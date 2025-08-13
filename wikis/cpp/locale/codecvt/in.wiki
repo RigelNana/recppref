@@ -1,0 +1,97 @@
+{{cpp/locale/codecvt/title|in|do_in}}
+{{cpp/locale/codecvt/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+result in( StateT&amp; state,
+           const ExternT* from,
+           const ExternT* from_end,
+           const ExternT*&amp; from_next,
+           InternT* to,
+           InternT* to_end,
+           InternT*&amp; to_next ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual result do_in( StateT&amp; state,
+                      const ExternT* from,
+                      const ExternT* from_end,
+                      const ExternT*&amp; from_next,
+                      InternT* to,
+                      InternT* to_end,
+                      InternT*&amp; to_next ) const;
+}}
+{{dcl end}}
+
+@1@ Public member function, calls the member function {{tt|do_in}} of the most derived class.
+
+@2@ If this {{tt|codecvt}} facet defines a conversion, translates the external characters from the source range {{range|from|from_end}} to internal characters, placing the results in the subsequent locations starting at {{c|to}}. Converts no more than {{c|from_end - from}} external characters and writes no more than {{c|to_end - to}} internal characters. Leaves {{c|from_next}} and {{c|to_next}} pointing one beyond the last element successfully converted.
+
+If this {{tt|codecvt}} facet does not define a conversion, no characters are converted. {{c|to_next}} is set to be equal to {{c|to}}, {{c|state}} is unchanged, and {{lc|std::codecvt_base::noconv}} is returned.
+
+{{c|do_in(state, from, from_end, from_next, to, to + 1, to_next)}} must return {{tt|ok}} if
+* this {{tt|codecvt}} facet is used by {{ltt|cpp/io/basic_filebuf}}, and
+* {{c|do_in(state, from, from_end, from_next, to, to_end, to_next)}} would return {{tt|ok}} where {{c|1=to != to_end}}.
+
+===Return value===
+A value of type {{lc|std::codecvt_base::result}}, indicating the success status as follows:
+{{dsc begin}}
+{{dsc|{{tt|ok}}|conversion completed}}
+{{dsc|{{tt|partial}}|not enough space in the output buffer or unexpected end of source buffer}}
+{{dsc|{{tt|error}}|encountered a character that could not be converted}}
+{{dsc|{{tt|noconv}}|this facet is non-converting, no output written}}
+{{dsc end}}
+
+The non-converting specialization {{c|std::codecvt&lt;char, char, std::mbstate_t&gt;}} always returns {{lc|std::codecvt_base::noconv}}.
+
+===Notes===
+Requires that {{c|1=from &lt;= from_end &amp;&amp; to &lt;= to_end}} and that {{c|state}} either representing the initial shift state or obtained by converting the preceding characters in the sequence.
+
+The effect on {{c|state}} is deliberately unspecified. In standard facets, it is used to maintain shift state like when calling {{lc|std::mbsrtowcs}}, and is therefore updated to reflect the conversion state after the last processed external character, but a user-defined facet is free to use it to maintain any other state, e.g. count the number of special characters encountered.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    auto const&amp; f = std::use_facet&lt;std::codecvt&lt;wchar_t, char, std::mbstate_t&gt;&gt;
+        (std::locale());
+    std::string external = "z\u00df\u6c34\U0001d10b"; // or u8"zß水𝄋"
+                     // or "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9d\x84\x8b"
+    
+    // note that the following can be done with wstring_convert
+    std::mbstate_t mb = std::mbstate_t(); // initial shift state
+    std::wstring internal(external.size(), '\0'); 
+    const char* from_next;
+    wchar_t* to_next;
+    f.in(mb, &amp;external[0], &amp;external[external.size()], from_next,
+             &amp;internal[0], &amp;internal[internal.size()], to_next);
+    // error checking skipped for brevity
+    internal.resize(to_next - &amp;internal[0]);
+    
+    std::wcout &lt;&lt; L"The string in wide encoding: " &lt;&lt; internal &lt;&lt; '\n';
+}
+|output=
+The string in wide encoding: zß水𝄋
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=76|std=C++98|before=it was unclear whether the conversion is required to&lt;br&gt;support producing one internal character at a time|after=only required if used&lt;br&gt;by {{ltt|cpp/io/basic_filebuf}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_filebuf/dsc underflow}}
+{{dsc inc|cpp/locale/wstring_convert/dsc from_bytes}}
+{{dsc inc|cpp/string/multibyte/dsc mbsrtowcs}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

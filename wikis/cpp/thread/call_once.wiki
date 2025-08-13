@@ -1,0 +1,118 @@
+{{cpp/title|call_once}}
+{{cpp/thread/navbar}}
+{{ddcl|header=mutex|since=c++11|
+template&lt; class Callable, class... Args &gt;
+void call_once( std::once_flag&amp; flag, Callable&amp;&amp; f, Args&amp;&amp;... args );
+}}
+
+Executes the {{named req|Callable}} object {{c|f}} exactly once, even if called concurrently from several threads. 
+
+In detail:
+
+* If, by the time {{tt|std::call_once}} is called, {{c|flag}} indicates that {{c|f}} was already called, {{tt|std::call_once}} returns right away (such a call to {{tt|std::call_once}} is known as ''passive'').
+
+* Otherwise, {{tt|std::call_once}} calls {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(std::forward&lt;Callable&gt;(f), std::forward&lt;Args&gt;(args)...)}}}}. Unlike the {{lc|std::thread}} constructor or {{lc|std::async}}, the arguments are not moved or copied because they do not need to be transferred to another thread of execution (such a call to {{tt|std::call_once}} is known as ''active'').
+
+:* If that invocation throws an exception, it is propagated to the caller of {{tt|std::call_once}}, and {{c|flag}} is not flipped so that another call will be attempted (such a call to {{tt|std::call_once}} is known as ''exceptional''{{sep}}).
+:* If that invocation returns normally (such a call to {{tt|std::call_once}} is known as ''returning''), {{c|flag}} is flipped, and all other calls to {{tt|std::call_once}} with the same {{c|flag}} are guaranteed to be ''passive''.
+
+All ''active'' calls on the same {{c|flag}} form a single total order consisting of zero or more ''exceptional'' calls, followed by one ''returning'' call. The end of each ''active'' call synchronizes-with the next ''active'' call in that order.
+
+The return from the ''returning'' call synchronizes-with the returns from all ''passive'' calls on the same {{c|flag}}: this means that all concurrent calls to {{tt|std::call_once}} are guaranteed to observe any side-effects made by the ''active'' call, with no additional synchronization.
+
+===Parameters===
+{{par begin}}
+{{par|flag|an object, for which exactly one function gets executed}}
+{{par|f|{{named req|Callable}} object to invoke}}
+{{par|args...|arguments to pass to the function}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Exceptions===
+* {{lc|std::system_error}} if any condition prevents calls to {{tt|std::call_once}} from executing as specified.
+* Any exception thrown by {{c|f}}.
+
+===Notes===
+If concurrent calls to {{tt|std::call_once}} pass different functions {{c|f}}, it is unspecified which {{c|f}} will be called. The selected function runs in the same thread as the {{tt|std::call_once}} invocation it was passed to.
+
+Initialization of [[cpp/language/storage duration#Static local variables|function-local statics]] is guaranteed to occur only once even when called from multiple threads, and may be more efficient than the equivalent code using {{tt|std::call_once}}.
+
+The POSIX equivalent of this function is [https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_once.html {{tt|pthread_once}}].
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+std::once_flag flag1, flag2;
+
+void simple_do_once()
+{
+    std::call_once(flag1, [](){ std::cout &lt;&lt; "Simple example: called once\n"; });
+}
+
+void may_throw_function(bool do_throw)
+{
+    if (do_throw)
+    {
+        std::cout &lt;&lt; "Throw: call_once will retry\n"; // this may appear more than once
+        throw std::exception();
+    }
+    std::cout &lt;&lt; "Did not throw, call_once will not attempt again\n"; // guaranteed once
+}
+
+void do_once(bool do_throw)
+{
+    try
+    {
+        std::call_once(flag2, may_throw_function, do_throw);
+    }
+    catch (...) {}
+}
+
+int main()
+{
+    std::thread st1(simple_do_once);
+    std::thread st2(simple_do_once);
+    std::thread st3(simple_do_once);
+    std::thread st4(simple_do_once);
+    st1.join();
+    st2.join();
+    st3.join();
+    st4.join();
+    
+    std::thread t1(do_once, true);
+    std::thread t2(do_once, true);
+    std::thread t3(do_once, false);
+    std::thread t4(do_once, true);
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+}
+|p=true
+|output=
+Simple example: called once
+Throw: call_once will retry
+Throw: call_once will retry
+Throw: call_once will retry
+Did not throw, call_once will not attempt again
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2080|std=C++11|before={{lc|std::invalid_argument}} would be thrown if {{c|f}} is invalid,&lt;br&gt;but the scenario where {{c|f}} is invalidated is not specified|after=removed this error condition}}
+{{dr list item|wg=lwg|dr=2442|std=C++11|before=the arguments were copied and/or moved before invocation|after=no copying/moving is performed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc once_flag}}
+{{dsc see c|c/thread/call_once}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

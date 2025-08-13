@@ -1,0 +1,110 @@
+{{cpp/locale/time_get/title|get|do_get}}
+{{cpp/locale/time_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|since=c++11|1=
+public:
+iter_type get( iter_type beg, iter_type end, std::ios_base&amp; str,
+               std::ios_base::iostate&amp; err, std::tm* t,
+               const char_type* fmtbeg, const char_type* fmtend ) const;
+}}
+{{dcl|num=2|since=c++11|1=
+protected:
+virtual iter_type do_get( iter_type beg, iter_type end, std::ios_base&amp; str,
+                          std::ios_base::iostate&amp; err, std::tm *t,
+                          char format, char modifier ) const;
+}}
+{{dcl end}}
+
+@1@ Parses the date and time from the input character sequence {{c|[beg, end)}} according to the format provided in the character sequence {{c|[fmtbeg, fmtend)}}. The format is expected to follow the format described below, although actual processing of each format specifier can be customized by overriding {{tt|do_get}}. The {{tt|get}} function performs the following:
+First, clears the error bits in {{c|err}} by executing {{c|1=err = std::ios_base::goodbit}}. Then enters a loop, which terminates whenever any of the following conditions becomes true (checked in this order):
+:@a@ All characters have been read from the format string ({{c|fmtbeg {{==}} fmtend}}).
+:@b@ There was a parsing error ({{c|err !{{=}} std::ios_base::goodbit}}).
+:@c@ All characters have been read from the input sequence ({{c|beg {{==}} end}}. If this condition terminates the loop, the function sets both {{tt|eofbit}} and {{tt|failbit}} in {{c|err}}.
+
+::In the body of the loop, the following steps take place:
+:@a@ If the next character in the format string is {{c|'%'}}, followed by one or two characters that form a valid {{lc|std::get_time}} conversion specifier (see below), these characters are used in the call {{c|do_get(beg, end, str, err, t, format, modifier)}}, where {{c|format}} is the primary conversion specifier character, and {{c|modifier}} is the optional modifier (which appears between {{tt|%}} and the format character, if present). If there is no modifier, the value {{c|'\0'}} is used. If the format string is ambiguous or ends too early to determine the conversion specifier after {{c|'%'}}, {{tt|eofbit}} is set in {{c|err}} and the loop is terminated. If, after the call to {{tt|do_get}}, no error bits are set in {{c|err}}, the function increments {{c|fmtbeg}} to point right after the conversion specifier and continues the loop.
+:@b@ If the next character is whitespace, as indicated by the locale provided in the stream {{c|str}} (i.e. {{c|std::isspace(*fmtbeg, str.getloc()) {{==}} true}}, the function keeps incrementing {{c|fmtbeg}} until it either becomes equal to {{c|fmtend}} or points to a non-whitespace character.
+:@c@ If the next character in the format string is equivalent to the next character in the input stream according to case-insensitive comparison, the function advances both sequences by one character {{c|++fmtbeg, ++beg;}} and continues the loop, Otherwise, it sets the {{tt|failbit}} in {{c|err}}.
+
+@2@ Parses one conversion specifier from the input sequence {{c|[beg, end)}} and updates the {{lc|std::tm}} structure pointed to by {{c|t}} accordingly.
+
+::First, clears the error bits in {{c|err}} by executing {{c|1=err = std::ios_base::goodbit}}. Then reads characters from the input sequence {{c|[beg, end)}} that are expected by the {{lc|std::time_get}} format specifier formed by combining {{c|'%'}}, {{c|modifier}} (if not {{c|'\0'}}), and {{c|format}}. If the characters do not combine to form a valid conversion specifier, sets {{tt|failbit}} in {{c|err}}. If the end of the input stream is reached after reading a character, sets {{tt|eofbit}} in {{c|err}}. If the input string was parsed successfully, updates the corresponding fields of {{c|*t}}.
+
+::For complex conversion specifiers, such as {{c|'%x'}} or {{c|'%c'}}, or the directives that use the modifiers {{c|'E'}} and {{c|'O'}}, the function may fail to determine some of the values to store in {{c|*t}}. In such case, it sets {{tt|eofbit}} in {{c|err}} and leaves these fields in unspecified state.
+
+===Parameters===
+{{par begin}}
+{{par|beg|iterator designating the start of the sequence to parse}}
+{{par|end|one past the end iterator for the sequence to parse}}
+{{par|str|a stream object that this function uses to obtain locale facets when needed, e.g. {{lc|std::ctype}} to skip whitespace or {{lc|std::collate}} to compare strings}}
+{{par|err|stream error flags object that is modified by this function to indicate errors}}
+{{par|t|pointer to the {{lc|std::tm}} object that will hold the result of this function call}}
+{{par|fmtbeg|pointer to the first character of a sequence of {{tt|char_type}} characters specifying the conversion format (see below)}}
+{{par|fmtend|pointer one past the last character of a sequence of {{tt|char_type}} characters specifying the conversion format}}
+{{par|format|the character that names a conversion specifier}}
+{{par|modifier|the optional modifier that may appear between {{tt|%}} and the conversion specifier}}
+{{par end}}
+&lt;br&gt;
+{{cpp/locale/time_get/time_get format}}
+
+===Return value===
+Iterator pointing one past the last character in {{c|[beg, end)}} that was parsed successfully.
+
+===Notes===
+The case-insensitive comparison for the non-whitespace non-{{c|'%'}} characters in the format string, the {{lc|std::collate}} facet of the locale provided by {{c|str}} is typically, but not necessarily, used.
+
+If a parsing error is encountered, many implementations of this function leave {{c|*t}} completely untouched.
+
+It's unspecified if these functions zero out the fields in {{c|*t}} that they do not set directly: portable programs should initialize every field to zero before calling {{tt|get()}}.
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+
+int main()
+{
+    std::istringstream ss("2026-März-12 23:45:56");
+    ss.imbue(std::locale("de_DE.utf8"));
+    
+    auto&amp; f = std::use_facet&lt;std::time_get&lt;char&gt;&gt;(ss.getloc());
+    std::tm t{};
+    std::string s = "%Y-%b-%d %H:%M:%S";
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    auto ret = f.get({ss}, {}, ss, err, &amp;t, &amp;s[0], &amp;s[0] + s.size());
+    ss.setstate(err);
+    std::istreambuf_iterator&lt;char&gt; last{};
+    
+    if (ss)
+    {
+        std::cout &lt;&lt; "Successfully parsed as " &lt;&lt; std::put_time(&amp;t, "%c") &lt;&lt; '\n';
+        if (ret != last)
+        {
+            std::cout &lt;&lt; "Remaining content: ";
+            std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+        }
+        else
+            std::cout &lt;&lt; "The input was fully consumed.";
+    }
+    else
+    {
+        std::cout &lt;&lt; "Parse failed.\nUnparsed string: ";
+        std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+    }
+    std::cout &lt;&lt; '\n';
+}
+|output=
+Successfully parsed as Sun Mar 12 23:45:56 2026
+The input was fully consumed.
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc get_time}}
+{{dsc end}}
+
+{{langlinks|ja|zh}}

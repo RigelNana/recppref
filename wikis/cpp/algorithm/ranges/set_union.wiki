@@ -1,0 +1,187 @@
+{{cpp/ranges/title|set_union|set_union_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+constexpr set_union_result&lt;I1, I2, O&gt;
+    set_union( I1 first1, S1 last1, I2 first2, S2 last2,
+               O result, Comp comp = {},
+               Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                        O, Comp, Proj1, Proj2&gt;
+constexpr set_union_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                           ranges::borrowed_iterator_t&lt;R2&gt;, O&gt;
+    set_union( R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+               Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I1, class I2, class O &gt;
+using set_union_result = ranges::in_in_out_result&lt;I1, I2, O&gt;;
+}}
+{{dcl end}}
+
+Constructs a sorted union beginning at {{c|result}} consisting of the set of elements present in one or both sorted input ranges {{range|first1|last1}} and {{range|first2|last2}}.
+
+If some element is found {{tt|m}} times in {{range|first1|last1}} and {{tt|n}} times in {{range|first2|last2}}, then all {{tt|m}} elements will be copied from {{range|first1|last1}} to {{c|result}}, preserving order, and then exactly {{c|max(n - m, 0)}} elements will be copied from {{range|first2|last2}} to {{c|result}}, also preserving order.
+
+The behavior is undefined if
+* the input ranges are not sorted with respect to {{c|comp}} and {{c|proj1}} or {{c|proj2}}, respectively, or
+* the resulting range overlaps with either of the input ranges.
+
+@1@ Elements are compared using the given binary comparison function {{c|comp}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r1}} as the first range and {{c|r2}} as the second range, as if using {{c|ranges::begin(r1)}} as {{c|first1}}, {{c|ranges::end(r1)}} as {{c|last1}}, {{c|ranges::begin(r2)}} as {{c|first2}}, and {{c|ranges::end(r2)}} as {{c|last2}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|iterator-sentinel pair denoting the first input sorted range}}
+{{par|first2, last2|iterator-sentinel pair denoting the second input sorted range}}
+{{par|r1|the first input sorted range}}
+{{par|r2|the second input sorted range}}
+{{par|result|the beginning of the output range}}
+{{par|comp|comparison to apply to the projected elements}}
+{{par|proj1|projection to apply to the elements in the first range}}
+{{par|proj2|projection to apply to the elements in the second range}}
+{{par end}}
+
+===Return value===
+{{c|{last1, last2, result_last} }}, where {{c|result_last}} is the end of the constructed range.
+
+===Complexity===
+At most {{mathjax-or|\(\scriptsize 2\cdot(N_1+N_2)-1\)|2&amp;middot;(N{{su|b=1}}+N{{su|b=2}})-1}} comparisons and applications of each projection, where {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} and {{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} are {{c|ranges::distance(first1, last1)}} and {{c|ranges::distance(first2, last2)}}, respectively.
+
+===Notes===
+This algorithm performs a similar task as {{lc|ranges::merge}} does. Both consume two sorted input ranges and produce a sorted output with elements from both inputs. The difference between these two algorithms is with handling values from both input ranges which compare equivalent (see notes on {{named req|LessThanComparable}}). If any equivalent values appeared {{tt|n}} times in the first range and {{tt|m}} times in the second, {{lc|ranges::merge}} would output all {{c|n+m}} occurrences whereas {{tt|ranges::set_union}} would output {{c|std::max(n, m)}} ones only. So {{lc|ranges::merge}} outputs exactly {{mathjax-or|\(\scriptsize (N_1+N_2)\)|(N{{su|b=1}}+N{{su|b=2}})}} values and {{tt|ranges::set_union}} may produce less.
+
+===Possible implementation===
+{{eq fun|1=
+struct set_union_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_union_result&lt;I1, I2, O&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                   O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        for (; !(first1 == last1 or first2 == last2); ++result)
+        {
+            if (std::invoke(comp, std::invoke(proj1, *first1), 
+                                  std::invoke(proj2, *first2)))
+            {
+                *result = *first1;
+                ++first1;
+            }
+            else if (std::invoke(comp, std::invoke(proj2, *first2),
+                                       std::invoke(proj1, *first1)))
+            {
+                *result = *first2;
+                ++first2;
+            }
+            else
+            {
+                *result = *first1;
+                ++first1;
+                ++first2;
+            }
+        }
+        auto res1 = ranges::copy(std::move(first1), std::move(last1), std::move(result));
+        auto res2 = ranges::copy(std::move(first2), std::move(last2), std::move(res1.out));
+        return {std::move(res1.in), std::move(res2.in), std::move(res2.out)};
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                            O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_union_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                       ranges::borrowed_iterator_t&lt;R2&gt;, O&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(result), std::move(comp),
+                       std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr set_union_fn set_union {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+void print(const auto&amp; in1, const auto&amp; in2, auto first, auto last)
+{
+    std::cout &lt;&lt; "{ ";
+    for (const auto&amp; e : in1)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; "} ∪ { ";
+    for (const auto&amp; e : in2)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; "} =\n{ ";
+    while (!(first == last))
+        std::cout &lt;&lt; *first++ &lt;&lt; ' ';
+    std::cout &lt;&lt; "}\n\n";
+}
+
+int main()
+{
+    std::vector&lt;int&gt; in1, in2, out;
+
+    in1 = {1, 2, 3, 4, 5};
+    in2 = {      3, 4, 5, 6, 7};
+    out.resize(in1.size() + in2.size());
+    const auto ret = std::ranges::set_union(in1, in2, out.begin());
+    print(in1, in2, out.begin(), ret.out);
+
+    in1 = {1, 2, 3, 4, 5, 5, 5};
+    in2 = {      3, 4, 5, 6, 7};
+    out.clear();
+    out.reserve(in1.size() + in2.size());
+    std::ranges::set_union(in1, in2, std::back_inserter(out));
+    print(in1, in2, out.cbegin(), out.cend());
+}
+|output=
+{ 1 2 3 4 5 } ∪ { 3 4 5 6 7 } =
+{ 1 2 3 4 5 6 7 }
+
+{ 1 2 3 4 5 5 5 } ∪ { 3 4 5 6 7 } =
+{ 1 2 3 4 5 5 5 6 7 }
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_intersection}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_symmetric_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc merge}}
+{{dsc inc|cpp/algorithm/ranges/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc set_union}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

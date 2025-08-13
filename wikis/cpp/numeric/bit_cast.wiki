@@ -1,0 +1,121 @@
+{{cpp/title|bit_cast}}
+{{cpp/utility/bit/navbar}}
+{{ddcl|since=c++20|header=bit|
+template&lt; class To, class From &gt;
+constexpr To bit_cast( const From&amp; from ) noexcept;
+}}
+
+Obtain a value of type {{tt|To}} by reinterpreting the object representation of {{tt|From}}. Every bit in the [[cpp/language/object#Object representation and value representation|value representation]] of the returned {{tt|To}} object is equal to the corresponding bit in the [[cpp/language/object#Object representation and value representation|object]] representation of {{c|from}}. The values of padding bits in the returned {{tt|To}} object are unspecified.
+
+If there is no value of type {{tt|To}} corresponding to the value representation produced, the behavior is undefined. If there are multiple such values, which value is produced is unspecified.
+
+A bit in the value representation of the result is ''indeterminate'' if it
+* does not correspond to a bit in the value representation of {{tt|From}} (i.e. it corresponds to a padding bit), or
+* corresponds to a bit {{rev inl|until=c++26|of an object that}}{{rev inl|since=c++26|for which the smallest enclosing object}} is not within its {{lt|cpp/language/lifetime}}, or
+* has an [[cpp/language/default initialization#Indeterminate and erroneous values|indeterminate value]].
+
+{{rrev|since=c++26|
+A bit in the value representation of the result is ''erroneous'' if it corresponds to a bit for which the smallest enclosing object has an [[cpp/language/default initialization#Indeterminate and erroneous values|erroneous value]].
+}}
+
+
+{{rev begin}}
+{{rev|until=c++26|
+For each bit in the value representation of the result that is indeterminate, the smallest object containing that bit has an indeterminate value; the behavior is undefined unless that object is of an [[cpp/language/default initialization#Special cases|uninitialized-friendly type]].
+
+The result does not otherwise contain any indeterminate values.
+}}
+{{rev|since=c++26|
+For each bit {{c|b}} in the value representation of the result that is indeterminate or erroneous, let {{c|u}} be the smallest object enclosing {{c|b}}:
+* If {{c|u}} is of [[cpp/language/default initialization#Special cases|uninitialized-friendly type]], {{c|u}} has an indeterminate value if any of the bits in its value representation are indeterminate, or otherwise has an erroneous value.
+* Otherwise, if {{c|b}} is indeterminate, the behavior is undefined.
+* Otherwise, the behavior is [[cpp/language/ub|erroneous]], and the result is as specified above.
+}}
+
+The result does not otherwise contain any indeterminate or erroneous values.
+{{rev end}}
+
+{{cpp/enable if|{{c|1=sizeof(To) == sizeof(From)}} and both {{tt|To}} and {{tt|From}} are {{named req|TriviallyCopyable}} types}}.
+
+This function template is {{c/core|constexpr}} if and only if each of {{tt|To}}, {{tt|From}} and the types of all subobjects of {{tt|To}} and {{tt|From}}:
+* is not a union type;
+* is not a pointer type;
+* is not a pointer to member type;
+* is not a volatile-qualified type; and
+* has no non-static data member of reference type.
+
+===Parameters===
+{{par begin}}
+{{par|from|the source of bits for the return value}}
+{{par end}}
+
+===Return value===
+An object of type {{tt|To}} whose value representation is as described above.
+
+===Possible implementation===
+To implement {{tt|std::bit_cast}}, ignoring the fact that it's {{lt|cpp/language/constexpr}}, {{lc|std::memcpy}} can be used, when it is needed, to interpret the object representation as one of another type:
+
+{{source|1=
+template&lt;class To, class From&gt;
+std::enable_if_t&lt;
+    sizeof(To) == sizeof(From) &amp;&amp;
+    std::is_trivially_copyable_v&lt;From&gt; &amp;&amp;
+    std::is_trivially_copyable_v&lt;To&gt;,
+    To&gt;
+// constexpr support needs compiler magic
+bit_cast(const From&amp; src) noexcept
+{
+    static_assert(std::is_trivially_constructible_v&lt;To&gt;,
+        "This implementation additionally requires "
+        "destination type to be trivially constructible");
+    
+    To dst;
+    std::memcpy(&amp;dst, &amp;src, sizeof(To));
+    return dst;
+}
+}}
+
+=== Notes ===
+{{ltt|cpp/language/reinterpret_cast}} (or equivalent {{lt|cpp/language/explicit cast}}) between pointer or reference types shall not be used to reinterpret object representation in most cases because of the [[cpp/language/reinterpret_cast#Type aliasing|type aliasing rule]].
+
+{{feature test macro|__cpp_lib_bit_cast|std=C++20|value=201806L|[[#Top|{{tt|std::bit_cast}}]]}}
+
+=== Example ===
+{{example|code=
+#include &lt;bit&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+constexpr double f64v = 19880124.0; 
+constexpr auto u64v = std::bit_cast&lt;std::uint64_t&gt;(f64v);
+static_assert(std::bit_cast&lt;double&gt;(u64v) == f64v); // round-trip
+
+constexpr std::uint64_t u64v2 = 0x3fe9000000000000ull;
+constexpr auto f64v2 = std::bit_cast&lt;double&gt;(u64v2);
+static_assert(std::bit_cast&lt;std::uint64_t&gt;(f64v2) == u64v2); // round-trip
+
+int main()
+{
+    std::cout
+        &lt;&lt; "std::bit_cast&lt;std::uint64_t&gt;(" &lt;&lt; std::fixed &lt;&lt; f64v &lt;&lt; ") == 0x"
+        &lt;&lt; std::hex &lt;&lt; u64v &lt;&lt; '\n'
+        &lt;&lt; "std::bit_cast&lt;double&gt;(0x" &lt;&lt; std::hex &lt;&lt; u64v2 &lt;&lt; ") == "
+        &lt;&lt; std::fixed &lt;&lt; f64v2 &lt;&lt; '\n';
+}
+|p=true
+|output=
+std::bit_cast&lt;std::uint64_t&gt;(19880124.000000) == 0x4172f58bc0000000
+std::bit_cast&lt;double&gt;(0x3fe9000000000000) == 0.781250
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2482|paper=P1272R4|std=C++20|before=it was unspecified whether UB would occur when involving indeterminate bits|after=specified}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc start_lifetime_as}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

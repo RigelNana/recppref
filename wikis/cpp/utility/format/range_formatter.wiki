@@ -1,0 +1,178 @@
+{{cpp/title|range_formatter}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|since=c++23|1=
+template&lt; class T, class CharT = char &gt;
+    requires std::same_as&lt;std::remove_cvref_t&lt;T&gt;, T&gt; &amp;&amp; std::formattable&lt;T, CharT&gt;
+class range_formatter;
+}}
+{{dcl end}}
+
+{{tt|std::range_formatter}} is a helper class template for implementing range {{lc|std::formatter}} specializations.
+
+===Range format specification===
+The syntax of {{spar|range-format-spec}} is:
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|range-fill-and-align}} {{spar optional|width}} {{ttb|n}}{{mark optional}} {{spar optional|range-type}} {{spar optional|range-underlying-spec}}
+}}
+{{sdsc end}}
+
+The {{spar|range-fill-and-align}} is interpreted the same way as a {{spar|fill-and-align}} except that the {{spar|fill}} in {{spar|range-fill-and-align}} is any character other than {{ttb|{}}, {{ttb|}&lt;!----&gt;}}, or {{ttb|:}}.
+
+The {{spar|width}} is described in {{rlp|spec#Width and precision|standard format width specification}}.
+
+The {{ttb|n}} option causes the range to be formatted without the opening and closing brackets.
+{{source|1=
+assert(std::format("{}", views::iota(1, 5)) == "[1, 2, 3, 4]");
+assert(std::format("{:n}", views::iota(1, 5)) == "1, 2, 3, 4");
+}}
+
+The {{spar|format-spec}} in a {{spar|range-underlying-spec}} (its syntax is equivalent to {{tt|:}} {{spar|format-spec}}), if any, is interpreted by the range element formatter {{tt|std::formatter&lt;T, CharT&gt;}}.
+{{source|1=
+std::array ints{12, 10, 15, 14};
+
+assert(std::format("{}", ints) == "[12, 10, 15, 14]");
+assert(std::format("{::X}", ints) == "[C, A, F, E]");
+assert(std::format("{:n:_^4}", ints) == "_12_, _10_, _15_, _14_");
+}}
+
+The {{spar|range-type}} changes the way a range is formatted, with certain options only valid with certain argument types.
+
+The available range presentation types are:
+* {{ttb|m}}: Indicates that the opening bracket should be {{c|"{"}}, the closing bracket should be {{c|"}"}}, the separator should be {{c|", "}}, and each range element should be formatted as if {{ttb|m}} were specified for its {{spar|tuple-type}} (in [[cpp/utility/format/tuple_formatter#Format specification|{{spar|tuple-format-spec}}]]).
+
+:* If {{ttb|m}} is chosen as the {{spar|range-type}}, the program is ill-formed unless {{tt|T}} is either a specialization of:
+::* {{lc|std::pair}}, or
+::* {{lc|std::tuple}} such that {{c|1=std::tuple_size_v&lt;T&gt; == 2}} is {{c|true}}.
+{{source|1=
+std::array char_pairs
+{
+    std::pair{'A', 5}, std::pair{'B', 10}, std::pair{'C', 12}
+};
+
+assert(std::format("{}", char_pairs) == "[('A', 5), ('B', 10), ('C', 12)]");
+assert(std::format("{:m}", char_pairs) == "{'A': 5, 'B': 10, 'C': 12}");
+}}
+
+* {{ttb|s}}: Indicates that the range should be formatted as a string.
+* {{ttb|?s}}: Indicates that the range should be formatted as an {{rlp|spec#Formatting escaped characters and strings|escaped string}}.
+:* If {{ttb|s}} or {{ttb|?s}} is chosen as the {{spar|range-type}}, both {{ttb|n}} option and {{spar|range-underlying-spec}} should not be included in the format specifier, and
+:* the program is ill-formed unless {{tt|T}} is {{tt|CharT}}.
+{{source|1=
+std::array star{'S', 'T', 'A', 'R'};
+
+assert(std::format("{}", star) == "['S', 'T', 'A', 'R']");
+assert(std::format("{:s}", star) == "STAR");
+assert(std::format("{:?s}", star) == "\"STAR\"");
+}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::formatter&lt;T, CharT&gt;}}|underlying_|the underlying formatter for elements}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::basic_string_view&lt;CharT&gt;}}|separator_|a string representing the separator of the range formatted result. The default separator is {{c|", "}}.}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::basic_string_view&lt;CharT&gt;}}|opening-bracket_|a string representing the opening bracket of the range formatted result. The default opening bracket is {{c|"["}}.}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::basic_string_view&lt;CharT&gt;}}|closing-bracket_|a string representing the closing bracket of the range formatted result. The default closing bracket is {{c|"]"}}.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem fun|set_separator|nolink=true|sets a specified separator for the range formatted result}}
+{{dsc mem fun|set_brackets|nolink=true|sets a specified opening and closing brackets for the range formatted result}}
+{{dsc mem fun|underlying|nolink=true|returns the underlying formatter}}
+{{dsc mem fun|parse|nolink=true|parses the format specifier as specified by {{spar|range-format-spec}}}}
+{{dsc mem fun|format|nolink=true|writes the range formatted output as specified by {{spar|range-format-spec}}}}
+{{dsc end}}
+
+{{member|1={{small|std::range_formatter::}}set_separator|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_separator( std::basic_string_view&lt;CharT&gt; sep ) noexcept;
+}}
+{{dcl end}}
+
+Assigns {{c|sep}} to {{tti|separator_}}.
+}}
+
+{{member|1={{small|std::range_formatter::}}set_brackets|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_brackets( std::basic_string_view&lt;CharT&gt; opening,
+                             std::basic_string_view&lt;CharT&gt; closing ) noexcept;
+}}
+{{dcl end}}
+
+Assigns {{c|opening}} and {{c|closing}} to {{tti|opening-bracket_}} and {{tti|closing-bracket_}}, respectively.
+}}
+
+{{member|1={{small|std::range_formatter::}}underlying|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+constexpr std::formatter&lt;T, CharT&gt;&amp; underlying();
+}}
+{{dcl|num=2|1=
+constexpr const std::formatter&lt;T, CharT&gt;&amp; underlying() const;
+}}
+{{dcl end}}
+
+Returns {{box|{{tti|underlying_}}}} (the underlying formatter).
+}}
+
+{{member|1={{small|std::range_formatter::}}parse|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; class ParseContext &gt;
+constexpr auto parse( ParseContext&amp; ctx ) -&gt; ParseContext::iterator;
+}}
+{{dcl end}}
+
+Parses the format specifiers as a {{spar|range-format-spec}} and stores the parsed specifiers in the current object.
+
+Calls {{box|{{tti|underlying_}}{{c/core|.parse(ctx)}}}} to parse {{spar|format-spec}} in {{spar|range-format-spec}} or, if the latter is not present, an empty {{spar|format-spec}}.
+
+If {{spar|range-type}} or the {{ttb|n}} option is present, the values of {{tti|opening-bracket_}}, {{tti|closing-bracket_}}, and {{tti|separator_}} are modified as required.
+
+It calls {{box|{{tti|underlying_}}{{c/core|.set_debug_format()}}}} if:
+* the {{spar|range-type}} is neither {{ttb|s}} nor {{ttb|?s}},
+* {{box|{{tti|underlying_}}{{c/core|.set_debug_format()}}}} is a valid expression, and
+* there is no {{spar|range-underlying-spec}}.
+
+Returns an iterator past the end of the {{spar|range-format-spec}}.
+}}
+
+{{member|1={{small|std::range_formatter::}}format|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; ranges::input_range R, class FormatContext &gt;
+  requires std::formattable&lt;ranges::range_reference_t&lt;R&gt;, CharT&gt; &amp;&amp;
+           std::same_as&lt;std::remove_cvref_t&lt;ranges::range_reference_t&lt;R&gt;&gt;, T&gt;
+auto format( R&amp;&amp; r, FormatContext&amp; ctx ) const -&gt; FormatContext::iterator;
+}}
+{{dcl end}}
+
+If the {{spar|range-type}} was either {{ttb|s}} or {{ttb|?s}}, it writes the formatted {{c|std::basic_string&lt;CharT&gt;(std::from_range, r)}} as a string or an escaped string, respectively, into {{c|ctx.out()}}.
+
+Otherwise, it writes the following into {{c|ctx.out()}} as specified by {{spar|range-format-spec}}, in order:
+* {{box|{{tti|opening-bracket_}}}},
+* for each formattable element {{c|e}} of the range {{c|r}}:
+:* the result of writing {{c|e}} via {{tti|underlying_}}, and
+:* {{box|{{tti|separator_}}}}, unless {{c|e}} is the last element of {{c|r}}, and
+* {{box|{{tti|closing-bracket_}}}}.
+
+Returns an iterator past the end of the output range.
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3892|std=c++23|before=the formatting of nested ranges was incorrect|after=corrected}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc formatter}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

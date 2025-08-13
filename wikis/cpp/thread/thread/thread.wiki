@@ -1,0 +1,213 @@
+{{cpp/thread/thread/title|thread}}
+{{cpp/thread/thread/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+thread() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+thread( thread&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=3|since=c++11|
+template&lt; class F, class... Args &gt; 
+explicit thread( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++11|1=
+thread( const thread&amp; ) = delete;
+}}
+{{dcl end}}
+
+Constructs a new {{tt|std::thread}} object.
+
+@1@ Creates a new {{tt|std::thread}} object which does not represent a thread.
+
+@2@ Move constructor. Constructs the {{tt|std::thread}} object to represent the thread of execution that was represented by {{c|other}}. After this call {{c|other}} no longer represents a thread of execution.
+
+@3@ Creates a new {{tt|std::thread}} object and associates it with a thread of execution. The new thread of execution starts executing:
+{{rev begin}}
+{{rev|until=c++23|
+{{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{tt|{{nbsp|7}}}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}}
+}}
+{{rev|since=c++23|
+{{c|
+std::invoke(auto(std::forward&lt;F&gt;(f)),
+            auto(std::forward&lt;Args&gt;(args))...)}}
+}}
+{{rev end}}
+
+@@ {{rev inl|until=c++23|The calls of {{lti|cpp/standard library/decay-copy}} are evaluated}}{{rev inl|since=c++23|The values produced by {{c/core|auto}} are [[cpp/language/implicit conversion#Temporary materialization|materialized]]}} in the current thread, so that any exceptions thrown during evaluation and copying/moving of the arguments are thrown in the current thread, without starting the new thread.
+
+@@ {{cpp/enable if|{{rev inl|until=c++20|{{c/core|std::decay&lt;F&gt;::type}}}}{{rev inl|since=c++20|{{c/core|std::remove_cvref_t&lt;F&gt;}}}} is not the same type as {{tt|std::thread}}}}.
+{{rev begin}}
+{{rev|until=c++20|
+If any of the following conditions is satisfied, the program is ill-formed:
+* {{tt|F}} is not {{named req|MoveConstructible}}.
+* Any type in {{tt|Args}} is not {{named req|MoveConstructible}}.
+* {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{tt|{{nbsp|7}}}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}} is not a valid expression.
+}}
+{{rev|since=c++20|
+If any of the following is {{c|false}}, the program is ill-formed:
+* {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}}
+* {{c|(std::is_constructible_v&lt;std::decay_t&lt;Args&gt;, Args&gt; &amp;&amp; ...)}}
+* {{c|std::is_invocable_v&lt;std::decay_t&lt;F&gt;, std::decay_t&lt;Args&gt;...&gt;}}
+}}
+{{rev end}}
+
+@@ The completion of the invocation of the constructor [[cpp/atomic/memory_order|synchronizes with]] the beginning of the invocation of the copy of {{c|f}} on the new thread of execution.
+
+@4@ The copy constructor is deleted; threads are not copyable. No two {{tt|std::thread}} objects may represent the same thread of execution.
+
+===Parameters===
+{{par begin}}
+{{par|other|another thread object to construct this thread object with}}
+{{par|f|{{named req|Callable}} object to execute in the new thread}}
+{{par|args|arguments to pass to the new function}}
+{{par end}}
+
+===Postconditions===
+@1@ {{lc|get_id()}} equal to {{c|std::thread::id()}} (i.e. {{lc|joinable()}} is {{c|false}}).
+@2@ {{c|other.get_id()}} equal to {{lc|std::thread::id()}} and {{lc|get_id()}} returns the value of {{c|other.get_id()}} prior to the start of construction.
+@3@ {{lc|get_id()}} not equal to {{lc|std::thread::id()}} (i.e. {{lc|joinable()}} is {{c|true}}).
+
+===Exceptions===
+@3@ {{lc|std::system_error}} if the thread could not be started. The exception may represent the error condition {{tt|std::errc::resource_unavailable_try_again}} or another implementation-specific error condition.
+
+===Notes===
+The arguments to the thread function are moved or copied by value. If a reference argument needs to be passed to the thread function, it has to be wrapped (e.g., with {{lc|std::ref}} or {{lc|std::cref}}).
+
+Any return value from the function is ignored. If the function throws an exception, {{lc|std::terminate}} is called. In order to pass return values or exceptions back to the calling thread, {{lc|std::promise}} or {{lc|std::async}} may be used.
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;utility&gt;
+ 
+void f1(int n)
+{
+    for (int i = 0; i &lt; 5; ++i)
+    {
+        std::cout &lt;&lt; "Thread 1 executing\n";
+        ++n;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+ 
+void f2(int&amp; n)
+{
+    for (int i = 0; i &lt; 5; ++i)
+    {
+        std::cout &lt;&lt; "Thread 2 executing\n";
+        ++n;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+ 
+class foo
+{
+public:
+    void bar()
+    {
+        for (int i = 0; i &lt; 5; ++i)
+        {
+            std::cout &lt;&lt; "Thread 3 executing\n";
+            ++n;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    int n = 0;
+};
+
+class baz
+{
+public:
+    void operator()()
+    {
+        for (int i = 0; i &lt; 5; ++i)
+        {
+            std::cout &lt;&lt; "Thread 4 executing\n";
+            ++n;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    int n = 0;
+};
+ 
+int main()
+{
+    int n = 0;
+    foo f;
+    baz b;
+    std::thread t1; // t1 is not a thread
+    std::thread t2(f1, n + 1); // pass by value
+    std::thread t3(f2, std::ref(n)); // pass by reference
+    std::thread t4(std::move(t3)); // t4 is now running f2(). t3 is no longer a thread
+    std::thread t5(&amp;foo::bar, &amp;f); // t5 runs foo::bar() on object f
+    std::thread t6(b); // t6 runs baz::operator() on a copy of object b
+    t2.join();
+    t4.join();
+    t5.join();
+    t6.join();
+    std::cout &lt;&lt; "Final value of n is " &lt;&lt; n &lt;&lt; '\n';
+    std::cout &lt;&lt; "Final value of f.n (foo::n) is " &lt;&lt; f.n &lt;&lt; '\n';
+    std::cout &lt;&lt; "Final value of b.n (baz::n) is " &lt;&lt; b.n &lt;&lt; '\n';
+}
+|p=true
+|output=
+Thread 1 executing
+Thread 2 executing
+Thread 3 executing
+Thread 4 executing
+Thread 3 executing
+Thread 1 executing
+Thread 2 executing
+Thread 4 executing
+Thread 2 executing
+Thread 3 executing
+Thread 1 executing
+Thread 4 executing
+Thread 3 executing
+Thread 2 executing
+Thread 1 executing
+Thread 4 executing
+Thread 3 executing
+Thread 1 executing
+Thread 2 executing
+Thread 4 executing
+Final value of n is 5
+Final value of f.n (foo::n) is 5
+Final value of b.n (baz::n) is 0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2097|std=C++11|before=for overload {{v|3}}, {{tt|F}} could be {{tt|std::thread}}|after={{tt|F}} is constrained}}
+{{dr list item|wg=lwg|dr=3476|std=C++20|before=overload {{v|3}} directly required (the decayed types of)&lt;br&gt;{{tt|F}} and the argument types to be move constructible|after=removed these&lt;br&gt;requirements&lt;ref&gt;The move-constructibility is already indirectly required by {{lc|std::is_constructible_v}}.&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+===References===
+{{ref std c++23}}
+{{ref std|section=33.4.3.3|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=32.4.2.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=33.3.2.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=30.3.1.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=30.3.1.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/jthread/dsc constructor}}
+{{dsc see c|c/thread/thrd_create}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,147 @@
+{{cpp/title|is_convertible|is_nothrow_convertible}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcla|since=c++11|num=1|1=
+template&lt; class From, class To &gt;
+struct is_convertible;
+}}
+{{dcla|since=c++20|num=2|1=
+template&lt; class From, class To &gt;
+struct is_nothrow_convertible;
+}}
+{{dcl end}}
+
+@1@ If the imaginary function definition {{c|To test() { return std::declval&lt;From&gt;(); }&lt;!----&gt;}} is well-formed, (that is, either {{c|std::declval&lt;From&gt;()}} can be converted to {{tt|To}} using [[cpp/language/implicit_conversion|implicit conversions]], or both {{tt|From}} and {{tt|To}} are possibly cv-qualified {{c/core|void}}), provides the member constant {{c|value}} equal to {{c|true}}. Otherwise {{c|value}} is {{c|false}}. For the purposes of this check, the use of {{lc|std::declval}} in the return statement is not considered an {{ls|cpp/language/definition#ODR-use}}.
+{{rrev|since=c++26|
+If {{tt|To}} is a reference type and a [[cpp/language/reference initialization#Lifetime of a temporary|temporary object]] would be created when binding {{c|std::declval&lt;From&gt;()}} to {{tt|To}}, the {{c/core|return}} statement in the imaginary function is considered well-formed, even though such binding is ill-formed in an actual function.
+}}
+@@ [[cpp/language/access|Access checks]] are performed as if from a context unrelated to either type. Only the validity of the immediate context of the expression in the return statement (including conversions to the return type) is considered.
+@2@ Same as {{v|1}}, but the conversion is also {{c/core|noexcept}}.
+
+{{cpp/types/cvaub|type1=From|type2=To}}
+
+{{cpp/types/nospec|any}}
+
+===Helper variable template===
+{{dcl begin}}
+{{dcl|since=c++17|1=
+template&lt; class From, class To &gt;
+constexpr bool is_convertible_v = is_convertible&lt;From, To&gt;::value;
+}}
+{{dcl|since=c++20|1=
+template&lt; class From, class To &gt;
+constexpr bool is_nothrow_convertible_v = is_nothrow_convertible&lt;From, To&gt;::value;
+}}
+{{dcl end}}
+{{cpp/types/integral_constant/inherit|{{tt|From}} is convertible to {{tt|To}}}}
+
+===Possible implementation===
+{{eq impl
+|title1={{tt|is_convertible}} (1)|ver1=1|1=
+namespace detail
+{
+    template&lt;class T&gt;
+    auto test_returnable(int) -&gt; decltype(
+        void(static_cast&lt;T(*)()&gt;(nullptr)), std::true_type{}
+    );
+    template&lt;class&gt;
+    auto test_returnable(...) -&gt; std::false_type;
+
+    template&lt;class From, class To&gt;
+    auto test_implicitly_convertible(int) -&gt; decltype(
+        void(std::declval&lt;void(&amp;)(To)&gt;()(std::declval&lt;From&gt;())), std::true_type{}
+    );
+    template&lt;class, class&gt;
+    auto test_implicitly_convertible(...) -&gt; std::false_type;
+} // namespace detail
+
+template&lt;class From, class To&gt;
+struct is_convertible : std::integral_constant&lt;bool,
+    (decltype(detail::test_returnable&lt;To&gt;(0))::value &amp;&amp;
+     decltype(detail::test_implicitly_convertible&lt;From, To&gt;(0))::value) {{!!}}
+    (std::is_void&lt;From&gt;::value &amp;&amp; std::is_void&lt;To&gt;::value)
+&gt; {};
+|title2={{tt|is_nothrow_convertible}} (2)|ver2=2|2=
+template&lt;class From, class To&gt;
+struct is_nothrow_convertible : std::conjunction&lt;std::is_void&lt;From&gt;, std::is_void&lt;To&gt;&gt; {};
+
+template&lt;class From, class To&gt;
+    requires
+        requires
+        {
+            static_cast&lt;To(*)()&gt;(nullptr);
+            { std::declval&lt;void(&amp;)(To) noexcept&gt;()(std::declval&lt;From&gt;()) } noexcept;
+        }
+struct is_nothrow_convertible&lt;From, To&gt; : std::true_type {};
+}}
+
+===Notes===
+Gives well-defined results for reference types, void types, array types, and function types.
+
+Currently the standard has not specified whether the destruction of the object produced by the conversion (either a result object or a temporary bound to a reference) is considered as a part of the conversion. This is {{lwg|3400}}.
+
+All known implementations treat the destruction as a part of the conversion, as proposed in {{stddoc|P0758R1#Appendix|P0758R1}}.
+
+{{feature test macro|__cpp_lib_is_nothrow_convertible|{{tt|std::is_nothrow_convertible}}|value=201806L|std=C++20}}
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+
+class E { public: template&lt;class T&gt; E(T&amp;&amp;) {} };
+
+int main()
+{
+    class A {};
+    class B : public A {};
+    class C {};
+    class D { public: operator C() { return c; } C c; };
+
+    static_assert(std::is_convertible_v&lt;B*, A*&gt;);
+    static_assert(!std::is_convertible_v&lt;A*, B*&gt;);
+    static_assert(std::is_convertible_v&lt;D, C&gt;);
+    static_assert(!std::is_convertible_v&lt;B*, C*&gt;);
+    // Note that the Perfect Forwarding constructor makes the class E be
+    // "convertible" from everything. So, A is replaceable by B, C, D..:
+    static_assert(std::is_convertible_v&lt;A, E&gt;);
+
+    static_assert(!std::is_convertible_v&lt;std::string_view, std::string&gt;);
+    static_assert(std::is_convertible_v&lt;std::string, std::string_view&gt;);
+
+    auto stringify = []&lt;typename T&gt;(T x)
+    {
+        if constexpr (std::is_convertible_v&lt;T, std::string&gt; or
+                      std::is_convertible_v&lt;T, std::string_view&gt;)
+            return x;
+        else
+            return std::to_string(x);
+    };
+
+    using std::operator "" s, std::operator "" sv;
+    const char* three = "three";
+
+    std::cout &lt;&lt; std::quoted(stringify("one"s)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify("two"sv)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify(three)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify(42)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify(42.0)) &lt;&lt; '\n';
+}
+|output=
+"one" "two" "three" "42" "42.000000"
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_base_of}}
+{{dsc inc|cpp/types/dsc is_pointer_interconvertible_base_of}}
+{{dsc inc|cpp/types/dsc is_pointer_interconvertible_with_class}}
+{{dsc inc|cpp/concepts/dsc convertible_to}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

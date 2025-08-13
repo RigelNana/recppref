@@ -1,0 +1,277 @@
+{{title|Constructors and member initializer lists}}
+{{cpp/language/classes/navbar}}
+
+''Constructors'' are non-static {{rlp|member functions}} declared with a special declarator syntax, they are used to initialize objects of their class types.
+
+{{rrev|since=c++20|
+A constructor cannot be a {{rlp|coroutines|coroutine}}.
+}}
+
+{{rrev|since=c++23|
+A constructor cannot have an {{rlpsd|member functions#Explicit object parameter}}.
+}}
+
+===Syntax===
+Constructors are declared using member {{rlp|function|function declarators}} of the following form:
+
+{{sdsc begin}}
+{{sdsc|{{spar|class-name}} {{ttb|(}} {{spar optional|parameter-list}} {{ttb|)}} {{spar optional|except}} {{spar optional|attr}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|class-name}}|an {{rlp|expressions#Primary expressions|identifier expression}},{{rev inl|since=c++11| possibly followed by a list of {{rlp|attributes}}, and}} possibly enclosed by a pair parentheses}}
+{{par|{{spar|parameter-list}}|{{rlpsd|function#Parameter list}}}}
+{{par|{{spar|except}}|{{rrev multi|until1=c++11|until2=c++17|rev1={{rlp|except spec|dynamic exception specification}}|rev2=either {{rlp|except spec|dynamic exception specification}}&lt;br&gt;or {{rlp|noexcept spec|noexcept specification}}|rev3={{rlp|noexcept spec|noexcept specification}}}}}}
+{{par|{{spar|attr}}|{{mark since c++11}} a list of {{rlp|attributes}}}}
+{{par end}}
+
+The only specifiers allowed in the {{rlp|declarations#Specifiers|declaration specifiers}} of a constructor declaration are {{rlpt|friend}}, {{rlpt|inline}}{{rev inl|since=c++11|, {{rlpt|constexpr}}}}{{rev inl|since=c++20|, {{rlpt|consteval}}}}, and {{rlpt|explicit}} (in particular, no return type is allowed). Note that {{rlp|member functions|cv- and ref-qualifiers}} are not allowed either: const and volatile semantics of an object under construction only kick in after the most-derived constructor completes.
+
+The identifier expression of {{spar|class-name}} must have one of the following forms:
+* In a {{rlp|friend|friend declaration}}, the identifier expression is a {{rlp|identifiers#Qualified identifiers|qualified identifier}} that {{rlp|qualified lookup#Class members|names a constructor}}.
+* Otherwise, in a member declaration that belongs to the {{rlpsd|class#Member specification}} of a class or class template:
+:* For classes, the identifier expression is the {{rlp|injected-class-name}} of the immediately-enclosing class.
+:* For class templates, the identifier expression is {{rev inl|until=c++20|a class name that names the {{rlpsd|dependent name#Current instantiation}}}}{{rev inl|since=c++20|the injected-class-name}} of the immediately-enclosing class template.
+* Otherwise, the identifier expression is a qualified identifier whose terminal unqualified identifier is the injected-class-name of its {{rlp|lookup}} context.
+
+===Member initializer list===
+The body of a {{rlp|function|function definition}} of any constructor, before the opening brace of the compound statement, may include the ''member initializer list'', whose syntax is the colon character {{ttb|:}}, followed by the comma-separated list of one or more {{spar|member-initializers}}, each of which has the following syntax:
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|class-or-identifier}} {{ttb|(}} {{spar optional|expression-list}} {{ttb|)}}}}
+{{sdsc|num=2|notes={{mark since c++11}}|{{spar|class-or-identifier}} {{spar|braced-init-list}}}}
+{{sdsc|num=3|notes={{mark since c++11}}|{{spar|parameter-pack}} {{ttb|...}}}}
+{{sdsc end}}
+
+@1@ Initializes the base or member named by {{spar|class-or-identifier}} using {{rlp|direct initialization|direct-initialization}} or, if {{spar|expression-list}} is empty, {{rlp|value initialization|value-initialization}}
+@2@ Initializes the base or member named by {{spar|class-or-identifier}} using {{rlp|list initialization|list-initialization}} (which becomes {{rlp|value  initialization|value-initialization}} if the list is empty and {{rlp|aggregate initialization|aggregate-initialization}} when initializing an aggregate)
+@3@ Initializes multiple bases using a {{rlp|parameter pack#Base specifiers and member initializer lists|pack expansion}}
+
+{{par begin}}
+{{par|{{spar|class-or-identifier}}|any identifier that names a non-static data member or any type name which names either the class itself (for delegating constructors) or a direct or virtual base. }}
+{{par|{{spar|expression-list}}|possibly empty, comma-separated list of the arguments to pass to the constructor of the base or member}}
+{{par|{{spar|braced-init-list}}|{{rlp|initialization|brace-enclosed initializer list}}}}
+{{par|{{spar|parameter-pack}}|name of a variadic template {{rlp|parameter pack#Base specifiers and member initializer lists|parameter pack}}}}
+{{par end}}
+
+{{example|code=
+struct S
+{
+    int n;
+    
+    S(int);       // constructor declaration
+    
+    S() : n(7) {} // constructor definition:
+                  // ": n(7)" is the initializer list
+                  // ": n(7) {}" is the function body
+};
+
+S::S(int x) : n{x} {} // constructor definition: ": n{x}" is the initializer list
+
+int main()
+{
+    S s;      // calls S::S()
+    S s2(10); // calls S::S(int)
+}
+}}
+
+===Explanation===
+Constructors have no names and cannot be called directly. They are invoked when {{rlp|initialization}} takes place, and they are selected according to the rules of initialization. The constructors without {{c/core|explicit}} specifier are {{rlp|converting constructor}}s. The constructors with a {{c/core|constexpr}} specifier make their type a {{named req|LiteralType}}. Constructors that may be called without any argument are {{rlp|default constructor}}s. Constructors that take another object of the same type as the argument are {{rlp|copy constructor}}s and {{rlp|move constructor}}s.
+
+Before the compound statement that forms the function body of the constructor begins executing, initialization of all direct bases, virtual bases, and non-static data members is finished. The member initializer list is the place where non-default initialization of these subobjects can be specified. For bases that cannot be default-initialized and for non-static data members that cannot be initialized by default-initialization {{rev inl|since=c++11|or by their {{rlp|data members#Member initialization|default member initializer}}, if any}}, such as members of reference and const-qualified types, member initializers must be specified. {{rev inl|since=c++11|(Note that default member initializers for non-static data members of class template instantiations may be invalid if the member type or initializer is dependent.)}} No initialization is performed for {{rlp|union#Anonymous unions|anonymous unions}} or {{rlp|union#Union-like class|variant members}} that do not have a member initializer {{rev inl|since=c++11|or default member initializer}}.
+
+The initializers where {{spar|class-or-identifier}} names a {{rlp|derived class|virtual base class}} are ignored during construction of any class that is not the most derived class of the object that's being constructed.
+
+Names that appear in {{spar|expression-list}} or {{spar|braced-init-list}} are evaluated in scope of the constructor:
+{{source|
+class X
+{
+    int a, b, i, j;
+public:
+    const int&amp; r;
+    X(int i)
+      : r(a) // initializes X::r to refer to X::a
+      , b{i} // initializes X::b to the value of the parameter i
+      , i(i) // initializes X::i to the value of the parameter i
+      , j(this-&gt;i) // initializes X::j to the value of X::i
+    {}
+};
+}}
+
+Exceptions that are thrown from member initializers may be handled by a {{rlp|try#Function try block|function {{c/core|try}} block}}.
+
+Member functions (including virtual member functions) can be called from member initializers, but the behavior is undefined if not all direct bases are initialized at that point.
+
+For virtual calls (if the direct bases are initialized at that point), the same rules apply as the rules for the virtual calls from constructors and destructors: virtual member functions behave as if the dynamic type of {{c|*this}} is the static type of the class that's being constructed (dynamic dispatch does not propagate down the inheritance hierarchy) and virtual calls (but not static calls) to {{rlp|abstract class|pure virtual}} member functions are undefined behavior.
+
+{{rrev|since=c++11|
+If a non-static data member has a {{rlp|data members#Member initialization|default member initializer}} and also appears in a member initializer list, then the member initializer is used and the default member initializer is ignored:
+{{source|1=
+struct S
+{
+    int n = 42;   // default member initializer
+    S() : n(7) {} // will set n to 7, not 42
+};
+}}
+}}
+
+Reference members cannot be bound to temporaries in a member initializer list:
+{{source|1=
+struct A
+{
+    A() : v(42) {} // Error
+    const int&amp; v;
+};
+}}
+Note: same applies to {{rlp|data members#Member initialization|default member initializer}}.
+
+{{rrev|since=c++11|
+====Delegating constructor====
+If the name of the class itself appears as {{spar|class-or-identifier}} in the member initializer list, then the list must consist of that one member initializer only; such a constructor is known as the ''delegating constructor'', and the constructor selected by the only member of the initializer list is the ''target constructor''.
+
+In this case, the target constructor is selected by overload resolution and executed first, then the control returns to the delegating constructor and its body is executed.
+
+Delegating constructors cannot be recursive.
+
+{{source|1=
+class Foo
+{
+public: 
+    Foo(char x, int y) {}
+    Foo(int y) : Foo('a', y) {} // Foo(int) delegates to Foo(char, int)
+};
+}}
+
+====Inheriting constructors====
+See {{rlp|using declaration#Inheriting_constructors|using declaration}}.
+}}
+
+====Initialization order====
+The order of member initializers in the list is irrelevant: the actual order of initialization is as follows:
+
+@1@ If the constructor is for the most-derived class, virtual bases are initialized in the order in which they appear in depth-first left-to-right traversal of the base class declarations (left-to-right refers to the appearance in base-specifier lists).
+@2@ Then, direct bases are initialized in left-to-right order as they appear in this class's base-specifier list.
+@3@ Then, non-static data member are initialized in order of declaration in the class definition.
+@4@ Finally, the body of the constructor is executed.
+
+(Note: if initialization order was controlled by the appearance in the member initializer lists of different constructors, then the {{rlp|destructor}} wouldn't be able to ensure that the order of destruction is the reverse of the order of construction.)
+
+===Notes===
+{{feature test macro|value=200604L|std=C++11|__cpp_delegating_constructors|[[#Delegating constructor|Delegating constructors]]}}
+
+===Example===
+
+{{example
+|code=
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+#include &lt;mutex&gt;
+
+struct Base
+{
+    int n;
+};   
+
+struct Class : public Base
+{
+    unsigned char x;
+    unsigned char y;
+    std::mutex m;
+    std::lock_guard&lt;std::mutex&gt; lg;
+    std::fstream f;
+    std::string s;
+
+    Class(int x) : Base{123}, // initialize base class
+        x(x),     // x (member) is initialized with x (parameter)
+        y{0},     // y initialized to 0
+        f{"test.cc", std::ios::app}, // this takes place after m and lg are initialized
+        s(__func__), // __func__ is available because init-list is a part of constructor
+        lg(m),    // lg uses m, which is already initialized
+        m{}       // m is initialized before lg even though it appears last here
+    {}            // empty compound statement
+
+    Class(double a) : y(a + 1),
+        x(y), // x will be initialized before y, its value here is indeterminate
+        lg(m)
+    {} // base class initializer does not appear in the list, it is
+       // default-initialized (not the same as if Base() were used, which is value-init)
+
+    Class()
+    try // function try block begins before the function body, which includes init list
+      : Class(0.0) // delegate constructor
+    {
+        // ...
+    }
+    catch (...)
+    {
+        // exception occurred on initialization
+    }
+};
+
+int main()
+{
+    Class c;
+    Class c1(1);
+    Class c2(0.1);
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=194|std=C++98|before=the declarator syntax of constructor only allowed&lt;br&gt;at most one function specifier (e.g. a constructor&lt;br&gt;cannot be declared {{c/core|inline explicit}})|after=multiple function&lt;br&gt;specifiers allowed}}
+{{dr list item|wg=cwg|dr=257|std=C++98|before=it was unspecified whether an abstract class should&lt;br&gt;provide member initializers for its virtual base classes|after=specified as not required&lt;br&gt;and such member initializers&lt;br&gt;are ignored during execution}}
+{{dr list item|wg=cwg|dr=263|std=C++98|before=the declarator syntax of constructor&lt;br&gt;prohibited constructors from being friends|after=allowed constructors&lt;br&gt;to be friends}}
+{{dr list item|wg=cwg|dr=1345|std=C++98|before=anonymous union members without default&lt;br&gt;member initializers were default-initialized|after=they are not initialized}}
+{{dr list item|wg=cwg|dr=1435|std=C++98|before=the meaning of “class name” in the&lt;br&gt;declarator syntax of constructor was unclear|after=changed the syntax to a specialized&lt;br&gt;function declarator syntax}}
+{{dr list item|wg=cwg|dr=1696|std=C++98|before=reference members could be initialized to temporaries&lt;br&gt;(whose lifetime would end at the end of constructor)|after=such initialization&lt;br&gt;is ill-formed}}
+&lt;!-- CWG issue #2237 is NOT resolved as DR --&gt;
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=11.4.5|title=Constructors|id=class.ctor}}
+{{ref std|section=11.9.3|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11.4.4|title=Constructors|id=class.ctor}}
+{{ref std|section=11.10.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=15.1|title=Constructors|id=class.ctor}}
+{{ref std|section=15.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=12.1|title=Constructors|id=class.ctor}}
+{{ref std|section=12.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=12.1|title=Constructors|id=class.ctor}}
+{{ref std|section=12.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=12.1|title=Constructors|id=class.ctor}}
+{{ref std|section=12.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+
+===See also===
+* {{rlp|copy elision}}
+* {{rlp|converting constructor}}
+* {{rlp|copy assignment}}
+* {{rlp|copy constructor}}
+* {{rlp|default constructor}}
+* {{rlp|destructor}}
+* {{rlpt|explicit}}
+* {{rlp|initialization}}
+** {{rlp|aggregate initialization}}
+** {{rlp|constant initialization}}
+** {{rlp|copy initialization}}
+** {{rlp|default initialization}}
+** {{rlp|direct initialization}}
+** {{rlp|list initialization}}
+** {{rlp|reference initialization}}
+** {{rlp|value initialization}}
+** {{rlp|zero initialization}}
+* {{rlp|move assignment}}
+* {{rlp|move constructor}}
+* {{rlpt|new}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

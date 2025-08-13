@@ -1,0 +1,137 @@
+{{cpp/title|default_delete}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++11|1=
+template&lt; class T &gt; struct default_delete;
+}}
+{{dcl|num=2|since=c++11|1=
+template&lt; class T &gt; struct default_delete&lt;T[]&gt;;
+}}
+{{dcl end}}
+
+{{tt|std::default_delete}} is the default destruction policy used by {{lc|std::unique_ptr}} when no deleter is specified. Specializations of {{tt|default_delete}} are empty classes on typical implementations, and used in the [[cpp/language/ebo|empty base class optimization]].
+
+@1@ The non-specialized {{tt|default_delete}} uses {{c/core|delete}} to deallocate memory for a single object.
+
+@2@ A partial specialization for array types that uses {{c/core|delete[]}} is also provided.
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/default_delete/dsc constructor}}
+{{dsc inc|cpp/memory/default_delete/dsc operator()}}
+{{dsc end}}
+
+{{member|{{small|std::default_delete::}}default_delete|2=
+{{dcl begin}}
+{{dcl|num=1|1= 
+constexpr default_delete() noexcept = default;
+}}
+{{dcl h|Primary template specializations}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class U &gt;
+default_delete( const default_delete&lt;U&gt;&amp; d ) noexcept;
+}}
+{{dcl h|Array specializations}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class U &gt;
+default_delete( const default_delete&lt;U[]&gt;&amp; d ) noexcept;
+}}
+{{dcl end}}
+
+@1@ Constructs a {{tt|std::default_delete}} object.
+
+@2@ Constructs a {{tt|std::default_delete&lt;T&gt;}} object from another {{tt|std::default_delete}} object.
+@@ {{cpp/enable if|{{tt|U*}} is implicitly convertible to {{tt|T*}}}}.
+
+@3@ Constructs a {{tt|std::default_delete&lt;T[]&gt;}} object from another {{tt|std::default_delete&lt;&lt;nowiki/&gt;U[]&gt;}} object.
+@@ {{cpp/enable if|{{tt|U(*)[]}} is implicitly convertible to {{tt|T(*)[]}}}}.
+
+===Parameters===
+{{par begin}}
+{{par|d|a deleter to copy from}}
+{{par end}}
+
+===Notes===
+The {{lt|cpp/language/converting constructor}} template of {{tt|std::default_delete}} makes possible the implicit conversion from {{c/core|std::unique_ptr&lt;Derived&gt;}} to {{c/core|std::unique_ptr&lt;Base&gt;}}.
+}}
+
+{{member|{{small|std::default_delete::}}operator()|2=
+{{dcl begin}}
+{{dcl h|Primary template specializations}}
+{{dcl|num=1|since=c++11|notes={{mark constexpr since c++23}}|
+void operator()( T* ptr ) const;
+}}
+{{dcl h|Array specializations}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class U &gt;
+void operator()( U* ptr ) const;
+}}
+{{dcl end}}
+
+@1@ Calls {{c/core|delete}} on {{c|ptr}}.
+
+@2@ Calls {{c/core|delete[]}} on {{c|ptr}}.
+@@ {{cpp/enable if|{{tt|U(*)[]}} is implicitly convertible to {{tt|T(*)[]}}.}}
+@@ If {{tt|U}} is an incomplete type, the program is ill-formed.
+
+===Parameters===
+{{par begin}}
+{{par|ptr|an object or array to delete}}
+{{par end}}
+
+===Exceptions===
+No exception guarantees.
+}}
+
+===Invoking over Incomplete Types===
+At the point in the code the {{c|operator()}} is called, the type must be complete. In some implementations a {{c/core|static_assert}} is used to make sure this is the case. The reason for this requirement is that calling {{ltt|cpp/language/delete}} on an incomplete type is undefined behavior in C++ if the complete class type has a nontrivial destructor or a deallocation function, as the compiler has no way of knowing whether such functions exist and must be invoked.
+
+===Notes===
+{{feature test macro|__cpp_lib_constexpr_memory|{{c/core|constexpr}} constructor and {{c|operator()}}|value=202202L|std=C++23}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;memory&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+//  {
+//      std::shared_ptr&lt;int&gt; shared_bad(new int[10]);
+//  } // the destructor calls delete, undefined behavior
+    
+    {
+        std::shared_ptr&lt;int&gt; shared_good(new int[10], std::default_delete&lt;int[]&gt;());
+    } // OK: the destructor calls delete[]
+    
+    {
+        std::unique_ptr&lt;int&gt; ptr(new int(5));
+    } // unique_ptr&lt;int&gt; uses default_delete&lt;int&gt;
+    
+    {
+        std::unique_ptr&lt;int[]&gt; ptr(new int[10]);
+    } // unique_ptr&lt;int[]&gt; uses default_delete&lt;int[]&gt;
+    
+    // default_delete can be used anywhere a delete functor is needed
+    std::vector&lt;int*&gt; v;
+    for (int n = 0; n &lt; 100; ++n)
+        v.push_back(new int(n));
+    std::for_each(v.begin(), v.end(), std::default_delete&lt;int&gt;());
+}
+|output=
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before=member functions of the array specializations rejected qualification conversions|after=accept}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

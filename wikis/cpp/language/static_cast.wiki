@@ -1,0 +1,309 @@
+{{title|{{tt|static_cast}} conversion}}
+{{cpp/language/expressions/navbar}}
+Converts between types using a combination of implicit and user-defined conversions.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|static_cast&lt;}}{{spar sep|target-type}}{{ttb|&gt;(}}{{spar sep|expression}}{{ttb|)}}}}
+{{sdsc end}}
+
+Returns a value of type {{spar|target-type}}.
+
+===Explanation===
+Only the following conversions can be done with {{c/core|static_cast}}, except when such conversions would {{rlp|const_cast#Casting away constness|cast away constness}} (or volatility).
+
+@1@ If {{spar|expression}} is an lvalue of type “''cv1'' {{tt|Base}}” and {{spar|target-type}} is “reference to ''cv2'' {{tt|Derived}}”, the result refers to the object of type {{tt|Derived}} enclosing {{spar|expression}} if all following conditions are satisfied:
+* {{tt|Derived}} is a complete class type.
+* {{tt|Base}} is a base class of {{tt|Derived}}.
+* ''cv1'' is not a greater cv-qualification than ''cv2''.
+@@ If any of the following conditions is satisfied, the program is ill-formed:
+* {{tt|Base}} is a {{rlp|derived class#Virtual base classes|virtual base class}} of {{tt|Derived}}.
+* {{tt|Base}} is a base class of a virtual base class of {{tt|Derived}}.
+* No valid {{rlp|implicit conversion|standard conversion}} from “pointer to {{tt|Derived}}” to “pointer to {{tt|Base}}” exists.
+@@ If {{spar|expression}} is actually not a base class subobject of an object of type {{tt|Derived}}, the behavior is undefined.
+{{source|1=
+struct B {};
+struct D : B { B b; };
+
+D d;
+B&amp; br1 = d;
+B&amp; br2 = d.b;
+
+static_cast&lt;D&amp;&gt;(br1); // OK, lvalue denoting the original “d” object
+static_cast&lt;D&amp;&gt;(br2); // UB: the “b” subobject is not a base class subobject
+}}
+
+{{rrev|since=c++11|
+@2@ If {{spar|target-type}} is “rvalue reference to {{tt|Derived}}” and {{spar|expression}} is an xvalue of type “(possibly cv-qualified) {{tt|Base}}” such that {{tt|Base}} is a base class of {{tt|Derived}}, the result and constraints of such a conversion are the same as those of the “{{tt|Base}} lvalue to {{tt|Derived}} reference” conversion.
+
+@3@ If {{spar|target-type}} is an rvalue reference type and the referenced type is {{rlp|reference initialization#Definitions|reference-compatible}} with the type of {{spar|expression}}, {{c/core|static_cast}} converts the value of {{rev inl|until=c++17|glvalue, class prvalue, or array prvalue}}{{rev inl|since=c++17|any lvalue}} {{spar|expression}} to xvalue referring to the same object as the expression, or to its base class subobject (depending on {{spar|target-type}}).&lt;ref&gt;This type of {{c/core|static_cast}} is used to implement move semantics in {{lc|std::move}}.&lt;/ref&gt;
+@@ If {{spar|target-type}} is an inaccessible or ambiguous base of the type of {{spar|expression}}, the program is ill-formed.
+@@ If {{spar|expression}} is a {{rlp|bit field|bit-field}} lvalue, it is first converted to prvalue of the underlying type.
+}}
+
+@4@ If {{spar|target-type}} is the (possibly cv-qualified) {{c/core|void}}, the conversion has no result. In this case, {{spar|expression}} is a {{rlp|expressions#Discarded-value expressions|discarded-value expression}}.
+
+@5@ Otherwise, {{spar|expression}} can be explicitly converted to {{spar|target-type}} if
+{{rev begin}}
+{{rev|until=c++17|
+the declaration {{box|{{spar|target-type}} {{c/core|temp(}}{{spar sep|expression}}{{c/core|);}}}} is well-formed for some invented temporary variable {{c|temp}}.
+
+The effect of such an explicit conversion is the same as performing the declaration and initialization and then using {{c|temp}} as the result of the conversion. The {{spar sep|expression}} is used as {{rev inl|until=c++11|an lvalue}}{{rev inl|since=c++11|a glvalue}} if and only if the initialization uses it as {{rev inl|until=c++11|an lvalue}}{{rev inl|since=c++11|a glvalue}}.
+}}
+{{rev|since=c++17|
+any of the following conditions is satisfied:
+* There is an implicit conversion sequence from {{spar|expression}} to {{spar|target-type}}.
+* The {{rlp|overload resolution}} for a {{rlp|direct initialization|direct-initialization}} of an object or reference of type {{spar|target-type}} from {{spar|expression}} would find at least one viable function.
+{{rrev|since=c++20|
+* {{spar|target-type}} is an {{rlp|aggregate initialization#Aggregate|aggregate type}} having a first element {{c|x}} and there is an implicit conversion sequence from {{spar|expression}} to the type of {{c|x}}.
+}}
+
+The explicit conversion is defined as follows:
+* If {{spar|target-type}} is a reference type, the effect is the same as performing the declaration and initialization {{box|{{spar|target-type}} {{c/core|temp(}}{{spar sep|expression}}{{c/core|);}}}} for some invented temporary variable {{c|temp}} and then using {{c|temp}} as the result of the conversion.
+* Otherwise, the result object is direct-initialized from {{spar sep|expression}}.
+}}
+{{rev end}}
+
+@6@ Otherwise, if the conversion from {{spar|expression}} to {{spar|target-type}} is an inverse of a standard conversion sequence, and the conversion sequence does not contain any of the following conversions, the conversion can be performed by {{c/core|static_cast}}:
+* {{rlpsd|implicit conversion#Lvalue-to-rvalue conversion}}
+* {{rlpsd|implicit conversion#Array-to-pointer conversion}}
+* {{rlpsd|implicit conversion#Function-to-pointer conversion}}
+* {{rlp|implicit conversion#Pointer conversions|null pointer conversion}}
+* {{rlp|implicit conversion#Pointer-to-member conversions|null member pointer conversion}}
+* {{rlp|implicit conversion#Boolean conversions|boolean conversion}}
+{{rrev|since=c++17|
+* {{rlp|implicit conversion#Function pointer conversions|function pointer conversion}}
+}}
+@@ If a program uses {{c/core|static_cast}} to perform the inverse of an ill-formed standard conversion sequence, it is ill-formed.
+
+@7@ Otherwise, lvalue-to-rvalue, array-to-pointer, and function-to-pointer conversions are applied to {{spar|expression}}. After these conversions, only the following conversions can be performed by {{c/core|static_cast}}:
+
+{{rrev|since=c++11|
+:@a@ A value of {{rlp|enum#Scoped enumerations|scoped enumeration}} type can be converted to an integer or floating-point type.
+{{rev begin}}
+{{rev|until=c++20|
+* If {{spar|target-type}} is (possibly cv-qualified) {{c/core|bool}}, the result is {{c|false}} if the original value of {{spar|expression}} is zero and {{c|true}} for all other values.
+* If {{spar|target-type}} is an integral type other than (possibly cv-qualified) {{c/core|bool}}, the value is unchanged if the original value of {{spar|expression}} can be represented by {{spar|target-type}}. Otherwise, the resulting value is unspecified.
+}}
+{{rev|since=c++20|
+* If {{spar|target-type}} is an integral type, the result is the same as that of converting to the enumeration’s underlying type and then to {{spar|target-type}}.
+}}
+{{rev end}}
+* If {{spar|target-type}} is a floating-point type, the result is the same as that of converting from the original value to {{spar|target-type}}.
+}}
+
+:@b@ A value of integer or enumeration type can be converted to any complete enumeration type.
+* If {{spar|target-type}} has a fixed underlying type, {{spar|expression}} is first converted to that type by {{rlpsd|implicit conversion#Integral promotion}} or {{rlp|implicit conversion#Integral conversions|integral conversion}}, if necessary, and then to {{spar|target-type}}.
+*  If {{spar|target-type}} does not have a fixed underlying type, the value of {{spar|expression}} is unchanged if the original value is {{rlp|enum#Notes|within the range of the enumeration values}}, otherwise the behavior is undefined.
+
+:@c@ A value of a floating-point type can also be converted to any complete enumeration type. The result is the same as {{rlp|implicit conversion#Floating-integral conversions|converting}} the original value of {{spar|expression}} first to the underlying type of {{spar|target-type}}, and then to {{spar|target-type}} itself.
+
+{{rrev|since=c++23|
+:@d@ A prvalue of floating-point type can be explicitly converted to any other floating-point type.
+* If the source value of {{spar|expression}} can be represented exactly in {{spar|target-type}}, it does not change.
+* Otherwise, if the source value of {{spar|expression}} is between two representable values of {{spar|target-type}}, the result of the conversion is an implementation-defined choice of either of those values.&lt;ref&gt;If IEEE arithmetic is supported, rounding defaults to nearest.&lt;/ref&gt;
+* Otherwise, the behavior is undefined.
+}}
+
+:@e@ {{rev inl|until=c++11|An rvalue}}{{rev inl|since=c++11|A prvalue}} of type “pointer to ''cv1'' {{tt|Base}}” can be explicitly converted to the type “pointer to ''cv2'' {{tt|Derived}}” if all following conditions are satisfied:
+* {{tt|Derived}} is a complete class type.
+* {{tt|Base}} is a base class of {{tt|Derived}}.
+* ''cv1'' is not a greater cv-qualification than ''cv2''.
+:@@ If {{spar|expression}} is a {{rlp|pointer#Null pointers|null pointer value}}, the result is a null pointer value of type {{spar|target-type}}. Otherwise, the result is a pointer to the object of type {{tt|Derived}} enclosing the object of type {{tt|Base}} pointed to by {{spar|expression}}.
+:@@ If any of the following conditions is satisfied, the program is ill-formed:
+* {{tt|Base}} is a {{rlp|derived class#Virtual base classes|virtual base class}} of {{tt|Derived}}.
+* {{tt|Base}} is a base class of a virtual base class of {{tt|Derived}}.
+* No valid standard conversion from “pointer to {{tt|Derived}}” to “pointer to {{tt|Base}}” exists.
+:@@ If {{spar|expression}} is not a null pointer value and does not actually point to a base class subobject of an object of type {{tt|Derived}}, the behavior is undefined.
+
+:@f@ {{rev inl|until=c++11|An rvalue}}{{rev inl|since=c++11|A prvalue}} of type “pointer to member of {{tt|Derived}} of type ''cv1'' {{tt|T}}” can be explicitly converted to the type “pointer to member of {{tt|Base}} of type ''cv2'' {{tt|T}}” if all following conditions are satisfied:
+* {{tt|Derived}} is a complete class type.
+* {{tt|Base}} is a base class of {{tt|Derived}}.
+* ''cv1'' is not a greater cv-qualification than ''cv2''.
+:@@ If {{spar|expression}} is a null member pointer value, the result is a null member pointer value of type {{spar|target-type}}. Otherwise, the result is a pointer to the original (possibly indirect) member of class {{tt|Base}}.
+:@@ If no valid standard conversion from “pointer to member of {{tt|Base}} of type {{tt|T}}” to “pointer to member of {{tt|Derived}} of type {{tt|T}}” exists, the program is ill-formed.
+:@@ If {{spar|expression}} is not a null member pointer value and the member it denotes is not a (possibly indirect) member of class {{tt|Base}}, the behavior is undefined.
+
+:@g@ {{rev inl|until=c++11|An rvalue}}{{rev inl|since=c++11|A prvalue}} of type “pointer to ''cv1'' {{c/core|void}}” can be explicitly converted to the type “pointer to ''cv2'' {{tt|T}}” if {{tt|T}} is an object type and ''cv1'' is not a greater cv-qualification than ''cv2''.
+{{rev begin}}
+{{rev|until=c++17|
+* If {{spar|expression}} is a null pointer value, the result is a null pointer value of type {{spar|target-type}}.
+* If the {{spar|expression}} {{rlp|pointer#Pointers|represents the address}} {{tt|A}} of a {{rlpsd|memory model#Byte}} in memory and {{tt|A}} satisfies the {{rlpsd|object#Alignment}} requirement of {{tt|T}}, then the resulting pointer value also represents {{tt|A}}.
+* The result of any other such pointer conversion is unspecified.
+* If {{spar|expression}} the result of a prior conversion from an object of type “pointer to ''cv3'' {{tt|T}}”, the result has the original value.
+}}
+{{rev|since=c++17|
+* If {{spar|expression}} {{rlp|pointer#Pointers|represents the address}} {{tt|A}} of a {{rlpsd|memory model#Byte}} in memory but {{tt|A}} does not satisfy the {{rlpsd|object#Alignment}} requirement of {{tt|T}}, then the resulting pointer value is unspecified.
+* Otherwise, if {{spar|expression}} points to an object {{c|a}}, and there is an object {{c|b}} of type {{tt|T}} (ignoring cv-qualification) that is pointer-interconvertible (see below) with {{c|a}}, the result is a pointer to {{c|b}}.
+* Otherwise, the pointer value is unchanged by the conversion.
+}}
+{{rev end}}
+
+{{cpp/language/cast return}}
+
+&lt;references/&gt;
+
+{{anchor|pointer-interconvertible}}
+===Pointer-interconvertible objects===
+Two objects {{c|a}} and {{c|b}} are ''pointer-interconvertible'' if:
+* they are the same object, or
+* one is a union object and the other is a non-static data member of that object, or
+* one is a {{rlpsd|data members#Standard-layout}} class object and the other is the first non-static data member of that object or any base class subobject of that object, or
+* there exists an object {{c|c}} such that {{c|a}} and {{c|c}} are pointer-interconvertible, and {{c|c}} and {{c|b}} are pointer-interconvertible.
+
+{{source|1=
+union U { int a; double b; } u;
+void* x = &amp;u;                        // x's value is “pointer to u”
+double* y = static_cast&lt;double*&gt;(x); // y's value is “pointer to u.b”
+char* z = static_cast&lt;char*&gt;(x);     // z's value is “pointer to u”
+}}
+
+===Notes===
+Base-to-derived conversions (''downcasts'') using {{c/core|static_cast}} make no runtime checks to ensure that the {{rlpsd|type#Dynamic type}} of the pointed/referred object is {{tt|Derived}}, and may only be used safely if this precondition is guaranteed by other means, such as when implementing {{enwiki|Curiously recurring template pattern#Static polymorphism|static polymorphism}}. Safe downcast may be done with {{rlpt|dynamic_cast}}.
+
+{{c/core|static_cast}} may also be used to disambiguate function overloads by performing a function-to-pointer conversion to specific type, as in
+{{source|
+std::for_each(files.begin(), files.end(),
+              static_cast&lt;std::ostream&amp;(*)(std::ostream&amp;)&gt;(std::flush));
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/static_cast}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct B
+{
+    int m = 42;
+    const char* hello() const
+    {
+        return "Hello world, this is B!\n";
+    }
+};
+
+struct D : B
+{
+    const char* hello() const
+    {
+        return "Hello world, this is D!\n";
+    }
+};
+
+enum class E { ONE = 1, TWO, THREE };
+enum EU { ONE = 1, TWO, THREE };
+
+int main()
+{
+    // 1. static downcast
+    D d;
+    B&amp; br = d; // upcast via implicit conversion
+    std::cout &lt;&lt; "1) " &lt;&lt; br.hello();
+    D&amp; another_d = static_cast&lt;D&amp;&gt;(br); // downcast
+    std::cout &lt;&lt; "1) " &lt;&lt; another_d.hello();
+    
+    // 3. lvalue to xvalue
+    std::vector&lt;int&gt; v0{1, 2, 3};
+    std::vector&lt;int&gt; v2 = static_cast&lt;std::vector&lt;int&gt;&amp;&amp;&gt;(v0);
+    std::cout &lt;&lt; "3) after move, v0.size() = " &lt;&lt; v0.size() &lt;&lt; '\n';
+    
+    // 4. discarded-value expression
+    static_cast&lt;void&gt;(v2.size());
+    
+    // 5. initializing conversion
+    int n = static_cast&lt;int&gt;(3.14);
+    std::cout &lt;&lt; "5) n = " &lt;&lt; n &lt;&lt; '\n';
+    std::vector&lt;int&gt; v = static_cast&lt;std::vector&lt;int&gt;&gt;(10);
+    std::cout &lt;&lt; "5) v.size() = " &lt;&lt; v.size() &lt;&lt; '\n';
+    
+    // 6. inverse of implicit conversion
+    void* nv = &amp;n;
+    int* ni = static_cast&lt;int*&gt;(nv);
+    std::cout &lt;&lt; "6) *ni = " &lt;&lt; *ni &lt;&lt; '\n';
+    
+    // 7a. scoped enum to int
+    E e = E::TWO;
+    int two = static_cast&lt;int&gt;(e);
+    std::cout &lt;&lt; "7a) " &lt;&lt; two &lt;&lt; '\n';
+    
+    // 7b. int to enum, enum to another enum
+    E e2 = static_cast&lt;E&gt;(two);
+    [[maybe_unused]]
+    EU eu = static_cast&lt;EU&gt;(e2);
+    
+    // 7f. pointer to member upcast
+    int D::*pm = &amp;D::m;
+    std::cout &lt;&lt; "7f) " &lt;&lt; br.*static_cast&lt;int B::*&gt;(pm) &lt;&lt; '\n';
+    
+    // 7g. void* to any object pointer
+    void* voidp = &amp;e;
+    [[maybe_unused]]
+    std::vector&lt;int&gt;* p = static_cast&lt;std::vector&lt;int&gt;*&gt;(voidp);
+}
+|output=
+1) Hello world, this is B!
+1) Hello world, this is D!
+3) after move, v0.size() = 0
+5) n = 3
+5) v.size() = 10
+6) *ni = 3
+7a) 2
+7f) 42
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=137|std=C++98|before=the constness and volatility of&lt;br&gt;pointers to {{c/core|void}} could be casted away|after=cv-qualifications cannot be&lt;br&gt;casted away in such cases}}
+{{dr list item|wg=cwg|dr=427|std=C++98|before=downcast might be ambiguous with direct-initialization|after=selects downcast in this case}}
+{{dr list item|wg=cwg|dr=439|std=C++98|before=when converting a “pointer to object” to “pointer to&lt;br&gt;{{c/core|void}}” then back to itself, it could only preserve its&lt;br&gt;value if the result type has the same cv-qualification|after=cv-qualification&lt;br&gt;may be different}}
+{{dr list item|wg=cwg|dr=1094|std=C++98|before=the conversion from floating-point values&lt;br&gt;to enumeration values was unspecified|after=specified}}
+{{dr list item|wg=cwg|dr=1320|std=C++11|before=the conversion from scoped enumeration&lt;br&gt;values to bool was unspecified|after=specified}}
+{{dr list item|wg=cwg|dr=1412|std=C++98|before=the result of the conversion from&lt;br&gt;“pointer to&lt;br&gt;{{c/core|void}}” to “pointer to object” was unclear|after=made clear}}
+{{dr list item|wg=cwg|dr=1447|std=C++11|before=the conversion from bit-fields to rvalue references&lt;br&gt;was unspecified (cannot bind references to bit-fields)|after=specified}}
+&lt;!-- CWG 1739 is a minor defect (editorial-like) --&gt;
+{{dr list item|wg=cwg|dr=1766|std=C++98|before=the conversion from integral or enumeration values to enumeration&lt;br&gt;values yielded unspecified result if {{spar|expression}} is out of range|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=1832|std=C++98|before=the conversion from integral or enumeration values to&lt;br&gt;enumeration values allowed {{spar|target-type}} to be incomplete|after=not allowed}}
+{{dr list item|wg=cwg|dr=2224|std=C++98|before=the conversion from a member of base class type to&lt;br&gt;its complete object of derived class type was valid|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=2254|std=C++11|before=a standard-layout class object with no data members&lt;br&gt;was pointer-interconvertible to its first base class|after=it is pointer-interconvertible&lt;br&gt;to any of its base classes}}
+{{dr list item|wg=cwg|dr=2284|std=C++11|before=a non-standard-layout union object and a non-static data&lt;br&gt;member of that object were not pointer-interconvertible|after=they are}}
+{{dr list item|wg=cwg|dr=2310|std=C++98|before=for base-to-derived pointer conversions and&lt;br&gt;derived-to-base pointer-to-member conversions,&lt;br&gt;the derived class type could be incomplete|after=must be complete}}
+{{dr list item|wg=cwg|dr=2338|std=C++11|before=the conversion to enumeration types with fixed underlying type&lt;br&gt;resulted in undefined behavior if {{spar|expression}} is out of range|after=convert to the underlying type&lt;br&gt;first (no undefined behavior)}}
+{{dr list item|wg=cwg|dr=2499|std=C++11|before=a standard-layout class might have a non-pointer-interconvertible&lt;br&gt;base class, even though all base subobjects have the same address|after=it does not have}}
+{{dr list item|wg=cwg|dr=2718|std=C++98|before=for base-to-derived reference conversions,&lt;br&gt;the derived class type could be incomplete|after=must be complete}}
+{{dr list item|wg=cwg|dr=2882|std=C++98|before=it was unclear whether {{c|static_cast&lt;void&gt;(expr)}} attempts&lt;br&gt;to form an implicit conversion sequence from {{c|expr}} to {{c/core|void}}|after=no attempt in this case}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.6.1.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.8|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+
+===See also===
+* {{rlpt|const_cast}}
+* {{rlpt|dynamic_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast}}
+* {{rlp|implicit cast|implicit conversions}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

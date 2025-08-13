@@ -1,0 +1,130 @@
+{{cpp/title|uninitialized_copy_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcla|num=1|since=c++11|constexpr=c++26|
+template&lt; class InputIt, class Size, class NoThrowForwardIt &gt;
+NoThrowForwardIt uninitialized_copy_n( InputIt first, Size count,
+                                       NoThrowForwardIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt,
+          class Size, class NoThrowForwardIt &gt;
+NoThrowForwardIt uninitialized_copy_n( ExecutionPolicy&amp;&amp; policy,
+                                       ForwardIt first, Size count,
+                                       NoThrowForwardIt d_first );}}
+{{dcl end}}
+                                    
+@1@ Copies {{c|count}} elements from a range beginning at {{c|first}} to an uninitialized memory area beginning at {{c|d_first}} as if by
+{{box|
+{{c/core|for (; count &gt; 0; ++d_first, (void) ++first, --count)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{rlpi|voidify}}{{c/core|(*d_first))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type(*first);}}
+}}
+@@ If an exception is thrown during the initialization, the objects already constructed are destroyed in an unspecified order.
+
+@2@ Same as {{v|1}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+
+{{rrev|since=c++20|
+If {{counted range|d_first|count}} overlaps with {{counted range|first|count}}, the behavior is undefined.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of the elements to copy}}
+{{par|count|the number of elements to copy}}
+{{par|d_first|the beginning of the destination range}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|NoThrowForwardIt|ForwardIterator}}
+{{par req|No increment, assignment, comparison, or indirection through valid instances of {{tt|NoThrowForwardIt}} may throw exceptions.}}
+{{par end}}
+
+===Return value===
+Iterator to the element past the last element copied.
+
+===Complexity===
+Linear in {{c|count}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===Notes===
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} for [[cpp/memory#Uninitialized memory algorithms|specialized memory algorithms]], {{vl|1}}}}
+
+===Possible implementation===
+{{eq fun|1=
+template&lt;class InputIt, class Size, class NoThrowForwardIt&gt;
+constexpr NoThrowForwardIt uninitialized_copy_n(InputIt first, Size count,
+                                                NoThrowForwardIt d_first)
+{
+    using T = typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type;
+    NoThrowForwardIt current = d_first;
+    try
+    {
+        for (; count &gt; 0; ++first, (void) ++current, --count)
+            ::new (static_cast&lt;void*&gt;(std::addressof(*current))) T(*first);
+    }
+    catch (...)
+    {
+        for (; d_first != current; ++d_first)
+            d_first-&gt;~T();
+        throw;
+    }
+    return current;
+}
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;std::string&gt; v = {"This", "is", "an", "example"};
+    
+    std::string* p;
+    std::size_t sz;
+    std::tie(p, sz) = std::get_temporary_buffer&lt;std::string&gt;(v.size());
+    sz = std::min(sz, v.size());
+    
+    std::uninitialized_copy_n(v.begin(), sz, p);
+    
+    for (std::string* i = p; i != p + sz; ++i)
+    {
+        std::cout &lt;&lt; *i &lt;&lt; ' ';
+        i-&gt;~basic_string&lt;char&gt;();
+    }
+    std::cout &lt;&lt; '\n';
+    
+    std::return_temporary_buffer(p);
+}
+|p=true
+|output=
+This is an example
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2133|std=C++98|before=the effect description used a {{c/core|for}} loop with the iteration&lt;br&gt;expression {{c|++d_first, ++first, --count}}, which&lt;br&gt;results in argument-dependent lookups of {{c/core|operator,}}|after=discards the value&lt;br&gt;of one operand to&lt;br&gt;disable those ADLs}}
+{{dr list item|wg=lwg|dr=2433|std=C++11|before=this algorithm might be hijacked by overloaded {{c/core|operator&amp;}}|after=uses {{lc|std::addressof}}}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=this algorithm might create objects on a {{c/core|const}} storage|after=kept disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc uninitialized_copy}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_copy_n}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

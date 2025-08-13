@@ -1,0 +1,329 @@
+{{title|Lifetime}}
+{{cpp/language/basics/navbar}}
+Every {{rlp|object}} and {{rlp|reference}} has a ''lifetime'', which is a runtime property: for any object or reference, there is a point of execution of a program when its lifetime begins, and there is a moment when it ends.
+
+The lifetime of an object begins when: 
+* storage with the proper alignment and size for its type is obtained, and
+* its initialization (if any) is complete (including {{rlp|default initialization}} via no constructor or {{rlpsd|default constructor#Trivial default constructor}}), except that
+:* if the object is a {{rlp|union#Member lifetime|union member}} or subobject thereof, its lifetime only begins if that union member is the initialized member in the union, or it is made active,
+:* if the object is nested in a union object, its lifetime may begin if the containing union object is assigned or constructed by a trivial special member function,
+:* an array object's lifetime may also begin if it is allocated by {{lc|std::allocator::allocate}}.
+
+Some operations {{rlp|object#Object creation|implicitly create objects}} of {{rlpsd|type#Implicit-lifetime type}}s in given region of storage and start their lifetime. If a subobject of an implicitly created object is not of an implicit-lifetime type, its lifetime does not begin implicitly.
+
+The lifetime of an object ends when: 
+* if it is of a non-class type, the object is destroyed (maybe via a pseudo-destructor call), or
+* if it is of a class type, the {{rlp|destructor}} call starts, or
+* the storage which the object occupies is released, or is [[#Storage reuse|reused]] by an object that is not nested within it.
+
+Lifetime of an object is equal to or is nested within the lifetime of its storage, see {{rlp|storage duration}}.
+
+The lifetime of a {{rlp|reference}} begins when its initialization is complete and ends as if it were a scalar object.
+
+Note: the lifetime of the referred object may end before the end of the lifetime of the reference, which makes {{rlpsd|reference#Dangling references}} possible.
+
+Lifetimes of non-static data members and base subobjects begin and end following {{rlp|initializer list#Initialization order|class initialization order}}.
+
+===Temporary object lifetime===
+Temporary objects are created {{rev inl|since=c++17|when a prvalue is {{rlp|implicit conversion#Temporary materialization|materialized}} so that it can be used as a glvalue, which occurs}} in the following situations:
+* {{rlp|reference initialization|binding a reference to a prvalue}}
+{{rrev|since=c++11|
+* {{rlp|list initialization|initializing}} an object of type {{c/core|std::initializer_list&lt;T&gt;}} from a {{rlp|initialization|brace-enclosed initializer list}}
+}}
+{{rrev multi|until1=c++17
+|rev1=
+* returning a prvalue from a function
+* {{rlp|expressions#Conversions|conversion}} that creates a prvalue ({{rlp|explicit cast|including}} {{c|T(a, b, c)}} and {{c|T{}&lt;!----&gt;}})
+{{rrev|since=c++11|
+* {{rlp|lambda|lambda expression}}
+}}
+* {{rlp|copy initialization|copy-initialization}} that requires conversion of the initializer,
+* {{rlp|reference initialization|reference-initialization|binding a reference}} to a different but convertible type or to a bitfield.
+|rev2=
+* when performing {{rlp|operator member access#Built-in member access operators|member access}} on a class prvalue
+* when performing an {{rlp|array#Array-to-pointer decay|array-to-pointer}} conversion or {{rlp|operator member access#Built-in subscript operator|subscripting}} on an array prvalue
+* for unevaluated operands in {{rlpt|sizeof}} and {{rlpt|typeid}}
+* when a prvalue appears as a {{rlp|expressions#Discarded-value expressions|discarded-value expression}}
+}}
+
+{{rrev|since=c++17|
+Also, temporary objects are created:
+* if supported by the implementation, when passing or returning an object of trivially-copyable type in a {{rlp|operator other#Built-in function call operator|function call expression}} (this allows passing structs in CPU registers)
+
+The materialization of a temporary object is generally delayed as long as possible in order to avoid creating unnecessary temporary object: see {{rlp|copy elision}}.
+}}
+
+All temporary objects are destroyed as the last step in evaluating the {{rlp|expressions#Full-expressions|full-expression}} that (lexically) contains the point where they were created, and if multiple temporary objects were created, they are destroyed in the order opposite to the order of creation. This is true even if that evaluation ends in throwing an exception.
+
+There are the following exceptions from that:
+* The lifetime of a temporary object may be extended by binding to a reference, see {{rlp|reference initialization#Lifetime of a temporary|reference initialization}} for details.
+* The lifetime of a temporary object created when evaluating the default arguments of a default or copy constructor used to initialize or copy an element of an array ends before the next element of the array begins initialization.
+{{rev begin}}
+{{rev|since=c++17|
+* The lifetime of a temporary object created in a {{rlp|structured binding}} declaration (introduced by the initializer for a variable with unique name) is extended to the end of the structured binding declaration.
+}}
+{{rev|since=c++23|
+* The lifetime of a temporary object created in the {{spar|range-initializer}} of a {{rlp|range-for|range-{{c/core|for}}}} statement that would otherwise be destroyed at the end of the {{spar|range-initializer}} is extended to the end of the loop body.
+}}
+{{rev end}}
+
+===Storage reuse===
+A program is not required to call the destructor of an object to end its lifetime if the object is {{rlp|destructor#Trivial destructor|trivially-destructible}} (be careful that the correct behavior of the program may depend on the destructor). However, if a program ends the lifetime of a non-trivially destructible object that is a variable explicitly, it must ensure that a new object of the same type is constructed in-place (e.g. via placement {{c/core|new}}) before the destructor may be called implicitly, i.e. due to scope exit or exception for automatic objects{{rev inl|since=c++11|, due to thread exit for thread-local objects,}} or due to program exit for static objects; otherwise the behavior is undefined.
+
+{{source|1=
+class T {}; // trivial
+
+struct B
+{
+    ~B() {} // non-trivial
+};
+
+void x()
+{
+    long long n; // automatic, trivial
+    new (&amp;n) double(3.14); // reuse with a different type okay
+} // okay
+
+void h()
+{
+    B b; // automatic non-trivially destructible
+    b.~B(); // end lifetime (not required, since no side-effects)
+    new (&amp;b) T; // wrong type: okay until the destructor is called
+} // destructor is called: undefined behavior
+}}
+
+It is undefined behavior to reuse storage that is or was occupied by a const complete object of static{{rev inl|since=c++11|, thread-local,}} or automatic storage duration because such objects may be stored in read-only memory:
+
+{{source|1=
+struct B
+{
+    B(); // non-trivial
+    ~B(); // non-trivial
+};
+const B b; // const static
+
+void h()
+{
+    b.~B(); // end the lifetime of b
+    new (const_cast&lt;B*&gt;(&amp;b)) const B; // undefined behavior: attempted reuse of a const
+}
+}}
+
+When evaluating a {{rlp|new|new expression}}, storage is considered reused after it is returned from the [[cpp/memory/new/operator new|allocation function]], but before the evaluation of the {{spar|initializer}} of the new expression:
+
+{{source|
+struct S
+{
+    int m;
+};
+
+void f()
+{
+    S x{1};
+    new(&amp;x) S(x.m); // undefined behavior: the storage is reused
+}
+}}
+
+If a new object is created at the address that was occupied by another object, then all pointers, references, and the name of the original object will automatically refer to the new object and, once the lifetime of the new object begins, can be used to manipulate the new object, but only if the original object is transparently replaceable by the new object.
+
+If all following conditions are satisfied, object {{c|x}} is ''transparently replaceable'' by object {{c|y}}:
+* The storage for {{c|y}} exactly overlays the storage location which {{c|x}} occupied.
+* {{c|y}} is of the same type as {{c|x}} (ignoring the top-level cv-qualifiers).
+* {{c|x}} is not a complete const object.
+* Neither {{c|x}} nor {{c|y}} is a base class subobject{{rev inl|since=c++20|, or a member subobject declared with {{attr|no_unique_address}}}}.
+* One of the following conditions is satisfied:
+:* {{c|x}} and {{c|y}} are both complete objects.
+:* {{c|x}} and {{c|y}} are direct subobjects of objects {{c|ox}} and {{c|oy}} respectively, and {{c|ox}} is transparently replaceable by {{c|oy}}.
+
+{{source|1=
+struct C
+{
+    int i;
+    void f();
+    const C&amp; operator=(const C&amp;);
+};
+
+const C&amp; C::operator=(const C&amp; other)
+{
+    if (this != &amp;other)
+    {
+        this-&gt;~C();          // lifetime of *this ends
+        new (this) C(other); // new object of type C created
+        f();                 // well-defined
+    }
+    return *this;
+}
+
+C c1;
+C c2;
+c1 = c2; // well-defined
+c1.f();  // well-defined; c1 refers to a new object of type C
+}}
+
+{{rrev|since=c++17|
+If the conditions listed above are not met, a valid pointer to the new object may still be obtained by applying the pointer optimization barrier {{lc|std::launder}}:
+{{source|1=
+struct A
+{ 
+    virtual int transmogrify();
+};
+ 
+struct B : A
+{
+    int transmogrify() override { ::new(this) A; return 2; }
+};
+ 
+inline int A::transmogrify() { ::new(this) B; return 1; }
+
+void test()
+{
+    A i;
+    int n = i.transmogrify();
+    // int m = i.transmogrify(); // undefined behavior:
+    // the new A object is a base subobject, while the old one is a complete object
+    int m = std::launder(&amp;i)-&gt;transmogrify(); // OK
+    assert(m + n == 3);
+}
+}}
+}}
+
+Similarly, if an object is created in the storage of a class member or array element, the created object is only a subobject (member or element) of the original object's containing object if:
+* the lifetime of the containing object has begun and not ended
+* the storage for the new object exactly overlays the storage of the original object
+* the new object is of the same type as the original object (ignoring cv-qualification).
+
+{{rrev|since=c++17|
+Otherwise, the name of the original subobject cannot be used to access the new object without {{lc|std::launder}}:
+{{todo|an appropriate example}}
+}}
+
+====Providing storage====
+As a special case, objects can be created in arrays of {{c/core|unsigned char}}{{rev inl|since=c++17| or {{ltt std|cpp/types/byte}}}} (in which case it is said that the array ''provides storage'' for the object) if
+* the lifetime of the array has begun and not ended
+* the storage for the new object fits entirely within the array
+* there is no array object that satisfies these constraints nested within the array.
+
+If that portion of the array previously provided storage for another object, the lifetime of that object ends because its storage was reused, however the lifetime of the array itself does not end (its storage is not considered to have been reused).
+{{source|1=
+template&lt;typename... T&gt;
+struct AlignedUnion
+{
+    alignas(T...) unsigned char data[max(sizeof(T)...)];
+};
+
+int f()
+{
+    AlignedUnion&lt;int, char&gt; au;
+    int *p = new (au.data) int;     // OK, au.data provides storage
+    char *c = new (au.data) char(); // OK, ends lifetime of *p
+    char *d = new (au.data + 1) char();
+    return *c + *d; // OK
+}
+}}
+
+===Access outside of lifetime===
+Before the lifetime of an object has started but after the storage which the object will occupy has been allocated or, after the lifetime of an object has ended and before the storage which the object occupied is reused or released, the behaviors of the following uses of the glvalue expression that identifies that object are undefined, unless the object is being constructed or destructed (separate set of rules applies):
+# Lvalue to rvalue conversion (e.g. function call to a function that takes a value).
+# Access to a non-static data member or a call to a non-static member function.
+# Binding a reference to a virtual base class subobject.
+# {{rlpt|dynamic_cast}} or {{rlpt|typeid}} expressions.
+
+The above rules apply to pointers as well (binding a reference to virtual base is replaced by implicit conversion to a pointer to virtual base), with two additional rules:
+# {{rlpt|static_cast}} of a pointer to storage without an object is only allowed when casting to (possibly cv-qualified) {{c/core|void*}}.
+# Pointers to storage without an object that were cast to possibly cv-qualified {{c/core|void*}} can only be {{rlpt|static_cast}} to pointers to possibly cv-qualified {{c/core|char}}, or possibly cv-qualified {{c/core|unsigned char}}{{rev inl|since=c++17|, or possibly cv-qualified {{ltt|cpp/types/byte|std::byte}}}}.
+
+During construction and destruction it is generally allowed to call non-static member functions, access non-static data members, and use {{rlpt|typeid}} and {{rlpt|dynamic_cast}}. However, because the lifetime either has not begun yet (during construction) or has already ended (during destruction), only specific operations are allowed. For one restriction, see {{rlp|virtual#During construction and destruction|virtual function calls during construction and destruction}}.
+
+===Notes===
+Until the resolution of {{cwg|2256}}, the end of lifetime rules are different between non-class objects (end of storage duration) and class objects (reverse order of construction):
+{{source|1=
+struct A
+{
+    int* p;
+    ~A() { std::cout &lt;&lt; *p; } // undefined behavior since CWG2256: n does not outlive a
+                              // well-defined until CWG2256: prints 123
+};
+
+void f()
+{
+    A a;
+    int n = 123; // if n did not outlive a, this could have been optimized out (dead store)
+    a.p = &amp;n;
+}
+}}
+
+Until the resolution of [https://wg21.link/p1971r0#RU007 RU007], a non-static member of a const-qualified type or a reference type prevents its containing object from being transparently replaceable, which makes {{lc|std::vector}} and {{lc|std::deque}} hard to implement:
+{{source|1=
+struct X { const int n; };
+union U { X x; float f; };
+
+void tong()
+{
+    U u = { {1} };
+    u.f = 5.f;                          // OK: creates new subobject of 'u'
+    X *p = new (&amp;u.x) X {2};            // OK: creates new subobject of 'u'
+    assert(p-&gt;n == 2);                  // OK
+    assert(u.x.n == 2);                 // undefined until RU007:
+                                        // 'u.x' does not name the new subobject
+    assert(*std::launder(&amp;u.x.n) == 2); // OK even until RU007
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=119|std=C++98|before=an object of a class type with a non-trivial constructor can&lt;br&gt;only start its lifetime when the constructor call has completed|after=lifetime also started&lt;br&gt;for other initializations}}
+{{dr list item|wg=cwg|dr=201|std=C++98|before=lifetime of a temporary object in a default argument&lt;br&gt;of a default constructor was required to end&lt;br&gt;when the initialization of the array completes|after=lifetime ends before&lt;br&gt;initializing the next&lt;br&gt;element (also resolves&lt;br&gt;{{cwg|124}})}}
+{{dr list item|wg=cwg|dr=274|std=C++98|before=an lvalue designating an out-of-lifetime object could be&lt;br&gt;used as the operand of static_cast only if the conversion&lt;br&gt;was ultimately to cv-unqualified {{c/core|char&amp;}} or {{c/core|unsigned char&amp;}}|after=cv-qualified {{c/core|char&amp;}}&lt;br&gt;and {{c/core|unsigned char&amp;}}&lt;br&gt;also allowed}}
+{{dr list item|wg=cwg|dr=597|std=C++98|before=the following behaviors were undefined:&lt;br&gt;1. a pointer to an out-of-lifetime object is implicitly&lt;br&gt;converted to a pointer to a non-virtual base class&lt;br&gt;2. an lvalue referring to an out-of-lifetime object&lt;br&gt;is bound to a reference to a non-virtual base class&lt;br&gt;3. an lvalue referring to an out-of-lifetime object is used&lt;br&gt;as the operand of a {{c/core|static_cast}} (with a few exceptions)|after=made well-defined}}
+{{dr list item|wg=cwg|dr=2012|std=C++98|before=lifetime of references was specified to match storage duration,&lt;br&gt;requiring that extern references are alive before their initializers run|after=lifetime begins&lt;br&gt;at initialization}}
+{{dr list item|wg=cwg|dr=2107|std=C++98|before=the resolution of {{cwg|124}} was not applied to copy constructors|after=applied}}
+{{dr list item|wg=cwg|dr=2256|std=C++98|before=lifetime of trivially destructible objects were inconsistent with other objects|after=made consistent}}
+{{dr list item|wg=cwg|dr=2470|std=C++98|before=more than one arrays could provide storage for the same object|after=only one provides}}
+{{dr list item|wg=cwg|dr=2489|std=C++98|before={{c/core|char[]}} cannot provide storage, but objects&lt;br&gt;could be implicitly created within its storage|after=objects cannot be&lt;br&gt;implicitly created within&lt;br&gt; the storage of {{c/core|char[]}}}}
+{{dr list item|wg=cwg|dr=2527|std=C++98|before=if a destructor is not invoked because of reusing storage and the&lt;br&gt;program depends on its side effects, the behavior was undefined|after=the behavior is well-&lt;br&gt;defined in this case}}
+{{dr list item|wg=cwg|dr=2721|std=C++98|before=the exact time point of storage reuse was unclear for placement {{c/core|new}}|after=made clear}}
+{{dr list item|wg=cwg|dr=2849|std=C++23|before=function parameter objects were considered as temporary&lt;br&gt;objects for range-{{c/core|for}} loop temporary object lifetime extension|after=not considered as&lt;br&gt;temporary objects}}
+{{dr list item|wg=cwg|dr=2854|std=C++98|before=exception objects were temporary objects|after=they are not&lt;br&gt;temporary objects}}
+{{dr list item|wg=cwg|dr=2867|std=C++17|before=the lifetime of temporary objects created in&lt;br&gt;structured binding declarations were not extended|after=extended to the end&lt;br&gt;of the declaration}}
+{{dr list item|paper=P0137R1|std=C++98|before=creating an object in an array of {{c/core|unsigned char}} reused its storage|after=its storage is not reused}}
+{{dr list item|paper=P0593R6|std=C++98|before=a pseudo-destructor call had no effects|after=it destroys the object}}
+{{dr list item|paper=P1971R0|std=C++98|before=a non-static data member of a const-qualified type or a reference type&lt;br&gt;prevented its containing object from being transparently replaceable|after=restriction removed}}
+{{dr list item|paper=P2103R0|std=C++98|before=transparently replaceability did not require keeping the original structure|after=requires}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=6.7.3|title=Object lifetime|id=basic.life}}
+{{ref std|section=11.9.5|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.7.3|title=Object lifetime|id=basic.life}}
+{{ref std|section=11.10.4|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=15.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=3.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/lifetime|Lifetime|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

@@ -1,0 +1,145 @@
+{{title|assert}}
+{{cpp/error/navbar}}
+{{dcl begin}}
+{{dcl header|cassert}}
+{{dcl h|Disabled assertion}}
+{{dcl rev begin|num=1}}
+{{dcl|until=c++26|
+#define assert(condition) ((void)0)
+}}
+{{dcl|since=c++26|
+#define assert(...)       ((void)0)
+}}
+{{dcl rev end}}
+{{dcl h|Enabled assertion}}
+{{dcl rev begin|num=2}}
+{{dcl|until=c++26|
+#define assert(condition) /* unspecified */
+}}
+{{dcl|since=c++26|
+#define assert(...)       /* unspecified */
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+The definition of the macro {{tt|assert}} depends on another macro, {{c|NDEBUG}}, which is not defined by the standard library.
+
+@1@ If {{c|NDEBUG}} is defined as a macro name at the point in the source code where {{header|cassert}} or {{ltt|cpp/header/cassert|&lt;assert.h&gt;}} is included, the assertion is disabled: {{tt|assert}} does nothing.
+
+@2@ Otherwise, the assertion is enabled:
+{{rev begin}}
+{{rev|until=c++26|
+{{tt|assert}} checks if its argument (which must have scalar type):
+* If the argument compares unequal to zero, there are no further effects.
+* Otherwise, {{tt|assert}} creates a diagnostic on the standard error stream and calls {{lc|std::abort()}}.
+}}
+{{rev|since=c++26|
+{{tt|assert}} puts a diagnostic test into programs and expands to an expression of type {{c/core|void}}. {{c|__VA_ARGS__}} is evaluated and [[cpp/language/implicit conversion#Contextual conversions|contextually converted to {{c/core|bool}}]]:
+* If the evaluation yields {{c|true}}, there are no further effects.
+* Otherwise, {{tt|assert}} creates a diagnostic on the standard error stream and calls {{lc|std::abort()}}.
+}}
+{{rev end}}
+
+The diagnostic information has an implementation-defined format, but it always includes the following information:
+{{rev begin}}
+{{rev|until=c++26|
+* the text of {{c|condition}}
+}}
+{{rev|since=c++26|
+* {{c|#__VA_ARGS__}}
+}}
+{{rev end}}
+* the source file name (i.e., {{box|{{ltt|cpp/preprocessor/replace#Predefined macros|__FILE__}}}})
+* the source line number (i.e., {{box|{{ltt|cpp/preprocessor/replace#Predefined macros|__LINE__}}}})
+* the name of the enclosing function (i.e., {{box|{{ltt|cpp/language/function#func|__func__}}}})
+
+{{rrev|since=c++11|
+The expression {{c|assert(E)}} is guaranteed to be a {{lsd|cpp/language/constant expression#Constant subexpression}}, if either
+* {{c|NDEBUG}} is defined at the point where {{tt|assert}} is last defined or redefined, or
+* {{c|E}}, [[cpp/language/implicit conversion#Contextual conversions|contextually converted to {{c/core|bool}}]], is a constant subexpression that evaluates to {{c|true}}.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|condition|expression of scalar type}}
+{{par end}}
+
+===Notes===
+{{rrev|until=c++26|
+Because {{tt|assert}} is a [[cpp/preprocessor/replace|function-like macro]], commas anywhere in the argument that are not protected by parentheses are interpreted as macro argument separators. Such commas are often found in template argument lists and list-initialization:
+{{source|1=
+assert(std::is_same_v&lt;int, int&gt;);        // error: assert does not take two arguments
+assert((std::is_same_v&lt;int, int&gt;));      // OK: one argument
+static_assert(std::is_same_v&lt;int, int&gt;); // OK: not a macro
+
+std::complex&lt;double&gt; c;
+assert(c == std::complex&lt;double&gt;{0, 0});   // error
+assert((c == std::complex&lt;double&gt;{0, 0})); // OK
+}}
+}}
+
+There is no standardized interface to add an additional message to {{tt|assert}} errors. A portable way to include one is to use a [[cpp/language/operator other#Built-in comma operator|comma operator]] provided it has not been [[cpp/language/operators|overloaded]], or use {{tt|&amp;&amp;}} with a string literal:
+
+{{source|1=
+assert(("There are five lights", 2 + 2 == 5));
+assert(2 + 2 == 5 &amp;&amp; "There are five lights");
+}}
+
+The implementation of {{tt|assert}} in [https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/assert-macro-assert-wassert Microsoft CRT] does not conform to C++11 and later revisions, because its underlying function ({{tt|_wassert}}) takes neither {{c|__func__}} nor an equivalent replacement.
+
+Since C++20, the values needed for the diagnostic message can also be obtained from {{l2tf std|cpp/utility/source_location/current}}.
+
+Even though the change of {{tt|assert}} in C23/C++26 is not formally a defect report, the C committee [https://www.open-std.org/jtc1/sc22/wg14/www/previous.html recommends] implementations to backport the change to old modes.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+// uncomment to disable assert()
+// #define NDEBUG
+#include &lt;cassert&gt;
+
+// Use (void) to silence unused warnings.
+#define assertm(exp, msg) assert((void(msg), exp))
+
+int main()
+{
+    assert(2 + 2 == 4);
+    std::cout &lt;&lt; "Checkpoint #1\n";
+    
+    assert((void("void helps to avoid 'unused value' warning"), 2 * 2 == 4));
+    std::cout &lt;&lt; "Checkpoint #2\n";
+    
+    assert((010 + 010 == 16) &amp;&amp; "Yet another way to add an assert message");
+    std::cout &lt;&lt; "Checkpoint #3\n";
+    
+    assertm((2 + 2) % 3 == 1, "Success");
+    std::cout &lt;&lt; "Checkpoint #4\n";
+    
+    assertm(2 + 2 == 5, "Failed"); // assertion fails
+    std::cout &lt;&lt; "Execution continues past the last assert\n"; // No output
+}
+|p=true
+|output=
+Checkpoint #1
+Checkpoint #2
+Checkpoint #3
+Checkpoint #4
+main.cpp:23: int main(): Assertion `((void)"Failed", 2 + 2 == 5)' failed.
+Aborted
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2234|std=C++11|before={{tt|assert}} could not be used in constant expression|after=can be used}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc static_assert}}
+{{dsc inc|cpp/utility/program/dsc abort}}
+{{dsc see c|c/error/assert}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,125 @@
+{{cpp/memory/scoped_allocator_adaptor/title|construct}}
+{{cpp/memory/scoped_allocator_adaptor/navbar}}
+{{dcl begin}}
+{{dcl header|scoped_allocator}}
+{{dcl|num=1|
+template&lt; class T, class... Args &gt;
+void construct( T* p, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|until=c++20|
+template&lt; class T1, class T2, class... Args1, class... Args2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, std::piecewise_construct_t,
+                std::tuple&lt;Args1...&gt; x, std::tuple&lt;Args2...&gt; y );
+}}
+{{dcl|num=3|until=c++20|
+template&lt; class T1, class T2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p );
+}}
+{{dcl|num=4|until=c++20|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, U&amp;&amp; x, V&amp;&amp; y );
+}}
+{{dcl|num=5|until=c++20|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, const std::pair&lt;U, V&gt;&amp; xy );
+}}
+{{dcl|num=6|until=c++20|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, std::pair&lt;U, V&gt;&amp;&amp; xy );
+}}
+{{dcl h|Helper function templates}}
+{{dcla|num=7|until=c++20|expos=yes|
+template &lt; class T, class... Args &gt;
+std::tuple&lt;/* see below */&gt; /*concat-args*/( std::tuple&lt;Args...&gt;&amp;&amp; tup );
+}}
+{{dcl end}}
+
+Constructs an object in allocated, but not initialized storage pointed to by {{c|p}} using the outer allocator and the provided constructor arguments. If the object is of a type that itself uses allocators{{rev inl|until=c++20|, or if it is {{lc|std::pair}}}}, passes the inner allocator down to the constructed object.
+
+@1@ Constructs an object of type {{tt|T}} by [[cpp/memory/uses_allocator#Uses-allocator_construction|uses-allocator construction]] at the uninitialized memory location indicated by {{c|p}} using the outermost allocator.
+{{rev begin}}
+{{rev|until=c++20|
+Given {{c|std::uses_allocator&lt;T, inner_allocator_type&gt;::value}} as {{c|uses_inner}}:
+* If {{c|uses_inner}} is {{c|false}} and {{c|std::is_constructible&lt;T, Args...&gt;::value}} is {{c|true}}, calls {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::forward&lt;Args&gt;(args)...)}}}}.
+* Otherwise, if {{c|uses_inner}} and {{c multi|std::is_constructible&lt;T, std::allocator_arg_t,|                      inner_allocator_type&amp;,|                      Args...&gt;::value}} are both {{c|true}}, calls {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::allocator_arg,}}&lt;br&gt;{{nbspt|20}}{{c/core|inner_allocator(),}}&lt;br&gt;{{nbspt|20}}{{c/core|std::forward&lt;Args&gt;(args)...)}}}}.
+* Otherwise, if {{c|uses_inner}} and {{c|std::is_constructible&lt;T, Args..., inner_allocator_type&amp;&gt;::value}} are both {{c|true}}, calls {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::forward&lt;Args&gt;(args)..., inner_allocator())}}}}.
+* Otherwise, the program is ill-formed.
+
+{{cpp/enable if|{{tt|T}} is not a specialization of {{lc|std::pair}}}}.
+}}
+{{rev|since=c++20|
+Equivalent to {{box|
+{{c/core|std::apply}}&lt;br&gt;
+{{c/core|(}}&lt;br&gt;
+{{nbspt|4}}{{c/core|[p, this](auto&amp;&amp;... newargs)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|{}}&lt;br&gt;
+{{nbspt|8}}{{rlpsi|helpers#outermost-construct}}&lt;br&gt;
+{{nbspt|12}}{{c/core|(p, std::forward&lt;decltype(newargs)&gt;(newargs)...);}}&lt;br&gt;
+{{nbspt|4}}{{c/core|},}}&lt;br&gt;
+{{nbspt|4}}{{c/core|std::uses_allocator_construction_args}}&lt;br&gt;
+{{nbspt|8}}{{c/core|(inner_allocator(), std::forward&lt;Args&gt;(args)...)}}&lt;br&gt;
+{{c/core|);}}
+}}.
+}}
+{{rev end}}
+
+@2-6@ Constructs a {{lc|std::pair}} object by [[cpp/memory/uses_allocator#Uses-allocator_construction|uses-allocator construction]] at the uninitialized memory location indicated by {{c|p}} using the outermost allocator.
+
+:@2@ Let {{c|xprime}} be {{box|{{tti|concat-args}}{{sep}}{{c/core|&lt;T1&gt;(std::move(x))}}}}, {{c|yprime}} be {{box|{{tti|concat-args}}{{sep}}{{c/core|&lt;T2&gt;(std::move(y))}}}}, calls {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::piecewise_construct, std::move(xprime), std::move(yprime))}}}}.
+
+:@3@ Equivalent to {{c|construct(p, std::piecewise_construct, std::tuple&lt;&gt;(), std::tuple&lt;&gt;());}}.
+
+:@4-6@ Equivalent to {{c multi|construct(p, std::piecewise_construct,|          std::forward_as_tuple(xarg), std::forward_as_tuple(yarg));}}, where {{c|xarg}} and {{c|yarg}} are defined as follows:
+{|class="wikitable" style="text-align: center;"
+!{{nbsp}}Overload{{nbsp}}
+!{{normal|{{c|xarg}}}}
+!{{normal|{{c|yarg}}}}
+|-
+|{{v|4}}
+|{{c|std::forward&lt;U&gt;(x)}}
+|{{c|std::forward&lt;V&gt;(y)}}
+|-
+|{{v|5}}
+|{{c|xy.first}}
+|{{c|xy.second}}
+|-
+|{{v|6}}
+|{{c|std::forward&lt;U&gt;(xy.first)}}
+|{{c|std::forward&lt;V&gt;(xy.second)}}
+|}
+
+@7@ Merges the arguments contained in {{c|tup}} and additional arguments required by [[cpp/memory/uses_allocator#Uses-allocator_construction|uses-allocator construction]] of an object of type {{tt|T}}.
+@@ Given {{c|std::uses_allocator&lt;T, inner_allocator_type&gt;::value}} as {{c|uses_inner}}:
+* If {{c|uses_inner}} is {{c|false}} and {{c|std::is_constructible&lt;T, Args...&gt;::value}} is {{c|true}}, returns {{c|std::tuple&lt;Args&amp;&amp;...&gt;(std::move(tup))}}.
+* Otherwise, if {{c|uses_inner}} and {{c multi|std::is_constructible&lt;T, std::allocator_arg_t,|                      inner_allocator_type&amp;,|                      Args...&gt;::value}} are both {{c|true}}, returns {{c multi|std::tuple_cat(std::tuple&lt;std::allocator_arg_t, inner_allocator_type&amp;&gt;|                   (std::allocator_arg, inner_allocator()),|               std::tuple&lt;Args&amp;&amp;...&gt;(std::move(tup)))}}.
+* Otherwise, if {{c|uses_inner}} and {{c|std::is_constructible&lt;T, Args..., inner_allocator_type&amp;&gt;::value}} are both {{c|true}}, returns {{c multi|std::tuple_cat(std::tuple&lt;Args&amp;&amp;...&gt;(std::move(tup)),|               std::tuple&lt;inner_allocator_type&amp;&gt;(inner_allocator())}}.
+* Otherwise, the program is ill-formed.
+
+===Parameters===
+{{par begin}}
+{{par|p|pointer to allocated, but not initialized storage}}
+{{par|args|the constructor arguments to pass to the constructor of {{tt|T}}}}
+{{par|x|the constructor arguments to pass to the constructor of {{tt|T1}}}}
+{{par|y|the constructor arguments to pass to the constructor of {{tt|T2}}}}
+{{par|xy|the pair whose two members are the constructor arguments for {{tt|T1}} and {{tt|T2}}}}
+{{par|tup|the arguments to be merged}}
+{{par end}}
+
+===Notes===
+This function is called (through {{lc|std::allocator_traits}}) by any allocator-aware object, such as {{lc|std::vector}}, that was given a {{lc|std::scoped_allocator_adaptor}} as the allocator to use. Since {{tt|inner_allocator_type}} is itself a specialization of {{lc|std::scoped_allocator_adaptor}}, this function will also be called when the allocator-aware objects constructed through this function start constructing their own members.
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2203|std=C++11|before=inner allocators were obtained by value-initializing&lt;br&gt;an {{tt|inner_allocator_type}} object|after=obtained by calling {{rlpf|inner_allocator}}}}
+{{dr list item|wg=lwg|dr=2511|paper=P0475R1|std=C++11|before={{tti|concat-args}} might copy elements of {{lc|std::tuple}}s|after=eliminated all element copy operations}}
+{{dr list item|wg=lwg|dr=2586|std=C++11|before=only constructions from&lt;br&gt;{{tt|inner_allocator_type}} rvalues were checked|after=checks constructions from non-const&lt;br&gt;{{tt|inner_allocator_type}} lvalues instead}}
+{{dr list item|wg=lwg|dr=2975|std=C++11|before=overload {{v|1}} was not constrained|after=constrained to refuse {{lc|std::pair}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator_traits/dsc construct}}
+{{dsc inc|cpp/memory/allocator/dsc construct}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

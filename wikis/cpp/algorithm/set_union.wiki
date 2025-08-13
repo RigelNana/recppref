@@ -1,0 +1,187 @@
+{{cpp/title|set_union}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2, class OutputIt &gt;
+OutputIt set_union( InputIt1 first1, InputIt1 last1,
+                    InputIt2 first2, InputIt2 last2,
+                    OutputIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class ForwardIt3 &gt;
+ForwardIt3 set_union( ExecutionPolicy&amp;&amp; policy,
+                      ForwardIt1 first1, ForwardIt1 last1,
+                      ForwardIt2 first2, ForwardIt2 last2,
+                      ForwardIt3 d_first );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2,
+          class OutputIt, class Compare &gt;
+OutputIt set_union( InputIt1 first1, InputIt1 last1,
+                    InputIt2 first2, InputIt2 last2,
+                    OutputIt d_first, Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2,
+          class ForwardIt3, class Compare &gt;
+ForwardIt3 set_union( ExecutionPolicy&amp;&amp; policy,
+                      ForwardIt1 first1, ForwardIt1 last1,
+                      ForwardIt2 first2, ForwardIt2 last2,
+                      ForwardIt3 d_first, Compare comp );
+}}
+{{dcl end}}
+
+Constructs a sorted union beginning at {{c|d_first}} consisting of the set of elements present in one or both sorted ranges {{range|first1|last1}} and {{range|first2|last2}}. 
+
+If {{range|first1|last1}} contains {{c|m}} elements that are equivalent to each other and {{range|first2|last2}} contains {{c|n}} elements that are equivalent to them, then all {{c|m}} elements will be copied from {{range|first1|last1}} to the output range, preserving order, and then the final {{c|std::max(n - m, 0)}} elements will be copied from {{range|first2|last2}} to the output range, also preserving order. 
+
+@1@ If {{range|first1|last1}} or {{range|first2|last2}} is not {{rlp|/#Requirements|sorted}} with respect to {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}, the behavior is undefined.
+
+@3@ If {{range|first1|last1}} or {{range|first2|last2}} is not sorted with respect to {{c|comp}}, the behavior is undefined.
+
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+If the output range overlaps with {{range|first1|last1}} or {{range|first2|last2}}, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the first input sorted range}}
+{{par|first2, last2|the second input sorted range}}
+{{par|d_first|the beginning of the output range}}
+{{par exec pol}}
+{{par cmp ord|comp|p1=InputIt1|p2=InputIt2}} 
+{{par hreq}}
+{{par req named|InputIt1, InputIt2|InputIterator}}
+{{par req named|ForwardIt1, ForwardIt2, ForwardIt3|ForwardIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===Return value===
+Iterator past the end of the constructed range.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} as {{c|std::distance(first1, last1)}} and {{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} as {{c|std::distance(first2, last2)}}:
+
+@1,2@ At most {{mathjax-or|\(\scriptsize 2 \cdot (N_1+N_2)-1\)|2⋅(N{{su|b=1}}+N{{su|b=2}})-1}} comparisons using {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}.
+
+@3,4@ At most {{mathjax-or|\(\scriptsize 2 \cdot (N_1+N_2)-1\)|2⋅(N{{su|b=1}}+N{{su|b=2}})-1}} applications of the comparison function {{c|comp}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+{{eq impl
+|title1=set_union (1)|ver1=1|1=
+template&lt;class InputIt1, class InputIt2, class OutputIt&gt;
+OutputIt set_union(InputIt1 first1, InputIt1 last1,
+                   InputIt2 first2, InputIt2 last2, OutputIt d_first)
+{
+    for (; first1 != last1; ++d_first)
+    {
+        if (first2 == last2)
+            return std::copy(first1, last1, d_first);
+        
+        if (*first2 &lt; *first1)
+            *d_first = *first2++;
+        else
+        {
+            *d_first = *first1;
+            if (!(*first1 &lt; *first2))
+                ++first2;
+            ++first1;
+        }
+    }
+    return std::copy(first2, last2, d_first);
+}
+|title2=set_union (3)|ver2=3|2=
+template&lt;class InputIt1, class InputIt2, class OutputIt, class Compare&gt;
+OutputIt set_union(InputIt1 first1, InputIt1 last1,
+                   InputIt2 first2, InputIt2 last2, OutputIt d_first, Compare comp)
+{
+    for (; first1 != last1; ++d_first)
+    {
+        if (first2 == last2)
+            // Finished range 2, include the rest of range 1:
+            return std::copy(first1, last1, d_first);
+        
+        if (comp(*first2, *first1))
+            *d_first = *first2++;
+        else
+        {
+            *d_first = *first1;
+            if (!comp(*first1, *first2)) // Equivalent =&gt; don't need to include *first2.
+                ++first2;
+            ++first1;
+        }
+    }
+    // Finished range 1, include the rest of range 2:
+    return std::copy(first2, last2, d_first);
+}
+}}
+
+===Notes===
+This algorithm performs a similar task as {{lc|std::merge}} does. Both consume two sorted input ranges and produce a sorted output with elements from both inputs. The difference between these two algorithms is with handling values from both input ranges which compare equivalent (see notes on {{named req|LessThanComparable}}). If any equivalent values appeared {{c|n}} times in the first range and {{c|m}} times in the second, {{lc|std::merge}} would output all {{c|n + m}} occurrences whereas {{tt|std::set_union}} would output {{c|std::max(n, m)}} ones only. So {{tt|std::merge}} outputs exactly {{c|std::distance(first1, last1) + std::distance(first2, last2)}} values and {{tt|std::set_union}} may produce fewer.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+void println(const std::vector&lt;int&gt;&amp; v)
+{
+    for (int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v1, v2, dest;
+    
+    v1 = {1, 2, 3, 4, 5};
+    v2 = {3, 4, 5, 6, 7};
+    
+    std::set_union(v1.cbegin(), v1.cend(),
+                   v2.cbegin(), v2.cend(),
+                   std::back_inserter(dest));
+    println(dest);
+    
+    dest.clear();
+    
+    v1 = {1, 2, 3, 4, 5, 5, 5};
+    v2 = {3, 4, 5, 6, 7};
+    
+    std::set_union(v1.cbegin(), v1.cend(),
+                   v2.cbegin(), v2.cend(),
+                   std::back_inserter(dest));
+    println(dest);
+}
+|output=
+1 2 3 4 5 6 7 
+1 2 3 4 5 5 5 6 7
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=291|std=C++98|before=it was unspecified how to handle equivalent elements in the input ranges|after=specified}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc merge}}
+{{dsc inc|cpp/algorithm/dsc set_difference}}
+{{dsc inc|cpp/algorithm/dsc set_intersection}}
+{{dsc inc|cpp/algorithm/dsc set_symmetric_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_union}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

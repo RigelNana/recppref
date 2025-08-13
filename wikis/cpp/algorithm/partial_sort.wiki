@@ -1,0 +1,210 @@
+{{cpp/title|partial_sort}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class RandomIt &gt;
+void partial_sort( RandomIt first, RandomIt middle, RandomIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt &gt;
+void partial_sort( ExecutionPolicy&amp;&amp; policy,
+                   RandomIt first, RandomIt middle, RandomIt last );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class RandomIt, class Compare &gt;
+void partial_sort( RandomIt first, RandomIt middle, RandomIt last,
+                   Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt, class Compare &gt;
+void partial_sort( ExecutionPolicy&amp;&amp; policy,
+                   RandomIt first, RandomIt middle, RandomIt last,
+                   Compare comp );
+}}
+{{dcl end}}
+
+Rearranges elements such that the range {{range|first|middle}} contains the sorted {{c|middle − first}} smallest elements in the range {{range|first|last}}.
+
+The order of equal elements is not guaranteed to be preserved. The order of the remaining elements in the range {{range|middle|last}} is unspecified.
+
+@1@ Elements are {{rlp|/#Requirements|sorted}} with respect to {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}.
+
+@3@ Elements are sorted with respect to {{c|comp}}.
+
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+If any of the following conditions is satisfied, the behavior is undefined:
+* {{range|first|middle}} or {{range|middle|last}} is not a [[cpp/iterator#Ranges|valid range]].
+{{rev begin}}
+{{rev|until=c++11|
+* The type of {{c|*first}} is not {{named req|Swappable}}.
+}}
+{{rev|since=c++11|
+* {{tt|RandomIt}} is not {{named req|ValueSwappable}}.
+* The type of {{c|*first}} is not {{named req|MoveConstructible}}.
+* The type of {{c|*first}} is not {{named req|MoveAssignable}}.
+}}
+{{rev end}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|random access iterators defining the range}}
+{{par|middle|random access iterator defining the one-past-the-end iterator of the range to be sorted}}
+{{par exec pol}}
+{{par cmp ord|comp|p1=RandomIt}}
+{{par hreq}}
+{{par req named|RandomIt|RandomAccessIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize M\)|M}} as {{c|middle - first}}, {{mathjax-or|\(\scriptsize N\)|N}} as {{c|last - first}}:
+@1,2@ Approximately {{mathjax-or|\(\scriptsize N \cdot \log(M)\)|N·log(M)}} comparisons using {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}.
+@3,4@ Approximately {{mathjax-or|\(\scriptsize N \cdot \log(M)\)|N·log(M)}} applications of the comparator {{c|comp}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L1915 libstdc++] and [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L5025 libc++].
+{{eq impl
+|title1=partial_sort (1)|ver1=1|1=
+template&lt;typename RandomIt&gt;
+constexpr //&lt; since C++20
+void partial_sort(RandomIt first, RandomIt middle, RandomIt last)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::value_type VT;
+    std::partial_sort(first, middle, last, std::less&lt;VT&gt;());
+}
+|title2=partial_sort (3)|ver2=3|2=
+namespace impl
+{
+    template&lt;typename RandomIt, typename Compare&gt;
+    constexpr //&lt; since C++20
+    void sift_down(RandomIt first, RandomIt last, const Compare&amp; comp)
+    {
+        // sift down element at “first”
+        const auto length = static_cast&lt;std::size_t&gt;(last - first);
+        std::size_t current = 0;
+        std::size_t next = 2;
+        while (next &lt; length)
+        {
+            if (comp(*(first + next), *(first + (next - 1))))
+                --next;
+            if (!comp(*(first + current), *(first + next)))
+                return;
+            std::iter_swap(first + current, first + next);
+            current = next;
+            next = 2 * current + 2;
+        }
+        --next;
+        if (next &lt; length &amp;&amp; comp(*(first + current), *(first + next)))
+            std::iter_swap(first + current, first + next);
+    }
+
+    template&lt;typename RandomIt, typename Compare&gt;
+    constexpr //&lt; since C++20
+    void heap_select(RandomIt first, RandomIt middle, RandomIt last, const Compare&amp; comp)
+    {
+        std::make_heap(first, middle, comp);
+        for (auto i = middle; i != last; ++i)
+        {
+            if (comp(*i, *first))
+            {
+                std::iter_swap(first, i);
+                sift_down(first, middle, comp);
+            }
+        }
+    }
+} // namespace impl
+
+template&lt;typename RandomIt, typename Compare&gt;
+constexpr //&lt; since C++20
+void partial_sort(RandomIt first, RandomIt middle, RandomIt last, Compare comp)
+{
+    impl::heap_select(first, middle, last, comp);
+    std::sort_heap(first, middle, comp);
+}
+}}
+
+===Notes===
+====Algorithm====
+The algorithm used is typically ''heap select'' to select the smallest elements, and ''heap sort'' to sort the selected elements in the heap in ascending order.
+
+To select elements, a heap is used (see {{enwiki|Heap (data structure)#Applications|heap}}). For example, for {{c|operator&lt;}} as comparison function, ''max-heap'' is used to select {{c|middle − first}} smallest elements.
+
+{{enwiki|Heapsort|Heap sort}} is used after selection to sort {{range|first|middle}} selected elements (see {{lc|std::sort_heap}}).
+
+====Intended use====
+{{tt|std::partial_sort}} algorithms are intended to be used for ''small constant numbers'' of {{range|first|middle}} selected elements.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+
+void print(const auto&amp; s, int middle)
+{
+    for (int a : s)
+        std::cout &lt;&lt; a &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    if (middle &gt; 0)
+    {
+        while (middle-- &gt; 0)
+            std::cout &lt;&lt; "--";
+        std::cout &lt;&lt; '^';
+    }
+    else if (middle &lt; 0)
+    {
+        for (auto i = s.size() + middle; --i; std::cout &lt;&lt; "  ")
+        {}
+        
+        for (std::cout &lt;&lt; '^'; middle++ &lt; 0; std::cout &lt;&lt; "--")
+        {}
+    }
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    std::array&lt;int, 10&gt; s{5, 7, 4, 2, 8, 6, 1, 9, 0, 3};
+    print(s, 0);
+    std::partial_sort(s.begin(), s.begin() + 3, s.end());
+    print(s, 3);
+    std::partial_sort(s.rbegin(), s.rbegin() + 4, s.rend());
+    print(s, -4);
+    std::partial_sort(s.rbegin(), s.rbegin() + 5, s.rend(), std::greater{});
+    print(s, -5);
+}
+|p=true
+|output=
+5 7 4 2 8 6 1 9 0 3
+
+0 1 2 7 8 6 5 9 4 3
+------^
+4 5 6 7 8 9 3 2 1 0
+          ^--------
+4 3 2 1 0 5 6 7 8 9
+        ^----------
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P0896R4|std=C++98|before={{range|first|middle}} and {{range|middle|last}}&lt;br&gt;were not required to be valid ranges|after=the behavior is undefined&lt;br&gt;if any of them is invalid}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc nth_element}}
+{{dsc inc|cpp/algorithm/dsc partial_sort_copy}}
+{{dsc inc|cpp/algorithm/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/dsc sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

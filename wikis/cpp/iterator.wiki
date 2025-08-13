@@ -1,0 +1,326 @@
+{{title|Iterator library}}
+{{cpp/iterator/navbar}}
+
+Iterators are a generalization of {{lt|cpp/language/pointer}}s that allow a C++ program to work with different data structures (for example, {{lt|cpp/container}}s{{rev inl|since=c++20| and {{lt|cpp/ranges}}}}) in a uniform manner. The iterator library provides definitions for iterators, as well as iterator traits, adaptors, and utility functions.
+
+Since iterators are an abstraction of pointers, their semantics are a generalization of most of the semantics of pointers in C++. This ensures that every {{lt|cpp/language/function template}} that takes iterators works as well with regular pointers.
+
+===Iterator categories===
+There are {{rev inl|until=c++17|five}}{{rev inl|since=c++17|six}} kinds of iterators: {{named req|InputIterator}}, {{named req|OutputIterator}}, {{named req|ForwardIterator}}, {{named req|BidirectionalIterator}}, {{named req|RandomAccessIterator}}{{rev inl|since=c++17|, and {{named req|ContiguousIterator}}}}. (See also {{named req|Iterator}} for the most basic kind of iterator.)
+
+Instead of being defined by specific types, each category of iterator is defined by the operations that can be performed on it. This definition means that any type that supports the necessary operations can be used as an iterator -- for example, a pointer supports all of the operations required by {{named req|RandomAccessIterator}}, so a pointer can be used anywhere a {{named req|RandomAccessIterator}} is expected.
+
+All of the iterator categories (except {{named req|OutputIterator}}) can be organized into a hierarchy, where more powerful iterator categories (e.g. {{named req|RandomAccessIterator}}) support the operations of less powerful categories (e.g. {{named req|InputIterator}}). If an iterator falls into one of these categories and also satisfies the requirements of {{named req|OutputIterator}}, then it is called a ''mutable'' iterator and supports ''both'' input and output. Non-mutable iterators are called ''constant'' iterators.
+
+{{rrev|since=c++20|
+Iterators are called ''constexpr'' iterators if all operations provided to meet iterator category requirements are {{ls|cpp/language/constexpr#constexpr function}}s.
+}}
+
+{|class="wikitable"
+!rowspan="3"|Iterator category
+!colspan="7"|Operations and storage requirement
+|-style="text-align:center;"
+|rowspan="2"|{{nbsp|5}}write{{nbsp|5}}
+|rowspan="2"|{{nbsp|5}}read{{nbsp|5}}
+|colspan="2"|increment
+|rowspan="2"|{{nbsp}}decrement{{nbsp}}
+|rowspan="2"|{{nbsp|3}}random{{nbsp|3}}&lt;br&gt;access
+|rowspan="2"|{{nbsp}}contiguous{{nbsp}}&lt;br&gt;storage
+|-style="text-align:center;"
+|without&lt;br&gt;{{nbsp|3}}multiple{{nbsp|3}}&lt;br&gt;passes
+|with&lt;br&gt;{{nbsp|3}}multiple{{nbsp|3}}&lt;br&gt;passes
+|-style="text-align:center;"
+|{{named req|Iterator}}
+|
+|
+|{{yes|Required}}
+|
+|
+|
+|
+|-style="text-align:center;"
+|{{named req|OutputIterator}}
+|{{yes|Required}}
+|
+|{{yes|Required}}
+|
+|
+|
+|
+|-style="text-align:center;"
+|{{named req|InputIterator}}&lt;br&gt;{{small|(mutable if supports write operation)}}
+|
+|{{yes|Required}}
+|{{yes|Required}}
+|
+|
+|
+|
+|-style="text-align:center;"
+|{{named req|ForwardIterator}}&lt;br&gt;{{small|(also satisfies {{named req|InputIterator}})}}
+|
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|
+|
+|
+|-style="text-align:center;"
+|{{named req|BidirectionalIterator}}&lt;br&gt;{{small|(also satisfies {{named req|ForwardIterator}})}}
+|
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|
+|
+|-style="text-align:center;"
+|{{named req|RandomAccessIterator}}&lt;br&gt;{{small|(also satisfies {{named req|BidirectionalIterator}})}}
+|
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|
+|-style="text-align:center;"
+|{{nbsp|3}}{{named req|ContiguousIterator}}&lt;ref&gt;{{named req|ContiguousIterator}} category was only formally specified in C++17, but the iterators of {{lc|std::vector}}, {{lc|std::basic_string}}, {{lc|std::array}}, and {{lc|std::valarray}}, as well as pointers into C arrays are often treated as a separate category in pre-C++17 code.&lt;/ref&gt;&lt;br&gt;{{small|(also satisfies {{named req|RandomAccessIterator}})}}
+|
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|{{yes|Required}}
+|}
+&lt;references/&gt;
+Note: A type supporting the required operations in a row of the table above does not necessarily fall into the corresponding category, see the category page for the complete list of requirements.
+
+===Definitions===
+====Types and writability====
+An input iterator {{c|i}} supports the expression {{c|*i}}, resulting in a value of some [[cpp/language/type|object type]] {{tt|T}}, called the ''value type'' of the iterator.
+
+An output iterator {{c|i}} has a non-empty set of types that are {{rev inl|until=c++20|''writable''}}{{rev inl|since=c++20|{{ltt|cpp/iterator/indirectly_writable}}}} to the iterator; for each such type {{tt|T}}, the expression {{c|1=*i = o}} is valid where {{c|o}} is a value of type {{tt|T}}.
+
+For every iterator type {{tt|X}} {{rev inl|until=c++20|for which equality is defined}}, there is a corresponding signed {{rev inl|until=c++20|[[cpp/language/types#Signed and unsigned integer types|integer]]}}{{rev inl|since=c++20|{{rl|is-integer-like|integer-like}}}} type called the ''difference type'' of the iterator.
+
+====Dereferenceability and validity====
+Just as a regular pointer to an [[cpp/language/array|array]] guarantees that there is a pointer value pointing past the last element of the array, so for any iterator type there is an iterator value that points past the last element of a corresponding sequence&lt;!--LWG 1210--&gt;. Such a value is called a ''past-the-end'' value.
+
+Values of an iterator {{c|i}} for which the expression {{c|*i}} is defined are called ''dereferenceable''. The [[cpp/standard library|standard library]] never assumes that past-the-end values are dereferenceable.
+
+Iterators can also have ''singular'' values that are not associated with any sequence. Results of most expressions are undefined for singular values; the only exceptions are
+* the assignment of a non-singular value to an iterator that holds a singular value,
+* destroying an iterator that holds a singular value, and,
+* for iterators that meet the {{named req|DefaultConstructible}} requirements, using a [[cpp/language/value initialization|value-initialized]] iterator as the source of a copy {{rev inl|since=c++11|or move}} operation.
+In these cases the singular value is overwritten the same way as any other value. Dereferenceable values are always non-singular.
+
+An ''invalid'' iterator is an iterator that may be singular.
+
+====Ranges====
+Most of the standard library’s algorithmic templates that operate on data structures have interfaces that use ranges.
+
+{{rev begin}}
+{{rev|until=c++20|
+An iterator {{c|j}} is called ''reachable'' from an iterator {{c|i}} if and only if there is a finite sequence of applications of the expression {{c|++i}} that makes {{c|1=i == j}}. If {{c|j}} is reachable from {{c|i}}, they refer to elements of the same sequence.
+
+A ''range'' is a pair of iterators that designate the beginning and end of the computation. A range {{range|i|i}} is an empty range; in general, a range {{range|i|j}} refers to the elements in the data structure starting with the element pointed to by {{c|i}} and up to but not including the element pointed to by {{c|j}}.
+
+Range {{range|i|j}} is ''valid'' if and only if {{c|j}} is reachable from {{c|i}}.
+}}
+{{rev|since=c++20|
+A ''range'' can be denoted by either
+* {{range|i|s}}, with an iterator {{c|i}} and a ''sentinel'' {{c|s}} that designate the beginning and end of the computation ({{c|i}} and {{c|s}} can have different types), or
+* {{counted range|i|n}}, with an iterator {{c|i}} and a count {{c|n}} that designate the beginning and the number of elements to which the computation is to be applied.
+
+=====Iterator-sentinel range=====
+An iterator and a sentinel denoting a range are comparable. {{range|i|s}} is empty if {{c|1=i == s}}; otherwise, {{range|i|s}} refers to the elements in the data structure starting with the element pointed to by {{c|i}} and up to but not including the element, if any, pointed to by the first iterator {{c|j}} such that {{c|1=j == s}}.
+
+A sentinel {{c|s}} is called ''reachable'' from an iterator {{c|i}} if and only if there is a finite sequence of applications of the expression {{c|++i}} that makes {{c|1=i == s}}.
+
+If {{c|s}} is reachable from {{c|i}}, {{range|i|s}} denotes a ''valid'' range.
+
+=====Counted range=====
+A ''counted range'' {{counted range|i|n}} is empty if {{c|1=n == 0}}; otherwise, {{counted range|i|n}} refers to the {{c|n}} elements in the data structure starting with the element pointed to by {{c|i}} and up to but not including the element, if any, pointed to by the result of {{c|n}} applications of {{c|++i}}.
+
+A counted range {{counted range|i|n}} is ''valid'' if and only if
+* {{c|1=n == 0}}; or
+* all of the following conditions are satisfied:
+** {{c|n}} is positive,
+** {{c|i}} is dereferenceable, and
+** {{counted range|++i|--n}} is valid.
+}}
+{{rev end}}
+
+The result of the application of functions in the standard library to invalid ranges is undefined.
+
+{{anchor|Iterator concepts}}
+===Iterator concepts {{mark since c++20}}===
+A new system of iterators based on [[cpp/language/constraints|concepts]] that are different from C++17 iterators. While the basic taxonomy remains similar, the requirements for individual iterator categories are somewhat different.
+
+{{dsc begin}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/iterator/dsc indirectly_readable}}
+{{dsc inc|cpp/iterator/dsc indirectly_writable}}
+{{dsc inc|cpp/iterator/dsc weakly_incrementable}}
+{{dsc inc|cpp/iterator/dsc incrementable}}
+{{dsc inc|cpp/iterator/dsc is-integer-like}}
+{{dsc inc|cpp/iterator/dsc input_or_output_iterator}}
+{{dsc inc|cpp/iterator/dsc sentinel_for}}
+{{dsc inc|cpp/iterator/dsc sized_sentinel_for}}
+{{dsc inc|cpp/iterator/dsc input_iterator}}
+{{dsc inc|cpp/iterator/dsc output_iterator}}
+{{dsc inc|cpp/iterator/dsc forward_iterator}}
+{{dsc inc|cpp/iterator/dsc bidirectional_iterator}}
+{{dsc inc|cpp/iterator/dsc random_access_iterator}}
+{{dsc inc|cpp/iterator/dsc contiguous_iterator}}
+{{dsc end}}
+
+{{anchor|Iterator associated types}}
+===Iterator associated types {{mark since c++20}}===
+{{dsc begin}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/iterator/dsc incrementable_traits}}
+{{dsc inc|cpp/iterator/dsc indirectly_readable_traits}}
+{{dsc inc|cpp/iterator/dsc iter_t}}
+{{dsc end}}
+
+===Iterator primitives===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc iterator_traits}}
+{{dsc inc|cpp/iterator/dsc iterator_tags}}
+{{dsc inc|cpp/iterator/dsc iterator}}
+{{dsc end}}
+
+{{anchor|Iterator customization points}}
+===Iterator customization points {{mark since c++20}}===
+{{dsc begin}}
+{{dsc namespace|std::ranges}}
+{{dsc inc|cpp/iterator/ranges/dsc iter_move}}
+{{dsc inc|cpp/iterator/ranges/dsc iter_swap}}
+{{dsc end}}
+
+{{anchor|Algorithm concepts and utilities}}
+===Algorithm concepts and utilities {{mark since c++20}}===
+A set of concepts and related utility templates designed to ease constraining common algorithm operations.
+
+{{dsc begin}}
+{{dsc header|iterator}}
+{{dsc namespace|std}}
+{{dsc h2|Indirect callable concepts}}
+{{dsc inc|cpp/iterator/dsc indirectly_unary_invocable}}
+{{dsc inc|cpp/iterator/dsc indirect_unary_predicate}}
+{{dsc inc|cpp/iterator/dsc indirect_binary_predicate}}
+{{dsc inc|cpp/iterator/dsc indirect_equivalence_relation}}
+{{dsc inc|cpp/iterator/dsc indirect_strict_weak_order}}
+{{dsc h2|Common algorithm requirements}}
+{{dsc inc|cpp/iterator/dsc indirectly_movable}}
+{{dsc inc|cpp/iterator/dsc indirectly_movable_storable}}
+{{dsc inc|cpp/iterator/dsc indirectly_copyable}}
+{{dsc inc|cpp/iterator/dsc indirectly_copyable_storable}}
+{{dsc inc|cpp/iterator/dsc indirectly_swappable}}
+{{dsc inc|cpp/iterator/dsc indirectly_comparable}}
+{{dsc inc|cpp/iterator/dsc permutable}}
+{{dsc inc|cpp/iterator/dsc mergeable}}
+{{dsc inc|cpp/iterator/dsc sortable}}
+{{dsc h2|Utilities}}
+{{dsc inc|cpp/iterator/dsc indirect_result_t}}
+{{dsc inc|cpp/iterator/dsc projected}}
+{{dsc inc|cpp/iterator/dsc projected_value_t}}
+{{dsc end}}
+
+===Iterator adaptors===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc reverse_iterator}}
+{{dsc inc|cpp/iterator/dsc make_reverse_iterator}}
+
+{{dsc inc|cpp/iterator/dsc back_insert_iterator}}
+{{dsc inc|cpp/iterator/dsc back_inserter}}
+{{dsc inc|cpp/iterator/dsc front_insert_iterator}}
+{{dsc inc|cpp/iterator/dsc front_inserter}}
+{{dsc inc|cpp/iterator/dsc insert_iterator}}
+{{dsc inc|cpp/iterator/dsc inserter}}
+
+{{dsc inc|cpp/iterator/dsc basic_const_iterator}}
+{{dsc inc|cpp/iterator/dsc const_iterator}}
+{{dsc inc|cpp/iterator/dsc const_sentinel}}
+{{dsc inc|cpp/iterator/dsc make_const_iterator}}
+{{dsc inc|cpp/iterator/dsc make_const_sentinel}}
+
+{{dsc inc|cpp/iterator/dsc move_iterator}}
+{{dsc inc|cpp/iterator/dsc move_sentinel}}
+{{dsc inc|cpp/iterator/dsc make_move_iterator}}
+
+{{dsc inc|cpp/iterator/dsc common_iterator}}
+{{dsc inc|cpp/iterator/dsc default_sentinel_t}}
+{{dsc inc|cpp/iterator/dsc counted_iterator}}
+{{dsc inc|cpp/iterator/dsc unreachable_sentinel_t}}
+{{dsc end}}
+
+===Stream iterators===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc istream_iterator}}
+{{dsc inc|cpp/iterator/dsc ostream_iterator}}
+{{dsc inc|cpp/iterator/dsc istreambuf_iterator}}
+{{dsc inc|cpp/iterator/dsc ostreambuf_iterator}}
+{{dsc end}}
+
+===Iterator operations===
+{{dsc begin}}
+{{dsc header|iterator}}
+{{dsc inc|cpp/iterator/dsc advance}}
+{{dsc inc|cpp/iterator/dsc distance}}
+{{dsc inc|cpp/iterator/dsc next}}
+{{dsc inc|cpp/iterator/dsc prev}}
+{{dsc inc|cpp/iterator/ranges/dsc advance}}
+{{dsc inc|cpp/iterator/ranges/dsc distance}}
+{{dsc inc|cpp/iterator/ranges/dsc next}}
+{{dsc inc|cpp/iterator/ranges/dsc prev}}
+{{dsc end}}
+
+{{anchor|Range access}}
+===Range access {{mark since c++11}}===
+These non-member function templates provide a generic interface for containers, plain arrays, and {{lc|std::initializer_list}}.
+{{dsc begin}}
+{{dsc header|array}}
+{{dsc header|deque}}
+{{dsc header|flat_map}}
+{{dsc header|flat_set}}
+{{dsc header|forward_list}}
+{{dsc header|inplace_vector}}
+{{dsc header|iterator}}
+{{dsc header|list}}
+{{dsc header|map}}
+{{dsc header|regex}}
+{{dsc header|set}}
+{{dsc header|span}}
+{{dsc header|string}}
+{{dsc header|string_view}}
+{{dsc header|unordered_map}}
+{{dsc header|unordered_set}}
+{{dsc header|vector}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/iterator/dsc begin}}
+{{dsc inc|cpp/iterator/dsc end}}
+{{dsc inc|cpp/iterator/dsc rbegin}}
+{{dsc inc|cpp/iterator/dsc rend}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc inc|cpp/iterator/dsc empty}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1181|std=C++98|before=array types could not be value types|after=they can}}
+{{dr list item|wg=lwg|dr=208|std=C++98|before=past-the-end iterators were always non-singular|after=they can be singular}}
+{{dr list item|wg=lwg|dr=278|std=C++98|before=the validity of an iterator was not defined|after=defined to be always non-singular}}
+{{dr list item|wg=lwg|dr=324|std=C++98|before=output iterators had value types|after=output iterators have writable types instead}}
+{{dr list item|wg=lwg|dr=407|std=C++98|before=singular iterators could not be destroyed|after=allowed}}
+{{dr list item|wg=lwg|dr=408|paper=N3066|std=C++98|before=singular iterators could not be copied|after=allowed if they are value-initialized}}
+{{dr list item|wg=lwg|dr=1185|paper=N3066|std=C++98|before={{named req|ForwardIterator}}, {{named req|BidirectionalIterator}}&lt;br&gt;and {{named req|RandomAccessIterator}}&lt;br&gt;always satisfy {{named req|OutputIterator}}|after=they might not satisfy {{named req|OutputIterator}}}}
+{{dr list item|wg=lwg|dr=1210|paper=N3066|std=C++98|before=the definition of iterator singularity and&lt;br&gt;reachability depended on containers|after=depend on sequences instead}}
+{{dr list item|wg=lwg|dr=3009|std=C++17|before={{header|string_view}} did not provide the&lt;br&gt;range access function templates|after=provides these templates}}
+{{dr list item|wg=lwg|dr=3987|std=C++23|before={{header|flat_map}} and {{header|flat_set}} did not&lt;br&gt;provide the range access function templates|after=provide these templates}}
+{{dr list end}}
+
+{{langlinks|ar|de|es|fr|it|ja|ko|pt|ru|tr|zh}}

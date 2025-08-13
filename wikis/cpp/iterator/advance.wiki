@@ -1,0 +1,143 @@
+{{cpp/title|advance}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcla|anchor=1|until=c++17|
+template&lt; class InputIt, class Distance &gt;
+void advance( InputIt&amp; it, Distance n );
+}}
+{{dcla|anchor=2|since=c++17|
+template&lt; class InputIt, class Distance &gt;
+constexpr void advance( InputIt&amp; it, Distance n );
+}}
+{{dcl end}}
+
+Increments given iterator {{c|it}} by {{c|n}} elements.
+
+If {{c|n}} is negative, the iterator is decremented. In this case, {{tt|InputIt}} must meet the requirements of {{named req|BidirectionalIterator}}, otherwise the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|it|iterator to be advanced}}
+{{par|n|number of elements {{c|it}} should be advanced}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Complexity===
+Linear. 
+
+However, if {{tt|InputIt}} additionally meets the requirements of {{named req|RandomAccessIterator}}, complexity is constant.
+
+===Notes===
+The behavior is undefined if the specified sequence of increments or decrements would require that a non-incrementable iterator (such as the past-the-end iterator) is incremented, or that a non-decrementable iterator (such as the front iterator or the {{rlp|/#Dereferenceability and validity|singular}} iterator) is decremented.
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_iterator_base_funcs.h#L200 libstdc++] and [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/iterator#L582 libc++].
+
+{{eq impl
+|title1=Non-constexpr version|ver1=1|1=
+namespace detail
+{
+    template&lt;class It&gt;
+    void do_advance(It&amp; it, typename std::iterator_traits&lt;It&gt;::difference_type n,
+                    std::input_iterator_tag)
+    {
+        while (n &gt; 0)
+        {
+            --n;
+            ++it;
+        }
+    }
+    
+    template&lt;class It&gt;
+    void do_advance(It&amp; it, typename std::iterator_traits&lt;It&gt;::difference_type n,
+                    std::bidirectional_iterator_tag)
+    {
+        while (n &gt; 0)
+        {
+            --n;
+            ++it;
+        }
+        while (n &lt; 0)
+        {
+            ++n;
+            --it;
+        }
+    }
+    
+    template&lt;class It&gt;
+    void do_advance(It&amp; it, typename std::iterator_traits&lt;It&gt;::difference_type n,
+                    std::random_access_iterator_tag)
+    {
+        it += n;
+    }
+} // namespace detail
+
+template&lt;class It, class Distance&gt;
+void advance(It&amp; it, Distance n)
+{
+    detail::do_advance(it, typename std::iterator_traits&lt;It&gt;::difference_type(n),
+                       typename std::iterator_traits&lt;It&gt;::iterator_category());
+}
+|title2=constexpr version|ver2=2|2=
+template&lt;class It, class Distance&gt;
+constexpr void advance(It&amp; it, Distance n)
+{
+    using category = typename std::iterator_traits&lt;It&gt;::iterator_category;
+    static_assert(std::is_base_of_v&lt;std::input_iterator_tag, category&gt;);
+    
+    auto dist = typename std::iterator_traits&lt;It&gt;::difference_type(n);
+    if constexpr (std::is_base_of_v&lt;std::random_access_iterator_tag, category&gt;)
+        it += dist;
+    else
+    {
+        while (dist &gt; 0)
+        {
+            --dist;
+            ++it;
+        }
+        if constexpr (std::is_base_of_v&lt;std::bidirectional_iterator_tag, category&gt;)
+            while (dist &lt; 0)
+            {
+                ++dist;
+                --it;
+            }
+    }
+}
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main() 
+{
+    std::vector&lt;int&gt; v{3, 1, 4};
+    
+    auto vi = v.begin();
+    std::advance(vi, 2);
+    std::cout &lt;&lt; *vi &lt;&lt; ' ';
+    
+    vi = v.end();
+    std::advance(vi, -2);
+    std::cout &lt;&lt; *vi &lt;&lt; '\n';
+}
+|output=4 1
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc next}}
+{{dsc inc|cpp/iterator/dsc prev}}
+{{dsc inc|cpp/iterator/dsc distance}}
+{{dsc inc|cpp/iterator/ranges/dsc advance}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,168 @@
+{{cpp/title|expected}}
+{{cpp/utility/expected/navbar}}
+{{dcl begin}}
+{{dcl header|expected}}
+{{dcl|num=1|since=c++23|
+template&lt; class T, class E &gt;
+class expected;
+}}
+{{dcl|num=2|since=c++23|
+template&lt; class T, class E &gt;
+    requires std::is_void_v&lt;T&gt;
+class expected&lt;T, E&gt;;
+}}
+{{dcl end}}
+
+The class template {{tt|std::expected}} provides a way to represent either of two values: an ''expected'' value of type {{tt|T}}, or an ''unexpected'' value of type {{tt|E}}. {{tt|std::expected}} is never valueless.
+
+@1@ The main template. Contains the expected or unexpected value within its own storage. No dynamic memory allocation takes place.
+
+@2@ The {{c/core|void}} partial specialization. Represents an expected {{c/core|void}} value or contains the unexpected value within its own storage. No dynamic memory allocation takes place.
+
+A program is ill-formed if it instantiates an {{tt|expected}} with a reference type, a function type, or a specialization of {{ltt std|cpp/utility/expected/unexpected}}. In addition, {{tt|T}} must not be {{lc|std::in_place_t}} or {{ltt std|cpp/utility/expected/unexpect_t}}.
+
+===Template parameters===
+{{par begin}}
+{{par|T|the type of the expected value. The type must either be (possibly cv-qualified) {{c/core|void}}, or meet the {{named req|Destructible}} requirements (in particular, array and reference types are not allowed).}}
+{{par|E|the type of the unexpected value. The type must meet the {{named req|Destructible}} requirements, and must be a valid template argument for {{ltt|cpp/utility/expected/unexpected|std::unexpected}} (in particular, arrays, non-object types, and cv-qualified types are not allowed).}}
+{{par end}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|error_type}}|{{tt|E}}}}
+{{dsc|{{tt|unexpected_type}}|{{rlt|unexpected|std::unexpected&lt;E&gt;}}}}
+{{dsc end}}
+
+===Member alias templates===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{c/core|rebind&lt;U&gt;}}|{{c/core|std::expected&lt;U, error_type&gt;}}}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|spec={{c/core|bool}}|has_val|whether the {{tt|expected}} object currently represents the expected value}}
+{{dsc expos mem var|spec={{tt|T}}|val|the expected value|notes={{mark|main template only}}}}
+{{dsc expos mem var|spec={{tt|E}}|unex|the unexpected value}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc constructor}}
+{{dsc inc|cpp/utility/expected/dsc destructor}}
+{{dsc inc|cpp/utility/expected/dsc operator{{=}}}}
+
+{{dsc h2|Observers}}
+{{dsc inc|cpp/utility/expected/dsc operator*}}
+{{dsc inc|cpp/utility/expected/dsc operator bool}}
+{{dsc inc|cpp/utility/expected/dsc value}}
+{{dsc inc|cpp/utility/expected/dsc error}}
+{{dsc inc|cpp/utility/expected/dsc value_or}}
+{{dsc inc|cpp/utility/expected/dsc error_or}}
+
+{{dsc h2|Monadic operations}}
+{{dsc inc|cpp/utility/expected/dsc and_then}}
+{{dsc inc|cpp/utility/expected/dsc transform}}
+{{dsc inc|cpp/utility/expected/dsc or_else}}
+{{dsc inc|cpp/utility/expected/dsc transform_error}}
+
+{{dsc h2|Modifiers}}
+{{dsc inc|cpp/utility/expected/dsc emplace}}
+{{dsc inc|cpp/utility/expected/dsc swap}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc operator cmp}}
+{{dsc inc|cpp/utility/expected/dsc swap2}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc unexpected}}
+{{dsc inc|cpp/utility/expected/dsc bad_expected_access}}
+{{dsc inc|cpp/utility/expected/dsc unexpect_t}}
+{{dsc end}}
+
+===Notes===
+Types with the same functionality are called [https://doc.rust-lang.org/std/result/enum.Result.html {{tt|Result}}] in Rust and [https://hackage.haskell.org/package/base-4.17.0.0/docs/Data-Either.html {{tt|Either}}] in Haskell.
+
+{{ftm begin|std=1|comment=1}}
+{{ftm|__cpp_lib_expected|rowspan="2"|std=C++23|value=202202L|class template {{tt|std::expected}} and associated [[#Helper classes|helper classes]]}}
+{{ftm|-|std=C++23|value=202211L|Monadic functions for {{tt|std::expected}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;cmath&gt;
+#include &lt;expected&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+enum class parse_error
+{
+    invalid_input,
+    overflow
+};
+
+auto parse_number(std::string_view&amp; str) -&gt; std::expected&lt;double, parse_error&gt;
+{
+    const char* begin = str.data();
+    char* end;
+    double retval = std::strtod(begin, &amp;end);
+    
+    if (begin == end)
+        return std::unexpected(parse_error::invalid_input);
+    else if (std::isinf(retval))
+        return std::unexpected(parse_error::overflow);
+    
+    str.remove_prefix(end - begin);
+    return retval;
+}
+
+int main()
+{
+    auto process = [](std::string_view str)
+    {
+        std::cout &lt;&lt; "str: " &lt;&lt; std::quoted(str) &lt;&lt; ", ";
+        if (const auto num = parse_number(str); num.has_value())
+            std::cout &lt;&lt; "value: " &lt;&lt; *num &lt;&lt; '\n';
+            // If num did not have a value, dereferencing num
+            // would cause an undefined behavior, and
+            // num.value() would throw std::bad_expected_access.
+            // num.value_or(123) uses specified default value 123.
+        else if (num.error() == parse_error::invalid_input)
+            std::cout &lt;&lt; "error: invalid input\n";
+        else if (num.error() == parse_error::overflow)
+            std::cout &lt;&lt; "error: overflow\n";
+        else
+            std::cout &lt;&lt; "unexpected!\n"; // or invoke std::unreachable();
+    };
+    
+    for (auto src : {"42", "42abc", "meow", "inf"})
+        process(src);
+}
+|output=
+str: "42", value: 42
+str: "42abc", value: 42
+str: "meow", error: invalid input
+str: "inf", error: overflow
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=22.8|title=Expected objects|id=expected}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc variant}}
+{{dsc inc|cpp/utility/dsc optional}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

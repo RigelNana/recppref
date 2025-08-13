@@ -1,0 +1,144 @@
+{{cpp/title|text_encoding}}
+{{cpp/text/text_encoding/navbar}}
+{{ddcl|header=text_encoding|since=c++26|
+struct text_encoding;
+}}
+
+The class {{tt|text_encoding}} provides a mechanism for identifying character encodings. It is used to determine the [[cpp/language/charset#Code unit and literal encoding|ordinary character literal encoding]] of the translation environment at compile-time and the character encoding of the execution environment at runtime.
+
+Each {{tt|text_encoding}} object encapsulates a ''character encoding scheme'', uniquely identified by an enumerator in [[#Member types|{{tt|text_encoding::id}}]] and a corresponding name represented by a null-terminated byte string. These can be accessed through the {{lc|mib()}} and {{lc|name()}} member functions, respectively. The determination of whether an object represents a character encoding scheme implemented in the translation or execution environment is implementation-defined.
+
+The class {{tt|text_encoding}} is a {{named req|TriviallyCopyable}} type. The array object representing the corresponding name of the character encoding scheme is [[cpp/language/object#Address|nested within]] the {{tt|text_encoding}} object itself. The stored name is limited to a maximum of [[#Member constant|{{c|max_name_length}}]] characters excluding the null character {{c|'\0'}}.
+
+The class supports both registered and non-registered character encodings. Registered encodings are those found in the [https://www.iana.org/assignments/character-sets/character-sets.xhtml IANA Character Sets Registry] excluding the following character encodings: 
+* NATS-DANO (33)
+* NATS-DANO-ADD (34).
+
+In addition, the class provides access for registered character encodings to:
+# ''Primary name'': The official name specified in the registry.
+# ''Aliases'': An implementation-defined superset of aliases from the registry.
+# ''MIBenum value'': A unique identifier for use in identifying coded character encodings.
+
+Non-registered encodings can be represented with an enumerator {{c|id::other}} or {{c|id::unknown}} and a custom name.
+
+A {{tt|text_encoding}} object {{c|e}} whose MIBenum value is neither {{c|id::other}} nor {{c|id::unknown}} maintains the following invariants:
+* {{c|1=*e.name() != '\0'}} is {{c|true}}, and
+* {{c|1=e.mib() == std::text_encoding(e.name()).mib()}} is {{c|true}}.
+
+===Member types===
+{{dsc begin}}
+{{dsc inc|cpp/text/text_encoding/dsc id}}
+{{dsc inc|cpp/text/text_encoding/dsc aliases_view}}
+{{dsc end}}
+
+===Member constant===
+{{dsc begin}}
+{{dsc hitem|Name|Value}}
+{{dsc mem sconst|nolink=true|{{dsc small|{{c/core|constexpr std::size_t}}}} max_name_length|{{c|63}}}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::text_encoding::id}}|mib_|id=mib|a MIBenum value with {{c|id::unknown}} as the default value}}
+{{dsc expos mem obj|private=yes|spec={{c/core|char[max_name_length + 1]}}|name_|id=name|a stored primary name}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc h2|Creation}}
+{{dsc inc|cpp/text/text_encoding/dsc constructor}}
+{{dsc inc|cpp/text/text_encoding/dsc literal}}
+{{dsc inc|cpp/text/text_encoding/dsc environment}}
+{{dsc h2|Observers}}
+{{dsc inc|cpp/text/text_encoding/dsc mib}}
+{{dsc inc|cpp/text/text_encoding/dsc name}}
+{{dsc inc|cpp/text/text_encoding/dsc aliases}}
+{{dsc inc|cpp/text/text_encoding/dsc environment_is}}
+{{dsc h2|Helpers}}
+{{dsc inc|cpp/text/text_encoding/dsc comp-name}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/text/text_encoding/dsc operator_eq}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/text/text_encoding/dsc hash}}
+{{dsc end}}
+
+===Notes===
+When working with character encodings, it is important to note that the primary names or aliases of two distinct registered character encodings are not equivalent when compared using [https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching Charset Alias Matching] as described by the Unicode Technical Standard.
+
+For convenience, the enumerators of {{tt|text_encoding::id}} are introduced as members of {{tt|text_encoding}} and can be accessed directly. This means that {{c|text_encoding::ASCII}} and {{c|text_encoding::id::ASCII}} refer to the same entity.
+
+It is recommended that the implementation should treat registered encodings as not interchangeable. 
+Additionally, the primary name of a registered encoding should not be used to describe a similar but different non-registered encoding, unless there is a clear precedent for doing so.
+
+{{feature test macro|__cpp_lib_text_encoding|std=C++26|value=202306L|{{tt|std::text_encoding}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;locale&gt;
+#include &lt;print&gt;
+#include &lt;text_encoding&gt;
+ 
+int main()
+{
+    // literal encoding is known at compile-time
+    constexpr std::text_encoding literal_encoding = std::text_encoding::literal();
+
+    // check for literal encoding
+    static_assert(literal_encoding.mib() != std::text_encoding::other &amp;&amp;
+                  literal_encoding.mib() != std::text_encoding::unknown);
+   
+    // environment encoding is only known at runtime
+    std::text_encoding env_encoding = std::text_encoding::environment();
+
+    // associated encoding of the default locale
+    std::text_encoding locale_encoding = std::locale("").encoding();
+
+    std::println("The literal encoding is {}", literal_encoding.name());
+    std::println("The aliases of literal encoding:");
+    for (const char* alias_name : literal_encoding.aliases())
+        std::println(" -&gt; {}", alias_name);
+
+    if (env_encoding == locale_encoding)
+        std::println("Both environment and locale encodings are the same");
+
+    std::println("The environment encoding is {}", env_encoding.name());
+    std::println("The aliases of environment encoding:");
+    for (const char* alias_name : env_encoding.aliases())
+        std::println(" -&gt; {}", alias_name);
+}
+|p=true
+|output=
+The literal encoding is UTF-8
+The aliases of literal encoding:
+ -&gt; UTF-8
+ -&gt; csUTF8
+Both environment and locale encodings are the same
+The environment encoding is ANSI_X3.4-1968
+The aliases of environment encoding:
+ -&gt; US-ASCII
+ -&gt; iso-ir-6
+ -&gt; ANSI_X3.4-1968
+ -&gt; ANSI_X3.4-1986
+ -&gt; ISO_646.irv:1991
+ -&gt; ISO646-US
+ -&gt; us
+ -&gt; IBM367
+ -&gt; cp367
+ -&gt; csASCII
+ -&gt; ASCII
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/locale/dsc locale}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

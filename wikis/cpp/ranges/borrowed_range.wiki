@@ -1,0 +1,109 @@
+{{cpp/ranges/title|borrowed_range|enable_borrowed_range}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class R &gt;
+concept borrowed_range =
+    ranges::range&lt;R&gt; &amp;&amp;
+    (std::is_lvalue_reference_v&lt;R&gt; {{!!}}
+     ranges::enable_borrowed_range&lt;std::remove_cvref_t&lt;R&gt;&gt;);
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class R &gt;
+constexpr bool enable_borrowed_range = false;
+}}
+{{dcl end}}
+
+@1@ The concept {{tt|borrowed_range}} defines the requirements of a range such that a function can take it by value and return iterators obtained from it without danger of dangling.
+@2@ The {{tt|enable_borrowed_range}} variable template is used to indicate whether a {{lconcept|range}} is a {{tt|borrowed_range}}. The primary template is defined as {{c|false}}.
+
+===Semantic requirements===
+Let {{tt|U}} be {{c/core|std::remove_reference_t&lt;T&gt;}} if {{tt|T}} is an rvalue reference type, and {{tt|T}} otherwise. Given a variable {{c|u}} of type {{tt|U}}, {{tt|T}} models {{tt|borrowed_range}} only if the validity of iterators obtained from {{c|u}} is not tied to the lifetime of that variable.&lt;!-- LWG 3361 --&gt;
+
+===Specializations===
+Specializations of {{tt|enable_borrowed_range}} for all specializations of the following standard templates are defined as {{c|true}}:
+* {{ltt|cpp/string/basic_string_view|std::basic_string_view}}
+* {{ltt|cpp/container/span|std::span}}
+* {{ltt|cpp/ranges/subrange|std::ranges::subrange}}
+* {{ltt|cpp/ranges/ref_view|std::ranges::ref_view}}
+* {{ltt|cpp/ranges/empty_view|std::ranges::empty_view}}
+* {{ltt|cpp/ranges/iota_view|std::ranges::iota_view}}
+
+&lt;!-- P2017R1 / LWG 3494 --&gt;Specialization of {{tt|enable_borrowed_range}} for the following standard range adaptors are defined as {{c|true}} if and only if {{c|std::ranges::enable_borrowed_range&lt;V&gt;}} is {{c|true}}, where {{tt|V}} is the underlying view type:
+* {{ltt|cpp/ranges/owning_view|std::ranges::owning_view}}
+* {{ltt|cpp/ranges/take_view|std::ranges::take_view}}
+* {{ltt|cpp/ranges/drop_view|std::ranges::drop_view}}
+* {{ltt|cpp/ranges/drop_while_view|std::ranges::drop_while_view}}
+* {{ltt|cpp/ranges/common_view|std::ranges::common_view}}
+* {{ltt|cpp/ranges/reverse_view|std::ranges::reverse_view}}
+* {{ltt|cpp/ranges/elements_view|std::ranges::elements_view}}
+{{rrev|since=c++23|
+* {{ltt|cpp/ranges/adjacent_view|std::ranges::adjacent_view}}
+}}
+
+{{rrev|since=c++23|
+Specialization for {{ltt|cpp/ranges/zip_view|std::ranges::zip_view}} is defined as {{c|true}} if and only if {{c|(std::ranges::enable_borrowed_range&lt;Vs&gt; &amp;&amp; ...)}} is {{c|true}}, where {{tt|Vs...}} are all view types it adapts.
+}}
+
+A program may specialize {{tt|enable_borrowed_range}} to {{c|true}} for cv-unqualified {{lsd|cpp/language/type#Program-defined type}}s which model {{tt|borrowed_range}}, and {{c|false}} for types which do not. Such specializations shall be usable in {{lt|cpp/language/constant expression}} and have type {{c/core|const bool}}.
+
+===Example===
+{{example
+|Demonstrates the specializations of {{tt|enable_borrowed_range}} for program defined types. Such specializations protect against potentially dangling results.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;span&gt;
+#include &lt;type_traits&gt;
+
+template&lt;typename T, std::size_t N&gt;
+struct MyRange : std::array&lt;T, N&gt; {};
+
+template&lt;typename T, std::size_t N&gt;
+constexpr bool std::ranges::enable_borrowed_range&lt;MyRange&lt;T, N&gt;&gt; = false;
+
+template&lt;typename T, std::size_t N&gt;
+struct MyBorrowedRange : std::span&lt;T, N&gt; {};
+
+template&lt;typename T, std::size_t N&gt;
+constexpr bool std::ranges::enable_borrowed_range&lt;MyBorrowedRange&lt;T, N&gt;&gt; = true;
+
+int main()
+{
+    static_assert(std::ranges::range&lt;MyRange&lt;int, 8&gt;&gt;);
+    static_assert(std::ranges::borrowed_range&lt;MyRange&lt;int, 8&gt;&gt; == false);
+    static_assert(std::ranges::range&lt;MyBorrowedRange&lt;int, 8&gt;&gt;);
+    static_assert(std::ranges::borrowed_range&lt;MyBorrowedRange&lt;int, 8&gt;&gt; == true);
+    
+    auto getMyRangeByValue = []{ return MyRange&lt;int, 4&gt;{&lt;!----&gt;{1, 2, 42, 3}&lt;!----&gt;}; };
+    auto dangling_iter = std::ranges::max_element(getMyRangeByValue());
+    static_assert(std::is_same_v&lt;std::ranges::dangling, decltype(dangling_iter)&gt;);
+    // *dangling_iter; // compilation error (i.e. dangling protection works.)
+    
+    auto my = MyRange&lt;int, 4&gt;{&lt;!----&gt;{1, 2, 42, 3}&lt;!----&gt;};
+    auto valid_iter = std::ranges::max_element(my);
+    std::cout &lt;&lt; *valid_iter &lt;&lt; ' '; // OK: 42
+    
+    auto getMyBorrowedRangeByValue = []
+    {
+        static int sa[4]{1, 2, 42, 3};
+        return MyBorrowedRange&lt;int, std::size(sa)&gt;{sa};
+    };
+    auto valid_iter2 = std::ranges::max_element(getMyBorrowedRangeByValue());
+    std::cout &lt;&lt; *valid_iter2 &lt;&lt; '\n'; // OK: 42
+}
+|output=
+42 42
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc dangling}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

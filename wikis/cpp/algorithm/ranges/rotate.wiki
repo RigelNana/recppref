@@ -1,0 +1,209 @@
+{{cpp/ranges/title|rotate}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr ranges::subrange&lt;I&gt;
+    rotate( I first, I middle, S last );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    rotate( R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle );
+}}
+{{dcl end}}
+
+@1@Performs a ''left rotation'' on a range of elements. Specifically, {{tt|ranges::rotate}} swaps the elements in the range {{range|first|last}} in such a way that the element {{c|*middle}} becomes the first element of the new range and {{c|*(middle - 1)}} becomes the last element.
+
+@@ The behavior is undefined if {{range|first|last}} is not a valid range or {{c|middle}} is not in {{range|first|last}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to rotate}}
+{{par|r|the range of elements to rotate}}
+{{par|middle|the iterator to the element that should appear at the beginning of the rotated range}}
+{{par end}}
+
+===Return value===
+{{c|{new_first, last}&lt;!----&gt;}}, where {{tt|''new_first''}} compares equal to {{c|1=ranges::next(first, ranges::distance(middle, last))}} and designates a new location of the element pointed by {{c|first}}.
+
+===Complexity===
+''Linear'' at worst: {{c|ranges::distance(first, last)}} swaps.
+
+===Notes===
+{{tt|ranges::rotate}} has better efficiency on common implementations if {{tt|I}} models {{lconcept|bidirectional_iterator}} or (better) {{lconcept|random_access_iterator}}.
+
+{{cpp/algorithm/notes swap vectorization}}
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/14d8a5ae472ca5743016f37da2dd4770d83dea21/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1361-L1506 libstdc++] and [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L4407-L4434 MSVC STL].
+{{eq fun|1=
+struct rotate_fn
+{
+    template&lt;std::permutable I, std::sentinel_for&lt;I&gt; S&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, I middle, S last) const
+    {
+        if (first == middle)
+        {
+            auto last_it = ranges::next(first, last);
+            return {last_it, last_it};
+        }
+        if (middle == last)
+            return {std::move(first), std::move(middle)};
+
+        if constexpr (std::bidirectional_iterator&lt;I&gt;)
+        {
+            ranges::reverse(first, middle);
+            auto last_it = ranges::next(first, last);
+            ranges::reverse(middle, last_it);
+
+            if constexpr (std::random_access_iterator&lt;I&gt;)
+            {
+                ranges::reverse(first, last_it);
+                return {first + (last_it - middle), std::move(last_it)};
+            }
+            else
+            {
+                auto mid_last = last_it;
+                do
+                {
+                    ranges::iter_swap(first, --mid_last);
+                    ++first;
+                }
+                while (first != middle &amp;&amp; mid_last != middle);
+                ranges::reverse(first, mid_last);
+
+                if (first == middle)
+                    return {std::move(mid_last), std::move(last_it)};
+                else
+                    return {std::move(first), std::move(last_it)};
+            }
+        }
+        else
+        { // I is merely a forward_iterator
+            auto next_it = middle;
+            do
+            { // rotate the first cycle
+                ranges::iter_swap(first, next_it);
+                ++first;
+                ++next_it;
+                if (first == middle)
+                    middle = next_it;
+            }
+            while (next_it != last);
+
+            auto new_first = first;
+            while (middle != last)
+            { // rotate subsequent cycles
+                next_it = middle;
+                do
+                {
+                    ranges::iter_swap(first, next_it);
+                    ++first;
+                    ++next_it;
+                    if (first == middle)
+                        middle = next_it;
+                }
+                while (next_it != last);
+            }
+
+            return {std::move(new_first), std::move(middle)};
+        }
+    }
+
+    template&lt;ranges::forward_range R&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle) const
+    {
+        return (*this)(ranges::begin(r), std::move(middle), ranges::end(r));
+    }
+};
+
+inline constexpr rotate_fn rotate {};
+}}
+
+===Example===
+{{example
+|{{tt|ranges::rotate}} is a common building block in many algorithms. This example demonstrates {{enwiki|insertion sort}}.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::string s(16, ' ');
+
+    for (int k {}; k != 5; ++k)
+    {
+        std::iota(s.begin(), s.end(), 'A');
+        std::ranges::rotate(s, s.begin() + k);
+        std::cout &lt;&lt; "Rotate left (" &lt;&lt; k &lt;&lt; "): " &lt;&lt; s &lt;&lt; '\n';
+    }
+    std::cout &lt;&lt; '\n';
+
+    for (int k {}; k != 5; ++k)
+    {
+        std::iota(s.begin(), s.end(), 'A');
+        std::ranges::rotate(s, s.end() - k);
+        std::cout &lt;&lt; "Rotate right (" &lt;&lt; k &lt;&lt; "): " &lt;&lt; s &lt;&lt; '\n';
+    }
+
+    std::cout &lt;&lt; "\nInsertion sort using `rotate`, step-by-step:\n";
+
+    s = {'2', '4', '2', '0', '5', '9', '7', '3', '7', '1'};
+
+    for (auto i = s.begin(); i != s.end(); ++i)
+    {
+        std::cout &lt;&lt; "i = " &lt;&lt; std::ranges::distance(s.begin(), i) &lt;&lt; ": ";
+        std::ranges::rotate(std::ranges::upper_bound(s.begin(), i, *i), i, i + 1);
+        std::cout &lt;&lt; s &lt;&lt; '\n';
+    }
+    std::cout &lt;&lt; (std::ranges::is_sorted(s) ? "Sorted!" : "Not sorted.") &lt;&lt; '\n';
+}
+|output=
+Rotate left (0): ABCDEFGHIJKLMNOP
+Rotate left (1): BCDEFGHIJKLMNOPA
+Rotate left (2): CDEFGHIJKLMNOPAB
+Rotate left (3): DEFGHIJKLMNOPABC
+Rotate left (4): EFGHIJKLMNOPABCD
+
+Rotate right (0): ABCDEFGHIJKLMNOP
+Rotate right (1): PABCDEFGHIJKLMNO
+Rotate right (2): OPABCDEFGHIJKLMN
+Rotate right (3): NOPABCDEFGHIJKLM
+Rotate right (4): MNOPABCDEFGHIJKL
+
+Insertion sort using `rotate`, step-by-step:
+i = 0: 2420597371
+i = 1: 2420597371
+i = 2: 2240597371
+i = 3: 0224597371
+i = 4: 0224597371
+i = 5: 0224597371
+i = 6: 0224579371
+i = 7: 0223457971
+i = 8: 0223457791
+i = 9: 0122345779
+Sorted!
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse}}
+{{dsc inc|cpp/algorithm/dsc rotate}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

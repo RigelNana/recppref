@@ -1,0 +1,173 @@
+{{cpp/title|char_traits}}
+{{cpp/string/char_traits/navbar}}
+{{ddcl|header=string|1=
+template&lt;
+    class CharT 
+&gt; class char_traits;
+}}
+
+The {{tt|char_traits}} class is a traits class template that abstracts basic character and string operations for a given character type. The defined operation set is such that generic algorithms almost always can be implemented in terms of it. It is thus possible to use such algorithms with almost any possible character or string type, just by supplying a customized {{tt|char_traits}} class.
+
+The {{tt|char_traits}} class template serves as a basis for explicit instantiations. The user can [[cpp/language/extending std|provide a specialization]] for any custom character types. Several explicit specializations are provided for the standard character types (see below), other specializations are not required to satisfy the requirements of {{named req|CharTraits}}.
+
+===Specializations===
+The standard library provides the following standard specializations:
+{{dsc begin}}
+{{dsc header|string}}
+{{dsc|{{c/core|std::char_traits&lt;char&gt;}}|the standard character traits of {{c/core|char}}}}
+{{dsc|{{c/core|std::char_traits&lt;wchar_t&gt;}}|the standard character traits of {{c/core|wchar_t}}}}
+{{dsc|{{c/core|std::char_traits&lt;char8_t&gt;}} {{mark c++20}}|the standard character traits of {{c/core|char8_t}}}}
+{{dsc|{{c/core|std::char_traits&lt;char16_t&gt;}} {{mark c++11}}|the standard character traits of {{c/core|char16_t}}}}
+{{dsc|{{c/core|std::char_traits&lt;char32_t&gt;}} {{mark c++11}}|the standard character traits of {{c/core|char32_t}}}}
+{{dsc end}}
+
+All these specializations satisfy the requirements of {{named req|CharTraits}}.
+
+====Member types====
+The standard specializations define the following member types required by {{named req|CharTraits}}:
+{|class=wikitable style="text-align: center;"
+!rowspan=2|{{tt|CharT}}
+!colspan=5|Member type
+|-
+!{{nbsp}}{{tt|char_type}}{{nbsp}}
+!{{tt|int_type}}
+!{{tt|off_type}}
+!{{tt|pos_type}}
+!{{tt|state_type}}
+|-
+|{{c/core|char}}
+|{{c/core|char}}
+|{{c/core|int}}
+|rowspan=5|{{nbsp}}{{lc|std::streamoff}}{{nbsp}}
+|{{lc|std::streampos}}
+|rowspan=5|{{nbsp}}{{lc|std::mbstate_t}}{{nbsp}}
+|-
+|{{c/core|wchar_t}}
+|{{c/core|wchar_t}}
+|{{ltt|cpp/string/wide#Types|std::wint_t}}
+|{{lc|std::wstreampos}}
+|-
+|{{c/core|char8_t}}
+|{{c/core|char8_t}}
+|{{c/core|unsigned int}}
+|{{lc|std::u8streampos}}
+|-
+|{{nbsp}}{{c/core|char16_t}}{{nbsp}}
+|{{c/core|char16_t}}
+|{{nbsp}}{{lc|std::uint_least16_t}}{{nbsp}}
+|{{nbsp}}{{lc|std::u16streampos}}{{nbsp}}
+|-
+|{{c/core|char32_t}}
+|{{c/core|char32_t}}
+|{{lc|std::uint_least32_t}}
+|{{lc|std::u32streampos}}
+|}
+
+{{rrev|since=c++20|
+On top of that, the standard specializations also define the member type {{tt|comparison_category}} as {{ltt std|cpp/utility/compare/strong_ordering}}.
+}}
+
+====Member functions====
+The standard specializations define the following static member functions required by {{named req|CharTraits}}:
+{{dsc begin}}
+{{dsc inc|cpp/string/char_traits/dsc assign}}
+{{dsc inc|cpp/string/char_traits/dsc cmp}}
+{{dsc inc|cpp/string/char_traits/dsc move}}
+{{dsc inc|cpp/string/char_traits/dsc copy}}
+{{dsc inc|cpp/string/char_traits/dsc compare}}
+{{dsc inc|cpp/string/char_traits/dsc length}}
+{{dsc inc|cpp/string/char_traits/dsc find}}
+{{dsc inc|cpp/string/char_traits/dsc to_char_type}}
+{{dsc inc|cpp/string/char_traits/dsc to_int_type}}
+{{dsc inc|cpp/string/char_traits/dsc eq_int_type}}
+{{dsc inc|cpp/string/char_traits/dsc eof}}
+{{dsc inc|cpp/string/char_traits/dsc not_eof}}
+{{dsc end}}
+
+===Notes===
+{{named req|CharTraits}} does not require defining the types and functions listed above as direct members, it only requires types like {{tt|X::type}} and expressions like {{c|X::func(args)}} are valid and have the required semantics. Users-defined character traits can be derived from other character traits classes and only override some of their members, see the example below.
+
+===Example===
+{{example
+|User-defined character traits may be used to provide [http://www.gotw.ca/gotw/029.htm case-insensitive comparison]:
+|code=
+#include &lt;cctype&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+
+struct ci_char_traits : public std::char_traits&lt;char&gt;
+{
+    static char to_upper(char ch)
+    {
+        return std::toupper((unsigned char) ch);
+    }
+    
+    static bool eq(char c1, char c2)
+    {
+        return to_upper(c1) == to_upper(c2);
+    }
+    
+    static bool lt(char c1, char c2)
+    {
+         return to_upper(c1) &lt; to_upper(c2);
+    }
+    
+    static int compare(const char* s1, const char* s2, std::size_t n)
+    {
+        while (n-- != 0)
+        {
+            if (to_upper(*s1) &lt; to_upper(*s2))
+                return -1;
+            if (to_upper(*s1) &gt; to_upper(*s2))
+                return 1;
+            ++s1;
+            ++s2;
+        }
+        return 0;
+    }
+    
+    static const char* find(const char* s, std::size_t n, char a)
+    {
+        const auto ua{to_upper(a)};
+        while (n-- != 0) 
+        {
+            if (to_upper(*s) == ua)
+                return s;
+            s++;
+        }
+        return nullptr;
+    }
+};
+
+template&lt;class DstTraits, class CharT, class SrcTraits&gt;
+constexpr std::basic_string_view&lt;CharT, DstTraits&gt;
+    traits_cast(const std::basic_string_view&lt;CharT, SrcTraits&gt; src) noexcept
+{
+    return {src.data(), src.size()};
+}
+
+int main()
+{
+    using namespace std::literals;
+    
+    constexpr auto s1 = "Hello"sv;
+    constexpr auto s2 = "heLLo"sv;
+    
+    if (traits_cast&lt;ci_char_traits&gt;(s1) == traits_cast&lt;ci_char_traits&gt;(s2))
+        std::cout &lt;&lt; s1 &lt;&lt; " and " &lt;&lt; s2 &lt;&lt; " are equal\n";
+}
+|output=
+Hello and heLLo are equal
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/string/dsc basic_string}}
+{{dsc inc|cpp/string/dsc basic_string_view}}
+{{dsc inc|cpp/io/dsc basic_istream}}
+{{dsc inc|cpp/io/dsc basic_ostream}}
+{{dsc inc|cpp/io/dsc basic_streambuf}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

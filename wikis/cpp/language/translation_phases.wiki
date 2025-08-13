@@ -1,0 +1,323 @@
+{{title|Phases of translation}}
+{{cpp/language/basics/navbar}}
+C++ source files are processed by the compiler to produce C++ programs. 
+
+===Translation process===
+The text of a C++ program is kept in units called ''source files''.
+
+C++ source files undergo ''translation'' to become a ''translation unit'', consisting of the following steps:
+# Maps each source file to a character sequence.
+# Converts each character sequence to a preprocessing token sequence, separated by whitespace.
+# Converts each preprocessing token to a token, forming a token sequence.
+# Converts each token sequence to a translation unit.
+
+A C++ program can be formed from translated translation units. Translation units can be separately translated and then later linked to produce an executable program.
+
+The process above can be organized into 9 [[#Translation phases|translation phases]].
+
+===Preprocessing tokens===
+A ''preprocessing token'' is the minimal lexical element of the language in translation phases 3 through 6.
+
+The categories of preprocessing token are:
+* [[cpp/preprocessor/include|header names]] (such as {{c|&lt;iostream&gt;}} or {{c|"myfile.h"}})
+{{rrev|since=c++20|
+* placeholder tokens produced by preprocessing {{rlp|modules|{{c/core|import}} and {{c/core|module}} directives}} (i.e. {{c|import XXX;}} and {{c|module XXX;}})
+}}
+* {{rlp|identifiers}}
+* preprocessing numbers (see below)
+* {{rlp|character literal}}s{{rev inl|since=c++11|, including {{rlp|user literal|user-defined}} character literals}}
+* {{rlp|string literal}}s{{rev inl|since=c++11|, including {{rlp|user literal|user-defined}} string literals}}
+* {{rlp|punctuators|operators and punctuators}}, including {{rlp|operator alternative|alternative tokens}}
+* individual non-whitespace characters that do not fit in any other category
+: The program is ill-formed if the character matching this category is
+:* apostrophe ({{c|'}}, U+0027),
+:* quotation mark ({{c|"}}, U+0022), or
+:* a character not in the {{rlp|charset|basic character set}}.
+
+====Preprocessing numbers====
+The set of preprocessing tokens of preprocessing number is a superset of the union of the sets of tokens of {{rlp|integer literal}}s and {{rlp|floating literal|floating-point literals}}:
+{{sdsc begin}}
+{{sdsc|
+{{ttb|.}}{{mark optional}} {{spar|digit}} {{spar optional|pp-continue-seq}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|digit}}|one of digits 0-9}}
+{{par|{{spar|pp-continue-seq}}|a sequence of {{spar sep|pp-continue}}s}}
+{{par end}}
+
+Each {{spar|pp-continue}} is one of the following:
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|identifier-continue}}
+}}
+{{sdsc|num=2|
+{{spar|exp-char}} {{spar|sign-char}}
+}}
+{{sdsc|num=3|
+{{ttb|.}}
+}}
+{{sdsc|num=4|notes={{mark since c++14}}|
+{{ttb|’}} {{spar|digit}}
+}}
+{{sdsc|num=5|notes={{mark since c++14}}|
+{{ttb|’}} {{spar|nondigit}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|identifier-continue}}|any non-first character of a valid {{rlp|identifiers|identifier}}}}
+{{par|{{spar|exp-char}}|one of{{rev inl|since=c++11| {{ttb|P}}, {{ttb|p}},}} {{ttb|E}} and {{ttb|e}}}}
+{{par|{{spar|sign-char}}|one of {{ttb|+}} and {{ttb|-}}}}
+{{par|{{spar|digit}}|one of digits 0-9}}
+{{par|{{spar|nondigit}}|one of Latin letters A/a-Z/z and underscore}}
+{{par end}}
+
+A preprocessing number does not have a type or a value; it acquires both after a successful conversion an integer/floating-point literal token.
+
+====Whitespace====
+''Whitespace'' consists of [[cpp/comment|comments]], whitespace characters, or both.
+
+The following characters are whitespace characters:
+* character tabulation (U+0009)
+* line feed / new-line character (U+000A)
+* line tabulation (U+000B)
+* form feed (U+000C)
+* space (U+0020)
+
+Whitespace is usually used to separate preprocessing tokens, with the following exceptions:
+* It is not a separator in header name, character literal and string literal.
+* Preprocessing tokens separated by whitespace containing new-line characters cannot form [[cpp/preprocessor|preprocessing directives]].
+
+{{source|
+#include "my header"        // OK, using a header name containing whitespace
+
+#include/*hello*/&lt;iostream&gt; // OK, using a comment as whitespace
+
+#include
+&lt;iostream&gt; // Error: #include cannot span across multiple lines
+
+"str ing"  // OK, a single preprocessing token (string literal)
+' '        // OK, a single preprocessing token (character literal)
+}}
+
+{{anchor|maximal munch}}
+====Maximal munch====
+If the input has been parsed into preprocessing tokens up to a given character, the next preprocessing token is generally taken to be the longest sequence of characters that could constitute a preprocessing token, even if that would cause subsequent analysis to fail. This is commonly known as ''maximal munch''. 
+{{source|1=
+int foo = 1;
+int bar = 0xE+foo;   // Error: invalid preprocessing number 0xE+foo
+int baz = 0xE + foo; // OK
+}}
+
+In other words, the maximal munch rule is in favor of {{rlpsd|punctuators#Multi-character operators and punctuators}}:
+{{source|1=
+int foo = 1;
+int bar = 2;
+
+int num1 = foo+++++bar; // Error: treated as “foo++ ++ +baz”, not “foo++ + ++baz”
+int num2 = -----foo;    // Error: treated as “-- -- -foo”, not “- -- --foo”
+}}
+
+The maximal munch rule has the following exceptions:
+* Header name preprocessing tokens are only formed in the following cases:
+:* after the {{c|include}} preprocessing token in an [[cpp/preprocessor/include|{{c/core|#include}}]] directive
+{{rev begin}}
+{{rev|since=c++17|
+:* in a {{ltt|cpp/preprocessor/include|__has_include}} expression
+}}
+{{rev|since=c++20|
+:* after the {{c|import}} preprocessing token in an [[cpp/language/modules#Syntax|{{c/core|import}}]] directive
+}}
+{{rev end}}
+{{source|
+std::vector&lt;int&gt; x; // OK, “int” is not a header name
+}}
+* If the next three characters are {{c|&lt;::}} and the subsequent character is neither {{c|:}} nor {{c|&gt;}}, the {{c|&lt;}} is treated as a preprocessing token by itself instead of the first character of the {{rlp|operator alternative|alternative token}} {{c|&lt;:}}.
+{{source|1=
+struct Foo { static const int v = 1; };
+std::vector&lt;::Foo&gt; x;  // OK, &lt;: not taken as the alternative token for [
+extern int y&lt;::&gt;;      // OK, same as “extern int y[];”
+int z&lt;:::Foo::value:&gt;; // OK, same as “int z[::Foo::value];”
+}}
+{{rrev|since=c++11|
+* If the next two characters are {{c|&gt;&gt;}} and one of the {{c|&gt;}} character can complete a {{rlp|templates#Template identifiers|template identifier}}, the character is treated as a preprocessing token alone instead of being part of the preprocessing token {{c|&gt;&gt;}}.
+{{source|
+template&lt;int i&gt; class X { /* ... */ };
+template&lt;class T&gt; class Y { /* ... */ };
+
+Y&lt;X&lt;1&gt;&gt; x3;      // OK, declares a variable “x3” of type “Y&lt;X&lt;1&gt; &gt;”
+Y&lt;X&lt;6&gt;&gt;1&gt;&gt; x4;   // Syntax error
+Y&lt;X&lt;(6&gt;&gt;1)&gt;&gt; x5; // OK
+}}
+* If the next character begins a sequence of characters that could be the prefix and initial double quote of a {{rlp|string literal#Raw string literals|raw string literal}}, the next preprocessing token is a raw string literal. The literal consists of the shortest sequence of characters that matches the raw-string pattern.
+{{source|1=
+#define R "x"
+const char* s = R"y";         // ill-formed raw string literal, not "x" "y"
+const char* s2 = R"(a)" "b)"; // a raw string literal followed by a normal string literal
+}}
+}}
+
+===Tokens===
+A ''token'' is the minimal lexical element of the language in translation phase 7.
+
+The categories of token are:
+* {{rlp|identifiers}}
+* {{lt|cpp/keyword}}s
+* {{rlpsd|expressions#Literals}}
+* {{rlp|punctuators|operators and punctuators}} (except preprocessing operators)
+
+===Translation phases===
+Translation is performed {{rlp|as if}} in the order from phase 1 to phase 9. Implementations behave as if these separate phases occur, although in practice different phases can be folded together.
+
+{{anchor|Phase 1}}
+====Phase 1: Mapping source characters====
+{{rev begin}}
+{{rev|until=c++23|
+@1@ The individual bytes of the source code file are mapped (in implementation-defined manner) to the characters of the {{rlp|charset#Basic source character set|basic source character set}}. In particular, OS-dependent end-of-line indicators are replaced by newline characters.
+
+@2@ {{rev inl|since=c++11|The set of source file characters accepted is implementation-defined}}. Any source file character that cannot be mapped to a character in the {{rlp|charset#Basic source character set|basic source character set}} is replaced by its {{rlp|escape|universal character name}} (escaped with {{tt|\u}} or {{tt|\U}}) or by some implementation-defined form that is handled equivalently. 
+
+{{rrev|until=c++17|
+@3@ {{rlp|operator alternative|Trigraph sequences}} are replaced by corresponding single-character representations.
+}}
+}}
+{{rev|since=c++23|
+Input files that are a sequence of UTF-8 code units (UTF-8 files) are guaranteed to be supported. The set of other supported kinds of input files is implementation-defined. If the set is non-empty, the kind of an input file is determined in an implementation-defined manner that includes a means of designating input files as UTF-8 files, independent of their content (recognizing the byte order mark is not sufficient).
+* If an input file is determined to be a UTF-8 file, then it shall be a well-formed UTF-8 code unit sequence and it is decoded to produce a sequence of Unicode scalar values. A sequence of {{rlp|charset#Translation character set|translation character set}} elements is then formed by mapping each Unicode scalar value to the corresponding translation character set element. In the resulting sequence, each pair of characters in the input sequence consisting of carriage return (U+000D) followed by line feed (U+000A), as well as each carriage return (U+000D) not immediately followed by a line feed (U+000A), is replaced by a single new-line character.
+* For any other kind of input file supported by the implementation, characters are mapped (in implementation-defined manner) to a sequence of translation character set elements. In particular, OS-dependent end-of-line indicators are replaced by new-line characters.
+}}
+{{rev end}}
+
+{{anchor|Phase 2}}
+====Phase 2: Splicing lines====
+@1@ {{rev inl|since=c++23|If the first translation character is byte order mark (U+FEFF), it is deleted. }}Whenever backslash ({{c|\}}) appears at the end of a line (immediately followed by {{rev inl|since=c++23|zero or more whitespace characters other than new-line followed by}} the newline character), these characters are deleted, combining two physical source lines into one logical source line. This is a single-pass operation; a line ending in two backslashes followed by an empty line does not combine three lines into one.
+@2@ If a non-empty source file does not end with a newline character after this step (end-of-line backslashes are no longer splices at this point), a terminating newline character is added.
+
+{{anchor|Phase 3}}
+====Phase 3: Lexing====
+@1@ The source file is decomposed into [[#Preprocessing tokens|preprocessing tokens]] and [[#Whitespace|whitespace]]:
+{{source|
+// The following #include directive can de decomposed into 5 preprocessing tokens:
+
+//     punctuators (#, &lt; and &gt;)
+//          │
+// ┌────────┼────────┐
+// │        │        │
+   #include &lt;iostream&gt;
+//     │        │
+//     │        └── header name (iostream)
+//     │
+//     └─────────── identifier (include)
+}}
+@@ If a source file ends in a partial preprocessing token or in a partial comment, the program is ill-formed:
+{{source|
+// Error: partial string literal
+"abc
+}}
+{{source|
+// Error: partial comment
+/* comment
+}}
+
+{{rrev|since=c++23|
+@@ As characters from the source file are consumed to form the next preprocessing token (i.e., not being consumed as part of a comment or other forms of whitespace), universal character names are recognized and replaced by the designated element of the {{rlpsd|charset#Translation character set}}, except when matching a character sequence in one of the following preprocessing tokens:
+:* a character literal ({{spar|c-char-sequence}})
+:* a string literal ({{spar|s-char-sequence}} and {{spar|r-char-sequence}}), excluding delimiters ({{spar|d-char-sequence}})
+:* a header name ({{spar|h-char-sequence}} and {{spar|q-char-sequence}})
+}}
+
+
+{{rrev|since=c++11|
+@2@ Any transformations performed during{{rev inl|until=c++23| phase 1 and}} phase 2 between the initial and the final double quote of any {{rlp|string literal|raw string literal}} are reverted.
+}}
+
+@3@ Whitespace is transformed:
+* Each comment is replaced by one space character.
+* New-line characters are retained.
+* Whether each nonempty sequence of whitespace characters other than new-line is retained or replaced by one space character is unspecified.
+
+{{anchor|Phase 4}}
+====Phase 4: Preprocessing====
+@1@ The {{lt|cpp/preprocessor}} is executed.
+@2@ Each file introduced with the [[cpp/preprocessor/include|{{c/core|#include}}]] directive goes through phases 1 through 4, recursively.
+@3@ At the end of this phase, all preprocessor directives are removed from the source.
+
+{{anchor|Phase 5}}
+====Phase 5: Determining common string literal encodings====
+{{rev begin}}
+{{rev|until=c++23|
+@1@ All characters in {{rlp|character literal}}s and {{rlp|string literal}}s are converted from the source character set to the {{rlp|charset#Code unit and literal|encoding|literal encoding}} (which may be a multibyte character encoding such as UTF-8, as long as the 96 characters of the {{rlp|charset#Basic character set|basic character set}} have single-byte representations).
+@2@ {{rlp|escape|Escape sequences}} and universal character names in character literals and non-raw string literals are expanded and converted to the literal encoding.
+If the character specified by a universal character name cannot be encoded as a single code point in the corresponding literal encoding, the result is implementation-defined, but is guaranteed not to be a null (wide) character.
+}}
+{{rev|since=c++23|
+For a sequence of two or more adjacent {{rlp|string literal}} tokens, a common encoding prefix is determined as described {{rlp|string literal#Concatenation|here}}. Each such string literal token is then considered to have that common encoding prefix.
+(Character conversion is moved to phase 3)
+}}
+{{rev end}}
+
+{{anchor|Phase 6}}
+====Phase 6: Concatenating string literals====
+Adjacent {{rlp|string literal|string literals}} are concatenated.
+
+{{anchor|Phase 7}}
+====Phase 7: Compiling====
+Compilation takes place: each preprocessing token is converted to a [[#Tokens|token]]. The tokens are syntactically and semantically analyzed and translated as a [[#Translation process|translation unit]].
+
+{{anchor|Phase 8}}
+====Phase 8: Instantiating templates====
+Each translation unit is examined to produce a list of required template instantiations, including the ones requested by {{rlp|class template|explicit instantiations}}. The definitions of the templates are located, and the required instantiations are performed to produce ''instantiation units''.
+
+{{anchor|Phase 9}}
+====Phase 9: Linking====
+Translation units, instantiation units, and library components needed to satisfy external references are collected into a program image which contains information needed for execution in its execution environment.
+
+===Notes===
+Source files, translation units and translated translation units need not necessarily be stored as files, nor need there be any one-to-one correspondence between these entities and any external representation. The description is conceptual only, and does not specify any particular implementation.
+
+{{rrev|until=c++23|
+The conversion performed at phase 5 can be controlled by command line options in some implementations: gcc and clang use {{c|-finput-charset}} to specify the encoding of the source character set, {{c|-fexec-charset}} and {{c|-fwide-exec-charset}} to specify the ordinary and wide literal encodings respectively, while Visual Studio 2015 Update 2 and later uses {{c|/source-charset}} and {{c|/execution-charset}} to specify the source character set and literal encoding respectively.
+}}
+
+Some compilers do not implement instantiation units (also known as [https://docs.oracle.com/cd/E18659_01/html/821-1383/bkagr.html#scrolltoc template repositories] or [http://www-01.ibm.com/support/knowledgecenter/SSXVZZ_12.1.0/com.ibm.xlcpp121.linux.doc/compiler_ref/fcat_template.html?lang=en template registries]) and simply compile each template instantiation at phase 7, storing the code in the object file where it is implicitly or explicitly requested, and then the linker collapses these compiled instantiations into one at phase 9.
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=787|std=C++98|before=the behavior was undefined if a non-empty source file does&lt;br&gt;not end with a newline character at the end of phase 2|after=add a terminating newline&lt;br&gt;character in this case}}
+{{dr list item|wg=cwg|dr=1104|std=C++98|before=the alternative token {{c|&lt;:}} caused {{c|std::vector&lt;::std::string&gt;}}&lt;br&gt;to be treated as {{c|std::vector[:std::string&gt;}}|after=added an additional lexing&lt;br&gt;rule to address this case}}
+{{dr list item|wg=cwg|dr=1775|std=C++11|before=forming a universal character name inside a raw&lt;br&gt;string literal in phase 2 resulted in undefined behavior|after=made well-defined}}
+{{dr list item|wg=cwg|dr=2747|std=C++98|before=phase 2 checked the end-of-file splice after splicing, this is unnecessary|after=removed the check}}
+{{dr list item|paper=P2621R3|std=C++98|before=universal character names were not allowed to&lt;br&gt;be formed by line splicing or token concatenation|after=allowed}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=5.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=5.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=5.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=2.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=2.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=2.1|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=2.1|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/translation phases|Phases of translation|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|pl|ru|zh}}

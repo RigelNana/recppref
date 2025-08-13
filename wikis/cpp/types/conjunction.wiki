@@ -1,0 +1,96 @@
+{{cpp/title|conjunction}}
+{{cpp/meta/navbar}}
+{{ddcl|header=type_traits|since=c++17|
+template&lt; class... B &gt;
+struct conjunction;
+}}
+
+Forms the {{enwiki|logical conjunction}} of the type traits {{c|B...}}, effectively performing a logical AND on the sequence of traits.
+
+The specialization {{c|std::conjunction&lt;B1, ..., BN&gt;}} has a public and unambiguous base that is
+* if {{c|1=sizeof...(B) == 0}}, {{c|std::true_type}}; otherwise
+* the first type {{tt|Bi}} in {{tt|B1, ..., BN}} for which {{c|1=bool(Bi::value) == false}}, or {{tt|BN}} if there is no such type.
+
+The member names of the base class, other than {{tt|conjunction}} and {{tt|1=operator=}}, are not hidden and are unambiguously available in {{tt|conjunction}}.
+
+Conjunction is short-circuiting: if there is a template type argument {{tt|Bi}} with {{c|1= bool(Bi::value) == false}}, then instantiating {{c|conjunction&lt;B1, ..., BN&gt;::value}} does not require the instantiation of {{c|Bj::value}} for {{tt|j &gt; i}}.
+
+{{cpp/types/nospec|pv}}
+
+===Template parameters===
+{{par begin}}
+{{par|B...|every template argument {{tt|Bi}} for which {{c|Bi::value}} is instantiated must be usable as a base class and define member {{tt|value}} that is convertible to {{c/core|bool}}}}
+{{par end}}
+
+===Helper variable template===
+{{ddcl|since=c++17|1=
+template&lt; class... B &gt;
+constexpr bool conjunction_v = conjunction&lt;B...&gt;::value;
+}}
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;class...&gt;
+struct conjunction : std::true_type {};
+
+template&lt;class B1&gt;
+struct conjunction&lt;B1&gt; : B1 {};
+
+template&lt;class B1, class... Bn&gt;
+struct conjunction&lt;B1, Bn...&gt;
+    : std::conditional_t&lt;bool(B1::value), conjunction&lt;Bn...&gt;, B1&gt; {};
+}}
+
+===Notes===
+A specialization of {{tt|conjunction}} does not necessarily inherit from either {{c|std::true_type}} or {{c|std::false_type}}: it simply inherits from the first {{tt|B}} whose {{tt|::value}}, explicitly converted to {{c/core|bool}}, is {{c|false}}, or from the very last {{tt|B}} when all of them convert to {{c|true}}. For example, {{c|std::conjunction&lt;std::integral_constant&lt;int, 2&gt;, std::integral_constant&lt;int, 4&gt;&gt;::value}} is {{c|4}}.
+
+The short-circuit instantiation differentiates {{tt|conjunction}} from [[cpp/language/fold|fold expressions]]: a fold expression, like {{c|(... &amp;&amp; Bs::value)}}, instantiates every {{tt|B}} in {{tt|Bs}}, while {{c|std::conjunction_v&lt;Bs...&gt;}} stops instantiation once the value can be determined. This is particularly useful if the later type is expensive to instantiate or can cause a hard error when instantiated with the wrong type.
+
+{{feature test macro|__cpp_lib_logical_traits|std=C++17|value=201510L|[[cpp/meta#Operations on traits|Logical operator type traits]]}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+// func is enabled if all Ts... have the same type as T
+template&lt;typename T, typename... Ts&gt;
+std::enable_if_t&lt;std::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;&gt;
+func(T, Ts...)
+{
+    std::cout &lt;&lt; "All types in pack are the same.\n";
+}
+
+// otherwise
+template&lt;typename T, typename... Ts&gt;
+std::enable_if_t&lt;!std::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;&gt;
+func(T, Ts...)
+{
+    std::cout &lt;&lt; "Not all types in pack are the same.\n";
+}
+
+template&lt;typename T, typename... Ts&gt;
+constexpr bool all_types_are_same = std::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;;
+
+static_assert(all_types_are_same&lt;int, int, int&gt;);
+static_assert(not all_types_are_same&lt;int, int&amp;, int&gt;);
+
+int main()
+{
+    func(1, 2, 3);
+    func(1, 2, "hello!");
+}
+|output=
+All types in pack are the same.
+Not all types in pack are the same.
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc negation}}
+{{dsc inc|cpp/types/dsc disjunction}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,83 @@
+{{cpp/ranges/title|constant_range}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class T &gt;
+concept constant_range =
+    ranges::input_range&lt;T&gt; &amp;&amp;
+    /*constant-iterator*/&lt;ranges::iterator_t&lt;T&gt;&gt;;
+}}
+{{dcl h|Helper concepts}}
+{{dcla|anchor=no|num=2|expos=yes|1=
+template&lt; class T &gt;
+concept /*constant-iterator*/ =
+    std::input_iterator&lt;T&gt; &amp;&amp;
+    std::same_as&lt;std::iter_const_reference_t&lt;T&gt;, std::iter_reference_t&lt;T&gt;&gt;;
+}}
+{{dcl end}}
+
+@1@ The {{tt|constant_range}} concept is a refinement of {{lconcept|range}} for which {{tt|ranges::begin}} returns a [[cpp/iterator#Iterator categories|constant iterator]].
+
+@2@ The concept {{c/core|/*constant-iterator*/&lt;T&gt;}} is satisfied when the result of the indirection operation of the input iterator is its const reference type which implies read-only.
+
+===Example===
+{{example
+|code=
+#include &lt;ranges&gt;
+#include &lt;span&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+// mechanisms for ensuring the parameter is a constant range
+// 1) an overload set where the mutable one defers to the constant one
+template&lt;std::ranges::constant_range R&gt;
+void takes_any_range1(R&amp;&amp; r)
+{
+    // R is definitely a constant range
+}
+
+template&lt;std::ranges::range R&gt;
+void takes_any_range1(R&amp;&amp; r)
+{
+    takes_any_range1(std::views::as_const(std::forward&lt;R&gt;(r)));
+}
+
+// 2) one function template that shadows its parameter
+template&lt;std::ranges::range R&gt;
+void takes_any_range2(R&amp;&amp; _r)
+{
+    auto r = std::views::as_const(std::forward&lt;R&gt;(_r));
+
+    // r is definitely a constant range
+    // never use _r again
+}
+
+// 3) one function template that recursively invokes itself
+template&lt;std::ranges::range R&gt;
+void takes_any_range3(R&amp;&amp; r)
+{
+    if constexpr (std::ranges::constant_range&lt;R&gt;)
+    {
+        // R is definitely a constant range
+        // put implementation here
+    }
+    else
+        takes_any_range3(std::views::as_const(std::forward&lt;R&gt;(r)));
+}
+
+static_assert
+(
+        std::ranges::constant_range&lt;const std::vector&lt;int&gt;&gt; and
+    not std::ranges::constant_range&lt;std::vector&lt;int&gt;&gt; and
+        std::ranges::constant_range&lt;std::string_view&gt; and
+    not std::ranges::constant_range&lt;std::span&lt;int&gt;&gt; and
+        std::ranges::constant_range&lt;std::span&lt;const int&gt;&gt; and
+    not std::ranges::constant_range&lt;const std::span&lt;int&gt;&gt;
+);
+
+int main() {}
+}}
+
+{{langlinks|es|ja|zh}}

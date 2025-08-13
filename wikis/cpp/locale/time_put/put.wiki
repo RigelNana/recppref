@@ -1,0 +1,112 @@
+{{cpp/locale/time_put/title|put|do_put}}
+{{cpp/locale/time_put/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type put( iter_type out, std::ios_base&amp; str,
+               char_type fill, const std::tm* t,
+               const CharT* fmtbeg, const CharT* fmtend ) const;
+}}
+{{dcl|num=2|1=
+public:
+iter_type put( iter_type out, std::ios_base&amp; str,
+               char_type fill, const std::tm* t,
+               char format, char modifier = 0 ) const;
+}}
+{{dcl|num=3|1=
+protected:
+virtual iter_type do_put( iter_type out, std::ios_base&amp; str,
+                          char_type fill, const std::tm* t,
+                          char format, char modifier ) const;
+}}
+{{dcl end}}
+
+Converts the calendar date and time stored in the {{lc|std::tm}} object pointed to by {{c|t}} into a character string, according to the [[#Format string|format string]] {{tt|[fmtbeg, fmtend)}}. The format string is the same as used by {{c|std::strftime}}, but each format specifier is processed by an individual call to {{tt|do_put()}}, which can be customized by extending this facet.
+
+@1@ Steps through the character sequence {{tt|[fmtbeg, fmtend)}}, examining the characters. Every character that is not a part of a format sequence is written to the output iterator {{c|out}} immediately. To identify format sequences, this function narrows the next character {{c|c}} in {{tt|[fmtbeg, fmtend)}} as if by {{c|std::ctype&lt;char_type&gt;(str.getloc()).narrow(c, 0)}} and if it equals {{c|'%'}}, the next one or two characters are compared to the list of format sequences recognized by {{lc|std::strftime}} plus any additional implementation-defined formats supported by this locale. For each valid format sequence, a call to {{c|do_put(out, str, fill, t, format, modifier)}} is made, where {{c|format}} is the format sequence character, and {{c|modifier}} is the optional format sequence modifier ({{c|'E'}} or {{c|'O'}}). A value of {{c|'\0'}} is used if the modifier is absent.
+@2@ Calls the {{tt|do_put}} member function of the most derived class.
+@3@ Converts the calendar date and time stored in the {{lc|std::tm}} object pointed to by {{c|t}} into a character string, according to the format conversion sequence formed by concatenating {{c|'%'}}, the value of {{c|modifier}} if not {{c|'\0'}}, and the value of {{c|format}}. The format is interpreted the same way as the function {{lc|std::strftime}}, except that the formats that are described as locale-dependent are defined by this locale, and additional format specifiers may be supported (the {{c|fill}} argument is provided for these implementation-defined format specifiers to use). The string is written to the output iterator {{c|out}}.
+
+===Parameters===
+{{par begin}}
+{{par|out|output iterator where the result of the conversion is written}}
+{{par|str|a stream object that this function uses to obtain locale facets when needed, e.g. {{lc|std::ctype}} to narrow characters}}
+{{par|t|pointer to the {{lc|std::tm}} object from which the date/time values are obtained}}
+{{par|fmtbeg|pointer to the first character of a sequence of {{tt|char_type}} characters specifying the [[#Format string|conversion format]]}}
+{{par|fmtend|pointer one past the last character of a sequence of {{tt|char_type}} characters specifying the [[#Format string|conversion format]]}}
+{{par|fill|fill character (usually space)}}
+{{par|format|the character that names a [[#Format string|conversion specifier]]}}
+{{par|modifier|the optional modifier that may appear between {{tt|%}} and the [[#Format string|conversion specifier]]}}
+{{par end}}
+
+===Format string===
+{{cpp/chrono/c/strftime format}}
+
+===Return value===
+Iterator pointing one past the last character that was produced.
+
+===Notes===
+No error handling is provided.
+
+The {{c|fill}} character is provided for those implementation-defined format specifiers and for the user-defined overrides of {{tt|do_put()}} that use padding and filling logic. Such implementations typically make use of the formatting flags from {{c|str}}.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+#include &lt;iomanip&gt;
+#include &lt;ctime&gt;
+
+void try_time_put(const std::tm* t, const std::string&amp; fmt)
+{
+    std::cout.imbue(std::locale());
+    std::cout &lt;&lt; "In the locale '" &lt;&lt; std::cout.getloc().name() &lt;&lt; "' : '";
+    
+    std::use_facet&lt;std::time_put&lt;char&gt;&gt;(std::cout.getloc()).put(
+        {std::cout}, std::cout, ' ', t, &amp;fmt[0], &amp;fmt[0] + fmt.size());
+    
+    std::cout &lt;&lt; "'\n";
+}
+
+int main()
+{
+    std::time_t t = std::time(NULL);
+    std::tm tm = *std::localtime(&amp;t);
+    
+    std::string fmt = "%c";
+    std::cout &lt;&lt; "Using the format string '" &lt;&lt; fmt
+              &lt;&lt; "' to format the time: " &lt;&lt; std::ctime(&amp;t) &lt;&lt; '\n';
+    
+    std::locale::global(std::locale("de_DE.utf8"));
+    try_time_put(&amp;tm, fmt);
+    
+    std::locale::global(std::locale("el_GR.utf8"));
+    try_time_put(&amp;tm, fmt);
+    
+    std::locale::global(std::locale("ja_JP.utf8"));
+    try_time_put(&amp;tm, fmt);
+}
+|p=true
+|output=
+Using the format string '%c' to format the time: Mon Feb 11 22:58:50 2013
+
+In the locale 'de_DE.utf8' : 'Mo 11 Feb 2013 23:02:38 EST'
+In the locale 'el_GR.utf8' : 'Δευ 11 Φεβ 2013 11:02:38 μμ EST'
+In the locale 'ja_JP.utf8' : '2013年02月11日 23時02分38秒'
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=164|std=C++98|before=the purpose of the parameter {{c|fill}} was not clear|after=made clear}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc put_time}}
+{{dsc inc|cpp/locale/time_get/dsc do_get}}
+{{dsc end}}
+
+{{langlinks|ja|zh}}

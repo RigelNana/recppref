@@ -1,0 +1,352 @@
+{{title|Non-static member functions}}
+{{cpp/language/classes/navbar}}
+
+A non-static member function is a function that is declared in a {{rlp|class|member specification}} of a class without a {{rlpt|static}} or {{rlpt|friend}} specifier
+(see {{rlp|static#Static member functions|static member functions}} and {{rlp|friend|friend declaration}} for the effect of those keywords).
+
+{{source|1=
+class S
+{
+    int mf1(); // non-static member function declaration
+    void mf2() volatile, mf3() &amp;&amp;; // can have cv-qualifiers and/or a reference-qualifier
+        // the declaration above is equivalent to two separate declarations:
+        // void mf2() volatile;
+        // void mf3() &amp;&amp;;
+    
+    int mf4() const { return data; } // can be defined inline
+    virtual void mf5() final; // can be virtual, can use final/override
+    S() : data(12) {} // constructors are member functions too
+    int data;
+};
+
+int S::mf1() { return 7; } // if not defined inline, has to be defined at namespace
+}}
+
+{{rlp|constructor|Constructors}}, {{rlp|destructor}}s, and {{rlp|cast operator|conversion functions}} use special syntaxes for their declarations. The rules described in this page may not apply to these functions. See their respective pages for details.
+
+{{rrev|since=c++23|
+An ''explicit object member function'' is a non-static member function with an {{rlp|function#Parameter list|explicit object parameter}}.
+}}
+An ''implicit object member function'' is a non-static member function without an explicit object parameter (prior to C++23, this was the only kind of non-static member function, and hence referred to as "non-static member function" in the literature).
+
+===Explanation===
+Any {{rlp|function|function declarations}} are allowed, with additional syntax elements that are only available for non-static member functions: {{rlp|abstract class|pure-specifiers}}, cv-qualifiers{{rev inl|since=c++11|, ref-qualifiers, {{rlpt|final}} and {{rlpt|override}} specifiers}}, and {{rlp|initializer list|member initialization lists}}.
+
+A non-static member function of class {{tt|X}} may be called
+@1@ For an object of type {{tt|X}} using the class member access operator
+@2@ For an object of a class {{rlp|derived class|derived}} from {{tt|X}}
+@3@ Directly from within the body of a member function of {{tt|X}}
+@4@ Directly from within the body of a member function of a class derived from {{tt|X}}
+
+Calling a non-static member function of class {{tt|X}} on an object that is not of type {{tt|X}}, or of a type derived from {{tt|X}} invokes undefined behavior.
+
+Within the body of a non-static member function of {{tt|X}}, any {{rlp|expressions|id-expression}} {{c|e}} (e.g. an identifier) that resolves to a non-type non-static member of {{tt|X}} or of a base class of {{tt|X}}, is transformed to a member access expression {{c|(*this).e}} (unless it's already a part of a member access expression). This does not occur in template definition context, so a name may have to be prefixed with {{c|this-&gt;}} explicitly to become {{rlp|dependent name|dependent}}.
+
+{{source|1=
+struct S
+{
+    int n;
+    void f();
+};
+
+void S::f()
+{
+    n = 1; // transformed to (*this).n = 1;
+}
+
+int main()
+{
+    S s1, s2;
+    s1.f(); // changes s1.n
+}
+}}
+
+Within the body of a non-static member function of {{tt|X}}, any unqualified-id that resolves to a static member, an enumerator or a nested type of {{tt|X}} or of a base class of {{tt|X}}, is transformed to the corresponding qualified-id:
+
+{{source|1=
+struct S
+{
+    static int n;
+    void f();
+};
+
+void S::f()
+{
+    n = 1; // transformed to S::n = 1;
+}
+
+int main()
+{
+    S s1, s2;
+    s1.f(); // changes S::n
+}
+}}
+
+====Member functions with cv-qualifiers====
+An implicit object member function can be declared with a {{rlp|cv|cv-qualifier}} sequence ({{c/core|const}}, {{c/core|volatile}}, or a combination of {{c/core|const}} and {{c/core|volatile}}), this sequence appears after the parameter list in the {{rlp|function|function declaration}}. Functions with different cv-qualifier sequences (or no sequence) have different types and so may overload each other.
+
+In the body of a function with a cv-qualifier sequence, {{c|*this}} is cv-qualified, e.g. in a member function with {{c/core|const}} qualifier, only other member functions with {{c/core|const}} qualifier may be called normally. A member function without {{c/core|const}} qualifier may still be called if {{rlpt|const_cast}} is applied or through an access path that does not involve {{rlpt|this}}.
+
+{{source|1=
+#include &lt;vector&gt;
+
+struct Array
+{
+    std::vector&lt;int&gt; data;
+    Array(int sz) : data(sz) {}
+    
+    // const member function
+    int operator[](int idx) const
+    {                     // the this pointer has type const Array*
+        return data[idx]; // transformed to (*this).data[idx];
+    }
+    
+    // non-const member function
+    int&amp; operator[](int idx)
+    {                     // the this pointer has type Array*
+        return data[idx]; // transformed to (*this).data[idx]
+    }
+};
+
+int main()
+{
+    Array a(10);
+    a[1] = 1;  // OK: the type of a[1] is int&amp;
+    const Array ca(10);
+    ca[1] = 2; // Error: the type of ca[1] is int
+}
+}}
+
+{{rrev|since=c++11|
+====Member functions with ref-qualifier====
+An implicit object member function can be declared with no ref-qualifier, with an lvalue ref-qualifier (the token {{tt|&amp;}} after the parameter list) or the rvalue ref-qualifier (the token {{tt|&amp;&amp;}} after the parameter list). During {{rlp|overload resolution}}, an implicit object member function with a cv-qualifier sequence of class X is treated as follows:
+* no ref-qualifier: the implicit object parameter has type lvalue reference to cv-qualified X and is additionally allowed to bind rvalue implied object argument
+* lvalue ref-qualifier: the implicit object parameter has type lvalue reference to cv-qualified X
+* rvalue ref-qualifier: the implicit object parameter has type rvalue reference to cv-qualified X
+
+{{source|1=
+#include &lt;iostream&gt;
+
+struct S
+{
+    void f() &amp;  { std::cout &lt;&lt; "lvalue\n"; }
+    void f() &amp;&amp; { std::cout &lt;&lt; "rvalue\n"; }
+};
+
+int main()
+{
+    S s;
+    s.f();            // prints "lvalue"
+    std::move(s).f(); // prints "rvalue"
+    S().f();          // prints "rvalue"
+}
+}}
+Note: unlike cv-qualification, ref-qualification does not change the properties of the {{rlpt|this}} pointer: within an rvalue ref-qualified function, {{c|*this}} remains an lvalue expression.
+}}
+
+====Virtual and pure virtual functions====
+A non-static member function may be declared ''virtual'' or ''pure virtual''. See {{rlp|virtual|virtual functions}} and {{rlp|abstract class|abstract classes}} for details.
+
+{{rrev|since=c++23|
+====Explicit object member functions====
+For a non-static non-virtual member function not declared with cv-qualifier or ref-qualifier, its first parameter, if not being a {{rlp|parameter pack|function parameter pack}}, can be an {{rlpsd|function#Explicit object parameter}} (denoted with the prefixed keyword {{c/core|this}}):
+{{source|1=
+struct X
+{
+    void foo(this X const&amp; self, int i); // same as void foo(int i) const &amp;;
+//  void foo(int i) const &amp;; // Error: already declared
+
+    void bar(this X self, int i); // pass object by value: makes a copy of “*this”
+};
+}}
+
+For member function templates, explicit object parameter allows deduction of type and value category, this language feature is called “deducing {{c/core|this}}”:
+{{source|1=
+struct X
+{
+    template&lt;typename Self&gt;
+    void foo(this Self&amp;&amp;, int);
+};
+
+struct D : X {};
+
+void ex(X&amp; x, D&amp; d)
+{
+    x.foo(1);       // Self = X&amp;
+    move(x).foo(2); // Self = X
+    d.foo(3);       // Self = D&amp;
+}
+}}
+
+This makes it possible to deduplicate const- and non-const member functions, see {{rlpsd|operators#Array subscript operator}} for an example.
+
+Additionally, explicit object parameter deduces to the derived type, which simplifies {{rlp|crtp|CRTP}}:
+{{source|1=
+// a CRTP trait
+struct add_postfix_increment
+{
+    template&lt;typename Self&gt;
+    auto operator++(this Self&amp;&amp; self, int)
+    {
+        auto tmp = self; // Self deduces to "some_type"
+        ++self;
+        return tmp;
+    }
+};
+
+struct some_type : add_postfix_increment
+{
+    some_type&amp; operator++() { ... }
+};
+}}
+
+Inside the body of an explicit object member function, the {{c|this}} pointer cannot be used: all member access must be done through the first parameter, like in static member functions:
+{{source|1=
+struct C
+{
+    void bar();
+    
+    void foo(this C c)
+    {
+        auto x = this; // error: no this
+        bar();         // error: no implicit this-&gt;
+        c.bar();       // ok
+    }
+};
+}}
+
+A pointer to an explicit object member function is an ordinary pointer to function, not a pointer to member:
+{{source|1=
+struct Y 
+{
+    int f(int, int) const&amp;;
+    int g(this Y const&amp;, int, int);
+};
+
+auto pf = &amp;Y::f;
+pf(y, 1, 2);              // error: pointers to member functions are not callable
+(y.*pf)(1, 2);            // ok
+std::invoke(pf, y, 1, 2); // ok
+
+auto pg = &amp;Y::g;
+pg(y, 3, 4);              // ok
+(y.*pg)(3, 4);            // error: “pg” is not a pointer to member function
+std::invoke(pg, y, 3, 4); // ok
+}}
+}}
+
+====Special member functions====
+Some member functions are ''special'': under certain circumstances they are defined by the compiler even if not defined by the user. They are:
+* {{rlp|default constructor|Default constructor}}
+* {{rlp|copy constructor|Copy constructor}}
+{{rrev|since=c++11|1=
+* {{rlp|move constructor|Move constructor}}
+}}
+* {{rlp|as operator|Copy assignment operator}}
+{{rrev|since=c++11|1=
+* {{rlp|move operator|Move assignment operator}}
+}}
+* {{rev inl|until=c++20|{{rlp|destructor|Destructor}}}}{{rev inl|since=c++20|{{rlp|destructor#Prospective destructor|Prospective destructor}}}}
+
+Special member functions {{rev inl|since=c++20|along with the {{rlp|default comparisons|comparison operators}}}} are the only functions that can be ''defaulted'', that is, defined using {{c/core|1== default}} instead of the function body (see their pages for details).
+
+===Notes===
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=200710L|std=C++11|__cpp_ref_qualifiers|{{rlp|function#Function declaration|ref-qualifiers}}}}
+{{ftm|value=202110L|std=C++23|__cpp_explicit_this_parameter|{{rlps|function#explicit object parameter}} ([[#Explicit object member functions|deducing {{tt|this}}]])}}
+{{ftm end}}
+
+===Example===
+{{example
+
+|code= 
+#include &lt;exception&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct S
+{
+    int data;
+
+    // simple converting constructor (declaration)
+    S(int val);
+
+    // simple explicit constructor (declaration)
+    explicit S(std::string str);
+
+    // const member function (definition)
+    virtual int getData() const { return data; }
+};
+
+// definition of the constructor
+S::S(int val) : data(val)
+{
+    std::cout &lt;&lt; "ctor1 called, data = " &lt;&lt; data &lt;&lt; '\n';
+}
+
+// this constructor has a catch clause
+S::S(std::string str) try : data(std::stoi(str))
+{
+    std::cout &lt;&lt; "ctor2 called, data = " &lt;&lt; data &lt;&lt; '\n';
+}
+catch(const std::exception&amp;)
+{
+    std::cout &lt;&lt; "ctor2 failed, string was '" &lt;&lt; str &lt;&lt; "'\n";
+    throw; // ctor's catch clause should always rethrow
+}
+
+struct D : S
+{
+    int data2;
+    // constructor with a default argument
+    D(int v1, int v2 = 11) : S(v1), data2(v2) {}
+
+    // virtual member function
+    int getData() const override { return data * data2; }
+
+    // lvalue-only assignment operator
+    D&amp; operator=(D other) &amp;
+    {
+        std::swap(other.data, data);
+        std::swap(other.data2, data2);
+        return *this;
+    }
+};
+
+int main()
+{
+    D d1 = 1;
+    S s2("2");
+
+    try
+    {
+        S s3("not a number");
+    }
+    catch(const std::exception&amp;) {}
+    
+    std::cout &lt;&lt; s2.getData() &lt;&lt; '\n';
+    
+    D d2(3, 4);
+    d2 = d1;   // OK: assignment to lvalue
+//  D(5) = d1; // ERROR: no suitable overload of operator=
+}
+|output=
+ctor1 called, data = 1
+ctor2 called, data = 2
+ctor2 failed, string was 'not a number'
+2
+ctor1 called, data = 3
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=194|std=C++98|before=ambiguous whether a non-static member function&lt;br&gt;could have the same name as the enclosing class name|after=explicit naming restriction added}}
+{{dr list end}}
+
+===See also===
+*{{rlp|classes}}
+*{{rlp|data members|non-static data members}}
+*{{rlp|static|static data members}}
+
+{{langlinks|de|es|ja|ru|zh}}

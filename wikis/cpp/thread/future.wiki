@@ -1,0 +1,128 @@
+{{cpp/title|future}}
+{{cpp/thread/future/navbar}}
+{{dcl begin}}
+{{dcl header|future}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt; class future;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class T &gt; class future&lt;T&amp;&gt;;
+}}
+{{dcl|num=3|since=c++11|
+template&lt;&gt; class future&lt;void&gt;;
+}}
+{{dcl end}}
+
+The class template {{tt|std::future}} provides a mechanism to access the result of asynchronous operations:
+
+* An asynchronous operation (created via {{lc|std::async}}, {{lc|std::packaged_task}}, or {{lc|std::promise}}) can provide a {{tt|std::future}} object to the creator of that asynchronous operation.
+
+* The creator of the asynchronous operation can then use a variety of methods to query, wait for, or extract a value from the {{tt|std::future}}. These methods may block if the asynchronous operation has not yet provided a value.
+
+* When the asynchronous operation is ready to send a result to the creator, it can do so by modifying ''shared state'' (e.g. {{lc|std::promise::set_value}}) that is linked to the creator's {{tt|std::future}}.
+
+Note that {{tt|std::future}} references shared state that is not shared with any other asynchronous return objects (as opposed to {{lc|std::shared_future}}). 
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/future/dsc constructor|future}}
+{{dsc inc|cpp/thread/future/dsc destructor}}
+{{dsc inc|cpp/thread/future/dsc operator{{=}}}}
+{{dsc inc|cpp/thread/future/dsc share}}
+
+{{dsc h2|Getting the result}}
+{{dsc inc|cpp/thread/future/dsc get|future}}
+
+{{dsc h2|State}}
+{{dsc inc|cpp/thread/future/dsc valid|future}}
+{{dsc inc|cpp/thread/future/dsc wait|future}}
+{{dsc inc|cpp/thread/future/dsc wait_for|future}}
+{{dsc inc|cpp/thread/future/dsc wait_until|future}}
+{{dsc end}}
+
+===Examples===
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int main()
+{
+    // future from a packaged_task
+    std::packaged_task&lt;int()&gt; task([]{ return 7; }); // wrap the function
+    std::future&lt;int&gt; f1 = task.get_future(); // get a future
+    std::thread t(std::move(task)); // launch on a thread
+
+    // future from an async()
+    std::future&lt;int&gt; f2 = std::async(std::launch::async, []{ return 8; });
+
+    // future from a promise
+    std::promise&lt;int&gt; p;
+    std::future&lt;int&gt; f3 = p.get_future();
+    std::thread([&amp;p]{ p.set_value_at_thread_exit(9); }).detach();
+
+    std::cout &lt;&lt; "Waiting..." &lt;&lt; std::flush;
+    f1.wait();
+    f2.wait();
+    f3.wait();
+    std::cout &lt;&lt; "Done!\nResults are: "
+              &lt;&lt; f1.get() &lt;&lt; ' ' &lt;&lt; f2.get() &lt;&lt; ' ' &lt;&lt; f3.get() &lt;&lt; '\n';
+    t.join();
+}
+|output=
+Waiting...Done!
+Results are: 7 8 9
+}}
+
+====Example with exceptions====
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int main()
+{
+    std::promise&lt;int&gt; p;
+    std::future&lt;int&gt; f = p.get_future();
+
+    std::thread t([&amp;p]
+    {
+        try
+        {
+            // code that may throw
+            throw std::runtime_error("Example");
+        }
+        catch (...)
+        {
+            try
+            {
+                // store anything thrown in the promise
+                p.set_exception(std::current_exception());
+            }
+            catch (...) {} // set_exception() may throw too
+        }
+    });
+
+    try
+    {
+        std::cout &lt;&lt; f.get();
+    }
+    catch (const std::exception&amp; e)
+    {
+        std::cout &lt;&lt; "Exception from the thread: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    t.join();
+}
+|output=
+Exception from the thread: Example
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc async}}
+{{dsc inc|cpp/thread/dsc shared_future}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

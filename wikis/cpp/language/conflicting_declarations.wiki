@@ -1,0 +1,182 @@
+{{title|Conflicting declarations}}
+{{cpp/language/declarations/navbar}}
+Unless otherwise specified, two declarations cannot (re)introduce the same entity. The program is ill-formed if such declarations exist.
+
+===Corresponding declarations===
+Two declarations ''correspond'' if they (re)introduce the same name, both declare constructors, or both declare destructors, unless
+* either is a {{rlp|using declaration|{{c/core|using}} declaration}},
+* one declares a type (not a {{rlp|typedef|typedef name}}) and the other declares a variable, non-static data member other than of an {{rlp|union#Anonymous unions|anonymous union}}, enumerator, function, or function template, or
+* each declares a function or function template and they do not declare corresponding overloads.
+
+====Corresponding function overloads====
+Two {{rlp|function|function declarations}} declare ''corresponding overloads'' if both declare functions satisfying all following conditions:
+* They have the same {{rlpsd|function#Parameter-type-list}}{{rev inl|since=c++23|, omitting the types of {{rlpsd|member functions#Explicit object parameter}}s}}.
+{{rrev|since=c++20|
+* They have {{rlp|function template#Function template overloading|equivalent}} trailing {{rlp|constraints#Requires clauses|{{c/core|requires}} clauses}} (if any, except {{rlp|friend|friend declarations}}).
+}}
+* If both of them are non-static member functions, they need to additionally satisfy one of the following requirements:
+{{rrev|since=c++23|
+:* Exactly one of them is an {{rlp|member functions|implicit object member function}} without ref-qualifier and the types of their object parameters, after removing top-level references, are the same.
+}}
+:* Their object parameters have the same type.
+
+====Corresponding function template overloads====
+Two {{rlp|function template|function template declarations}} declare ''corresponding overloads'' if both declare function templates satisfying all following conditions:
+* Their template parameter lists have the same length.
+* Their corresponding template parameters are {{rlp|function template#Function template overloading|equivalent}}.
+* They have equivalent {{rlpsd|function#Parameter-type-list}}s{{rev inl|since=c++23|, omitting the types of {{rlpsd|member functions#Explicit object parameter}}s}}.
+* They have equivalent return types.
+{{rrev|since=c++20|
+* Their corresponding template parameters are either both declared without {{rlp|constraints#Constraints|constraint}}, or both declared with equivalent constraints.
+* They have equivalent trailing {{rlp|constraints#Requires clauses|{{c/core|requires}} clauses}} (if any).
+}}
+* If both are non-static members function templates, they need to additionally satisfy one of the following requirements:
+{{rrev|since=c++23|
+:* Exactly one of them is an {{rlp|member functions|implicit object member function}} template without ref-qualifier and the types of their object parameters, after removing all references, are equivalent.
+}}
+:* Their object parameters have equivalent types.
+
+{{source|
+struct A
+{
+    friend void c();   // #1
+};
+
+struct B
+{
+    friend void c() {} // corresponds to, and defines, #1
+};
+
+typedef int Int;
+
+enum E : int { a };
+
+void f(int);   // #2
+void f(Int) {} // defines #2
+void f(E) {}   // OK, another overload
+
+struct X
+{
+    static void f();
+    void f() const;   // error: redeclaration
+    
+    void g();
+    void g() const;   // OK
+    void g() &amp;;       // error: redeclaration
+    
+    void h(this X&amp;, int);
+    void h(int) &amp;&amp;;   // OK, another overload
+    
+    void j(this const X&amp;);
+    void j() const &amp;; // error: redeclaration
+    
+    void k();
+    void k(this X&amp;);  // error: redeclaration
+};
+}}
+
+===Multiple declarations of the same entity===
+{{rrev|since=c++26|
+A declaration is ''name-independent'' if its name is {{c|_}} and it declares
+* a variable with automatic {{rlp|storage duration}},
+* a {{rlp|structured binding}} with no {{rlp|storage duration|storage class specifier}} and not {{rlp|scope|inhabiting}} a namespace scope,
+* the variable introduced by a {{rlpsd|lambda#Lambda capture}} with an initializer, or
+* a non-static {{rlp|data members|data member}} of other than an {{rlp|union#Anonymous unions|anonymous union}}.
+}}
+
+Unless otherwise specified, two declarations of entities ''declare the same entity'' if all following conditions are satisfied, considering declarations of unnamed types to introduce their {{rlp|typedef#typedef name for linkage purposes|typedef names}} and {{rlp|enum#Enumeration name for linkage purposes|enumeration names}} for linkage purposes (if any exists):
+* They correspond.
+* They have the same {{rlp|scope|target scope}}, which is not a {{rlpsd|scope#Function parameter scope}} or a {{rlpsd|scope#Template parameter scope}}.
+{{rrev|since=c++26|
+* Neither is a name-independent declaration.
+}}
+* One of the following conditions is satisfied:
+:* They appear in the same translation unit.
+{{rrev|since=c++20|
+:* They both declare names with {{rlpsd|storage duration#Module linkage}} and are {{rlp|modules#Module ownership|attached to the same module}}.
+}}
+:* They both declare names with {{rlpsd|storage duration#External linkage}}.
+
+A declaration of an entity or typedef name {{tt|X}} is a ''redeclaration'' of {{tt|X}} if another declaration of {{tt|X}} is reachable from it.
+
+====Restrictions====
+If any two declarations of an entity {{tt|E}} violate the corresponding restriction below, the program is ill-formed:
+* If one declares {{tt|E}} to be a variable, the other must also declare {{tt|E}} as a variable of the same type.
+* If one declares {{tt|E}} to be a {{rlp|function}}, the other must also declare {{tt|E}} as a function of the same type.
+* If one declares {{tt|E}} to be an {{rlp|enum|enumerator}}, the other must also declare {{tt|E}} as an enumerator.
+* If one declares {{tt|E}} to be a {{rlp|namespace}}, the other must also declare {{tt|E}} as a namespace.
+* If one declares {{tt|E}} to be a {{rlp|class|class type}}, the other must also declare {{tt|E}} as a class type.
+* If one declares {{tt|E}} to be an {{rlp|enum|enumeration type}}, the other must also declare {{tt|E}} as an enumeration type.
+* If one declares {{tt|E}} to be a {{rlp|class template}}, the other must also declare {{tt|E}} as a class template with an equivalent template parameter list (see {{rlpsd|function template#Function template overloading}}).
+* If one declares {{tt|E}} to be a {{rlp|function template}}, the other must also declare {{tt|E}} as a function template with an equivalent template parameter list and type.
+{{rev begin}}
+{{rev|since=c++11|
+* If one declares {{tt|E}} to be an {{rlp|type alias|alias template}}, the other must also declare {{tt|E}} as an alias template with an equivalent template parameter list and {{spar|type-id}}.
+}}
+{{rev|since=c++14|
+* If one declares {{tt|E}} to be a (partial specialization of a) {{rlp|variable template}}, the other must also declare {{tt|E}} as a (partial specialization of a) variable template with an equivalent template parameter list and type.
+}}
+{{rev|since=c++20|
+* If one declares {{tt|E}} to be a {{rlp|constraints|concept}}, the other must also declare {{tt|E}} as a concept.
+}}
+{{rev end}}
+
+Types are compared after all adjustments of types (during which {{rlp|typedef|typedefs}} are replaced by their definitions). Declarations for an array object can specify array types that differ by the presence or absence of a major array bound. No diagnostic is required if neither declaration is reachable from the other.
+
+{{source|
+void g();      // #1
+void g(int);   // OK, different entity from #1 (they do not correspond)
+int g();       // Error: same entity as #1 with different type
+
+void h();      // #2
+namespace h {} // Error: same entity as #2, but not a function
+}}
+
+If a declaration {{tt|H}} that declares a name with {{rlpsd|storage duration#Internal linkage}} precedes a declaration {{tt|D}} in another translation unit {{tt|U}} and would declare the same entity as {{tt|D}} if it appeared in {{tt|U}}, the program is ill-formed.
+
+===Potentially-conflicting declarations===
+Two declarations ''potentially conflict'' if they correspond but declare different entities.
+
+If, in any scope, a name is bound to two declarations {{tt|A}} and {{tt|B}} that potentially conflict{{rev inl|since=c++26|, {{tt|B}} is not name-independent}}, and {{tt|A}} precedes {{tt|B}}, the program is ill-formed:
+{{source|1=
+void f()
+{
+    int x, y;
+    void x(); // Error: different entity for x
+    int y;    // Error: redefinition
+}
+
+enum { f };   // Error: different entity for ::f
+
+namespace A {}
+namespace B = A;
+namespace B = A; // OK, no effect
+namespace B = B; // OK, no effect
+namespace A = B; // OK, no effect
+namespace B {}   // Error: different entity for B
+
+void g()
+{
+    int _;
+    _ = 0; // OK
+    int _; // OK since C++26, name-independent declaration
+    _ = 0; // Error: two non-function declarations in the lookup set
+}
+
+void h ()
+{
+    int _;        // #1
+    _ ++;         // OK
+    static int _; // Error: conflicts with #1 because
+                  // static variables are not name-independent
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=279|paper=P1787R6|std=C++98|before=it was unclear whether an unnamed class or enumeration can&lt;br&gt;be redeclared if it has a typedef name for linkage purposes|after=it can be redeclared}}
+{{dr list item|wg=cwg|dr=338|paper=P1787R6|std=C++98|before=it was unclear whether an unnamed enumeration can be&lt;br&gt;redeclared if it has an enumerator as a name for linkage purposes|after=it can be redeclared}}
+{{dr list item|wg=cwg|dr=1884|paper=P1787R6|std=C++98|before=the restrictions applied to multiple&lt;br&gt;declarations of the same entity were unclear|after=made clear}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

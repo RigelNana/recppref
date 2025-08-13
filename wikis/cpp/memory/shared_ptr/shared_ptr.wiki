@@ -1,0 +1,222 @@
+{{cpp/memory/shared_ptr/title|shared_ptr}}
+{{cpp/memory/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl|num=1|1= 
+constexpr shared_ptr() noexcept;
+}}
+{{dcl|num=2|1= 
+constexpr shared_ptr( std::nullptr_t ) noexcept;
+}}
+{{dcl|num=3|1= 
+template&lt; class Y &gt; 
+explicit shared_ptr( Y* ptr );
+}}
+{{dcl|num=4|1= 
+template&lt; class Y, class Deleter &gt; 
+shared_ptr( Y* ptr, Deleter d );
+}}
+{{dcl|num=5|1= 
+template&lt; class Deleter &gt; 
+shared_ptr( std::nullptr_t ptr, Deleter d );
+}}
+{{dcl|num=6|1= 
+template&lt; class Y, class Deleter, class Alloc &gt; 
+shared_ptr( Y* ptr, Deleter d, Alloc alloc );
+}}
+{{dcl|num=7|1= 
+template&lt; class Deleter, class Alloc &gt; 
+shared_ptr( std::nullptr_t ptr, Deleter d, Alloc alloc );
+}}
+{{dcl|num=8|1=&lt;!--
+This is the correct signature. Please do not change it! element_type is the member typedef of std::shared_ptr.
+--&gt;
+template&lt; class Y &gt; 
+shared_ptr( const shared_ptr&lt;Y&gt;&amp; r, element_type* ptr ) noexcept;
+}}
+{{dcl|num=8|since=c++20|1= 
+template&lt; class Y &gt; 
+shared_ptr( shared_ptr&lt;Y&gt;&amp;&amp; r, element_type* ptr ) noexcept;
+}}
+{{dcl|num=9|1= 
+shared_ptr( const shared_ptr&amp; r ) noexcept;
+}}
+{{dcl|num=9|1= 
+template&lt; class Y &gt; 
+shared_ptr( const shared_ptr&lt;Y&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=10|1= 
+shared_ptr( shared_ptr&amp;&amp; r ) noexcept;
+}}
+{{dcl|num=10|1= 
+template&lt; class Y &gt; 
+shared_ptr( shared_ptr&lt;Y&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcl|num=11|1= 
+template&lt; class Y &gt; 
+explicit shared_ptr( const std::weak_ptr&lt;Y&gt;&amp; r );
+}}
+{{dcl|num=12|removed=c++17|1= 
+template&lt; class Y &gt; 
+shared_ptr( std::auto_ptr&lt;Y&gt;&amp;&amp; r );
+}}
+{{dcl|num=13|1= 
+template&lt; class Y, class Deleter &gt; 
+shared_ptr( std::unique_ptr&lt;Y, Deleter&gt;&amp;&amp; r );
+}}
+{{dcl end}}
+
+Constructs new {{tt|shared_ptr}} from a variety of pointer types that refer to an object to manage. 
+
+{{rrev|since=c++17|
+For the purposes of the description below, a pointer type {{tt|Y*}} is said to be ''compatible with'' a pointer type {{tt|T*}} if either {{tt|Y*}} is convertible to {{tt|T*}} or {{tt|Y}} is the array type {{tt|U[N]}} and {{tt|T}} is {{tt|U cv []}} (where cv is some set of cv-qualifiers).
+}}
+
+@1,2@ Constructs a {{tt|shared_ptr}} with no managed object, i.e. empty {{tt|shared_ptr}}.
+
+@3-7@ Constructs a {{tt|shared_ptr}} with {{c|ptr}} as the pointer to the managed object.
+{{cpp/rev
+|until c++17=For {{v|3,4,6}}, {{tt|Y*}} must be convertible to {{tt|T*}}.
+|since c++17=If {{tt|T}} is an array type {{tt|U[N]}}, {{v|3,4,6}} do not participate in overload resolution if {{tt|Y(*)[N]}} is an invalid type or not convertible to {{tt|T*}}. If {{tt|T}} is an array type {{tt|U[]}}, {{v|3,4,6}} do not participate in overload resolution if {{tt|Y(*)[]}} is an invalid type or not convertible to {{tt|T*}}. Otherwise, {{v|3,4,6}} do not participate in overload resolution if {{tt|Y*}} is not convertible to {{tt|T*}}.
+}}
+Additionally:
+
+:@3@ Uses the [[cpp/language/delete|delete-expression]] {{c|delete ptr}} {{rev inl|since=c++17| if {{tt|T}} is not an array type; {{c|delete[] ptr}} if {{tt|T}} is an array type}} as the deleter. {{tt|Y}} must be a complete type. The delete expression must be well-formed, have well-defined behavior and not throw any exceptions. {{rev inl|since=c++17|This constructor additionally does not participate in overload resolution if the delete expression is not well-formed.}}
+
+:@4,5@ Uses the specified deleter {{c|d}} as the deleter. The expression {{c|d(ptr)}} must be well formed, have well-defined behavior and not throw any exceptions. The construction of {{c|d}} and of the stored deleter copied from it must not throw exceptions.
+{{cpp/rev
+|until c++17={{tt|Deleter}} must be {{named req|CopyConstructible}}.
+|since c++17=These constructors additionally do not participate in overload resolution if the expression {{c|d(ptr)}} is not well-formed, or if {{c|std::is_move_constructible_v&lt;D&gt;}} is {{c|false}}.
+}}
+
+:@6,7@  Same as {{v|4,5}}, but additionally uses a copy of {{c|alloc}} for allocation of data for internal use. {{tt|Alloc}} must be an {{named req|Allocator}}.
+
+@8@ The ''aliasing constructor'': constructs a {{tt|shared_ptr}} which shares ownership information with the initial value of {{c|r}}, but holds an unrelated and unmanaged pointer {{c|ptr}}. If this {{tt|shared_ptr}} is the last of the group to go out of scope, it will call the stored deleter for the object originally managed by {{c|r}}. However, calling {{tt|get()}} on this {{tt|shared_ptr}} will always return a copy of {{c|ptr}}. It is the responsibility of the programmer to make sure that this {{c|ptr}} remains valid as long as this shared_ptr exists, such as in the typical use cases where {{c|ptr}} is a member of the object managed by {{c|r}} or is an alias (e.g., downcast) of {{tt|r.get()}}  {{rev inl|since=c++20|For the second overload taking an rvalue, {{c|r}} is empty and {{c|r.get() {{==}} nullptr}} after the call.}}
+
+@9@ Constructs a {{tt|shared_ptr}} which shares ownership of the object managed by {{c|r}}. If {{c|r}} manages no object, {{c|*this}} manages no object either. The template overload doesn't participate in overload resolution if {{tt|Y*}} is not {{rev inl|until=c++17|implicitly convertible to}}{{rev inl|since=c++17|''compatible with''}} {{tt|T*}}.
+
+@10@ Move-constructs a {{tt|shared_ptr}} from {{c|r}}. After the construction, {{c|*this}} contains a copy of the previous state of {{c|r}}, {{c|r}} is empty and its stored pointer is null. The template overload doesn't participate in overload resolution if {{tt|Y*}} is not {{rev inl|until=c++17|implicitly convertible to}}{{rev inl|since=c++17|''compatible with''}} {{tt|T*}}.
+
+@11@ Constructs a {{tt|shared_ptr}} which shares ownership of the object managed by {{c|r}}. {{rev inl|until=c++17|{{tt|Y*}} must be implicitly convertible to {{tt|T*}}.}}{{rev inl|since=c++17|{{cpp/enable_if|{{tt|Y*}} is compatible with {{tt|T*}}}}.}} Note that {{c|r.lock()}} may be used for the same purpose: the difference is that this constructor throws an exception if the argument is empty, while {{c|std::weak_ptr&lt;T&gt;::lock()}} constructs an empty {{tt|std::shared_ptr}} in that case.
+
+@12@ Constructs a {{tt|shared_ptr}} that stores and owns the object formerly owned by {{c|r}}. {{tt|Y*}} must be convertible to {{tt|T*}}. After construction, {{c|r}} is empty.
+
+@13@ Constructs a {{tt|shared_ptr}} which manages the object currently managed by {{c|r}}. The deleter associated with {{c|r}} is stored for future deletion of the managed object. {{c|r}} manages no object after the call. {{rev begin}}{{rev|since=c++17|This overload doesn't participate in overload resolution if {{tt|std::unique_ptr&lt;Y, Deleter&gt;::pointer}} is not ''compatible with'' {{tt|T*}}.
+If {{c|r.get()}} is a null pointer, this overload is equivalent to the default constructor {{v|1}}.}}{{rev end}} If {{tt|Deleter}} is a reference type, it is equivalent to {{c|shared_ptr(r.release(), std::ref(r.get_deleter())}}. Otherwise, it is equivalent to {{c|shared_ptr(r.release(), std::move(r.get_deleter()))}}.
+
+When {{tt|T}} is not an array type, the overloads {{v|3,4,6}} enable {{tt|shared_from_this}} with {{c|ptr}}, and the overload {{v|13}} enables {{tt|shared_from_this}} with the pointer returned by {{c|r.release()}}. 
+
+===Parameters===
+{{par begin}}
+{{par|ptr|a pointer to an object to manage}}
+{{par|d|a deleter to use to destroy the object}}
+{{par|alloc|an allocator to use for allocations of data for internal use}}
+{{par|r|another smart pointer to share the ownership to or acquire the ownership from}}
+{{par end}} 
+
+===Exceptions===
+@3@ {{lc|std::bad_alloc}} if required additional memory could not be obtained. May throw implementation-defined exception for other errors. If an exception occurs, this calls {{c|delete ptr}}{{rev inl|since=c++17| if {{tt|T}} is not an array type, and calls {{c|delete[] ptr}} otherwise}}.
+
+@4-7@ {{lc|std::bad_alloc}} if required additional memory could not be obtained. May throw implementation-defined exception for other errors. {{c|d(ptr)}} is called if an exception occurs.
+
+@11@ {{lc|std::bad_weak_ptr}} if {{c|r.expired() {{==}} true}}. The constructor has no effect in this case.
+
+@12@ {{lc|std::bad_alloc}} if required additional memory could not be obtained. May throw implementation-defined exception for other errors. This constructor has no effect if an exception occurs.
+
+@13@ If an exception is thrown, the constructor has no effects.
+
+===Notes===
+{{cpp/memory/shared ptr/enabling shared from this}}
+
+The raw pointer overloads assume ownership of the pointed-to object. Therefore, constructing a {{tt|shared_ptr}} using the raw pointer overload for an object that is already managed by a {{tt|shared_ptr}}, such as by {{c|shared_ptr(ptr.get())}} is likely to lead to undefined behavior, even if the object is of a type derived from {{lc|std::enable_shared_from_this}}.
+
+Because the default constructor is {{tt|constexpr}}, static shared_ptrs are initialized as part of [[cpp/language/initialization#Non-local_variables|static non-local initialization]], before any dynamic non-local initialization begins. This makes it safe to use a shared_ptr in a constructor of any static object.
+
+In C++11 and C++14 it is valid to construct a {{c|std::shared_ptr&lt;T&gt;}} from a {{c|std::unique_ptr&lt;T[]&gt;}}:
+
+{{source|1=
+std::unique_ptr&lt;int[]&gt; arr(new int[1]);
+std::shared_ptr&lt;int&gt; ptr(std::move(arr)); 
+}}
+
+Since the {{tt|shared_ptr}} obtains its deleter (a {{c|std::default_delete&lt;T[]&gt;}} object) from the {{lc|std::unique_ptr}}, the array will be correctly deallocated.
+
+This is no longer allowed in C++17. Instead the array form {{c|std::shared_ptr&lt;T[]&gt;}} should be used.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo
+{
+    int id{0};
+    Foo(int i = 0) : id{i} { std::cout &lt;&lt; "Foo::Foo(" &lt;&lt; i &lt;&lt;  ")\n"; }
+    ~Foo() { std::cout &lt;&lt; "Foo::~Foo(), id=" &lt;&lt; id &lt;&lt; '\n'; }
+};
+
+struct D
+{
+    void operator()(Foo* p) const
+    {
+        std::cout &lt;&lt; "Call delete from function object. Foo::id=" &lt;&lt; p-&gt;id &lt;&lt; '\n';
+        delete p;
+    }
+};
+
+int main()
+{
+    {
+        std::cout &lt;&lt; "1) constructor with no managed object\n";
+        std::shared_ptr&lt;Foo&gt; sh1;
+    }
+
+    {
+        std::cout &lt;&lt; "2) constructor with object\n";
+        std::shared_ptr&lt;Foo&gt; sh2(new Foo{10});
+        std::cout &lt;&lt; "sh2.use_count(): " &lt;&lt; sh2.use_count() &lt;&lt; '\n';
+        std::shared_ptr&lt;Foo&gt; sh3(sh2);
+        std::cout &lt;&lt; "sh2.use_count(): " &lt;&lt; sh2.use_count() &lt;&lt; '\n';
+        std::cout &lt;&lt; "sh3.use_count(): " &lt;&lt; sh3.use_count() &lt;&lt; '\n';
+    }
+
+    {
+        std::cout &lt;&lt; "3) constructor with object and deleter\n";
+        std::shared_ptr&lt;Foo&gt; sh4(new Foo{11}, D());
+        std::shared_ptr&lt;Foo&gt; sh5(new Foo{12}, [](auto p)
+        {
+            std::cout &lt;&lt; "Call delete from lambda... p-&gt;id=" &lt;&lt; p-&gt;id &lt;&lt; '\n';
+            delete p;
+        });
+    }
+}
+|output=
+1) constructor with no managed object
+2) constructor with object
+Foo::Foo(10)
+sh2.use_count(): 1
+sh2.use_count(): 2
+sh3.use_count(): 2
+Foo::~Foo(), id=10
+3) constructor with object and deleter
+Foo::Foo(11)
+Foo::Foo(12)
+Call delete from lambda... p-&gt;id=12
+Foo::~Foo(), id=12
+Call delete from function object. Foo::id=11
+Foo::~Foo(), id=11
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3548|std=C++11|before=the constructor from {{tt|unique_ptr}} copy-constructed the deleter|after=move-constructs instead}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc allocate_shared}}
+{{dsc inc|cpp/memory/dsc enable_shared_from_this}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

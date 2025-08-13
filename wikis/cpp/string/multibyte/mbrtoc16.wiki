@@ -1,0 +1,100 @@
+{{cpp/title|mbrtoc16}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cuchar|since=c++11|
+std::size_t mbrtoc16( char16_t* pc16,
+                      const char* s,
+                      std::size_t n,
+                      std::mbstate_t* ps );
+}}
+
+Converts a narrow multibyte character to UTF-16 character representation.
+
+If {{c|s}} is not a null pointer, inspects at most {{c|n}} bytes of the multibyte character string, beginning with the byte pointed to by {{c|s}} to determine the number of bytes necessary to complete the next multibyte character (including any shift sequences). If the function determines that the next multibyte character in {{c|s}} is complete and valid, converts it to the corresponding 16-bit character and stores it in {{c|*pc16}} (if {{c|pc16}} is not null).
+
+If the multibyte character in {{c|*s}} corresponds to a multi-char16_t sequence (e.g. a surrogate pair in UTF-16), then after the first call to this function, {{c|*ps}} is updated in such a way that the next call to {{tt|mbrtoc16}} will write out the additional char16_t, without considering {{c|*s}}.
+
+If {{c|s}} is a null pointer, the values of {{c|n}} and {{c|pc16}} are ignored and the call is equivalent to {{c|std::mbrtoc16(nullptr, "", 1, ps)}}.
+
+If the wide character produced is the null character, the conversion state {{c|*ps}} represents the initial shift state.
+
+The multibyte encoding used by this function is specified by the currently active C locale.
+
+===Parameters===
+{{par begin}}
+{{par|pc16|pointer to the location where the resulting 16-bit character will be written}}
+{{par|s|pointer to the multibyte character string used as input}}
+{{par|n|limit on the number of bytes in s that can be examined}}
+{{par|ps|pointer to the conversion state object used when interpreting the multibyte string}}
+{{par end}}
+
+===Return value===
+The first of the following that applies:
+* {{c|0}} if the character converted from {{c|s}} (and stored in {{c|*pc16}} if non-null) was the null character.
+* the number of bytes {{c|[1...n]}} of the multibyte character successfully converted from {{c|s}}.
+* {{c|-3}} if the next {{c/core|char16_t}} from a multi-{{c/core|char16_t}} character (e.g. a surrogate pair) has now been written to {{c|*pc16}}. No bytes are processed from the input in this case.
+* {{c|-2}} if the next {{c|n}} bytes constitute an incomplete, but so far valid, multibyte character. Nothing is written to {{c|*pc16}}.
+* {{c|-1}} if encoding error occurs. Nothing is written to {{c|*pc16}}, the value {{lc|EILSEQ}} is stored in {{lc|errno}} and the value of {{c|*ps}} is unspecified.
+
+===Example===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cstring&gt;
+#include &lt;cuchar&gt;
+#include &lt;cwchar&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+
+    std::string str = "z\u00df\u6c34\U0001F34C"; // or u8"zß水🍌"
+
+    std::cout &lt;&lt; "Processing " &lt;&lt; str.size() &lt;&lt; " bytes: [ " &lt;&lt; std::showbase;
+    for (unsigned char c: str)
+        std::cout &lt;&lt; std::hex &lt;&lt; +c &lt;&lt; ' ';
+    std::cout &lt;&lt; "]\n";
+
+    std::mbstate_t state{}; // zero-initialized to initial state
+    char16_t c16;
+    const char* ptr = &amp;str[0], *end = &amp;str[0] + str.size();
+
+    while (std::size_t rc = std::mbrtoc16(&amp;c16, ptr, end - ptr + 1, &amp;state))
+    {
+        std::cout &lt;&lt; "Next UTF-16 char: " &lt;&lt; std::hex
+                  &lt;&lt; static_cast&lt;int&gt;(c16) &lt;&lt; " obtained from ";
+        if (rc == (std::size_t)-3)
+            std::cout &lt;&lt; "earlier surrogate pair\n";
+        else if (rc == (std::size_t) - 2)
+            break;
+        else if (rc == (std::size_t) - 1)
+            break;
+        else
+        {
+            std::cout &lt;&lt; std::dec &lt;&lt; rc &lt;&lt; " bytes [ ";
+            for (std::size_t n = 0; n &lt; rc; ++n)
+                std::cout &lt;&lt; std::hex &lt;&lt; +static_cast&lt;unsigned char&gt;(ptr[n]) &lt;&lt; ' ';
+            std::cout &lt;&lt; "]\n";
+            ptr += rc;
+        }
+    }
+}
+|output=
+Processing 10 bytes: [ 0x7a 0xc3 0x9f 0xe6 0xb0 0xb4 0xf0 0x9f 0x8d 0x8c ]
+Next UTF-16 char: 0x7a obtained from 1 bytes [ 0x7a ]
+Next UTF-16 char: 0xdf obtained from 2 bytes [ 0xc3 0x9f ]
+Next UTF-16 char: 0x6c34 obtained from 3 bytes [ 0xe6 0xb0 0xb4 ]
+Next UTF-16 char: 0xd83c obtained from 4 bytes [ 0xf0 0x9f 0x8d 0x8c ]
+Next UTF-16 char: 0xdf4c obtained from earlier surrogate pair
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc c16rtomb}}
+{{dsc inc|cpp/string/multibyte/dsc mbrtoc8}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in|mem=std::codecvt&lt;char16_t, char, std::mbstate_t&gt;}}
+{{dsc see c|c/string/multibyte/mbrtoc16}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

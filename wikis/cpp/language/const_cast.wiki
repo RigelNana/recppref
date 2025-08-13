@@ -1,0 +1,139 @@
+{{title|{{tt|const_cast}} conversion}}
+{{cpp/language/expressions/navbar}}
+Converts between types with different cv-qualification.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|const_cast&lt;}} {{spar|target-type}} {{ttb|&gt;(}} {{spar|expression}} {{ttb|)}}}}
+{{sdsc end}}
+
+Returns a value of type {{spar|target-type}}.
+
+===Explanation===
+Only the following conversions can be done with {{c/core|const_cast}}:
+
+@1@ For two {{rlp|implicit conversion#Similar types|similar}} object pointer or pointer to data member types {{tt|T1}} and {{tt|T2}}, a prvalue of type {{tt|T1}} can be converted to {{tt|T2}} if {{tt|T1}} and {{tt|T2}} differ only in cv-qualification (formally, if, considering the {{rlp|implicit conversion#Similar types|qualification-decompositions}} of both types, each {{tt|P1_i}} is the same as {{tt|P2_i}} for all {{c|i}}).
+* If {{spar|expression}} is a null pointer value, the result is also a null pointer value.
+* If {{spar|expression}} is a null member pointer value, the result is also a null member pointer value.
+* If {{spar|expression}} points to an object, the result points to the same object.
+* If {{spar|expression}} points past an object, the result points past the same object.
+* If {{spar|expression}} points to a data member, the result points to the same data member.
+{{rrev|since=c++17|
+Even if {{spar|expression}} is a prvalue, {{rlpsd|implicit conversion#Temporary materialization}} is not performed.
+}}
+
+@2@ For two {{rlpsd|type#Object type}}s {{tt|T1}} and {{tt|T2}}, if a pointer to {{tt|T1}} can be explicitly converted to the type “pointer to {{tt|T2}}” using {{c|const_cast&lt;T2*&gt;}}, then the following conversions can also be made:
+* An lvalue of type {{tt|T1}} can be explicitly converted to an lvalue of type {{tt|T2}} using {{c|const_cast&lt;T2&amp;&gt;}}.
+{{rrev|since=c++11|
+* A glvalue of type {{tt|T1}} can be explicitly converted to an xvalue of type {{tt|T2}} using {{c|const_cast&lt;T2&amp;&amp;&gt;}}.
+* If {{tt|T1}} is a class or array type, a prvalue of type {{tt|T1}} can be explicitly converted to an xvalue of type {{tt|T2}} using {{c|const_cast&lt;T2&amp;&amp;&gt;}}.
+}}
+{{rev begin}}
+{{rev|until=c++17|
+The result reference refers to the original object.
+}}
+{{rev|since=c++17|
+If {{spar|expression}} is a glvalue, the result reference refers to the original object. Otherwise, the result reference refers to the {{rlp|implicit conversion#Temporary materialization|materialized temporary}}.
+}}
+{{rev end}}
+
+{{cpp/language/cast return}}
+
+===Casting away constness===
+For two different types {{tt|T1}} and {{tt|T2}}, a conversion from {{tt|T1}} to {{tt|T2}} ''casts away constness'' if there exists a {{rlp|implicit conversion#Similar types|qualification-decomposition}} of {{tt|T2}} of the form “cv2_0 P2_0 cv2_1 P2_1 ... cv2_n−1 P2_n−1 cv2_n U2”, and there is no {{rlpsd|implicit conversion#Qualification conversions|qualification conversion}} that converts {{tt|T1}} to “cv2_0 P1_0 cv2_1 P1_1 ... cv2_n−1 P1_n−1 cv2_n U1” (same cv-components, different P-components and U-components).
+
+If a cast from a prvalue of type {{tt|T1*}} to the type {{tt|T2*}} casts away constness, casting from an expression of type {{tt|T1}} to a reference to {{tt|T2}} will also cast away constness.
+
+Only {{c/core|const_cast}} may be used to cast away constness.
+
+“Casting away constness” implies “casting away volatility”, as qualification conversions cannot cast away volatility as well.
+
+===Notes===
+Pointers to functions and pointers to member functions are not subject to {{c/core|const_cast}}.
+
+{{c/core|const_cast}} makes it possible to form a reference or pointer to non-const type that is actually referring to a {{rlp|cv|const object}} or a reference or pointer to non-volatile type that is actually referring to a {{rlp|cv|volatile object}}. Modifying a const object through a non-const access path and referring to a volatile object through a non-volatile {{rlps|value category#glvalue}} results in undefined behavior.
+
+===Keywords===
+{{ltt|cpp/keyword/const_cast}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct type
+{
+    int i;
+    
+    type(): i(3) {}
+    
+    void f(int v) const
+    {
+        // this-&gt;i = v;                 // compile error: this is a pointer to const
+        const_cast&lt;type*&gt;(this)-&gt;i = v; // OK as long as the type object isn't const
+    }
+};
+
+int main()
+{
+    int i = 3;                 // i is not declared const
+    const int&amp; rci = i;
+    const_cast&lt;int&amp;&gt;(rci) = 4; // OK: modifies i
+    std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n';
+    
+    type t; // if this was const type t, then t.f(4) would be undefined behavior
+    t.f(4);
+    std::cout &lt;&lt; "type::i = " &lt;&lt; t.i &lt;&lt; '\n';
+    
+    const int j = 3; // j is declared const
+    [[maybe_unused]]
+    int* pj = const_cast&lt;int*&gt;(&amp;j);
+    // *pj = 4;      // undefined behavior
+    
+    [[maybe_unused]]
+    void (type::* pmf)(int) const = &amp;type::f; // pointer to member function
+    // const_cast&lt;void(type::*)(int)&gt;(pmf);   // compile error: const_cast does
+                                              // not work on function pointers
+}
+|output=
+i = 4
+type::i = 4
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1965|std=C++11|before={{c/core|const_cast}} could not bind rvalue references to array prvalues|after=allowed to bind such references}}
+{{dr list item|wg=cwg|dr=2879|std=C++17|before=pointer pvalue operands were materialized|after=they are not materialized}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.6.1.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.10|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+
+===See also===
+* {{rlpt|static_cast}}
+* {{rlpt|dynamic_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast}}
+* {{rlp|implicit cast|implicit conversions}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

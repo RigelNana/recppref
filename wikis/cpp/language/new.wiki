@@ -1,0 +1,291 @@
+{{title|{{tt|new}} expression}}
+{{cpp/language/expressions/navbar}}
+
+Creates and initializes objects with dynamic {{rlp|storage duration}}, that is, objects whose lifetime is not necessarily limited by the scope in which they were created.
+
+===Syntax===
+{{sdsc begin}} 
+{{sdsc|num=1|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{ttb|(}}{{spar sep|type}}{{ttb|)}} {{spar optional|new-initializer}}
+}}
+{{sdsc|num=2|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{spar|type}} {{spar optional|new-initializer}}
+}}
+{{sdsc|num=3|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{ttb|(}}{{spar sep|placement-args}}{{ttb|)}} {{ttb|(}}{{spar sep|type}}{{ttb|)}} {{spar optional|new-initializer}}
+}}
+{{sdsc|num=4|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{ttb|(}}{{spar sep|placement-args}}{{ttb|)}} {{spar|type}} {{spar optional|new-initializer}}
+}}
+{{sdsc end}}
+
+@1,2@ Attempts to create an object of type, denoted by the {{rlp|type#Type naming|type-id}} {{spar|type}}, which may be array type{{rev inl|since=c++11|, and may include a {{rlp|auto|placeholder type specifier}}}}{{rev inl|since=c++17|, or include a class template name whose argument is to be deduced by {{rlp|class template argument deduction}}}}.
+@3,4@ Same as {{v|1,2}}, but provides additional arguments to the allocation function, see [[#Placement new|placement {{c/core|new}}]].
+
+===Explanation===
+{{par begin}}
+{{par|{{spar|type}}|the target type-id}}
+{{par|{{spar|new-initializer}}|a parentheses-enclosed expression list{{rev inl|since=c++11| or a {{rlp|initialization|brace-enclosed initializer list}}}}}}
+{{par|{{spar|placement-args}}|additional placement arguments}}
+{{par end}}
+
+
+The {{c/core|new}} expression attempts to allocate storage and then attempts to construct and initialize either a single unnamed object, or an unnamed array of objects in the allocated storage. The {{c/core|new}} expression returns a prvalue pointer to the constructed object or, if an array of objects was constructed, a pointer to the initial element of the array.
+
+Syntax {{v|1}} or {{v|3}} is required if {{spar|type}} includes parentheses:
+{{source|1=
+new int(*[10])();    // error: parsed as (new int) (*[10]) ()
+new (int (*[10])()); // okay: allocates an array of 10 pointers to functions
+}}
+
+In addition, {{spar|type}} is parsed greedily: it will be taken include every token that can be a part of a declarator:
+
+{{source|1=
+new int + 1; // okay: parsed as (new int) + 1, increments a pointer returned by new int
+new int * 1; // error: parsed as (new int*) (1)
+}}
+
+The {{spar|new-initializer}} is not optional if
+* {{spar|type}} is an {{rlp|array#Arrays of unknown bound|array of unknown bound}}, &lt;!-- p1009r2, accepted as a Defect Report --&gt;
+{{rev begin}}
+{{rev|since=c++11|
+* a {{rlp|auto|placeholder}} is used in {{spar|type}}, that is, {{c/core|auto}} {{rev inl|since=c++14|or {{c/core|decltype(auto)}}}}{{rev inl|since=c++20|, possibly combined with a {{rlp|constraints#Concepts|type constraint}}}},
+}}
+{{rev|since=c++17|
+* a class template is used in {{spar|type}} whose arguments need to be {{rlp|class template argument deduction|deduced}}.
+}}
+{{rev end}}
+{{source|1=
+double* p = new double[]{1, 2, 3}; // creates an array of type double[3]
+auto p = new auto('c');            // creates a single object of type char. p is a char*
+
+auto q = new std::integral auto(1);         // OK: q is an int*
+auto q = new std::floating_point auto(true) // ERROR: type constraint not satisfied
+
+auto r = new std::pair(1, true); // OK: r is a std::pair&lt;int, bool&gt;*
+auto r = new std::vector;        // ERROR: element type can't be deduced
+}}
+
+===Dynamic arrays===
+If {{spar|type}} is an array type, all dimensions other than the first must be specified as positive {{rev inl|until=c++14|{{rlp|constant expression|integral constant expression}}}}{{rev inl|since=c++14|{{rlp|constant expression|converted constant expression}} of type {{lc|std::size_t}}}}, but (only when using un-parenthesized syntaxes  {{v|2}} and {{v|4}}) the first dimension may be {{rev inl|until=c++14|an expression of integral type, enumeration type, or class type with a single non-explicit conversion function to integral or enumeration type}}{{rev inl|since=c++14|any expression convertible to {{lc|std::size_t}}}}. This is the only way to directly create an array with size defined at runtime, such arrays are often referred to as ''dynamic arrays'':
+
+{{source|1=
+int n = 42;
+double a[n][5]; // error
+auto p1 = new  double[n][5];  // OK
+auto p2 = new  double[5][n];  // error: only the first dimension may be non-constant
+auto p3 = new (double[n][5]); // error: syntax (1) cannot be used for dynamic arrays
+}}
+
+{{rrev multi|until1=c++11
+|rev1=
+The behavior is undefined if the value in the first dimension (converted to integral or enumeration type if needed) is negative.
+|rev2=
+In the following cases the value of the expression specifying the first dimension is invalid:
+* the expression is of non-class type and its value before conversion to {{lc|std::size_t}} is negative;
+* the expression is of class type and its value after user-defined conversion function and before the {{rlp|implicit conversion|second standard conversion}} is negative;
+* the value of the expression is larger than some implementation-defined limit;
+* the value is smaller than the number of array elements provided in the brace-enclosed initializer list (including the terminating {{c|'\0'}} on a {{rlp|string literal}}).
+
+If the value in the first dimension is invalid for any of these reasons,
+* if, after conversion to {{lc|std::size_t}}, the first dimension is a {{rlp|constant expression#Core constant expressions|core constant expression}} and it is {{rlp|expressions#Potentially-evaluated expressions|potentially evaluated}}, the program is ill-formed,
+* otherwise, if the allocation function that would have been called is non-throwing (including {{lc|std::nothrow}} overloads not declared {{lc|noexcept}}), the {{c/core|new}} expression returns the null pointer of the required result type,
+* otherwise, the {{c/core|new}} expression does not call the allocation function, and instead throws an exception of a type that would match a {{rlp|catch|handler}} of type {{lc|std::bad_array_new_length}}.
+}}
+
+The first dimension of zero is acceptable, and the allocation function is called.
+
+{{rrev|since=c++11|
+If {{spar|new-initializer}} is a braced-enclosed initializer list, and the first dimension is {{rlp|expressions#Potentially-evaluated expressions|potentially evaluated}} and not a {{rlp|constant expression#Core constant expressions|core constant expression}}, the semantic constraints of {{rlp|copy initialization|copy-initializing}} a hypothetical element of the array from an empty initializer list are checked.
+}}
+
+===Allocation===
+The {{c/core|new}} expression allocates storage by calling the appropriate [[cpp/memory/new/operator new|allocation function]]. If {{spar|type}} is a non-array type, the name of the function is {{c|operator new}}. If {{spar|type}} is an array type, the name of the function is {{c|operator new[]}}. 
+
+As described in [[cpp/memory/new/operator new|allocation function]], the C++ program may provide global and class-specific replacements for these functions. If the {{c/core|new}} expression begins with the optional {{c|::}} operator, as in {{c|::new T}} or {{c|::new T[n]}}, class-specific replacements will be ignored (the function is {{rlp|lookup|looked up}} in global {{rlp|scope}}). Otherwise, if {{tt|T}} is a class type, lookup begins in the class scope of {{tt|T}}.
+
+When calling the allocation function, the {{c/core|new}} expression passes the number of bytes requested as the first argument, of type {{lc|std::size_t}}, which is exactly {{c|sizeof(T)}} for non-array {{tt|T}}.
+
+Array allocation may supply unspecified overhead, which may vary from one call to {{c/core|new}} to the next, unless the allocation function selected is the standard non-allocating form. The pointer returned by the {{c/core|new}} expression will be offset by that value from the pointer returned by the allocation function. Many implementations use the array overhead to store the number of objects in the array which is used by the {{rlp|delete|{{c/core|delete[]}}}} expression to call the correct number of destructors. In addition, if the {{c/core|new}} expression is used to allocate an array of {{c/core|char}}, {{c/core|unsigned char}}{{rev inl|since=c++17|, or {{ltt|cpp/types/byte|std::byte}}}}, it may request additional memory from the allocation function if necessary to guarantee correct alignment of objects of all types no larger than the requested array size, if one is later placed into the allocated array. 
+
+{{rev begin}}
+{{rev|since=c++14|
+{{c/core|new}} expressions are allowed to elide or combine allocations made through replaceable allocation functions. In case of elision, the storage may be provided by the compiler without making the call to an allocation function (this also permits optimizing out unused {{c/core|new}} expression). In case of combining, the allocation made by a {{c/core|new}} expression {{c|E1}} may be extended to provide additional storage for another {{c/core|new}} expression {{c|E2}} if all of the following is true:
+@1@ The lifetime of the object allocated by {{c|E1}} strictly contains the lifetime of the object allocated by {{c|E2}}.
+@2@ {{c|E1}} and {{c|E2}} would invoke the same replaceable global allocation function.
+@3@ For a throwing allocation function, exceptions in {{c|E1}} and {{c|E2}} would be first caught in the same handler.
+
+Note that this optimization is only permitted when {{c/core|new}} expressions are used, not any other methods to call a replaceable allocation function: {{c|delete[] new int[10];}} can be optimized out, but {{c|operator delete(operator new(10));}} cannot.
+}}
+{{rev|since=c++20|
+During an evaluation of a {{rlp|constant expression}}, a call to an allocation function is always omitted. Only {{c/core|new}} expressions that would otherwise result in a call to a replaceable global allocation function can be evaluated in constant expressions.
+}}
+{{rev end}}
+
+{{anchor|Placement new}}
+====Placement {{c/core|new}}====
+If {{spar|placement-args}} are provided, they are passed to the allocation function as additional arguments. Such allocation functions are known as "placement {{c/core|new}}", after the standard allocation function {{c|void* operator new(std::size_t, void*)}}, which simply returns its second argument unchanged. This is used to construct objects in allocated storage:
+
+{{source|1=
+// within any block scope...
+{
+    // Statically allocate the storage with automatic storage duration
+    // which is large enough for any object of type “T”.
+    alignas(T) unsigned char buf[sizeof(T)];
+    
+    T* tptr = new(buf) T; // Construct a “T” object, placing it directly into your 
+                          // pre-allocated storage at memory address “buf”.
+    
+    tptr-&gt;~T();           // You must **manually** call the object's destructor
+                          // if its side effects is depended by the program.
+}                         // Leaving this block scope automatically deallocates “buf”.
+}}
+
+Note: this functionality is encapsulated by the member functions of the {{named req|Allocator}} classes.
+
+{{rrev|since=c++17|
+When allocating an object whose alignment requirement exceeds {{ltt|cpp/preprocessor/replace#Predefined macros|__STDCPP_DEFAULT_NEW_ALIGNMENT__}} or an array of such objects, the {{c/core|new}} expression passes the alignment requirement (wrapped in {{lc|std::align_val_t}}) as the second argument for the allocation function (for placement forms, {{spar|placement-arg}} appear after the alignment, as the third, fourth, etc arguments). If overload resolution fails (which happens when a class-specific allocation function is defined with a different signature, since it hides the globals), overload resolution is attempted a second time, without alignment in the argument list. This allows alignment-unaware class-specific allocation functions to take precedence over the global alignment-aware allocation functions.
+}}
+
+{{source|1=
+new T;      // calls operator new(sizeof(T))
+            // (C++17) or operator new(sizeof(T), std::align_val_t(alignof(T))))
+new T[5];   // calls operator new[](sizeof(T)*5 + overhead)
+            // (C++17) or operator new(sizeof(T)*5+overhead, std::align_val_t(alignof(T))))
+new(2,f) T; // calls operator new(sizeof(T), 2, f)
+            // (C++17) or operator new(sizeof(T), std::align_val_t(alignof(T)), 2, f)
+}}
+
+If a non-throwing allocation function (e.g. the one selected by {{c|new(std::nothrow) T}}) returns a null pointer because of an allocation failure, then the {{c/core|new}} expression returns immediately, it does not attempt to initialize an object or to call a deallocation function. If a null pointer is passed as the argument to a non-allocating placement {{c/core|new}} expression, which makes the selected standard non-allocating placement allocation function return a null pointer, the behavior is undefined.
+
+===Initialization===
+The object created by a {{c/core|new}} expression is initialized according to the following rules.
+
+If {{spar|type}} is not an array type, the single object is constructed in the acquired memory area:
+* If {{spar|new-initializer}} is absent, the object is {{rlp|default initialization|default-initialized}}.
+* If {{spar|new-initializer}} is a parentheses-enclosed expression list, the object is {{rlp|direct initialization|direct-initialized}}.
+{{rrev|since=c++11|
+* If {{spar|new-initializer}} is a braced-enclosed initializer list, the object is {{rlp|list initialization|list-initialized}}.
+}}
+
+If {{spar|type}} is an array type, an array of objects is initialized:
+* If {{spar|new-initializer}} is absent, each element is {{rlp|default initialization|default-initialized}}.
+:* Even if the first dimension is zero, the semantic constraints of default-initializing a hypothetical element still need to be met.
+* If {{spar|new-initializer}} is a pair of parentheses, each element is {{rlp|value initialization|value-initialized}}.
+:* Even if the first dimension is zero, the semantic constraints of value-initializing a hypothetical element still need to be met.
+{{rev begin}}
+{{rev|since=c++11|
+* If {{spar|new-initializer}} is a braced-enclosed initializer list, the array is {{rlp|aggregate initialization|aggregate-initialized}}.
+}}
+{{rev|since=c++20|
+* If {{spar|new-initializer}} is a parentheses-enclosed non-empty expression list, the array is {{rlp|aggregate initialization|aggregate-initialized}}.
+}}
+{{rev end}}
+
+====Initialization failure====
+If initialization terminates by throwing an exception (e.g. from the constructor), the program looks up a matching deallocation function, then:
+* If a suitable deallocation function can be found, the deallocation function is called to free the memory in which the object was being constructed. After that, the exception continues to propagate in the context of the {{c/core|new}} expression.
+* If no unambiguous matching deallocation function can be found, propagating the exception does not cause the object’s memory to be freed. It is only appropriate if the called allocation function does not allocate memory, otherwise it is likely to result in a memory leak.
+
+The scope of the {{rlp|lookup}} of the matching deallocation function is determined as follows:
+* If the {{c/core|new}} expression does not begin with {{tt|::}}, and the allocated type is either a class type {{tt|T}} or an array of class type {{tt|T}}, a search is performed for the deallocation function’s name in the class scope of {{tt|T}}.
+* Otherwise, or if nothing is found in the {{tt|T}}'s class scope, the deallocation function’s name is looked up by searching for it in the {{rlp|scope|global scope}}.
+
+For a non-placement allocation function, the normal deallocation function lookup is used to find the matching deallocation function (see {{rlp|delete|delete-expression}}).
+
+For a placement allocation function, the matching deallocation function must have the same number of parameter, and each parameter type except the first is identical to the corresponding parameter type of the allocation function (after {{rlp|function#Function type|parameter transformations}}).
+* If the lookup finds a single matching deallocation function, that function will be called; otherwise, no deallocation function will be called.
+* If the lookup finds a non-placement deallocation function and that function, considered as a placement deallocation function, would have been selected as a match for the allocation function, the program is ill-formed.
+
+In any case, the matching deallocation function (if any) must be{{rev inl|since=c++11| non-deleted and}} accessible from the point where the {{c/core|new}} expression appears.
+{{source|1=
+struct S
+{
+    // Placement allocation function:
+    static void* operator new(std::size_t, std::size_t);
+    
+    // Non-placement deallocation function:
+    static void operator delete(void*, std::size_t);
+};
+
+S* p = new (0) S; // error: non-placement deallocation function matches
+                  //        placement allocation function
+}}
+
+If a deallocation function is called in a {{c/core|new}} expression (due to initialization failure), the arguments passed to that function are determined as follows:
+* The first argument is the value (of type {{c/core|void*}}) returned from the allocation function call.
+* Other arguments (only for placement deallocation functions) are the {{spar|placement-args}} passed to the placement allocation function.
+
+If the implementation is allowed to introduce a temporary object or make a copy of any argument as part of the call to the allocation function, it is unspecified whether the same object is used in the call to both the allocation and deallocation functions.
+
+===Memory leaks===
+The objects created by {{c/core|new}} expressions (objects with dynamic storage duration) persist until the pointer returned by the {{c/core|new}} expression is used in a matching {{rlp|delete|delete-expression}}. If the original value of pointer is lost, the object becomes unreachable and cannot be deallocated: a ''memory leak'' occurs.
+
+This may happen if the pointer is assigned to:
+
+{{source|1=
+int* p = new int(7); // dynamically allocated int with value 7
+p = nullptr; // memory leak
+}}
+
+or if the pointer goes out of scope:
+
+{{source|1=
+void f()
+{
+    int* p = new int(7);
+} // memory leak
+}}
+
+or due to exception:
+
+{{source|1=
+void f()
+{
+    int* p = new int(7);
+    g();      // may throw
+    delete p; // okay if no exception
+} // memory leak if g() throws
+}}
+
+To simplify management of dynamically-allocated objects, the result of a {{c/core|new}} expression is often stored in a [[cpp/memory#Smart pointers|smart pointer]]: {{rev inl|until=c++17|{{lc|std::auto_ptr}} }}{{rev inl|since=c++11|{{lc|std::unique_ptr}}, or {{lc|std::shared_ptr}}}}. These pointers guarantee that the delete expression is executed in the situations shown above.
+
+===Notes===
+[https://itanium-cxx-abi.github.io/cxx-abi/abi.html#array-cookies Itanium C++ ABI] requires that the array allocation overhead is zero if the element type of the created array is trivially destructible. So does MSVC.
+
+Some implementations (e.g. MSVC before VS 2019 v16.7) require non-zero array allocation overhead on non-allocating placement array {{c/core|new}} if the element type is not trivially destructible, which is no longer conforming since {{cwg|2382}}.
+
+A non-allocating placement array {{c/core|new}} expression that creates an array of {{c/core|unsigned char}}{{rev inl|since=c++17|, or {{ltt|cpp/types/byte|std::byte}}}} can be used to {{rlp|lifetime|implicitly create objects}} on given region of storage: it ends lifetime of objects overlapping with the array, and then implicitly creates objects of implicit-lifetime types in the array.
+
+{{lc|std::vector}} offers similar functionality for one-dimensional dynamic arrays.
+
+===Keywords===
+{{ltt|cpp/keyword/new}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=74|std=C++98|before=value in the first dimension must have integral type|after=enumeration types permitted}}
+{{dr list item|wg=cwg|dr=299|std=C++98|before=value in the first dimension must&lt;br&gt;have integral or enumeration type|after=class types with a single&lt;br&gt;conversion function to integral&lt;br&gt;or enumeration type permitted}}
+{{dr list item|wg=cwg|dr=624|std=C++98|before=the behavior was unspecified when the&lt;br&gt;size of the allocated object would exceed&lt;br&gt;the implementation-defined limit|after=no storage is obtained and an&lt;br&gt;exception is thrown in this case}}
+{{dr list item|wg=cwg|dr=1748|std=C++98|before=non-allocating placement {{c/core|new}} need&lt;br&gt;to check if the argument is null|after=undefined behavior for null argument}}
+{{dr list item|wg=cwg|dr=1992|std=C++11|before={{c|new (std::nothrow) int[N]}}&lt;br&gt;could throw {{lc|std::bad_array_new_length}}|after=changed to return a null pointer}}
+{{dr list item|wg=cwg|dr=2102|std=C++98|before=it was unclear whether default/value-initialization is&lt;br&gt;required to be well-formed when initializing empty arrays|after=required}}
+{{dr list item|wg=cwg|dr=2382|std=C++98|before=non-allocating placement array {{c/core|new}}&lt;br&gt;could require allocation overhead|after=such allocation overhead disallowed}}
+{{dr list item|wg=cwg|dr=2392|std=C++11|before=the program might be ill-formed even if the&lt;br&gt;first dimension is not potentially-evaluated|after=well-formed in this case}}
+{{dr list item|paper=P1009R2|std=C++11|before=the array bound could not be&lt;br&gt;deduced in a {{c/core|new}} expression|after=deduction permitted}}
+{{dr list end}}
+
+===See also===
+* {{rlp|constructor}}
+* {{rlp|copy elision}}
+* {{rlp|default constructor}}
+* {{rlpt|delete}}
+* {{rlp|destructor}}
+* {{rlp|initialization}}
+** {{rlp|aggregate initialization}}
+** {{rlp|default initialization}}
+** {{rlp|direct initialization}}
+** {{rlp|list initialization}}
+** {{rlp|value initialization}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

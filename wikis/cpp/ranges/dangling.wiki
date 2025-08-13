@@ -1,0 +1,73 @@
+{{cpp/ranges/title | dangling}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header | ranges}}
+{{dcl | since = c++20 |
+struct dangling;
+}}
+{{dcl end}}
+
+{{tt|dangling}} is a placeholder type and an empty class type, used together with the template aliases {{ltt|cpp/ranges/borrowed_iterator_t|ranges::borrowed_iterator_t}} and {{ltt|cpp/ranges/borrowed_iterator_t|ranges::borrowed_subrange_t}}.
+
+When some [[cpp/algorithm/ranges|constrained algorithms]] that usually return an iterator or a subrange of a {{lconcept|range}} take a particular rvalue {{tt|range}} argument that does not model {{lconcept|borrowed_range}}, {{tt|dangling}} will be returned instead to avoid returning potentially dangling results.
+
+===Member functions===
+{{member | {{small|std::ranges::dangling::}}dangling | 2=
+{{dcl begin}}
+{{dcl | num=1 |1=
+constexpr dangling() noexcept = default;
+}}
+{{dcl | num=2 |
+template&lt;class... Args&gt;
+constexpr dangling(Args&amp;&amp;...) noexcept { }
+}}
+{{dcl end}}
+
+@1@ {{tt|dangling}} is trivially default constructible.
+@2@ {{tt|dangling}} can be constructed from arguments of arbitrary number and arbitrary non-void type. The construction does not have any side-effect itself.
+In other words, after replacing the type (e.g. an iterator type) in a well-formed non-aggregate initialization with {{tt|dangling}}, the resulting initialization is also well-formed.
+}}
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;type_traits&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    auto get_array_by_value = [] { return std::array{0, 1, 0, 1}; };
+    auto dangling_iter = std::ranges::max_element(get_array_by_value());
+    static_assert(std::is_same_v&lt;std::ranges::dangling, decltype(dangling_iter)&gt;);
+//  std::cout &lt;&lt; *dangling_iter &lt;&lt; '\n'; // compilation error: no match for 'operator*'
+                                         // (operand type is 'std::ranges::dangling')
+    
+    auto get_persistent_array = []() -&gt; const std::array&lt;int, 4&gt;&amp; {
+        static constexpr std::array a{0, 1, 0, 1};
+        return a;
+    };
+    auto valid_iter = std::ranges::max_element(get_persistent_array());
+    static_assert(!std::is_same_v&lt;std::ranges::dangling, decltype(valid_iter)&gt;);
+    std::cout &lt;&lt; *valid_iter &lt;&lt; ' '; // 1
+
+
+    auto get_string_view = [] { return std::string_view{"alpha"}; };
+    auto valid_iter2 = std::ranges::min_element(get_string_view());
+        // OK: std::basic_string_view models borrowed_range
+    static_assert(!std::is_same_v&lt;std::ranges::dangling, decltype(valid_iter2)&gt;);
+    std::cout &lt;&lt; '\'' &lt;&lt; *valid_iter2 &lt;&lt; '\'' &lt;&lt; '\n'; // 'a'
+}
+| output=1 'a'
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc | cpp/ranges/dsc borrowed_iterator_t}}
+{{dsc inc | cpp/ranges/dsc borrowed_range}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,104 @@
+{{cpp/ranges/title|copy_n|copy_n_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::input_iterator I, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr copy_n_result&lt;I, O&gt;
+    copy_n( I first, std::iter_difference_t&lt;I&gt; n, O result );
+}}
+{{dcl h|Helper type}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class I, class O &gt;
+using copy_n_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ Copies exactly {{c|n}} values from the range beginning at {{c|first}} to the range beginning at {{c|result}} by performing {{c|1=*(result + i) = *(first + i)}} for each integer in {{range|0|n}}. The behavior is undefined if {{c|result}} is within the range {{range|first|first + n}} ({{lc|ranges::copy_backward}} might be used instead in this case).
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of elements to copy from}}
+{{par|n|number of the elements to copy}}
+{{par|result|the beginning of the destination range}}
+{{par end}}
+
+===Return value===
+{{c|ranges::copy_n_result{first + n, result + n} }} or more formally, a value of type {{lc|ranges::in_out_result}} that contains an {{lc|std::input_iterator}} iterator equals to {{c|ranges::next(first, n)}} and a {{lc|std::weakly_incrementable}} iterator equals to {{c|ranges::next(result, n)}}.
+
+===Complexity===
+Exactly {{c|n}} assignments.
+
+===Notes===
+In practice, implementations of {{tt|std::ranges::copy_n}} may avoid multiple assignments and use bulk copy functions such as {{lc|std::memmove}} if the value type is {{named req|TriviallyCopyable}} and the iterator types satisfy {{lconcept|contiguous_iterator}}. Alternatively, such copy acceleration can be injected during an optimization phase of a compiler.
+
+When copying overlapping ranges, {{tt|std::ranges::copy_n}} is appropriate when copying to the left (beginning of the destination range is outside the source range) while {{lc|std::ranges::copy_backward}} is appropriate when copying to the right (end of the destination range is outside the source range).
+
+===Possible implementation===
+{{eq fun|1=
+struct copy_n_fn
+{
+    template&lt;std::input_iterator I, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::copy_n_result&lt;I, O&gt;
+        operator()(I first, std::iter_difference_t&lt;I&gt; n, O result) const
+    {
+        for (std::iter_difference_t&lt;I&gt; i {}; i != n; ++i, ++first, ++result)
+            *result = *first;
+        return {std::move(first), std::move(result)};
+    }
+};
+
+inline constexpr copy_n_fn copy_n {};
+}}
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    const std::string_view in {"ABCDEFGH"};
+    std::string out;
+
+    std::ranges::copy_n(in.begin(), 4, std::back_inserter(out));
+    std::cout &lt;&lt; std::quoted(out) &lt;&lt; '\n';
+
+    out = "abcdefgh";
+    const auto res = std::ranges::copy_n(in.begin(), 5, out.begin());
+    std::cout
+        &lt;&lt; "*(res.in): '" &lt;&lt; *(res.in) &lt;&lt; "', distance: "
+        &lt;&lt; std::distance(std::begin(in), res.in) &lt;&lt; '\n'
+        &lt;&lt; "*(res.out): '" &lt;&lt; *(res.out) &lt;&lt; "', distance: "
+        &lt;&lt; std::distance(std::begin(out), res.out) &lt;&lt; '\n';
+}
+|output=
+"ABCD"
+*(res.in): 'F', distance: 5
+*(res.out): 'f', distance: 5
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc replace_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/dsc copy_n}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

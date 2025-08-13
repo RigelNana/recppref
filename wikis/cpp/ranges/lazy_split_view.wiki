@@ -1,0 +1,143 @@
+{{cpp/ranges/view title|lazy_split}}
+{{cpp/ranges/lazy_split_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::input_range V, ranges::forward_range Pattern &gt;
+requires ranges::view&lt;V&gt; &amp;&amp;
+         ranges::view&lt;Pattern&gt; &amp;&amp;
+         std::indirectly_comparable&lt;ranges::iterator_t&lt;V&gt;,
+                                    ranges::iterator_t&lt;Pattern&gt;,
+                                    ranges::equal_to&gt; &amp;&amp;
+         (ranges::forward_range&lt;V&gt; {{!!}} /*tiny-range*/&lt;Pattern&gt;)
+class lazy_split_view
+    : public ranges::view_interface&lt;lazy_split_view&lt;V, Pattern&gt;&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    inline constexpr /* unspecified */ lazy_split = /* unspecified */;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R, class Pattern &gt;
+    requires /* see below */
+constexpr ranges::view auto lazy_split( R&amp;&amp; r, Pattern&amp;&amp; pattern );
+}}
+{{dcl|since=c++20|1=
+template&lt; class Pattern &gt;
+constexpr /* range adaptor closure */ lazy_split( Pattern&amp;&amp; pattern );
+}}
+{{dcl h|Helper concepts}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class R &gt;
+concept /*tiny-range*/ =
+    ranges::sized_range&lt;R&gt; &amp;&amp;
+    requires { /* is-statically-constexpr-sized */&lt;R&gt;; } &amp;&amp;
+    (std::remove_reference_t&lt;R&gt;::size() &lt;= 1);
+}}
+{{dcl end}}
+
+@1@ {{tt|lazy_split_view}} takes a {{lconcept|view}} and a delimiter, and splits the {{lconcept|view}} into subranges on the delimiter.
+&lt;!----&gt;
+Two major scenarios are supported:
+* The view is an {{lconcept|input_range}}, the delimiter is a single element (wrapped in a {{rlpt|single_view}}).
+* The view is a {{lconcept|forward_range}}, the delimiter is a {{lconcept|view}} of elements.
+
+@2@ A {{named req|RangeAdaptorObject}}. The expression {{c|views::lazy_split(e, f)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|lazy_split_view(e, f)}}&lt;!-- LWG 3524 --&gt;.
+
+@3@ The exposition-only concept {{c|/*tiny-range*/&lt;Pattern&gt;}} is satisfied if {{tt|Pattern}} satisfies {{lconcept|sized_range}}, {{c|Pattern::size()}} is a constant expression and suitable as a template non-type argument, and the value of {{c|Pattern::size()}} is less than or equal to {{tt|1}}.&lt;!-- The standard uses `std::remove_reference_t&lt;R&gt;::size()`, but since `Pattern` is a `view`, it cannot be a reference. --&gt; Notably, {{rlpt|empty_view}} and {{rlpt|single_view}} satisfy this concept.
+
+{{tt|lazy_split_view}} models the concepts {{lconcept|forward_range}} and {{lconcept|input_range}} when the underlying {{lconcept|view}} {{tt|V}} models respective concepts, and models {{lconcept|common_range}} when {{tt|V}} models both {{lconcept|forward_range}} and {{lconcept|common_range}}.
+
+The inner range ({{c/core|ranges::range_reference_t&lt;lazy_split_view&gt;}}) models the concepts {{lconcept|forward_range}} and {{lconcept|input_range}} when the underlying {{lconcept|view}} {{tt|V}} models respective concepts. It does not model {{lconcept|common_range}}, and cannot be used with algorithms that expect a {{lconcept|bidirectional_range}} or higher.
+
+Unlike {{rlpt|split_view}}, {{tt|lazy_split_view}} does not maintain the continuity of the subrange.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|base_|id=base|private=yes|spec={{tt|V}}|the underlying {{lconcept|view}}}}
+{{dsc expos mem obj|pattern_|id=pattern|private=yes
+|spec={{tt|Pattern}}|the pattern that is used as a delimiter to split the underlying {{lconcept|view}}}}
+{{dsc expos mem obj|current_|id=current|private=yes
+|maybe=(present only if {{tt|V}} does not satisfy {{lconcept|forward_range}})
+|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}
+|an object that caches the result of calls to {{rltf|begin}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|lazy_split_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|lazy_split_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|lazy_split_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|lazy_split_view}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|data=invalid|size=invalid|back=invalid|operator[]=invalid}}
+{{dsc end}}
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/lazy_split_view/outer_iterator|the iterator type}}
+{{dsc expos mem tclass|cpp/ranges/lazy_split_view/inner_iterator|the iterator type of the inner range}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Notes===
+The name {{tt|lazy_split_view}} is introduced by the post-C++20 defect report {{wg21|P2210R2}}. It has the same lazy mechanism as that of the old {{tt|split_view}} before change.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+auto print = [](auto const&amp; view)
+{
+    // `view` is of std::views::lazy_split_view::__outer_iterator::value_type
+
+    for (std::cout &lt;&lt; "{ "; const auto element : view)
+        std::cout &lt;&lt; element &lt;&lt; ' ';
+    std::cout &lt;&lt; "} ";
+};
+
+int main()
+{
+    constexpr static auto source = {0, 1, 0, 2, 3, 0, 4, 5, 6, 0, 7, 8, 9};
+    constexpr int delimiter{0};
+    constexpr std::ranges::lazy_split_view outer_view{source, delimiter};
+    std::cout &lt;&lt; "splits[" &lt;&lt; std::ranges::distance(outer_view) &lt;&lt; "]:  ";
+    for (auto const&amp; inner_view: outer_view)
+        print(inner_view);
+
+    constexpr std::string_view hello{"Hello C++ 20 !"};
+    std::cout &lt;&lt; "\n" "substrings: ";
+    std::ranges::for_each(hello {{!}} std::views::lazy_split(' '), print);
+
+    constexpr std::string_view text{"Hello-+-C++-+-20-+-!"};
+    constexpr std::string_view delim{"-+-"};
+    std::cout &lt;&lt; "\n" "substrings: ";
+    std::ranges::for_each(text {{!}} std::views::lazy_split(delim), print);
+}
+|output=
+splits[5]:  { } { 1 } { 2 3 } { 4 5 6 } { 7 8 9 }
+substrings: { H e l l o } { C + + } { 2 0 } { ! }
+substrings: { H e l l o } { C + + } { 2 0 } { ! }
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2210R2|std=C++20|before=the old {{tt|split_view}} was too lazy to be easily used|after=moves its functionality to {{tt|lazy_split_view}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc split_view}}
+{{dsc inc|cpp/ranges/dsc join_view}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

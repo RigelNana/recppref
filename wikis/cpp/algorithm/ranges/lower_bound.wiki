@@ -1,0 +1,189 @@
+{{cpp/ranges/title|lower_bound}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=1|since=c++20|until=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr I lower_bound( I first, S last, const T&amp; value,
+                         Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;I, Proj&gt;,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr I lower_bound( I first, S last, const T&amp; value,
+                         Comp comp = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++20|until=c++26|1=
+template&lt; ranges::forward_range R,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    lower_bound( R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::forward_range R,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    lower_bound( R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+@1@ Returns an iterator pointing to the first element in the range {{range|first|last}} that is ''not less'' than (i.e. greater or equal to) {{c|value}}, or {{c|last}} if no such element is found.
+The range {{range|first|last}} must be partitioned with respect to the expression {{c|std::invoke(comp, std::invoke(proj, element), value)}}, i.e., all elements for which the expression is {{c|true}} must precede all elements for which the expression is {{c|false}}. A fully-sorted range meets this criterion.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|iterator-sentinel pair defining the partially-ordered range to examine}}
+{{par|r|the partially-ordered range to examine}}
+{{par|value|value to compare the projected elements to}}
+{{par|comp|comparison predicate to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+Iterator pointing to the first element that is ''not less'' than {{c|value}}, or {{c|last}} if no such element is found.
+
+===Complexity===
+The number of comparisons and applications of the projection performed are logarithmic in the distance between {{c|first}} and {{c|last}} (at most {{math|log{{su|b=2}}(last - first) + O(1)}} comparisons and applications of the projection). However, for an iterator that does not model {{lconcept|random_access_iterator}}, the number of iterator increments is linear.
+
+===Notes===
+On a range that's fully sorted (or more generally, partially ordered with respect to {{c|value}}) after projection, {{tt|std::ranges::lower_bound}} implements the binary search algorithm. Therefore, {{lc|ranges::binary_search|std::ranges::binary_search}} can be implemented in terms of it.
+
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|[[cpp/language/list initialization|List-initialization]] for algorithms {{vl|1,2}}}}
+
+===Possible implementation===
+{{eq fun|1=
+struct lower_bound_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             class T = std::projected_value_t&lt;I, Proj&gt;,
+             std::indirect_strict_weak_order
+                 &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr I operator()(I first, S last, const T&amp; value,
+                           Comp comp = {}, Proj proj = {}) const
+    {
+        I it;
+        std::iter_difference_t&lt;I&gt; count, step;
+        count = std::ranges::distance(first, last);
+        
+        while (count &gt; 0)
+        {
+            it = first;
+            step = count / 2;
+            ranges::advance(it, step, last);
+            if (comp(std::invoke(proj, *it), value))
+            {
+                first = ++it;
+                count -= step + 1;
+            }
+            else
+                count = step;
+        }
+        return first;
+    }
+    
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+          class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), value,
+                       std::ref(comp), std::ref(proj));
+    }
+};
+
+inline constexpr lower_bound_fn lower_bound;
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+namespace ranges = std::ranges;
+
+template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class T,
+         class Proj = std::identity,
+         std::indirect_strict_weak_order
+             &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+constexpr I binary_find(I first, S last, const T&amp; value, Comp comp = {}, Proj proj = {})
+{
+    first = ranges::lower_bound(first, last, value, comp, proj);
+    return first != last &amp;&amp; !comp(value, proj(*first)) ? first : last;
+}
+
+int main()
+{
+    std::vector data{1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5};
+    //                                 ^^^^^^^^^^
+    auto lower = ranges::lower_bound(data, 4);
+    auto upper = ranges::upper_bound(data, 4);
+
+    std::cout &lt;&lt; "found a range [" &lt;&lt; ranges::distance(data.cbegin(), lower)
+              &lt;&lt; ", " &lt;&lt; ranges::distance(data.cbegin(), upper) &lt;&lt; ") = { ";
+    ranges::copy(lower, upper, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; "}\n";
+
+    // classic binary search, returning a value only if it is present
+
+    data = {1, 2, 4, 8, 16};
+    //               ^
+    auto it = binary_find(data.cbegin(), data.cend(), 8); // '5' would return end()
+
+    if (it != data.cend())
+        std::cout &lt;&lt; *it &lt;&lt; " found at index "&lt;&lt; ranges::distance(data.cbegin(), it);
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{{1, 0}, {2, 2}, {2, 1}, {3, 0}};
+    auto cmpz = [](CD x, CD y) { return x.real() &lt; y.real(); };
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto it2 = ranges::lower_bound(nums, {2, 0}, cmpz);
+    #else
+        auto it2 = ranges::lower_bound(nums, CD{2, 0}, cmpz);
+    #endif
+    assert((*it2 == CD{2, 2}));
+}
+|output=
+found a range [6, 10) = { 4 4 4 4 }
+8 found at index 3
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal_range}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition_point}}
+{{dsc inc|cpp/algorithm/ranges/dsc upper_bound}}
+{{dsc inc|cpp/algorithm/dsc lower_bound}}
+{{dsc end}}
+
+{{langlinks|es|ja|zh}}

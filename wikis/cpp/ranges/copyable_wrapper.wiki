@@ -1,0 +1,204 @@
+{{title|Assignable wrapper {{mark c++20}}}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl rev multi
+|since1=c++20|notes1={{mark expos}}|dcl1=
+template&lt; class T &gt;
+    requires std::copy_constructible&lt;T&gt; &amp;&amp; std::is_object_v&lt;T&gt;
+class /*copyable-box*/;
+|since2=c++23|notes2={{mark expos}}|dcl2=
+template&lt; class T &gt;
+    requires std::move_constructible&lt;T&gt; &amp;&amp; std::is_object_v&lt;T&gt;
+class /*movable-box*/;
+}}
+{{dcl end}}
+
+{{ltt|cpp/ranges/single_view|ranges::single_view}}{{rev inl|since=c++23|, {{ltt|cpp/ranges/repeat_view|ranges::repeat_view}},}} and range adaptors that store an invocable object are specified in terms of an exposition-only class template {{rev inl|until=c++23|{{tti|copyable-box}}}}{{rev inl|since=c++23|{{tti|movable-box}}}}. The name shown here is for exposition purposes only.
+
+The wrapper behaves exactly like {{c|std::optional&lt;T&gt;}}, except that the default constructor, copy assignment operator, and move assignment operator are (conditionally) different from those of {{lc|std::optional}}, which augments {{tt|T}} with assignability when needed and makes it always satisfy {{lconcept|copyable}}{{rev inl|since=c++23|or {{lconcept|movable}}}}.
+
+{{rrev multi
+|rev1=
+If {{tt|T}} is already {{lconcept|copyable}}, or both {{c|std::is_nothrow_move_constructible_v&lt;T&gt;}} and {{c|std::is_nothrow_copy_constructible_v&lt;T&gt;}} are {{c|true}}, {{c|/*copyable-box*/&lt;T&gt;}} may store only a {{tt|T}} object, because it always contains a value.
+|since2=c++23|rev2=
+If {{tt|T}}
+* is already {{lconcept|copyable}}, or
+* is {{lconcept|copy_constructible}} and both {{c|std::is_nothrow_move_constructible_v&lt;T&gt;}} and {{c|std::is_nothrow_copy_constructible_v&lt;T&gt;}} are {{c|true}}, or
+* does not satisfy {{lconcept|copy_constructible}} but satisfies {{lconcept|movable}}, or
+* does not satisfy {{lconcept|copy_constructible}} but {{c|std::is_nothrow_move_constructible_v&lt;T&gt;}} is {{c|true}},
+{{c|/*movable-box*/&lt;T&gt;}} may store only a {{tt|T}} object, because it always contains a value.
+}}
+
+===Template parameters===
+{{par begin}}
+{{par|T|the type of the contained value, must be an object type that models {{rev inl|until=c++23|{{lconcept|copy_constructible}}}}{{rev inl|since=c++23|{{lconcept|move_constructible}}}}}}
+{{par end}}
+
+===Member functions===
+{{member|Default constructor|
+{{dcl begin}}
+{{dcl rev multi
+|since1=c++20|dcl1=
+constexpr /*copyable-box*/() noexcept(std::is_nothrow_default_constructible_v&lt;T&gt;)
+    requires std::default_initializable&lt;T&gt;
+    : /*copyable-box*/(std::in_place) { }
+|since2=c++23|dcl2=
+constexpr /*movable-box*/() noexcept(std::is_nothrow_default_constructible_v&lt;T&gt;)
+    requires std::default_initializable&lt;T&gt;
+    : /*movable-box*/(std::in_place) { }
+}}
+{{dcl end}}
+
+The default constructor is provided if and only if {{tt|T}} models {{lconcept|default_initializable}}.
+
+A default-constructed wrapper contains a value-initialized {{tt|T}} object.
+}}
+
+{{member|Assignment operators|
+{{dcl begin}}
+{{dcl rev multi|num=1
+|since1=c++20|dcl1=
+constexpr /*copyable-box*/&amp; operator=(const /*copyable-box*/&amp; other);
+    noexcept(/* see below */);
+|since2=c++23|dcl2=
+constexpr /*movable-box*/&amp; operator=(const /*movable-box*/&amp; other);
+    noexcept(/* see below */) requires std::copy_constructible&lt;T&gt;;
+}}
+{{dcl rev multi|num=2
+|since1=c++20|dcl1=
+constexpr /*copyable-box*/&amp; operator=(/*copyable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;);
+|since2=c++23|dcl2=
+constexpr /*movable-box*/&amp; operator=(/*movable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;);
+}}
+{{dcl end}}
+
+@1@ If {{c|std::copyable&lt;T&gt;}} is not modeled, the copy assignment operator is equivalently defined as:
+{{rrev multi
+|rev1=
+{{c|1=
+constexpr /*copyable-box*/&amp; operator=(const /*copyable-box*/&amp; other)
+    noexcept(std::is_nothrow_copy_constructible_v&lt;T&gt;)
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(*other);
+        else
+            reset();
+
+    return *this;
+}
+}}
+|since2=c++23|rev2=
+{{c|1=
+constexpr /*movable-box*/&amp; operator=(const /*movable-box*/&amp; other)
+    noexcept(std::is_nothrow_copy_constructible_v&lt;T&gt;)
+    requires std::copy_constructible&lt;T&gt;
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(*other);
+        else
+            reset();
+
+    return *this;
+}
+}}
+}}
+Otherwise, it is identical to [[cpp/utility/optional/operator=|the copy assignment operator of {{tt|std::optional}}]].
+
+@2@ If {{c|std::movable&lt;T&gt;}} is not modeled, the move assignment operator is equivalently defined as:
+{{rrev multi
+|rev1=
+{{c|1=
+constexpr /*copyable-box*/&amp; operator=(/*copyable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;)
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(std::move(*other));
+        else
+            reset();
+
+    return *this;
+}
+}}
+|since2=c++23|rev2=
+{{c|1=
+constexpr /*movable-box*/&amp; operator=(/*movable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;)
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(std::move(*other));
+        else
+            reset();
+
+    return *this;
+}
+}}
+}}
+Otherwise, it is identical to [[cpp/utility/optional/operator=|the move assignment operator of {{tt|std::optional}}]].
+}}
+
+{{identical|{{small|std::}}optional|
+2=&lt;!--
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc end}}
+--&gt;
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/optional/dsc constructor}}
+{{dsc inc|cpp/utility/optional/dsc destructor}}
+{{dsc inc|cpp/utility/optional/dsc operator{{=}}}}
+
+{{dsc h2|Observers}}
+{{dsc inc|cpp/utility/optional/dsc operator*}}
+{{dsc inc|cpp/utility/optional/dsc operator bool}}
+&lt;!--{{dsc inc|cpp/utility/optional/dsc value}}
+{{dsc inc|cpp/utility/optional/dsc value_or}}--&gt;
+
+{{dsc h2|Modifiers}}
+&lt;!--{{dsc inc|cpp/utility/optional/dsc swap}}--&gt;
+{{dsc inc|cpp/utility/optional/dsc reset}}
+{{dsc inc|cpp/utility/optional/dsc emplace}}
+{{dsc end}}
+}}
+
+===Notes===
+A {{rev inl|until=c++23|{{tti|copyable-box}}}}{{rev inl|since=c++23|{{tti|movable-box}}}} does not contain a value only if
+* {{tt|T}} does not model {{lconcept|movable}} or {{lconcept|copyable}}, and an exception is thrown on move assignment or copy assignment respectively, or
+* it is initialized/assigned from another valueless wrapper.
+
+Before {{wg21|P2325R3}}, the wrapper was called {{tt|''semiregular-box''}} in the standard and always satisfied {{lconcept|semiregular}}, as the default constructor was always provided (which might construct a valueless wrapper).
+
+{{ftm begin|std=1|sort=1|comment=1}}
+{{ftm|value=201911L|std=C++20|__cpp_lib_ranges|rowspan="3"|[[cpp/ranges|Ranges library]] and [[cpp/algorithm/ranges|constrained algorithms]]}}
+{{ftm|value=202106L|std=C++20|dr=yes|-|Non-[[cpp/concepts/default_initializable|default-initializable]] [[cpp/ranges/view|view]]s}}
+{{ftm|value=202207L|std=C++23|-|Relaxing [[cpp/ranges#Range adaptors|range adaptors]] to allow for move-only types}}
+{{ftm end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2325R3|std=C++20|before=if {{tt|T}} is not {{lconcept|default_initializable}}, the default constructor&lt;br&gt;constructs a wrapper which does not contain a value|after=the wrapper is also&lt;br&gt;not {{lconcept|default_initializable}}}}
+{{dr list item|wg=lwg|dr=3572|std=C++20|before=conditionally different assignment operators were not constexpr|after=made constexpr}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc single_view}}
+{{dsc inc|cpp/ranges/dsc repeat_view}}
+{{dsc inc|cpp/ranges/dsc filter_view}}
+{{dsc inc|cpp/ranges/dsc transform_view}}
+{{dsc inc|cpp/ranges/dsc take_while_view}}
+{{dsc inc|cpp/ranges/dsc drop_while_view}}
+{{dsc inc|cpp/ranges/dsc zip_transform_view}}
+{{dsc inc|cpp/ranges/dsc adjacent_transform_view}}
+{{dsc end}}
+
+{{langlinks|ar|cs|de|es|fr|it|ja|ko|pl|pt|ru|tr|zh}}

@@ -1,0 +1,604 @@
+{{title|Namespaces}}
+{{cpp/language/declarations/navbar}}
+
+Namespaces provide a method for preventing name conflicts in large projects.
+
+Entities declared inside a namespace block are placed in a namespace scope, which prevents them from being mistaken for identically-named entities in other scopes.
+
+Entities declared outside all namespace blocks belong to the ''global namespace''. The global namespace belongs to the {{rlp|scope|global scope}}, and can be referred to explicitly with a leading {{tt|::}}. While it has no declaration, the global namespace is not an [[#Unnamed namespaces|unnamed namespace]].
+
+Multiple namespace blocks with the same name are allowed. All declarations within these blocks are declared in the same namespace scope.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|namespace}} {{spar|ns-name}} {{ttb|{}} {{spar|declarations}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc|num=2|notes={{mark since c++11}}|
+{{ttb|inline}} {{ttb|namespace}} {{spar|ns-name}} {{ttb|{}} {{spar|declarations}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc|num=3|
+{{ttb|namespace}} {{ttb|{}} {{spar|declarations}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc|num=4|
+{{spar|ns-name}} {{ttb|::}} {{spar|member-name}}
+}}
+{{sdsc|num=5|
+{{ttb|using}} {{ttb|namespace}} {{spar|ns-name}} {{ttb|;}}
+}}
+{{sdsc|num=6|
+{{ttb|using}} {{spar|ns-name}} {{ttb|::}} {{spar|member-name}} {{ttb|;}}
+}}
+{{sdsc|num=7|
+{{ttb|namespace}} {{spar|name}} {{ttb|{{=}}}} {{spar|qualified-namespace}} {{ttb|;}}
+}}
+{{sdsc|num=8|notes={{mark since c++17}}|
+{{ttb|namespace}} {{spar|ns-name}} {{ttb|::}} {{spar|member-name}} {{ttb|{}} {{spar|declarations}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc|num=9|notes={{mark since c++20}}|
+{{ttb|namespace}} {{spar|ns-name}} {{ttb|::}} {{ttb|inline}} {{spar|member-name}} {{ttb|{}} {{spar|declarations}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc end}}
+
+@1@ [[#Namespaces|Named namespace definition]] for the namespace {{spar|ns-name}}.
+@2@ [[#Inline namespaces|Inline namespace definition]] for the namespace {{spar|ns-name}}. Declarations inside {{spar|ns-name}} will be visible in its enclosing namespace.
+@3@ [[#Unnamed namespaces|Unnamed namespace definition]]. Its members have potential scope from their point of declaration to the end of the translation unit, and have {{rlp|storage duration|internal linkage}}.
+@4@ Namespace names (along with class names) can appear on the left hand side of the scope resolution operator, as part of {{rlp|lookup|qualified name lookup}}.
+@5@ [[#Using-directives|using-directive]]: From the point of view of unqualified {{rlp|lookup|name lookup}} of any name after a using-directive and until the end of the scope in which it appears, every name from {{spar|ns-name}} is visible as if it were declared in the nearest enclosing namespace which contains both the using-directive and {{spar|ns-name}}.
+@6@ [[#Using-declarations|using-declaration]]: makes the symbol {{spar|member-name}} from the namespace {{spar|ns-name}} accessible for {{rlp|lookup|unqualified lookup}} as if declared in the same class scope, block scope, or namespace as where this using-declaration appears.
+@7@ {{spar|namespace-alias-definition}}: makes {{spar|name}} a synonym for another namespace: see {{rlp|namespace alias}}
+@8@ nested namespace definition: {{c|namespace A::B::C { ... } }} is equivalent to {{c|namespace A { namespace B { namespace C { ... } } } }}.
+@9@ nested inline namespace definition: {{c| namespace A::B::inline C { ... } }} is equivalent to {{c|namespace A::B { inline namespace C { ... } } }}. {{c|inline}} may appear in front of every namespace name except the first: {{c|namespace A::inline B::C {} }} is equivalent to {{c| namespace A { inline namespace B { namespace C {} } } }}.
+
+===Explanation===
+====Namespaces====
+{{sdsc begin}}
+{{sdsc|1=
+{{ttb|inline}}{{mark optional}} {{ttb|namespace}} {{spar optional|attr}} {{spar|identifier}} {{ttb|{ }} {{spar|namespace-body}} {{ttb|} }} }}
+{{sdsc end}}
+{{par begin}}
+{{par|{{tt|inline}}|{{mark since c++11}} if present, makes this an inline namespace (see below). Cannot appear on the ''extension-namespace-definition'' if the ''original-namespace-definition'' did not use {{tt|inline}} }}
+{{par|{{spar|attr}}|{{mark since c++17}} optional sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|identifier}}|either
+* a previously unused identifier, in which case this is ''original-namespace-definition'';
+
+* the name of a namespace, in which case this is ''extension-namespace-definition'';
+
+{{rrev|since=c++17|
+* a sequence of enclosing namespace specifiers separated by {{tt|::}}, ending with {{spar|identifier}}, in which case this is a ''nested-namespace-definition''}}}}
+{{par|{{spar|namespace-body}}|possibly empty sequence of {{rlp|declarations}} of any kind (including class and function definitions as well as nested namespaces)}}
+{{par end}}
+
+Namespace definitions are only allowed at namespace scope, including the global scope.
+
+To reopen an existing namespace (formally, to be an ''extension-namespace-definition''), the lookup for the {{spar|identifier}} used in the namespace definition must resolve to a namespace name (not a namespace alias), that was declared as a member of the enclosing namespace or of an inline namespace within an enclosing namespace.
+
+The {{spar|namespace-body}} defines a {{rlp|scope|namespace scope}}, which affects {{rlp|lookup|name lookup}}.
+
+All names introduced by the declarations that appear within {{spar|namespace-body}} (including nested namespace definitions) become members of the namespace {{spar|identifier}}, whether this namespace definition is the original namespace definition (which introduced {{spar|identifier}}), or an extension namespace definition (which "reopened" the already defined namespace)
+
+A namespace member that was declared within a namespace body may be defined or redeclared outside of it using explicit qualification
+{{source|1=
+namespace Q
+{
+    namespace V   // V is a member of Q, and is fully defined within Q
+    { // namespace Q::V { // C++17 alternative to the lines above
+        class C { void m(); }; // C is a member of V and is fully defined within V
+                               // C::m is only declared
+        void f(); // f is a member of V, but is only declared here
+    }
+    
+    void V::f() // definition of V's member f outside of V
+                // f's enclosing namespaces are still the global namespace, Q, and Q::V
+    {
+        extern void h(); // This declares ::Q::V::h
+    }
+    
+    void V::C::m() // definition of V::C::m outside of the namespace (and the class body)
+                   // enclosing namespaces are the global namespace, Q, and Q::V
+    {}
+}
+}}
+
+Out-of-namespace definitions and redeclarations are only allowed
+* after the point of declaration, 
+* at namespace scope, and
+* in namespaces that enclose the original namespace (including the global namespace).
+Also, they must use qualified-id syntax.
+
+{{source|1=
+namespace Q
+{
+    namespace V    // original-namespace-definition for V
+    {
+        void f();  // declaration of Q::V::f
+    }
+    
+    void V::f() {} // OK
+    void V::g() {} // Error: g() is not yet a member of V
+    
+    namespace V    // extension-namespace-definition for V
+    {
+        void g();  // declaration of Q::V::g
+    }
+}
+
+namespace R           // not an enclosing namespace for Q
+{
+    void Q::V::g() {} // Error: cannot define Q::V::g inside R
+}
+
+void Q::V::g() {}     // OK: global namespace encloses Q
+}}
+
+Names introduced by {{rlp|friend}} declarations within a non-local class X become members of the innermost enclosing namespace of X, but they do not become visible to ordinary {{rlp|lookup|name lookup}} (neither {{rlp|unqualified lookup|unqualified}} nor {{rlp|qualified lookup|qualified}}) unless a matching declaration is provided at namespace scope, either before or after the class definition. Such name may be found through {{rlp|adl|ADL}} which considers both namespaces and classes.
+
+Only the innermost enclosing namespace is considered by such friend declaration when deciding whether the name would conflict with a previously declared name.
+
+{{source|1=
+void h(int);
+namespace A
+{
+    class X
+    {
+        friend void f(X);       // A::f is a friend
+        
+        class Y
+        {
+            friend void g();    // A::g is a friend
+            friend void h(int); // A::h is a friend, no conflict with ::h
+        };
+    };
+    // A::f, A::g and A::h are not visible at namespace scope
+    // even though they are members of the namespace A
+    
+    X x;
+    void g()  // definition of A::g
+    {
+        f(x); // A::X::f is found through ADL
+    }
+    
+    void f(X) {}   // definition of A::f
+    void h(int) {} // definition of A::h
+    // A::f, A::g and A::h are now visible at namespace scope
+    // and they are also friends of A::X and A::X::Y
+}
+}}
+
+{{rrev|since=c++11|
+====Inline namespaces====
+An inline namespace is a namespace that uses the optional keyword {{tt|inline}} in its ''original-namespace-definition''. 
+
+Members of an inline namespace are treated as if they are members of the enclosing namespace in many situations (listed below). This property is transitive: if a namespace N contains an inline namespace M, which in turn contains an inline namespace O, then the members of O can be used as though they were members of M or N. 
+
+* A ''using-directive'' that names the inline namespace is implicitly inserted in the enclosing namespace (similar to the implicit using-directive for the unnamed namespace)
+* In {{rlp|adl|argument-dependent lookup}}, when a namespace is added to the set of associated namespaces, its inline namespaces are added as well, and if an inline namespace is added to the list of associated namespaces, its enclosing namespace is added as well.
+* Each member of an inline namespace can be partially specialized,{{mark unreviewed dr|CWG|1819}} explicitly instantiated, or explicitly specialized as if it were a member of the enclosing namespace.
+* Qualified {{rlp|lookup|name lookup}} that examines the enclosing namespace will include the names from the inline namespaces even if the same name is present in the enclosing namespace.
+
+{{source|1=
+// in C++14, std::literals and its member namespaces are inline
+{
+    using namespace std::string_literals; // makes visible operator""s 
+                                          // from std::literals::string_literals
+    auto str = "abc"s;
+}
+
+{
+    using namespace std::literals; // makes visible both
+                                   // std::literals::string_literals::operator""s
+                                   // and std::literals::chrono_literals::operator""s
+    auto str = "abc"s;
+    auto min = 60s;
+}
+
+{
+    using std::operator""s; // makes both std::literals::string_literals::operator""s
+                            // and std::literals::chrono_literals::operator""s visible
+    auto str = "abc"s;
+    auto min = 60s;
+}
+}}
+
+Note: the rule about specializations allows library versioning: different implementations of a library template may be defined in different inline namespaces, while still allowing the user to extend the parent namespace with an explicit specialization of the primary template:
+
+{{example|code=
+namespace Lib
+{
+    inline namespace Lib_1
+    {
+        template&lt;typename T&gt; class A; 
+    }
+
+    template&lt;typename T&gt; void g(T) { /* ... */ }
+}
+/* ... */
+struct MyClass { /* ... */ };
+namespace Lib
+{
+    template&lt;&gt; class A&lt;MyClass&gt; { /* ... */ };
+}
+
+int main()
+{
+    Lib::A&lt;MyClass&gt; a;
+    g(a);  // ok, Lib is an associated namespace of A
+}
+}}
+}}
+
+====Unnamed namespaces====
+The ''unnamed-namespace-definition'' is a namespace definition of the form
+{{sdsc begin}}
+{{sdsc|1=
+{{ttb|inline}}{{mark optional}} {{ttb|namespace}} {{spar optional|attr}} {{ttb|{ }} {{spar|namespace-body}} {{ttb|} }} }}
+{{sdsc end}}
+{{par begin}}
+{{par|{{tt|inline}}|{{mark since c++11}} if present, makes this an inline namespace}}
+{{par|{{spar|attr}}|{{mark since c++17}} optional sequence of any number of {{rlp|attributes}}}}
+{{par end}}
+This definition is treated as a definition of a namespace with unique name and a ''using-directive'' in the current scope that nominates this unnamed namespace (Note: implicitly added using directive makes namespace available for the {{rlp|qualified lookup|qualified name lookup}} and {{rlp|unqualified lookup|unqualified name lookup}}, but not for the {{rlp|adl|argument-dependent lookup}}).
+The unique name is unique over the entire program, but within a translation unit each unnamed namespace definition maps to the same unique name: multiple unnamed namespace definitions in the same scope denote the same unnamed namespace.
+
+{{source|
+namespace
+{
+    int i; // defines ::(unique)::i
+}
+
+void f()
+{
+    i++;   // increments ::(unique)::i
+}
+
+namespace A
+{
+    namespace
+    {
+        int i;        // A::(unique)::i
+        int j;        // A::(unique)::j
+    }
+    
+    void g() { i++; } // A::(unique)::i++
+}
+
+using namespace A; // introduces all names from A into global namespace
+
+void h()
+{
+    i++;    // error: ::(unique)::i and ::A::(unique)::i are both in scope
+    A::i++; // ok, increments ::A::(unique)::i
+    j++;    // ok, increments ::A::(unique)::j
+}
+}}
+
+{{rrev multi|until1=c++11
+|rev1=
+Even though names in an unnamed namespace may be declared with external linkage, they are never accessible from other translation units because their namespace name is unique.
+|rev2=
+Unnamed namespaces as well as all namespaces declared directly or indirectly within an unnamed namespace have {{rlp|storage duration#Linkage|internal linkage}}, which means that any name that is declared within an unnamed namespace has internal linkage.
+}}
+
+====Using-declarations====
+Introduces a name that is defined elsewhere into the declarative region where this using-declaration appears.
+
+{{sdsc begin}}
+{{sdsc|1=
+{{ttb|using}} {{ttb|typename}}{{mark optional}} {{spar|nested-name-specifier}} {{spar|unqualified-id}} {{ttb|;}}|notes={{mark until c++17}}
+}}
+{{sdsc|{{ttb|using}} {{spar|declarator-list}} {{ttb|;}}|notes={{mark since c++17}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{ttb|typename}}|the keyword {{tt|typename}} may be used as necessary to resolve {{rlp|dependent name}}s, when the using-declaration introduces a member type from a base class into a class template}}
+{{par|{{spar|nested-name-specifier}}|a sequence of names and scope resolution operators {{tt|::}}, ending with a scope resolution operator. A single {{tt|::}} refers to the global namespace.}}
+{{par|{{spar|unqualified-id}}|an {{rlp|identifiers|id-expression}} }}
+{{par|{{spar|declarator-list}}|comma-separated list of one or more declarators of the form {{ttb|typename}}{{mark optional}} {{spar|nested-name-specifier}} {{spar|unqualified-id}}. A declarator may be followed by an ellipsis to indicate {{rlp|parameter pack|pack expansion}}, although that form is only meaningful in {{rlp|using declaration|derived class definitions}} }}
+{{par end}}
+
+Using-declarations can be used to introduce namespace members into other namespaces and block scopes, or to introduce base class members into derived class definitions{{rev inl|since=c++20|, or to introduce {{rlp|enum|enumerators}} into namespaces, block, and class scopes}}.
+{{rrev|since=c++17|
+A using-declaration with more than one using-declarator is equivalent to a corresponding sequence of using-declarations with one using-declarator.
+}}
+
+For the use in derived class definitions, see {{rlp|using declaration}}.
+
+Names introduced into a namespace scope by a using-declaration can be used just like any other names, including qualified lookup from other scopes:
+{{source|1=
+void f();
+namespace A
+{
+    void g();
+}
+
+namespace X
+{
+    using ::f;        // global f is now visible as ::X::f
+    using A::g;       // A::g is now visible as ::X::g
+    using A::g, A::g; // (C++17) OK: double declaration allowed at namespace scope
+}
+
+void h()
+{
+    X::f(); // calls ::f
+    X::g(); // calls A::g
+}
+}}
+
+If, after the using-declaration was used to take a member from a namespace, the namespace is extended and additional declarations for the same name are introduced, those additional declarations do not become visible through the using-declaration (in contrast with using-directive). One exception is when a using-declaration names a class template: partial specializations introduced later are effectively visible, because their {{rlp|lookup}} proceeds through the primary template.
+{{source|1=
+namespace A
+{
+    void f(int);
+}
+using A::f; // ::f is now a synonym for A::f(int)
+
+namespace A       // namespace extension
+{
+    void f(char); // does not change what ::f means
+}
+
+void foo()
+{
+    f('a'); // calls f(int), even though f(char) exists.
+}
+
+void bar()
+{
+    using A::f; // this f is a synonym for both A::f(int) and A::f(char)
+    f('a');     // calls f(char)
+}
+}}
+
+Using-declarations cannot name {{rlps|templates#template-id}}, or namespace{{rev inl|until=c++20|, or a scoped enumerator}}. Each declarator in a using-declaration introduces one and only one name, for example using-declaration for an {{rlp|enum|enumeration}} does not introduce any of its enumerators.
+
+All restrictions on regular declarations of the same names, hiding, and overloading rules apply to using-declarations:
+
+{{source|1=
+namespace A
+{
+    int x;
+}
+
+namespace B
+{
+    int i;
+    struct g {};
+    struct x {};
+    
+    void f(int);
+    void f(double);
+    void g(char); // OK: function name g hides struct g
+}
+
+void func()
+{
+    int i;
+    using B::i;   // error: i declared twice
+
+    void f(char);
+    using B::f;   // OK: f(char), f(int), f(double) are overloads
+    f(3.5);       // calls B::f(double)
+
+    using B::g;
+    g('a');       // calls B::g(char)
+    struct g g1;  // declares g1 to have type struct B::g
+
+    using B::x;
+    using A::x;   // OK: hides struct B::x
+    x = 99;       // assigns to A::x
+    struct x x1;  // declares x1 to have type struct B::x
+}
+}}
+
+If a function was introduced by a using-declaration, declaring a function with the same name and parameter list is ill-formed (unless the declaration is for the same function). If a function template was introduced by a using-declaration, declaring a function template with the same name, parameter type list, return type, and template parameter list is ill-formed.
+Two using-declarations can introduce functions with the same name and parameter list, but if a call to that function is attempted, the program is ill-formed. 
+
+{{source|1=
+namespace B
+{
+    void f(int);
+    void f(double);
+}
+
+namespace C
+{
+    void f(int);
+    void f(double);
+    void f(char);
+}
+
+void h()
+{
+    using B::f;  // introduces B::f(int), B::f(double)
+    using C::f;  // introduces C::f(int), C::f(double), and C::f(char)
+    f('h');      // calls C::f(char)
+    f(1);        // error: B::f(int) or C::f(int)?
+    void f(int); // error: f(int) conflicts with C::f(int) and B::f(int)
+}
+}}
+
+If an entity is declared, but not defined in some inner namespace, and then declared through using-declaration in the outer namespace, and then a definition appears in the outer namespace with the same unqualified name, that definition is a member of the outer namespace and conflicts with the using-declaration:
+{{source|1=
+namespace X
+{
+    namespace M
+    {
+        void g(); // declares, but doesn't define X::M::g()
+    }
+    using M::g;
+    
+    void g();     // Error: attempt to declare X::g which conflicts with X::M::g()
+}
+}}
+
+More generally, a declaration that appears in any namespace scope and introduces a name using an unqualified identifier always introduces a member into the namespace it's in and not to any other namespace. The exceptions are explicit instantiations and explicit specializations of a primary template that is defined in an inline namespace: because they do not introduce a new name, they may use unqualified-id in an enclosing namespace.
+
+====Using-directives====
+A ''using-directive'' is a {{rlp|declarations|block-declaration}} with the following syntax:
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|using}} {{ttb|namespace}} {{spar optional|nested-name-specifier}} {{spar|namespace-name}} {{ttb|;}} }}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}} that apply to this using-directive}}
+{{par|{{spar|nested-name-specifier}}|a sequence of names and scope resolution operators {{tt|::}}, ending with a scope resolution operator. A single {{tt|::}} refers to the global namespace. When looking up the names in this sequence, {{rlp|lookup}} considers namespace declarations only}}
+{{par|{{spar|namespace-name}}|a name of a namespace. When looking up this name, {{rlp|lookup}} considers namespace declarations only}}
+{{par end}}
+
+Using-directives are allowed only in namespace {{rlp|scope}} and in block scope. From the point of view of {{rlp|unqualified lookup|unqualified name lookup}} of any name after a using-directive and until the end of the scope in which it appears, every name from {{spar|namespace-name}} is visible as if it were declared in the nearest enclosing namespace which contains both the using-directive and {{spar|namespace-name}}.
+
+Using-directive does not add any names to the declarative region in which it appears (unlike the using-declaration), and thus does not prevent identical names from being declared.
+
+Using-directives are transitive for the purposes of {{rlp|unqualified lookup|unqualified lookup}}: if a scope contains a using-directive that nominates a {{spar|namespace-name}}, which itself contains using-directive for some {{spar|namespace-name-2}}, the effect is as if the using directives from the second namespace appear within the first. The order in which these transitive namespaces occur does not influence name lookup.
+{{source|1=
+namespace A
+{
+    int i;
+}
+
+namespace B
+{
+    int i;
+    int j;
+    
+    namespace C
+    {
+        namespace D
+        {
+            using namespace A;
+            // Names from A are "injected" into D.
+            // Unqualified lookup within D considers these names to have the same
+            // scope as the global scope (e.g. for the purposes of name hiding).
+            // Qualified lookup referring to D (D::name for some name)
+            // will find the same name as unqualified lookup within D.
+            
+            int j;
+            int k;
+            int a = i;   // i is B::i, because A::i is hidden by B::i
+            int b = ::i; // error: there is still no i in the global namespace
+        }
+        
+        using namespace D; // names from D and A are injected into C
+        
+        int k = 89; // OK to declare name identical to one introduced by a using
+        int l = k;  // ambiguous: C::k or D::k
+        int m = i;  // ok: B::i hides A::i
+        int n = j;  // ok: D::j hides B::j
+    }
+}
+
+// These are all equivalent definitions:
+int t0 = B::i;
+int t1 = B::C::a;
+int t2 = B::C::D::a;
+}}
+
+If, after a using-directive was used to nominate some namespace, the namespace is extended and additional members and/or using-directives are added to it, those additional members and the additional namespaces are visible through the using-directive (in contrast with using-declaration)
+
+{{source|
+namespace D
+{
+    int d1;
+    void f(char);
+}
+using namespace D; // introduces D::d1, D::f, D::d2, D::f,
+                   // E::e, and E::f into global namespace!
+
+int d1;            // OK: no conflict with D::d1 when declaring
+
+namespace E
+{
+    int e;
+    void f(int);
+}
+
+namespace D            // namespace extension
+{
+    int d2;
+    using namespace E; // transitive using-directive
+    void f(int);
+}
+
+void f()
+{
+    d1++;    // error: ambiguous ::d1 or D::d1?
+    ::d1++;  // OK
+    D::d1++; // OK
+    d2++;    // OK, d2 is D::d2
+    
+    e++;     // OK: e is E::e due to transitive using
+    
+    f(1);    // error: ambiguous: D::f(int) or E::f(int)?
+    f('a');  // OK: the only f(char) is D::f(char)
+}
+}}
+
+===Notes===
+The using-directive {{c|using namespace std;}} at any namespace scope introduces every name from the namespace {{tt|std}} into the global namespace (since the global namespace is the nearest namespace that contains both {{tt|std}} and any user-declared namespace), which may lead to undesirable name collisions. This, and other using directives are generally considered bad practice at file scope of a header file ([https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rs-using-directive SF.7: Don’t write {{c|using namespace}} at global scope in a header file]).
+
+{{feature test macro|std=C++17|value=201411L|__cpp_namespace_attributes|{{rlp|attributes|Attributes}} for namespaces}}
+
+===Keywords===
+{{ltt|cpp/keyword/namespace}},
+{{ltt|cpp/keyword/using}},
+{{ltt|cpp/keyword/inline}}
+
+===Example===
+{{example
+|This example shows how to use a namespace to create a class that already has been named in the {{tt|std}} namespace. 
+|code=
+#include &lt;vector&gt;
+
+namespace vec
+{
+    template&lt;typename T&gt;
+    class vector
+    {
+        // ...
+    };
+} // of vec
+
+int main()
+{
+    std::vector&lt;int&gt; v1; // Standard vector.
+    vec::vector&lt;int&gt; v2; // User defined vector.
+
+    // v1 = v2;          // Error: v1 and v2 are different object's type.
+
+    {
+        using namespace std;
+        vector&lt;int&gt; v3;  // Same as std::vector
+        v1 = v3; // OK
+    }
+
+    {
+        using vec::vector;
+        vector&lt;int&gt; v4;  // Same as vec::vector
+        v2 = v4; // OK
+    }
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=101|std=C++98|before=the program is ill-formed if a function declaration in namespace&lt;br&gt;scope or block scope and a function introduced by a&lt;br&gt;using-declaration declare the same function (no ambiguity)|after=allowed}}
+{{dr list item|wg=cwg|dr=373|std=C++98|before=lookup only considered namespace declarations only for&lt;br&gt;the last name in the operand of a using-directive (which is&lt;br&gt;sub-optimal, because classes cannot contain namespaces)|after=the lookup restriction&lt;br&gt;applies to all names in the&lt;br&gt;operands of using-directives}}
+{{dr list item|wg=cwg|dr=460|std=C++98|before=a using-declaration could name a namespace|after=prohibited}}
+{{dr list item|wg=cwg|dr=565|std=C++98|before=a using-declaration cannot introduce a function&lt;br&gt;identical to another function in the same scope, but&lt;br&gt;the restriction was not applied to function templates|after=apply the same restriction&lt;br&gt;to function templates as well}}
+{{dr list item|wg=cwg|dr=986|std=C++98|before=using-directive was transitive for qualified lookup|after=only transitive for unqualified lookup}}
+&lt;!-- DR 987/1021/1831 basically refer to the same defect, the items listed here simply demonstrate the same resolution in different aspects --&gt;
+{{dr list item|wg=cwg|dr=987|std=C++98|before=entities declared in a nested namespace was&lt;br&gt;also members of the enclosing namespace|after=nested scopes excluded}}
+{{dr list item|wg=cwg|dr=1021|std=C++98|before=it was unclear whether an entity whose definition&lt;br&gt;is introduced to a namespace via using-declaration&lt;br&gt;is considered to be defined in that namespace|after=not defined in that namespace}} 
+{{dr list item|wg=cwg|dr=1838|std=C++98|before=unqualified definition in an outer namespace&lt;br&gt;could define an entity declared, but not defined in&lt;br&gt;another namespace and pulled in by a using|after=unqualified definition&lt;br&gt;always refers to&lt;br&gt;its namespace}}
+{{dr list item|wg=cwg|dr=2155|std=C++98|before=the resolution of {{cwg|1838}} was not&lt;br&gt;applied to class and enumeration declarations|after=applied}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc namespace alias}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

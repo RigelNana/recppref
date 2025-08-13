@@ -1,0 +1,369 @@
+{{title|Structured binding declaration {{mark since c++17}}}}
+{{cpp/language/declarations/navbar}}
+Binds the specified names to subobjects or elements of the initializer.
+
+Like a reference, a structured binding is an alias to an existing object. Unlike a reference, a structured binding does not have to be of a reference type.
+
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|attr}} {{spar|decl-specifier-seq}} {{spar optional|ref-qualifier}} {{ttb|[}} {{spar|sb-identifier-list}} {{ttb|]}} {{spar sep|initializer}}{{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|decl-specifier-seq}}|sequence of the following specifiers (following the rules of {{rlpsd|declarations#Simple declaration}}):
+{{rrev|since=c++26|
+* {{rlpt|constexpr}}
+* {{rlpt|constinit}}
+}}
+* {{ltt|cpp/keyword/static}}
+* {{ltt|cpp/keyword/thread_local}}
+* {{ltt|cpp/keyword/const}}
+* {{ltt|cpp/keyword/volatile}} {{mark deprecated c++20}}
+* {{rlpt|auto}}}}
+{{par|{{spar|ref-qualifier}}|either {{ttb|&amp;}} or {{ttb|&amp;&amp;}}}}
+{{par|{{spar|sb-identifier-list}}|list of comma-separated identifiers introduced by this declaration{{rev inl|since=c++26|, each identifier may be followed by an {{rlp|attributes|attribute specifier sequence}}}}}}
+{{par|{{spar|initializer}}|an initializer (see below)}}
+{{par end}}
+
+
+{{spar|initializer}} may be one of the following:
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|1==}} {{spar|expression}}
+}}
+{{sdsc|num=2|
+{{ttb|{}} {{spar|expression}} {{ttb|}}}
+}}
+{{sdsc|num=3|
+{{ttb|(}} {{spar|expression}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|expression}}|any expression (except unparenthesized {{rlp|operator other#Built-in comma operator|comma expressions}})}}
+{{par end}}
+
+
+A structured binding declaration introduces all identifiers in the {{spar|sb-identifier-list}} as names in the surrounding scope and binds them to subobjects or elements of the object denoted by {{spar|expression}}. The bindings so introduced are called ''structured bindings''.
+
+{{rrev|since=c++26|
+One of the identifiers in the {{spar|sb-identifier-list}} can be preceded by an ellipsis. Such an identifier introduces a ''structured binding pack''.
+
+The identifier must declare a {{rlpsd|templates#Templated entity}}.
+}}
+
+A structured binding is an identifier in the {{spar|sb-identifier-list}}{{sep}}{{rev inl|since=c++26| that is not preceded by an ellipsis, or an element of a structured binding pack introduced in the same identifier list}}.
+
+===Binding process===
+A structured binding declaration first introduces a uniquely-named variable (here denoted by {{c|e}}) to hold the value of the initializer, as follows:
+* If {{spar|expression}} has array type ''cv1'' {{tt|A}} and no {{spar|ref-qualifier}} is present, define {{c|e}} as {{box|{{spar optional|attr}} {{spar|specifiers}} {{tt|A e;}}}}, where {{spar|specifiers}} is a sequence of the specifiers in {{spar|decl-specifier-seq}} excluding {{c/core|auto}}.
+: Then each element of {{c|e}} is initialized from the corresponding element of {{spar|expression}} as specified by the form of {{spar|initializer}}{{sep}}:
+:* For initializer syntax {{v|1}}, the elements are {{rlp|copy initialization|copy-initialized}}.
+:* For initializer syntaxes {{v|2,3}}, the elements are {{rlp|direct initialization|direct-initialized}}.
+* Otherwise, define {{c|e}} as {{box|{{spar optional|attr}} {{spar|decl-specifier-seq}} {{spar optional|ref-qualifier}} {{tt|e}} {{spar sep|initializer}}{{tt|;}}}}.
+
+We use {{tt|E}} to denote the type of the identifier expression {{c|e}} (i.e., {{tt|E}} is the equivalent of {{c/core|std::remove_reference_t&lt;decltype((e))&gt;}}).
+
+A ''structured binding size'' of {{tt|E}} is the number of structured bindings that need to be introduced by the structured binding declaration.
+
+{{rev begin}}
+{{rev|until=c++26|
+The number of identifiers in {{spar|sb-identifier-list}} must be equal to the structured binding size of {{tt|E}}.
+}}
+{{rev|since=c++26|
+Given the number of identifiers in {{spar|sb-identifier-list}} as {{c|N}} and the structured binding size of {{tt|E}} as {{c|S}}:
+* If there is no structured binding pack, {{c|N}} must be equal to {{c|S}}.
+* Otherwise, the number of non-pack elements (i.e., {{c|N - 1}}) must be less than or equal to {{c|S}}, and the number of elements of the structured binding pack is {{c|S - N + 1}} (which can be zero).
+}}
+{{rev end}}
+
+{{source|1=
+struct C { int x, y, z; };
+
+template&lt;class T&gt;
+void now_i_know_my() 
+{
+    auto [a, b, c] = C(); // OK: a, b, c refer to x, y, z, respectively
+    auto [d, ...e] = C(); // OK: d refers to x; ...e refers to y and z
+    auto [...f, g] = C(); // OK: ...f refers x and y; g refers to z
+    auto [h, i, j, ...k] = C();    // OK: the pack k is empty
+    auto [l, m, n, o, ...p] = C(); // error: structured binding size is too small
+}
+}}
+
+A structured binding declaration performs the binding in one of three possible ways, depending on {{tt|E}}:
+* Case 1: If {{tt|E}} is an array type, then the names are bound to the array elements.
+* Case 2: If {{tt|E}} is a non-union class type and {{c/core|std::tuple_size&lt;E&gt;}} is a complete type with a member named {{tt|value}} (regardless of the type or accessibility of such member), then the "tuple-like" binding protocol is used.
+* Case 3: If {{tt|E}} is a non-union class type but {{c/core|std::tuple_size&lt;E&gt;}} is not a complete type, then the names are bound to the accessible data members of {{tt|E}}.
+
+Each of the three cases is described in more detail below. 
+
+Each structured binding has a ''referenced type'', defined in the description below. This type is the type returned by {{rlpt|decltype}} when applied to an unparenthesized structured binding.
+
+====Case 1: binding an array====
+Each structured binding in the {{spar|sb-identifier-list}} becomes the name of an lvalue that refers to the corresponding element of the array. The structured binding size of {{tt|E}} is equal to the number of array elements.
+
+The ''referenced type'' for each structured binding is the array element type. Note that if the array type {{tt|E}} is cv-qualified, so is its element type.
+
+{{source|1=
+int a[2] = {1, 2};
+
+auto [x, y] = a;    // creates e[2], copies a into e,
+                    // then x refers to e[0], y refers to e[1]
+auto&amp; [xr, yr] = a; // xr refers to a[0], yr refers to a[1]
+}}
+
+====Case 2: binding a type implementing the tuple operations====
+The expression {{c|std::tuple_size&lt;E&gt;::value}} must be a well-formed {{rlpsd|constant expression#Integral constant expression}}, and the structured binding size of {{tt|E}} is equal to {{c|std::tuple_size&lt;E&gt;::value}}.
+
+For each structured binding, a variable whose type is "reference to {{c/core|std::tuple_element&lt;I, E&gt;::type}}" is introduced: lvalue reference if its corresponding initializer is an lvalue, rvalue reference otherwise. The initializer for the {{c|I}}th variable is
+* {{c|e.get&lt;I&gt;()}}, if lookup for the identifier {{tt|get}} in the scope of {{tt|E}} by class member access lookup finds at least one declaration that is a function template whose first template parameter is a non-type parameter
+* Otherwise, {{c|get&lt;I&gt;(e)}}, where {{c|get}} is looked up by {{rlp|adl|argument-dependent lookup}} only, ignoring non-ADL lookup.
+
+In these initializer expressions, {{c|e}} is an lvalue if the type of the entity {{c|e}} is an lvalue reference (this only happens if the {{spar|ref-qualifier}} is {{ttb|&amp;}} or if it is {{ttb|&amp;&amp;}} and the initializer expression is an lvalue) and an xvalue otherwise (this effectively performs a kind of perfect forwarding), {{c|I}} is a {{lc|std::size_t}} prvalue, and {{c|&lt;I&gt;}} is always interpreted as a template parameter list. 
+
+The variable has the same {{rlp|storage duration}} as {{c|e}}.
+
+The structured binding then becomes the name of an lvalue that refers to the object bound to said variable.
+
+The ''referenced type'' for the {{c|I}}th structured binding is {{c/core|std::tuple_element&lt;I, E&gt;::type}}.
+
+{{source|1=
+float x{};
+char  y{};
+int   z{};
+
+std::tuple&lt;float&amp;, char&amp;&amp;, int&gt; tpl(x, std::move(y), z);
+const auto&amp; [a, b, c] = tpl;
+// using Tpl = const std::tuple&lt;float&amp;, char&amp;&amp;, int&gt;;
+// a names a structured binding that refers to x (initialized from get&lt;0&gt;(tpl))
+// decltype(a) is std::tuple_element&lt;0, Tpl&gt;::type, i.e. float&amp;
+// b names a structured binding that refers to y (initialized from get&lt;1&gt;(tpl))
+// decltype(b) is std::tuple_element&lt;1, Tpl&gt;::type, i.e. char&amp;&amp;
+// c names a structured binding that refers to the third component of tpl, get&lt;2&gt;(tpl)
+// decltype(c) is std::tuple_element&lt;2, Tpl&gt;::type, i.e. const int
+}}
+
+====Case 3: binding to data members====
+Every non-static data member of {{tt|E}} must be a direct member of {{tt|E}} or the same base class of {{tt|E}}, and must be well-formed in the context of the structured binding when named as {{c|e.name}}. {{tt|E}} may not have an anonymous union member. The structured binding size of {{tt|E}} is equal to the number of non-static data members.
+
+Each structured binding in {{spar|sb-identifier-list}} becomes the name of an lvalue that refers to the next member of {{c|e}} in declaration order (bit-fields are supported); the type of the lvalue is that of {{c|e.mI}}, where {{tt|mI}} refers to the {{c|I}}th member.
+
+The ''referenced type'' of the {{c|I}}th structured binding is the type of {{c|e.mI}} if it is not a reference type, or the declared type of {{tt|mI}} otherwise.
+{{source|1=
+#include &lt;iostream&gt;
+
+struct S
+{
+    mutable int x1 : 2;
+    volatile double y1;
+};
+
+S f() { return S{1, 2.3}; }
+
+int main()
+{
+    const auto [x, y] = f(); // x is an int lvalue identifying the 2-bit bit-field
+                             // y is a const volatile double lvalue
+    std::cout &lt;&lt; x &lt;&lt; ' ' &lt;&lt; y &lt;&lt; '\n';  // 1 2.3
+    x = -2;   // OK
+//  y = -2.;  // Error: y is const-qualified
+    std::cout &lt;&lt; x &lt;&lt; ' ' &lt;&lt; y &lt;&lt; '\n';  // -2 2.3
+}
+|output=
+1 2.3
+-2 2.3
+}}
+
+====Initialization order====
+Let {{c|valI}} be the object or reference named by the {{c|I}}th structured binding in {{spar sep|sb-identifier-list}}:
+* The initialization of {{c|e}} is {{rlp|eval order|sequenced before}} the initialization of any {{c|valI}}.
+* The initialization of each {{c|valI}} is sequenced before the initialization of any {{c|valJ}} where {{c|I}} is less than {{c|J}}.
+
+===Notes===
+{{rrev|since=c++20|
+Structured bindings cannot be {{rlp|constraints|constrained}}:
+{{source|1=
+template&lt;class T&gt;
+concept C = true;
+
+C auto [x, y] = std::pair{1, 2}; // error: constrained
+}}
+}}
+
+The lookup for member {{tt|get}} ignores accessibility as usual and also ignores the exact type of the non-type template parameter. A private {{c|template&lt;char*&gt; void get();}} member will cause the member interpretation to be used, even though it is ill-formed.
+
+The portion of the declaration preceding {{ttb|[}} applies to the hidden variable {{c|e}}, not to the introduced structured bindings:
+{{source|1=
+int a = 1, b = 2;
+const auto&amp; [x, y] = std::tie(a, b); // x and y are of type int&amp;
+auto [z, w] = std::tie(a, b);        // z and w are still of type int&amp;
+assert(&amp;z == &amp;a);                    // passes
+}}
+
+The tuple-like interpretation is always used if {{c/core|std::tuple_size&lt;E&gt;}} is a complete type with a member named {{tt|value}}, even if that would cause the program to be ill-formed:
+
+{{source|1=
+struct A { int x; };
+
+namespace std
+{
+    template&lt;&gt;
+    struct tuple_size&lt;::A&gt; { void value(); };
+}
+
+auto [x] = A{}; // error; the "data member" interpretation is not considered.
+}}
+
+The usual rules for reference-binding to temporaries (including lifetime-extension) apply if a {{spar|ref-qualifier}} is present and the {{spar|expression}} is a prvalue. In those cases the hidden variable {{c|e}} is a reference that binds to the temporary variable {{rlp|implicit conversion#Temporary materialization|materialized}} from the prvalue expression, extending its lifetime. As usual, the binding will fail if {{c|e}} is a non-const lvalue reference:
+{{source|1=
+int a = 1;
+
+const auto&amp; [x] = std::make_tuple(a); // OK, not dangling
+auto&amp;       [y] = std::make_tuple(a); // error, cannot bind auto&amp; to rvalue std::tuple
+auto&amp;&amp;      [z] = std::make_tuple(a); // also OK
+}}
+
+{{c/core|decltype(x)}}, where {{c|x}} denotes a structured binding, names the ''referenced type'' of that structured binding. In the tuple-like case, this is the type returned by {{lc|std::tuple_element}}, which may not be a reference even though a hidden reference is always introduced in this case. This effectively emulates the behavior of binding to a struct whose non-static data members have the types returned by {{lc|std::tuple_element}}, with the referenceness of the binding itself being a mere implementation detail.
+{{source|1=
+std::tuple&lt;int, int&amp;&gt; f();
+
+auto [x, y] = f();       // decltype(x) is int
+                         // decltype(y) is int&amp;
+
+const auto [z, w] = f(); // decltype(z) is const int
+                         // decltype(w) is int&amp;
+}}
+
+{{rrev|until=c++20|
+Structured bindings cannot be captured by {{rlp|lambda|lambda expressions}}:
+{{source|1=
+#include &lt;cassert&gt;
+
+int main()
+{
+    struct S { int p{6}, q{7}; };
+    const auto&amp; [b, d] = S{};
+    auto l = [b, d] { return b * d; }; // valid since C++20
+    assert(l() == 42);
+}
+}}
+}}
+
+
+{{rrev|since=c++26|
+A structured binding size is allowed to be {{c|0}} as long as the {{spar|sb-identifier-list}} contains exactly one identifier that can only introduce an empty structured binding pack.
+
+{{source|1=
+auto return_empty() -&gt; std::tuple&lt;&gt;;
+
+template &lt;class&gt;
+void test_empty()
+{
+    auto [] = return_empty(); // error
+    auto [...args] = return_empty(); // OK, args is an empty pack
+    auto [one, ...rest] = return_empty(); // error, structured binding size is too small
+}
+}}
+}}
+
+{{ftm begin|core=yes}}
+{{ftm|__cpp_structured_bindings|Structured bindings|value=201606L|std=C++17|rowspan=3}}
+{{ftm|-|Structured bindings with attributes|value=202403L|std=C++26}}
+{{ftm|-|Structured bindings can introduce a pack|value=202411L|std=C++26}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/auto}}
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;set&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::set&lt;std::string&gt; myset{"hello"};
+    
+    for (int i{2}; i; --i)
+    {
+        if (auto [iter, success] = myset.insert("Hello"); success) 
+            std::cout &lt;&lt; "Insert is successful. The value is "
+                      &lt;&lt; std::quoted(*iter) &lt;&lt; ".\n";
+        else
+            std::cout &lt;&lt; "The value " &lt;&lt; std::quoted(*iter)
+                      &lt;&lt; " already exists in the set.\n";
+    }
+    
+    struct BitFields
+    {
+        // C++20: default member initializer for bit-fields
+        int b : 4 {1}, d : 4 {2}, p : 4 {3}, q : 4 {4};
+    };
+    
+    {
+        const auto [b, d, p, q] = BitFields{};
+        std::cout &lt;&lt; b &lt;&lt; ' ' &lt;&lt; d &lt;&lt; ' ' &lt;&lt; p &lt;&lt; ' ' &lt;&lt; q &lt;&lt; '\n';
+    }
+    
+    {
+        const auto [b, d, p, q] = []{ return BitFields{4, 3, 2, 1}; }();
+        std::cout &lt;&lt; b &lt;&lt; ' ' &lt;&lt; d &lt;&lt; ' ' &lt;&lt; p &lt;&lt; ' ' &lt;&lt; q &lt;&lt; '\n';
+    }
+    
+    {
+        BitFields s;
+        
+        auto&amp; [b, d, p, q] = s;
+        std::cout &lt;&lt; b &lt;&lt; ' ' &lt;&lt; d &lt;&lt; ' ' &lt;&lt; p &lt;&lt; ' ' &lt;&lt; q &lt;&lt; '\n';
+        
+        b = 4, d = 3, p = 2, q = 1;
+        std::cout &lt;&lt; s.b &lt;&lt; ' ' &lt;&lt; s.d &lt;&lt; ' ' &lt;&lt; s.p &lt;&lt; ' ' &lt;&lt; s.q &lt;&lt; '\n';
+    }
+}
+|output=
+Insert is successful. The value is "Hello".
+The value "Hello" already exists in the set.
+1 2 3 4
+4 3 2 1
+1 2 3 4
+4 3 2 1
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2285|std=C++17|before={{spar|expression}} could refer to the names from {{spar|identifier-list}}|after=the declaration is&lt;br&gt;ill-formed in this case}}
+{{dr list item|wg=cwg|dr=2312|std=C++17|before=the meaning of {{c/core|mutable}} was lost in case 3|after=its meaning is still kept}}
+{{dr list item|wg=cwg|dr=2313|std=C++17|before=in case 2, the structure binding variables could be redeclared|after=cannot be redeclared}}
+{{dr list item|wg=cwg|dr=2339|std=C++17|before=in case 2, the definition of {{c|I}} was missing|after=added the definition}}
+{{dr list item|wg=cwg|dr=2341|paper=P1091R3|std=C++17|before=structured bindings could not be&lt;br&gt;declared with static storage duration|after=allowed}}
+{{dr list item|wg=cwg|dr=2386|std=C++17|before=the “tuple-like” binding protocol was used&lt;br&gt;whenever {{c/core|std::tuple_size&lt;E&gt;}} is a complete type|after=used only when {{c/core|std::tuple_size&lt;E&gt;}}&lt;br&gt;has a member {{tt|value}}}}
+{{dr list item|wg=cwg|dr=2506|std=C++17|before=if {{spar|expression}} is of a cv-qualified array type,&lt;br&gt;the cv-qualification was carried over to {{tt|E}}|after=discards that cv-qualification}}
+{{dr list item|wg=cwg|dr=2635|std=C++20|before=structured bindings could be constrained|after=prohibited}}
+{{dr list item|wg=cwg|dr=2867|std=C++17|before=the initialization order was unclear|after=made clear}}
+{{dr list item|paper=P0961R1|std=C++17|before=in case 2, member {{tt|get}} was used&lt;br&gt;if lookup finds a {{tt|get}} of any kind|after=only if lookup finds a function&lt;br&gt;template with a non-type parameter}}
+{{dr list item|paper=P0969R0|std=C++17|before=in case 3, the members were required to be public|after=only required to be accessible&lt;br&gt;in the context of the declaration}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=9.6|title=Structured binding declarations|id=dcl.struct.bind|p=228-229}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.6|title=Structured binding declarations|id=dcl.struct.bind|p=219-220}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=11.5|title=Structured binding declarations|id=dcl.struct.bind|p=219-220}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tie}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

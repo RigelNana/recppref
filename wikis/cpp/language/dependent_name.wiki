@@ -1,0 +1,680 @@
+{{title|Dependent names}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+Inside the definition of a {{rlp|templates|template}} (both {{rlp|class template}} and {{rlp|function template}}), the meaning of some constructs may differ from one instantiation to another. In particular, types and expressions may depend on types of type template parameters and values of non-type template parameters.
+{{source|1=
+template&lt;typename T&gt;
+struct X : B&lt;T&gt; // “B&lt;T&gt;” is dependent on T
+{
+    typename T::A* pa; // “T::A” is dependent on T
+                       // (see below for the meaning of this use of “typename”)
+    
+    void f(B&lt;T&gt;* pb)
+    {
+        static int i = B&lt;T&gt;::i; // “B&lt;T&gt;::i” is dependent on T
+        pb-&gt;j++; // “pb-&gt;j” is dependent on T
+    }
+};
+}}
+Name {{rlp|lookup}} and binding are different for dependent names and non-dependent names.
+
+===Binding rules===
+Non-dependent names are looked up and bound at the point of template definition. This binding holds even if at the point of template instantiation there is a better match:
+{{example
+|code=
+#include &lt;iostream&gt;
+
+void g(double) { std::cout &lt;&lt; "g(double)\n"; }
+
+template&lt;class T&gt;
+struct S
+{
+    void f() const
+    {
+        g(1); // “g” is a non-dependent name, bound now
+    }
+};
+
+void g(int) { std::cout &lt;&lt; "g(int)\n"; }
+
+int main()
+{
+    g(1);  // calls g(int)
+
+    S&lt;int&gt; s;
+    s.f(); // calls g(double)
+}
+}}
+
+If the meaning of a non-dependent name changes between the definition context and the point of instantiation of a specialization of the template, the program is ill-formed, no diagnostic required. This is possible in the following situations:
+* a type used in a non-dependent name is {{rlp|incomplete type|incomplete}} at the point of definition but complete at the point of instantiation
+{{rrev|since=c++17|
+* lookup for a name in the template definition found a {{rlp|using declaration|using-declaration}}, but the lookup in the corresponding scope in the instantiation does not find any declarations because the using-declaration was a pack expansion and the corresponding pack is empty
+}}
+* an instantiation uses a default argument or default template argument that had not been defined at the point of definition
+* a {{rlp|constant expression}} at the point of instantiation uses the value of a const object of integral or unscoped enum type{{rev inl|since=c++11|, the value of a constexpr object, the value of a reference, or the definition of a constexpr function}}, and that object{{rev inl|since=c++11|/reference/function}} was not defined at the point of definition
+* the template uses a non-dependent class template specialization {{rev inl|since=c++14|or variable template specialization}} at the point of instantiation, and this template it uses is either instantiated from a partial specialization that was not defined at the point of definition or names an explicit specialization that was not declared at the point of definition
+
+Binding of dependent names is postponed until lookup takes place.
+
+===Lookup rules===
+The {{rlp|lookup}} of a dependent name used in a template is postponed until the template arguments are known, at which time
+* non-ADL lookup examines function declarations with external linkage that are visible from the template definition context
+* {{rlp|adl|ADL}} examines function declarations with external linkage that are visible from either the template definition context or the template instantiation context
+(in other words, adding a new function declaration after template definition does not make it visible, except via ADL).
+
+The purpose of this rule is to help guard against violations of the {{rlp|definition#One Definition Rule|ODR}} for template instantiations:
+{{source|1=
+// an external library
+namespace E
+{
+    template&lt;typename T&gt;
+    void writeObject(const T&amp; t)
+    {
+        std::cout &lt;&lt; "Value = " &lt;&lt; t &lt;&lt; '\n';
+    }
+}
+
+// translation unit 1:
+// Programmer 1 wants to allow E::writeObject to work with vector&lt;int&gt;
+namespace P1
+{
+    std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const std::vector&lt;int&gt;&amp; v)
+    {
+        for (int n : v)
+            os &lt;&lt; n &lt;&lt; ' ';
+        return os;
+    }
+    
+    void doSomething()
+    {
+        std::vector&lt;int&gt; v;
+        E::writeObject(v); // Error: will not find P1::operator&lt;&lt;
+    }
+}
+
+// translation unit 2:
+// Programmer 2 wants to allow E::writeObject to work with vector&lt;int&gt;
+namespace P2
+{
+    std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const std::vector&lt;int&gt;&amp; v)
+    {
+        for (int n : v)
+            os &lt;&lt; n &lt;&lt; ':';
+        return os &lt;&lt; "[]";
+    }
+    
+    void doSomethingElse()
+    {
+        std::vector&lt;int&gt; v;
+        E::writeObject(v); // Error: will not find P2::operator&lt;&lt;
+    }
+}
+}}
+In the above example, if non-ADL lookup for {{tt|operator&lt;&lt;}} were allowed from the instantiation context, the instantiation of {{c|E::writeObject&lt;vector&lt;int&gt;&gt;}} would have two different definitions: one using {{c|P1::operator&lt;&lt;}} and one using {{c|P2::operator&lt;&lt;}}. Such ODR violation may not be detected by the linker, leading to one or the other being used in both instances.
+
+To make ADL examine a user-defined namespace, either {{lc|std::vector}} should be replaced by a user-defined class or its element type should be a user-defined class:
+{{source|1=
+namespace P1
+{
+    // if C is a class defined in the P1 namespace
+    std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const std::vector&lt;C&gt;&amp; v)
+    {
+        for (C n : v)
+            os &lt;&lt; n;
+        return os;
+    }
+    
+    void doSomething()
+    {
+        std::vector&lt;C&gt; v;
+        E::writeObject(v); // OK: instantiates writeObject(std::vector&lt;P1::C&gt;)
+                           //     which finds P1::operator&lt;&lt; via ADL
+    }
+}
+}}
+
+Note: this rule makes it impractical to overload operators for standard library types:
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+// Bad idea: operator in global namespace, but its arguments are in std::
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::pair&lt;int, double&gt; p)
+{
+    return os &lt;&lt; p.first &lt;&lt; ',' &lt;&lt; p.second;
+}
+
+int main()
+{
+    typedef std::pair&lt;int, double&gt; elem_t;
+    std::vector&lt;elem_t&gt; v(10);
+    std::cout &lt;&lt; v[0] &lt;&lt; '\n'; // OK, ordinary lookup finds ::operator&lt;&lt;
+    std::copy(v.begin(), v.end(),
+              std::ostream_iterator&lt;elem_t&gt;(std::cout, " "));
+    // Error: both ordinary lookup from the point of definition of
+    // std::ostream_iterator and ADL will only consider the std namespace,
+    // and will find many overloads of std::operator&lt;&lt;, so the lookup will be done.
+    // Overload resolution will then fail to find operator&lt;&lt; for elem_t
+    // in the set found by the lookup.
+}
+}}
+
+Note: limited lookup (but not binding) of dependent names also takes place at template definition time, as needed to distinguish them from non-dependent names and also to determine whether they are members of the current instantiation or members of unknown specialization. The information obtained by this lookup can be used to detect errors, see below.
+
+===Dependent types===
+The following types are ''dependent types''{{sep}}:
+* template parameter
+* a member of an unknown specialization (see below)
+* a nested class/enum that is a dependent member of unknown specialization (see below)
+* a cv-qualified version of a dependent type
+* a compound type constructed from a dependent type
+* an array type whose element type is dependent or whose bound (if any) is value-dependent
+{{rrev|since=c++11|
+* a function type whose parameters include one or more function {{rlp|parameter pack}}s
+}}
+* a function type whose exception specification is value-dependent
+* a {{rlps|templates#template-id}} where either
+:* the template name is a template parameter, or
+:* any of template arguments is type-dependent, or value-dependent{{rev inl|since=c++11|, or is a pack expansion}} (even if the template-id is used without its argument list, as {{rlp|injected-class-name}})
+{{rrev|since=c++11|
+* the result of {{rlpt|decltype}} applied to a type-dependent expression
+
+The result of {{c/core|decltype}} applied to a type-dependent expression is a unique dependent type. Two such results refer to the same type only if their expressions are {{rlp|function template#Function template overloading|equivalent}}.
+}}
+{{rrev|since=c++26|
+* the {{rlpsd|pack indexing#Pack indexing specifier}} applied to a type-dependent constant expression
+
+The pack indexing specifier applied to a type-dependent constant expression is a unique dependent type. Two such pack indexing specifiers refer to the same type only if their constant expressions are equivalent. Otherwise, two such pack indexing specifiers refer to the same type only if their indices have the same value.
+}}
+
+Note: a typedef member of a current instantiation is only dependent when the type it refers to is.
+
+===Type-dependent expressions===
+The following expressions are ''type-dependent''{{sep}}:
+* an expression whose any subexpression is a type-dependent expression
+* {{c|this}}, if the class is a dependent type.
+* an {{rlp|identifiers|identifier expression}} that {{rev inl|since=c++20|is not a {{rlp|constraints|concept-id}} and}}
+:* contains an identifier for which name lookup finds at least one dependent declaration
+:* contains a dependent {{rlps|templates#template-id}}
+{{rrev|since=c++11|
+:* contains the special identifier {{tt|__func__}} (if some enclosing function is a template, a non-template member of a class template{{rev inl|since=c++14|, or a generic lambda}})
+}}
+:* contains the name of {{rlp|cast operator|conversion function}} to a dependent type
+:* contains a nested name specifier or {{rlp|identifiers|qualified-id}} that is a member of unknown specialization
+:* names a dependent member of the current instantiation which is a static data member of type "array of unknown bound"
+{{rev begin}}
+{{rev|since=c++14|
+:* contains an identifier for which name lookup finds one or more declarations of member functions of the current instantiation declared with {{rlpsd|function#Return type deduction}}
+}}
+{{rev|since=c++17|
+:* contains an identifier for which name lookup finds a {{rlp|structured binding|structured binding declaration}} whose initializer is type-dependent
+:* contains an identifier for which name lookup finds a non-type template parameter whose type contains the placeholder {{c/core|auto}}
+:* contains an identifier for which by name lookup finds a variable declared with a type that contains a placeholder type (e.g., {{c/core|auto}} static data member), where the initializer is type-dependent,
+}}
+{{rev|since=c++26|
+:* contains an identifier for which name lookup finds a {{rlp|pack}}
+}}
+{{rev end}}
+* any cast expression to a dependent type
+* {{rlp|new|{{c/core|new}} expression}} that creates an object of a dependent type
+* member access expression that refers to a member of the current instantiation whose type is dependent
+* member access expression that refers to a member of unknown specialization
+{{rrev|since=c++17|
+* {{rlp|fold|fold expression}}
+}}
+{{rrev|since=c++26|
+* {{rlp|pack indexing#Pack indexing expression|pack indexing expression}} if its identifier expression is a type-dependent expression
+}}
+
+The following expressions are never type-dependent because the types of these expressions cannot be:
+* {{rlpsd|expressions#Literals}}
+* pseudo-destructor calls
+* {{rlpt|sizeof}}
+{{rrev|since=c++11|
+* {{rlpt|sizeof...}}
+* {{rlpt|alignof}}
+* {{rlpt|noexcept}}
+}}
+* {{rlpt|throw}}
+* {{rlpt|typeid}}
+* {{rlpt|delete}}
+{{rrev|since=c++20|
+* {{rlpt|requires}}
+}}
+
+===Value-dependent expressions===
+The following expressions are ''value-dependent''{{sep}}:
+* an expression used in context where {{rlp|constant expression}} is required, and whose any subexpression is value-dependent
+* an {{rlp|identifiers|identifier expression}} that satisfies any of the following conditions:
+{{rrev|since=c++20|
+:* It is a {{rlp|constraints|concept-id}} and any of its arguments are dependent.
+}}
+:* It is type-dependent.
+:* It is a name of a non-type template parameter.
+:* It names a static data member that is a dependent member of the current instantiation and is not initialized.
+:* It names a static member function that is a dependent member of the current instantiation.
+:* It is a constant with a {{rev inl|until=c++11|integer or enumeration}}{{rev inl|since=c++11|literal}} type, initialized from a value-dependent expression.
+* the following expressions where the operand is a type-dependent expression:
+:* {{rlpt|sizeof}}
+:* {{rlpt|typeid}}
+{{rrev|since=c++11|
+:* {{rlpt|alignof}}
+}}
+* the following expressions where the operand is a dependent type-id:
+:* {{rlpt|sizeof}}
+:* {{rlpt|typeid}}
+* the following expressions where the target type is dependent or the operand is a type-dependent expression:
+:* {{rlp|explicit cast|C-style cast}}
+:* {{rlpt|static_cast}}
+:* {{rlpt|const_cast}}
+:* {{rlpt|reinterpret_cast}}
+:* {{rlpt|dynamic_cast}}
+* {{rlp|explicit cast|function-style cast}} expression where the target type is dependent or a value-dependent expression is enclosed by parentheses{{rev inl|since=c++11| or braces}}
+{{rev begin}}
+{{rev|since=c++11|
+* {{rlpt|sizeof...}} expression{{rev inl|since=c++26| where the operand is not a {{rlp|structured binding|structured binding pack}}}}
+}}
+{{rev|since=c++17|
+* {{rlp|fold|fold expression}}
+}}
+{{rev end}}
+* address-of expression where the argument is a {{rlp|identifiers|qualified identifier}} that names a dependent member of the current instantiation
+* address-of expression where the argument is any expression which, evaluated as a core {{rlp|constant expression}}, refers to a {{rlpsd|templates#Templated entity}} that is an object with static {{rev inl|since=c++11|or thread storage}} duration or a member function.
+
+===Dependent names===
+{{todo|the lede from [temp.dep], which is missing (identifier expression followed by parenthesized list...}}
+{{todo|reword to maybe make it more clear (or at least less intimidating), and while at it, apply {{cwg|591}}}}
+
+===Current instantiation===
+Within a class template definition (including its member functions and nested classes) some names may be deduced to refer to the ''current instantiation''. This allows certain errors to be detected at the point of definition, rather than instantiation, and removes the requirement on the {{c/core|typename}} and {{c/core|template}} disambiguators for dependent names, see below.
+
+Only the following names can refer to the current instantiation:
+* in the definition of a class template, a nested class of a class template, a member of a class template, or a member of a nested class of a class template:
+** the injected-class-name of the class template or nested class
+* in the definition of a primary class template or a member of a primary class template:
+** the name of the class template followed by template argument list (or an equivalent alias template specialization) for the primary template where each argument is equivalent (defined below) to its corresponding parameter.
+* in the definition of a nested class of a class template:
+** the name of the nested class used as a member of the current instantiation
+* in the definition of a class template partial specialization or a member of a class template partial specialization:
+** the name of the class template followed by template argument list for the partial specialization, where each argument is equivalent to its corresponding parameter
+* in the definition of a {{rlp|templates#Templated entity|templated function}}:
+** the name of a {{rlp|class#Local classes|local class}}
+
+A template argument is equivalent to a template parameter if
+* for a {{rlp|template parameters#Type template parameter|type parameter}}, the template argument denotes the same type as the template parameter.
+* for a {{rlp|template parameters#Non-type template parameter|non-type parameter}}, the template argument is an {{rlp|identifiers|identifier}} that names a variable that is equivalent to the template parameter. A variable is equivalent to a template parameter if
+:* it has the same type as the template parameter (ignoring cv-qualification) and
+:* its initializer consists of a single identifier that names the template parameter or, recursively, such a variable.
+
+{{source|1=
+template&lt;class T&gt;
+class A
+{
+    A* p1;      // A is the current instantiation
+    A&lt;T&gt;* p2;   // A&lt;T&gt; is the current instantiation
+    ::A&lt;T&gt;* p4; // ::A&lt;T&gt; is the current instantiation
+    A&lt;T*&gt; p3;   // A&lt;T*&gt; is not the current instantiation
+    
+    class B
+    {
+        B* p1;                 // B is the current instantiation
+        A&lt;T&gt;::B* p2;           // A&lt;T&gt;::B is the current instantiation
+        typename A&lt;T*&gt;::B* p3; // A&lt;T*&gt;::B is not the current instantiation
+    };
+};
+
+template&lt;class T&gt;
+class A&lt;T*&gt;
+{
+    A&lt;T*&gt;* p1; // A&lt;T*&gt; is the current instantiation
+    A&lt;T&gt;* p2;  // A&lt;T&gt; is not the current instantiation
+};
+
+template&lt;int I&gt;
+struct B
+{
+    static const int my_I = I;
+    static const int my_I2 = I + 0;
+    static const int my_I3 = my_I;
+    static const long my_I4 = I;
+    static const int my_I5 = (I);
+    
+    B&lt;my_I&gt;* b1;  // B&lt;my_I&gt; is the current instantiation:
+                  //   my_I has the same type as I,
+                  //   and it is initialized with only I
+    B&lt;my_I2&gt;* b2; // B&lt;my_I2&gt; is not the current instantiation:
+                  //   I + 0 is not a single identifier
+    B&lt;my_I3&gt;* b3; // B&lt;my_I3&gt; is the current instantiation:
+                  //   my_I3 has the same type as I,
+                  //   and it is initialized with only my_I (which is equivalent to I)
+    B&lt;my_I4&gt;* b4; // B&lt;my_I4&gt; is not the current instantiation:
+                  //   the type of my_I4 (long) is not the same as the type of I (int)
+    B&lt;my_I5&gt;* b5; // B&lt;my_I5&gt; is not the current instantiation:
+                  //   (I) is not a single identifier
+};
+}}
+
+Note that a base class can be the current instantiation if a nested class derives from its enclosing class template. Base classes that are dependent types but are not the current instantiation are ''dependent base classes'':
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    typedef int M;
+    
+    struct B
+    {
+        typedef void M;
+        
+        struct C;
+    };
+};
+
+template&lt;class T&gt;
+struct A&lt;T&gt;::B::C : A&lt;T&gt;
+{
+    M m; // OK, A&lt;T&gt;::M
+};
+}}
+
+A name is classified as a member of the current instantiation if it is
+* an unqualified name that is found by {{rlp|unqualified lookup}} in the current instantiation or in its non-dependent base.
+* {{rlp|qualified lookup|qualified name}}, if the qualifier (the name to the left of {{ttb|::}}) names the current instantiation and lookup finds the name in the current instantiation or in its non-dependent base
+* a name used in a class member access expression ({{c|y}} in {{c|x.y}} or {{c|xp-&gt;y}}), where the object expression ({{c|x}} or {{c|*xp}}) is the current instantiation and lookup finds the name in the current instantiation or in its non-dependent base
+
+{{source|1=
+template&lt;class T&gt;
+class A
+{
+    static const int i = 5;
+    
+    int n1[i];       // i refers to a member of the current instantiation
+    int n2[A::i];    // A::i refers to a member of the current instantiation
+    int n3[A&lt;T&gt;::i]; // A&lt;T&gt;::i refers to a member of the current instantiation
+    
+    int f();
+};
+
+template&lt;class T&gt;
+int A&lt;T&gt;::f()
+{
+    return i; // i refers to a member of the current instantiation
+}
+}}
+
+Members of the current instantiation may be both dependent and non-dependent.
+
+If the lookup of a member of current instantiation gives a different result between the point of instantiation and the point of definition, the lookup is ambiguous. Note however that when a member name is used, it is not automatically converted to a class member access expression, only explicit member access expressions indicate members of current instantiation:
+{{source|1=
+struct A { int m; };
+struct B { int m; };
+
+template&lt;typename T&gt;
+struct C : A, T
+{
+    int f() { return this-&gt;m; } // finds A::m in the template definition context
+    int g() { return m; }       // finds A::m in the template definition context
+};
+
+template int C&lt;B&gt;::f(); // error: finds both A::m and B::m
+
+template int C&lt;B&gt;::g(); // OK: transformation to class member access syntax
+                        // does not occur in the template definition context
+}}
+
+===Unknown specializations===
+Within a template definition, certain names are deduced to belong to an ''unknown specialization'', in particular,
+
+* a {{rlp|qualified lookup|qualified name}}, if any name that appears to the left of {{ttb|::}} is a dependent type that is not a member of the current instantiation
+* a {{rlp|qualified lookup|qualified name}}, whose qualifier is the current instantiation, and the name is not found in the current instantiation or any of its non-dependent base classes, and there is a dependent base class
+* a name of a member in a class member access expression (the {{c|y}} in {{c|x.y}} or {{c|xp-&gt;y}}), if the type of the object expression ({{c|x}} or {{c|*xp}}) is a dependent type and is not the current instantiation
+* a name of a member in a class member access expression (the {{c|y}} in {{c|x.y}} or {{c|xp-&gt;y}}), if the type of the object expression ({{c|x}} or {{c|*xp}}) is the current instantiation, and the name is not found in the current instantiation or any of its non-dependent base classes, and there is a dependent base class
+
+{{source|1=
+template&lt;typename T&gt;
+struct Base {};
+
+template&lt;typename T&gt;
+struct Derived : Base&lt;T&gt;
+{
+    void f()
+    {
+        // Derived&lt;T&gt; refers to current instantiation
+        // there is no “unknown_type” in the current instantiation
+        // but there is a dependent base (Base&lt;T&gt;)
+        // Therefore, “unknown_type” is a member of unknown specialization
+        typename Derived&lt;T&gt;::unknown_type z;
+    }
+};
+
+template&lt;&gt;
+struct Base&lt;int&gt; // this specialization provides it
+{
+    typedef int unknown_type;
+};
+}}
+
+
+This classification allows the following errors to be detected at the point of template definition (rather than instantiation):
+
+* If any template definition has a {{rlp|qualified lookup|qualified name}} in which the qualifier refers to the current instantiation and the name is neither a member of current instantiation nor a member of unknown specialization, the program is ill-formed (no diagnostic required) even if the template is never instantiated.
+{{source|1=
+template&lt;class T&gt;
+class A
+{
+    typedef int type;
+    
+    void f()
+    {
+        A&lt;T&gt;::type i; // OK: “type” is a member of the current instantiation
+        typename A&lt;T&gt;::other j; // Error:
+        
+        // “other” is not a member of the current instantiation
+        // and it is not a member of an unknown specialization
+        // because A&lt;T&gt; (which names the current instantiation),
+        // has no dependent bases for “other” to hide in.
+    }
+};
+}}
+* If any template definition has a member access expression where the object expression is the current instantiation, but the name is neither a member of current instantiation nor a member of unknown specialization, the program is ill-formed even if the template is never instantiated.
+
+Members of unknown specialization are always dependent, and are looked up and bound at the point of instantiation as all dependent names (see above)
+
+{{anchor|typename disambiguator}}
+===The {{c/core|typename}} disambiguator for dependent names===
+
+In a declaration or a definition of a template, including alias template, a name that is not a member of the current instantiation and is dependent on a template parameter is not considered to be a type unless the keyword {{c/core|typename}} is used or unless it was already established as a type name, e.g. with a typedef declaration or by being used to name a base class.
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int p = 1;
+
+template&lt;typename T&gt;
+void foo(const std::vector&lt;T&gt; &amp;v)
+{
+    // std::vector&lt;T&gt;::const_iterator is a dependent name,
+    typename std::vector&lt;T&gt;::const_iterator it = v.begin();
+
+    // without “typename”, the following is parsed as multiplication
+    // of the type-dependent data member “const_iterator”
+    // and some variable “p”. Since there is a global “p” visible
+    // at this point, this template definition compiles.
+    std::vector&lt;T&gt;::const_iterator* p;
+
+    typedef typename std::vector&lt;T&gt;::const_iterator iter_t;
+    iter_t * p2; // “iter_t” is a dependent name, but it is known to be a type name
+}
+
+template&lt;typename T&gt;
+struct S
+{
+    typedef int value_t; // member of current instantiation
+    
+    void f()
+    {
+        S&lt;T&gt;::value_t n{}; // S&lt;T&gt; is dependent, but “typename” not needed
+        std::cout &lt;&lt; n &lt;&lt; '\n';
+    }
+};
+
+int main()
+{
+    std::vector&lt;int&gt; v;
+    foo(v); // template instantiation fails: there is no member variable
+            // called “const_iterator” in the type std::vector&lt;int&gt;
+    S&lt;int&gt;().f();
+}
+}}
+
+The keyword {{c/core|typename}} may only be used in this way before qualified names (e.g. {{c|T::x}}), but the names need not be dependent.
+
+Usual {{rlp|qualified lookup|qualified name lookup}} is used for the identifier prefixed by {{c/core|typename}}. Unlike the case with {{rlp|elaborated type specifier}}, the lookup rules do not change despite the qualifier:
+
+{{source|1=
+struct A // A has a nested variable X and a nested type struct X
+{
+    struct X {};
+    int X;
+};
+
+struct B
+{
+    struct X {}; // B has a nested type struct X
+};
+
+template&lt;class T&gt;
+void f(T t)
+{
+    typename T::X x;
+}
+
+void foo()
+{
+    A a;
+    B b;
+    f(b); // OK: instantiates f&lt;B&gt;, T::X refers to B::X
+    f(a); // error: cannot instantiate f&lt;A&gt;:
+          // because qualified name lookup for A::X finds the data member
+}
+}}
+
+The keyword {{c/core|typename}} can be used even outside of templates.
+{{source|1=
+#include &lt;vector&gt;
+
+int main()
+{
+    // Both OK (after resolving CWG 382)
+    typedef typename std::vector&lt;int&gt;::const_iterator iter_t;
+    typename std::vector&lt;int&gt; v;
+}
+}}
+
+{{rrev|since=c++20|
+In some contexts, only type names can validly appear. In these contexts, a dependent qualified name is assumed to name a type and no {{c/core|typename}} is required:
+* A qualified name that is used as a {{rlp|declarations#Specifiers|declaration specifier}} in the (top-level) {{spar|decl-specifier-seq}} of:
+:* a {{rlpsd|declarations#Simple declaration}} or {{rlpsd|function#Function definition}} at namespace scope;
+:* a {{rlp|class#Member specification|class member declaration}};
+:* a {{rlp|function#Parameter list|parameter declaration}} in a {{rlp|class#Member specification|class member declaration}} (including friend function declarations), outside of default arguments;
+:* a {{rlp|function#Parameter list|parameter declaration}} of a {{rlp|function|declarator for a function or function template}} whose name is qualified, outside of default arguments;
+:* a {{rlp|function#Parameter list|parameter declaration}} of a {{rlp|lambda|lambda expression}} outside of default arguments;
+:* a parameter declaration of a {{rlp|constraints#Requires expressions|{{c/core|requires}} expression}};
+:* the type in the declaration of a {{rlpsd|template parameters#Non-type template parameter}};
+* A qualified name that appears in {{rlp|type#Type naming|type-id}}, where the smallest enclosing type-id is:
+:* the {{spar|type}} in a {{rlp|new|new expression}} that does not parenthesize its type;
+:* the {{spar|type-id}} in an {{rlp|type alias|alias declaration}};
+:* a {{rlp|function|trailing return type}},
+:* a {{rlp|template parameters#Type template parameter|default argument of a type template parameter}}, or
+:* the {{spar|type-id}} of a {{rlpt|static_cast}}, {{rlpt|dynamic_cast}}, {{rlpt|const_cast}}, or {{rlpt|reinterpret_cast}}.
+}}
+
+{{anchor|template disambiguator}}
+===The {{c/core|template}} disambiguator for dependent names===
+Similarly, in a template definition, a dependent name that is not a member of the current instantiation is not considered to be a template name unless the disambiguation keyword {{c/core|template}} is used or unless it was already established as a template name:
+
+{{example|code=
+template&lt;typename T&gt;
+struct S
+{
+    template&lt;typename U&gt;
+    void foo() {}
+};
+
+template&lt;typename T&gt;
+void bar()
+{
+    S&lt;T&gt; s;
+    s.foo&lt;T&gt;();          // error: &lt; parsed as less than operator
+    s.template foo&lt;T&gt;(); // OK
+}
+}}
+
+The keyword {{c/core|template}} may only be used in this way after operators {{c|::}} (scope resolution), {{c|-&gt;}} (member access through pointer), and {{c|.}} (member access), the following are all valid examples:
+
+* {{c|T::template foo&lt;X&gt;();}}
+* {{c|s.template foo&lt;X&gt;();}}
+* {{c|this-&gt;template foo&lt;X&gt;();}}
+* {{c|typename T::template iterator&lt;int&gt;::value_type v;}}
+
+As is the case with {{c/core|typename}}, the {{c/core|template}} prefix is allowed even if the name is not dependent or the use does not appear in the scope of a template.
+
+Even if the name to the left of {{ttb|::}} refers to a namespace, the template disambiguator is allowed:
+{{source|1=
+template&lt;typename&gt;
+struct S {};
+
+::template S&lt;void&gt; q; // allowed, but unnecessary
+}}
+
+{{rrev|until=c++23|
+Due to the special rules for {{rlp|unqualified lookup|unqualified name lookup}} for template names in member access expressions, when a non-dependent template name appears in a member access expression (after {{c|-&gt;}} or after {{c|.}}), the disambiguator is unnecessary if there is a {{rev inl|since=c++11|class or alias}} template with the same name found by ordinary lookup in the context of the expression. {{rev inl|until=c++11|However, if the template found by lookup in the context of the expression differs from the one found in the context of the class, the program is ill-formed}}
+
+{{source|1=
+template&lt;int&gt;
+struct A { int value; };
+
+template&lt;class T&gt;
+void f(T t)
+{
+    t.A&lt;0&gt;::value; // Ordinary lookup of A finds a class template.
+                   // A&lt;0&gt;::value names member of class A&lt;0&gt;
+    // t.A &lt; 0;    // Error: “&lt;” is treated as the start of template argument list
+}
+}}
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/template}},
+{{ltt|cpp/keyword/typename}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=206|std=C++98|before=it was unspecified at what point semantic constraints are&lt;br&gt;applied when a type used in a non-dependent name is&lt;br&gt;incomplete at the point at which a template is defined but is&lt;br&gt;complete at the point at which an instantiation is performed|after=the program is ill-formed&lt;br&gt;and no diagnostic is&lt;br&gt;required in this case}}
+{{dr list item|wg=cwg|dr=224|std=C++98|before=the definition of dependent types was based&lt;br&gt;on the form of the name rather than lookup|after=definition revamped}}
+{{dr list item|wg=cwg|dr=382|std=C++98|before=the {{c/core|typename}} disambiguator was only allowed in template scope|after=also allowed outside&lt;br&gt;of templates}}
+{{dr list item|wg=cwg|dr=468|std=C++98|before=the {{c/core|template}} disambiguator was only allowed in template scope|after=also allowed outside&lt;br&gt;of templates}}
+{{dr list item|wg=cwg|dr=502|std=C++98|before=it was unspecified whether nested enumerations are dependent|after=dependent as nested classes}}
+{{dr list item|wg=cwg|dr=1047|std=C++98|before={{c/core|typeid}} expressions were never value-dependent|after=value-dependent if the&lt;br&gt;operand is type-dependent}}
+{{dr list item|wg=cwg|dr=1160|std=C++98|before=it was unspecified whether a name refers to the current instantiation&lt;br&gt;when a template-id matching a primary template or partial&lt;br&gt;specialization appears in the definition of a member of the template|after=specified}}
+{{dr list item|wg=cwg|dr=1413|std=C++98|before=uninitialized static data member, static member function, and address&lt;br&gt;of member of a class template were not listed as value-dependent|after=listed}}
+{{dr list item|wg=cwg|dr=1471|std=C++98|before=a nested type of a non-dependent base of&lt;br&gt;the current instantiation was dependent|after=it is not dependent}}
+{{dr list item|wg=cwg|dr=1850|std=C++98|before=the list of cases that meaning may change between the&lt;br&gt;definition context and the point of instantiation was incomplete|after=made complete}}
+{{dr list item|wg=cwg|dr=1929|std=C++98|before=it was not clear whether the {{c/core|template}} disambiguator can&lt;br&gt;follow a {{tt|::}} where the name to its left refers to a namespace|after=allowed}}
+{{dr list item|wg=cwg|dr=2066|std=C++98|before={{c|this}} was never value-dependent|after=it may be&lt;br&gt;value-dependent}}
+{{dr list item|wg=cwg|dr=2100|std=C++98|before=address of a static data member of class&lt;br&gt;template was not listed as value-dependent|after=listed}}
+{{dr list item|wg=cwg|dr=2109|std=C++98|before=type-dependent identifier expressions might not be value-dependent|after=they are always&lt;br&gt;value-dependent}}
+{{dr list item|wg=cwg|dr=2276|std=C++98|before=a function type whose exception specification&lt;br&gt;is value-dependent was not a dependent type|after=it is}}
+{{dr list item|wg=cwg|dr=2307|std=C++98|before=a parenthesized non-type template parameter used as a&lt;br&gt;template argument was equivalent to that template parameter|after=not equivalent anymore}}
+{{dr list item|wg=cwg|dr=2457|std=C++11|before=a function type with function parameter&lt;br&gt;pack was not a dependent type|after=it is}}
+{{dr list item|wg=cwg|dr=2785|std=C++20|before={{c/core|requires}} expressions might be type-dependent|after=they are never&lt;br&gt;type-dependent}}
+{{dr list item|wg=cwg|dr=2905|std=C++11|before=a {{c/core|noexcept}} expression was only value-dependent&lt;br&gt;if its operand is value-dependent|after=it is value-dependent&lt;br&gt;if its operand involves&lt;br&gt;a template parameter}}
+{{dr list item|wg=cwg|dr=2936|std=C++98|before=the names of local classes of templated&lt;br&gt;functions were not part of the current instantiation|after=they are}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

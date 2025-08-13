@@ -1,0 +1,238 @@
+{{title|Language linkage}}
+{{cpp/language/declarations/navbar}}
+Provides for linkage between program units written in different programming languages.
+
+{{rrev|since=c++20|
+This can also be used to detach a declaration from its module. See {{rlp|modules#Module ownership|Module ownership}}.
+}}
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|extern}} {{spar|string-literal}} {{ttb|{}} {{spar optional|declaration-seq}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=2|1=
+{{ttb|extern}} {{spar|string-literal}} {{spar|declaration}}
+}}
+{{sdsc end}}
+@1@ Applies the language specification {{spar|string-literal}} to all function types, function names with external linkage and variables with external linkage declared in {{spar|declaration-seq}}.
+@2@ Applies the language specification {{spar|string-literal}} to a single declaration or definition.
+
+{{par begin}}
+{{par|{{spar|string-literal}}|an {{rlp|string literal#Unevaluated strings|unevaluated string literal}} that names the required language linkage}}
+{{par|{{spar|declaration-seq}}|a sequence of declarations, which may include nested linkage specifications}}
+{{par|{{spar|declaration}}|a declaration}}
+{{par end}}
+
+===Explanation===
+Every function type, every function name with {{rlp|storage duration|external linkage}}, and every variable name with {{rlp|storage duration|external linkage}}, has a property called ''language linkage''. Language linkage encapsulates the set of requirements necessary to link with a program unit written in another programming language: {{enwiki|calling convention}}, {{enwiki|name mangling}} (name decoration) algorithm, etc.
+
+Only two language linkages are guaranteed to be supported:
+# {{c/core|"C++"}}, the default language linkage.
+# {{c/core|"C"}}, which makes it possible to link with functions written in the C programming language, and to define, in a C++ program, functions that can be called from the units written in C.
+
+{{source|1=
+extern "C"
+{
+    int open(const char *path_name, int flags); // C function declaration
+}
+
+int main()
+{
+    int fd = open("test.txt", 0); // calls a C function from a C++ program
+}
+
+// This C++ function can be called from C code
+extern "C" void handler(int)
+{
+    std::cout &lt;&lt; "Callback invoked\n"; // It can use C++
+}
+}}
+
+Since language linkage is part of every function type, pointers to functions maintain language linkage as well. Language linkage of function types (which represents calling convention) and language linkage of function names (which represents name mangling) are independent of each other:
+
+{{source|1=
+extern "C" void f1(void(*pf)()); // declares a function f1 with C linkage,
+                             // which returns void and takes a pointer to a C function
+                             // which returns void and takes no parameters
+
+extern "C" typedef void FUNC(); // declares FUNC as a C function type that returns void
+                                // and takes no parameters
+
+FUNC f2;            // the name f2 has C++ linkage, but its type is C function
+extern "C" FUNC f3; // the name f3 has C linkage and its type is C function void()
+void (*pf2)(FUNC*); // the name pf2 has C++ linkage, and its type is
+                    // "pointer to a C++ function which returns void and takes one
+                    // argument of type 'pointer to the C function which returns void
+                    // and takes no parameters'"
+
+extern "C"
+{
+    static void f4(); // the name of the function f4 has internal linkage (no language)
+                      // but the function's type has C language linkage
+}
+}}
+
+If {{rlp|conflicting declarations#Multiple declarations of the same entity|two declarations of an entity}} give it different language linkages, the program is ill-formed; no diagnostic is required if neither declaration is reachable from the other. A redeclaration of an entity without a linkage specification inherits the language linkage of the entity and its type (if exists).
+
+{{source|
+extern "C" int f();
+extern "C++" int f(); // Error: different language linkages
+
+extern "C" int g();
+int g(); // OK, has C language linkage
+
+int h(); // has C++ language linkage by default
+extern "C" int h(); // Error: different language linkages
+}}
+
+====Special rules for {{c/core|"C"}} linkage====
+When class members{{rev inl|since=c++20|, friend functions with a trailing {{rlp|constraints#Requires clauses|{{c/core|requires}} clause}},}} or non-static member functions appear in a {{c/core|"C"}} language block, the linkage of their types remains {{c/core|"C++"}} (but parameter types, if any, remain {{c/core|"C"}}):
+{{source|
+extern "C"
+{
+    class X
+    {
+        void mf();           // the function mf and its type have C++ language linkage
+        void mf2(void(*)()); // the function mf2 has C++ language linkage;
+                             // the parameter has type “pointer to C function”
+    };
+}
+
+template&lt;typename T&gt;
+struct A { struct B; };
+
+extern "C"
+{
+    template&lt;typename T&gt;
+    struct A&lt;T&gt;::B
+    {
+        friend void f(B*) requires true {} // C language linkage ignored
+    };
+}
+
+namespace Q
+{
+    extern "C" void f(); // not ill-formed
+}
+}}
+
+Let {{tt|C}} be a declaration that declares a function or variable with {{c/core|"C"}} language linkage. If another declaration {{tt|D}} declares an entity with the same name, and it satisfies any of the following conditions, {{tt|C}} and {{tt|D}} declare the same entity:
+* {{tt|D}} declares a variable that belongs to the global scope.
+* If {{tt|C}} declares a variable, {{tt|D}} also declares a variable.
+* If {{tt|C}} declares a function, {{tt|D}} also declares a function.
+
+Unlike {{rlp|conflicting declarations#Multiple declarations of the same entity|regular redeclarations}}, {{tt|C}} and {{tt|D}} can have different {{rlp|scope|target scopes}}:
+{{source|
+extern "C"
+{
+    int x;
+    int f();
+    int g() { return 1; }
+}
+
+namespace A
+{
+    int x;                // Error: redefines “x”
+    int f();              // OK, redeclares “f”
+    int g() { return 1; } // Error: redefines “g”
+}
+}}
+
+However, the {{rlpsd|conflicting declarations#Restrictions}} of such declarations still apply, which means they should either both declare functions or both declare variables, and the declared entities must have the same type:
+{{source|
+namespace A
+{
+    extern "C" int x();
+    extern "C" int y();
+}
+
+int x; // Error: redeclares “x” as a different kind of entity
+
+namespace B
+{
+    void y(); // Error: redeclares “y” with a different type
+}
+}}
+
+===Notes===
+Language specifications can only appear in {{rlpsd|scope#Namespace scope}}.
+
+The braces of the language specification do not establish a scope.
+
+When language specifications nest, the innermost specification is the one that is in effect.
+
+A declaration directly contained in a language linkage specification is treated as if it contains the {{rlp|storage duration|{{c/core|extern}} specifier}} for the purpose of determining the {{rlpsd|storage duration#Linkage}} of the declared name and whether it is a {{rlp|definition}}.
+{{source|1=
+extern "C" int x; // a declaration and not a definition
+// The above line is equivalent to extern "C" { extern int x; }
+
+extern "C" { int x; } // a declaration and definition
+
+extern "C" double f();
+static double f(); // error: linkage conflict
+
+extern "C" static void g(); // error: linkage conflict
+}}
+
+{{c/core|extern "C"}} makes it possible to include header files containing declarations of C library functions in a C++ program, but if the same header file is shared with a C program, {{c/core|extern "C"}}  (which is not allowed in C) must be hidden with an appropriate {{ltt|cpp/preprocessor/conditional|#ifdef}}, typically {{ltt|cpp/preprocessor/replace#Predefined macros|__cplusplus}}:
+{{source|1=
+#ifdef __cplusplus
+extern "C" int foo(int, int); // C++ compiler sees this
+#else
+int foo(int, int);            // C compiler sees this
+#endif
+}}
+
+The only modern compiler that differentiates function types with {{c/core|"C"}} and {{c/core|"C++"}} language linkages is Oracle Studio, others do not permit overloads that are only different in language linkage, including the overload sets required by the C++ standard ({{lc|std::qsort}}, {{lc|std::bsearch}}, {{lc|std::signal}}, {{lc|std::atexit}}, and {{lc|std::at_quick_exit}}): [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=2316 GCC bug 2316], [https://bugs.llvm.org/show_bug.cgi?id=6277 Clang bug 6277], {{cwg|1555}}.
+
+{{source|1=
+extern "C"   using c_predfun   = int(const void*, const void*);
+extern "C++" using cpp_predfun = int(const void*, const void*);
+
+// ill-formed, but accepted by most compilers
+static_assert(std::is_same&lt;c_predfun, cpp_predfun&gt;::value,
+              "C and C++ language linkages shall not differentiate function types.");
+
+// following declarations do not declare overloads in most compilers
+// because c_predfun and cpp_predfun are considered to be the same type
+void qsort(void* base, std::size_t nmemb, std::size_t size, c_predfun*   compar);
+void qsort(void* base, std::size_t nmemb, std::size_t size, cpp_predfun* compar);
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/extern}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=4|std=C++98|before=names with internal linkage can have language linkages|after=limited to names with external linkage}}
+&lt;!-- The resolution of CWG 195 only formalized the wording with the concept of 'conditionally-supported', the actual meaning did not change. --&gt;
+{{dr list item|wg=cwg|dr=341|std=C++98|before=a function with {{c/core|"C"}} language linkage can&lt;br&gt;have the same name as a global variable|after=the program is ill-formed in this case&lt;br&gt;(no diagnostic required if they&lt;br&gt;appear in different translation units)}}
+{{dr list item|wg=cwg|dr=564|std=C++98|before=the program was ill-formed if two declarations&lt;br&gt;only differ in language linkage specifications&lt;br&gt;(i.e. different string literals following 'extern')|after=the actual language linkages given by&lt;br&gt;the declarations are compared instead}}
+{{dr list item|wg=cwg|dr=2460|std=C++20|before=friend functions with a trailing {{c/core|requires}} clause&lt;br&gt;and {{c/core|"C"}} language linkage had conflict behaviors|after={{c/core|"C"}} language linkage&lt;br&gt;is ignored in this case}}
+{{dr list item|wg=cwg|dr=2483|std=C++98|before=the linkage of the types of static member functions&lt;br&gt;appear in {{c/core|"C"}} language blocks was {{c/core|"C++"}}|after=the linkage is {{c/core|"C"}}}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=9.11|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.11|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+
+{{langlinks|es|ja|ru|zh}}

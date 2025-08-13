@@ -1,0 +1,113 @@
+{{cpp/title|add_pointer}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|1=
+template&lt; class T &gt;
+struct add_pointer;
+}}
+{{dcl end}}
+
+If {{tt|T}} is a [[cpp/meta#Definitions|referenceable type]] or (possibly cv-qualified) {{c/core|void}}, the member typedef {{tt|type}} provided is {{c/core|typename std::remove_reference&lt;T&gt;::type*}}. 
+
+Otherwise, the member typedef {{tt|type}} provided is {{tt|T}}.
+
+{{cpp/types/nospec}}
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|type}}|determined as above}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|since=c++14|1=
+template&lt; class T &gt;
+using add_pointer_t = typename add_pointer&lt;T&gt;::type;
+}}
+{{dcl end}}
+
+===Possible implementation===
+{{eq fun
+|1=
+namespace detail
+{
+    template&lt;class T&gt;
+    struct type_identity { using type = T; }; // or use std::type_identity (since C++20)
+    
+    template&lt;class T&gt;
+    auto try_add_pointer(int)
+      -&gt; type_identity&lt;typename std::remove_reference&lt;T&gt;::type*&gt;; // usual case
+    
+    template&lt;class T&gt;
+    auto try_add_pointer(...)
+      -&gt; type_identity&lt;T&gt;; // unusual case (cannot form std::remove_reference&lt;T&gt;::type*)
+} // namespace detail
+ 
+template&lt;class T&gt;
+struct add_pointer : decltype(detail::try_add_pointer&lt;T&gt;(0)) {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+template&lt;typename F, typename Class&gt;
+void ptr_to_member_func_cvref_test(F Class::*)
+{
+    // F is an “abominable function type”
+    using FF = std::add_pointer_t&lt;F&gt;;
+    static_assert(std::is_same_v&lt;F, FF&gt;, "FF should be precisely F");
+}
+
+struct S
+{
+    void f_ref() &amp; {}
+    void f_const() const {}
+};
+
+int main()
+{
+    int i = 123;
+    int&amp; ri = i;
+    typedef std::add_pointer&lt;decltype(i)&gt;::type IntPtr;
+    typedef std::add_pointer&lt;decltype(ri)&gt;::type IntPtr2;
+    IntPtr pi = &amp;i;
+    std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n';
+    std::cout &lt;&lt; "*pi = " &lt;&lt; *pi &lt;&lt; '\n';
+    
+    static_assert(std::is_pointer_v&lt;IntPtr&gt;, "IntPtr should be a pointer");
+    static_assert(std::is_same_v&lt;IntPtr, int*&gt;, "IntPtr should be a pointer to int");
+    static_assert(std::is_same_v&lt;IntPtr2, IntPtr&gt;, "IntPtr2 should be equal to IntPtr");
+    
+    typedef std::remove_pointer&lt;IntPtr&gt;::type IntAgain;
+    IntAgain j = i;
+    std::cout &lt;&lt; "j = " &lt;&lt; j &lt;&lt; '\n';
+    
+    static_assert(!std::is_pointer_v&lt;IntAgain&gt;, "IntAgain should not be a pointer");
+    static_assert(std::is_same_v&lt;IntAgain, int&gt;, "IntAgain should be equal to int");
+    
+    ptr_to_member_func_cvref_test(&amp;S::f_ref);
+    ptr_to_member_func_cvref_test(&amp;S::f_const);
+}
+|output=
+i = 123
+*pi = 123
+j = 123
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2101|std=c++11|before=the program was ill-formed if {{tt|T}} is a {{lsd|cpp/language/function#Function type}} with {{spar|cv}} or {{spar|ref}}|after=the type produced is {{tt|T}} in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_pointer}}
+{{dsc inc|cpp/types/dsc remove_pointer}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,148 @@
+{{cpp/title|move_iterator}}
+{{cpp/iterator/move_iterator/navbar}}
+{{ddcl|header=iterator|since=c++11|
+template&lt; class Iter &gt;
+class move_iterator;
+}}
+
+{{tt|std::move_iterator}} is an iterator adaptor which behaves exactly like the underlying iterator (which must be at least a {{named req|InputIterator}}{{rev inl|since=c++20| or model {{lconcept|input_iterator}}}}{{rev inl|since=c++23|, or stronger iterator concept}}), except that dereferencing converts the value returned by the underlying iterator into an rvalue. If this iterator is used as an input iterator, the effect is that the values are moved from, rather than copied from.
+
+===Nested types===
+{{rrev multi|until1=c++20|rev1=
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_category}}|{{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::value_type}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::difference_type}}}}
+{{dsc|{{tt|pointer}}|{{tt|Iter}}}}
+{{dsc|{{tt|reference}}|
+* the rvalue reference version of {{c/core|std::iterator_traits&lt;Iter&gt;::reference}} if {{c/core|std::iterator_traits&lt;Iter&gt;::reference}} is a reference type
+* {{c/core|std::iterator_traits&lt;Iter&gt;::reference}} otherwise}}
+{{dsc end}}
+|rev2=
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_category}}&lt;br&gt;{{mark cond present}}|
+* undefined if {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} is invalid or does not denote a type
+* {{lc|std::random_access_iterator_tag}} if {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} models {{c/core|std::derived_from&lt;std::random_access_iterator_tag&gt;}}
+* {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} otherwise}}
+{{dsc|{{tt|iterator_concept}}|{{rrev multi|until1=c++23
+|rev1={{lc|std::input_iterator_tag}}
+|rev2=
+* {{lc|std::random_access_iterator_tag}} if {{tt|Iter}} models {{lc|std::random_access_iterator}}
+* {{lc|std::bidirectional_iterator_tag}} if {{tt|Iter}} only models {{lc|std::bidirectional_iterator}}
+* {{lc|std::forward_iterator_tag}} if {{tt|Iter}} only models {{lc|std::forward_iterator}}
+* {{lc|std::input_iterator_tag}} otherwise}}}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iter_value_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iter_difference_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|pointer}}|{{tt|Iter}}}}
+{{dsc|{{tt|reference}}|{{c/core|std::iter_rvalue_reference_t&lt;Iter&gt;}}}}
+{{dsc end}}
+}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|spec={{tt|Iter}}|current|id=current|the underlying iterator}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc constructor|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator{{=}}|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc base|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator*|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator at|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator arith|move_iterator}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator cmp|move_iterator}}
+{{dsc inc|cpp/iterator/move_iterator/dsc operator cmp2}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator+|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator-|move_iterator}}
+{{dsc inc|cpp/iterator/move_iterator/dsc operator-2}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_move|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_swap|move_iterator}}
+{{dsc inc|cpp/iterator/dsc make_move_iterator}}
+{{dsc end}}
+
+===Helper templates===
+{{ddcl|since=c++20|1=
+template&lt; class Iterator1, class Iterator2 &gt;
+    requires (!std::sized_sentinel_for&lt;Iterator1, Iterator2&gt;)
+constexpr bool disable_sized_sentinel_for
+    &lt;std::move_iterator&lt;Iterator1&gt;, std::move_iterator&lt;Iterator2&gt;&gt; = true;
+}}
+
+This partial specialization of {{tt|std::disable_sized_sentinel_for}} prevents specializations of {{tt|move_iterator}} from satisfying {{lconcept|sized_sentinel_for}} if their underlying iterators do not satisfy the concept.
+
+===Notes===
+{{feature test macro|__cpp_lib_move_iterator_concept|Make {{c/core|std::move_iterator&lt;T*&gt;}} a random access iterator|value=202207L|std=C++23}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+void print(const std::string_view rem, const auto&amp; v)
+{
+    std::cout &lt;&lt; rem;
+    for (const auto&amp; s : v)
+        std::cout &lt;&lt; std::quoted(s) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    std::vector&lt;std::string&gt; v{"this", "_", "is", "_", "an", "_", "example"};
+    print("Old contents of the vector: ", v);
+    std::string concat;
+    for (auto begin = std::make_move_iterator(v.begin()),
+              end = std::make_move_iterator(v.end());
+         begin != end; ++begin)
+    {
+        std::string temp{*begin}; // moves the contents of *begin to temp
+        concat += temp;
+    }
+    
+    // Starting from C++17, which introduced class template argument deduction,
+    // the constructor of std::move_iterator can be used directly:
+    // std::string concat = std::accumulate(std::move_iterator(v.begin()),
+    //                                      std::move_iterator(v.end()),
+    //                                      std::string());
+    
+    print("New contents of the vector: ", v);
+    print("Concatenated as string: ", std::ranges::single_view(concat));
+}
+|p=true
+|output=
+Old contents of the vector: "this" "_" "is" "_" "an" "_" "example"
+New contents of the vector: "" "" "" "" "" "" ""
+Concatenated as string: "this_is_an_example"
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2106|std=C++11|before=dereferencing a {{tt|move_iterator}} could return a dangling reference&lt;br&gt;if the dereferencing the underlying iterator returns a prvalue|after=returns the&lt;br&gt;object instead}}
+{{dr list item|wg=lwg|dr=3736|std=C++20|before={{tt|move_iterator}} was missing {{tt|disable_sized_sentinel_for}} specialization|after=added}}
+{{dr list item|paper=P2259R1|std=C++20|before=member {{tt|iterator_category}} was defined even if&lt;br&gt;{{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} is not defined|after={{tt|iterator_category}} is&lt;br&gt;not defined in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc make_move_iterator}}
+{{dsc inc|cpp/iterator/dsc move_sentinel}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

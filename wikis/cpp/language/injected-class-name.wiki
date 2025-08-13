@@ -1,0 +1,184 @@
+{{title|Injected-class-name}}
+{{cpp/language/classes/navbar}}
+The injected-class-name is the unqualified name of a class within the scope of said class.
+
+In a {{rlp|class template}}, the injected-class-name can be used either as a template name that refers to the current template, or as a class name that refers to the current instantiation.
+
+===Explanation===
+In a {{rlpsd|scope#Class scope}}, the class name of the current class or the template name of the current class template is treated as if it were a public member name; this is called ''injected-class-name''. The point of declaration of the name is immediately following the opening brace of the class (template) definition.
+
+{{source|1=
+int X;
+
+struct X
+{
+    void f()
+    {
+        X* p;   // OK, X is an injected-class-name
+        ::X* q; // Error: name lookup finds a variable name, which hides the struct name
+    }
+};
+
+template&lt;class T&gt;
+struct Y
+{
+    void g()
+    {
+        Y* p;    // OK, Y is an injected-class-name
+        Y&lt;T&gt;* q; // OK, Y is an injected-class-name, but Y&lt;T&gt; is not
+    }
+};
+}}
+
+Like other members, injected-class-names are inherited. In the presence of private or protected inheritance, the injected-class-name of an indirect base class might end up being inaccessible in a derived class.
+
+{{source|1=
+struct A {};
+struct B : private A {};
+struct C : public B
+{
+    A* p;   // Error: injected-class-name A is inaccessible
+    ::A* q; // OK, does not use the injected-class-name
+};
+}}
+
+===In class template===
+The injected-class-name of a class template can be used as a template-name or a type-name.
+
+In the following cases, the injected-class-name is treated as a template-name of the class template itself:
+* It is followed by {{ttb|&lt;}}.&lt;!-- intentionally differs from the standard, see cwg 1841 --&gt;
+* It is used as a {{rlp|template parameters#Template template arguments|template template argument}}.
+* It is the final identifier in the {{rlp|elaborated type specifier|elaborated class specifier}} of a friend class template declaration.
+
+Otherwise, it is treated as a type-name, and is equivalent to the template-name followed by the template-parameters of the class template enclosed in {{ttb|&lt;&gt;}}.
+
+{{source|1=
+template&lt;template&lt;class, class&gt; class&gt;
+struct A;
+
+template&lt;class T1, class T2&gt;
+struct X
+{
+    X&lt;T1, T2&gt;* p;   // OK, X is treated as a template-name
+    
+    using a = A&lt;X&gt;; // OK, X is treated as a template-name
+    
+    template&lt;class U1, class U2&gt;
+    friend class X; // OK, X is treated as a template-name
+    
+    X* q;           // OK, X is treated as a type-name, equivalent to X&lt;T1, T2&gt;
+};
+}}
+
+Within the scope of a class {{rlp|template specialization}} or {{rlp|partial specialization}}, when the injected-class-name is used as a type-name, it is equivalent to the template-name followed by the template-arguments of the class template specialization or partial specialization enclosed in {{ttb|&lt;&gt;}}.
+
+{{source|1=
+template&lt;&gt;
+struct X&lt;void, void&gt;
+{
+    X* p; // OK, X is treated as a type-name, equivalent to X&lt;void, void&gt;
+    
+    template&lt;class, class&gt;
+    friend class X; // OK, X is treated as a template-name (same as in primary template)
+    
+    X&lt;void, void&gt;* q; // OK, X is treated as a template-name
+};
+
+template&lt;class T&gt;
+struct X&lt;char, T&gt;
+{
+    X* p, q; // OK, X is treated as a type-name, equivalent to X&lt;char, T&gt;
+    
+    using r = X&lt;int, int&gt;; // OK, can be used to name another specialization
+};
+}}
+
+The injected-class-name of a class template or class template specialization can be used either as a template-name or a type-name wherever it is in scope.
+
+{{source|1=
+template&lt;&gt;
+class X&lt;int, char&gt;
+{
+    class B
+    {
+        X a;            // meaning X&lt;int, char&gt;
+        
+        template&lt;class, class&gt;
+        friend class X; // meaning ::X
+    };
+};
+
+template&lt;class T&gt;
+struct Base
+{
+    Base* p; // OK: Base means Base&lt;T&gt;
+};
+
+template&lt;class T&gt;
+struct Derived : public Base&lt;T*&gt;
+{
+    typename Derived::Base* p; // OK: Derived::Base means Derived&lt;T&gt;::Base,
+                               // which is Base&lt;T*&gt;
+};
+
+template&lt;class T, template&lt;class&gt; class U = T::template Base&gt;
+struct Third {};
+
+Third&lt;Derived&lt;int&gt;&gt; t; // OK: default argument uses injected-class-name as a template
+}}
+
+A lookup that finds an injected-class-name can result in an ambiguity in certain cases (for example, if it is found in more than one base class). If all of the injected-class-names that are found refer to specializations of the same class template, and if the name is used as a template-name, the reference refers to the class template itself and not a specialization thereof, and is not ambiguous.
+
+{{source|1=
+template&lt;class T&gt;
+struct Base {};
+
+template&lt;class T&gt;
+struct Derived: Base&lt;int&gt;, Base&lt;char&gt;
+{
+    typename Derived::Base b;         // error: ambiguous
+    typename Derived::Base&lt;double&gt; d; // OK
+};
+}}
+
+===injected-class-name and constructors===
+Constructors do not have names, but the injected-class-name of the enclosing class is considered to name a constructor in constructor declarations and definitions.
+
+In a qualified name {{tt|C::D}}, if
+* name lookup does not ignore function names&lt;!-- cwg 1310 --&gt;, and
+* lookup of {{tt|D}} in the scope of the class {{tt|C}} finds its injected-class-name
+
+the qualified name is always considered to name {{tt|C}}'s constructor. Such a name can only be used in the declaration of a constructor (e.g. in a friend constructor declaration, a constructor template specialization, constructor template instantiation, or constructor definition){{rev inl|since=c++11| or be used to inherit constructors}}.
+
+{{source|1=
+struct A
+{
+    A();
+    A(int);
+    
+    template&lt;class T&gt;
+    A(T) {}
+};
+using A_alias = A;
+
+A::A() {}
+A_alias::A(int) {}
+template A::A(double);
+
+struct B : A
+{
+    using A_alias::A;
+};
+
+A::A a;         // Error: A::A is considered to name a constructor, not a type
+struct A::A a2; // OK, same as 'A a2;'
+B::A b;         // OK, same as 'A b;'
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1004|std=C++98|before=an injected-class-name could not&lt;br&gt;be a template template argument|after=allowed, it refers to the class&lt;br&gt;template itself in this case}}
+{{dr list item|wg=cwg|dr=2637|std=C++98|before=the entire template-id could be an injected-class-name|after=only the template name can}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

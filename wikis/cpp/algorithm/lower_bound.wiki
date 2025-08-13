@@ -1,0 +1,202 @@
+{{cpp/title|lower_bound}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=1|constexpr=c++20|until=c++26|
+template&lt; class ForwardIt, class T &gt;
+ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                       const T&amp; value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ForwardIt, class T = typename std::iterator_traits
+                                         &lt;ForwardIt&gt;::value_type &gt;
+constexpr ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                                 const T&amp; value );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcla|anchor=2|constexpr=c++20|until=c++26|
+template&lt; class ForwardIt, class T, class Compare &gt;
+ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                       const T&amp; value, Compare comp );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ForwardIt, class T = typename std::iterator_traits
+                                         &lt;ForwardIt&gt;::value_type,
+          class Compare &gt;
+constexpr ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                                 const T&amp; value, Compare comp );
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+Searches for the first element in the partitioned range {{range|first|last}} which is '''not''' ordered before {{c|value}}.
+
+@1@ The order is determined by {{c/core|operator&lt;}}:
+{{rev begin}}
+{{rev|until=c++20|
+Returns the first iterator {{c|iter}} in {{range|first|last}} where {{c|bool(*iter &lt; value)}} is {{c|false}}, or {{c|last}} if no such {{c|iter}} exists.
+
+If the elements {{c|elem}} of {{range|first|last}} are not {{rlp|/#Requirements|partitioned}} with respect to the expression {{c|bool(elem &lt; value)}}, the behavior is undefined.
+}}
+{{rev|since=c++20|
+Equivalent to {{c|std::lower_bound(first, last, value, std::less{})}}.
+}}
+{{rev end}}
+
+@2@ The order is determined by {{c|comp}}:
+@@ Returns the first iterator {{c|iter}} in {{range|first|last}} where {{c|bool(comp(*iter, value))}} is {{c|false}}, or {{c|last}} if no such {{c|iter}} exists.
+@@ If the elements {{c|elem}} of {{range|first|last}} are not {{rlp|/#Requirements|partitioned}} with respect to the expression {{c|bool(comp(elem, value))}}, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the partitioned range of elements to examine}}
+{{par|value|value to compare the elements to}}
+{{par pred2|comp|if the first argument is ordered before the second|p1=ForwardIt|t2=T}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|Compare|BinaryPredicate|notes=It is not required to satisfy {{named req|Compare}}.}}
+{{par end}}
+
+===Return value===
+Iterator to the first element of the range {{range|first|last}} not ordered before {{c|value}}, or {{c|last}} if no such element is found.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+
+@1@ At most {{mathjax-or|\(\scriptsize \log_{2}(N)+O(1)\)|log{{su|b=2}}(N)+O(1)}} comparisons with {{c|value}} using {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}.
+
+@2@ At most {{mathjax-or|\(\scriptsize \log_{2}(N)+O(1)\)|log{{su|b=2}}(N)+O(1)}} applications of the comparator {{c|comp}}.
+
+However, if {{tt|ForwardIt}} is not a {{named req|RandomAccessIterator}}, the number of iterator increments is linear in {{mathjax-or|\(\scriptsize N\)|N}}. Notably, {{lc|std::map}}, {{lc|std::multimap}}, {{lc|std::set}}, and {{lc|std::multiset}} iterators are not random access, and so their member {{c|lower_bound}} functions should be preferred.
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algobase.h#L1023 libstdc++] and [https://github.com/llvm/llvm-project/blob/8350d9c23d76fb95f42674a1563cbe8c32582dd5/libcxx/include/__algorithm/lower_bound.h#L32 libc++].
+{{eq impl
+|title1=lower_bound (1)|ver1=1|1=
+template&lt;class ForwardIt, class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type&gt;
+ForwardIt lower_bound(ForwardIt first, ForwardIt last, const T&amp; value)
+{
+    return std::lower_bound(first, last, value, std::less{});
+}
+|title2=lower_bound (2)|ver2=2|2=
+template&lt;class ForwardIt, class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type,
+         class Compare&gt;
+ForwardIt lower_bound(ForwardIt first, ForwardIt last, const T&amp; value, Compare comp)
+{
+    ForwardIt it;
+    typename std::iterator_traits&lt;ForwardIt&gt;::difference_type count, step;
+    count = std::distance(first, last);
+    
+    while (count &gt; 0)
+    {
+        it = first;
+        step = count / 2;
+        std::advance(it, step);
+        
+        if (comp(*it, value))
+        {
+            first = ++it;
+            count -= step + 1;
+        }
+        else
+            count = step;
+    }
+    
+    return first;
+}
+}}
+
+===Notes===
+Although {{tt|std::lower_bound}} only requires {{range|first|last}} to be partitioned, this algorithm is usually used in the case where {{range|first|last}} is sorted, so that the binary search is valid for any {{c|value}}.
+
+Unlike {{lc|std::binary_search}}, {{tt|std::lower_bound}} does not require {{c/core|operator&lt;}} or {{c|comp}} to be asymmetric (i.e., {{c|a &lt; b}} and {{c|b &lt; a}} always have different results). In fact, it does not even require {{c|value &lt; *iter}} or {{c|comp(value, *iter)}} to be well-formed for any iterator {{c|iter}} in {{range|first|last}}.
+
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|[[cpp/language/list initialization|List-initialization]] for algorithms {{vl|1,2}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct PriceInfo { double price; };
+
+int main()
+{
+    const std::vector&lt;int&gt; data{1, 2, 4, 5, 5, 6};
+    
+    for (int i = 0; i &lt; 8; ++i)
+    {
+        // Search for first element x such that i ≤ x
+        auto lower = std::lower_bound(data.begin(), data.end(), i);
+        
+        std::cout &lt;&lt; i &lt;&lt; " ≤ ";
+        lower != data.end()
+            ? std::cout &lt;&lt; *lower &lt;&lt; " at index " &lt;&lt; std::distance(data.begin(), lower)
+            : std::cout &lt;&lt; "not found";
+        std::cout &lt;&lt; '\n';
+    }
+    
+    std::vector&lt;PriceInfo&gt; prices{{100.0}, {101.5}, {102.5}, {102.5}, {107.3}};
+    
+    for (const double to_find : {102.5, 110.2})
+    {
+        auto prc_info = std::lower_bound(prices.begin(), prices.end(), to_find,
+            [](const PriceInfo&amp; info, double value)
+            {
+                return info.price &lt; value;
+            });
+        
+        prc_info != prices.end()
+            ? std::cout &lt;&lt; prc_info-&gt;price &lt;&lt; " at index " &lt;&lt; prc_info - prices.begin()
+            : std::cout &lt;&lt; to_find &lt;&lt; " not found";
+        std::cout &lt;&lt; '\n';
+    }
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{&lt;!----&gt;{1, 0}, {2, 2}, {2, 1}, {3, 0}&lt;!----&gt;};
+    auto cmpz = [](CD x, CD y) { return x.real() &lt; y.real(); };
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto it = std::lower_bound(nums.cbegin(), nums.cend(), {2, 0}, cmpz);
+    #else
+        auto it = std::lower_bound(nums.cbegin(), nums.cend(), CD{2, 0}, cmpz);
+    #endif
+    assert((*it == CD{2, 2}));
+}
+|output=
+0 ≤ 1 at index 0
+1 ≤ 1 at index 0
+2 ≤ 2 at index 1
+3 ≤ 4 at index 2
+4 ≤ 4 at index 2
+5 ≤ 5 at index 3
+6 ≤ 6 at index 5
+7 ≤ not found
+102.5 at index 2
+110.2 not found
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=270|std=C++98|before={{tt|Compare}} was required to satisfy {{named req|Compare}} and {{tt|T}} was required&lt;br&gt;to be {{named req|LessThanComparable}} (strict weak ordering required)|after=only a partitioning is required;&lt;br&gt;heterogeneous comparisons permitted}}
+{{dr list item|wg=lwg|dr=384|std=C++98|before=at most {{mathjax-or|\(\scriptsize \log(N)+1\)|log(N)+1}} comparisons were allowed|after=corrected to {{mathjax-or|\(\scriptsize \log_{2}(N)+O(1)\)|log{{su|b=2}}(N)+1}}}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before=if any iterator {{c|iter}} exists in {{range|first|last}} such that&lt;br&gt;{{c|bool(comp(*iter, value))}} is {{c|false}}, {{tt|std::lower_bound}}&lt;br&gt;could return any iterator in {{range|iter|last}}|after=no iterator after&lt;br&gt;{{c|iter}} can be returned}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc equal_range}}
+{{dsc inc|cpp/algorithm/dsc partition}}
+{{dsc inc|cpp/algorithm/dsc partition_point}}
+{{dsc inc|cpp/algorithm/dsc upper_bound}}
+{{dsc inc|cpp/container/dsc lower_bound|set}}
+{{dsc inc|cpp/container/dsc lower_bound|multiset}}
+{{dsc inc|cpp/algorithm/ranges/dsc lower_bound}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|ko|pt|ru|zh}}

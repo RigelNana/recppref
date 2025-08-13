@@ -1,0 +1,138 @@
+{{cpp/title|format_to_n|format_to_n_result}}
+{{cpp/utility/format/navbar}}
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 std::format_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 std::wformat_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 const std::locale&amp; loc,
+                 std::format_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 const std::locale&amp; loc,
+                 std::wformat_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=5|since=c++20|1=
+template&lt; class OutputIt &gt;
+struct format_to_n_result {
+    OutputIt out;
+    std::iter_difference_t&lt;OutputIt&gt; size;
+};
+}}
+{{dcl end}}
+
+Format {{c|args}} according to the format string {{c|fmt}}, and write the result to the output iterator {{c|out}}. At most {{c|n}} characters are written. If present, {{c|loc}} is used for locale-specific formatting.
+
+Let {{tt|CharT}} be {{c/core|char}} for overloads {{v|1,3}}, {{co|wchar_t}} for overloads {{v|2,4}}.
+
+{{cpp/enable if|plural=true|
+{{tt|OutputIt}} satisfies the concept {{c|std::output_iterator&lt;const CharT&amp;&gt;}}.
+}}
+The behavior is undefined if {{tt|OutputIt}} does not model (meet the semantic requirements of) the  concept {{c|std::output_iterator&lt;const CharT&amp;&gt;}}, or if {{c|std::formatter&lt;std::remove_cvref_t&lt;Ti&gt;, CharT&gt;}} does not meet the {{named req|BasicFormatter}} requirements for any {{tt|Ti}} in {{tt|Args}}.
+
+@5@ {{tt|std::format_to_n_result}} has no base classes, or members other than {{c|out}}, {{tt|size}} and implicitly declared special member functions.
+
+===Parameters===
+{{par begin}}
+{{par|out|iterator to the output buffer}}
+{{par|n|maximum number of characters to be written to the buffer}}
+{{par|fmt|{{include|cpp/utility/format/format string|const}}}}
+{{par|args...|arguments to be formatted}}
+{{par|loc|{{lc|std::locale}} used for locale-specific formatting}}
+{{par end}}
+
+===Return value===
+A {{tt|format_to_n_result}} such that the {{c|out}} member is an iterator past the end of the output range, and the {{tt|size}} member is the total (not truncated) output size.
+
+===Exceptions===
+Propagates any exception thrown by formatter or iterator operations.
+
+===Notes===
+The libstdc++ implementation prior to GCC-13.3 had a [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=110990 bug] in reporting the correct {{c|format_to_n_result::out}} value.
+
+===Example===
+{{example
+|At Godbolt's Compiler Explorer: [https://godbolt.org/z/s7a5d76ET clang (trunk) + libc++], [https://godbolt.org/z/bdvxnPb1T GCC (trunk) + libstdc++].
+|code=
+#include &lt;format&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    char buffer[64];
+
+    for (std::size_t max_chars_to_write : {std::size(buffer) - 1, 23uz, 21uz})
+    {
+        const std::format_to_n_result result =
+            std::format_to_n(
+                buffer, max_chars_to_write,
+                "Hubble's H{2} {3} {0}{4}{1} km/sec/Mpc.", // 24 bytes w/o formatters
+                71,       // {0}, occupies 2 bytes
+                8,        // {1}, occupies 1 byte
+                "\u2080", // {2}, occupies 3 bytes, '₀' (SUBSCRIPT ZERO)
+                "\u2245", // {3}, occupies 3 bytes, '≅' (APPROXIMATELY EQUAL TO)
+                "\u00B1"  // {4}, occupies 2 bytes, '±' (PLUS-MINUS SIGN)
+                ); // 24 + 2 + 1 + 3 + 3 + 2 == 35, no trailing '\0'
+
+        *result.out = '\0'; // adds terminator to buffer
+
+        const std::string_view str(buffer, result.out);
+
+        std::cout &lt;&lt; "Buffer until '\\0': " &lt;&lt; std::quoted(str) &lt;&lt; '\n'
+                  &lt;&lt; "Max chars to write: " &lt;&lt; max_chars_to_write &lt;&lt; '\n'
+                  &lt;&lt; "result.out offset: " &lt;&lt; result.out - buffer &lt;&lt; '\n'
+                  &lt;&lt; "Untruncated output size: " &lt;&lt; result.size &lt;&lt; "\n\n";
+    }
+}
+|output=
+Buffer until '\0': "Hubble's H₀ ≅ 71±8 km/sec/Mpc."
+Max chars to write: 63
+result.out offset: 35
+Untruncated output size: 35
+
+Buffer until '\0': "Hubble's H₀ ≅ 71±8"
+Max chars to write: 23
+result.out offset: 23
+Untruncated output size: 35
+
+Buffer until '\0': "Hubble's H₀ ≅ 71�"
+Max chars to write: 21
+result.out offset: 21
+Untruncated output size: 35
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2216R3|std=C++20|before=throws {{lc|std::format_error}} for invalid format string|after=invalid format string results in compile-time error}}
+{{dr list item|paper=P2418R2|std=C++20|before=objects that are neither const-usable nor copyable&lt;br&gt;(such as generator-like objects) are not formattable|after=allow formatting these objects}}
+{{dr_p2508}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc format}}
+{{dsc inc|cpp/utility/format/dsc format_to}}
+{{dsc inc|cpp/utility/format/dsc formatted_size}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

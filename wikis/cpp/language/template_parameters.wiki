@@ -1,0 +1,811 @@
+{{title|Template parameters and template arguments}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+===Template parameters===
+Every {{rlp|templates|template}} is parameterized by one or more template parameters, indicated in the {{spar|parameter-list}} of the template declaration syntax:
+
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{spar|declaration}}}}
+{{sdsc|num=2|notes={{mark since c++20}}|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{ttb|requires}} {{spar|constraint}} {{spar|declaration}}}}
+{{sdsc end}}
+
+Each parameter in {{spar|parameter-list}} may be:
+* a non-type template parameter;
+* a type template parameter;
+* a template template parameter.
+
+====Non-type template parameter====
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|type}} {{spar optional|name}}}}
+{{sdsc|num=2|{{spar|type}} {{spar optional|name}} {{ttb|{{=}}}} {{spar|default}}}}
+{{sdsc|num=3|{{spar|type}} {{ttb|...}} {{spar optional|name}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+@1@ A non-type template parameter.
+@2@ A non-type template parameter with a default template argument.
+@3@ A non-type template {{rlp|parameter pack}}.
+
+{{par begin}}
+{{par|{{spar|type}}|one of the following types:
+* a structural type (see below)
+{{rev begin}}
+{{rev|since=c++17|
+* a type that contains a {{rlp|auto|placeholder type}}
+}}
+{{rev|since=c++20|
+* a {{rlp|class template argument deduction|placeholder for a deduced class type}}
+}}
+{{rev end}}}}
+{{par|{{spar|name}}|the name of the non-type template parameter}}
+{{par|{{spar|default}}|the [[#Default template arguments|default template argument]]}}
+{{par end}}
+
+A ''structural type'' is one of the following types (optionally cv-qualified, the qualifiers are ignored):
+* {{rlp|reference#lvalue references|lvalue reference type}} (to object or to function);
+* an {{rlp|type|integral type}};
+* a {{rlp|pointer|pointer type}} (to object or to function);
+* a {{rlp|pointer#Pointers to members|pointer to member type}} (to member object or to member function);
+* an {{rlp|enum|enumeration type}};
+{{rrev|since=c++11|
+* {{lc|std::nullptr_t}};
+}}
+{{rrev|since=c++20|
+* a {{rlp|type|floating-point type}};
+* a {{rlp|lambda#Closure_type|lambda closure type}} whose lambda expression has no capture;
+* a non-closure [[cpp/named req/LiteralType|literal class type]] with the following properties:
+:* all base classes and non-static data members are public and non-mutable and
+:* the types of all base classes and non-static data members are structural types or (possibly multi-dimensional) array thereof.
+}}
+
+Array and function types may be written in a template declaration, but they are automatically replaced by pointer to object and pointer to function as appropriate.
+
+When the name of a non-type template parameter is used in an expression within the body of the class template, it is an unmodifiable {{rlp|value category|prvalue}} unless its type was an lvalue reference type{{rev inl|since=c++20|, or unless its type is a class type}}.
+
+A template parameter of the form {{c|class Foo}} is not an unnamed non-type template parameter of type {{tt|Foo}}, even if otherwise {{c|class Foo}} is an {{rlp|elaborated type specifier}} and {{c|class Foo x;}} declares {{c|x}} to be of type {{tt|Foo}}.
+
+{{anchor|Template parameter object}}
+{{anchor|template parameter object}}&lt;!-- will be removed later --&gt;
+{{rrev|since=c++20|1=
+An {{rlp|identifiers|identifier}} that names a non-type template parameter of class type {{tt|T}} denotes a static storage duration object of type {{c/core|const T}}, called a ''template parameter object'', which is [[#Template argument equivalence|template-argument-equivalent]] to the corresponding template argument after it has been converted to the type of the template parameter. No two template parameter objects are template-argument-equivalent.
+
+{{source|1=
+struct A
+{
+    friend bool operator==(const A&amp;, const A&amp;) = default;
+};
+
+template&lt;A a&gt;
+void f()
+{
+    &amp;a;                       // OK
+    const A&amp; ra = a, &amp;rb = a; // Both bound to the same template parameter object
+    assert(&amp;ra == &amp;rb);       // passes
+}
+}}
+}}
+
+====Type template parameter====
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|type-parameter-key}} {{spar optional|name}}}}
+{{sdsc|num=2|{{spar|type-parameter-key}} {{spar optional|name}} {{ttb|{{=}}}} {{spar|default}}}}
+{{sdsc|num=3|{{spar|type-parameter-key}} {{ttb|...}} {{spar optional|name}}|notes={{mark since c++11}}}}
+{{sdsc|num=4|{{spar|type-constraint}} {{spar optional|name}}|notes={{mark since c++20}}}}
+{{sdsc|num=5|{{spar|type-constraint}} {{spar optional|name}} {{ttb|{{=}}}} {{spar|default}}|notes={{mark since c++20}}}}
+{{sdsc|num=6|{{spar|type-constraint}} {{ttb|...}} {{spar optional|name}}|notes={{mark since c++20}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|type-parameter-key}}|either {{ttb|typename}} or {{ttb|class}}. There is no difference between these keywords in a type template parameter declaration}}
+{{par|{{spar|type-constraint}}|either the name of a {{rlp|constraints|concept}} or the name of a concept followed by a list of template arguments (in angle brackets). Either way, the concept name may be optionally qualified}}
+{{par|{{spar|name}}|the name of the type template parameter}}
+{{par|{{spar|default}}|the [[#Default template arguments|default template argument]]}}
+{{par end}}
+
+@1@ A type template parameter without a default.
+{{source|1=
+template&lt;class T&gt;
+class My_vector { /* ... */ };
+}}
+@2@ A type template parameter with a default.
+{{source|1=
+template&lt;class T = void&gt;
+struct My_op_functor { /* ... */ };
+}}
+@3@ A type template {{rlp|parameter pack}}.
+{{source|1=
+template&lt;typename... Ts&gt;
+class My_tuple { /* ... */ };
+}}
+@4@ A constrained type template parameter without a default.
+{{source|1=
+template&lt;My_concept T&gt;
+class My_constrained_vector { /* ... */ };
+}}
+@5@ A constrained type template parameter with a default.
+{{source|1=
+template&lt;My_concept T = void&gt;
+class My_constrained_op_functor { /* ... */ };
+}}
+@6@ A constrained type template {{rlp|parameter pack}}.
+{{source|1=
+template&lt;My_concept... Ts&gt;
+class My_constrained_tuple { /* ... */ };
+}}
+
+The name of the parameter is optional:
+{{source|1=
+// Declarations of the templates shown above:
+template&lt;class&gt;
+class My_vector;
+template&lt;class = void&gt;
+struct My_op_functor;
+template&lt;typename...&gt;
+class My_tuple;
+}}
+
+In the body of the template declaration, the name of a type parameter is a typedef-name which aliases the type supplied when the template is instantiated.
+
+{{rrev|since=c++20|{{anchor|Constrained template parameter}}
+Each constrained parameter {{tt|P}} whose {{spar|type-constraint}} is Q designating the concept {{tt|C}} introduces a {{rlp|constraints|constraint-expression}} {{tt|E}} according to the following rules:
+* if {{tt|Q}} is {{tt|C}} (without an argument list),
+:* if {{tt|P}} is not a parameter pack, {{tt|E}} is simply {{tt|C&amp;lt;P&gt;}}
+:* otherwise, {{tt|P}} is a parameter pack, {{tt|E}} is a fold-expression {{tt|(C&amp;lt;P&gt; &amp;&amp; ...)}}
+* if {{tt|Q}} is {{tt|C&amp;lt;A1,A2...,AN&gt;}}, then {{tt|E}} is {{tt|C&amp;lt;P,A1,A2,...AN&gt;}} or {{tt|(C&amp;lt;P,A1,A2,...AN&gt; &amp;&amp; ...)}}, respectively.
+
+{{source|1=
+template&lt;typename T&gt;
+concept C1 = true;
+template&lt;typename... Ts&gt; // variadic concept
+concept C2 = true;
+template&lt;typename T, typename U&gt;
+concept C3 = true;
+
+template&lt;C1 T&gt;         struct s1; // constraint-expression is C1&lt;T&gt;
+template&lt;C1... T&gt;      struct s2; // constraint-expression is (C1&lt;T&gt; &amp;&amp; ...)
+template&lt;C2... T&gt;      struct s3; // constraint-expression is (C2&lt;T&gt; &amp;&amp; ...)
+template&lt;C3&lt;int&gt; T&gt;    struct s4; // constraint-expression is C3&lt;T, int&gt;
+template&lt;C3&lt;int&gt;... T&gt; struct s5; // constraint-expression is (C3&lt;T, int&gt; &amp;&amp; ...)
+}}}}
+
+====Template template parameter====
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{spar|type-parameter-key}} {{spar optional|name}}}}
+{{sdsc|num=2|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{spar|type-parameter-key}} {{spar optional|name}} {{ttb|{{=}}}} {{spar|default}}}}
+{{sdsc|num=3|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{spar|type-parameter-key}} {{ttb|...}} {{spar optional|name}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|type-parameter-key}}|{{ttb|class}} {{rev inl|since=c++17|or {{ttb|typename}}}}}}
+{{par end}}
+
+@1@ A template template parameter with an optional name.
+@2@ A template template parameter with an optional name and a default.
+@3@ A template template {{rlp|parameter pack}} with an optional name.
+
+In the body of the template declaration, the name of this parameter is a template-name (and needs arguments to be instantiated).
+
+{{source|1=
+template&lt;typename T&gt;
+class my_array {};
+
+// two type template parameters and one template template parameter:
+template&lt;typename K, typename V, template&lt;typename&gt; typename C = my_array&gt;
+class Map
+{
+    C&lt;K&gt; key;
+    C&lt;V&gt; value;
+};
+}}
+
+====Name resolution for template parameters====
+The name of a template parameter is not allowed to be redeclared within its scope (including nested scopes). A template parameter is not allowed to have the same name as the template name.
+{{source|1=
+template&lt;class T, int N&gt;
+class Y
+{
+    int T;      // error: template parameter redeclared
+    void f()
+    {
+        char T; // error: template parameter redeclared
+    }
+};
+
+template&lt;class X&gt;
+class X; // error: template parameter redeclared
+}}
+
+In the definition of a member of a class template that appears outside of the class template definition, the name of a member of the class template hides the name of a template parameter of any enclosing class templates, but not a template parameter of the member if the member is a class or function template.
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    struct B {};
+    typedef void C;
+    void f();
+
+    template&lt;class U&gt;
+    void g(U);
+};
+
+template&lt;class B&gt;
+void A&lt;B&gt;::f()
+{
+    B b; // A's B, not the template parameter
+}
+
+template&lt;class B&gt;
+template&lt;class C&gt;
+void A&lt;B&gt;::g(C)
+{
+    B b; // A's B, not the template parameter
+    C c; // the template parameter C, not A's C
+}
+}}
+
+In the definition of a member of a class template that appears outside of the namespace containing the class template definition, the name of a template parameter hides the name of a member of this namespace.
+{{source|1=
+namespace N
+{
+    class C {};
+
+    template&lt;class T&gt;
+    class B
+    {
+        void f(T);
+    };
+}
+
+template&lt;class C&gt;
+void N::B&lt;C&gt;::f(C)
+{
+    C b; // C is the template parameter, not N::C
+}
+}}
+
+In the definition of a class template or in the definition of a member of such a template that appears outside of the template definition, for each non-{{rlp|dependent name#Dependent types|dependent}} base class, if the name of the base class or the name of a member of the base class is the same as the name of a template parameter, the base class name or member name hides the template parameter name.
+{{source|1=
+struct A
+{
+    struct B {};
+    int C;
+    int Y;
+};
+
+template&lt;class B, class C&gt;
+struct X : A
+{
+    B b; // A's B
+    C b; // error: A's C isn't a type name
+};
+}}
+
+===Template arguments===
+In order for a template to be instantiated, every template parameter (type, non-type, or template) must be replaced by a corresponding template argument. For {{rlp|class template}}s, the arguments are either explicitly provided{{rev inl|since=c++17|, {{rlp|class template argument deduction|deduced from the initializer}}, }} or defaulted. For {{rlp|function template}}s, the arguments are explicitly provided, {{rlp|template argument deduction|deduced from the context}}, or defaulted.
+
+If an argument can be interpreted as both a {{rlp|type-id}} and an expression, it is always interpreted as a type-id, even if the corresponding template parameter is non-type:
+{{source|1=
+template&lt;class T&gt;
+void f(); // #1
+
+template&lt;int I&gt;
+void f(); // #2
+
+void g()
+{
+    f&lt;int()&gt;(); // "int()" is both a type and an expression,
+                // calls #1 because it is interpreted as a type
+}
+}}
+
+====Template non-type arguments====
+{{rev begin}}
+{{rev|until=c++11|
+The template argument that can be used with a non-type template parameter can be any {{rlp|constant expression#Manifestly constant-evaluated expressions|manifestly constant-evaluated expression}}.
+}}
+{{rev|since=c++11|
+The template argument that can be used with a non-type template parameter can be any {{rlp|initialization#Initializers|initializer clause}}. If the initializer clause is an expression, it must be {{rlp|constant expression#Manifestly constant-evaluated expressions|manifestly constant-evaluated}}.
+}}
+{{rev end}}
+
+Given the {{spar|type}} of the [[#Non-type template parameter|non-type template parameter declaration]] as {{tt|T}} and the template argument provided for the parameter as {{c|E}}.
+
+{{rev begin}}
+{{rev|since=c++26|
+The invented declaration {{c|1=T x = E;}} must satisfy the semantic constraints for the definition of a {{rlp|constexpr#constexpr variable|{{c/core|constexpr}} variable}} with {{rlpsd|storage duration#Static storage duration}}.
+}}
+{{rev|since=c++17|
+If {{tt|T}} contains a {{rlp|auto|placeholder type}}, or is a {{rlp|class template argument deduction|placeholder for a deduced class type}}, the type of the template parameter is the type deduced for the variable {{c|x}} in the invented declaration {{c|1=T x = E;}}.
+
+If a deduced parameter type is not a [[#Non-type template parameter|structural type]], the program is ill-formed.
+
+For non-type template parameter packs whose type uses a placeholder type, the type is independently deduced for each template argument and need not match.
+}}
+{{rev end}}
+
+{{source|1=
+template&lt;auto n&gt;
+struct B { /* ... */ };
+
+B&lt;5&gt; b1;   // OK: non-type template parameter type is int
+B&lt;'a'&gt; b2; // OK: non-type template parameter type is char
+B&lt;2.5&gt; b3; // error (until C++20): non-type template parameter type cannot be double
+
+// C++20 deduced class type placeholder, class template arguments are deduced at the
+// call site
+template&lt;std::array arr&gt;
+void f();
+
+f&lt;std::array&lt;double, 8&gt;{}&gt;();
+
+template&lt;auto...&gt;
+struct C {};
+
+C&lt;'C', 0, 2L, nullptr&gt; x; // OK
+}}
+
+The value of a non-type template parameter {{c|P}} of{{rev inl|since=c++17| (possibly deduced)}} type {{tt|T}} is determined from its template argument {{c|A}} as follows:
+{{rev begin}}
+{{rev|until=c++11|
+* If {{c|A}} is a {{rlpsd|constant expression#Converted constant expression}} of type {{tt|T}}, the value of {{c|P}} is {{c|A}} (as converted).
+* Otherwise, the program is ill-formed.
+}}
+{{rev|since=c++11|until=c++20|
+* If {{c|A}} is an expression:
+:* If {{c|A}} is a {{rlpsd|constant expression#Converted constant expression}} of type {{tt|T}}, the value of {{c|P}} is {{c|A}} (as converted).
+:* Otherwise, the program is ill-formed.
+* Otherwise ({{c|A}} is a braced-enclosed initializer list), a temporary variable {{c|1=constexpr T v = A;}} is introduced. The value of {{c|P}} is that of {{c|v}}.
+:* The {{rlp|lifetime}} of {{c|v}} ends immediately after initializing it.
+}}
+{{rev|since=c++20|
+* If {{tt|T}} is not a class type and {{c|A}} is an expression:
+:* If {{c|A}} is a {{rlpsd|constant expression#Converted constant expression}} of type {{tt|T}}, the value of {{c|P}} is {{c|A}} (as converted).
+:* Otherwise, the program is ill-formed.
+* Otherwise ({{tt|T}} is a class type or {{c|A}} is a braced-enclosed initializer list), a temporary variable {{c|1=constexpr T v = A;}} is introduced. 
+:* If {{tt|T}} is a class type, a [[#Template parameter object|template parameter object]] exists (which is also denoted by {{c|P}}). {{c|P}} is copy-initialized from an unspecified candidate initializer that is [[#Template argument equivalence|template-argument-equivalent]] to {{c|v}}.
+::* The {{rlp|lifetime}} of {{c|v}} ends immediately after initializing it and {{c|P}}.
+::* If the initialization of {{c|P}} satisfies any of the following conditions, the program is ill-formed:
+:::* The initialization would be ill-formed.
+:::* The {{rlp|expressions#Full-expressions|full-expression}} of an invented declarator-initializer sequence for the initialization would not be a constant expression when interpreted as a {{rlp|constant expression#Manifestly constant-evaluated expressions|manifestly constant-evaluated expression}}.
+:::* The initialization would cause {{c|P}} to not be [[#Template argument equivalence|template-argument-equivalent]] to {{c|v}}.
+:* Otherwise, the value of {{c|P}} is that of {{c|v}}.
+}}
+{{rev end}}
+
+{{source|1=
+template&lt;int i&gt;
+struct C { /* ... */ };
+
+C&lt;{42}&gt; c1; // OK
+
+template&lt;auto n&gt;
+struct B { /* ... */ };
+
+struct J1
+{
+    J1* self = this;
+};
+
+B&lt;J1{}&gt; j1; // error: initialization of the template parameter object
+            //        is not a constant expression
+
+struct J2
+{
+    J2 *self = this;
+    constexpr J2() {}
+    constexpr J2(const J2&amp;) {}
+};
+
+B&lt;J2{}&gt; j2; // error: the template parameter object is not
+            //        template-argument-equivalent to introduced temporary
+}}
+
+{{rev begin}}
+{{rev|until=c++17|
+The following limitations apply when instantiating templates that have non-type template parameters:
+* For integral and arithmetic types, the template argument provided during instantiation must be a {{rlp|constant expression|converted constant expression}} of the template parameter's type (so certain implicit conversion applies).
+* For pointers to objects, the template arguments have to designate the address of a complete object with static {{rlp|storage duration}} and a {{rlp|storage duration#Linkage|linkage}} (either internal or external), or a constant expression that evaluates to the appropriate null pointer{{rev inl|since=c++11| or {{lc|std::nullptr_t}}}} value.
+* For pointers to functions, the valid arguments are pointers to functions with linkage (or constant expressions that evaluate to null pointer values).
+* For lvalue reference parameters, the argument provided at instantiation cannot be a temporary, an unnamed lvalue, or a named lvalue with no linkage (in other words, the argument must have linkage).
+* For pointers to members, the argument has to be a pointer to member expressed as {{c|&amp;Class::Member}} or a constant expression that evaluates to null pointer{{rev inl|since=c++11| or {{lc|std::nullptr_t}}}} value.
+
+In particular, this implies that string literals, addresses of array elements, and addresses of non-static members cannot be used as template arguments to instantiate templates whose corresponding non-type template parameters are pointers to objects.
+}}
+{{rev|since=c++17|
+Non-type template parameters of reference or pointer type {{rev inl|since=c++20|and non-static data members of reference or pointer type in a non-type template parameter of class type and its subobjects}} cannot refer to/be the address of
+* a temporary object (including one created during {{rlp|reference initialization}});
+* a {{rlp|string literal}};
+* the result of {{rlpt|typeid}};
+* the predefined variable {{c|__func__}};
+* or a subobject (including non-static class member, base subobject, or array element){{rev inl|since=c++20| of one of the above}}.
+}}
+{{rev end}}
+
+{{source|1=
+template&lt;const int* pci&gt;
+struct X {};
+
+int ai[10];
+X&lt;ai&gt; xi; // OK: array to pointer conversion and cv-qualification conversion
+
+struct Y {};
+
+template&lt;const Y&amp; b&gt;
+struct Z {};
+
+Y y;
+Z&lt;y&gt; z;   // OK: no conversion
+
+template&lt;int (&amp;pa)[5]&gt;
+struct W {};
+
+int b[5];
+W&lt;b&gt; w;   // OK: no conversion
+
+void f(char);
+void f(int);
+
+template&lt;void (*pf)(int)&gt;
+struct A {};
+
+A&lt;&amp;f&gt; a;  // OK: overload resolution selects f(int)
+}}
+
+{{source|1=
+template&lt;class T, const char* p&gt;
+class X {};
+
+X&lt;int, "Studebaker"&gt; x1; // error: string literal as template-argument
+
+template&lt;int* p&gt;
+class X {};
+
+int a[10];
+
+struct S
+{
+    int m;
+    static int s;
+} s;
+
+X&lt;&amp;a[2]&gt; x3; // error (until C++20): address of array element
+X&lt;&amp;s.m&gt; x4;  // error (until C++20): address of non-static member
+X&lt;&amp;s.s&gt; x5;  // OK: address of static member
+X&lt;&amp;S::s&gt; x6; // OK: address of static member
+
+template&lt;const int&amp; CRI&gt;
+struct B {};
+
+B&lt;1&gt; b2;     // error: temporary would be required for template argument
+int c = 1;
+B&lt;c&gt; b1;     // OK
+}}
+
+====Template type arguments====
+A template argument for a type template parameter must be a {{rlp|type#Type naming|type-id}}, which may name an incomplete type:
+{{source|
+template&lt;typename T&gt;
+class X {}; // class template
+
+struct A;            // incomplete type
+typedef struct {} B; // type alias to an unnamed type
+
+int main()
+{
+    X&lt;A&gt; x1;  // OK: 'A' names a type
+    X&lt;A*&gt; x2; // OK: 'A*' names a type
+    X&lt;B&gt; x3;  // OK: 'B' names a type
+}
+}}
+
+====Template template arguments====
+A template argument for a template template parameter must be an {{rlp|identifiers#In expressions|id-expression}} which names a class template or a template alias.
+
+When the argument is a class template, only the primary template is considered when matching the parameter. The partial specializations, if any, are only considered when a specialization based on this template template parameter happens to be instantiated.
+
+{{source|1=
+template&lt;typename T&gt; // primary template
+class A { int x; };
+
+template&lt;typename T&gt; // partial specialization
+class A&lt;T*&gt; { long x; };
+
+// class template with a template template parameter V
+template&lt;template&lt;typename&gt; class V&gt;
+class C
+{
+    V&lt;int&gt; y;  // uses the primary template
+    V&lt;int*&gt; z; // uses the partial specialization
+};
+
+C&lt;A&gt; c; // c.y.x has type int, c.z.x has type long
+}}
+
+To match a template template argument {{tt|A}} to a template template parameter {{tt|P}}, {{tt|P}} must be ''at least as specialized'' as {{tt|A}} (see below).{{rev inl|since=c++11| If {{tt|P}}'s parameter list includes a {{rlp|parameter pack}}, zero or more template parameters (or parameter packs) from {{tt|A}}'s template parameter list are matched by it.}}
+
+Formally, a template template-parameter {{tt|P}} is ''at least as specialized'' as a template template argument {{tt|A}} if, given the following rewrite to two function templates, the function template corresponding to {{tt|P}} is at least as specialized as the function template corresponding to {{tt|A}} according to the partial ordering rules for {{rlp|function template}}s. Given an invented class template {{tt|X}} with the template parameter list of {{tt|A}} (including default arguments):
+* Each of the two function templates has the same template parameters, respectively, as {{tt|P}} or {{tt|A}}.
+* Each function template has a single function parameter whose type is a specialization of {{tt|X}} with template arguments corresponding to the template parameters from the respective function template where, for each template parameter {{tt|PP}} in the template parameter list of the function template, a corresponding template argument {{tt|AA}} is formed.{{rev inl|since=c++11| If {{tt|PP}} declares a parameter pack, then {{tt|AA}} is the pack expansion {{tt|PP...}}; otherwise,}} {{tt|AA}} is the id-expression {{tt|PP}}.
+
+If the rewrite produces an invalid type, then {{tt|P}} is not at least as specialized as {{tt|A}}.
+
+{{source|1=
+template&lt;typename T&gt;
+struct eval;                     // primary template
+
+template&lt;template&lt;typename, typename...&gt; class TT, typename T1, typename... Rest&gt;
+struct eval&lt;TT&lt;T1, Rest...&gt;&gt; {}; // partial specialization of eval
+
+template&lt;typename T1&gt; struct A;
+template&lt;typename T1, typename T2&gt; struct B;
+template&lt;int N&gt; struct C;
+template&lt;typename T1, int N&gt; struct D;
+template&lt;typename T1, typename T2, int N = 17&gt; struct E;
+
+eval&lt;A&lt;int&gt;&gt; eA;        // OK: matches partial specialization of eval
+eval&lt;B&lt;int, float&gt;&gt; eB; // OK: matches partial specialization of eval
+eval&lt;C&lt;17&gt;&gt; eC;         // error: C does not match TT in partial specialization
+                        // because TT's first parameter is a
+                        // type template parameter, while 17 does not name a type
+eval&lt;D&lt;int, 17&gt;&gt; eD;    // error: D does not match TT in partial specialization
+                        // because TT's second parameter is a
+                        // type parameter pack, while 17 does not name a type
+eval&lt;E&lt;int, float&gt;&gt; eE; // error: E does not match TT in partial specialization
+                        // because E's third (default) parameter is a non-type
+}}
+
+Before the adoption of {{stddoc|p0522r0}}, each of the template parameters of {{tt|A}} must match corresponding template parameters of {{tt|P}} exactly. This hinders many reasonable template argument from being accepted.
+
+Although it was pointed out very early ([https://wg21.cmeerw.net/cwg/issue150 CWG#150]), by the time it was resolved, the changes were applied to the C++17 working paper and the resolution became a de facto C++17 feature. Many compilers disable it by default:
+* [https://gcc.gnu.org/gcc-7/changes.html#cxx GCC] disables it in all language modes prior to C++17 by default, it can only be enabled by setting a compiler flag in these modes.
+* [https://clang.llvm.org/cxx_status.html#p0522 Clang] disables it in all language modes by default, it can only be enabled by setting a compiler flag.
+* [https://docs.microsoft.com/en-us/cpp/overview/visual-cpp-language-conformance Microsoft Visual Studio] treats it as a normal C++17 feature and only enables it in C++17 and later language modes (i.e. no support in C++14 language mode, which is the default mode).
+
+{{source|1=
+template&lt;class T&gt; class A { /* ... */ };
+template&lt;class T, class U = T&gt; class B { /* ... */ };
+template&lt;class... Types&gt; class C { /* ... */ };
+
+template&lt;template&lt;class&gt; class P&gt; class X { /* ... */ };
+X&lt;A&gt; xa; // OK
+X&lt;B&gt; xb; // OK after P0522R0
+         // Error earlier: not an exact match
+X&lt;C&gt; xc; // OK after P0522R0
+         // Error earlier: not an exact match
+
+template&lt;template&lt;class...&gt; class Q&gt; class Y { /* ... */ };
+Y&lt;A&gt; ya; // OK
+Y&lt;B&gt; yb; // OK
+Y&lt;C&gt; yc; // OK
+
+template&lt;auto n&gt; class D { /* ... */ };   // note: C++17
+template&lt;template&lt;int&gt; class R&gt; class Z { /* ... */ };
+Z&lt;D&gt; zd; // OK after P0522R0: the template parameter
+         // is more specialized than the template argument
+
+template&lt;int&gt; struct SI { /* ... */ };
+template&lt;template&lt;auto&gt; class&gt; void FA(); // note: C++17
+FA&lt;SI&gt;(); // Error
+}}
+
+====Default template arguments====
+Default template arguments are specified in the parameter lists after the {{c|{{=}}}} sign. Defaults can be specified for any kind of template parameter (type, non-type, or template){{rev inl|since=c++11|, but not to parameter packs}}.
+
+If the default is specified for a template parameter of a primary class template{{rev inl|since=c++14|, primary variable template,}} or alias template, each subsequent template parameter must have a default argument{{rev inl|since=c++11|, except the very last one may be a template parameter pack}}. In a function template, there are no restrictions on the parameters that follow a default{{rev inl|since=c++11|, and a parameter pack may be followed by more type parameters only if they have defaults or can be deduced from the function arguments}}.
+
+Default parameters are not allowed
+* in the out-of-class definition of a member of a {{rlp|class template}} (they have to be provided in the declaration inside the class body). Note that {{rlp|member template}}s of non-template classes can use default parameters in their out-of-class definitions (see [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=53856 GCC bug 53856])
+* in {{rlp|friend#Template friends|friend class template}} declarations
+{{rrev|until=c++11| {{mark unreviewed dr|CWG}}&lt;!-- CWG #226, but the compilers did not apply it to their C++03 mode --&gt;
+* in any {{rlp|function template}} declaration or definition
+}}
+
+{{rrev|since=c++11|
+On a friend function template declaration, default template arguments are allowed only if the declaration is a definition, and no other declarations of this function appear in this translation unit.
+}}
+
+Default template arguments that appear in the declarations are merged similarly to default function arguments:
+{{source|1=
+template&lt;typename T1, typename T2 = int&gt; class A;
+template&lt;typename T1 = int, typename T2&gt; class A;
+
+// the above is the same as the following:
+template&lt;typename T1 = int, typename T2 = int&gt; class A;
+}}
+But the same parameter cannot be given default arguments twice in the same scope:
+{{source|1=
+template&lt;typename T = int&gt; class X;
+template&lt;typename T = int&gt; class X {}; // error
+}}
+
+When parsing a default template argument for a non-type template parameter, the first non-nested {{c|&gt;}} is taken as the end of the template parameter list rather than a greater-than operator:
+
+{{source|1=
+template&lt;int i = 3 &gt; 4&gt;   // syntax error
+class X { /* ... */ };
+
+template&lt;int i = (3 &gt; 4)&gt; // OK
+class Y { /* ... */ };
+}}
+
+The template parameter lists of template template parameters can have their own default arguments, which are only in effect where the template template parameter itself is in scope:
+
+{{source|1=
+// class template, with a type template parameter with a default
+template&lt;typename T = float&gt;
+struct B {};
+
+// template template parameter T has a parameter list, which
+// consists of one type template parameter with a default
+template&lt;template&lt;typename = float&gt; typename T&gt;
+struct A
+{
+    void f();
+    void g();
+};
+
+// out-of-body member function template definitions
+
+template&lt;template&lt;typename TT&gt; class T&gt;
+void A&lt;T&gt;::f()
+{
+    T&lt;&gt; t; // error: TT has no default in scope
+}
+
+template&lt;template&lt;typename TT = char&gt; class T&gt;
+void A&lt;T&gt;::g()
+{
+    T&lt;&gt; t; // OK: t is T&lt;char&gt;
+}
+}}
+
+{{rlp|access|Member access}} for the names used in a default template parameter is checked at the declaration, not at the point of use:
+{{source|1=
+class B {};
+
+template&lt;typename T&gt;
+class C
+{
+protected:
+    typedef T TT;
+};
+
+template&lt;typename U, typename V = typename U::TT&gt;
+class D: public U {};
+
+D&lt;C&lt;B&gt;&gt;* d; // error: C::TT is protected
+}}
+
+{{rrev|since=c++14|{{mark unreviewed dr|CWG|2008}}
+The default template argument is implicitly instantiated when the value of that default argument is needed, except if the template is used to name a function:
+{{source|1=
+template&lt;typename T, typename U = int&gt;
+struct S {};
+
+S&lt;bool&gt;* p; // The default argument for U is instantiated at this point
+            // the type of p is S&lt;bool, int&gt;*
+}}
+}}
+
+====Template argument equivalence====
+Template argument equivalence is used to determine whether two {{rlpsd|templates#Template identifiers}} are same.
+
+Two values are ''template-argument-equivalent'' if they are of the same type and any of the following conditions is satisfied:
+* They are of integral or enumeration type and their values are the same.
+* They are of pointer type and they have the same pointer value.
+* They are of pointer-to-member type and they refer to the same class member or are both the null member pointer value.
+* They are of lvalue reference type and they refer to the same object or function.
+{{rrev|since=c++11|
+* They are of type {{lc|std::nullptr_t}}.
+}}
+{{rrev|since=c++20|
+* They are of floating-point type and their values are identical.
+* They are of array type (in which case the arrays must be member objects of some class/union) and their corresponding elements are template-argument-equivalent.
+* They are of union type and either they both have no active member or they have the same active member and their active members are template-argument-equivalent.
+* They are of a lambda closure type.
+* They are of non-union class type and their corresponding direct subobjects and reference members are template-argument-equivalent.
+}}
+
+===Notes===
+{{rrev|since=c++20|
+In template parameters, type constraints could be used for both type and non-type parameters, depending on whether {{c/core|auto}} is present.
+
+{{source|1=
+template&lt;typename&gt;
+concept C = true;
+
+template&lt;C,     // type parameter 
+         C auto // non-type parameter
+        &gt;
+struct S{};
+
+S&lt;int, 0&gt; s;
+}}
+
+}}
+
+{{ftm begin|core=1|std=1|comment=1|sort=1}}
+{{ftm|value=201606L|std=C++17|__cpp_nontype_template_parameter_auto|Declaring [[#Non-type template parameter|non-type template parameters]] with {{tt|auto}}}}
+{{ftm|value=201611L|std=c++17|__cpp_template_template_args|Matching of [[#Template template arguments|template template-arguments]]|dr=yes}}
+{{ftm|value=201411L|std=C++17|__cpp_nontype_template_args|rowspan="2"|Allow constant evaluation for all [[#Template non-type arguments|non-type template arguments]]}}
+{{ftm|value=201911L|std=C++20|-|Class types and floating-point types in [[#Non-type template parameter|non-type template parameters]]}}
+{{ftm end}}
+
+===Examples===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+
+// simple non-type template parameter
+template&lt;int N&gt;
+struct S { int a[N]; };
+
+template&lt;const char*&gt;
+struct S2 {};
+
+// complicated non-type example
+template
+&lt;
+    char c,             // integral type
+    int (&amp;ra)[5],       // lvalue reference to object (of array type)
+    int (*pf)(int),     // pointer to function
+    int (S&lt;10&gt;::*a)[10] // pointer to member object (of type int[10])
+&gt;
+struct Complicated
+{
+    // calls the function selected at compile time
+    // and stores the result in the array selected at compile time
+    void foo(char base)
+    {
+        ra[4] = pf(c - base);
+    }
+};
+
+//  S2&lt;"fail"&gt; s2;        // error: string literal cannot be used
+    char okay[] = "okay"; // static object with linkage
+//  S2&lt;&amp;okay[0]&gt; s3;      // error: array element has no linkage
+    S2&lt;okay&gt; s4;          // works
+
+int a[5];
+int f(int n) { return n; }
+
+// C++20: NTTP can be a literal class type
+template&lt;std::array arr&gt;
+constexpr
+auto sum() { return std::accumulate(arr.cbegin(), arr.cend(), 0); }
+
+// C++20: class template arguments are deduced at the call site
+static_assert(sum&lt;std::array&lt;double, 8&gt;{3, 1, 4, 1, 5, 9, 2, 6}&gt;() == 31.0);
+// C++20: NTTP argument deduction and CTAD
+static_assert(sum&lt;std::array{2, 7, 1, 8, 2, 8}&gt;() == 28);
+
+int main()
+{
+    S&lt;10&gt; s; // s.a is an array of 10 int
+    s.a[9] = 4;
+
+    Complicated&lt;'2', a, f, &amp;S&lt;10&gt;::a&gt; c;
+    c.foo('0');
+
+    std::cout &lt;&lt; s.a[9] &lt;&lt; a[4] &lt;&lt; '\n';
+}
+|output=
+42
+}}
+{{todo|more examples}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=150|paper=P0522R0|std=C++98|before=template-template arguments had to match parameter&lt;br&gt;lists of template-template parameters exactly|after=more specialized&lt;br&gt;also allowed}}
+{{dr list item|wg=cwg|dr=184|std=C++98|before=whether the template parameters of template template&lt;br&gt;parameters are allowed to have default arguments is unspecified|after=specification added}}
+{{dr list item|wg=cwg|dr=354|std=C++98|before=null pointer values could not be non-type template arguments|after=allowed}}
+{{dr list item|wg=cwg|dr=1398|std=C++11|before=template non-type arguments could not have type {{tt|std::nullptr_t}}|after=allowed}}
+{{dr list item|wg=cwg|dr=1570|std=C++98|before=template non-type arguments could designate addresses of subobjects|after=not allowed}}
+{{dr list item|wg=cwg|dr=1922|std=C++98|before=it was unclear whether a class template whose name is an&lt;br&gt;injected-class-name can use the default arguments in prior declarations|after=allowed}}
+{{dr list item|wg=cwg|dr=2032|std=C++14|before=for variable templates, there was no restriction on the template&lt;br&gt;parameters after a template parameter with a default argument|after=apply the same restriction&lt;br&gt;as on class templates&lt;br&gt;and alias templates}}
+{{dr list item|wg=cwg|dr=2542|std=C++20|before=it was unclear whether the closure type is structural|after=it is not structural}}
+{{dr list item|wg=cwg|dr=2845|std=C++20|before=the closure type was not structural|after=it is structural&lt;br&gt;if capture-less}}
+{{dr list item|paper=P2308R1|std=C++11&lt;br&gt;C++20|before=1. list-initialization was not allowed for&lt;br&gt;{{nbsp|4}}non-type template arguments (C++11)&lt;br&gt;2. it was unclear how non-type template&lt;br&gt;{{nbsp|4}}parameters of class types are initialized (C++20)|after=1. allowed&lt;br&gt;2. made clear}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

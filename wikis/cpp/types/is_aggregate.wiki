@@ -1,0 +1,66 @@
+{{cpp/types/traits/is|1=is_aggregate
+|std=c++17
+|description=If {{tt|T}} is an [[cpp/language/aggregate initialization|aggregate type]], provides the member constant {{tt|value}} equal {{c|true}}. For any other type, {{tt|value}} is {{c|false}}.
+
+If {{tt|T}} is an incomplete type other than an array type or (possibly cv-qualified) {{c/core|void}}, the behavior is undefined.
+|inherit_desc={{tt|T}} is an aggregate type
+}}
+
+===Notes===
+{{feature test macro|__cpp_lib_is_aggregate|value=201703L|std=C++17|{{tt|std::is_agregate}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;new&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+// Constructs a T at the uninitialized memory pointed to by p using
+// list-initialization for aggregates and non-list initialization otherwise.
+template&lt;class T, class... Args&gt;
+T* construct(T* p, Args&amp;&amp;... args)
+{
+    if constexpr (std::is_aggregate_v&lt;T&gt;)
+        return ::new (static_cast&lt;void*&gt;(p)) T{std::forward&lt;Args&gt;(args)...};
+    else
+        return ::new (static_cast&lt;void*&gt;(p)) T(std::forward&lt;Args&gt;(args)...);
+}
+
+struct A { int x, y; };
+static_assert(std::is_aggregate_v&lt;A&gt;);
+
+struct B
+{
+    int i;
+    std::string_view str;
+
+    B(int i, std::string_view str) : i(i), str(str) {}
+};
+static_assert(not std::is_aggregate_v&lt;B&gt;);
+
+template &lt;typename... Ts&gt;
+using aligned_storage_t = alignas(Ts...) std::byte[std::max({sizeof(Ts)...})];
+
+int main()
+{
+    aligned_storage_t&lt;A, B&gt; storage;
+
+    A&amp; a = *construct(reinterpret_cast&lt;A*&gt;(&amp;storage), 1, 2);
+    assert(a.x == 1 and a.y == 2);
+
+    B&amp; b = *construct(reinterpret_cast&lt;B*&gt;(&amp;storage), 3, "4");
+    assert(b.i == 3 and b.str == "4");
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3823|std=C++17|before=The behavior is undefined if {{tt|T}} is an array type but&lt;br&gt;{{tt|std::remove_all_extents_t&lt;T&gt;}} is an incomplete type.|after=The behavior is defined regardless of the&lt;br&gt;incompleteness of {{tt|std::remove_all_extents_t&lt;T&gt;}}&lt;br&gt; as long as {{tt|T}} is an array type.}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

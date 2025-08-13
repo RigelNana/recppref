@@ -1,0 +1,202 @@
+{{title|Placeholder type specifiers {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+A placeholder type specifier designates a ''placeholder type'' that will be replaced later, typically by deduction from an {{rlp|initialization|initializer}}.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar optional|type-constraint}} {{ttb|auto}}}}
+{{sdsc|num=2|{{spar optional|type-constraint}} {{ttb|decltype(auto)}}|notes={{mark since c++14}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|type-constraint}}|{{mark since c++20}} a {{rlp|constraints#Concepts|concept}} name, optionally qualified, optionally followed by a template argument list enclosed in {{ttb|&lt;&gt;}}}}
+{{par end}}
+
+@1@ Type is deduced using the rules for {{rlp|template argument deduction#Other contexts|template argument deduction}}.
+@2@ Type is {{rlp|decltype|{{tt|decltype(expr)}}}}, where {{c|expr}} is the initializer or ones used in return statements.
+
+The placeholder {{c/core|auto}} may be accompanied by modifiers, such as {{c/core|const}} or {{tt|&amp;}}, which will participate in the type deduction. {{rev inl|since=c++14|The placeholder {{c/core|decltype(auto)}} must be the sole constituent of the declared type.}}
+
+{{rrev|since=c++20|
+If {{spar|type-constraint}} is present, let {{tt|T}} be the type deduced for the placeholder, the {{spar|type-constraint}} introduces a {{rlp|constraints|constraint expression}} as follows:
+
+* If {{spar|type-constraint}} is {{tt|Concept&lt;A{{sub|1}}, ..., A{{sub|n}}&gt;}}, then the constraint expression is {{tt|Concept&lt;T, A{{sub|1}}, ..., A{{sub|n}}&gt;}};
+* otherwise ({{spar|type-constraint}} is {{tt|Concept}} without an argument list), the constraint expression is {{tt|Concept&lt;T&gt;}}.
+
+Deduction fails if the constraint expression is invalid or returns {{c|false}}.
+}}
+
+===Explanation===
+A placeholder type specifier may appear in the following contexts:
+
+{{rev begin}}
+{{rev|since=c++14|
+====Parameter declarations====
+In the following parameter declarations, the type of the parameter declared can be of syntax {{v|1}}:
+* If a parameter of a {{rlp|lambda|lambda expression}} has a placeholder type, the lambda expression is a generic lambda.
+}}
+{{rev|since=c++17|
+* If a {{rlp|template parameters#Template non-type arguments|non-type template parameter}} has a placeholder type, its type is deduced from the corresponding template argument.
+}}
+{{rev|since=c++20|
+* If a parameter of a {{rlp|function|function declaration}} has a placeholder type, an {{rlpsd|function template#Abbreviated function template}} is declared.
+}}
+{{rev end}}
+
+====Function declarations====
+A placeholder type can appear in the {{rlp|declarations#Specifiers|declaration specifiers}} for a {{rlp|function|function declarator}} that includes a trailing return type.
+
+{{rrev|since=c++14|
+A placeholder type can appear in the declaration specifiers or {{rlp|declarations#Specifiers|type specifiers}} in the declared return type of a {{rlp|function|function declarator}}. {{rlps|function#Return type deduction}} will be applied in this case.
+}}
+
+{{source|1=
+auto f() -&gt; int; // OK: f returns int
+auto g() { return 0.0; } // OK since C++14: g returns double
+auto h(); // OK since C++14: h’s return type will be deduced when it is defined
+}}
+
+====Variable declarations====
+The type of a variable declared using a placeholder type is deduced from its {{rlp|initialization|initializer}}. This use is allowed in an initializing declaration of a variable.
+
+The placeholder type can only appear as one of the {{rlp|declarations#Specifiers|declaration specifiers}} in the declaration specifier sequence or as one of the type specifiers in a trailing return type that specifies the type that replaces such a declaration specifier. In this case, the declaration must declare at least one variable, and each variable must have a non-empty initializer.
+
+{{source|1=
+// “auto”s in declaration specifiers
+auto x = 5; // OK: x has type int
+const auto *v = &amp;x, u = 6; // OK: v has type const int*, u has type const int
+static auto y = 0.0; // OK: y has type double
+
+auto f() -&gt; int;
+auto (*fp)() -&gt; auto = f; // OK: the “auto” in the trailing return type
+                          // can be deduced from f
+}}
+
+{{rrev|since=c++17|1=
+====Structured binding declarations====
+The {{c/core|auto}} specifier can be used in a {{rlp|structured binding}} declaration.
+}}
+
+{{anchor|New expressions}}
+===={{c/core|new}} expressions====
+A placeholder type can be used in the type specifier sequence of the type-id of a {{rlp|new|new expression}}. In such a type-id, the placeholder type must appear as one of the type specifiers in the type specifier sequence or a trailing return type that specifies the type that replaces
+such a type specifier.
+
+{{rrev|since=c++23|1=
+====Function-style cast====
+The {{c/core|auto}} type specifier can be used as the type specifier of a {{rlp|explicit cast|function-style cast}}.
+}}
+
+===Notes===
+Until C++11, {{c/core|auto}} had the semantic of a {{rlp|storage duration|storage duration specifier}}.
+
+A program that uses a placeholder type in a context not explicitly stated above is ill-formed.
+
+If a declaration declares multiple entities, and the declaration specifier sequence uses a placeholder type, the program is ill-formed if any of the following conditions is satisfied:
+* Some of the entities declared are not variables.
+* The type that replaces the placeholder type is not the same in each deduction.
+
+{{source|1=
+auto f() -&gt; int, i = 0; // Error: declares a function and a variable with “auto”
+auto a = 5, b = {1, 2}; // Error: different types for “auto”
+}}
+
+{{rrev|since=concepts_ts|
+The {{c/core|auto}} keyword may also be used in a nested name specifier. A nested name specifier of the form {{c|auto::}} is a placeholder that is replaced by a class or enumeration type following the rules for [[cpp/experimental/constraints|constrained type]] placeholder deduction.
+}}
+
+{{feature test macro|value=201304L|std=C++14|__cpp_decltype_auto|{{c/core|decltype(auto)}}}}
+
+===Keywords===
+{{ltt|cpp/keyword/auto}},
+{{ltt|cpp/keyword/decltype}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;utility&gt;
+
+template&lt;class T, class U&gt;
+auto add(T t, U u) { return t + u; } // the return type is the type of operator+(T, U)
+
+// perfect forwarding of a function call must use decltype(auto)
+// in case the function it calls returns by reference
+template&lt;class F, class... Args&gt;
+decltype(auto) PerfectForward(F fun, Args&amp;&amp;... args) 
+{ 
+    return fun(std::forward&lt;Args&gt;(args)...); 
+}
+
+template&lt;auto n&gt; // C++17 auto parameter declaration
+auto f() -&gt; std::pair&lt;decltype(n), decltype(n)&gt; // auto can't deduce from brace-init-list
+{
+    return {n, n};
+}
+
+int main()
+{
+    auto a = 1 + 2;          // type of a is int
+    auto b = add(1, 1.2);    // type of b is double
+    static_assert(std::is_same_v&lt;decltype(a), int&gt;);
+    static_assert(std::is_same_v&lt;decltype(b), double&gt;);
+    
+    auto c0 = a;             // type of c0 is int, holding a copy of a
+    decltype(auto) c1 = a;   // type of c1 is int, holding a copy of a
+    decltype(auto) c2 = (a); // type of c2 is int&amp;, an alias of a
+    std::cout &lt;&lt; "before modification through c2, a = " &lt;&lt; a &lt;&lt; '\n';
+    ++c2;
+    std::cout &lt;&lt; " after modification through c2, a = " &lt;&lt; a &lt;&lt; '\n';
+    
+    auto [v, w] = f&lt;0&gt;(); //structured binding declaration
+    
+    auto d = {1, 2}; // OK: type of d is std::initializer_list&lt;int&gt;
+    auto n = {5};    // OK: type of n is std::initializer_list&lt;int&gt;
+//  auto e{1, 2};    // Error as of DR n3922, std::initializer_list&lt;int&gt; before
+    auto m{5};       // OK: type of m is int as of DR n3922, initializer_list&lt;int&gt; before
+//  decltype(auto) z = { 1, 2 } // Error: {1, 2} is not an expression
+    
+    // auto is commonly used for unnamed types such as the types of lambda expressions
+    auto lambda = [](int x) { return x + 3; };
+    
+//  auto int x; // valid C++98, error as of C++11
+//  auto x;     // valid C, error in C++
+    
+    [](...){}(c0, c1, v, w, d, n, m, lambda); // suppresses "unused variable" warnings
+}
+|p=true
+|output=
+before modification through c2, a = 3
+ after modification through c2, a = 4
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1265|std=C++11|before=the {{c/core|auto}} specifier could be used to declare a function with a trailing&lt;br&gt;return type and define a variable in one declaration statement|after=prohibited}}
+{{dr list item|wg=cwg|dr=1346|std=C++11|before=a parenthesized expression list could not be assigned to an {{c/core|auto}} variable|after=allowed}}
+{{dr list item|wg=cwg|dr=1347|std=C++11|before=a declaration with the {{c/core|auto}} specifier could define two variables&lt;br&gt;with types {{tt|T}} and {{c/core|std::initializer_list&lt;T&gt;}} respectively|after=prohibited}}
+{{dr list item|wg=cwg|dr=1852|std=C++14|before=the {{c/core|auto}} specifier in {{c/core|decltype(auto)}} was also a placeholder|after=not a placeholder&lt;br&gt;in this case}}
+{{dr list item|wg=cwg|dr=1892|std=C++11|before=the return type of a function pointer type-id could be {{c/core|auto}}|after=prohibited}}
+{{dr list item|wg=cwg|dr=2476|std=C++11|before=the resolution of {{cwg|1892}} prohibited the deduction&lt;br&gt;of the return type of function pointer variables from initializers|after=allowed}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=9.2.9.6|title=Placeholder type specifiers|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.2.8.5|title=Placeholder type specifiers|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.1.7.4|title=The {{tt|auto}} specifier|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.1.6.4|title={{tt|auto}} specifier|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.1.6.4|title={{tt|auto}} specifier|id=dcl.spec.auto}}
+{{ref std end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

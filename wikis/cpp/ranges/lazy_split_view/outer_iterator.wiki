@@ -1,0 +1,195 @@
+{{cpp/ranges/title|{{petty|lazy_split_view&lt;V, Pattern&gt;::}}''outer_iterator''}}
+{{cpp/ranges/lazy_split_view/navbar}}
+{{ddcla|since=c++20|expos=yes|
+template&lt; bool Const &gt;
+struct /*outer_iterator*/;
+}}
+
+The return type of {{rlpt|begin|lazy_split_view::begin}}, and of {{rlpt|end|lazy_split_view::end}} when the underlying view is a {{lconcept|common_range}} and {{lconcept|forward_range}}.
+
+If either {{tt|V}} or {{tt|Pattern}} is not a [[cpp/ranges#Helper concepts|simple view]] (e.g. if {{c/core|ranges::iterator_t&lt;const V&gt;}} is invalid or different from {{c/core|ranges::iterator_t&lt;V&gt;}}), {{tt|Const}} is {{c|true}} for iterators returned from the const overloads, and {{c|false}} otherwise. If {{tt|V}} is a simple view, {{tt|Const}} is {{c|true}} if and only if {{tt|V}} is a {{lconcept|forward_range}}.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem type|Parent|{{cpp/ranges/maybe-const|ranges::lazy_split_view}}}}
+{{dsc expos mem type|Base|{{cpp/ranges/maybe-const|V}}}}
+{{dsc|{{tt|iterator_concept}}|
+* {{lc|std::forward_iterator_tag}}, if {{tti|Base}} models {{lconcept|forward_range}},
+* {{lc|std::input_iterator_tag}}, otherwise}}
+{{dsc|{{tt|iterator_category}}&lt;br&gt;{{small|(present only if {{tti|Base}} models {{lconcept|forward_range}})}}|{{lc|std::input_iterator_tag}}}}
+{{dsc mem class|cpp/ranges/lazy_split_view/value_type|the value type of the {{tti|outer_iterator}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|ranges::range_difference_t&lt;Base&gt;}}}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|parent_|id=parent|private=yes|spec={{c/core|Parent*}}|a pointer to the parent object {{rlpt|/|lazy_split_view}}}}
+{{dsc expos mem obj|current_|id=current|private=yes|spec={{c/core|ranges::iterator_t&lt;Base&gt;}}|maybe=(present only if {{tt|V}} models {{lconcept|forward_range}})|an iterator into the underlying {{lconcept|view}}}}
+{{dsc expos mem obj|trailing_empty_|id=trailing_empty|private=yes|spec=bool|a flag that indicates whether an empty trailing subrange (if any) was reached}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|nolink=true|constructs an iterator}}
+{{dsc mem fun|nolink=true|operator*|returns the current subrange}}
+{{dsc mem fun|nolink=true|operator++&lt;br&gt;operator++{{dsc small|(int)}}|advances the iterator}}
+{{dsc expos mem fun|nolink=true|cur|returns conditionally a reference to the {{box|{{lsi|#current_}}}} (if present) or to the {{box|{{c/core|*}}{{lsi|#parent_}}{{c/core|-&gt;}}{{rlpsi|/#current_}}}}}}
+{{dsc end}}
+
+===Member functions===
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}''outer_iterator''|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+/*outer_iterator*/() = default;
+}}
+{{dcl|num=2|since=c++20|
+constexpr explicit /*outer_iterator*/( Parent&amp; parent )
+    requires (!ranges::forward_range&lt;Base&gt;);
+}}
+{{dcl|num=3|since=c++20|
+constexpr /*outer_iterator*/( Parent&amp; parent,
+                              ranges::iterator_t&lt;Base&gt; current )
+    requires ranges::forward_range&lt;Base&gt;;
+}}
+{{dcla|num=4|anchor=ctor4|since=c++20|
+constexpr /*outer_iterator*/( /*outer_iterator*/&lt;!Const&gt; i )
+    requires Const &amp;&amp; std::convertible_to&lt;ranges::iterator_t&lt;V&gt;,
+                                          ranges::iterator_t&lt;Base&gt;&gt;;
+}}
+{{dcl end}}
+
+@1@ Value initializes the non-static data members with their default member initializer, that is:
+* {{c|1=parent_ = nullptr;}},
+* {{c|1=current_ = iterator_t&lt;Base&gt;();}} (present only if {{tt|V}} models {{lconcept|forward_range}}),
+@2@ Initializes {{tti|parent_}} with {{c|std::addressof(parent)}}.
+@3@ Initializes {{tti|parent_}} with {{c|std::addressof(parent)}} and {{tti|current_}} with {{c|std::move(current)}}.
+@4@ Initializes {{tti|parent_}} with {{c|i.parent_}}, {{tti|current_}} with {{c|std::move(i.current_)}}, and {{tti|trailing_empty_}} with {{c|t.trailing_empty_}}.
+
+The {{tti|trailing_empty_}} is initialized with its default member initializer to {{c/core|false}}.
+}}
+
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}operator*|2=
+{{ddcl|since=c++20|
+constexpr value_type operator*() const;
+}}
+Equivalent to {{c|return value_type{*this};}}.
+}}
+
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}operator++|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+constexpr /*outer_iterator*/&amp; operator++();
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr decltype(auto) operator++(int);
+}}
+{{dcl end}}
+
+@1@ The function body is equivalent to
+{{source|1=
+const auto end = ranges::end(parent_-&gt;base_);
+if (/*cur*/() == end)
+{
+    trailing_empty_ = false;
+    return *this;
+}
+const auto [pbegin, pend] = ranges::subrange{parent_-&gt;pattern_};
+if (pbegin == pend)
+    ++/*cur*/();
+else if constexpr (/*tiny_range*/&lt;Pattern&gt;)
+{
+    /*cur*/() = ranges::find(std::move(/*cur*/()), end, *pbegin);
+    if (/*cur*/() != end)
+    {
+        ++/*cur*/();
+        if (/*cur*/() == end)
+            trailing_empty_ = true;
+    }
+}
+else
+{
+    do
+    {
+        auto [b, p] = ranges::mismatch(/*cur*/(), end, pbegin, pend);
+        if (p == pend)
+        {
+            /*cur*/() = b;
+            if (/*cur*/() == end)
+                trailing_empty_ = true;
+            break; // The pattern matched; skip it
+        }
+    } while (++/*cur*/() != end);
+}
+return *this;
+}}
+
+@2@ Equivalent to
+{{source|1=
+if constexpr (ranges::forward_range&lt;Base&gt;)
+{
+    auto tmp = *this;
+    ++*this;
+    return tmp;
+}
+else
+{
+    ++*this; // no return statement
+}
+}}
+}}
+
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}''cur''{{sep}}()|2=
+{{dcl begin}}
+{{dcla|anchor=no|num=1|since=c++20|expos=yes|
+constexpr auto&amp; /*cur*/() noexcept;
+}}
+{{dcla|anchor=no|num=2|since=c++20|expos=yes|
+constexpr auto&amp; /*cur*/() const noexcept;
+}}
+{{dcl end}}
+
+This convenience member function is referred to from {{c|/*outer_iterator*/::operator++()}}, from the non-member {{c|1=operator==(const /*outer_iterator*/&amp;, std::default_sentinel_t)}}, and from some member functions of the possible implementation of {{rlpi|inner_iterator}}.
+
+@1,2@ Equivalent to
+{{source|1=
+if constexpr (ranges::forward_range&lt;V&gt;)
+    return current_;
+else
+    return *parent-&gt;current_;
+}}
+}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc fun|nolink=true|operator{{==}}|compares the underlying iterators or the underlying iterator and {{lc|std::default_sentinel}}|notes={{mark c++20}}}}
+{{dsc end}}
+
+{{member|1= operator==&lt;small&gt;(std::ranges::split_view::''outer_iterator'')&lt;/small&gt;|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+friend constexpr bool operator==( const /*outer_iterator*/&amp; x,
+                                  const /*outer_iterator*/&amp; y )
+      requires forward_range&lt;Base&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+friend constexpr bool operator==( const /*outer_iterator*/&amp; x,
+                                  std::default_sentinel_t );
+}}
+{{dcl end}}
+
+@1@ Equivalent to {{c|1=return x.current_ == y.current_ and x.trailing_empty_ == y.trailing_empty_;}}.
+@2@ Equivalent to {{c|1=return x./*cur*/() == ranges::end(x.parent_-&gt;base_) and !x.trailing_empty_;}}.
+
+{{cpp/note synthesized eq}}
+
+{{cpp/hidden friend|plural=yes|{{tt|std::ranges::split_view::''outer_iterator''}}}}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3904|std=C++20|before=[[#Data members|{{tti|trailing_empty_}}]] was not initialized in constructor ([[#ctor4|4]])|after=initialized}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

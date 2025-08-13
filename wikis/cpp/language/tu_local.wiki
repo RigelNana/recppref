@@ -1,0 +1,179 @@
+{{title|Translation-unit-local entities {{mark since c++20}}}}
+{{cpp/language/declarations/navbar}}
+Translation-unit-local (TU-local) entities are introduced to prevent entities that are supposed to be local (not used in any other translation unit) being exposed and used in other translation units.
+
+An example from [https://vector-of-bool.github.io/2019/03/31/modules-2.html Understanding C++ Modules: Part 2] illustrates the problem of not constraining exposures:
+{{source|1=
+// Module unit without TU-local constraints
+export module Foo;
+
+import &lt;iostream&gt;;
+
+namespace
+{
+   class LolWatchThis {        // internal linkage, cannot be exported
+       static void say_hello()
+       {
+           std::cout &lt;&lt; "Hello, everyone!\n";
+       }
+   };
+}
+
+export LolWatchThis lolwut() { // LolWatchThis is exposed as return type
+    return LolWatchThis();
+}
+}}
+{{source|1=
+// main.cpp
+import Foo;
+
+int main()
+{
+    auto evil = lolwut();        // 'evil' has type of 'LolWatchThis'
+    decltype(evil)::say_hello(); // definition of 'LolWatchThis' is not internal anymore
+}
+}}
+
+===TU-local entities===
+An entity is ''TU-local'' if it is
+# a type, function, variable, or template that
+## has a name with {{rlp|storage duration#internal linkage|internal linkage}}, or
+## does not have a name with linkage and is declared, or introduced by a {{rlp|lambda|lambda expression}}, within the definition of a TU-local entity,
+# a type with no name that is defined outside a {{rlp|class|class-specifier}}, function body, or initializer or is introduced by a defining-type-specifier (type-specifier, class-specifier or enum-specifier) that is used to declare only TU-local entities,
+# a specialization of a TU-local template,
+# a specialization of a template with any TU-local template argument, or
+# a specialization of a template whose (possibly instantiated) declaration is an exposure (defined below).
+{{source|1=
+// TU-local entities with internal linkage
+namespace { // all names declared in unnamed namespace have internal linkage
+    int tul_var = 1;                          // TU-local variable
+    int tul_func() { return 1; }              // TU-local function
+    struct tul_type { int mem; };             // TU-local (class) type
+}
+template&lt;typename T&gt;
+static int tul_func_temp() { return 1; }      // TU-local template
+
+// TU-local template specialization
+template&lt;&gt;
+static int tul_func_temp&lt;int&gt;() { return 3; } // TU-local specialization
+
+// template specialization with TU-local template argument
+template &lt;&gt; struct std::hash&lt;tul_type&gt; {      // TU-local specialization
+    std::size_t operator()(const tul_type&amp; t) const { return 4u; }
+};
+}}
+
+{{todo|missing examples of rules #1.2, #2 and #5}}
+
+A value or object is ''TU-local'' if either
+# it is, or is a pointer to, a TU-local function or the object associated with a TU-local variable, or
+# it is an object of class or array type and any of its {{rlp|object#Subobjects|subobjects}} or any of the objects or functions to which its non-static data members of reference type refer is TU-local and is {{rlp|constant_expression#Usable in constant expressions|usable in constant expressions}}.
+{{source|1=
+static int tul_var = 1;             // TU-local variable
+static int tul_func() { return 1; } // TU-local function
+
+int* tul_var_ptr = &amp;tul_var;        // TU-local: pointer to TU-local variable
+int (* tul_func_ptr)() = &amp;tul_func; // TU-local: pointer to TU-local function
+
+constexpr static int tul_const = 1; // TU-local variable usable in constant expressions
+int tul_arr[] = { tul_const };      // TU-local: array of constexpr TU-local object 
+struct tul_class { int mem; };
+tul_class tul_obj{tul_const};       // TU-local: has member constexpr TU-local object
+}}
+
+===Exposures===
+A declaration D ''names'' an entity E if
+# D contains a lambda expression whose closure type is E,
+# E is not a function or function template and D contains an id-expression, type-specifier, nested-name-specifier, template-name, or concept-name denoting E, or
+# E is a function or function template and D contains an expression that names E or an id-expression that refers to a set of overloads that contains E.
+{{source|1=
+// lambda naming
+auto x = [] {}; // names decltype(x)
+
+// non-function (template) naming
+int y1 = 1;                      // names y1 (id-expression)
+struct y2 { int mem; };
+y2 y2_obj{1};                    // names y2 (type-specifier)
+struct y3 { int mem_func(); };
+int y3::mem_func() { return 0; } // names y3 (nested-name-specifier)
+template&lt;typename T&gt; int y4 = 1;
+int var = y4&lt;y2&gt;;                // names y4 (template-name)
+template&lt;typename T&gt; concept y5 = true;
+template&lt;typename T&gt; void func(T&amp;&amp;) requires y5&lt;T&gt;; // names y5 (concept-name)
+
+// function (template) naming
+int z1(int arg)    { std::cout &lt;&lt; "no overload"; return 0; }
+int z2(int arg)    { std::cout &lt;&lt; "overload 1";  return 1; }
+int z2(double arg) { std::cout &lt;&lt; "overload 2";  return 2; }
+
+int val1 = z1(0); // names z1
+int val2 = z2(0); // names z2 ( int z2(int) )
+}}
+
+A declaration is an ''exposure'' if it either names a TU-local entity, ignoring
+# the function-body for a non-inline function or function template (but not the deduced return type for a (possibly instantiated) definition of a function with a declared return type that uses a {{rlp|auto|placeholder type}}),
+# the initializer for a variable or variable template (but not the variable’s type),
+#friend declarations in a class definition, and
+# any reference to a non-volatile const object or reference with internal or no linkage initialized with a constant expression that is not an {{rlp|definition#ODR-use|odr-use}},
+or defines a constexpr variable initialized to a TU-local value.
+
+{{todo|missing examples for exposures}}
+
+===TU-local constraints===
+If a (possibly instantiated) {{rlp|declarations|declaration}} of, or a {{rlp|class_template_argument_deduction#Deduction for class templates|deduction guide}} for, a non-TU-local entity in a {{rlp|modules|module interface unit}} (outside the private-module-fragment, if any) or module partition is an exposure, the program is ill-formed. Such a declaration in any other context is deprecated.
+
+If a declaration that appears in one translation unit names a TU-local entity declared in another translation unit that is not a header unit, the program is ill-formed. A declaration instantiated for a template specialization appears at the point of instantiation of the specialization.
+
+{{todo|missing examples for constraints}}
+
+===Example===
+Translation unit #1:
+{{source|1=
+export module A;
+static void f() {}
+inline void it() { f(); }         // error: is an exposure of f
+static inline void its() { f(); } // OK
+template&lt;int&gt; void g() { its(); } // OK
+template void g&lt;0&gt;();
+
+decltype(f) *fp;                             // error: f (though not its type) is TU-local
+auto &amp;fr = f;                                // OK
+constexpr auto &amp;fr2 = fr;                    // error: is an exposure of f
+constexpr static auto fp2 = fr;              // OK
+struct S { void (&amp;ref)(); } s{f};            // OK: value is TU-local
+constexpr extern struct W { S &amp;s; } wrap{s}; // OK: value is not TU-local
+
+static auto x = []{ f(); }; // OK
+auto x2 = x;                // error: the closure type is TU-local
+int y = ([]{ f(); }(), 0);  // error: the closure type is not TU-local
+int y2 = (x, 0);            // OK
+
+namespace N
+{
+    struct A {};
+    void adl(A);
+    static void adl(int);
+}
+void adl(double);
+
+inline void h(auto x) { adl(x); } // OK, but a specialization might be an exposure
+}}
+
+Translation unit #2:
+{{source|1=
+module A;
+void other()
+{
+    g&lt;0&gt;();                  // OK: specialization is explicitly instantiated
+    g&lt;1&gt;();                  // error: instantiation uses TU-local its
+    h(N::A{});               // error: overload set contains TU-local N::adl(int)
+    h(0);                    // OK: calls adl(double)
+    adl(N::A{});             // OK; N::adl(int) not found, calls N::adl(N::A)
+    fr();                    // OK: calls f
+    constexpr auto ptr = fr; // error: fr is not usable in constant expressions here
+}
+}}
+
+{{todo|examples are too complex, need better arrangement}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,132 @@
+{{cpp/title|try_lock}}
+{{cpp/thread/navbar}}
+{{ddcl|header=mutex|since=c++11|
+template&lt; class Lockable1, class Lockable2, class... LockableN &gt;
+int try_lock( Lockable1&amp; lock1, Lockable2&amp; lock2, LockableN&amp;... lockn );
+}}
+
+Tries to lock each of the given {{named req|Lockable}} objects {{c|lock1}}, {{c|lock2}}, {{c|...}}, {{c|lockn}} by calling {{tt|try_lock}} in order beginning with the first. 
+
+If a call to {{tt|try_lock}} fails, no further call to {{tt|try_lock}} is performed, {{tt|unlock}} is called for any locked objects and a {{c|0}}-based index of the object that failed to lock is returned.
+
+If a call to {{tt|try_lock}} results in an exception, {{tt|unlock}} is called for any locked objects before rethrowing.
+
+===Parameters===
+{{par begin}}
+{{par|lock1, lock2, ..., lockn|the {{named req|Lockable}} objects to lock}}
+{{par end}}
+
+===Return value===
+{{c|-1}} on success, or {{c|0}}-based index value of the object that failed to lock.
+
+===Example===
+{{example
+|The following example uses {{tt|std::try_lock}} to periodically tally and reset counters running in separate threads.
+|p=true
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    int foo_count = 0;
+    std::mutex foo_count_mutex;
+    int bar_count = 0;
+    std::mutex bar_count_mutex;
+    int overall_count = 0;
+    bool done = false;
+    std::mutex done_mutex;
+
+    auto increment = [](int&amp; counter, std::mutex&amp; m, const char* desc)
+    {
+        for (int i = 0; i &lt; 10; ++i)
+        {
+            std::unique_lock&lt;std::mutex&gt; lock(m);
+            ++counter;
+            std::cout &lt;&lt; desc &lt;&lt; ": " &lt;&lt; counter &lt;&lt; '\n';
+            lock.unlock();
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    };
+
+    std::thread increment_foo(increment, std::ref(foo_count), 
+        std::ref(foo_count_mutex), "foo");
+    std::thread increment_bar(increment, std::ref(bar_count), 
+        std::ref(bar_count_mutex), "bar");
+
+    std::thread update_overall([&amp;]()
+    {
+        done_mutex.lock();
+        while (!done)
+        {
+            done_mutex.unlock();
+            int result = std::try_lock(foo_count_mutex, bar_count_mutex);
+            if (result == -1)
+            {
+                overall_count += foo_count + bar_count;
+                foo_count = 0;
+                bar_count = 0;
+                std::cout &lt;&lt; "overall: " &lt;&lt; overall_count &lt;&lt; '\n';
+                foo_count_mutex.unlock();
+                bar_count_mutex.unlock();
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            done_mutex.lock();
+        }
+        done_mutex.unlock();
+    });
+
+    increment_foo.join();
+    increment_bar.join();
+    done_mutex.lock();
+    done = true;
+    done_mutex.unlock();
+    update_overall.join();
+
+    std::cout &lt;&lt; "Done processing\n"
+              &lt;&lt; "foo: " &lt;&lt; foo_count &lt;&lt; '\n'
+              &lt;&lt; "bar: " &lt;&lt; bar_count &lt;&lt; '\n'
+              &lt;&lt; "overall: " &lt;&lt; overall_count &lt;&lt; '\n';
+}
+|output=
+bar: 1
+foo: 1
+foo: 2
+bar: 2
+foo: 3
+overall: 5
+bar: 1
+foo: 1
+bar: 2
+foo: 2
+bar: 3
+overall: 10
+bar: 1
+foo: 1
+bar: 2
+foo: 2
+overall: 14
+bar: 1
+foo: 1
+bar: 2
+overall: 17
+foo: 1
+bar: 1
+foo: 2
+overall: 20
+Done processing
+foo: 0
+bar: 0
+overall: 20
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc lock}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

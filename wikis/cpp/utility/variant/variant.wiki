@@ -1,0 +1,196 @@
+{{cpp/utility/variant/title|variant}}
+{{cpp/utility/variant/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|
+constexpr variant() noexcept(/* see below */);
+}}
+{{dcl|num=2|since=c++17|
+constexpr variant( const variant&amp; other );
+}}
+{{dcl|num=3|since=c++17|
+constexpr variant( variant&amp;&amp; other ) noexcept(/* see below */);
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class T &gt;
+constexpr variant( T&amp;&amp; t ) noexcept(/* see below */);
+}}
+{{dcl|num=5|since=c++17|
+template&lt; class T,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_type_t&lt;T&gt;,
+                            Args&amp;&amp;... args );
+}}
+{{dcl|num=6|since=c++17|
+template&lt; class T,
+          class U,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_type_t&lt;T&gt;,
+                            std::initializer_list&lt;U&gt; il,
+                            Args&amp;&amp;... args );
+}}
+{{dcl|num=7|since=c++17|
+template&lt; std::size_t I,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_index_t&lt;I&gt;,
+                            Args&amp;&amp;... args );
+}}
+{{dcl|num=8|since=c++17|
+template&lt; std::size_t I,
+          class U,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_index_t&lt;I&gt;,
+                            std::initializer_list&lt;U&gt; il,
+                            Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+Constructs a new {{tt|variant}} object.
+
+@1@ Default constructor. Constructs a {{tt|variant}} holding the [[cpp/language/value initialization|value-initialized]] value of the first alternative ({{lc|index()}} is zero).
+* This constructor is {{co|constexpr}} if and only if the value initialization of the alternative type {{tt|T_0}} would satisfy the requirements for a [[cpp/language/constexpr|constexpr function]].
+* {{cpp/enable_if|{{c|std::is_default_constructible_v&lt;T_0&gt;}} is {{co|true}}}}.
+
+@2@ Copy constructor. If {{c|other}} is not {{lc|valueless_by_exception}}, constructs a {{tt|variant}} holding the same alternative as {{c|other}} and [[cpp/language/direct initialization|direct-initializes]] the contained value with {{c|*std::get_if&lt;other.index()&gt;(std::addressof(other))}}. Otherwise, initializes a {{lc|valueless_by_exception}} variant.
+* This constructor is defined as deleted unless {{c|std::is_copy_constructible_v&lt;T_i&gt;}} is {{co|true}} for all {{tt|T_i}} in {{c|Types...}}.
+* It is trivial if {{c|std::is_trivially_copy_constructible_v&lt;T_i&gt;}} is {{co|true}} for all {{tt|T_i}} in {{c|Types...}}.
+
+@3@ Move constructor. If {{c|other}} is not {{lc|valueless_by_exception}}, constructs a {{tt|variant}} holding the same alternative as {{c|other}} and [[cpp/language/direct initialization|direct-initializes]] the contained value with {{c|std::move(*std::get_if&lt;other.index()&gt;(std::addressof(other)))}}. Otherwise, initializes a {{lc|valueless_by_exception}} variant.
+* {{cpp/enable_if|{{c|std::is_move_constructible_v&lt;T_i&gt;}} is {{co|true}} for all {{tt|T_i}} in {{c|Types...}}}}.
+* It is trivial if {{c|std::is_trivially_move_constructible_v&lt;T_i&gt;}} is {{co|true}} for all {{tt|T_i}} in {{c|Types...}}.
+
+@4@ Converting constructor. Constructs a {{tt|variant}} holding the alternative type {{tt|T_j}} that would be selected by overload resolution for the expression {{c|F(std::forward&lt;T&gt;(t))}} if there was an overload of imaginary function {{tt|F(T_i)}} for each {{tt|T_i}} in {{c|Types...}}, except that narrowing conversions aren't considered.
+Formally:
+:* An overload {{c|F(T_i)}} is only considered if the declaration {{c|1=T_i x[] = { std::forward&lt;T&gt;(t) };}} is valid for some invented variable {{tt|x}}.
+@@[[cpp/language/direct initialization|Direct-initializes]] the contained value as if by direct non-list-initialization from {{c|std::forward&lt;T&gt;(t)}}.
+* {{cpp/enable_if|
+** {{c|sizeof...(Types) &gt; 0}},
+** {{rev inl|until=c++20|{{c|std::decay_t&lt;T&gt;}}}}{{rev inl|since=c++20|{{c|std::remove_cvref_t&lt;T&gt;}}}} is neither the same type as {{tt|variant}}, nor a specialization of {{lc|std::in_place_type_t}}, nor a specialization of {{lc|std::in_place_index_t}},
+**  {{c|std::is_constructible_v&lt;T_j, T&gt;}} is {{co|true}},
+** and the expression {{c|F(std::forward&lt;T&gt;(t))}} (with F being the above-mentioned set of imaginary functions) is well formed}}.
+* This constructor is a {{co|constexpr}} constructor if {{tt|T_j}}'s selected constructor is a constexpr constructor.
+{{source|1=
+std::variant&lt;std::string&gt; v("abc"); // OK
+std::variant&lt;std::string, std::string&gt; w("abc"); // ill-formed
+std::variant&lt;std::string, const char*&gt; x("abc"); // OK, chooses const char*
+std::variant&lt;std::string, bool&gt; y("abc"); // OK, chooses string; bool is not a candidate
+std::variant&lt;float, long, double&gt; z = 0; // OK, holds long
+                                         // float and double are not candidates
+}}
+
+@5@ Constructs a {{tt|variant}} with the specified alternative {{tt|T}} and initializes the contained value with the arguments {{c|std::forward&lt;Args&gt;(args)...}}.
+* If {{tt|T}}'s selected constructor is a {{co|constexpr}} constructor, this constructor is also a {{co|constexpr}} constructor.
+* {{cpp/enable_if|there is exactly one occurrence of {{tt|T}} in {{c|Types...}} and {{c|std::is_constructible_v&lt;T, Args...&gt;}} is {{co|true}}}}.
+
+@6@ Constructs a {{tt|variant}} with the specified alternative {{tt|T}} and initializes the contained value with the arguments {{c|il, std::forward&lt;Args&gt;(args)...}}.
+* If {{tt|T}}'s selected constructor is a {{co|constexpr}} constructor, this constructor is also a {{co|constexpr}} constructor.
+* {{cpp/enable_if|there is exactly one occurrence of {{tt|T}} in {{c|Types...}} and {{c|std::is_constructible_v&lt;T, initializer_list&lt;U&gt;&amp;, Args...&gt;}} is {{co|true}}}}.
+
+@7@ Constructs a {{tt|variant}} with the alternative {{tt|T_i}} specified by the index {{tt|I}} and initializes the contained value with the arguments {{c|std::forward&lt;Args&gt;(args)...}}.
+* If {{tt|T_i}}'s selected constructor is a {{co|constexpr}} constructor, this constructor is also a {{co|constexpr}} constructor.
+* {{cpp/enable_if|{{c|I &lt; sizeof...(Types)}} and {{c|std::is_constructible_v&lt;T_i, Args...&gt;}} is {{co|true}}}}.
+ 
+@8@ Constructs a {{tt|variant}} with the alternative {{tt|T_i}} specified by the index {{tt|I}} and initializes the contained value with the arguments {{c|il, std::forward&lt;Args&gt;(args)...}}.
+* If {{tt|T_i}}'s selected constructor is a {{co|constexpr}} constructor, this constructor is also a {{co|constexpr}} constructor.
+* {{cpp/enable_if|{{c|I &lt; sizeof...(Types)}} and {{c|std::is_constructible_v&lt;T_i, std::initializer_list&lt;U&gt;&amp;, Args...&gt;}} is {{co|true}}}}.
+
+===Parameters===
+{{par begin}}
+{{par|other|another {{tt|variant}} object whose contained value to copy/move}}
+{{par|t|value to initialize the contained value with}}
+{{par|args...|arguments to initialize the contained value with}}
+{{par|il|initializer list to initialize the contained value with}}
+{{par end}}
+
+===Exceptions===
+@1@ May throw any exception thrown by the value initialization of the first alternative. {{noexcept|std::is_nothrow_default_constructible_v&lt;T_0&gt;}}
+@2@ May throw any exception thrown by direct-initializing any {{tt|T_i}} in {{c|Types...}}.
+@3@ May throw any exception thrown by move-constructing any {{tt|T_i}} in {{c|Types...}}. {{noexcept|(std::is_nothrow_move_constructible_v&lt;Types&gt; &amp;&amp; ...)}}
+@4@ May throw any exception thrown by the initialization of the selected alternative {{tt|T_j}}. {{noexcept|std::is_nothrow_constructible_v&lt;T_j, T&gt;}}
+@5-8@ May throw any exception thrown by calling the selected constructor of the selected alternative.
+
+===Notes===
+MSVC STL initially treated {{wg21|P0608R3}} as a change in C++20. As of VS 2022 17.12, MSVC STL also treats P0608R3 as a defect report against C++17.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;variant&gt;
+#include &lt;vector&gt;
+
+using vector_t = std::vector&lt;int&gt;;
+
+auto&amp; operator&lt;&lt;(auto&amp; out, const vector_t&amp; v)
+{
+    out &lt;&lt; "{ ";
+    for (int e : v)
+        out &lt;&lt; e &lt;&lt; ' ';
+    return out &lt;&lt; '}';
+}
+
+int main()
+{
+    // value-initializes first alternative
+    std::variant&lt;int, std::string&gt; var0;
+    assert(std::holds_alternative&lt;int&gt;(var0) and
+           var0.index() == 0 and
+           std::get&lt;int&gt;(var0) == 0);
+
+    // initializes first alternative with std::string{"STR"};
+    std::variant&lt;std::string, int&gt; var1{"STR"};
+    assert(var1.index() == 0);
+    std::cout &lt;&lt; "1) " &lt;&lt; std::get&lt;std::string&gt;(var1) &lt;&lt; '\n';
+
+    // initializes second alternative with int == 42;
+    std::variant&lt;std::string, int&gt; var2{42};
+    assert(std::holds_alternative&lt;int&gt;(var2));
+    std::cout &lt;&lt; "2) " &lt;&lt; std::get&lt;int&gt;(var2) &lt;&lt; '\n';
+
+    // initializes first alternative with std::string{4, 'A'};
+    std::variant&lt;std::string, vector_t, float&gt; var3
+    {
+        std::in_place_type&lt;std::string&gt;, 4, 'A'
+    };
+    assert(var3.index() == 0);
+    std::cout &lt;&lt; "3) " &lt;&lt; std::get&lt;std::string&gt;(var3) &lt;&lt; '\n';
+
+    // initializes second alternative with std::vector{1,2,3,4,5};
+    std::variant&lt;std::string, vector_t, char&gt; var4
+    {
+        std::in_place_type&lt;vector_t&gt;, {1, 2, 3, 4, 5}
+    };
+    assert(var4.index() == 1);
+    std::cout &lt;&lt; "4) " &lt;&lt; std::get&lt;vector_t&gt;(var4) &lt;&lt; '\n';
+
+    // initializes first alternative with std::string{"ABCDE", 3};
+    std::variant&lt;std::string, vector_t, bool&gt; var5 {std::in_place_index&lt;0&gt;, "ABCDE", 3};
+    assert(var5.index() == 0);
+    std::cout &lt;&lt; "5) " &lt;&lt; std::get&lt;std::string&gt;(var5) &lt;&lt; '\n';
+
+    // initializes second alternative with std::vector(4, 42);
+    std::variant&lt;std::string, vector_t, char&gt; var6 {std::in_place_index&lt;1&gt;, 4, 42};
+    assert(std::holds_alternative&lt;vector_t&gt;(var6));
+    std::cout &lt;&lt; "6) " &lt;&lt; std::get&lt;vector_t&gt;(var6) &lt;&lt; '\n';
+}
+|output=
+1) STR
+2) 42
+3) AAAA
+4) { 1 2 3 4 5 }
+5) ABC
+6) { 42 42 42 42 }
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++17|dr=2901|before=allocator-aware constructors provided but&lt;br&gt;{{tt|variant}} can't properly support allocators|after=constructors removed}}
+{{dr list item|paper=p0739r0|std=C++17|before=converting constructor template interacts&lt;br&gt;poorly with class template argument deduction|after=constraint added}}
+{{dr list item|wg=lwg|std=C++17|dr=3024|before=copy constructor doesn't participate in&lt;br&gt;overload resolution if any member type is not copyable|after=defined as deleted instead}}
+{{dr list item|paper=P0602R4|std=C++17|before=copy/move constructors may not be&lt;br&gt;trivial even if underlying constructors are trivial|after= required to propagate triviality}}
+{{dr list item|paper=P0608R3|std=C++17|before=converting constructor blindly assembles&lt;br&gt;an overload set, leading to unintended conversions|after= narrowing and boolean conversions not considered}}
+{{dr list item|paper=P1957R2|std=C++17|before=converting constructor for {{co|bool}} did not allow&lt;br&gt;implicit conversion|after=Pointer to {{co|bool}} conversion is narrowing and&lt;br&gt;converting constructor has no&lt;br&gt;exception for {{co|bool}}}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,108 @@
+{{cpp/utility/optional/title|emplace}}
+{{cpp/utility/optional/navbar}}
+{{dcl begin}}
+{{dcla|num=1|since=c++17|constexpr=c++20|
+template&lt; class... Args &gt;
+T&amp; emplace( Args&amp;&amp;... args );
+}}
+{{dcla|num=2|since=c++17|constexpr=c++20|
+template&lt; class U, class... Args &gt;
+T&amp; emplace( std::initializer_list&lt;U&gt; ilist, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+Constructs the contained value in-place. If {{c|*this}} already contains a value before the call, the contained value is destroyed by calling its destructor.
+
+@1@ Initializes the contained value by [[cpp/language/direct initialization|direct-initializing]] (but not direct-list-initializing) with {{c|std::forward&lt;Args&gt;(args)...}} as parameters.
+
+@2@ Initializes the contained value by calling its constructor with {{c|ilist, std::forward&lt;Args&gt;(args)...}} as parameters. {{cpp/enable if|{{c|std::is_constructible&lt;T, std::initializer_list&lt;U&gt;&amp;, Args&amp;&amp;...&gt;::value}} is {{c|true}}}}.
+
+===Parameters===
+{{par begin}}
+{{par|args...|the arguments to pass to the constructor}}
+{{par|ilist|the initializer list to pass to the constructor}}
+{{par hreq}}
+{{par req|{{tt|T}} must be constructible from {{tt|Args...}} for overload {{v|1}}}}
+{{par req|{{tt|T}} must be constructible from {{lc|std::initializer_list}} and {{tt|Args...}} for overload {{v|2}}}}
+{{par end}}
+
+===Return value===
+A reference to the new contained value.
+
+===Exceptions===
+Any exception thrown by the selected constructor of {{tt|T}}. If an exception is thrown, {{c|*this}} does not contain a value after this call (the previously contained value, if any, had been destroyed).
+
+{{ftm begin}}
+{{ftm|std=C++20|dr=20|value=202106L|__cpp_lib_optional|Fully {{c/core|constexpr}} {{vl|1,2}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;optional&gt;
+
+struct A
+{
+    std::string s;
+
+    A(std::string str) : s(std::move(str)), id{n++} { note("+ constructed"); }
+    ~A() { note("~ destructed"); }
+    A(const A&amp; o) : s(o.s), id{n++} { note("+ copy constructed"); }
+    A(A&amp;&amp; o) : s(std::move(o.s)), id{n++} { note("+ move constructed"); }
+
+    A&amp; operator=(const A&amp; other)
+    {
+        s = other.s;
+        note("= copy assigned");
+        return *this;
+    }
+
+    A&amp; operator=(A&amp;&amp; other)
+    {
+        s = std::move(other.s);
+        note("= move assigned");
+        return *this;
+    }
+
+    inline static int n{};
+    int id{};
+    void note(auto s) { std::cout &lt;&lt; "  " &lt;&lt; s &lt;&lt; " #" &lt;&lt; id &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    std::optional&lt;A&gt; opt;
+
+    std::cout &lt;&lt; "Assign:\n";
+    opt = A("Lorem ipsum dolor sit amet, consectetur adipiscing elit nec.");
+
+    std::cout &lt;&lt; "Emplace:\n";
+    // As opt contains a value it will also destroy that value
+    opt.emplace("Lorem ipsum dolor sit amet, consectetur efficitur.");
+
+    std::cout &lt;&lt; "End example\n";
+}
+|output=
+Assign:
+  + constructed #0
+  + move constructed #1
+  ~ destructed #0
+Emplace:
+  ~ destructed #1
+  + constructed #2
+End example
+  ~ destructed #2
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2231R1|std=C++20|before={{tt|emplace}} was not {{c/core|constexpr}} while the required operations can be {{c/core|constexpr}} in C++20|after=made {{c/core|constexpr}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/optional/dsc operator{{=}}}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

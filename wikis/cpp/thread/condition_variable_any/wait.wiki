@@ -1,0 +1,88 @@
+{{cpp/thread/condition_variable_any/title|wait}}
+{{cpp/thread/condition_variable_any/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+template&lt; class Lock &gt;
+void wait( Lock&amp; lock );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class Lock, class Predicate &gt;
+void wait( Lock&amp; lock, Predicate pred );
+}}
+{{dcl|num=3|since=c++20|
+template&lt; class Lock, class Predicate &gt;
+bool wait( Lock&amp; lock, std::stop_token stoken, Predicate pred );
+}}
+{{dcl end}}
+
+{{tt|wait}} causes the current thread to block until the condition variable is notified or a spurious wakeup occurs. {{c|pred}} can be optionally provided to detect spurious wakeup.
+
+@1@ Atomically calls {{c|lock.unlock()}} and blocks on {{c|*this}}.
+@@ The thread will be unblocked when {{lc|notify_all()}} or {{lc|notify_one()}} is executed. It may also be unblocked spuriously.
+@@ When unblocked, calls {{c|lock.lock()}} (possibly blocking on the lock), then returns.
+
+@2,3@ Waiting for a specific condition to become true, can be used to ignore spurious awakenings.
+:@2@ Equivalent to
+:@@ {{c multi
+|while (!pred())
+|    wait(lock);}}
+:@3@ Registers {{c|*this}} for the duration of this call, to be notified if a stop request is made on {{c|stoken}}'s associated stop-state; it is then equivalent to
+:@@ {{c multi
+|while (!stoken.stop_requested())
+|{
+|    if (pred())
+|        return true;
+|    wait(lock);
+|}
+|return pred();
+}}
+
+Right after {{tt|wait}} returns, {{c|lock}} is locked by the calling thread. If this postcondition cannot be satisfied&lt;ref&gt;This can happen if the re-locking of the mutex throws an exception.&lt;/ref&gt;, calls {{lc|std::terminate}}.
+
+&lt;references/&gt;
+
+===Parameters===
+{{par begin}}
+{{par|lock|an lock which must be locked by the calling thread}}
+{{par|stoken|a stop token to register interruption for}}
+{{par|pred|the predicate to check whether the waiting can be completed}}
+{{par hreq}}
+{{par req named|Lock|BasicLockable}}
+{{par req named|Predicate|FunctionObject}}
+{{par req|{{c|pred()}} must be a valid expression, and its type and value category must meet the {{named req|BooleanTestable}} requirements.}}
+{{par end}}
+
+===Return value===
+@1,2@ (none)
+@3@ The latest result of {{c|pred()}} before returning to the caller.
+
+===Exceptions===
+@1@ Does not throw.
+@2,3@ Any exception thrown by {{c|pred}}.
+
+===Notes===
+The returned value of overload {{v|3}} indicates whether {{c|pred}} evaluated to {{c|true}}, regardless of whether there was a stop requested or not.
+
+{{cpp/thread/condition_variable/single total order note}}
+
+===Example===
+{{include|cpp/thread/condition_variable/example1|condition_variable_any}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++11|before=convertibility to {{c/core|bool}} was too weak to reflect the expectation of implementations|after=requirements strengthened}}
+{{dr list item|wg=lwg|dr=2135|std=C++11|before=the behavior was unclear if {{c|lock.lock()}} throws an exception|after=calls {{lc|std::terminate}} in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable_any}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_until|condition_variable_any}}
+{{dsc see c|c/thread/cnd_wait}}
+{{dsc end}}
+
+===External links===
+{{eli|1=[https://devblogs.microsoft.com/oldnewthing/20180201-00/?p=97946 The Old New Thing] article: Spurious wake-ups in Win32 condition variables.}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

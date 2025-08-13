@@ -1,0 +1,152 @@
+{{cpp/title|enable_shared_from_this}}
+{{cpp/memory/enable_shared_from_this/navbar}}
+{{ddcl|header=memory|since=c++11|
+template&lt; class T &gt;
+class enable_shared_from_this;
+}}
+
+{{tt|std::enable_shared_from_this}} allows an object {{c|t}} that is currently managed by a {{lc|std::shared_ptr}} named {{c|pt}} to safely generate additional {{lc|std::shared_ptr}} instances {{c|pt1}}, {{c|pt2}} etc. that all share ownership of {{c|t}} with {{c|pt}}.
+
+Publicly inheriting from {{tt|std::enable_shared_from_this&lt;T&gt;}} provides the type {{tt|T}} with a member function {{tt|shared_from_this}}.  If an object {{c|t}} of type {{tt|T}} is managed by a {{c/core|std::shared_ptr&lt;T&gt;}} named {{c|pt}}, then calling {{tt|T::shared_from_this}} will return a new {{c/core|std::shared_ptr&lt;T&gt;}} that shares ownership of {{c|t}} with {{c|pt}}.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|spec={{c/core|mutable std::weak_ptr&lt;T&gt;}}|weak_this|id=weak_this|the object tracking the control block of the first shared owner of {{c|*this}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc prot mem ctor|cpp/memory/enable_shared_from_this/enable_shared_from_this|constructs an {{tt|enable_shared_from_this}} object}}
+{{dsc prot mem dtor|cpp/memory/enable_shared_from_this/~enable_shared_from_this|destroys an {{tt|enable_shared_from_this}} object}}
+{{dsc prot mem fun|cpp/memory/enable_shared_from_this/operator{{=}}|returns a reference to {{c|*this}}}}
+{{dsc mem fun|cpp/memory/enable_shared_from_this/shared_from_this|returns a {{lc|std::shared_ptr}} which shares ownership of {{c|*this}}}}
+{{dsc mem fun|cpp/memory/enable_shared_from_this/weak_from_this|returns a {{lc|std::weak_ptr}} which shares ownership of {{c|*this}}|notes={{mark c++17}}}}
+{{dsc end}}
+
+===Notes===
+The constructors of {{lc|std::shared_ptr}} detect the presence of an unambiguous and accessible (i.e. public inheritance is mandatory) {{tt|enable_shared_from_this}} base and assign the newly created {{lc|std::shared_ptr}} to {{tti|weak_this}} if not already owned by a live {{lc|std::shared_ptr}}. Constructing a {{lc|std::shared_ptr}} for an object that is already managed by another {{lc|std::shared_ptr}} will not consult {{tti|weak_this}} and thus will lead to undefined behavior.
+
+It is permitted to call {{tt|shared_from_this}} only on a previously shared object, i.e. on an object managed by {{c/core|std::shared_ptr&lt;T&gt;}}. Otherwise, {{lc|std::bad_weak_ptr}} is thrown (by the {{lc|std::shared_ptr}} constructor from a default-constructed {{tti|weak_this}}{{sep}}).
+
+{{tt|enable_shared_from_this}} provides the safe alternative to an expression like {{c|std::shared_ptr&lt;T&gt;(this)}}, which is likely to result in {{c|this}} being destructed more than once by multiple owners that are unaware of each other (see example below).
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+ 
+class Good : public std::enable_shared_from_this&lt;Good&gt;
+{
+public:
+    std::shared_ptr&lt;Good&gt; getptr()
+    {
+        return shared_from_this();
+    }
+};
+
+class Best : public std::enable_shared_from_this&lt;Best&gt;
+{
+    struct Private{ explicit Private() = default; };
+    
+public:
+    // Constructor is only usable by this class
+    Best(Private) {}
+    
+    // Everyone else has to use this factory function
+    // Hence all Best objects will be contained in shared_ptr
+    static std::shared_ptr&lt;Best&gt; create()
+    {
+        return std::make_shared&lt;Best&gt;(Private());
+    }
+    
+    std::shared_ptr&lt;Best&gt; getptr()
+    {
+        return shared_from_this();
+    }
+};
+
+struct Bad
+{
+    std::shared_ptr&lt;Bad&gt; getptr()
+    {
+        return std::shared_ptr&lt;Bad&gt;(this);
+    }
+    ~Bad() { std::cout &lt;&lt; "Bad::~Bad() called\n"; }
+};
+
+void testGood()
+{
+    // Good: the two shared_ptr's share the same object
+    std::shared_ptr&lt;Good&gt; good0 = std::make_shared&lt;Good&gt;();
+    std::shared_ptr&lt;Good&gt; good1 = good0-&gt;getptr();
+    std::cout &lt;&lt; "good1.use_count() = " &lt;&lt; good1.use_count() &lt;&lt; '\n';
+}
+
+void misuseGood()
+{
+    // Bad: shared_from_this is called without having std::shared_ptr owning the caller
+    try
+    {
+        Good not_so_good;
+        std::shared_ptr&lt;Good&gt; gp1 = not_so_good.getptr();
+    }
+    catch (std::bad_weak_ptr&amp; e)
+    {
+        // undefined behavior (until C++17) and std::bad_weak_ptr thrown (since C++17)
+        std::cout &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+
+void testBest()
+{
+    // Best: Same but cannot stack-allocate it:
+    std::shared_ptr&lt;Best&gt; best0 = Best::create();
+    std::shared_ptr&lt;Best&gt; best1 = best0-&gt;getptr();
+    std::cout &lt;&lt; "best1.use_count() = " &lt;&lt; best1.use_count() &lt;&lt; '\n';
+    
+    // Best stackBest; // &lt;- Will not compile because Best::Best() is private.
+}
+
+void testBad()
+{
+    // Bad, each shared_ptr thinks it is the only owner of the object
+    std::shared_ptr&lt;Bad&gt; bad0 = std::make_shared&lt;Bad&gt;();
+    std::shared_ptr&lt;Bad&gt; bad1 = bad0-&gt;getptr();
+    std::cout &lt;&lt; "bad1.use_count() = " &lt;&lt; bad1.use_count() &lt;&lt; '\n';
+} // UB: double-delete of Bad
+
+int main()
+{
+    testGood();
+    misuseGood();
+    
+    testBest();
+    
+    testBad();
+}
+|p=true
+|output=
+good1.use_count() = 2
+bad_weak_ptr
+best1.use_count() = 2
+bad1.use_count() = 1
+Bad::~Bad() called
+Bad::~Bad() called
+*** glibc detected *** ./test: double free or corruption
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2179|paper=P0033R1|std=C++11|before=given type {{tt|T}} derived from {{tt|enable_shared_from_this}}, the behavior of&lt;br&gt;constructing two {{c/core|std::shared_ptr&lt;T&gt;}}s from the same {{c/core|T*}} object was unclear|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=lwg|dr=2529|paper=P0033R1|std=C++11|before=it was unclear how the underlying {{lc|std::weak_ptr}} is updated|after=made clear}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

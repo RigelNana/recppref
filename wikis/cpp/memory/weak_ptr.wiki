@@ -1,0 +1,110 @@
+{{cpp/title|weak_ptr}}
+{{cpp/memory/weak_ptr/navbar}}
+{{ddcl|header=memory|since=c++11|1=
+template&lt; class T &gt; class weak_ptr;
+}}
+
+{{tt|std::weak_ptr}} is a smart pointer that holds a non-owning ("weak") reference to an object that is managed by {{lc|std::shared_ptr}}. It must be converted to {{lc|std::shared_ptr}} in order to access the referenced object.
+
+{{tt|std::weak_ptr}} models temporary ownership: when an object needs to be accessed only if it exists, and it may be deleted at any time by someone else, {{tt|std::weak_ptr}} is used to track the object, and it is converted to {{lc|std::shared_ptr}} to acquire temporary ownership. If the original {{lc|std::shared_ptr}} is destroyed at this time, the object's lifetime is extended until the temporary {{lc|std::shared_ptr}} is destroyed as well.
+
+Another use for {{tt|std::weak_ptr}} is to break reference cycles formed by objects managed by {{lc|std::shared_ptr}}. If such cycle is orphaned (i.e., there are no outside shared pointers into the cycle), the {{tt|shared_ptr}} reference counts cannot reach zero and the memory is leaked. To prevent this, one of the pointers in the cycle [[cpp/memory/weak_ptr/~weak_ptr#Example|can be made weak]].
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|element_type}}|{{rrev multi
+|rev1=
+{{c/core|T}}
+|since2=c++17|rev2=
+{{c/core|std::remove_extent_t&lt;T&gt;}}
+}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/weak_ptr/dsc destructor}}
+{{dsc inc|cpp/memory/weak_ptr/dsc operator{{=}}}}
+
+{{dsc h2|Modifiers}}
+{{dsc inc|cpp/memory/weak_ptr/dsc reset}}
+{{dsc inc|cpp/memory/weak_ptr/dsc swap}}
+
+{{dsc h2|Observers}}
+{{dsc inc|cpp/memory/weak_ptr/dsc use_count}}
+{{dsc inc|cpp/memory/weak_ptr/dsc expired}}
+{{dsc inc|cpp/memory/weak_ptr/dsc lock}}
+{{dsc inc|cpp/memory/weak_ptr/dsc owner_before}}
+{{dsc inc|cpp/memory/weak_ptr/dsc owner_hash}}
+{{dsc inc|cpp/memory/weak_ptr/dsc owner_equal}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc swap2}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc atomic2}}
+{{dsc end}}
+
+==={{rl|deduction_guides|Deduction guides}} {{mark since c++17}}===
+
+===Notes===
+Like {{lc|std::shared_ptr}}, a typical implementation of {{tt|weak_ptr}} stores two pointers:
+* a pointer to the control block; and
+* the stored pointer of the {{tt|shared_ptr}} it was constructed from.
+
+A separate stored pointer is necessary to ensure that converting a {{tt|shared_ptr}} to {{tt|weak_ptr}} and then back works correctly, even for aliased {{tt|shared_ptr}}s. It is not possible to access the stored pointer in a {{tt|weak_ptr}} without locking it into a {{tt|shared_ptr}}.
+
+{{feature test macro|__cpp_lib_smart_ptr_owner_equality|Enabling the use of {{tt|std::weak_ptr}} as keys in {{lsd|cpp/container#Unordered associative containers}}|std=C++26|value=202306L}}
+
+===Example===
+{{example
+|Demonstrates how lock is used to ensure validity of the pointer.
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+std::weak_ptr&lt;int&gt; gw;
+
+void observe()
+{
+    std::cout &lt;&lt; "gw.use_count() == " &lt;&lt; gw.use_count() &lt;&lt; "; ";
+    // we have to make a copy of shared pointer before usage:
+    if (std::shared_ptr&lt;int&gt; spt = gw.lock())
+        std::cout &lt;&lt; "*spt == " &lt;&lt; *spt &lt;&lt; '\n';
+    else
+        std::cout &lt;&lt; "gw is expired\n";
+}
+
+int main()
+{
+    {
+        auto sp = std::make_shared&lt;int&gt;(42);
+        gw = sp;
+
+        observe();
+    }
+
+    observe();
+}
+|output=
+gw.use_count() == 1; *spt == 42
+gw.use_count() == 0; gw is expired
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3001|std=C++17|before={{tt|element_type}} was not updated for array support|after=updated}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

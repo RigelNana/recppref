@@ -1,0 +1,780 @@
+{{title|Function declaration}}
+{{cpp/language/functions/navbar}}
+
+A function declaration introduces the function name and its type. A function definition associates the function name/type with the function body. 
+
+===Function declaration===
+Function declarations may appear in any scope. A function declaration at class scope introduces a class member function (unless the {{c/core|friend}} specifier is used), see {{rlp|member functions}} and {{rlp|friend|friend functions}} for details.
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|noptr-declarator}} {{ttb|(}} {{spar|parameter-list}} {{ttb|)}} {{spar optional|cv}} {{spar optional|ref}} {{spar optional|except}} {{spar optional|attr}}
+}}
+{{sdsc|num=2|notes={{mark since c++11}}|
+{{spar|noptr-declarator}} {{ttb|(}} {{spar|parameter-list}} {{ttb|)}} {{spar optional|cv}} {{spar optional|ref}} {{spar optional|except}} {{spar optional|attr}}&lt;br&gt;{{ttb|-&gt;}} {{spar|trailing}}
+}}
+{{sdsc end}}
+
+(see {{rlp|declarations|Declarations}} for the other forms of the {{spar|declarator}} syntax)
+
+@1@ Regular function declarator syntax.
+@2@ Trailing return type declaration. The {{spar|decl-specifier-seq}} in this case must contain the keyword {{c/core|auto}}.
+
+{{par begin}}
+{{par|{{spar|noptr-declarator}}|any valid {{spar|declarator}}, but if it begins with {{tt|*}}, {{tt|&amp;}}, or {{tt|&amp;&amp;}}, it has to be surrounded by parentheses.}}
+{{par|{{spar|parameter-list}}|possibly empty, comma-separated list of the function parameters (see below for details)}}
+{{par|{{spar|attr}}|{{mark since c++11}} a list of {{rlp|attributes}}. These attributes are applied to the type of the function, not the function itself. The attributes for the function appear after the identifier within the declarator and are combined with the attributes that appear in the beginning of the declaration, if any.}}
+{{par|{{spar|cv}}|const/volatile qualification, only allowed in non-static member function declarations}}
+{{par|{{spar|ref}}|{{mark since c++11}} ref-qualification, only allowed in non-static member function declarations}}
+{{par|{{spar|except}}|{{rrev multi|until1=c++11|until2=c++17|rev1={{rlp|except spec|dynamic exception specification}}|rev2=either {{rlp|except spec|dynamic exception specification}}&lt;br&gt;or {{rlp|noexcept spec|noexcept specification}}|rev3={{rlp|noexcept spec|noexcept specification}}}}}}
+{{par|{{spar|trailing}}|Trailing return type, useful if the return type depends on argument names, such as {{c|1=template&lt;class T, class U&gt; auto add(T t, U u) -&gt; decltype(t + u);}} or is complicated, such as in {{c|1=auto fpif(int)-&gt;int(*)(int)}}}}
+{{par end}}
+
+
+{{rrev|since=c++20|
+As mentioned in {{rlp|declarations#Declarators|Declarations}}, the declarator can be followed by a {{rlp|constraints#Requires clauses|{{c/core|requires}} clause}}, which declares the associated {{rlp|constraints}} for the function, which must be satisfied in order for the function to be selected by {{rlp|overload resolution}}. (example: {{c|void f1(int a) requires true;}}) Note that the associated constraint is part of function signature, but not part of function type.
+}}
+
+Function declarators can be mixed with other declarators, where the {{rlp|declarations#Specifiers|declaration specifier sequence}} allows:
+{{source|1=
+// declares an int, an int*, a function, and a pointer to a function
+int a = 1, *p = NULL, f(), (*pf)(double);
+// decl-specifier-seq is int
+// declarator f() declares (but doesn't define)
+//                a function taking no arguments and returning int
+
+struct S
+{
+    virtual int f(char) const, g(int) &amp;&amp;; // declares two non-static member functions
+    virtual int f(char), x; // compile-time error: virtual (in decl-specifier-seq)
+                            // is only allowed in declarations of non-static
+                            // member functions
+};
+}}
+
+{{rrev|since=c++20|
+Using a volatile-qualified object type as parameter type or return type is deprecated.
+}}
+
+The return type of a function cannot be a function type or an array type (but can be a pointer or reference to those).
+
+{{rev begin}}
+{{rev|since=c++11|
+As with any declaration, attributes that appear before the declaration and the attributes that appear immediately after the identifier within the declarator both apply to the entity being declared or defined (in this case, to the function):
+{{source|
+[[noreturn]] void f [[noreturn]] (); // OK: both attributes apply to the function f
+}}
+However, the attributes that appear after the declarator (in the syntax above), apply to the type of the function, not to the function itself:
+{{source|
+void f() [[noreturn]]; // Error: this attribute has no effect on the function itself
+}}
+}}
+{{rev|since=c++14|
+===Return type deduction===
+If the {{spar|decl-specifier-seq}} of the function declaration contains the keyword {{c/core|auto}}, trailing return type may be omitted, and will be deduced by the compiler from the type of the expression used in the {{rlp|return}} statement. If the return type does not use {{c/core|decltype(auto)}}, the deduction follows the rules of {{rlp|template argument deduction#Other contexts|template argument deduction}}:
+{{source|1=
+int x = 1;
+auto f() { return x; }        // return type is int
+const auto&amp; f() { return x; } // return type is const int&amp;
+}}
+If the return type is {{c/core|decltype(auto)}}, the return type is as what would be obtained if the expression used in the return statement were wrapped in {{rlpt|decltype}}:
+{{source|1=
+int x = 1;
+decltype(auto) f() { return x; }  // return type is int, same as decltype(x)
+decltype(auto) f() { return(x); } // return type is int&amp;, same as decltype((x))
+}}
+(note: “{{c/core|const decltype(auto)&amp;}}” is an error, {{c/core|decltype(auto)}} must be used on its own)
+
+If there are multiple return statements, they must all deduce to the same type:
+{{source|
+auto f(bool val)
+{
+    if (val) return 123; // deduces return type int
+    else return 3.14f;   // Error: deduces return type float
+} 
+}}
+
+If there is no return statement or if the argument of the return statement is a void expression, the declared return type must be either {{c/core|decltype(auto)}}, in which case the deduced return type is {{c/core|void}}, or (possibly cv-qualified) {{c/core|auto}}, in which case the deduced return type is then (identically cv-qualified) {{c/core|void}}:
+{{source|
+auto f() {}              // returns void
+auto g() { return f(); } // returns void
+auto* x() {}             // Error: cannot deduce auto* from void
+}}
+
+Once a return statement has been seen in a function, the return type deduced from that statement can be used in the rest of the function, including in other return statements:
+{{source|1=
+auto sum(int i)
+{
+    if (i == 1)
+        return i;              // sum’s return type is int
+    else
+        return sum(i - 1) + i; // OK: sum’s return type is already known
+}
+}}
+
+If the return statement uses a {{rlp|initialization|brace-enclosed initializer list}}, deduction is not allowed:
+{{source|
+auto func() { return {1, 2, 3}; } // Error
+}}
+
+{{rlp|virtual|Virtual functions}}{{rev inl|since=c++20| and {{rlp|coroutines}}}} cannot use return type deduction:
+{{source|
+struct F
+{
+    virtual auto f() { return 2; } // Error
+};
+}}
+
+{{rlp|function template|Function templates}} other than {{rlp|cast operator|user-defined conversion functions}} can use return type deduction. The deduction takes place at instantiation even if the expression in the return statement is not {{rlp|dependent name|dependent}}. This instantiation is not in an immediate context for the purposes of {{rlp|sfinae|SFINAE}}.
+{{source|1=
+template&lt;class T&gt;
+auto f(T t) { return t; }
+typedef decltype(f(1)) fint_t;    // instantiates f&lt;int&gt; to deduce return type
+
+template&lt;class T&gt;
+auto f(T* t) { return *t; }
+void g() { int (*p)(int*) = &amp;f; } // instantiates both fs to determine return types,
+                                  // chooses second template overload
+}}
+
+Redeclarations or specializations of functions or function templates that use return type deduction must use the same return type placeholders:
+{{source|
+auto f(int num) { return num; }
+// int f(int num);            // Error: no placeholder return type
+// decltype(auto) f(int num); // Error: different placeholder
+
+template&lt;typename T&gt;
+auto g(T t) { return t; }
+template auto g(int);     // OK: return type is int
+// template char g(char); // Error: not a specialization of the primary template g
+}}
+
+Similarly, redeclarations or specializations of functions or function templates that do not use return type deduction must not use a placeholder:
+{{source|
+int f(int num);
+// auto f(int num) { return num; } // Error: not a redeclaration of f
+
+template&lt;typename T&gt;
+T g(T t) { return t; }
+template int g(int);      // OK: specialize T as int
+// template auto g(char); // Error: not a specialization of the primary template g
+}}
+
+{{rlp|function template#Explicit instantiation|Explicit instantiation declarations}} do not themselves instantiate function templates that use return type deduction:
+{{source|1=
+template&lt;typename T&gt;
+auto f(T t) { return t; }
+extern template auto f(int); // does not instantiate f&lt;int&gt;
+
+int (*p)(int) = f; // instantiates f&lt;int&gt; to determine its return type,
+                   // but an explicit instantiation definition 
+                   // is still required somewhere in the program
+}}
+}}
+{{rev end}}
+
+===Parameter list===
+The parameter list determines the arguments that can be specified when the function is called. It is a comma-separated list of ''parameter declarations'', each of which has the following syntax:
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{spar|decl-specifier-seq}} {{spar|declarator}}
+}}
+{{sdsc|num=2|notes={{mark since c++23}}|{{anchor|Version_2}}
+{{spar optional|attr}} {{ttb|this}} {{spar|decl-specifier-seq}} {{spar|declarator}}
+}}
+{{sdsc|num=3|
+{{spar optional|attr}} {{spar|decl-specifier-seq}} {{spar|declarator}} {{ttb|1==}} {{spar|initializer}}
+}}
+{{sdsc|num=4|
+{{spar optional|attr}} {{spar|decl-specifier-seq}} {{spar optional|abstract-declarator}}
+}}
+{{sdsc|num=5|notes={{mark since c++23}}|{{anchor|Version_5}}
+{{spar optional|attr}} {{ttb|this}} {{spar|decl-specifier-seq}} {{spar optional|abstract-declarator}}
+}}
+{{sdsc|num=6|
+{{spar optional|attr}} {{spar|decl-specifier-seq}} {{spar optional|abstract-declarator}} {{ttb|1==}} {{spar|initializer}}
+}}
+{{sdsc|num=7|
+{{ttb|void}}
+}}
+{{sdsc end}}
+
+@1@ Declares a named (formal) parameter. For the meanings of {{spar|decl-specifier-seq}} and {{spar|declarator}}, see {{rlp|declarations}}.
+@@ {{cc|
+int f(int a, int* p, int (*(*x)(double))[3]);
+}}
+@2@ Declares a named {{lsd|#Explicit object parameter}}.
+@3@ Declares a named (formal) parameter with a {{rlp|default arguments|default value}}.
+@@ {{cc|1=
+int f(int a = 7, int* p = nullptr, int (*(*x)(double))[3] = nullptr);
+}}
+@4@ Declares an unnamed parameter.
+@@ {{cc|
+int f(int, int*, int (*(*)(double))[3]);
+}}
+@5@ Declares a unnamed {{lsd|#Explicit object parameter}}.
+@6@ Declares an unnamed parameter with a {{rlp|default arguments|default value}}.
+@@ {{cc|1=
+int f(int = 7, int* = nullptr, int (*(*)(double))[3] = nullptr);
+}}
+@7@ Indicates that the function takes no parameters, it is the exact synonym for an empty parameter list: {{c|int f(void);}} and {{c|int f();}} declare the same function.
+@@ {{c|void}} is the only syntax equivalent to an empty parameter list, other usages of {{c/core|void}} parameters are ill-formed:
+{|class="wikitable"
+!Incorrect usage
+!Example
+|-
+|multiple parameters are present
+|{{c|int f1(void, int);}}
+|-
+|the {{c/core|void}} parameter is named
+|{{c|inf f2(void param);}}
+|-
+|{{c/core|void}} is cv-qualified
+|{{c|int f3(const void);}}
+|-
+|{{c/core|void}} is {{rlp|dependent name|dependent}}
+|{{c|int f4(T);}} (where {{tt|T}} is {{c/core|void}})
+|-
+|the {{c/core|void}} parameter is an [[#Explicit object parameter|explicit object parameter]] {{mark since c++23}}
+|{{c|int f5(this void);}}
+|}
+
+{{rev begin}}
+{{rev|until=c++17|
+Although {{spar|decl-specifier-seq}} implies there can exist {{rlpsd|declarations#Specifiers}} other than type specifiers, the only other specifier allowed is {{c/core|register}}{{rev inl|until=c++11| as well as {{c/core|auto}}}}, and it has no effect.
+}}
+{{rev|since=c++20|
+If any of the function parameters uses a ''placeholder'' (either {{c/core|auto}} or a [[cpp/concepts|concept type]]), the function declaration is instead an {{rlpsd|function template#Abbreviated function template}} declaration:
+{{source|
+void f1(auto);    // same as template&lt;class T&gt; void f1(T)
+void f2(C1 auto); // same as template&lt;C1 T&gt; void f2(T), if C1 is a concept
+}}
+}}
+{{rev|since=c++23|
+{{anchor|Explicit object parameter}}
+A parameter declaration with the specifier {{c/core|this}} (syntax {{vl|2}}/{{vl|5}}) declares an ''explicit object parameter''.
+
+An explicit object parameter cannot be a {{rlp|pack|function parameter pack}}, and it can only appear as the first parameter of the parameter list in the following declarations:
+* a declaration of a {{rlp|member functions|member function}} or member function template
+* an {{rlpsd|function template#Explicit instantiation}} or {{rlp|template specialization|explicit specialization}} of a templated member function
+* a {{rlp|lambda}} declaration
+
+A member function with an explicit object parameter has the following restrictions:
+* The function is not {{rlp|static}}.
+* The function is not {{rlp|virtual}}.
+* The declarator of the function does not contain {{spar|cv}} and {{spar|ref}}.
+
+{{source|
+struct C
+{
+    void f(this C&amp; self);     // OK
+    
+    template&lt;typename Self&gt;
+    void g(this Self&amp;&amp; self); // also OK for templates
+    
+    void p(this C) const;     // Error: “const” not allowed here
+    static void q(this C);    // Error: “static” not allowed here
+    void r(int, this C);      // Error: an explicit object parameter
+                              //        can only be the first parameter
+};
+
+// void func(this C&amp; self);   // Error: non-member functions cannot have
+                              //        an explicit object parameter
+}}
+}}
+{{rev end}}
+
+Parameter names declared in function declarations are usually for only self-documenting purposes. &lt;!--they are sometimes significant when trailing return type is used--&gt;They are used (but remain optional) in function definitions.
+
+An ambiguity arises in a parameter list when a type name is nested in parentheses{{rev inl|since=c++11| (including {{rlp|lambda|lambda expressions}})}}. In this case, the choice is between the declaration of a parameter of type pointer to function and the declaration of a parameter with redundant parentheses around the identifier of the {{spar|declarator}}. The resolution is to consider the type name as a {{rlp|declarations#Specifiers|simple type specifier}} (which is the pointer to function type):
+{{source|
+class C {};
+
+void f(int(C)) {} // void f(int(*fp)(C param)) {}
+                  // NOT void f(int C) {}
+
+void g(int *(C[10])); // void g(int *(*fp)(C param[10]));
+                      // NOT void g(int *C[10]);
+}}
+
+Parameter type cannot be a type that includes a reference or a pointer to array of unknown bound, including a multi-level pointers/arrays of such types, or a pointer to functions whose parameters are such types.
+
+====Using an ellipsis====
+The last parameter in the parameter list can be an ellipsis ({{c|...}}); this declares a {{rlp|variadic arguments|variadic function}}&lt;span class="t-rev-inl"&gt;. The comma preceding the ellipsis can be omitted{{mark deprecated c++26}}&lt;/span&gt;:
+{{source|
+int printf(const char* fmt, ...); // a variadic function
+int printf(const char* fmt...);   // same as above, but deprecated since C++26
+
+template&lt;typename... Args&gt;
+void f(Args..., ...); // a variadic function template with a parameter pack
+
+template&lt;typename... Args&gt;
+void f(Args... ...);  // same as above, but deprecated since C++26
+
+template&lt;typename... Args&gt;
+void f(Args......);   // same as above, but deprecated since C++26
+}}
+
+===Function type===
+====Parameter-type-list====
+A function’s ''parameter-type-list'' is determined as follows:
+# The type of each parameter{{rev inl|since=c++11| (including function {{rlp|pack|parameter pack}}s)}} is determined from its own [[#Parameter list|parameter declaration]].
+# After determining the type of each parameter, any parameter of type “array of {{tt|T}}” or of function type {{tt|T}} is adjusted to be “pointer to {{tt|T}}”.
+# After producing the list of parameter types, any top-level {{rlp|cv|cv-qualifiers}} modifying a parameter type are deleted when forming the function type.
+# The resulting list of transformed parameter types and the presence or absence of the [[#Using an ellipsis|ellipsis]]{{rev inl|since=c++11| or a function {{rlp|pack|parameter pack}}}} is the function’s parameter-type-list.
+
+{{source|
+void f(char*);         // #1
+void f(char[]) {}      // defines #1
+void f(const char*) {} // OK, another overload
+void f(char* const) {} // Error: redefines #1
+
+void g(char(*)[2]);   // #2
+void g(char[3][2]) {} // defines #2
+void g(char[3][3]) {} // OK, another overload
+
+void h(int x(const int)); // #3
+void h(int (*)(int)) {}   // defines #3
+}}
+
+====Determining function type====
+In syntax {{v|1}}, assuming {{spar|noptr-declarator}} as a standalone declaration, given the type of the {{spar|qualified-id}} or {{spar|unqualified-id}} in {{spar|noptr-declarator}} as  “derived-declarator-type-list {{tt|T}}”:
+{{rrev|since=c++17|
+* If the exception specification is {{rlp|noexcept spec|non-throwing}}, the type of the function declared is&lt;br&gt;“derived-declarator-type-list {{c/core|noexcept}} function of&lt;br&gt;parameter-type-list {{spar optional|cv}} {{spar optional|ref}} returning {{tt|T}}”.
+}}
+* {{rev inl|until=c++17|The}}{{rev inl|since=c++17|Otherwise, the}} type of the function declared is&lt;br&gt;“derived-declarator-type-list function of&lt;br&gt;parameter-type-list {{spar optional|cv}}{{rev inl|since=c++11| {{spar optional|ref}}}} returning {{tt|T}}”.
+
+{{rev begin}}
+{{rev|since=c++11|
+In syntax {{v|2}}, assuming {{spar|noptr-declarator}} as a standalone declaration, given the type of the {{spar|qualified-id}} or {{spar|unqualified-id}} in {{spar|noptr-declarator}} as  “derived-declarator-type-list {{tt|T}}” ({{tt|T}} must be {{c/core|auto}} in this case):
+}}
+{{rev|since=c++17|
+* If the exception specification is {{rlp|noexcept spec|non-throwing}}, the type of the function declared is&lt;br&gt;“derived-declarator-type-list {{c/core|noexcept}} function of&lt;br&gt;parameter-type-list {{spar optional|cv}} {{spar optional|ref}} returning {{spar sep|trailing}}”.
+}}
+{{rev|since=c++11|
+* {{rev inl|until=c++17|The}}{{rev inl|since=c++17|Otherwise, the}} type of the function declared is&lt;br&gt;“derived-declarator-type-list function of&lt;br&gt;parameter-type-list {{spar optional|cv}} {{spar optional|ref}} returning {{spar sep|trailing}}”.
+{{spar|attr}}, if present, applies to the function type.
+}}
+{{rev end}}
+
+{{source|
+// the type of “f1” is
+// “function of int returning void, with attribute noreturn”
+void f1(int a) [[noreturn]];
+
+// the type of “f2” is
+// “constexpr noexcept function of pointer to int returning int”
+constexpr auto f2(int[] b) noexcept -&gt; int;
+
+struct X
+{
+    // the type of “f3” is
+    // “function of no parameter const returning const int”
+    const int f3() const;
+};
+}}
+
+====Trailing qualifiers====
+A function type with {{spar sep|cv}}{{rev inl|since=c++11| or {{spar sep|ref}}}} (including a type named by {{rlpt|typedef}} name) can appear only as:
+* the function type for a {{rlp|member functions|non-static member function}},
+* the function type to which a pointer to member refers,
+* the top-level function type of a function {{c/core|typedef}} declaration{{rev inl|since=c++11| or {{rlp|type alias|alias declaration}}}},
+* the {{rlp|type#Type naming|type-id}} in the default argument of a {{rlp|template parameters#Type template parameter|template type parameter}}, or
+* the type-id of a template argument for a template type parameter.
+
+{{source|1=
+typedef int FIC(int) const;
+FIC f;     // Error: does not declare a member function
+
+struct S
+{
+    FIC f; // OK
+};
+
+FIC S::*pm = &amp;S::f; // OK
+}}
+
+===Function signature===
+Every function has a signature.
+
+The signature of a function consists of its name and [[#Parameter-type-list|parameter-type-list]]. Its signature also contains the enclosing {{rlp|namespace}}, with the following exceptions:
+* If the function is a {{rlp|member functions|member function}}, its signature contains the class of which the function is a member instead of the enclosing namespace. Its signature also contains the following components, if exists:
+:* {{spar|cv}}
+{{rev begin}}
+{{rev|since=c++11|
+:* {{spar|ref}}
+}}
+{{rev|since=c++20|
+:* trailing {{c/core|requires}} clause
+* If the function is a non-template {{rlp|friend}} function with a trailing {{c/core|requires}} clause, its signature contains the enclosing class instead of the enclosing namespace. The signature also contains the trailing {{c/core|requires}} clause.
+}}
+{{rev end}}
+
+{{spar|except}}{{rev inl|since=c++11| and {{spar|attr}}}} doesn't involve function signature{{rev inl|since=c++17|, although {{rlp|noexcept spec|{{c/core|noexcept}} specification}} affects the function type}}.
+
+===Function definition===
+A non-member function definition may appear at namespace scope only (there are no nested functions). A {{rlp|member functions|member function}} definition may also appear in the body of a {{rlp|class|class definition}}. They have the following syntax:
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{spar optional|decl-specifier-seq}} {{spar|declarator}}&lt;br&gt;{{spar optional|virt-specifier-seq}} {{spar|function-body}}
+}}
+{{sdsc|num=2|notes={{mark since c++20}}|
+{{spar optional|attr}} {{spar optional|decl-specifier-seq}} {{spar|declarator}} {{spar|requires-clause}} {{spar|function-body}}
+}}
+{{sdsc end}}
+@1@ A function definition without constraints.
+@2@ A function definition with constraints.
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} a list of {{rlp|attributes}}. These attributes are combined with the attributes after the identifier in the {{spar|declarator}} (see top of this page), if any.}}
+{{par|{{spar|decl-specifier-seq}}|the return type with specifiers, as in the {{rlp|declarations|declaration grammar}}}}
+{{par|{{spar|declarator}}|function declarator, same as in the function declaration grammar above (can be parenthesized)}}
+{{par|{{spar|virt-specifier-seq}}|{{mark since c++11}} {{rlpt|override}}, {{rlpt|final}}, or their combination in any order}}
+{{par|{{spar|requires-clause}}|a {{rlp|constraints#Requires clauses|{{c/core|requires}} clause}}}}
+{{par|{{spar|function-body}}|the function body (see below)}}
+{{par end}}
+
+
+{{spar|function-body}} is one of the following:
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|ctor-initializer}} {{spar|compound-statement}}}}
+{{sdsc|num=2|
+{{spar|function-try-block}}}}
+{{sdsc|num=3|notes={{mark since c++11}}|
+{{ttb|1==}} {{ttb|default}} {{ttb|;}}}}&lt;!--Semicolon is a part of the grammar--&gt;
+{{sdsc|num=4|notes={{mark since c++11}}|
+{{ttb|1==}} {{ttb|delete}} {{ttb|;}}}}
+{{sdsc|num=5|notes={{mark since c++26}}|
+{{ttb|1==}} {{ttb|delete}} {{ttb|(}} {{spar|string-literal}} {{ttb|);}}}}
+{{sdsc end}}
+@1@ Regular function body.
+@2@ {{rlp|try#Function try block|Function {{c/core|try}} block}}.
+@3@ Explicitly defaulted function definition.
+@4@ Explicitly deleted function definition.
+@5@ Explicitly deleted function definition with error message.
+
+{{par begin}}
+{{par|{{spar|ctor-initializer}}|{{rlp|initializer list|member initializer list}}, only allowed in constructors}}
+{{par|{{spar|compound-statement}}|the brace-enclosed {{rlp|statements#Compound statements|sequence of statements}} that constitutes the body of a function}}
+{{par|{{spar|function-try-block}}|a {{rlp|try#Function try block|function {{c/core|try}} block}}}}
+{{par|{{spar|string-literal}}|an {{rlp|string literal#Unevaluated strings|unevaluated string literal}} that could be used to explain the rationale for why the function is deleted}}
+{{par end}}
+
+{{source|1=
+int max(int a, int b, int c)
+{
+    int m = (a &gt; b) ? a : b;
+    return (m &gt; c) ? m : c;
+}
+
+// decl-specifier-seq is “int”
+// declarator is “max(int a, int b, int c)”
+// body is { ... }
+}}
+
+The function body is a {{rlp|statements#Compound statements|compound statement}} (sequence of zero or more statements surrounded by a pair of curly braces), which is executed when the function call is made. Moreover, the function body of a {{rlp|constructor}} also includes the following:
+* For all non-static data members whose identifiers are absent in the constructor's {{rlp|constructor|member initializer list}}, the{{rev inl|since=c++11| {{rlp|data members#Member initialization|default member initializers}} or}} {{rlp|default initialization|default-initializations}} used to initialize the corresponding member {{rlpsd|object#Subobjects}}.
+* For all base classes whose type names are absent in the constructor's member initializer list, the default-initializations used to initialize the corresponding base class subobjects.
+
+{{rev begin}}
+{{rev|since=c++11|
+If a function definition contains a {{spar|virt-specifier-seq}}, it must define a {{rlp|member functions|member function}}.
+}}
+{{rev|since=c++20|
+If a function definition contains a {{spar|requires-clause}}, it must define a {{rlp|templates#Templated entity|templated function}}.
+}}
+{{rev end}}
+
+{{source|1=
+void f() override {} // Error: not a member function
+
+void g() requires (sizeof(int) == 4) {} // Error: not a templated function
+}}
+
+The parameter types, as well as the return type of a function definition cannot be (possibly cv-qualified) {{rlp|incomplete type|incomplete}} {{rlp|class|class types}}{{rev inl|since=c++11| unless the function is defined as deleted}}. The completeness check is only made in the function body, which allows {{rlp|member functions}} to return the class in which they are defined (or its enclosing class), even if it is incomplete at the point of definition (it is complete in the function body).
+
+The parameters declared in the {{spar|declarator}} of a function definition are {{rlp|scope|in scope}} within the body. If a parameter is not used in the function body, it does not need to be named (it's sufficient to use an abstract declarator):
+{{source|1=
+void print(int a, int) // second parameter is not used
+{
+    std::printf("a = %d\n", a);
+}
+}}
+Even though top-level {{rlp|cv|cv-qualifiers}} on the parameters are discarded in function declarations, they modify the type of the parameter as visible in the body of a function:
+{{source|
+void f(const int n) // declares function of type void(int)
+{
+    // but in the body, the type of “n” is const int
+}
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+====Defaulted functions====
+If the function definition is of syntax {{vl|3}}, the function is defined as ''explicitly defaulted''.
+
+A function that is explicitly defaulted must be a {{rlp|member functions#Special member functions|special member function}}{{rev inl|since=c++20| or {{rlp|operator comparison|comparison operator function}}}}, and it must have no {{rlp|default arguments|default argument}}.
+
+An explicitly defaulted special member function {{tt|F1}} is allowed to differ from the corresponding special member function {{tt|F2}} that would have been implicitly declared, as follows:
+* {{tt|F1}} and {{tt|F2}} may have different {{spar|ref}} and/or {{spar|except}}.
+* If {{tt|F2}} has a non-object parameter of type {{c/core|const C&amp;}}, the corresponding non-object parameter of {{tt|F1}} maybe of type {{tt|C&amp;}}.
+}}
+{{rev|since=c++23|
+* If {{tt|F2}} has an implicit object parameter of type “reference to {{tt|C}}”, {{tt|F1}} may be an explicit object member function whose {{lsd|#Explicit object parameter}} is of (possibly different) type “reference to {{tt|C}}”, in which case the type of {{tt|F1}} would differ from the type of {{tt|F2}} in that the type of {{tt|F1}} has an additional parameter.
+}}
+{{rev|since=c++11|
+If the type of {{tt|F1}} differs from the type of {{tt|F2}} in a way other than as allowed by the preceding rules, then:
+* If {{tt|F1}} is an assignment operator, and the return type of {{tt|F1}} differs from the return type of {{tt|F2}} or {{tt|F1}}’s non-object parameter type is not a reference, the program is ill-formed.
+* Otherwise, if {{tt|F1}} is explicitly defaulted on its first declaration, it is defined as deleted.
+* Otherwise, the program is ill-formed.
+
+A function explicitly defaulted on its first declaration is implicitly {{rlp|inline}}, and is implicitly constexpr if it can be a {{rlps|constexpr#constexpr function}}.
+
+{{source|1=
+struct S
+{
+    S(int a = 0) = default;             // error: default argument
+    void operator=(const S&amp;) = default; // error: non-matching return type
+    ~S() noexcept(false) = default;     // OK, different exception specification
+private:
+    int i;
+    S(S&amp;);          // OK, private copy constructor
+};
+
+S::S(S&amp;) = default; // OK, defines copy constructor
+}}
+
+Explicitly-defaulted functions and implicitly-declared functions are collectively called ''defaulted'' functions. Their actual definitions will be implicitly provided, see their corresponding pages for details.
+
+====Deleted functions====
+If the function definition is of syntax {{vl|4}}{{rev inl|since=c++26| or {{vl|5}}}}, the function is defined as ''explicitly deleted''.
+
+Any use of a deleted function is ill-formed (the program will not compile). This includes calls, both explicit (with a function call operator) and implicit (a call to deleted overloaded operator, special member function, allocation function, etc), constructing a pointer or pointer-to-member to a deleted function, and even the use of a deleted function in an expression that is not {{rlp|expressions#Potentially-evaluated expressions|potentially-evaluated}}.
+
+A non-pure virtual member function can be defined as deleted, even though it is implicitly {{rlp|definition#ODR-use|odr-used}}. A deleted function can only be overridden by deleted functions, and a non-deleted function can only be overridden by non-deleted functions.
+}}
+{{rev|since=c++26|
+If {{spar|string-literal}} is present, the implementation is encouraged to include the text of it as part of the resulting diagnostic message which shows the rationale for deletion or to suggest an alternative.
+}}
+{{rev|since=c++11|
+If the function is overloaded, {{rlp|overload resolution}} takes place first, and the program is only ill-formed if the deleted function was selected:
+{{source|1=
+struct T
+{
+    void* operator new(std::size_t) = delete;
+    void* operator new[](std::size_t) = delete("new[] is deleted"); // since C++26
+};
+
+T* p = new T;    // Error: attempts to call deleted T::operator new
+T* p = new T[5]; // Error: attempts to call deleted T::operator new[],
+                 //        emits a diagnostic message “new[] is deleted”
+}}
+
+The deleted definition of a function must be the first declaration in a translation unit: a previously-declared function cannot be redeclared as deleted:
+{{source|1=
+struct T { T(); };
+T::T() = delete; // Error: must be deleted on the first declaration
+}}
+
+====User-provided functions====
+A function is ''user-provided'' if it is user-declared and not explicitly defaulted or deleted on its first declaration. A user-provided explicitly-defaulted function (i.e., explicitly defaulted after its first declaration) is defined at the point where it is explicitly defaulted; if such a function is implicitly defined as deleted, the program is ill-formed. Declaring a function as defaulted after its first declaration can provide efficient execution and concise definition while enabling a stable binary interface to an evolving code base.
+{{source|1=
+// All special member functions of “trivial” are
+// defaulted on their first declarations respectively,
+// they are not user-provided
+struct trivial
+{
+    trivial() = default;
+    trivial(const trivial&amp;) = default;
+    trivial(trivial&amp;&amp;) = default;
+    trivial&amp; operator=(const trivial&amp;) = default;
+    trivial&amp; operator=(trivial&amp;&amp;) = default;
+    ~trivial() = default;
+};
+
+struct nontrivial
+{
+    nontrivial(); // first declaration
+};
+
+// not defaulted on the first declaration,
+// it is user-provided and is defined here
+nontrivial::nontrivial() = default;
+}}
+
+====Ambiguity Resolution====
+In the case of an ambiguity between a function body and an {{rlp|initialization|initializer}} beginning with {{ttb|{}}{{rev inl|since=c++26| or {{ttb|1==}}}}, the ambiguity is resolved by checking the type of the {{rlp|declarations#Declarators|declarator identifier}} of {{spar sep|noptr-declarator}}:
+* If the type is a function type, the ambiguous token sequence is treated as a function body.
+* Otherwise, the ambiguous token sequence is treated as an initializer.
+
+{{source|1=
+using T = void(); // function type
+using U = int;    // non-function type
+
+T a{}; // defines a function doing nothing
+U b{}; // value-initializes an int object
+
+T c = delete("hello"); // defines a function as deleted
+U d = delete("hello"); // copy-initializes an int object with
+                       // the result of a delete expression (ill-formed)
+}}
+
+{{anchor|func}}
+===__func__===
+Within the function body, the function-local predefined variable {{lc|__func__}} is defined as if by
+{{source|1=static const char __func__[] = "function-name";}}
+This variable has block scope and static storage duration:
+{{source|1=
+struct S
+{
+    S(): s(__func__) {} // OK: initializer-list is part of function body
+    const char* s;
+};
+void f(const char* s = __func__); // Error: parameter-list is part of declarator
+}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+void Foo() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; }
+
+struct Bar
+{
+    Bar() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; }
+    ~Bar() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; }
+    struct Pub { Pub() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; } };
+};
+
+int main()
+{
+    Foo();
+    Bar bar;
+    Bar::Pub pub;
+}
+|p=true
+|output=
+Foo Bar Pub ~Bar
+}}
+}}
+{{rev end}}
+
+===Notes===
+In case of ambiguity between a variable declaration using the direct-initialization syntax and a function declaration, the compiler always chooses function declaration; see {{rlp|direct initialization#Notes|direct-initialization}}.
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=201304L|std=C++14|__cpp_decltype_auto|{{rlpt|auto|decltype(auto)}}}}
+{{ftm|value=201304L|std=C++14|__cpp_return_type_deduction|{{lsd|#Return type deduction}} for normal functions}}
+{{ftm|value=202110L|std=C++23|__cpp_explicit_this_parameter|{{lsd|#Explicit object parameter}}s ([[cpp/language/member functions#Explicit object member functions|deducing {{c/core|this}}]])}}
+{{ftm|value=202403L|std=C++26|__cpp_deleted_function|deleted function with a reason}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/default}},
+{{ltt|cpp/keyword/delete}},
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+// simple function with a default argument, returning nothing
+void f0(const std::string&amp; arg = "world!")
+{
+    std::cout &lt;&lt; "Hello, " &lt;&lt; arg &lt;&lt; '\n';
+}
+
+// the declaration is in namespace (file) scope
+// (the definition is provided later)
+int f1();
+
+// function returning a pointer to f0, pre-C++11 style
+void (*fp03())(const std::string&amp;)
+{
+    return f0;
+}
+
+// function returning a pointer to f0, with C++11 trailing return type
+auto fp11() -&gt; void(*)(const std::string&amp;)
+{
+    return f0;
+}
+
+int main()
+{
+    f0();
+    fp03()("test!");
+    fp11()("again!");
+    int f2(std::string) noexcept; // declaration in function scope
+    std::cout &lt;&lt; "f2(\"bad\"): " &lt;&lt; f2("bad") &lt;&lt; '\n';
+    std::cout &lt;&lt; "f2(\"42\"): " &lt;&lt; f2("42") &lt;&lt; '\n';
+}
+
+// simple non-member function returning int
+int f1()
+{
+    return 007;
+}
+
+// function with an exception specification and a function try block
+int f2(std::string str) noexcept
+try
+{
+    return std::stoi(str);
+}
+catch (const std::exception&amp; e)
+{
+    std::cerr &lt;&lt; "stoi() failed!\n";
+    return 0;
+}
+
+// deleted function, an attempt to call it results in a compilation error
+void bar() = delete
+#   if __cpp_deleted_function
+    ("reason")
+#   endif
+;
+|p=true
+|output=
+stoi() failed!
+Hello, world!
+Hello, test!
+Hello, again!
+f2("bad"): 0
+f2("42"): 42
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=135|std=c++98|before=member functions defined in class&lt;br&gt;could not have a parameter of or return&lt;br&gt;its own class because it is incomplete|after=allowed}}
+{{dr list item|wg=cwg|dr=332|std=C++98|before=a parameter could have cv-qualified {{c/core|void}} type|after=prohibited}}
+{{dr list item|wg=cwg|dr=393|std=C++98|before=types that include pointers/references to&lt;br&gt;array of unknown bound could not be parameters|after=such types are allowed}}
+{{dr list item|wg=cwg|dr=452|std=C++98|before=member initializer list was not a part of function body|after=it is}}
+{{dr list item|wg=cwg|dr=577|std=c++98|before=dependent type {{c/core|void}} could be used to&lt;br&gt;declare a function taking no parameters|after=only non-dependent&lt;br&gt;{{c/core|void}} is allowed}}
+{{dr list item|wg=cwg|dr=1327|std=C++11|before=defaulted or deleted functions could not&lt;br&gt;be specified with {{c/core|override}} or {{c/core|final}}|after=allowed}}
+{{dr list item|wg=cwg|dr=1355|std=C++11|before=only special member functions could be user-provided|after=extended to all functions}}
+{{dr list item|wg=cwg|dr=1394|std=C++11|before=deleted functions could not have any parameter of&lt;br&gt;an incomplete type or return an incomplete type|after=incomplete type allowed}}
+{{dr list item|wg=cwg|dr=1824|std=C++98|before=the completeness check on parameter type and&lt;br&gt;return type of a function definition could be made&lt;br&gt;outside the context of the function definition|after=only check in the&lt;br&gt;context of the&lt;br&gt;function definition}}
+{{dr list item|wg=cwg|dr=1877|std=C++14|before=return type deduction treated {{c|return;}} as {{c|return void();}}|after=simply deduce the return&lt;br&gt;type as {{c/core|void}} in this case}}
+{{dr list item|wg=cwg|dr=2015|std=C++11|before=the implicit odr-use of a deleted&lt;br&gt;virtual function was ill-formed|after=such odr-uses are exempt&lt;br&gt;from the use prohibition}}
+{{dr list item|wg=cwg|dr=2044|std=C++14|before=return type deduction on functions returning {{c/core|void}}&lt;br&gt;would fail if the declared return type is {{c/core|decltype(auto)}}|after=updated the deduction&lt;br&gt;rule to handle this case}}
+{{dr list item|wg=cwg|dr=2081|std=C++14|before=function redeclarations could use return type&lt;br&gt;deduction even if the initial declaration does not|after=not allowed}}
+{{dr list item|wg=cwg|dr=2144|std=C++11|before={{c|{}&lt;!----&gt;}} could be a function body or an initializer at the same place|after=differentiated by the type&lt;br&gt;of the declarator identifier}}
+{{dr list item|wg=cwg|dr=2145|std=C++98|before=the {{spar|declarator}} in function definition could not be parenthesized|after=allowed}}
+{{dr list item|wg=cwg|dr=2259|std=C++11|before=the ambiguity resolution rule regarding parenthesized&lt;br&gt;type names did not cover lambda expressions|after=covered}}
+{{dr list item|wg=cwg|dr=2430|std=C++98|before=in the definition of a member function in a class definition,&lt;br&gt;the type of that class could not be the return type or&lt;br&gt;parameter type due to the resolution of {{cwg|1824}}|after=only check in the&lt;br&gt;function body}}
+{{dr list item|wg=cwg|dr=2760|std=C++98|before=the function body of a constructor did not include the initializations&lt;br&gt;not specified in the constructor's regular function body|after=also includes these&lt;br&gt;initializations}}
+{{dr list item|wg=cwg|dr=2831|std=C++20|before=a function definition with a {{spar|requires-clause}}&lt;br&gt;could define a non-templated function|after=prohibited}}
+{{dr list item|wg=cwg|dr=2846|std=C++23|before=explicit object member functions could not have out-of-class definitions|after=allowed}}
+{{dr list item|wg=cwg|dr=2915|std=C++23|before=unnamed explicit object parameters could have type {{c/core|void}}|after=prohibited}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/function declaration|Declaring functions|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

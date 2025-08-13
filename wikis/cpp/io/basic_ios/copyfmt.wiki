@@ -1,0 +1,77 @@
+{{cpp/io/basic_ios/title|copyfmt}}
+{{cpp/io/basic_ios/navbar}}
+{{ddcl| 
+basic_ios&amp; copyfmt( const basic_ios&amp; other );
+}}
+
+If {{c|other}} refers to the same object as {{c|*this}}, has no effects. Otherwise, copies the state of the stream {{c|other}} into {{c|*this}}. This is done in the following sequence:
+
+@1@ Calls every callback registered by {{lc|register_callback()}} passing {{ltt|cpp/io/ios_base/event|erase_event}} as parameter.
+
+@2@ Copies all member objects from {{c|other}} to {{c|*this}} except for {{lc|rdstate()}}, the exception mask, and {{lc|rdbuf()}}. In particular, makes copies of the locale, the formatting flags, the contents of the arrays {{lc|std::ios_base::iword}} and {{lc|std::ios_base::pword}} (but not the {{tt|iword}} and {{tt|pword}} pointers themselves), the callbacks, and the tied stream.
+
+@3@ Calls every callback registered by {{lc|register_callback()}} passing {{ltt|cpp/io/ios_base/event|copyfmt_event}} as parameter.
+
+@4@ Copies the exception mask from {{c|other}} to {{c|*this}} as if by calling {{c|exceptions(other.exceptions())}}.
+
+===Parameters===
+{{par begin}}
+{{par|other|another stream to use as source}}
+{{par end}}
+
+===Return value===
+{{c|*this}}
+
+===Notes===
+The second pass through the callbacks may be used to deep-copy the user-defined objects pointed to by the pointers in {{lc|std::ios_base::pword}}.
+
+{{tt|copyfmt()}} may be used to save and restore the state of a stream. Boost provides a more fine-grained [https://www.boost.org/doc/libs/release/libs/io/doc/ios_state.html I/O state savers] library for the same purpose.
+
+===Example===
+{{example
+|Makes the {{lc|std::ofstream}} object "out" behave exactly like {{lc|std::cout}}, including formatting, {{rlpt|tie|tie()}} to {{lc|std::cin}}, etc.
+|code=
+#include &lt;bitset&gt;
+#include &lt;climits&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::ofstream out;
+
+    out.copyfmt(std::cout); // copy everything except rdstate and rdbuf
+    out.clear(std::cout.rdstate()); // copy rdstate
+    out.basic_ios&lt;char&gt;::rdbuf(std::cout.rdbuf()); // share the buffer
+
+    out &lt;&lt; "Hello, world\n";
+
+    auto bin = [](std::ios_base::fmtflags f)
+    {
+        return std::bitset&lt;sizeof(std::ios_base::fmtflags) * CHAR_BIT&gt;
+            { static_cast&lt;unsigned long long&gt;(f) };
+    };
+    std::ofstream out2;
+    std::cout &lt;&lt; "1) out2.flags(): " &lt;&lt; bin(out2.flags()) &lt;&lt; '\n';
+    std::cout &lt;&lt; "2) cout.flags(): " &lt;&lt; bin(std::cout.flags()) &lt;&lt; '\n';
+    std::cout.setf(std::ios::hex {{!}} std::ios::fixed {{!}} std::ios::boolalpha);
+    std::cout &lt;&lt; "3) cout.flags(): " &lt;&lt; bin(std::cout.flags()) &lt;&lt; '\n';
+    out2.copyfmt(std::cout); // copy everything except rdstate and rdbuf
+    std::cout &lt;&lt; "4) out2.flags(): " &lt;&lt; bin(out2.flags()) &lt;&lt; '\n';
+}
+|p=true
+|output=
+Hello, world
+1) out2.flags(): 00000000000000000001000000000010
+2) cout.flags(): 00000000000000000001000000000010
+3) cout.flags(): 00000000000000000001000000001111
+4) out2.flags(): 00000000000000000001000000001111
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=256|std=C++98|before=step 3 called the registered callbacks with the&lt;br&gt;event type {{tt|copy_event}}, which is not defined|after=corrected to&lt;br&gt;{{ltt|cpp/io/ios_base/event|copyfmt_event}}}}
+{{dr list item|wg=lwg|dr=292|std=C++98|before=if {{c|other}} refers to the same object as {{c|*this}}, the member objects&lt;br&gt;were still copied and the registered callbacks were still called|after=do nothing&lt;br&gt;in this case}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

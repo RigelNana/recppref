@@ -1,0 +1,127 @@
+{{cpp/title|formatter{{small|&lt;''pair-or-tuple''&gt;}}}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|since=c++23|1=
+template&lt; class CharT, std::formattable&lt;CharT&gt;... Ts &gt;
+struct formatter&lt;/*pair-or-tuple*/&lt;Ts...&gt;, CharT&gt;;
+}}
+{{dcl end}}
+
+The template specialization of {{lc|std::formatter}} for the {{lc|std::pair}} and {{lc|std::tuple}} allows users to convert a pair or a tuple to its textual representation as a collection of elements using [[cpp/utility/format|formatting functions]].
+
+The exposition-only name {{c/core|/*pair-or-tuple*/}} denotes either class template {{lc|std::pair}} or {{lc|std::tuple}}.
+
+This specialization meets the {{named req|Formatter}} requirements if {{c|(std::formattable&lt;const Ts, CharT&gt; &amp;&amp; ...)}} is {{c|true}}. It always meets the {{named req|BasicFormatter}} requirements.
+
+===Format specification===
+The syntax of {{spar|tuple-format-spec}} is:
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|tuple-fill-and-align}} {{spar optional|width}} {{spar optional|tuple-type}}
+}}
+{{sdsc end}}
+
+The {{spar|tuple-fill-and-align}} is interpreted the same way as a {{spar|fill-and-align}} except that the {{spar|fill}} in {{spar|tuple-fill-and-align}} is any character other than {{ttb|{}}, {{ttb|}&lt;!----&gt;}}, or {{ttb|:}}. 
+
+The {{spar|width}} is described in {{rlp|spec#Width and precision|standard format width specification}}.
+
+The {{spar|tuple-type}} changes the way a tuple is formatted, with certain options only valid with certain argument types. 
+
+The available tuple presentation types are:
+* {{ttb|m}}: Indicates that both opening and closing brackets should be {{c|""}} while the separator should be {{c|": "}}.
+
+:* If {{ttb|m}} is chosen as the {{spar|tuple-type}}, the program is ill-formed unless {{c|1=sizeof...(Ts) == 2}} is {{c|true}}.
+
+* {{ttb|n}}: Indicates that separator, opening and closing brackets should be {{c|""}}.
+
+===Member objects===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|private=yes|underlying_|tuple of underlying formatters of type {{c/core|std::tuple&lt;std::formatter&lt;std::remove_cvref_t&lt;Ts&gt;, CharT&gt;...&gt;}}}}
+{{dsc expos mem obj|private=yes|separator_|a string representing the separator of the tuple formatted result (defaults to {{c|", "}})}}
+{{dsc expos mem obj|private=yes|opening-bracket_|a string representing the opening bracket of the tuple formatted result (defaults to {{c|"("}})}}
+{{dsc expos mem obj|private=yes|closing-bracket_|a string representing the closing bracket of the tuple formatted result (defaults to {{c|")"}})}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem fun|set_separator|nolink=true|sets a specified separator for the tuple formatted result}}
+{{dsc mem fun|set_brackets|nolink=true|sets a specified opening and closing brackets for the tuple formatted result}}
+{{dsc mem fun|parse|nolink=true|parses the format specifier as specified by {{spar|tuple-format-spec}}}}
+{{dsc mem fun|format|nolink=true|writes the tuple formatted output as specified by {{spar|tuple-format-spec}}}}
+{{dsc end}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}set_separator|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_separator( std::basic_string_view&lt;CharT&gt; sep ) noexcept;
+}}
+{{dcl end}}
+
+Assigns {{c|sep}} to {{tti|separator_}}.
+}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}set_brackets|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_brackets( std::basic_string_view&lt;CharT&gt; opening,
+                             std::basic_string_view&lt;CharT&gt; closing ) noexcept;
+}}
+{{dcl end}}
+
+Assigns {{c|opening}} and {{c|closing}} to {{tti|opening-bracket_}} and {{tti|closing-bracket_}}, respectively.
+}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}parse|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; class ParseContext &gt;
+constexpr auto parse( ParseContext&amp; ctx ) -&gt; ParseContext::iterator;
+}}
+{{dcl end}}
+
+Parses the format specifiers as a {{spar|tuple-format-spec}} and stores the parsed specifiers in the current object.
+
+If {{spar|tuple-type}} or the {{ttb|n}} option is present, the values of {{tti|opening-bracket}}, {{tti|closing-bracket}}, and {{tti|separator}} are modified as required.
+
+For each element {{c|e}} in {{box|{{tti|underlying_}}}}, calls {{c|e.parse(ctx)}} to parse an empty {{spar|format-spec}} and, if {{c|e.set_debug_format()}} is a valid expression, calls {{c|e.set_debug_format()}}.
+
+Returns an iterator past the end of the {{spar|tuple-format-spec}}.
+}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}format|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; class FormatContext &gt;
+FormatContext::iterator
+format( /*maybe-const-pair-or-tuple*/&lt;Ts...&gt;&amp; elems, FormatContext&amp; ctx ) const;
+}}
+{{dcl end}}
+
+{{c/core|/*maybe-const-pair-or-tuple*/}} denotes:
+* {{c/core|const /*pair-or-tuple*/}}, if {{c|(std::formattable&lt;const Ts, CharT&gt; &amp;&amp; ...)}} is {{c|true}},
+* {{c/core|/*pair-or-tuple*/}} otherwise.
+
+Writes the following into {{c|ctx.out()}} as specified by {{spar|tuple-format-spec}}, in order:
+* {{box|{{tti|opening-bracket_}}}},
+* for each index {{c|I}} in {{range|0|sizeof...(Ts)}}:
+:* if {{c|1=I != 0}}, {{box|{{tti|separator_}}}},
+:* the result of writing {{c|std::get&lt;I&gt;(elems)}} via {{box|{{c/core|std::get&lt;I&gt;(}}{{tti|underlying_}}{{c/core|)}}}}, and
+* {{box|{{tti|closing-bracket_}}}}.
+
+Returns an iterator past the end of the output range.
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3892|std=c++23|before=the formatting of nested tuples was incorrect|after=corrected}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc formatter}}
+{{dsc end}}

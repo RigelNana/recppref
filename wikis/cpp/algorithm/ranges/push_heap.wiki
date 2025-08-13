@@ -1,0 +1,200 @@
+{{cpp/ranges/title|push_heap}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+    requires std::sortable&lt;I, Comp, Proj&gt;
+constexpr I push_heap( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+    requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    push_heap( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Inserts the last element in the specified range into a [[cpp/algorithm#Heap operations|heap]] with respect to {{c|comp}} and {{c|proj}}, where the heap consists of all elements in the range except the last. The heap after the insertion will be the entire range.
+
+@1@ The specified range is {{range|first|last}}.
+
+@2@ The specified range is {{c|r}}.
+
+If the specified range (excluding the last element) is not a heap with respect to {{c|comp}} and {{c|proj}}, the behavior is undefined.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the iterator and sentinel designating the range of elements to modify}}
+{{par|r|the range of elements to modify}}
+{{par|comp|comparator to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+@1@ {{c|last}}
+@2@ {{c|ranges::end(r)}}
+
+===Complexity===
+At most {{mathjax-or|\(\scriptsize \log{(N)}\)|log(N)}} applications of {{c|comp}} and {{mathjax-or|\(\scriptsize 2\log{(N)}\)|2log(N)}} applications of {{c|proj}}, where {{mathjax-or|\(\scriptsize N \)|N}} is:
+@1@ {{c|ranges::distance(first, last)}}
+@2@ {{c|ranges::distance(r)}}
+
+===Possible implementation===
+{{eq fun|1=
+struct push_heap_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Comp = ranges::less, class Proj = std::identity&gt;
+    requires std::sortable&lt;I, Comp, Proj&gt;
+    constexpr I operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        const auto n{ranges::distance(first, last)};
+        const auto length{n};
+        if (n &gt; 1)
+        {
+            I last{first + n};
+            n = (n - 2) / 2;
+            I i{first + n};
+            if (std::invoke(comp, std::invoke(proj, *i), std::invoke(proj, *--last)))
+            {
+                std::iter_value_t&lt;I&gt; v {ranges::iter_move(last)};
+                do
+                {
+                    *last = ranges::iter_move(i);
+                    last = i;
+                    if (n == 0)
+                        break;
+                    n = (n - 1) / 2;
+                    i = first + n;
+                }
+                while (std::invoke(comp, std::invoke(proj, *i), std::invoke(proj, v)));
+                *last = std::move(v);
+            }
+        }
+        return first + length;
+    }
+    
+    template&lt;ranges::random_access_range R,
+             class Comp = ranges::less, class Proj = std::identity&gt;
+    requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr push_heap_fn push_heap{};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+void out(const auto&amp; what, int n = 1)
+{
+    while (n-- &gt; 0)
+        std::cout &lt;&lt; what;
+}
+
+void print(auto rem, auto const&amp; v)
+{
+    out(rem);
+    for (auto e : v)
+        out(e), out(' ');
+    out('\n');
+}
+
+void draw_heap(auto const&amp; v)
+{
+    auto bails = [](int n, int w)
+    {
+        auto b = [](int w) { out("┌"), out("─", w), out("┴"), out("─", w), out("┐"); };
+        if (!(n /= 2))
+            return;
+        for (out(' ', w); n-- &gt; 0;)
+            b(w), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto data = [](int n, int w, auto&amp; first, auto last)
+    {
+        for (out(' ', w); n-- &gt; 0 &amp;&amp; first != last; ++first)
+            out(*first), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto tier = [&amp;](int t, int m, auto&amp; first, auto last)
+    {
+        const int n{1 &lt;&lt; t};
+        const int w{(1 &lt;&lt; (m - t - 1)) - 1};
+        bails(n, w), data(n, w, first, last);
+    };
+    
+    const int m{static_cast&lt;int&gt;(std::ceil(std::log2(1 + v.size())))};
+    auto first{v.cbegin()};
+    for (int i{}; i != m; ++i)
+        tier(i, m, first, v.cend());
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{1, 6, 1, 8, 0, 3,};
+    print("source vector v: ", v);
+    
+    std::ranges::make_heap(v);
+    print("after make_heap: ", v);
+    draw_heap(v);
+    
+    v.push_back(9);
+    
+    print("before push_heap: ", v);
+    draw_heap(v);
+    
+    std::ranges::push_heap(v);
+    print("after push_heap: ", v);
+    draw_heap(v);
+}
+|output=&lt;nowiki/&gt;
+source vector v: 1 6 1 8 0 3
+after make_heap: 8 6 3 1 0 1
+   8
+ ┌─┴─┐
+ 6   3
+┌┴┐ ┌┴┐
+1 0 1
+before push_heap: 8 6 3 1 0 1 9
+   8
+ ┌─┴─┐
+ 6   3
+┌┴┐ ┌┴┐
+1 0 1 9
+after push_heap: 9 6 8 1 0 1 3
+   9
+ ┌─┴─┐
+ 6   8
+┌┴┐ ┌┴┐
+1 0 1 3
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_heap_until}}
+{{dsc inc|cpp/algorithm/ranges/dsc make_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc pop_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort_heap}}
+{{dsc inc|cpp/algorithm/dsc push_heap}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

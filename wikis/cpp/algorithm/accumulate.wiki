@@ -1,0 +1,125 @@
+{{cpp/title|accumulate}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|constexpr=c++20|
+template&lt; class InputIt, class T &gt;
+T accumulate( InputIt first, InputIt last, T init );
+}}
+{{dcla|num=2|constexpr=c++20|
+template&lt; class InputIt, class T, class BinaryOp &gt;
+T accumulate( InputIt first, InputIt last, T init, BinaryOp op );
+}}
+{{dcl end}}
+
+Computes the sum of the given value {{c|init}} and the elements in the range {{range|first|last}}.
+
+@1@ Initializes the accumulator {{c|acc}} (of type {{tt|T}}) with the initial value {{c|init}} and then modifies it with {{rev inl|until=c++20|{{c|1=acc = acc + *i}}}}{{rev inl|since=c++20|{{c|1=acc = std::move(acc) + *i}}}} for every iterator {{c|i}} in the range {{range|first|last}} in order.
+
+@2@ Initializes the accumulator {{c|acc}} (of type {{tt|T}}) with the initial value {{c|init}} and then modifies it with {{rev inl|until=c++20|{{c|1=acc = op(acc, *i)}}}}{{rev inl|since=c++20|{{c|1=acc = op(std::move(acc), *i)}}}} for every iterator {{c|i}} in the range {{range|first|last}} in order.
+
+If any of the following conditions is satisfied, the behavior is undefined:
+* {{tt|T}} is not {{named req|CopyConstructible}}.
+* {{tt|T}} is not {{named req|CopyAssignable}}.
+* {{c|op}} modifies any element of {{range|first|last}}.
+* {{c|op}} invalidates any iterator or subrange in {{closed range|first|last}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to sum}}
+{{par|init|initial value of the sum}}
+{{par op2|op|t1=T|p2=InputIt|rt=T}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===Return value===
+{{c|acc}} after all modifications.
+
+===Possible implementation===
+{{eq impl
+|title1=accumulate (1)|ver1=1|1=
+template&lt;class InputIt, class T&gt;
+constexpr // since C++20
+T accumulate(InputIt first, InputIt last, T init)
+{
+    for (; first != last; ++first)
+        init = std::move(init) + *first; // std::move since C++20
+    
+    return init;
+}
+|title2=accumulate (2)|ver2=2|2=
+template&lt;class InputIt, class T, class BinaryOperation&gt;
+constexpr // since C++20
+T accumulate(InputIt first, InputIt last, T init, BinaryOperation op)
+{
+    for (; first != last; ++first)
+        init = op(std::move(init), *first); // std::move since C++20
+    
+    return init;
+}
+}}
+
+===Notes===
+{{tt|std::accumulate}} performs a left [[enwiki:Fold (higher-order function)|fold]]. In order to perform a right fold, one must reverse the order of the arguments to the binary operator, and use reverse iterators.
+
+If left to type inference, {{c|op}} operates on values of the same type as {{c|init}} which can result in unwanted casting of the iterator elements. For example, {{c|std::accumulate(v.begin(), v.end(), 0)}} likely does not give the result one wishes for when {{c|v}} is of type {{c/core|std::vector&lt;double&gt;}}.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+ 
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    
+    int sum = std::accumulate(v.begin(), v.end(), 0);
+    int product = std::accumulate(v.begin(), v.end(), 1, std::multiplies&lt;int&gt;());
+    
+    auto dash_fold = [](std::string a, int b)
+    {
+        return std::move(a) + '-' + std::to_string(b);
+    };
+    
+    std::string s = std::accumulate(std::next(v.begin()), v.end(),
+                                    std::to_string(v[0]), // start with first element
+                                    dash_fold);
+    
+    // Right fold using reverse iterators
+    std::string rs = std::accumulate(std::next(v.rbegin()), v.rend(),
+                                     std::to_string(v.back()), // start with last element
+                                     dash_fold);
+    
+    std::cout &lt;&lt; "sum: " &lt;&lt; sum &lt;&lt; '\n'
+              &lt;&lt; "product: " &lt;&lt; product &lt;&lt; '\n'
+              &lt;&lt; "dash-separated string: " &lt;&lt; s &lt;&lt; '\n'
+              &lt;&lt; "dash-separated string (right-folded): " &lt;&lt; rs &lt;&lt; '\n';
+}
+|output=
+sum: 55
+product: 3628800
+dash-separated string: 1-2-3-4-5-6-7-8-9-10
+dash-separated string (right-folded): 10-9-8-7-6-5-4-3-2-1
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op}} could not have side effects|after=it cannot modify the ranges involved}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_difference}}
+{{dsc inc|cpp/algorithm/dsc inner_product}}
+{{dsc inc|cpp/algorithm/dsc partial_sum}}
+{{dsc inc|cpp/algorithm/dsc reduce}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

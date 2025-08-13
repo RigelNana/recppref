@@ -1,0 +1,119 @@
+{{cpp/ranges/title|is_partitioned}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+constexpr bool
+    is_partitioned( I first, S last, Pred pred, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R, class Proj = std::identity,
+          std::indirect_unary_predicate&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+constexpr bool
+    is_partitioned( R&amp;&amp; r, Pred pred, Proj proj = {} );
+}}
+{{dcl end}}
+
+@1@ Returns {{c|true}} if all elements in the range {{range|first|last}} that satisfy the predicate {{c|pred}} after projection appear before all elements that don't. Also returns {{c|true}} if {{range|first|last}} is empty.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|iterator-sentinel pair denoting the range of elements to examine}}
+{{par|r|the range of elements to examine}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the range {{range|first|last}} is empty or is partitioned by {{c|pred}}, {{c|false}} otherwise.
+
+===Complexity===
+At most {{c|ranges::distance(first, last)}} applications of {{c|pred}} and {{c|proj}}.
+
+===Possible implementation===
+{{eq fun|1=
+struct is_partitioned_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    constexpr bool operator()(I first, S last, Pred pred, Proj proj = {}) const
+    {
+        for (; first != last; ++first)
+            if (!std::invoke(pred, std::invoke(proj, *first)))
+                break;
+
+        for (; first != last; ++first)
+            if (std::invoke(pred, std::invoke(proj, *first)))
+                return false;
+
+        return true;
+    }
+
+    template&lt;ranges::input_range R, class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    constexpr bool operator()(R&amp;&amp; r, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::ref(pred), std::ref(proj));
+    }
+};
+
+inline constexpr auto is_partitioned = is_partitioned_fn();
+}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;utility&gt;
+
+int main()
+{
+    std::array&lt;int, 9&gt; v;
+
+    auto print = [&amp;v](bool o)
+    {
+        for (int x : v)
+            std::cout &lt;&lt; x &lt;&lt; ' ';
+        std::cout &lt;&lt; (o ? "=&gt; " : "=&gt; not ") &lt;&lt; "partitioned\n";
+    };
+
+    auto is_even = [](int i) { return i % 2 == 0; };
+
+    std::iota(v.begin(), v.end(), 1); // or std::ranges::iota(v, 1);
+    print(std::ranges::is_partitioned(v, is_even));
+
+    std::ranges::partition(v, is_even);
+    print(std::ranges::is_partitioned(std::as_const(v), is_even));
+
+    std::ranges::reverse(v);
+    print(std::ranges::is_partitioned(v.cbegin(), v.cend(), is_even));
+    print(std::ranges::is_partitioned(v.crbegin(), v.crend(), is_even));
+}
+|output=
+1 2 3 4 5 6 7 8 9 =&gt; not partitioned
+2 4 6 8 5 3 7 1 9 =&gt; partitioned
+9 1 7 3 5 8 6 4 2 =&gt; not partitioned
+9 1 7 3 5 8 6 4 2 =&gt; partitioned
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition_point}}
+{{dsc inc|cpp/algorithm/dsc is_partitioned}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

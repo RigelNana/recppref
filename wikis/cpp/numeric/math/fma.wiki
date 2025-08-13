@@ -1,0 +1,137 @@
+{{cpp/title|fma|fmaf|fmal}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+float       fma ( float x, float y, float z );
+double      fma ( double x, double y, double z );
+long double fma ( long double x, long double y, long double z );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            fma ( /* floating-point-type */ x,
+                  /* floating-point-type */ y,
+                  /* floating-point-type */ z );
+}}
+{{dcl|num=2|since=c++11|notes={{mark|constexpr since C++23}}|
+float       fmaf( float x, float y, float z );
+}}
+{{dcl|num=3|since=c++11|notes={{mark|constexpr since C++23}}|
+long double fmal( long double x, long double y, long double z );
+}}
+{{dcl|num=4|since=c++11|
+#define FP_FAST_FMA  /* implementation-defined */
+}}
+{{dcl|num=5|since=c++11|
+#define FP_FAST_FMAF /* implementation-defined */
+}}
+{{dcl|num=6|since=c++11|
+#define FP_FAST_FMAL /* implementation-defined */
+}}
+{{dcl h|[[#Notes|Additional overloads]]}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark|constexpr since C++23}}|
+template&lt; class Arithmetic1, class Arithmetic2, class Arithmetic3 &gt;
+/* common-floating-point-type */
+    fma( Arithmetic1 x, Arithmetic2 y, Arithmetic3 z );
+}}
+{{dcl end}}
+
+@1-3@ Computes {{c|x * y + z}} as if to infinite precision and rounded only once to fit the result type.{{rev inl|since=c++23| The library provides overloads of {{tt|std::fma}} for all cv-unqualified floating-point types as the type of the parameters {{c|x}}, {{c|y}} and {{c|z}}.}}
+@4-6@ If the macro constants {{c|FP_FAST_FMA}}, {{c|FP_FAST_FMAF}}, or {{c|FP_FAST_FMAL}} are defined, the function {{tt|std::fma}} evaluates faster (in addition to being more precise) than the expression {{c|x * y + z}} for {{c/core|double}}, {{c/core|float}}, and {{c/core|long double}} arguments, respectively. If defined, these macros evaluate to integer {{c|1}}.
+@A@ Additional overloads are provided for all other combinations of arithmetic types.
+
+===Parameters===
+{{par begin}}
+{{par|x, y, z|floating-point or integer values}}
+{{par end}}
+
+===Return value===
+If successful, returns the value of {{c|x * y + z}} as if calculated to infinite precision and rounded once to fit the result type (or, alternatively, calculated as a single ternary floating-point operation).
+
+If a range error due to overflow occurs, {{lc|HUGE_VAL|±HUGE_VAL}}, {{tt|±HUGE_VALF}}, or {{tt|±HUGE_VALL}} is returned.
+
+If a range error due to underflow occurs, the correct value (after rounding) is returned.
+
+===Error handling===
+Errors are reported as specified in {{lc|math_errhandling}}.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+* If {{c|x}} is zero and {{c|y}} is infinite or if {{c|x}} is infinite and {{c|y}} is zero, and
+** if {{c|z}} is not a NaN, then NaN is returned and {{lc|FE_INVALID}} is raised,
+** if {{c|z}} is a NaN, then NaN is returned and {{lc|FE_INVALID}} may be raised.
+* If {{c|x * y}} is an exact infinity and {{c|z}} is an infinity with the opposite sign, NaN is returned and {{lc|FE_INVALID}} is raised.
+* If {{c|x}} or {{c|y}} are NaN, NaN is returned.
+* If {{c|z}} is NaN, and {{c|x * y}} is not {{c|0 * Inf}} or {{c|Inf * 0}}, then NaN is returned (without {{lc|FE_INVALID}}).
+
+===Notes===
+This operation is commonly implemented in hardware as {{enwiki|Multiply%E2%80%93accumulate operation|fused multiply-add}} CPU instruction. If supported by hardware, the appropriate {{c|FP_FAST_FMA?}} macros are expected to be defined, but many implementations make use of the CPU instruction even when the macros are not defined.
+
+POSIX [https://pubs.opengroup.org/onlinepubs/9699919799/functions/fma.html ({{tt|fma}}, {{tt|fmaf}}, {{tt|fmal}})] additionally specifies that the situations specified to return {{lc|FE_INVALID}} are domain errors.
+
+Due to its infinite intermediate precision, {{tt|std::fma}} is a common building block of other correctly-rounded mathematical operations, such as {{lc|std::sqrt}} or even the division (where not provided by the CPU, e.g. {{enwiki|Itanium}}).
+
+As with all floating-point expressions, the expression {{c|x * y + z}} may be compiled as a fused multiply-add unless the {{ltt|cpp/preprocessor/impl|#pragma}} {{c|STDC FP_CONTRACT}} is off.
+
+{{cpp/numeric/math/additional overload note|fma}}
+
+===Example===
+{{example
+|code=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+#ifndef __GNUC__
+#pragma STDC FENV_ACCESS ON
+#endif
+
+int main()
+{
+    // demo the difference between fma and built-in operators
+    const double in = 0.1;
+    std::cout &lt;&lt; "0.1 double is " &lt;&lt; std::setprecision(23) &lt;&lt; in
+              &lt;&lt; " (" &lt;&lt; std::hexfloat &lt;&lt; in &lt;&lt; std::defaultfloat &lt;&lt; ")\n"
+              &lt;&lt; "0.1*10 is 1.0000000000000000555112 (0x8.0000000000002p-3), "
+              &lt;&lt; "or 1.0 if rounded to double\n";
+    
+    const double expr_result = 0.1 * 10 - 1;
+    const double fma_result = std::fma(0.1, 10, -1);
+    std::cout &lt;&lt; "0.1 * 10 - 1 = " &lt;&lt; expr_result
+              &lt;&lt; " : 1 subtracted after intermediate rounding\n"
+              &lt;&lt; "fma(0.1, 10, -1) = " &lt;&lt; std::setprecision(6) &lt;&lt; fma_result &lt;&lt; " ("
+              &lt;&lt; std::hexfloat &lt;&lt; fma_result &lt;&lt; std::defaultfloat &lt;&lt; ")\n\n";
+    
+    // fma is used in double-double arithmetic
+    const double high = 0.1 * 10;
+    const double low = std::fma(0.1, 10, -high);
+    std::cout &lt;&lt; "in double-double arithmetic, 0.1 * 10 is representable as "
+              &lt;&lt; high &lt;&lt; " + " &lt;&lt; low &lt;&lt; "\n\n";
+    
+    // error handling 
+    std::feclearexcept(FE_ALL_EXCEPT);
+    std::cout &lt;&lt; "fma(+Inf, 10, -Inf) = " &lt;&lt; std::fma(INFINITY, 10, -INFINITY) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    FE_INVALID raised\n";
+}
+|p=true
+|output=
+0.1 double is 0.10000000000000000555112 (0x1.999999999999ap-4)
+0.1*10 is 1.0000000000000000555112 (0x8.0000000000002p-3), or 1.0 if rounded to double
+0.1 * 10 - 1 = 0 : 1 subtracted after intermediate rounding
+fma(0.1, 10, -1) = 5.55112e-17 (0x1p-54)
+
+in double-double arithmetic, 0.1 * 10 is representable as 1 + 5.55112e-17
+
+fma(+Inf, 10, -Inf) = -nan
+    FE_INVALID raised
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc remainder}}
+{{dsc inc|cpp/numeric/math/dsc remquo}}
+{{dsc see c|c/numeric/math/fma}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

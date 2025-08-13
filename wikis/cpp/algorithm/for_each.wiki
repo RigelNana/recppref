@@ -1,0 +1,125 @@
+{{cpp/title|for_each}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class UnaryFunc &gt;
+UnaryFunc for_each( InputIt first, InputIt last, UnaryFunc f );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt, class UnaryFunc &gt;
+void for_each( ExecutionPolicy&amp;&amp; policy,
+               ForwardIt first, ForwardIt last, UnaryFunc f );
+}}
+{{dcl end}}
+
+Applies the given function object {{c|f}} to the result of dereferencing every iterator in the range {{range|first|last}}. If {{c|f}} returns a result, the result is ignored.
+
+@1@ {{c|f}} is applied in order starting from {{c|first}}.
+{{rrev|since=c++11|
+If {{tt|UnaryFunc}} is not {{named req|MoveConstructible}}, the behavior is undefined.
+}}
+
+@2@ {{c|f}} might not be applied in order. The algorithm is executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition}}
+@@ If {{tt|UnaryFunc}} is not {{named req|CopyConstructible}}, the behavior is undefined.
+
+If the iterator type ({{tt|InputIt}}/{{tt|ForwardIt}}) is mutable, {{c|f}} may modify the elements of the range through the dereferenced iterator.
+
+Unlike the rest of the parallel algorithms, {{tt|for_each}} is not allowed to make copies of the elements in the sequence even if they are {{named req|TriviallyCopyable}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range to apply the function to}}
+{{par exec pol}}
+{{par opf|f|to be applied to the result of dereferencing every iterator in the range {{range|first|last}}|p1=InputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par end}}
+
+===Return value===
+@1@ {{c|f}}
+@2@ (none)
+
+===Complexity===
+Exactly {{c|std::distance(first, last)}} applications of {{c|f}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L3858 libstdc++], [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L880 libc++] and [https://github.com/microsoft/STL/blob/ff83542af4b683fb2f2dea1423fd6c50fe3e13b0/stl/inc/algorithm#L229 MSVC stdlib].
+{{eq fun|1=
+template&lt;class InputIt, class UnaryFunc&gt;
+constexpr UnaryFunc for_each(InputIt first, InputIt last, UnaryFunc f)
+{
+    for (; first != last; ++first)
+        f(*first);
+    
+    return f; // implicit move since C++11
+}
+}}
+
+===Notes===
+For overload {{v|1}}, {{c|f}} can be a stateful function object. The return value can be considered as the final state of the batch operation.
+
+For overload {{v|2}}, multiple copies of {{c|f}} may be created to perform parallel invocation. No value is returned because parallelization often does not permit efficient state accumulation.
+
+===Example===
+{{example
+|The following example uses a [[cpp/language/lambda|lambda-expression]] to increment all of the elements of a vector and then uses an overloaded {{tt|operator()}} in a function object (a.k.a., "functor") to compute their sum. Note that to compute the sum, it is recommended to use the dedicated algorithm {{lc|std::accumulate}}.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+ 
+int main()
+{
+    std::vector&lt;int&gt; v{3, -4, 2, -8, 15, 267};
+    
+    auto print = [](const int&amp; n) { std::cout &lt;&lt; n &lt;&lt; ' '; };
+    
+    std::cout &lt;&lt; "before:\t";
+    std::for_each(v.cbegin(), v.cend(), print);
+    std::cout &lt;&lt; '\n';
+    
+    // increment elements in-place
+    std::for_each(v.begin(), v.end(), [](int &amp;n) { n++; });
+    
+    std::cout &lt;&lt; "after:\t";
+    std::for_each(v.cbegin(), v.cend(), print);
+    std::cout &lt;&lt; '\n';
+    
+    struct Sum
+    {
+        void operator()(int n) { sum += n; }
+        int sum {0};
+    };
+    
+    // invoke Sum::operator() for each element
+    Sum s = std::for_each(v.cbegin(), v.cend(), Sum());    
+    std::cout &lt;&lt; "sum:\t" &lt;&lt; s.sum &lt;&lt; '\n';
+}
+|output=
+before:	3 -4 2 -8 15 267 
+after:	4 -3 3 -7 16 268 
+sum:	281
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=475|std=C++98|before=it was unclear whether {{c|f}} can modify the elements&lt;br&gt;of the sequence being iterated over ({{tt|for_each}} is&lt;br&gt;classified as “non-modifying sequence operations”)|after=made clear (allowed if the&lt;br&gt;iterator type is mutable)}}
+{{dr list item|wg=lwg|dr=2747|std=C++11|before=overload {{v|1}} returned {{c|std::move(f)}}|after=returns {{c|f}} (which implicitly moves)}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/algorithm/dsc for_each_n}}
+{{dsc inc|cpp/algorithm/ranges/dsc for_each}}
+{{dsc inc|cpp/algorithm/ranges/dsc for_each_n}}
+{{dsc inc|cpp/language/dsc range-for}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,124 @@
+{{title|{{tt|decltype}} specifier {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+Inspects the declared type of an entity or the type and value category of an expression.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|decltype (}} {{spar|entity}} {{ttb|)}}|num=1}}
+{{sdsc|{{ttb|decltype (}} {{spar|expression}} {{ttb|)}}|num=2}}
+{{sdsc end}}
+
+===Explanation===
+@1@ If the argument is an unparenthesized {{rlp|identifiers|id-expression}} or an unparenthesized {{rlp|operator member access|class member access}} expression, then decltype yields the type of the {{spar|entity}} named by this expression. If there is no such entity, or if the argument names a set of overloaded functions, the program is ill-formed.
+{{rev begin}}
+{{rev|since=c++17|
+If the argument is an unparenthesized {{rlp|identifiers|id-expression}} naming a {{rlp|structured binding|structured binding}}, then decltype yields the ''referenced type'' (described in the specification of the structured binding declaration).
+}}
+{{rev|since=c++20|
+If the argument is an unparenthesized {{rlp|identifiers|id-expression}} naming a {{rlp|template parameters#Non-type template parameter|non-type template parameter}}, then decltype yields the type of the template parameter (after performing any necessary type deduction if the template parameter is declared with a placeholder type). The type is non-const even if the entity is a template parameter object (which is a const object).
+}}
+{{rev end}}
+@2@ If the argument is any other expression of type {{tt|T}}, and
+:@a@ if the {{rlp|value category}} of {{spar|expression}} is {{rlp|value category#xvalue|''xvalue''}}, then decltype yields {{c|T&amp;&amp;}};
+:@b@ if the value category of {{spar|expression}} is {{rlp|value category#lvalue|''lvalue''}}, then decltype yields {{c|T&amp;}};
+:@c@ if the value category of {{spar|expression}} is {{rlp|value category#prvalue|''prvalue''}}, then decltype yields {{c|T}}.
+{{rrev multi|until1=c++17|rev1=
+If {{spar|expression}} is a function call which returns a prvalue of class type or is a {{rlp|operator other|comma expression}} whose right operand is such a function call, a temporary object is not introduced for that prvalue.
+|rev2=
+If {{spar|expression}} is a prvalue{{rev inl|since=c++20| other than a (possibly parenthesized) {{rlp|consteval|immediate invocation}}}}, a temporary object is not {{rlp|implicit_cast#Temporary_materialization|materialized}} from that prvalue: such prvalue has no result object.}}
+Because no temporary object is created, the type need not be {{rlp|incomplete type|complete}} or have an available {{rlp|destructor}}, and can be {{rlp|abstract class|abstract}}. This rule doesn't apply to sub-expressions: in {{c|decltype(f(g()))}}, {{c|g()}} must have a complete type, but {{c|f()}} need not.
+
+Note that if the name of an object is parenthesized, it is treated as an ordinary lvalue expression, thus {{c|decltype(x)}} and {{c|decltype((x))}} are often different types.
+
+{{tt|decltype}} is useful when declaring types that are difficult or impossible to declare using standard notation, like lambda-related types or types that depend on template parameters.
+
+===Notes===
+{{feature test macro|std=C++11|value=200707L|__cpp_decltype|{{c/core|decltype}}}}
+
+===Keywords===
+{{ltt|cpp/keyword/decltype}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+struct A { double x; };
+const A* a;
+
+decltype(a-&gt;x) y;       // type of y is double (declared type)
+decltype((a-&gt;x)) z = y; // type of z is const double&amp; (lvalue expression)
+
+template&lt;typename T, typename U&gt;
+auto add(T t, U u) -&gt; decltype(t + u) // return type depends on template parameters
+                                      // return type can be deduced since C++14
+{
+    return t + u;
+}
+
+const int&amp; getRef(const int* p) { return *p; }
+static_assert(std::is_same_v&lt;decltype(getRef), const int&amp;(const int*)&gt;);
+auto getRefFwdBad(const int* p) { return getRef(p); }
+static_assert(std::is_same_v&lt;decltype(getRefFwdBad), int(const int*)&gt;,
+    "Just returning auto isn't perfect forwarding.");
+decltype(auto) getRefFwdGood(const int* p) { return getRef(p); }
+static_assert(std::is_same_v&lt;decltype(getRefFwdGood), const int&amp;(const int*)&gt;,
+    "Returning decltype(auto) perfectly forwards the return type.");
+
+// Alternatively:
+auto getRefFwdGood1(const int* p) -&gt; decltype(getRef(p)) { return getRef(p); }
+static_assert(std::is_same_v&lt;decltype(getRefFwdGood1), const int&amp;(const int*)&gt;,
+    "Returning decltype(return expression) also perfectly forwards the return type.");
+
+int main()
+{
+    int i = 33;
+    decltype(i) j = i * 2;
+    static_assert(std::is_same_v&lt;decltype(i), decltype(j)&gt;);
+    assert(i == 33 &amp;&amp; 66 == j);
+
+    auto f = [i](int av, int bv) -&gt; int { return av * bv + i; };
+    auto h = [i](int av, int bv) -&gt; int { return av * bv + i; };
+    static_assert(!std::is_same_v&lt;decltype(f), decltype(h)&gt;,
+        "The type of a lambda function is unique and unnamed");
+
+    decltype(f) g = f;
+    std::cout &lt;&lt; f(3, 3) &lt;&lt; ' ' &lt;&lt; g(3, 3) &lt;&lt; '\n';
+}
+|output=
+42 42
+}}
+
+===References===
+{{cot}}
+{{ref std c++23}}
+{{ref std|section=9.2.9.5|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.2.8.4|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=TBD|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=TBD|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=TBD|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{cob}}
+
+{{todo|Requires correction. See: [[Talk:cpp/language/decltype#Wrong_References|Talk: Wrong References]].}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc auto}}
+{{dsc inc|cpp/utility/dsc declval}}
+{{dsc inc|cpp/types/dsc is_same}}
+{{dsc see c|c/language/typeof}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

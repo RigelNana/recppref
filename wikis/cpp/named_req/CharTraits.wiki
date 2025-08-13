@@ -1,0 +1,160 @@
+{{cpp/named req/title|CharTraits}}
+{{cpp/named req/navbar}}
+
+{{named req|CharTraits}} is a traits class that abstracts basic character and string operations for a given character type. Most standard library string and input/output classes require a {{named req/core|CharTraits}} template type parameter alongside a corresponding character template type parameter.
+
+===Requirements===
+No operation listed below on {{named req/core|CharTraits}} may throw an exception.
+
+Given
+* {{tt|CharT}}, a character type
+* {{tt|X}}, a {{named req/core|CharTraits}} type for type {{tt|CharT}}
+* {{c|c}}, {{c|d}}, values of type {{tt|CharT}}
+* {{c|p}}, {{c|q}}, values of type {{c/core|const CharT*}}
+* {{c|s}}, a value of type {{tt|CharT*}}
+* {{c|n}}, {{c|i}}, {{c|j}}, values of type {{lc|std::size_t}}
+* {{c|e}}, {{c|f}}, values of type {{tt|X::int_type}}
+* {{c|pos}}, a value of type {{tt|X::pos_type}}
+* {{c|state}}, a value of type {{tt|X::state_type}}
+* {{c|r}}, an lvalue of type {{tt|CharT}}
+
+===Types===
+{|class=wikitable
+!Type||Semantics
+|-
+|{{tt|X::char_type}} || {{tt|CharT}}
+|-
+|{{tt|X::int_type}} || A type that can hold all valid values of {{tt|X::char_type}} plus {{c|X::eof()}}
+|-
+|{{tt|X::off_type}} || Invokes implementation-defined behavior if not {{lc|std::streamoff}} when {{tt|X}} is used as the traits template parameter in input/output classes.
+|-
+|{{tt|X::pos_type}} ||
+* Functions in input/output classes returning this type use {{c|X::pos_type(X::off_type(-1))}} as an invalid value to signal an error
+* Use of this invalid value as an argument to any {{lc|std::istream}}, {{lc|std::ostream}} or {{lc|std::streambuf}} member taking a value of this type is undefined behavior
+* Invokes implementation-defined behavior if this type is not {{lc|std::streampos}} when {{tt|X}} is used as the traits template parameter in input/output classes
+|-
+|{{tt|X::state_type}}{{nbsp}} || {{named req|Destructible}}, {{named req|CopyAssignable}}, {{named req|CopyConstructible}}, {{named req|DefaultConstructible}}
+|}
+
+===Expressions===
+{|class=wikitable
+!Expression||Return type||Semantics||{{nbsp}}Complexity{{nbsp}}
+|-
+|{{c|X::eq(c, d)}} || {{c/core|bool}} || Returns: whether {{c|c}} is to be treated as equal to {{c|d}} || Constant
+|-
+|{{c|X::lt(c, d)}} || {{c/core|bool}} || Returns: whether {{c|c}} is to be treated as less than {{c|d}} || Constant
+|-
+|{{c|X::compare(p, q, n)}} || {{c/core|int}} || Returns:
+* {{c|0}} if for each {{c|i}} in {{range|0|n}}, {{c|X::eq(p[i], q[i])}} is {{c|true}}
+* Else, a negative value if
+** For some {{c|j}} in {{range|0|n}}, {{c|X::lt(p[j], q[j])}} is {{c|true}} and
+** For each {{c|i}} in {{range|0|j}}, {{c|X::eq(p[i], q[i])}} is {{c|true}}
+* Else a positive value
+|| Linear
+|-
+|{{c|X::length(p)}} || {{lc|std::size_t}} || Returns: the smallest {{c|i}} such that {{c|X::eq(p[i], CharT())}} is {{c|true}} || Linear
+|-
+|{{c|X::find(p, n, c)}} || {{c/core|const X::char_type*}} || Returns:
+* The smallest {{c|q}} in {{range|p|p + n}} such that {{c|X::eq(*q, c)}} is {{c|true}}
+* {{c|0}} otherwise
+|| Linear
+|-
+|{{c|X::move(s, p, n)}} || {{tt|X::char_type*}} ||
+* For each {{c|i}} in {{range|0|n}}, performs {{c|X::assign(s[i], p[i])}}
+* Copies correctly even where the ranges {{range|p|p + n}} and {{range|s|s + n}} overlap
+* Returns: {{c|s}}
+|| Linear
+|-
+|{{c|X::copy(s, p, n)}} || {{tt|X::char_type*}} ||
+* Requires: {{range|p|p + n}} and {{range|s|s + n}} do not overlap
+* Returns: {{c|s}}
+* For each {{c|i}} in {{range|0|n}}, performs {{c|X::assign(s[i], p[i])}}
+|| Linear
+|-
+|{{c|X::assign(r, d)}} || (Not used) || Assigns {{c|1=r = d}} || Constant
+|-
+|{{c|X::assign(s, n, c)}} || {{tt|X::char_type*}} ||
+* For each {{c|i}} in {{range|0|n}}, performs {{c|X::assign(s[i], c)}}.
+* Returns: {{c|s}}
+|| Linear
+|-
+|{{c|X::not_eof(e)}} || {{tt|X::int_type}} || Returns:
+* {{c|e}} if {{c|X::eq_int_type(e, X::eof())}} is {{c|false}}
+* Otherwise a value {{c|f}} such that {{c|X::eq_int_type(f, X::eof())}} is {{c|false}}
+|| Constant
+|-
+|{{c|X::to_char_type(e)}} || {{tt|X::char_type}} || Returns:
+* If for some {{c|c}}, {{c|X::eq_int_type(e, X::to_int_type(c))}} is {{c|true}}, {{c|c}}
+* Else some unspecified value
+|| Constant
+|-
+|{{c|X::to_int_type(c)}} || {{tt|X::int_type}} || Returns: some value {{c|e}}, constrained by the definitions of {{tt|X::to_char_type}} and {{tt|X::eq_int_type}} || Constant
+|-
+|{{c|X::eq_int_type(e, f)}} || {{c/core|bool}} ||
+* For all {{c|c}} and {{c|d}}, {{c|X::eq(c, d)}} is equal to {{box|{{c/core|X::eq_int_type(X::to_int_type(c),}}&lt;br&gt;{{c/core|               X::to_int_type(d))}}}}
+* Returns:
+** Yields {{c|X::eq(c, d)}} if for some {{c|c}} and {{c|d}}, {{c|1=e == X::to_int_type(c)}} and {{c|1=f == X::to_int_type(d)}}
+** Otherwise, yields {{c|true}} if {{c|e}} and {{c|f}} are both copies of {{c|X::eof()}}
+** Otherwise, yields {{c|false}} if one of {{c|e}} and {{c|f}} is a copy of {{c|X::eof()}} and the other is not
+** Otherwise the value is unspecified
+|| Constant
+|-
+|{{c|X::eof()}} || {{tt|X::int_type}} || Returns: a value {{c|e}} such that {{c|X::eq_int_type(e, X::to_int_type(c))}} is {{c|false}} for all values {{c|c}} || Constant
+|}
+
+===Standard library===
+{{named req/core|CharTraits}} is required by the following standard library class templates as a template type parameter:
+{{dsc begin}}
+{{dsc h2|Strings}}
+{{dsc inc|cpp/string/dsc basic_string}}
+{{dsc inc|cpp/string/dsc basic_string_view}}
+{{dsc h2|Streams}}
+{{dsc inc|cpp/io/dsc basic_ios}}
+{{dsc inc|cpp/io/dsc basic_istream}}
+{{dsc inc|cpp/io/dsc basic_ifstream}}
+{{dsc inc|cpp/io/dsc basic_istringstream}}
+{{dsc inc|cpp/io/dsc basic_ispanstream}}
+{{dsc inc|cpp/io/dsc basic_ostream}}
+{{dsc inc|cpp/io/dsc basic_ofstream}}
+{{dsc inc|cpp/io/dsc basic_ostringstream}}
+{{dsc inc|cpp/io/dsc basic_osyncstream}}
+{{dsc inc|cpp/io/dsc basic_ospanstream}}
+{{dsc inc|cpp/io/dsc basic_iostream}}
+{{dsc inc|cpp/io/dsc basic_fstream}}
+{{dsc inc|cpp/io/dsc basic_stringstream}}
+{{dsc inc|cpp/io/dsc basic_spanstream}}
+{{dsc h2|Stream iterators}}
+{{dsc inc|cpp/iterator/dsc istream_iterator}}
+{{dsc inc|cpp/iterator/dsc ostream_iterator}}
+{{dsc h2|Stream buffers}}
+{{dsc inc|cpp/io/dsc basic_streambuf}}
+{{dsc inc|cpp/io/dsc basic_filebuf}}
+{{dsc inc|cpp/io/dsc basic_stringbuf}}
+{{dsc inc|cpp/io/dsc basic_syncbuf}}
+{{dsc inc|cpp/io/dsc basic_spanbuf}}
+{{dsc h2|Stream buffer iterators}}
+{{dsc inc|cpp/iterator/dsc istreambuf_iterator}}
+{{dsc inc|cpp/iterator/dsc ostreambuf_iterator}}
+{{dsc end}}
+
+
+{{named req/core|CharTraits}} is satisfied by the following standard library explicit specializations of {{lc|std::char_traits}}:
+{{dcl begin}}
+{{dcl|notes=&lt;br&gt;&lt;br&gt;{{mark since c++20}}&lt;br&gt;{{mark since c++11}}&lt;br&gt;{{mark since c++11}}|
+template&lt;&gt; class char_traits&lt;char&gt;;
+template&lt;&gt; class char_traits&lt;wchar_t&gt;;
+template&lt;&gt; class char_traits&lt;char8_t&gt;;
+template&lt;&gt; class char_traits&lt;char16_t&gt;;
+template&lt;&gt; class char_traits&lt;char32_t&gt;;
+}}
+{{dcl end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=335|std=C++98|before=the requirements on the binary overload of&lt;br&gt;{{tt|assign}} did not prevent assignments to rvalues|after=its first argument&lt;br&gt;can only be an lvalue}}
+{{dr list item|wg=lwg|dr=352|std=C++98|before={{tt|X::state_type}} was only&lt;br&gt;required to be {{named req|CopyConstructible}}|after=it is also required to be&lt;br&gt;{{named req|CopyAssignable}} and {{named req|DefaultConstructible}}}}
+{{dr list item|wg=lwg|dr=3085|std=C++98|before={{c|X::copy(s, p, n)}} only required {{c|p}} not&lt;br&gt;in {{range|s|s + n}}, which is too weak&lt;ref&gt;{{range|p|p + n}} and {{range|s|s + n}} can overlap, using {{lc|std::memcpy}} to implement {{tt|X::copy}} results in undefined behavior in this case.&lt;/ref&gt;|after=requires {{range|p|p + n}} and&lt;br&gt;{{range|s|s + n}} not to overlap}}
+{{dr list end}}
+&lt;references/&gt;
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

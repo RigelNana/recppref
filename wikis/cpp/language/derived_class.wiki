@@ -1,0 +1,259 @@
+{{title|Derived classes}}
+{{cpp/language/classes/navbar}}
+
+Any class type (whether declared with {{spar|class-key}} {{tt|class}} or {{tt|struct}}) may be declared as ''derived'' from one or more ''base classes'' which, in turn, may be derived from their own base classes, forming an inheritance hierarchy.
+
+===Syntax===
+The list of base classes is provided in the {{spar|base-clause}} of the {{rlp|class|class declaration syntax}}. The {{spar|base-clause}} consists of the character {{ttb|:}} followed by a comma-separated list of one or more {{spar|base-specifier}}s.
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar optional|attr}} {{spar|class-or-computed}}}}
+{{sdsc|num=2|1=
+{{spar optional|attr}} {{ttb|virtual}} {{spar|class-or-computed}}}}
+{{sdsc|num=3|1=
+{{spar optional|attr}} {{spar|access-specifier}} {{spar|class-or-computed}}}}
+{{sdsc|num=4|1=
+{{spar optional|attr}} {{ttb|virtual}} {{spar|access-specifier}} {{spar|class-or-computed}}}}
+{{sdsc|num=5|1=
+{{spar optional|attr}} {{spar|access-specifier}} {{ttb|virtual}} {{spar|class-or-computed}}}}
+{{sdsc end}}
+
+@1@ Specifies a non-virtual inheritance with default member accessibility.
+@2@ Specifies a virtual inheritance with default member accessibility.
+@3@ Specifies a non-virtual inheritance with given member accessibility.
+@4@ Specifies a virtual inheritance with given member accessibility.
+@5@ Same as 4), {{ttb|virtual}} and {{spar|access-specifier}} can appear in any order.
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|access-specifier}}|one of {{tt|private}}, {{tt|public}}, or {{tt|protected}}}}
+{{par|{{spar|class-or-computed}}|one of
+* {{spar optional|nested-name-specifier}} {{spar|type-name}}
+* {{spar|nested-name-specifier}} {{ttb|template}} {{spar|simple-template-id}}
+{{rrev|since=c++11|
+* {{rlp|decltype|{{spar|decltype-specifier}}}}
+}}}}
+{{rrev|since=c++26|
+* {{rlp|pack indexing#Pack indexing specifier|{{spar|pack-index-specifier}}
+}}}}
+{{par end}}
+
+An {{rlp|elaborated type specifier}} cannot directly appear as {{spar|class-or-computed}} due to syntax limitations.
+
+{{rrev|since=c++11|
+{{spar|base-specifier}}s in a {{spar|base-clause}} may be {{rlp|parameter pack|pack expansions}}.
+
+A class or struct declared {{rlpt|final}} cannot be denoted by {{spar|class-or-computed}}.
+}}
+
+If {{spar|access-specifier}} is omitted, it defaults to {{tt|public}} for derived classes declared with {{spar|class-key}} {{tt|struct}} and to {{tt|private}} for derived classes declared with {{spar|class-key}} {{tt|class}}.
+
+{{source|
+struct Base
+{
+    int a, b, c;
+};
+
+// every object of type Derived includes Base as a subobject
+struct Derived : Base
+{
+    int b;
+};
+
+// every object of type Derived2 includes Derived and Base as subobjects
+struct Derived2 : Derived
+{
+    int c;
+};
+}}
+
+Classes denoted by {{spar|class-or-computed}}'s listed in the {{spar|base-clause}} are direct base classes. Their bases are indirect base classes. The same class cannot be specified as a direct base class more than once, but the same class can be both direct and indirect base class.
+
+Each direct and indirect base class is present, as ''base class subobject'', within the object representation of the derived class at an ABI-dependent offset. Empty base classes usually do not increase the size of the derived object due to {{rlp|ebo|empty base optimization}}. The constructors of base class subobjects are called by the constructor of the derived class: arguments may be provided to those constructors in the {{rlp|initializer_list|member initializer list}}. 
+
+===Virtual base classes===
+For each distinct base class that is specified {{tt|virtual}}, the most derived object contains only one base class subobject of that type, even if the class appears many times in the inheritance hierarchy (as long as it is inherited {{tt|virtual}} every time).
+
+{{source|1=
+struct B { int n; };
+class X : public virtual B {};
+class Y : virtual public B {};
+class Z : public B {};
+
+// every object of type AA has one X, one Y, one Z, and two B's:
+// one that is the base of Z and one that is shared by X and Y
+struct AA : X, Y, Z
+{
+    AA()
+    {
+        X::n = 1; // modifies the virtual B subobject's member
+        Y::n = 2; // modifies the same virtual B subobject's member
+        Z::n = 3; // modifies the non-virtual B subobject's member
+        
+        std::cout &lt;&lt; X::n &lt;&lt; Y::n &lt;&lt; Z::n &lt;&lt; '\n'; // prints 223
+    }
+};
+}}
+
+An example of an inheritance hierarchy with virtual base classes is the iostreams hierarchy of the standard library: {{lc|std::istream}} and {{lc|std::ostream}} are derived from {{lc|std::basic_ios|std::ios}} using virtual inheritance. {{lc|std::iostream}} is derived from both {{lc|std::istream}} and {{lc|std::ostream}}, so every instance of {{lc|std::iostream}} contains a {{lc|std::ostream}} subobject, a {{lc|std::istream}} subobject, and just one {{lc|std::basic_ios|std::ios}} subobject (and, consequently, one {{lc|std::ios_base}}).
+
+All virtual base subobjects are initialized before any non-virtual base subobject, so only the most derived class calls the constructors of the virtual bases in its {{rlp|initializer list|member initializer list}}:
+
+{{source|1=
+struct B
+{
+    int n;
+    
+    B(int x) : n(x) {}
+};
+
+struct X : virtual B { X() : B(1) {} };
+struct Y : virtual B { Y() : B(2) {} };
+struct AA : X, Y     { AA() : B(3), X(), Y() {} };
+
+// the default constructor of AA calls the default constructors of X and Y
+// but those constructors do not call the constructor of B because B is a virtual base
+AA a; // a.n == 3
+
+// the default constructor of X calls the constructor of B
+X x;  // x.n == 1
+}}
+
+There are {{rlp|unqualified lookup#Member function definition|special rules}} for unqualified name lookup for class members when virtual inheritance is involved (sometimes referred to as the rules of dominance).
+
+===Public inheritance===
+When a class uses {{tt|public}} {{rlp|access|member access specifier}} to derive from a base, all public members of the base class are accessible as public members of the derived class and all protected members of the base class are accessible as protected members of the derived class (private members of the base are never accessible unless friended).
+
+Public inheritance models the subtyping relationship of object-oriented programming: the derived class object IS-A base class object. References and pointers to a derived object are expected to be usable by any code that expects references or pointers to any of its public bases (see {{enwiki|Liskov substitution principle|LSP}}) or, in {{enwiki|Design by contract|DbC}} terms, a derived class should maintain class invariants of its public bases, should not strengthen any precondition or weaken any postcondition of a member function it {{rlp|virtual|overrides}}.
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct MenuOption { std::string title; };
+
+// Menu is a vector of MenuOption: options can be inserted, removed, reordered...
+// and has a title.
+class Menu : public std::vector&lt;MenuOption&gt;
+{
+public:
+    std::string title;
+
+    void print() const
+    {
+        std::cout &lt;&lt; title &lt;&lt; ":\n";
+        for (std::size_t i = 0, s = size(); i &lt; s; ++i)
+            std::cout &lt;&lt; "  " &lt;&lt; (i + 1) &lt;&lt; ". " &lt;&lt; at(i).title &lt;&lt; '\n';
+    }
+};
+// Note: Menu::title is not problematic because its role is independent of the base class.
+
+enum class Color { WHITE, RED, BLUE, GREEN };
+
+void apply_terminal_color(Color) { /* OS-specific */ }
+
+// THIS IS BAD!
+// ColorMenu is a Menu where every option has a custom color.
+class ColorMenu : public Menu
+{
+public:
+    std::vector&lt;Color&gt; colors;
+
+    void print() const
+    {
+        std::cout &lt;&lt; title &lt;&lt; ":\n";
+        
+        for (std::size_t i = 0, s = size(); i &lt; s; ++i)
+        {
+            std::cout &lt;&lt; "  " &lt;&lt; (i + 1) &lt;&lt; ". ";
+            apply_terminal_color(colors[i]);
+            std::cout &lt;&lt; at(i).title &lt;&lt; '\n';
+            apply_terminal_color(Color::WHITE);
+        }
+    }
+};
+// ColorMenu needs the following invariants that cannot be satisfied
+// by publicly inheriting from Menu, for example:
+// - ColorMenu::colors and Menu must have the same number of elements
+// - To make sense, calling erase() should remove also elements from colors,
+//   in order to let options keep their colors
+// Basically every non-const call to a std::vector method will break the invariant
+// of the ColorMenu and will need fixing from the user by correctly managing colors.
+
+int main()
+{
+    ColorMenu color_menu;
+
+    // The big problem of this class is that we must keep ColorMenu::Color
+    // in sync with Menu.
+    color_menu.push_back(MenuOption{"Some choice"});
+
+    // color_menu.print(); // ERROR! colors[i] in print() is out of range
+
+    color_menu.colors.push_back(Color::RED);
+
+    color_menu.print(); // OK: colors and Menu has the same number of elements
+}
+}}
+
+===Protected inheritance===
+When a class uses {{tt|protected}} {{rlp|access|member access specifier}} to derive from a base, all public and protected members of the base class are accessible as protected members of the derived class (private members of the base are never accessible unless friended).
+
+Protected inheritance may be used for "controlled polymorphism": within the members of Derived, as well as within the members of all further-derived classes, the derived class IS-A base: references and pointers to Derived may be used where references and pointers to Base are expected.
+
+===Private inheritance===
+When a class uses {{tt|private}} {{rlp|access|member access specifier}} to derive from a base, all public and protected members of the base class are accessible as private members of the derived class (private members of the base are never accessible unless friended).
+
+Private inheritance is commonly used in policy-based design, since policies are usually empty classes, and using them as bases both enables static polymorphism and leverages {{rlp|ebo|empty-base optimization}}.
+
+Private inheritance can also be used to implement the composition relationship (the base class subobject is an implementation detail of the derived class object). Using a member offers better encapsulation and is generally preferred unless the derived class requires access to protected members (including constructors) of the base, needs to override a virtual member of the base, needs the base to be constructed before and destructed after some other base subobject, needs to share a virtual base or needs to control the construction of a virtual base. Use of members to implement composition is also not applicable in the case of multiple inheritance from a {{rlp|parameter pack}} or when the identities of the base classes are determined at compile time through template metaprogramming.
+
+Similar to protected inheritance, private inheritance may also be used for controlled polymorphism: within the members of the derived (but not within further-derived classes), derived IS-A base.
+
+{{source|1=
+template&lt;typename Transport&gt;
+class service : private Transport // private inheritance from the Transport policy
+{
+public:
+    void transmit()
+    {
+        this-&gt;send(...); // send using whatever transport was supplied
+    }
+};
+
+// TCP transport policy
+class tcp
+{
+public:
+    void send(...);
+};
+
+// UDP transport policy
+class udp
+{
+public:
+    void send(...);
+};
+
+service&lt;tcp&gt; service(host, port); 
+service.transmit(...); // send over TCP
+}}
+
+===Member name lookup===
+Unqualified and qualified name lookup rules for class members are detailed in {{rlp|lookup|name lookup}}.
+
+===Keywords===
+{{ltt|cpp/keyword/virtual}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1710|std=C++98|before=the syntax of {{spar|class-or-decltype}}&lt;!-- the presence of 'decltype' only affects the name, the defect itself still applies to C++98 --&gt; made it impossible to derive from&lt;br&gt;a dependent class where the {{c|template}} disambiguator is required|after=allowed {{c|template}}}}
+{{dr list end}}
+
+===See also===
+* {{rlp|virtual|virtual functions}}
+* {{rlp|abstract class|abstract classes}}
+
+{{langlinks|es|ja|ru|zh}}

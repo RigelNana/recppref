@@ -1,0 +1,136 @@
+{{cpp/ranges/title|iota|iota_result}}
+{{cpp/algorithm/ranges/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++23|1=
+template&lt; std::input_or_output_iterator O, std::sentinel_for&lt;O&gt; S,
+          std::weakly_incrementable T &gt;
+requires std::indirectly_writable&lt;O, const T&amp;&gt;
+constexpr iota_result&lt;O, T&gt;
+    iota( O first, S last, T value );
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; std::weakly_incrementable T, ranges::output_range&lt;const T&amp;&gt; R &gt;
+constexpr iota_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, T&gt;
+    iota( R&amp;&amp; r, T value );
+}}
+{{dcl h|Helper types}}
+{{dcl|since=c++23|num=3|1=
+template&lt; class O, class T &gt;
+using iota_result = ranges::out_value_result&lt;O, T&gt;;
+}}
+{{dcl end}}
+
+Fills the range {{range|first|last}} with sequentially increasing values, starting with {{c|value}} and repetitively evaluating {{c|++value}}.
+
+Equivalent operation:
+
+{{source|1=
+*(first)     = value;
+*(first + 1) = ++value;
+*(first + 2) = ++value;
+*(first + 3) = ++value;
+...
+}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to fill with sequentially increasing values starting with {{c|value}}}}
+{{par|value|initial value to store; the expression {{c|++value}} must be well-formed}}
+{{par end}}
+
+===Return value===
+{{c|1={last, value + ranges::distance(first, last)} }}
+
+===Complexity===
+Exactly {{c|last - first}} increments and assignments.
+
+===Possible implementation===
+{{eq fun|1=
+struct iota_fn
+{
+    template&lt;std::input_or_output_iterator O, std::sentinel_for&lt;O&gt; S,
+            std::weakly_incrementable T&gt;
+    requires std::indirectly_writable&lt;O, const T&amp;&gt;
+    constexpr iota_result&lt;O, T&gt; operator()(O first, S last, T value) const
+    {
+        while (first != last)
+        {
+            *first = as_const(value);
+            ++first;
+            ++value;
+        }
+        return {std::move(first), std::move(value)};
+    }
+
+    template&lt;std::weakly_incrementable T, std::ranges::output_range&lt;const T&amp;&gt; R&gt;
+    constexpr iota_result&lt;std::ranges::borrowed_iterator_t&lt;R&gt;, T&gt;
+    operator()(R&amp;&amp; r, T value) const
+    {
+        return (*this)(std::ranges::begin(r), std::ranges::end(r), std::move(value));
+    }
+};
+ 
+inline constexpr iota_fn iota;
+}}
+
+===Notes===
+The function is named after the integer function &lt;span style="font-size: 1.5em"&gt;⍳&lt;/span&gt; &lt;!-- ⍳ : U+2373 APL FUNCTIONAL SYMBOL IOTA --&gt; from the programming language {{enwiki|APL_(programming_language)|APL}}.
+
+{{feature test macro|__cpp_lib_ranges_iota|std=C++23|value=202202L|{{tt|std::ranges::iota}}}}
+
+===Example===
+{{example
+|Uses the {{lc|std::vector|vector}} of iterators ({{c|std::vector&lt;std::list&lt;T&gt;::iterator&gt;}}) as a proxy to shuffle the elements of the {{lc|std::list}}, because {{lc|ranges::shuffle}} cannot be applied to the {{lc|std::list}} directly.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;numeric&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+template &lt;typename Proj = std::identity&gt;
+void println(auto comment, std::ranges::input_range auto&amp;&amp; range, Proj proj = {})
+{
+    for (std::cout &lt;&lt; comment; auto const &amp;element : range)
+        std::cout &lt;&lt; proj(element) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::list&lt;int&gt; list(8);
+
+    // Fill the list with ascending values: 0, 1, 2, ..., 7
+    std::ranges::iota(list, 0);
+    println("List: ", list);
+
+    // A vector of iterators (see the comment to Example)
+    std::vector&lt;std::list&lt;int&gt;::iterator&gt; vec(list.size());
+
+    // Fill with iterators to consecutive list's elements
+    std::ranges::iota(vec.begin(), vec.end(), list.begin());
+
+    std::ranges::shuffle(vec, std::mt19937 {std::random_device {}()});
+    println("List viewed via vector: ", vec, [](auto it) { return *it; });
+}
+|p=true
+|output=
+List: 0 1 2 3 4 5 6 7
+List viewed via vector: 5 7 6 0 1 3 4 2
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc fill}}
+{{dsc inc|cpp/algorithm/ranges/dsc fill}}
+{{dsc inc|cpp/algorithm/dsc generate}}
+{{dsc inc|cpp/algorithm/ranges/dsc generate}}
+{{dsc inc|cpp/ranges/dsc iota_view}}
+{{dsc inc|cpp/algorithm/dsc iota}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

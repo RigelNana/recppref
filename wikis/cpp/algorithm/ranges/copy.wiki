@@ -1,0 +1,186 @@
+{{cpp/ranges/title|copy|copy_if|copy_result|copy_if_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcla|since=c++20|num=1|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr copy_result&lt;I, O&gt;
+    copy( I first, S last, O result );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    copy( R&amp;&amp; r, O result );
+}}
+{{dcla|since=c++20|num=3|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr copy_if_result&lt;I, O&gt;
+    copy_if( I first, S last, O result, Pred pred, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=4|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr copy_if_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    copy_if( R&amp;&amp; r, O result, Pred pred, Proj proj = {} );
+}}
+{{dcl h|Helper types}}
+{{dcl|since=c++20|num=5|1=
+template&lt; class I, class O &gt;
+using copy_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl|since=c++20|num=6|1=
+template&lt; class I, class O &gt;
+using copy_if_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+Copies the elements in the range, defined by {{range|first|last}}, to another range beginning at {{c|result}}.
+@1@ Copies all elements in the range {{range|first|last}} starting from {{c|first}} and proceeding to {{c|last - 1}}. The behavior is undefined if {{c|result}} is within the range {{range|first|last}}. In this case, {{lc|ranges::copy_backward}} may be used instead.
+@3@ Only copies the elements for which the predicate {{c|pred}} returns {{c|true}}. The relative order of the elements that are copied is preserved. The behavior is undefined if the source and the destination ranges overlap.
+@2,4@ Same as {{v|1,3}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to copy}}
+{{par|r|the range of elements to copy}}
+{{par|result|the beginning of the destination range.}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+A {{lc|ranges::in_out_result}} containing an input iterator equal to {{c|last}} and an output iterator past the last element copied.
+
+===Complexity===
+@1,2@ Exactly {{c|last - first}} assignments.
+
+@3,4@ Exactly {{c|last - first}} applications of the predicate and projection, between {{c|0}} and {{c|last - first}} assignments (assignment for every element for which predicate returns {{c|true}}, dependent on predicate and input data).
+
+===Notes===
+In practice, implementations of {{tt|ranges::copy}} avoid multiple assignments and use bulk copy functions such as {{lc|std::memmove}} if the value type is {{named req|TriviallyCopyable}} and the iterator types satisfy {{lconcept|contiguous_iterator}}.
+
+When copying overlapping ranges, {{tt|ranges::copy}} is appropriate when copying to the left (beginning of the destination range is outside the source range) while {{rlpt|copy_backward|ranges::copy_backward}} is appropriate when copying to the right (end of the destination range is outside the source range).
+
+===Possible implementation===
+{{eq impl
+|title1=copy|ver1=1|1=
+struct copy_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::copy_result&lt;I, O&gt; operator()(I first, S last, O result) const
+    {
+        for (; first != last; ++first, (void)++result)
+            *result = *first;
+        return {std::move(first), std::move(result)};
+    }
+
+    template&lt;ranges::input_range R, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, O result) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr copy_fn copy;
+|title2=copy_if|ver2=3|2=
+struct copy_if_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O,
+             class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::copy_if_result&lt;I, O&gt;
+        operator()(I first, S last, O result, Pred pred, Proj proj = {}) const
+    {
+        for (; first != last; (void)++first)
+            if (std::invoke(pred, std::invoke(proj, *first)))
+            {
+                *result = *first;
+                (void)++result;
+            }
+        return {std::move(first), std::move(result)};
+    }
+
+    template&lt;ranges::input_range R, std::weakly_incrementable O,
+             class Proj = std::identity,
+             std::indirect_unary_predicate&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::copy_if_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, O result, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::move(result),
+                       std::ref(pred), std::ref(proj));
+    }
+};
+
+inline constexpr copy_if_fn copy_if;
+}}
+
+===Example===
+{{example
+|The following code uses {{tt|ranges::copy}} to both copy the contents of one {{lc|std::vector}} to another and to display the resulting {{tt|std::vector}}:
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; source(10);
+    std::iota(source.begin(), source.end(), 0);
+
+    std::vector&lt;int&gt; destination;
+
+    std::ranges::copy(source.begin(), source.end(),
+                      std::back_inserter(destination));
+// or, alternatively,
+//  std::vector&lt;int&gt; destination(source.size());
+//  std::ranges::copy(source.begin(), source.end(), destination.begin());
+// either way is equivalent to
+//  std::vector&lt;int&gt; destination = source;
+
+    std::cout &lt;&lt; "destination contains: ";
+
+    std::ranges::copy(destination, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "odd numbers in destination are: ";
+
+    std::ranges::copy_if(destination, std::ostream_iterator&lt;int&gt;(std::cout, " "),
+                         [](int x) { return (x % 2) == 1; });
+    std::cout &lt;&lt; '\n';
+}
+|output=
+destination contains: 0 1 2 3 4 5 6 7 8 9
+odd numbers in destination are: 1 3 5 7 9
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_n}}
+{{dsc inc|cpp/algorithm/ranges/dsc fill}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/dsc copy}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|ja|ru|zh}}

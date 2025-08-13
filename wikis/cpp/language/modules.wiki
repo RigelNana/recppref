@@ -1,0 +1,455 @@
+{{title|Modules {{mark since c++20}}}}
+{{cpp/language/basics/navbar}}
+
+Most C++ projects use multiple translation units, and so they need to share {{rlp|declarations}} and {{rlp|definition}}s across those units. The usage of {{lsd|cpp/standard library#Headers}} is prominent for this purpose, an example being the {{lt|cpp/standard library}} whose declarations can be provided by [[cpp/standard library#Including headers|including the corresponding header]].
+
+Modules are a language feature to share declarations and definitions across translation units.
+They are an alternative to some use cases of headers.
+
+Modules are orthogonal to {{rlp|namespace}}s.
+
+{{source|
+// helloworld.cpp
+export module helloworld; // module declaration
+
+import &lt;iostream&gt;;        // import declaration
+
+export void hello()       // export declaration
+{
+    std::cout &lt;&lt; "Hello world!\n";
+}
+}}
+
+{{source|
+// main.cpp
+import helloworld; // import declaration
+
+int main()
+{
+    hello();
+}
+}}
+
+=== Syntax ===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|export}}{{mark optional}} {{ttb|module}} {{spar optional|module-name module-partition}} {{spar optional|attr}} {{ttb|;}}
+}}
+{{sdsc|num=2|
+{{ttb|export}} {{spar|declaration}}
+}}
+{{sdsc|num=3|
+{{ttb|export {}} {{spar optional|declaration-seq}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=4|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|module-name attr}} {{ttb|;}}
+}}
+{{sdsc|num=5|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|module-partition attr}} {{ttb|;}}
+}}
+{{sdsc|num=6|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|header-name attr}} {{ttb|;}}
+}}
+{{sdsc|num=7|
+{{ttb|module;}}
+}}
+{{sdsc|num=8|
+{{ttb|module : private;}}
+}}
+{{sdsc end}}
+
+@1@ Module declaration. Declares that the current translation unit is a ''module unit''.
+@2,3@ Export declaration. Export all namespace-scope declarations in {{spar|declaration}} or {{spar|declaration-seq}}.
+@4,5,6@ Import declaration. Import a module unit/module partition/header unit.
+@7@ Starts a [[#Global module fragment|global module fragment]].
+@8@ Starts a [[#Private module fragment|private module fragment]].
+
+===Module declarations===
+A translation unit may have a module declaration, in which case it is considered a ''module unit''.
+The ''module declaration'', if provided, must be the first declaration of the translation unit (excepted the ''global module fragment'', which is covered later on). Each module unit is associated to a ''module name'' (and optionally a partition), provided in the module declaration.
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|module}} {{spar optional|module-name module-partition}} {{spar optional|attr}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+The module name consists of one or more identifiers separated by dots (for example: {{tt|mymodule}}, {{tt|mymodule.mysubmodule}}, {{tt|mymodule2}}...). Dots have no intrinsic meaning, however they are used informally to represent hierarchy.
+
+If any identifier in the module name or module partition is defined as an [[cpp/preprocessor/replace|object-like macro]], the program is ill-formed.
+
+A ''named module'' is the collection of module units with the same module name.
+
+Module units whose declaration has the keyword {{c/core|export}} are termed ''module interface units''; all other module units are termed ''module implementation units''.
+
+For every named module, there must be exactly one module interface unit that specifies no module partition; this module unit is termed the ''primary module interface unit''. Its exported content will be available when importing the corresponding named module.
+
+{{source|
+// (each line represents a separate translation unit)
+
+export module A;   // declares the primary module interface unit for named module 'A'
+module A;          // declares a module implementation unit for named module 'A'
+module A;          // declares another module implementation unit for named module 'A'
+export module A.B; // declares the primary module interface unit for named module 'A.B'
+module A.B;        // declares a module implementation unit for named module 'A.B'
+}}
+
+===Exporting declarations and definitions===
+Module interface units can export declarations (including definitions), which can be imported by other translation units. To export a declaration, either prefix it with the {{c/core|export}} keyword, or else place it inside an {{c/core|export}} block.
+ 
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}} {{spar|declaration}}
+}}
+{{sdsc|
+{{ttb|export {}} {{spar optional|declaration-seq}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+{{source|
+export module A; // declares the primary module interface unit for named module 'A'
+
+// hello() will be visible by translations units importing 'A'
+export char const* hello() { return "hello"; } 
+
+// world() will NOT be visible.
+char const* world() { return "world"; }
+
+// Both one() and zero() will be visible.
+export
+{
+    int one()  { return 1; }
+    int zero() { return 0; }
+}
+
+// Exporting namespaces also works: hi::english() and hi::french() will be visible.
+export namespace hi
+{
+    char const* english() { return "Hi!"; }
+    char const* french()  { return "Salut!"; }
+}
+}}
+
+===Importing modules and header units===
+Modules are imported via an ''import declaration'':
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|module-name attr}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+All declarations and definitions exported in the module interface units of the given named module will be available in the translation unit using the import declaration.
+
+Import declarations can be exported in a module interface unit. That is, if module {{tt|B}} export-imports {{tt|A}}, then importing {{tt|B}} will also make visible all exports from {{tt|A}}.
+
+In module units, all import declarations (including export-imports) must be grouped after the module declaration and before all other declarations.
+
+{{source|
+/////// A.cpp (primary module interface unit of 'A')
+export module A;
+
+export char const* hello() { return "hello"; }
+
+/////// B.cpp (primary module interface unit of 'B')
+export module B;
+
+export import A;
+
+export char const* world() { return "world"; }
+
+/////// main.cpp (not a module unit)
+#include &lt;iostream&gt;
+import B;
+
+int main()
+{
+    std::cout &lt;&lt; hello() &lt;&lt; ' ' &lt;&lt; world() &lt;&lt; '\n';
+}
+}}
+
+{{ltt|cpp/preprocessor/include|#include}} should not be used in a module unit (outside the ''global module fragment''), because all included declarations and definitions would be considered part of the module. Instead, headers can also be imported as ''header units'' with an ''import declaration'':
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|header-name attr}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+A header unit is a separate translation unit synthesized from a header. Importing a header unit will make accessible all its definitions and declarations. Preprocessor macros are also accessible (because import declarations are recognized by the preprocessor).
+
+However, contrary to {{c/core|#include}}, preprocessing macros already defined at the point of the import declaration will not affect the processing of the header. This may be inconvenient in some cases (some headers use preprocessing macros as a form of configuration), in which case the usage of ''global module fragment'' is needed.
+
+{{source|1=
+/////// A.cpp (primary module interface unit of 'A')
+export module A;
+
+import &lt;iostream&gt;;
+export import &lt;string_view&gt;;
+
+export void print(std::string_view message)
+{
+    std::cout &lt;&lt; message &lt;&lt; std::endl;
+}
+
+/////// main.cpp (not a module unit)
+import A;
+
+int main()
+{
+    std::string_view message = "Hello, world!";
+    print(message);
+}
+}}
+
+===Global module fragment===
+Module units can be prefixed by a ''global module fragment'', which can be used to include headers when importing the headers is not possible (notably when the header uses preprocessing macros as configuration).
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|module;}}
+
+{{spar optional|preprocessing-directives}}
+
+{{spar|module-declaration}}
+}}
+{{sdsc end}}
+
+If a module-unit has a global module fragment, then its first declaration must be {{ttb|module;}}. Then, only [[cpp/preprocessor#Directives|preprocessing directives]] can appear in the global module fragment. Then, a standard module declaration marks the end of the global module fragment and the start of the module content.
+
+{{source|
+/////// A.cpp (primary module interface unit of 'A')
+module;
+
+// Defining _POSIX_C_SOURCE adds functions to standard headers,
+// according to the POSIX standard.
+#define _POSIX_C_SOURCE 200809L
+#include &lt;stdlib.h&gt;
+
+export module A;
+
+import &lt;ctime&gt;;
+
+// Only for demonstration (bad source of randomness).
+// Use C++ &lt;random&gt; instead.
+export double weak_random()
+{
+    std::timespec ts;
+    std::timespec_get(&amp;ts, TIME_UTC); // from &lt;ctime&gt;
+    
+    // Provided in &lt;stdlib.h&gt; according to the POSIX standard.
+    srand48(ts.tv_nsec);
+    
+    // drand48() returns a random number between 0 and 1.
+    return drand48();
+}
+
+/////// main.cpp (not a module unit)
+import &lt;iostream&gt;;
+import A;
+
+int main()
+{
+    std::cout &lt;&lt; "Random value between 0 and 1: " &lt;&lt; weak_random() &lt;&lt; '\n';
+}
+}}
+
+===Private module fragment===
+Primary module interface unit can be suffixed by a ''private module fragment'', which allows a module to be represented as a single translation unit without making all of the contents of the module reachable to importers.
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|module : private;}}
+{{spar optional|declaration-seq}}
+}}
+{{sdsc end}}
+
+''Private module fragment'' ends the portion of the module interface unit that can affect the behavior of other translation units. If a module unit contains a ''private module fragment'', it will be the only module unit of its module.
+
+{{source|
+export module foo;
+
+export int f();
+
+module : private; // ends the portion of the module interface unit that
+                  // can affect the behavior of other translation units
+                  // starts a private module fragment
+
+int f()           // definition not reachable from importers of foo
+{
+    return 42;
+}
+}}
+
+===Module partitions===
+A module can have ''module partition units''. They are module units whose module declarations include a module partition, which starts with a colon {{ttb|:}} and is placed after the module name.
+
+{{source|
+export module A:B; // Declares a module interface unit for module 'A', partition ':B'.
+}}
+
+A module partition represents exactly one module unit (two module units cannot designate the same module partition). They are visible only from inside the named module (translation units outside the named module cannot import a module partition directly).
+
+A module partition can be imported by module units of the same named module.
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|module-partition attr}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{source|
+/////// A-B.cpp   
+export module A:B;
+...
+
+/////// A-C.cpp
+module A:C;
+...
+
+/////// A.cpp
+export module A;
+
+import :C;
+export import :B;
+
+...
+}}
+
+All definitions and declarations in a module partition are visible by the importing module unit, whether exported or not.
+
+Module partitions can be module interface units (when their module declarations have {{ttb|export}}). They must be export-imported by the primary module interface unit, and their exported statements will be visible when the module is imported.
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|module-partition attr}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{source|
+///////  A.cpp   
+export module A;     // primary module interface unit
+
+export import :B;    // Hello() is visible when importing 'A'.
+import :C;           // WorldImpl() is now visible only for 'A.cpp'.
+// export import :C; // ERROR: Cannot export a module implementation unit.
+
+// World() is visible by any translation unit importing 'A'.
+export char const* World()
+{
+    return WorldImpl();
+}
+
+}}
+{{source|
+/////// A-B.cpp 
+export module A:B; // partition module interface unit
+
+// Hello() is visible by any translation unit importing 'A'.
+export char const* Hello() { return "Hello"; }
+}}
+
+{{source|
+/////// A-C.cpp 
+module A:C; // partition module implementation unit
+
+// WorldImpl() is visible by any module unit of 'A' importing ':C'.
+char const* WorldImpl() { return "World"; }
+}}
+
+{{source|
+/////// main.cpp 
+import A;
+import &lt;iostream&gt;;
+
+int main()
+{
+    std::cout &lt;&lt; Hello() &lt;&lt; ' ' &lt;&lt; World() &lt;&lt; '\n';
+    // WorldImpl(); // ERROR: WorldImpl() is not visible.
+}
+}}
+
+===Module ownership===
+In general, if a declaration appears after the module declaration in a module unit, it is ''attached to'' that module.
+
+If a declaration of an entity is attached to a named module, that entity can only be defined in that module. All declarations of such an entity must be attached to the same module.
+
+If a declaration is attached to a named module, and it is not exported, the declared name has {{rlpsd|storage duration#Module linkage}}.
+
+{{source|1=
+export module lib_A;
+
+int f() { return 0; } // f has module linkage
+export int x = f();   // x equals 0
+}}
+
+{{source|1=
+export module lib_B;
+
+int f() { return 1; } // OK, f in lib_A and f in lib_B refer to different entities
+export int y = f(); // y equals 1
+}}
+
+If {{rlp|conflicting declarations#Multiple declarations of the same entity|two declarations of an entity}} are attached to different modules, the program is ill-formed; no diagnostic is required if neither is reachable from the other.
+
+{{source|
+/////// decls.h
+int f(); // #1, attached to the global module
+int g(); // #2, attached to the global module
+}}
+
+{{source|
+/////// Module interface of M
+module;
+#include "decls.h"
+export module M;
+export using ::f; // OK, does not declare an entity, exports #1
+int g();          // Error: matches #2, but attached to M
+export int h();   // #3
+export int k();   // #4
+}}
+
+{{source|
+/////// Other translation unit
+import M;
+static int h();   // Error: matches #3
+int k();          // Error: matches #4
+}}
+
+The following declarations are not attached to any named module (and thus the declared entity can be defined outside the module):
+
+* {{rlp|namespace}} definitions with external linkage;
+* declarations within a {{rlp|language linkage}} specification.
+
+{{source|1=
+export module lib_A;
+
+namespace ns // ns is not attached to lib_A.
+{
+    export extern "C++" int f(); // f is not attached to lib_A.
+           extern "C++" int g(); // g is not attached to lib_A.
+    export              int h(); // h is attached to lib_A.
+}
+// ns::h must be defined in lib_A, but ns::f and ns::g can be defined elsewhere (e.g.
+// in a traditional source file).
+}}
+
+===Notes===
+{{ftm begin|comment=yes|std=yes}}
+{{ftm|__cpp_modules|Modules &amp;mdash; core language support|value=201907L|std=C++20}}
+{{ftm|__cpp_lib_modules|[[cpp/standard library#Importing modules|Standard library modules]] {{c|std}} and {{c|std.compat}}|value=202207L|std=C++23}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/private}},
+{{ltt|cpp/identifier_with_special_meaning/module}},
+{{ltt|cpp/identifier_with_special_meaning/import}},
+{{ltt|cpp/keyword/export}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2732|std=C++20|before=it was unclear whether importable headers can&lt;br&gt;react to preprocessor state from the point of import|after=no reaction}}
+{{dr list item|paper=P3034R1|std=C++20|before=module names and module partitions could&lt;br&gt;contain identifiers defined as object-like macros|after=prohibited}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

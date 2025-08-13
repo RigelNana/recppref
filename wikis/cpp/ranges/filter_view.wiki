@@ -1,0 +1,179 @@
+{{cpp/ranges/view title|filter}}
+{{cpp/ranges/filter_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::input_range V,
+          std::indirect_unary_predicate&lt;ranges::iterator_t&lt;V&gt;&gt; Pred &gt;
+    requires ranges::view&lt;V&gt; &amp;&amp; std::is_object_v&lt;Pred&gt;
+class filter_view
+    : public ranges::view_interface&lt;filter_view&lt;V, Pred&gt;&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    inline constexpr /* unspecified */ filter = /* unspecified */;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R, class Pred &gt;
+    requires /* see below */
+constexpr ranges::view auto filter( R&amp;&amp; r, Pred&amp;&amp; pred );
+}}
+{{dcl|since=c++20|1=
+template&lt; class Pred &gt;
+constexpr /* range adaptor closure */ filter( Pred&amp;&amp; pred );
+}}
+{{dcl end}}
+
+@1@ A range adaptor that represents {{lconcept|view}} of an underlying sequence without the elements that fail to satisfy a predicate.
+@2@ {{named req|RangeAdaptorObject}}. The expression {{c|views::filter(e, p)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|filter_view(e, p)}}&lt;!--LWG 3524--&gt; for any suitable subexpressions {{c|e}} and {{c|p}}.
+
+{{tt|filter_view}} models the concepts {{lconcept|bidirectional_range}}, {{lconcept|forward_range}}, {{lconcept|input_range}}, and {{lconcept|common_range}} when the underlying {{lconcept|view}} {{tt|V}} models respective concepts.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|base_|private=yes|The underlying {{lconcept|view}} of type {{tt|V}}.}}
+{{dsc expos mem obj|pred_|private=yes|Wraps the predicate used to filter out elements of {{tti|base_}} of type {{rev inl|until=c++23|{{rlpi|copyable_wrapper|copyable-box&lt;!--P2325R3--&gt;}}{{tt|&lt;Pred&gt;}}}}{{rev inl|since=c++23|{{rlpi|copyable_wrapper|movable-box}}{{tt|&lt;Pred&gt;}}}} augmenting {{tt|Pred}} with assignability when needed and hence always satisfies {{lconcept|copyable}}{{rev inl|since=c++23|or {{lconcept|movable}}}}.}}
+{{dsc expos mem obj|begin_|private=yes|maybe=yes|An object of [[cpp/ranges#Non-propagating cache|optional-like]] type that caches an iterator to the first element of {{tti|base_}} that satisfies the {{tti|pred_}}. Present only if {{tt|filter_view}} models {{lconcept|forward_range}}.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|{{PAGENAME}}#ctor|constructs a {{tt|filter_view}}}}
+{{dsc mem fun|{{PAGENAME}}#base|title=base|returns the underlying view {{tt|V}}}}
+{{dsc mem fun|{{PAGENAME}}#pred|title=pred|returns a reference to the predicate stored within {{tt|filter_view}}}}
+{{dsc mem fun|{{PAGENAME}}#begin|title=begin|returns the beginning iterator of the {{tt|filter_view}}}}
+{{dsc mem fun|{{PAGENAME}}#end|title=end|returns the sentinel of the {{tt|filter_view}}}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid|operator[]=invalid}}
+{{dsc end}}
+
+{{anchor|ctor}}
+{{member|{{small|std::ranges::filter_view::}}filter_view|2=
+{{dcl begin}}
+{{dcl|since=c++20|num=1|1=
+filter_view() requires std::default_initializable&lt;V&gt; &amp;&amp;
+                       std::default_initializable&lt;Pred&gt; = default;&lt;!--P2325R3--&gt;
+}}
+{{dcl|since=c++20|num=2|
+constexpr explicit filter_view( V base, Pred pred );
+}}
+{{dcl end}}
+
+@1@ Value-initializes {{tti|base_}} via its default member initializer ({{c|1== V()}}) and default-initializes {{tti|pred_}} (which value-initializes the contained {{tt|Pred}}).
+@2@ Initializes {{tti|base_}} with {{c|std::move(base)}} and initializes {{tti|pred_}} with {{c|std::move(pred)}}.
+
+===Parameters===
+{{par begin}}
+{{par|base|range to filter}}
+{{par|pred|predicate to filter out elements}}
+{{par end}}
+}}
+
+{{anchor|base}}
+{{member|{{small|std::ranges::filter_view::}}base|2=
+{{dcl begin}}
+{{dcl|since=c++20|num=1|
+constexpr V base() const&amp; requires std::copy_constructible&lt;V&gt;;
+}}
+{{dcl|since=c++20|num=2|
+constexpr V base() &amp;&amp;;
+}}
+{{dcl end}}
+
+@1@ Equivalent to {{c|return base_;}}.
+@2@ Equivalent to {{c|return std::move(base_);}}.
+}}
+
+{{anchor|pred}}
+{{member|{{small|std::ranges::filter_view::}}pred|2=
+{{ddcl|since=c++20|1=
+constexpr const Pred&amp; pred() const;
+}}
+
+Returns a reference to the contained {{tt|Pred}} object. The behavior is undefined if {{tti|pred_}} does not contain a value.
+}}
+
+{{anchor|begin}}
+{{member|{{small|std::ranges::filter_view::}}begin|2=
+{{ddcl|notes={{mark expos}}|
+constexpr /*iterator*/ begin();
+}}
+
+In order to provide the amortized constant time complexity required by the {{lconcept|range}} concept, this function caches the result within the {{tt|filter_view}} object for use on subsequent calls. Equivalent to
+{{source|1=
+if constexpr (!ranges::forward_range&lt;V&gt;)
+    return /*iterator*/{*this, ranges::find_if(base_, std::ref(*pred_))};
+else
+{
+    if (!begin_.has_value())
+        begin_ = ranges::find_if(base_, std::ref(*pred_)); // caching
+    return /*iterator*/{*this, begin_.value())};
+}
+}}
+The behavior is undefined if {{tti|pred_}} does not contain a value.
+}}
+
+{{anchor|end}}
+{{member|{{small|std::ranges::filter_view::}}end|2=
+{{ddcl|since=c++20|1=
+constexpr auto end();
+}}
+
+Returns an iterator to the end. Equivalent to
+{{source|1=
+if constexpr (ranges::common_range&lt;V&gt;)
+    return /*iterator*/{*this, ranges::end(base_)};
+else
+    return /*sentinel*/{*this};
+}}
+}}
+
+===Deduction guides===
+{{ddcl|since=c++20|1=
+template&lt; class R, class Pred &gt;
+filter_view( R&amp;&amp;, Pred ) -&gt; filter_view&lt;views::all_t&lt;R&gt;, Pred&gt;;
+}}
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem class|cpp/ranges/filter_view/iterator|the iterator type of {{tt|filter_view}}}}
+{{dsc expos mem class|cpp/ranges/filter_view/sentinel|the sentinel type of {{tt|filter_view}} when the underlying view is not a {{lconcept|common_range}}}}
+{{dsc end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto even = [](int i) { return 0 == i % 2; };
+    auto square = [](int i) { return i * i; };
+    
+    for (int i : std::views::iota(0, 6)
+               {{!}} std::views::filter(even)
+               {{!}} std::views::transform(square))
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+0 4 16
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3714|paper=P2711R1|std=C++20|before=the multi-parameter constructor was not explicit|after=made explicit}}
+{{dr list item|paper=P2325R3|std=C++20|before=if {{tt|Pred}} is not {{lconcept|default_initializable}}, the default constructor&lt;br&gt;constructs a {{tt|filter_view}} which does not contain a {{tt|Pred}}|after=the {{tt|filter_view}} is also&lt;br&gt;not {{lconcept|default_initializable}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc take_while_view}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

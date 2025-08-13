@@ -1,0 +1,103 @@
+{{cpp/title|align}}
+{{cpp/memory/navbar}}
+{{ddcl|since=c++11|header=memory| 
+void* align( std::size_t alignment,
+             std::size_t size,
+             void*&amp; ptr,
+             std::size_t&amp; space );
+}}
+
+Given a pointer {{c|ptr}} to a buffer of size {{c|space}}, returns a pointer aligned by the specified {{c|alignment}} for {{c|size}} number of bytes and decreases {{c|space}} argument by the number of bytes used for alignment. The first aligned address is returned.
+
+The function modifies the pointer only if it would be possible to fit the wanted number of bytes aligned by the given alignment into the buffer. If the buffer is too small, the function does nothing and returns {{c|nullptr}}.
+
+The behavior is undefined if {{c|alignment}} is not a power of two.
+
+===Parameters===
+{{par begin}}
+{{par|alignment|the desired alignment}}
+{{par|size|the size of the storage to be aligned}}
+{{par|ptr|pointer to contiguous storage (a buffer) of at least {{tt|space}} bytes}}
+{{par|space|the size of the buffer in which to operate}}
+{{par end}}
+
+===Return value===
+The adjusted value of {{c|ptr}}, or null pointer value if the space provided is too small.
+
+===Example===
+{{example
+|Demonstrates the use of {{tt|std::align}} to place objects of different type in memory.
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+template&lt;std::size_t N&gt;
+struct MyAllocator
+{
+    char data[N];
+    void* p;
+    std::size_t sz;
+    MyAllocator() : p(data), sz(N) {}
+    template&lt;typename T&gt;
+    T* aligned_alloc(std::size_t a = alignof(T))
+    {
+        if (std::align(a, sizeof(T), p, sz))
+        {
+            T* result = reinterpret_cast&lt;T*&gt;(p);
+            p = (char*)p + sizeof(T);
+            sz -= sizeof(T);
+            return result;
+        }
+        return nullptr;
+    }
+};
+
+int main()
+{
+    MyAllocator&lt;64&gt; a;
+    std::cout &lt;&lt; "allocated a.data at " &lt;&lt; (void*)a.data
+              &lt;&lt; " (" &lt;&lt; sizeof a.data &lt;&lt; " bytes)\n";
+
+    // allocate a char
+    if (char* p = a.aligned_alloc&lt;char&gt;())
+    {
+        *p = 'a';
+        std::cout &lt;&lt; "allocated a char at " &lt;&lt; (void*)p &lt;&lt; '\n';
+    }
+
+    // allocate an int
+    if (int* p = a.aligned_alloc&lt;int&gt;())
+    {
+        *p = 1;
+        std::cout &lt;&lt; "allocated an int at " &lt;&lt; (void*)p &lt;&lt; '\n';
+    }
+
+    // allocate an int, aligned at 32-byte boundary
+    if (int* p = a.aligned_alloc&lt;int&gt;(32))
+    {
+        *p = 2;
+        std::cout &lt;&lt; "allocated an int at " &lt;&lt; (void*)p &lt;&lt; " (32 byte alignment)\n";
+    }
+}
+|p = true
+|output=
+allocated a.data at 0x7ffd0b331f80 (64 bytes)
+allocated a char at 0x7ffd0b331f80
+allocated an int at 0x7ffd0b331f84
+allocated an int at 0x7ffd0b331fa0 (32 byte alignment)
+}}
+
+=== Defect reports ===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2377|std=C++11|before={{tt|alignment}} required to be a fundamental or supported extended alignment value|after=only need to be a power of two}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignof}}
+{{dsc inc|cpp/language/dsc alignas}}
+{{dsc inc|cpp/types/dsc aligned_storage}}
+{{dsc inc|cpp/memory/dsc assume_aligned}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

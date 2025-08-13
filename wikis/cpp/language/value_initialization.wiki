@@ -1,0 +1,119 @@
+{{title|Value-initialization}}
+{{cpp/language/initialization/navbar}}
+This is the initialization performed when an object is constructed with an empty initializer.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|T}} {{ttb|()}}}}
+{{sdsc|num=2|{{ttb|new}} {{spar|T}} {{ttb|()}}}}
+{{sdsc|num=3|{{spar|Class}}{{ttb|::}}{{spar|Class}}{{ttb|(}}{{spar|...}}{{ttb|)}} {{ttb|:}} {{spar|member}} {{ttb|()}} {{ttb|{}} {{spar|...}} {{ttb|}&lt;!-- --&gt;}}}}
+{{sdsc|num=4|{{spar|T}} {{spar|object}} {{ttb|{};}}|notes={{mark since c++11}}}}
+{{sdsc|num=5|{{spar|T}} {{ttb|{}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc|num=6|{{ttb|new}} {{spar|T}} {{ttb|{}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc|num=7|{{spar|Class}}{{ttb|::}}{{spar|Class}}{{ttb|(}}{{spar|...}}{{ttb|)}} {{ttb|:}} {{spar|member}} {{ttb|{}&lt;!-- --&gt;}} {{ttb|{}} {{spar|...}} {{ttb|}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+===Explanation===
+Value-initialization is performed in these situations:
+@1,5@ when a nameless temporary object is created with the initializer consisting of an empty pair of parentheses{{rev inl|since=c++11| or braces}};
+@2,6@ when an object with dynamic storage duration is created by a {{rlp|new|{{c/core|new}} expression}} with the initializer consisting of an empty pair of parentheses{{rev inl|since=c++11| or braces}};
+@3,7@ when a non-static data member or a base class is initialized using a {{rlp|constructor|member initializer}} with an empty pair of parentheses {{rev inl|since=c++11|or braces}};
+@4@ when a named object (automatic, static, or thread-local) is declared with the initializer consisting of a pair of braces.
+
+In all cases, if the empty pair of braces {{tt|{}&lt;!-- --&gt;}} is used and {{tt|T}} is an aggregate type, {{rlp|aggregate initialization}} is performed instead of value-initialization.
+
+{{rrev|since=c++11|
+If {{tt|T}} is a class type that has no default constructor but has a constructor taking {{lc|std::initializer_list}}, {{rlp|list initialization|list-initialization}} is performed.
+}}
+
+The effects of value-initialization are:
+* If {{tt|T}} is a (possibly cv-qualified) class type:
+:* If the default-initialization for {{tt|T}} selects a {{rlp|constructor}}, and the constructor is not {{rev inl|until=c++11|user-declared}}{{rev inl|since=c++11|{{rlp|function#User-provided functions|user-provided}}}}, the object is first {{rlp|zero initialization|zero-initialized}}.
+:* In any case, the object is {{rlp|default initialization|default-initialized}}.
+* Otherwise, if {{tt|T}} is an array type, each element of the array is value-initialized.
+* Otherwise, the object is zero-initialized.
+
+===Notes===
+The syntax {{c|T object();}} does not initialize an object; it declares a function that takes no arguments and returns {{tt|T}}. The way to value-initialize a named variable before C++11 was {{c|1=T object = T();}}, which value-initializes a temporary and then copy-initializes the object: most compilers {{rlp|copy elision|optimize out the copy}} in this case.
+
+References cannot be value-initialized.
+
+As described in {{rlp|explicit cast|function-style cast}}, the syntax {{c|T()}} {{v|1}} is prohibited if {{tt|T}} names an array type, while {{c|T{}&lt;!-- --&gt;}} {{v|5}} is allowed.
+
+All standard containers ({{lc|std::vector}}, {{lc|std::list}}, etc.) value-initialize their elements when constructed with a single {{tt|size_type}} argument or when grown by a call to {{c|resize()}}, unless their allocator customizes the behavior of {{c|construct}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct T1
+{
+    int mem1;
+    std::string mem2;
+    virtual void foo() {} // make sure T1 is not an aggregate
+}; // implicit default constructor
+
+struct T2
+{
+    int mem1;
+    std::string mem2;
+    T2(const T2&amp;) {} // user-provided copy constructor
+};                   // no default constructor
+
+struct T3
+{
+    int mem1;
+    std::string mem2;
+    T3() {} // user-provided default constructor
+};
+
+std::string s{}; // class =&gt; default-initialization, the value is ""
+
+int main()
+{
+    int n{};                // scalar =&gt; zero-initialization, the value is 0
+    assert(n == 0);
+    double f = double();    // scalar =&gt; zero-initialization, the value is 0.0
+    assert(f == 0.0);
+    int* a = new int[10](); // array =&gt; value-initialization of each element
+    assert(a[9] == 0);      //          the value of each element is 0
+    T1 t1{};                // class with implicit default constructor =&gt;
+    assert(t1.mem1 == 0);   //     t1.mem1 is zero-initialized, the value is 0
+    assert(t1.mem2 == "");  //     t1.mem2 is default-initialized, the value is ""
+//  T2 t2{};                // error: class with no default constructor
+    T3 t3{};                // class with user-provided default constructor =&gt;
+    std::cout &lt;&lt; t3.mem1;   //     t3.mem1 is default-initialized to indeterminate value
+    assert(t3.mem2 == "");  //     t3.mem2 is default-initialized, the value is ""
+    std::vector&lt;int&gt; v(3);  // value-initialization of each element
+    assert(v[2] == 0);      // the value of each element is 0
+    std::cout &lt;&lt; '\n';
+    delete[] a;
+}
+|p=true
+|output=
+42
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=178|std=C++98|before=there was no value-initialization; empty initializer invoked default-&lt;br&gt;initialization (though {{c|new T()}} also performs zero-initialization)|after=empty initializer invoke&lt;br&gt;value-initialization}}
+{{dr list item|wg=cwg|dr=543|std=C++98|before=value-initialization for a class object without any&lt;br&gt;user-provided constructors was equivalent to value-&lt;br&gt;initializing each subobject (which need not zero-&lt;br&gt;initialize a member with user-provided default constructor)|after=zero-initializes&lt;br&gt;the entire object,&lt;br&gt;then calls the&lt;br&gt;default constructor}}
+{{dr list item|wg=cwg|dr=1301|std=C++11|before=value-initialization of unions with deleted&lt;br&gt;default constructors led to zero-initialization|after=they are&lt;br&gt;default-initialized}}
+{{dr list item|wg=cwg|dr=1368|std=C++98|before=any user-provided constructor caused&lt;br&gt;zero-initialization to be skipped|after=only a user-provided&lt;br&gt;default constructor&lt;br&gt;skips zero-initialization}}
+{{dr list item|wg=cwg|dr=1502|std=C++11|before=value-initializing a union without a user-provided&lt;br&gt;default constructor only zero-initialized the&lt;br&gt;object, despite default member initializers|after=performs default-&lt;br&gt;initialization after&lt;br&gt;zero-initialization}}
+{{dr list item|wg=cwg|dr=1507|std=C++98|before=value-initialization for a class object without any&lt;br&gt;user-provided constructors did not check the validity&lt;br&gt;of the default constructor when the latter is trivial|after=the validity of trivial&lt;br&gt;default constructor&lt;br&gt;is checked}}
+{{dr list item|wg=cwg|dr=2820|std=C++98|before=the default-initialization following the zero-&lt;br&gt;initialization required a non-trivial constructor|after=not required}}
+{{dr list item|wg=cwg|dr=2859|std=C++98|before=value-initialization for a class object might involve&lt;br&gt;zero-initialization even if the default-initialization&lt;br&gt;does not actually select a user-provided constructor|after=there is no&lt;br&gt;zero-initialization&lt;br&gt;in this case}}
+{{dr list end}}
+
+===See also===
+* {{rlp|default constructor}}
+* {{rlpt|explicit}}
+* {{rlp|aggregate initialization}}
+* {{rlp|list initialization|list-initialization}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

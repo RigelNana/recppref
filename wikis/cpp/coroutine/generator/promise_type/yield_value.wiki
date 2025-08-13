@@ -1,0 +1,95 @@
+{{cpp/title|{{small|generator&lt;Ref,V,Allocator&gt;::promise_type::}}yield_value}}
+{{cpp/coroutine/generator/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|
+std::suspend_always yield_value( yielded val ) noexcept;
+}}
+{{dcl|num=2|since=c++23|
+auto yield_value( const std::remove_reference_t&lt;yielded&gt;&amp; lval )
+    requires std::is_rvalue_reference_v&lt;yielded&gt; &amp;&amp;
+             std::constructible_from&lt;std::remove_cvref_t&lt;yielded&gt;,
+                 const std::remove_reference_t&lt;yielded&gt;&amp;&gt;;
+}}
+{{dcl|num=3|since=c++23|
+template&lt; class R2, class V2, class Alloc2, class Unused &gt;
+    requires std::same_as&lt;typename std::generator&lt;T2, V2, Alloc2&gt;::yielded, 
+                          yielded&gt;
+auto yield_value( ranges::elements_of&lt;std::generator&lt;T2, V2, Alloc2&gt;&amp;&amp;,
+                                      Unused&gt; g ) noexcept;
+}}
+{{dcl|num=4|since=c++23|
+template&lt; class R2, class V2, class Alloc2, class Unused &gt;
+    requires std::same_as&lt;typename std::generator&lt;T2, V2, Alloc2&gt;::yielded, 
+                          yielded&gt;
+auto yield_value( ranges::elements_of&lt;std::generator&lt;T2, V2, Alloc2&gt;&amp;,
+                                      Unused&gt; g ) noexcept;
+}}
+{{dcla|num=5|since=c++23|
+template&lt; ranges::input_range R, class Alloc &gt;
+    requires std::convertible_to&lt;ranges::range_reference_t&lt;R&gt;, yielded&gt;
+auto yield_value( ranges::elements_of&lt;R, Alloc&gt; r );
+}}
+{{dcl end}}
+
+An implementation of coroutine interface functions used internally to support {{c|operator co_yield}}.
+
+{{petty|({{ltt|cpp/coroutine/generator#Member types|yielded}} is a reference type defined in {{c/core|std::generator}}.)}}
+
+@1@ Assigns {{c|std::addressof(val)}} to {{rlpsi|/#value_}}. Returns {{c|{}&lt;!----&gt;}}.
+
+@2@ Returns an awaitable object {{c|x}} of an unspecified type that stores an object of type {{box/core|{{c/core|std::remove_cvref_t&lt;}}{{lst|cpp/coroutine/generator#yielded}}{{c/core|&gt;}}}}. {{c|x}} is [[cpp/language/direct initialization|direct-non-list-initialized]] with {{c|lval}}, whose member functions are configured so that {{rlpsi|/#value_}} points to that stored object. Then suspends the coroutine.
+
+@3, 4@ Let {{c|x}} be some {{lt|cpp/coroutine/generator}} object.
+Returns an awaitable object of an unspecified type into which {{c|g.range}} is moved,
+* whose member {{c|await_ready}} returns {{c|false}},
+* whose member {{c|await_suspend}} pushes {{c|g.range.coroutine_}} into {{box|{{c/core|*x.}}{{lsi|cpp/coroutine/generator#active_}}}} and
+* resumes execution of the coroutine referred to by {{c|g.range.coroutine_}}, and
+* whose member {{c|await_resume}} evaluates
+:* {{c|std::rethrow_exception(except_)}} if {{c|bool(except_)}} is {{c|true}}.
+:* If {{c/core|bool(except_)}} is {{c|false}}, the {{c|await_resume}} member has no effects.
+
+@@ The coroutine referred to by {{c|g.range.coroutine_}} must be suspended at its initial suspend point. Otherwise the behavior is undefined.
+
+@5@ Equivalent to:
+{{source|1=
+auto nested = [](std::allocator_arg_t, Alloc, ranges::iterator_t&lt;R&gt; i,
+                 ranges::sentinel_t&lt;R&gt; s) -&gt;
+    std::generator&lt;yielded, void, Alloc&gt;
+{
+    for (; i != s; ++i)
+        co_yield static_cast&lt;yielded&gt;(*i);
+};
+
+return yield_value(ranges::elements_of(nested(
+    allocator_arg, r.allocator, ranges::begin(r.range), ranges::end(r.range))));
+}}
+
+@2,3@ {{cpp/precondition|A handle referring to the coroutine whose promise object is {{c|*this}} must be at the top of {{box|{{c/core|*}}{{lsi|cpp/coroutine/generator#active_}}}} of some generator object.}}
+
+@2-5@ A [[cpp/language/coroutines#co_yield|''yield-expression'']] that calls these overload has the type {{c/core|void}}.
+
+===Parameters===
+{{par begin}}
+{{par|val|a value which is a result of the ''yield-expression'' evaluation}}
+{{par|lval|an lvalue which is a result of the ''yield-expression'' evaluation}}
+{{par|g|a range of elements produced by a generator}}
+{{par|r|a range of elements}}
+{{par end}}
+
+===Return value===
+@1@ The awaitable object of type {{c/core|std::suspend_always}}.
+@2-5@ An awaitable object of an unspecified type as described above.
+
+===Exceptions===
+@2,5@ May throw any exception thrown by the initialization of the stored object.
+
+===Example===
+{{example}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3899|std=C++23|before={{tt|yield_value}} on a range of elements produced by lvalue generator&lt;br&gt;used generic {{tt|elements_of}} overload|after=used special {{tt|elements_of}} overload for such generators}}
+{{dr list item|wg=lwg|dr=4119|std=C++23|before={{tt|range_value_t}} in {{tt|generator}}'s template argument as part&lt;br&gt;of the return type of {{c|nested}} in {{vl|5}} may be ill-formed|after=used {{c/core|void}}}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

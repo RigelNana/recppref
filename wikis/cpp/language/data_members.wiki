@@ -1,0 +1,255 @@
+{{title|Non-static data members}}
+{{cpp/language/classes/navbar}}
+Non-static data members are declared in a {{rlp|class|member specification}} of a class.
+
+{{source|1=
+class S
+{
+    int n;              // non-static data member
+    int&amp; r;             // non-static data member of reference type
+    int a[2] = {1, 2};  // non-static data member with default member initializer (C++11)
+    std::string s, *ps; // two non-static data members
+    
+    struct NestedS
+    {
+        std::string s;
+    } d5;               // non-static data member of nested type
+    
+    char bit : 2;       // two-bit bitfield
+};
+}}
+
+Any {{rlp|declarations|simple declarations}} are allowed, except
+* {{ltt|cpp/keyword/extern}} and {{ltt|cpp/keyword/register}} storage class specifiers are not allowed;
+{{rrev|since=c++11|
+* {{ltt|cpp/keyword/thread_local}} storage class specifier is not allowed (but it is allowed for {{rlp|static}} data members);
+}}
+* {{rlp|incomplete type|incomplete types}}, {{rlp|abstract class|abstract class types}}, and arrays thereof are not allowed: in particular, a class {{tt|C}} cannot have a non-static data member of type {{tt|C}}, although it can have a non-static data member of type {{tt|C&amp;}} (reference to C) or {{tt|C*}} (pointer to {{tt|C}});
+* a non-static data member cannot have the same name as the name of the class if at least one user-declared constructor is present;
+{{rrev|since=c++11|
+* a {{rlp|auto|placeholder type specifier}} (i.e. {{c/core|auto}}{{rev inl|since=c++14|, {{c/core|decltype(auto)}}}}{{rev inl|since=c++17|, a class template name subject to {{rlp|class template argument deduction|deduction}}}}{{rev inl|since=c++20|, a {{rlp|constraints|constrained}} placeholder}}) cannot be used in a non-static data member declaration (although it is allowed for static data members that are {{rlp|static#Constant static members|initialized in the class definition}}).
+}}
+
+In addition, {{rlp|bit field|bit-field}} declarations are allowed.
+
+===Layout===
+When an object of some class {{tt|C}} is created, each non-static data member of non-reference type is allocated in some part of the object representation of {{tt|C}}. Whether reference members occupy any storage is implementation-defined, but their {{rlp|storage duration}} is the same as that of the object in which they are members.
+
+{{rrev multi|rev1=
+For non-{{rlp|union}} class types, {{rev inl|since=c++20|{{rlp|object#Subobjects|non-zero-sized}}}} members {{rev inl|until=c++11|not separated by an {{rlp|access|access specifier}}}}{{rev inl|since=c++11|with the same {{rlp|access|member access}}}} are always allocated so that the members declared later have higher addresses within a class object. Members {{rev inl|until=c++11|separated by an access specifier}}{{rev inl|since=c++11|with different access control}} are allocated in unspecified order (the compiler may group them together).
+|since2=c++23|rev2=
+For non-{{rlp|union}} class types, {{rlp|object#Size|non-zero-sized}} members are always allocated so that the members declared later have higher addresses within a class object. Note that access control of member still affects the standard-layout property (see below).
+}}
+
+Alignment requirements may necessitate padding between members, or after the last member of a class.
+
+===Standard-layout===
+{{rrev multi
+|rev1=
+A class is considered to be ''standard-layout'' and to have properties described below if and only if it is a {{rlps|classes#POD class}}.
+|since2=c++11|rev2=
+A class where all non-static data members have the same access control and certain other conditions are satisfied is known as ''standard-layout class'' (see {{rlpsd|classes#Standard-layout class}} for the list of requirements).
+}}
+
+The ''common initial sequence'' of two standard-layout non-union class types is the longest sequence of non-static data members and bit-fields in declaration order, starting with the first such entity in each of the classes, such that
+{{rrev|since=c++20|
+* if {{c|__has_cpp_attribute(no_unique_address)}} is not {{c|0}}, neither entity is declared with {{attr|no_unique_address}} attribute, 
+}}
+* corresponding entities have layout-compatible types,
+* corresponding entities have the same {{rlp|object#Alignment|alignment requirements}}, and
+* either both entities are bit-fields with the same width or neither is a bit-field.
+{{source|1=
+struct A { int a; char b; };
+struct B { const int b1; volatile char b2; }; 
+// A and B's common initial sequence is A.a, A.b and B.b1, B.b2
+
+struct C { int c; unsigned : 0; char b; };
+// A and C's common initial sequence is A.a and C.c
+
+struct D { int d; char b : 4; };
+// A and D's common initial sequence is A.a and D.d
+
+struct E { unsigned int e; char b; };
+// A and E's common initial sequence is empty
+}}
+
+Two standard-layout non-union class types are called ''layout-compatible'' if they are the same type ignoring cv-qualifiers, if any, are layout-compatible {{rlp|enum|enumerations}} (i.e. enumerations with the same underlying type), or if their ''common initial sequence'' consists of every non-static data member and bit-field (in the example above, {{tt|A}} and {{tt|B}} are layout-compatible).
+
+Two standard-layout unions are called ''layout-compatible'' if they have the same number of non-static data members and corresponding non-static data members (in any order) have layout-compatible types.
+
+Standard-layout types have the following special properties:
+:* In a standard-layout union with an active member of non-union class type {{tt|T1}}, it is permitted to read a non-static data member {{tt|m}} of another union member of non-union class type {{tt|T2}} provided {{tt|m}} is part of the common initial sequence of {{tt|T1}} and {{tt|T2}} (except that reading a volatile member through non-volatile glvalue is undefined).
+:* A pointer to an object of standard-layout class type can be {{rlpt|reinterpret_cast}} to pointer to its first non-static non-bitfield data member (if it has non-static data members) or otherwise any of its base class subobjects (if it has any), and vice versa. In other words, padding is not allowed before the first data member of a standard-layout type. Note that {{rlp|reinterpret_cast#Type aliasing|strict aliasing}} rules still apply to the result of such cast.
+:* The macro {{lc|offsetof}} may be used to determine the offset of any member from the beginning of a standard-layout class.
+
+===Member initialization===
+Non-static data members may be initialized in one of two ways:
+@1@ In the {{rlp|constructor|member initializer list}} of the constructor.
+{{source|1=
+struct S
+{
+    int n;
+    std::string s;
+    S() : n(7) {} // direct-initializes n, default-initializes s
+};
+}}
+
+{{rrev|since=c++11|
+@2@ Through a ''default member initializer'', which is a brace or equals {{rlp|initialization|initializer}} included in the member declaration and is used if the member is omitted from the member initializer list of a constructor.
+{{source|1=
+struct S
+{
+    int n = 7;
+    std::string s{'a', 'b', 'c'};
+    S() {} // default member initializer will copy-initialize n, list-initialize s
+};
+}}
+
+If a member has a default member initializer and also appears in the member initialization list in a constructor, the default member initializer is ignored for that constructor.
+{{example|code=
+#include &lt;iostream&gt;
+
+int x = 0;
+struct S
+{
+    int n = ++x;
+    S() {}                 // uses default member initializer
+    S(int arg) : n(arg) {} // uses member initializer 
+};
+
+int main()
+{
+    std::cout &lt;&lt; x &lt;&lt; '\n'; // prints 0
+    S s1;                   // default initializer ran
+    std::cout &lt;&lt; x &lt;&lt; '\n'; // prints 1
+    S s2(7);                // default initializer did not run
+    std::cout &lt;&lt; x &lt;&lt; '\n'; // prints 1
+}
+}}
+
+{{rrev|until=c++20|
+Default member initializers are not allowed for {{rlp|bit field|bit-field}} members.
+}}
+Members of array type cannot deduce their size from member initializers:
+{{source|1=
+struct X
+{
+    int a[] = {1, 2, 3};  // error
+    int b[3] = {1, 2, 3}; // OK
+};
+}}
+
+Default member initializers are not allowed to cause the implicit definition of a defaulted {{rlp|default constructor}} for the enclosing class or the exception specification of that constructor:
+{{source|1=
+struct node
+{
+    node* p = new node; // error: use of implicit or defaulted node::node() 
+};
+}}
+
+Reference members cannot be bound to temporaries in a default member initializer (note; same rule exists for {{rlp|constructor#Explanation|member initializer lists}}):
+{{source|1=
+struct A
+{
+    A() = default;     // OK
+    A(int v) : v(v) {} // OK
+    const int&amp; v = 42; // OK
+};
+
+A a1;    // error: ill-formed binding of temporary to reference
+A a2(1); // OK (default member initializer ignored because v appears in a constructor)
+         // however a2.v is a dangling reference
+}}
+}}
+
+
+{{rrev|since=c++17|
+If {{rev inl|until=c++20|a reference member is initialized from its default member initializer}}{{rev inl|since=c++20|a member has a default member initializer}} and a {{rlp|expressions#Potentially-evaluated expressions|potentially-evaluated}} subexpression thereof is an {{rlp|aggregate initialization}} that would use that default member initializer, the program is ill-formed:
+{{source|1=
+struct A;
+extern A a;
+
+struct A
+{
+    const A&amp; a1{A{a, a}&lt;!----&gt;}; // OK
+    const A&amp; a2{A{}&lt;!----&gt;};     // error
+};
+
+A a{a, a};                // OK
+}}
+}}
+
+===Usage===
+The name of a non-static data member or a non-static member function can only appear in the following three situations:
+@1@ As a part of class member access expression, in which the class either has this member or is derived from a class that has this member, including the implicit {{c|this-&gt;}} member access expressions that appear when a non-static member name is used in any of the contexts where {{rlpt|this}} is allowed (inside member function bodies, in member initializer lists, in the in-class default member initializers).
+{{source|1=
+struct S
+{
+    int m;
+    int n;
+    int x = m;            // OK: implicit this-&gt; allowed in default initializers (C++11)
+    
+    S(int i) : m(i), n(m) // OK: implicit this-&gt; allowed in member initializer lists
+    {
+        this-&gt;f();        // explicit member access expression
+        f();              // implicit this-&gt; allowed in member function bodies
+    }
+    
+    void f();
+};
+}}
+@2@ To form a {{rlp|pointer|pointer to non-static member}}.
+{{source|1=
+struct S
+{
+    int m;
+    void f();
+};
+
+int S::*p = &amp;S::m;       // OK: use of m to make a pointer to member
+void (S::*fp)() = &amp;S::f; // OK: use of f to make a pointer to member
+}}
+
+@3@ (for data members only, not member functions) When used in {{rlp|expressions#Unevaluated expressions|unevaluated operands}}.
+{{source|1=
+struct S
+{
+    int m;
+    static const std::size_t sz = sizeof m; // OK: m in unevaluated operand
+};
+
+std::size_t j = sizeof(S::m + 42); // OK: even though there is no "this" object for m
+}}
+@@ Notes: such uses are allowed via the resolution of {{cwg|613}} in {{wg21|N2253}}, which is treated as a change in C++11 by some compilers (e.g. clang).
+
+===Notes===
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=200809L|std=C++11|__cpp_nsdmi|[[#Member initialization|Non-static data member initializers]]}}
+{{ftm|value=201304L|std=C++14|__cpp_aggregate_nsdmi|[[cpp/language/aggregate_initialization|Aggregate classes]] with [[#Member initialization|default member initializers]]}}
+{{ftm end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=80|std=C++98|before=all data members cannot have the same name&lt;br&gt;as the name of the class (breaks C compatibility)|after=allow non-static data members&lt;br&gt;share the class name if there is&lt;br&gt;no user-declared constructor}}
+{{dr list item|wg=cwg|dr=190|std=C++98|before=when determining layout compatibility,&lt;br&gt;all members were considered|after=only consider non-&lt;br&gt;static data members}}
+{{dr list item|wg=cwg|dr=613|std=C++98|before=unevaluated uses of non-static data members not allowed|after=such uses are allowed}} &lt;!-- gcc in particular supports it in C++03 more and defended this support as intentional in bug report 65890 --&gt;
+{{dr list item|wg=cwg|dr=645|std=C++98|before=it was unspecified whether bit-field and&lt;br&gt;non-bit-field members are layout compatible|after=not layout compatible}}
+{{dr list item|wg=cwg|dr=1397|std=C++11|before=class was regarded as complete&lt;br&gt;in the default member initializers|after=default member init cannot trigger&lt;br&gt;definition of default constructor}}
+{{dr list item|wg=cwg|dr=1425|std=C++98|before=it was unclear whether a standard-layout object&lt;br&gt;shares the same address with the first non-static&lt;br&gt;data member or the first base class subobject|after=non-static data member&lt;br&gt;if present, otherwise base&lt;br&gt;class subobject if present}}
+{{dr list item|wg=cwg|dr=1696|std=C++98|before=reference members could be initialized to temporaries&lt;br&gt;(whose lifetime would end at the end of constructor)|after=such init is ill-formed}}
+{{dr list item|wg=cwg|dr=1719|std=C++98|before=differently cv-qualified types weren't layout-compatible|after=cv-quals ignored, spec improved}}
+{{dr list item|wg=cwg|dr=2254|std=C++11|before=pointer to standard-layout class with no data&lt;br&gt;members can be reinterpret_cast to its first base class|after=can be reinterpret_cast&lt;br&gt;to any of its base classes}}
+{{dr list item|wg=cwg|dr=2583|std=C++11|before=common initial sequence did not&lt;br&gt;consider alignment requirements|after=considered}}
+{{dr list item|wg=cwg|dr=2759|std=C++20|before=common initial sequence could include&lt;br&gt;members declared {{attr|no_unique_address}}|after=they are not included}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc|{{rlp|classes|classes}}}}
+{{dsc|{{rlp|static|static members}}}}
+{{dsc|{{rlp|member functions|non-static member functions}}}}
+{{dsc inc|cpp/types/dsc is_standard_layout}}
+{{dsc inc|cpp/types/dsc offsetof}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

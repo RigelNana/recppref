@@ -1,0 +1,143 @@
+{{cpp/title|exchange}}
+{{cpp/utility/navbar}}
+{{ddcl|header=utility|since=c++14|notes={{mark constexpr since c++20}}&lt;br&gt;{{mark|conditionally noexcept since C++23}}|1=
+template&lt; class T, class U = T &gt;
+T exchange( T&amp; obj, U&amp;&amp; new_value );
+}}
+
+Replaces the value of {{c|obj}} with {{c|new_value}} and returns the old value of {{c|obj}}.
+
+===Parameters===
+{{par begin}}
+{{par|obj|object whose value to replace}}
+{{par|new_value|the value to assign to {{c|obj}}}}
+{{par hreq}}
+{{par req named|T|MoveConstructible|notes=Also, it must be possible to move-assign objects of type {{tt|U}} to objects of type {{tt|T}}.}}
+{{par end}}
+
+===Return value===
+The old value of {{c|obj}}.
+
+===Exceptions===
+{{rrev multi|since2=c++23
+|rev1=(none)
+|rev2=
+{{noexcept|
+    std::is_nothrow_move_constructible_v&lt;T&gt; &amp;&amp;
+    std::is_nothrow_assignable_v&lt;T&amp;, U&gt;
+}}
+}}
+
+===Possible implementation===
+{{eq fun|1=
+template&lt;class T, class U = T&gt;
+constexpr // Since C++20
+T exchange(T&amp; obj, U&amp;&amp; new_value)
+    noexcept( // Since C++23
+        std::is_nothrow_move_constructible&lt;T&gt;::value &amp;&amp;
+        std::is_nothrow_assignable&lt;T&amp;, U&gt;::value
+    )
+{
+    T old_value = std::move(obj);
+    obj = std::forward&lt;U&gt;(new_value);
+    return old_value;
+}
+}}
+
+===Notes===
+{{tt|std::exchange}} can be used when implementing [[cpp/language/move assignment|move assignment operators]] and {{lt|cpp/language/move constructor}}s:
+{{source|1=
+struct S
+{
+    int n;
+
+    S(S&amp;&amp; other) noexcept : n{std::exchange(other.n, 0)} {}
+  
+    S&amp; operator=(S&amp;&amp; other) noexcept
+    {
+        n = std::exchange(other.n, 0); // Move n, while leaving zero in other.n
+                                       // (note: in self-move-assignment, n is unchanged)
+        return *this;
+    }
+};
+}}
+
+{{feature test macro|__cpp_lib_exchange_function|[[#Top|{{tt|std::exchange}}]]|value=201304L|std=C++14}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+class stream
+{
+public:
+    using flags_type = int;
+
+public:
+    flags_type flags() const { return flags_; }
+
+    // Replaces flags_ by newf, and returns the old value.
+    flags_type flags(flags_type newf) { return std::exchange(flags_, newf); }
+
+private:
+    flags_type flags_ = 0;
+};
+
+void f() { std::cout &lt;&lt; "f()"; }
+
+int main()
+{
+    stream s;
+
+    std::cout &lt;&lt; s.flags() &lt;&lt; '\n';
+    std::cout &lt;&lt; s.flags(12) &lt;&lt; '\n';
+    std::cout &lt;&lt; s.flags() &lt;&lt; "\n\n";
+
+    std::vector&lt;int&gt; v;
+
+    // Since the second template parameter has a default value, it is possible
+    // to use a braced-init-list as second argument. The expression below
+    // is equivalent to std::exchange(v, std::vector&lt;int&gt;{1, 2, 3, 4});
+
+    std::exchange(v, {1, 2, 3, 4});
+
+    std::copy(begin(v), end(v), std::ostream_iterator&lt;int&gt;(std::cout, ", "));
+
+    std::cout &lt;&lt; "\n\n";
+
+    void (*fun)();
+
+    // The default value of template parameter also makes possible to use a
+    // normal function as second argument. The expression below is equivalent to
+    // std::exchange(fun, static_cast&lt;void(*)()&gt;(f))
+    std::exchange(fun, f);
+    fun();
+
+    std::cout &lt;&lt; "\n\nFibonacci sequence: ";
+    for (int a{0}, b{1}; a &lt; 100; a = std::exchange(b, a + b))
+        std::cout &lt;&lt; a &lt;&lt; ", ";
+    std::cout &lt;&lt; "...\n";
+}
+|output=
+0
+0
+12
+
+1, 2, 3, 4,
+
+f()
+
+Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, ...
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc swap}}
+{{dsc inc|cpp/atomic/dsc atomic_exchange}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

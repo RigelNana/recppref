@@ -1,0 +1,125 @@
+{{cpp/experimental/ranges/title|equal}}
+{{cpp/experimental/ranges/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/ranges/algorithm}}
+{{dcl|since=ranges|num=1|1=
+template&lt; InputIterator I1, Sentinel&lt;I1&gt; S1, InputIterator I2, Sentinel&lt;I2&gt; S2,
+          class Pred = ranges::equal_to&lt;&gt;, 
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity &gt;
+    requires IndirectlyComparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+bool equal( I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = Pred{},
+            Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} );
+}}
+{{dcl|since=ranges|num=2|1=
+template&lt; InputRange R1, InputRange R2, class Pred = ranges::equal_to&lt;&gt;,
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity &gt;
+    requires IndirectlyComparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                  Pred, Proj1, Proj2&gt;
+bool equal( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = Pred{},
+            Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} );
+}}
+{{dcl|since=ranges|num=3|notes={{mark deprecated}}|1=
+template&lt; InputIterator I1, Sentinel&lt;I1&gt; S1, class I2,
+          class Pred = ranges::equal_to&lt;&gt;, 
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity &gt;
+    requires InputIterator&lt;std::decay_t&lt;I2&gt;&gt; &amp;&amp; !Range&lt;I2&gt; &amp;&amp;
+             IndirectlyComparable&lt;I1, std::decay_t&lt;I2&gt;, Pred, Proj1, Proj2&gt;
+bool equal( I1 first1, S1 last1, I2&amp;&amp; first2_, Pred pred = Pred{},
+            Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} );
+
+}}
+{{dcl|since=ranges|num=4|notes={{mark deprecated}}|1=
+template&lt; InputRange R1, class I2, class Pred = ranges::equal_to&lt;&gt;,
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity &gt;
+    requires InputIterator&lt;std::decay_t&lt;I2&gt;&gt; &amp;&amp; !Range&lt;I2&gt; &amp;&amp;
+             IndirectlyComparable&lt;ranges::iterator_t&lt;R1&gt;, std::decay_t&lt;I2&gt;, Pred, Proj1, Proj2&gt;
+bool equal( R1&amp;&amp; r1, I2&amp;&amp; first2_, Pred pred = Pred{}, 
+            Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} );
+}}
+{{dcl end}}
+
+@1@ Returns {{c|true}} if the range {{range|first1|last1}} is equal to the range {{range|first2|last2}}, and {{c|false}} otherwise. 
+
+@2@ Same as {{v|1}}, but uses {{c|r1}} as the first source range and {{c|r2}} as the second source range, as if using {{c|ranges::begin(r1)}} as {{c|first1}}, {{c|ranges::end(r1)}} as {{c|last1}}, {{c|ranges::begin(r2)}} as {{c|first2}}, and {{c|ranges::end(r2)}} as {{c|last2}}.
+
+@3@ Same as {{v|1}}, except that the second range is considered to end when either the first range is exhausted or the first mismatch is detected. Equivalent to {{c|return last1 {{==}} ranges::mismatch(first1, last1, std::forward&lt;I2&gt;(first2_), comp, proj1, proj2).in1();}}
+
+@4@ Same as {{v|3}}, but uses {{c|r1}} as the first source range, as if using {{c|ranges::begin(r1)}} as {{c|first1}} and {{c|ranges::end(r1)}} as {{c|last1}}. 
+
+Two ranges are considered equal if they have the same number of elements and, for every iterator {{tt|i}} in the range {{range|first1|last1}}, {{c|ranges::invoke(pred, ranges::invoke(proj1, *i), ranges::invoke(proj2, *(first2 + (i - first1))))}} is {{c|true}}. 
+
+{{cpp/experimental/ranges/algorithm/tparams}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the first range of the elements}}
+{{par|r1|the first range of the elements}}
+{{par|first2, last2|the second range of the elements}}
+{{par|r2|the second range of the elements}}
+{{par|first2_|the beginning of the second range of the elements}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj1|projection to apply to the elements in the first range}}
+{{par|proj2|projection to apply to the elements in the second range}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the two ranges are equal, otherwise returns {{c|false}}.
+
+===Notes===
+{{tt|ranges::equal}} should not be used to compare the ranges formed by the iterators from {{lc|std::unordered_set}}, {{lc|std::unordered_multiset}}, {{lc|std::unordered_map}}, or {{lc|std::unordered_multimap}} because the order in which the elements are stored in those containers may be different even if the two containers store the same elements. 
+
+When comparing entire containers for equality, {{tt|operator{{==}}}} for the corresponding container are usually preferred.
+
+===Complexity===
+@1,2@ If {{c|SizedSentinel&lt;S1, I1&gt; &amp;&amp; SizedSentinel&lt;S2, I2&gt;}} is satisfied and {{c|last1 - first1 !{{=}} last2 - first2}}, no applications of the predicate and projections. Otherwise, at most min({{c|last1}} - {{c|first1}}, {{c|last2}} - {{c|first2}}) applications of the predicate and each projection.
+@3,4@ At most {{c|last1}} - {{c|first1}} applications of the predicate and each projection.
+
+===Possible implementation===
+{{eq fun|
+1=
+namespace detail 
+{
+    template&lt;InputIterator I1, SizedSentinel&lt;I1&gt; S1,
+             InputIterator I2, SizedSentinel&lt;I1&gt; S2&gt;
+    bool check_size(I1&amp; first1, S1&amp; last1, I2&amp; first2, S2&amp; last2)
+    {
+        return last1 - first1 != last2 - first2;
+    }
+
+    template&lt;InputIterator I1, Sentinel&lt;I1&gt; S1, InputIterator I2, Sentinel&lt;I1&gt; S2&gt;
+    bool check_size(I1&amp; first1, S1&amp; last1, I2&amp; first2, S2&amp; last2)
+    {
+        return false;
+    }
+}
+
+template&lt;InputIterator I1, Sentinel&lt;I1&gt; S1, InputIterator I2, Sentinel&lt;I2&gt; S2,
+         class Pred = ranges::equal_to&lt;&gt;, 
+         class Proj1 = ranges::identity, class Proj2 = ranges::identity&gt;
+    requires IndirectlyComparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+bool equal(I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = Pred{},
+           Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{}) 
+{
+    if (detail::check_size(first1, last1, first2, last2))
+        return false;
+    for (; first1 != last1 &amp;&amp; first2 != last2; (void) ++first1, (void)++first2)
+        if (!ranges::invoke(pred, ranges::invoke(proj1, *first1), 
+                                  ranges::invoke(proj2, *first2)))
+            return false;
+    return first1 == last1 &amp;&amp; first2 == last2;
+}
+}}
+
+===Example===
+{{example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc equal}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc find}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc lexicographical_compare}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc mismatch}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc search}}
+{{dsc end}}
+
+{{langlinks|ja|zh}}

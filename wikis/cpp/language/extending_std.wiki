@@ -1,0 +1,176 @@
+{{title|Extending the namespace {{tt|std}}}}
+{{cpp/language/navbar}}
+
+===Adding declarations to {{tt|std}}===
+It is undefined behavior to add declarations or definitions to namespace {{tt|std}} or to any namespace nested within {{tt|std}}, with a few exceptions noted below.
+
+{{source|
+#include &lt;utility&gt;
+
+namespace std
+{
+    // a function definition added to namespace std: undefined behavior
+    pair&lt;int, int&gt; operator+(pair&lt;int, int&gt; a, pair&lt;int, int&gt; b)
+    {
+        return {a.first + b.first, a.second + b.second};
+    }
+}
+}}
+
+===Adding template specializations===
+====Class templates====
+It is allowed to add template specializations for any standard library class template to the namespace {{tt|std}} only if the declaration depends on at least one {{rlpsd|type#Program-defined type}} and the specialization satisfies all requirements for the original template, except where such specializations are prohibited.
+
+{{source|
+// Get the declaration of the primary std::hash template.
+// We are not permitted to declare it ourselves.
+// &lt;typeindex&gt; is guaranteed to provide such a declaration, 
+// and is much cheaper to include than &lt;functional&gt;.
+
+#include &lt;typeindex&gt; 
+
+// Specialize std::hash so that MyType can be used as a key in 
+// std::unordered_set and std::unordered_map.  Opening namespace
+// std can accidentally introduce undefined behavior, and is not
+// necessary for specializing class templates.
+template&lt;&gt;
+struct std::hash&lt;MyType&gt;
+{
+    std::size_t operator()(const MyType&amp; t) const { return t.hash(); }
+};
+}}
+
+* Specializing the template {{lc|std::complex}} for any type other than {{c/core|float}}, {{c/core|double}}, and {{c/core|long double}} is unspecified.
+
+* Specializations of {{lc|std::numeric_limits}} must define all members declared {{rev inl|until=c++11|{{c/core|static const}}}}{{rev inl|since=c++11|{{c/core|static constexpr}}}} in the primary template, in such a way that they are usable as {{rlp|constant expression|integral constant expressions}}.
+{{rrev|since=c++11|
+* None of the templates defined in {{header|type_traits}} may be specialized for a {{rlpsd|type#Program-defined type}}, except for {{lc|std::common_type}}{{rev inl|since=c++20| and {{ltt|cpp/types/common_reference#Helper types|std::basic_common_reference}}}}. This includes the [[cpp/types|type traits]] and the class template {{lc|std::integral_constant}}.
+
+* Specializations of {{lc|std::hash}} for program-defined types must satisfy {{named req|Hash}} requirements.
+
+* Specializations of {{lc|std::atomic}} must have a deleted copy constructor, a deleted copy assignment operator, and a constexpr value constructor.
+
+* Specializations of {{lc|std::shared_ptr}} and {{lc|std::weak_ptr}} must be {{named req|CopyConstructible}} and {{named req|CopyAssignable}}. In addition, specializations of {{lc|std::shared_ptr}} must be {{named req|LessThanComparable}}, and convertible to {{c|bool}}.
+
+* Specializations of {{lc|std::istreambuf_iterator}} must have a trivial copy constructor, a constexpr default constructor, and a trivial destructor.
+}}
+{{rrev|until=c++17|
+* {{lc|std::unary_function}} and {{lc|std::binary_function}} may not be specialized.
+}}
+
+It is undefined behavior to declare a full or partial specialization of any member class template of a standard library class or class template.
+{{todo|mini-example}}
+
+====Function templates and member functions of templates====
+{{rrev multi|until1=c++20
+|rev1=
+It is allowed to add template specializations for any standard library function template to the namespace {{tt|std}} only if the declaration depends on at least one {{rlpsd|type#Program-defined type}} and the specialization satisfies all requirements for the original template, except where such specializations are prohibited.
+|rev2=
+It is undefined behavior to declare a full specialization of any standard library function template.
+}}
+{{todo|mini-example}}
+
+It is undefined behavior to declare a full specialization of any member function of a standard library class template:
+{{todo|mini-example}}
+
+It is undefined behavior to declare a full specialization of any member function template of a standard library class or class template:
+{{todo|mini-example}}
+
+====Variable templates====
+{{rrev|since=c++14|
+It is undefined behavior to declare a full or partial specialization of any standard library variable template, except where explicitly allowed.{{mark unreviewed dr|LWG|2954}}
+{{todo|mini-example}}
+{{rrev|since=c++20|
+* Specializations of {{lc|std::sized_sentinel_for|std::disable_sized_sentinel_for}}, {{lc|std::ranges::sized_range|std::ranges::disable_sized_range}}, {{lc|std::ranges::view|std::ranges::enable_view}} and {{lc|std::ranges::borrowed_range|std::ranges::enable_borrowed_range}} shall be usable in constant expressions and have type {{c|const bool}}. And
+** {{tt|std::disable_sized_sentinel_for}} may be specialized for cv-unqualified non-array object types {{tt|S}} and {{tt|I}} at least one of which is a {{rlpsd|type#Program-defined type}}.
+** {{tt|std::ranges::disable_sized_range}}, {{tt|std::ranges::enable_view}} and {{tt|std::ranges::enable_borrowed_range}} may be specialized for cv-unqualified program-defined types.
+* Every [[cpp/numeric/constants|mathematical constant variable template]] may be partially or explicitly specialized, provided that the specialization depends on a program-defined type.
+}}
+}}
+
+===Explicit instantiation of templates===
+It is allowed to explicitly instantiate a {{rev inl|since=c++20|class }}template defined in the standard library only if the declaration depends on the name of at least one {{rlpsd|type#Program-defined type}} and the instantiation meets the standard library requirements for the original template.
+{{todo|mini-example}}
+
+===Other restrictions===
+The namespace {{tt|std}} may not be declared as an {{rlp|namespace#Inline namespaces|inline namespace}}.
+
+{{rrev|since=c++20|
+====Addressing restriction====
+The behavior of a C++ program is unspecified (possibly ill-formed) if it explicitly or implicitly attempts to form a pointer, reference (for free functions and static member functions) or pointer-to-member (for non-static member functions) to a standard library function or an instantiation of a standard library function template, unless it is designated an ''addressable function'' (see below).
+
+Following code was well-defined in C++17, but leads to unspecified behaviors and possibly fails to compile since C++20:
+{{source|1=
+#include &lt;cmath&gt;
+#include &lt;memory&gt;
+
+int main()
+{
+    // by unary operator&amp;
+    auto fptr0 = &amp;static_cast&lt;float(&amp;)(float, float)&gt;(std::betaf);
+
+    // by std::addressof
+    auto fptr1 = std::addressof(static_cast&lt;float(&amp;)(float, float)&gt;(std::betaf));
+
+    // by function-to-pointer implicit conversion
+    auto fptr2 = static_cast&lt;float(&amp;)(float)&gt;(std::riemann_zetaf);
+
+    // forming a reference
+    auto&amp; fref = static_cast&lt;float(&amp;)(float)&gt;(std::riemann_zetaf);
+}
+}}
+
+====Designated addressable functions====
+* [[cpp/io/manip|I/O manipulators]]:
+** {{tt|fmtflags}} manipulators:
+*** {{lc|std::boolalpha}}
+*** {{lc|std::boolalpha|std::noboolalpha}}
+*** {{lc|std::showbase}}
+*** {{lc|std::showbase|std::noshowbase}}
+*** {{lc|std::showpoint}}
+*** {{lc|std::showpoint|std::noshowpoint}}
+*** {{lc|std::showpos}}
+*** {{lc|std::showpos|std::noshowpos}}
+*** {{lc|std::skipws}}
+*** {{lc|std::skipws|std::noskipws}}
+*** {{lc|std::uppercase}}
+*** {{lc|std::uppercase|std::nouppercase}}
+*** {{lc|std::unitbuf}}
+*** {{lc|std::unitbuf|std::nounitbuf}}
+** {{tt|adjustfield}} manipulators:
+*** {{lc|std::left|std::internal}}
+*** {{lc|std::left}}
+*** {{lc|std::left|std::right}}
+** {{tt|basefield}} manipulators:
+*** {{lc|std::hex|std::dec}}
+*** {{lc|std::hex}}
+*** {{lc|std::hex|std::oct}}
+** {{tt|floatfield}} manipulators:
+*** {{lc|std::fixed}}
+*** {{lc|std::fixed|std::scientific}}
+*** {{lc|std::fixed|std::hexfloat}}
+*** {{lc|std::fixed|std::defaultfloat}}
+** {{tt|basic_istream}} manipulators:
+*** {{lc|std::ws}}
+** {{tt|basic_ostream}} manipulators:
+*** {{lc|std::endl}}
+*** {{lc|std::ends}}
+*** {{lc|std::flush}}
+&lt;!-- Mapping not established yet
+*** {{lc|std::emit_on_flush}}
+*** {{lc|std::emit_on_flush|std::noemit_on_flush}}
+*** {{lc|std::flush_emit}}
+--&gt;
+*** {{ltt|cpp/io/manip/emit_on_flush|std::emit_on_flush}}
+*** {{ltt|cpp/io/manip/emit_on_flush|std::noemit_on_flush}}
+*** {{ltt|cpp/io/manip/flush_emit|std::flush_emit}}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=120|std=C++98|before=users could explicitly instantiate standard&lt;br&gt;library templates for non-user defined types|after=prohibited}}
+{{dr list item|wg=lwg|dr=232|std=C++98|before=users could explicitly specialize standard library templates&lt;br&gt;if the declaration depends on a user-defined name of&lt;br&gt;external linkage (which can refer to a non-user-defined type)|after=only allowed for&lt;br&gt;user-defined types}}
+{{dr list item|wg=lwg|dr=422|std=C++98|before=users could specialize individual members or member templates&lt;br&gt;without specializing the whole standard library class or class template|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,150 @@
+{{cpp/ranges/view title|adjacent_transform|{{small|views::}}pairwise_transform}}
+{{cpp/ranges/adjacent_transform_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::forward_range V, std::move_constructible F, std::size_t N &gt;
+  requires ranges::view&lt;V&gt; &amp;&amp; (N &gt; 0) &amp;&amp; std::is_object_v&lt;F&gt; &amp;&amp;
+           std::regular_invocable&lt;F&amp;,
+               /*REPEAT*/(ranges::range_reference_t&lt;V&gt;, N)...&gt; &amp;&amp;
+           /*can-reference*/&lt;std::invoke_result_t&lt;F&amp;,
+               /*REPEAT*/(ranges::range_reference_t&lt;V&gt;, N)...&gt;&gt;
+class adjacent_transform_view
+    : public ranges::view_interface&lt;adjacent_transform_view&lt;V, F, N&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    template&lt; std::size_t N &gt;
+    constexpr /* unspecified */ adjacent_transform = /* unspecified */;
+}
+}}
+{{dcl|num=3|since=c++23|1=
+namespace views {
+    inline constexpr auto pairwise_transform = adjacent_transform&lt;2&gt;;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++23|
+template&lt; ranges::viewable_range R, class F &gt;
+    requires /* see below */
+constexpr ranges::view auto adjacent_transform&lt;N&gt;( R&amp;&amp; r, F&amp;&amp; fun );
+}}
+{{dcl|since=c++23|
+template&lt; class F &gt;
+constexpr /*range adaptor closure*/ adjacent_transform&lt;N&gt;( F&amp;&amp; fun );
+}}
+{{dcl end}}
+
+@1@ {{tt|adjacent_transform_view}} is a range adaptor that takes a {{lconcept|view}} and an invocable object {{c|fun}}, and produces a {{lconcept|view}} whose {{tti|i}}{{sup|th}} element is a value that is the result of applying {{c|fun}} to each element in {{range|i|i + N}} of the original view. {{tt|F}} always has {{enwiki|arity}} {{tt|N}}.
+
+@@ Let {{tti|S}} be the size of the original view. Then the size of produced view is:
+* {{c|S - N + 1}}, if {{c|1=S &gt;= N}},
+* {{c|0}} otherwise, and the resulting view is empty.
+
+@2@ The name {{c|views::adjacent_transform&lt;N&gt;}} denotes a {{named req|RangeAdaptorObject}}. Given subexpressions {{c|e}} and {{c|f}}, and a constant expression {{tt|N}}, the expression {{c|views::adjacent_transform&lt;N&gt;(e, f)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to:
+* {{c|((void)e, views::zip_transform(f))}}, if {{tt|N}} is equal to {{c|0}} and {{c|decltype((e))}} models {{lconcept|forward_range}} (except that the evaluations of {{c|e}} and {{c|f}} are [[cpp/language/eval order#Ordering|indeterminately sequenced]]),
+* {{c|adjacent_transform_view&lt;views::all_t&lt;decltype((e))&gt;, std::decay_t&lt;decltype((f))&gt;, N&gt;(e, f)}} otherwise.
+
+@3@ The name {{c|views::pairwise_transform}} denotes a {{named req|RangeAdaptorObject}} that behaves exactly as {{c|views::adjacent_transform&lt;2&gt;}}. In particular, the arity of {{tt|F}} is also {{c|2}} and {{c|fun}} is a binary invocable object.
+
+{{tt|adjacent_transform_view}} always models {{lconcept|forward_range}}, and models {{lconcept|bidirectional_range}}, {{lconcept|random_access_range}}, or {{lconcept|sized_range}}, if adapted {{lconcept|view}} type models the corresponding concept.
+&lt;!--{{tt|adjacent_transform_view}} models {{lconcept|common_range}} if--&gt;
+&lt;!--{{cpp/ranges/cpo|views|adjacent_transform}}--&gt;
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|adjacent_transform_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|adjacent_transform_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|adjacent_transform_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|adjacent_transform_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+===Deduction guides===
+(none)
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc expos mem type|InnerView|private=yes|{{c|ranges::adjacent_view&lt;V, N&gt;}}.}}
+{{dsc expos mem type|inner_iterator|private=yes|
+* {{c|ranges::iterator_t&lt;const InnerView&gt;}}, if {{tt|Const}} is {{c|true}}. Otherwise,
+* {{c|ranges::iterator_t&lt;InnerView&gt;}}.}}
+{{dsc expos mem type|inner_sentinel|private=yes|
+* {{c|ranges::sentinel_t&lt;const InnerView&gt;}}, if {{tt|Const}} is {{c|true}}. Otherwise,
+* {{c|ranges::sentinel_t&lt;InnerView&gt;}}.}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|fun_|private=yes|{{c|/*movable-box*/&lt;F&gt;}}}}
+{{dsc expos mem obj|inner_|private=yes|{{c|ranges::adjacent_view&lt;V,N&gt;}}}}
+{{dsc end}}
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/adjacent_transform_view/iterator|the iterator type}}
+{{dsc expos mem tclass|cpp/ranges/adjacent_transform_view/sentinel|the sentinel type used when {{tt|adjacent_transform_view}} is not a {{lconcept|common_range}}}}
+{{dsc end}}
+
+===Notes===
+{{c|views::adjacent_transform}} only accepts foward ranges even when {{tt|N}} is {{tt|0}}.
+
+{{feature test macro|__cpp_lib_ranges_zip|std=C++23|value=202110L|{{c/core|ranges::zip_view}},&lt;br&gt;{{c/core|ranges::zip_transform_view}},&lt;br&gt;{{c/core|ranges::adjacent_view}},&lt;br&gt;{{tt|ranges::adjacent_transform_view}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    constexpr static std::array data{1, 2, 3, 4, 5, 6};
+    constexpr int window{3};
+
+    auto Fun = [](auto... ints) { return (... + ints); };
+    // Alternatively, the Fun could be any ternary (if window == 3) callable, e.g.:
+    // auto Fun = [](int x, int y, int z) { return x + y + z; };
+
+    constexpr auto view = data {{!}} std::views::adjacent_transform&lt;window&gt;(Fun);
+
+    static_assert(
+        view.size() == (data.size() - window + 1)
+        &amp;&amp; std::array{6, 9, 12, 15}
+        == std::array{view[0], view[1], view[2], view[3]}
+        &amp;&amp; view[0] == Fun(data[0], data[1], data[2])
+        &amp;&amp; view[1] == Fun(data[1], data[2], data[3])
+        &amp;&amp; view[2] == Fun(data[2], data[3], data[4])
+        &amp;&amp; view[3] == Fun(data[3], data[4], data[5])
+    );
+
+    for (int x : view)
+        std::cout &lt;&lt; x &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+6 9 12 15
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=4098|std=C++23|before={{c|views::adjacent_transform&lt;0&gt;}} used to accept input-only ranges|after=made rejected}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Adjacent transform view|id=range.adjacent.transform|section=26.7.27}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc adjacent_view}}
+{{dsc inc|cpp/ranges/dsc transform_view}}
+{{dsc inc|cpp/ranges/dsc zip_transform_view}}
+{{dsc inc|cpp/algorithm/ranges/dsc transform}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

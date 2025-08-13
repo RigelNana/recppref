@@ -1,0 +1,128 @@
+{{cpp/utility/any/title|any}}
+{{cpp/utility/any/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|
+constexpr any() noexcept;
+}}
+{{dcl|num=2|since=c++17|
+any( const any&amp; other );
+}}
+{{dcl|num=3|since=c++17|
+any( any&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ValueType &gt;
+any( ValueType&amp;&amp; value );
+}}
+{{dcl|num=5|since=c++17|
+template&lt; class ValueType, class... Args &gt;
+explicit any( std::in_place_type_t&lt;ValueType&gt;, Args&amp;&amp;... args );
+}}
+{{dcl|num=6|since=c++17|
+template&lt; class ValueType, class U, class... Args &gt;
+explicit any( std::in_place_type_t&lt;ValueType&gt;, std::initializer_list&lt;U&gt; il,
+              Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+Constructs a new {{tt|any}} object.
+
+@1@ Constructs an empty object.
+
+@2,3@ Copies {{v|2}} or moves {{v|3}} content of {{c|other}} into a new instance, so that any content is equivalent in both type and value to those of {{c|other}} prior to the constructor call, or empty if {{c|other}} is empty. Formally,
+:@2@ If {{c|other}} is empty, the constructed object is empty. Otherwise, equivalent to {{c|any(std::in_place_type&lt;T&gt;, std::any_cast&lt;const T&amp;&gt;(other))}}, where {{tt|T}} is the type of the object contained in {{c|other}}.
+:@3@ If {{c|other}} is empty, the constructed object is empty. Otherwise, the constructed object contains either the object contained in {{c|other}}, or an object of the same type constructed from the object contained in {{c|other}}, considering that object as an rvalue.
+@4@ Constructs an object with initial content an object of type {{c|std::decay_t&lt;ValueType&gt;}}, [[cpp/language/direct initialization|direct-initialized]] from {{c|std::forward&lt;ValueType&gt;(value)}}.
+* {{cpp/enable if|{{c|std::decay_t&lt;ValueType&gt;}} is not the same type as {{tt|any}} nor a specialization of {{lc|std::in_place_type_t}}, and {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;ValueType&gt;&gt;}} is {{c|true}}}}.
+@5@ Constructs an object with initial content an object of type {{c|std::decay_t&lt;ValueType&gt;}}, [[cpp/language/direct initialization|direct-non-list-initialized]] from {{c|std::forward&lt;Args&gt;(args)...}}.
+* {{cpp/enable_if|{{c|1=std::is_constructible_v&lt;std::decay_t&lt;ValueType&gt;, Args...&gt;}} and {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;ValueType&gt;&gt;}} are both {{c|true}}}}.
+@6@ Constructs an object with initial content an object of type {{c|std::decay_t&lt;ValueType&gt;}}, [[cpp/language/direct initialization|direct-non-list-initialized]] from {{c|il, std::forward&lt;Args&gt;(args)...}}.
+* {{cpp/enable if|{{c|1=std::is_constructible_v&lt;std::decay_t&lt;ValueType&gt;, std::initializer_list&lt;U&gt;&amp;, Args...&gt;}} and {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;ValueType&gt;&gt;}} are both {{c|true}}}}.
+
+===Template parameters===
+{{par begin}}
+{{par|ValueType|contained value type}}
+{{par hreq}}
+{{par req named|std::decay_t&lt;ValueType&gt;|CopyConstructible}}
+{{par end}}
+
+===Parameters===
+{{par begin}}
+{{par|other|another {{tt|any}} object to copy or move from}}
+{{par|value|value to initialize the contained value with}}
+{{par|il, args|arguments to be passed to the constructor of the contained object}}
+{{par end}}
+
+===Exceptions===
+@2,4-6@ Throws any exception thrown by the constructor of the contained type.
+
+===Notes===
+Because the default constructor is {{c/core|constexpr}}, static {{tt|std::any}}s are initialized as part of [[cpp/language/initialization#Non-local_variables|static non-local initialization]], before any dynamic non-local initialization begins. This makes it safe to use an object of type {{tt|std::any}} in a constructor of any static object.
+
+===Example===
+{{example
+|code=
+#include &lt;boost/core/demangle.hpp&gt;
+
+#include &lt;any&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;set&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    int age;
+    std::string name;
+    double salary;
+
+#if __cpp_aggregate_paren_init &lt; 201902L
+    // Required before C++20 for in-place construction
+    A(int age, std::string name, double salary)
+        : age(age), name(std::move(name)), salary(salary) {}
+#endif
+};
+
+// Using abi demangle to print nice type name of instance of any holding
+void printType(const std::any&amp; a)
+{
+    std::cout &lt;&lt; boost::core::demangle(a.type().name()) &lt;&lt; '\n';
+}
+
+int main()
+{
+    // Constructor #4: std::any holding int
+    std::any a1{7};
+    
+    // Constructor #5: std::any holding A, constructed in place
+    std::any a2(std::in_place_type&lt;A&gt;, 30, "Ada", 1000.25);
+ 
+    // Constructor #6: std::any holding a set of A with custom comparison
+    auto lambda = [](auto&amp;&amp; l, auto&amp;&amp; r){ return l.age &lt; r.age; };
+    std::any a3(
+        std::in_place_type&lt;std::set&lt;A, decltype(lambda)&gt;&gt;,
+        {
+            A{39, std::string{"Ada"}, 100.25},
+            A{20, std::string{"Bob"}, 75.5}
+        },
+        lambda);
+
+    printType(a1);
+    printType(a2);
+    printType(a3);
+}
+|p=true
+|output=
+int
+A
+std::set&lt;A, main::{lambda(auto:1&amp;&amp;, auto:2&amp;&amp;)#1}, std::allocator&lt;A&gt; &gt;
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/any/dsc operator{{=}}}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

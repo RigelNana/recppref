@@ -1,0 +1,143 @@
+{{cpp/named req/title|RandomAccessIterator}}
+{{cpp/named req/navbar}}
+
+A {{named req|RandomAccessIterator}} is a {{named req|BidirectionalIterator}} that can be moved to point to any element in constant time.
+
+If a {{named req|RandomAccessIterator}} {{c|it}} originates from a {{named req|Container}}, then {{c|it}}'s {{tt|value_type}} is the same as the container's, so dereferencing ({{c|*it}}) obtains the container's {{tt|value_type}}.
+
+A pointer to an element of an array satisfies all requirements of {{named req/core|RandomAccessIterator}}.
+
+===Requirements===
+The type {{tt|It}} satisfies {{named req/core|RandomAccessIterator}} if
+* The type {{tt|It}} satisfies {{named req|BidirectionalIterator}}
+
+And, given
+* {{tt|value_type}}, the type denoted by {{c/core|std::iterator_traits&lt;It&gt;::value_type}}
+* {{tt|difference_type}}, the type denoted by {{c/core|std::iterator_traits&lt;It&gt;::difference_type}}
+* {{tt|reference}}, the type denoted by {{c/core|std::iterator_traits&lt;It&gt;::reference}}
+* {{c|i}}, {{c|a}}, {{c|b}}, objects of type {{tt|It}} or {{c/core|const It}}
+* {{c|r}}, an lvalue of type {{tt|It}}
+* {{c|n}}, an integer of type {{tt|difference_type}}
+
+The following expressions must be valid and have their specified effects:
+{|table class="wikitable"
+|-
+!Expression||Return type||Operational semantics||Notes
+|-
+|{{c|1=r += n}}
+|{{tt|It&amp;}}
+|{{c|1=difference_type m = n;
+if (m &gt;= 0) while (m--) ++r;
+else while (m++) --r;
+return r;}}
+|
+*{{c|n}} can be both positive or negative
+*The complexity is constant (that is, the implementation cannot actually execute the while loop shown in operational semantics)
+|-
+|{{c|a + n}}
+{{c|n + a}}
+|{{tt|It}}
+|{{c|1=It temp = a;
+return temp += n;}} 
+|
+*{{c|n}} can be both positive or negative
+*{{c|1=a + n == n + a}}
+|-
+|{{c|1=r -= n}}||{{tt|It&amp;}}||{{c|1=return r += -n;}}
+|The absolute value of {{c|n}} must be within the range of representable values of {{tt|difference_type}}. {{mark unreviewed dr|LWG|2519}}
+|-
+|{{c|i - n}}||{{tt|It}}||{{c|1=It temp = i;
+return temp -= n;}}||
+|-
+|{{c|b - a}}||{{tt|difference_type}}||{{c|return n;}}&lt;br&gt;(see the precondition)||
+Precondition:
+* there exists a value {{c|n}} of type {{tt|difference_type}} such that {{c|1=a + n == b}}
+Postcondition:
+* {{c|1=b == a + (b - a)}}.
+|-
+|{{c|i[n]}}||convertible to {{tt|reference}}||{{c|*(i + n)}}||
+|-
+|{{c|a &lt; b}}
+|{{rrev multi|noborder=true
+|rev1=meets {{named req|BooleanTestable}}
+|since2=c++20|rev2=models {{lconcept|boolean-testable}}
+}}
+|Equivalent to {{c|return b - a &gt; 0;}}
+|Precondition:
+* same as of {{c|b - a}}&lt;!-- LWG3236 --&gt;
+Strict total ordering relation:
+* {{c|!(a &lt; a)}}
+* if {{c|a &lt; b}} then {{c|!(b &lt; a)}}
+* if {{c|a &lt; b}} and {{c|b &lt; c}} then {{c|a &lt; c}}
+* {{c|a &lt; b}} or {{c|b &lt; a}} or {{c|1=a == b}}&lt;br&gt; (exactly one of the expressions is true)
+|-
+|{{c|a &gt; b}}
+|{{rrev multi|noborder=true
+|rev1=meets {{named req|BooleanTestable}}
+|since2=c++20|rev2=models {{lconcept|boolean-testable}}
+}}
+|{{c|b &lt; a}}
+|Total ordering relation opposite to {{c|a &lt; b}}
+|-
+|{{c|1=a &gt;= b}}
+|{{rrev multi|noborder=true
+|rev1=meets {{named req|BooleanTestable}}
+|since2=c++20|rev2=models {{lconcept|boolean-testable}}
+}}
+|{{c|!(a &lt; b)}}
+|
+|-
+|{{c|1=a &lt;= b}}
+|{{rrev multi|noborder=true
+|rev1=meets {{named req|BooleanTestable}}
+|since2=c++20|rev2=models {{lconcept|boolean-testable}}
+}}
+|{{c|!(a &gt; b)}}
+|
+|}
+
+The above rules imply that {{named req/core|RandomAccessIterator}} also implements {{named req|LessThanComparable}}.
+
+A ''mutable'' {{named req/core|RandomAccessIterator}} is a {{named req/core|RandomAccessIterator}} that additionally satisfies the {{named req|OutputIterator}} requirements.
+
+{{rrev|since=c++20|
+===Concept===
+For the definition of {{lc|std::iterator_traits}}, the following exposition-only concept is defined.
+
+{{dcl begin}}
+{{dcl|1=
+template&lt;class I&gt;
+concept __LegacyRandomAccessIterator&lt;!-- called cpp17-random-access-iterator in the standard --&gt; =
+    __LegacyBidirectionalIterator&lt;I&gt; &amp;&amp; std::totally_ordered&lt;I&gt; &amp;&amp;
+        requires(I i, typename std::incrementable_traits&lt;I&gt;::difference_type n)
+        {
+            { i += n } -&gt; std::same_as&lt;I&amp;&gt;;
+            { i -= n } -&gt; std::same_as&lt;I&amp;&gt;;
+            { i +  n } -&gt; std::same_as&lt;I&gt;;
+            { n +  i } -&gt; std::same_as&lt;I&gt;;
+            { i -  n } -&gt; std::same_as&lt;I&gt;;
+            { i -  i } -&gt; std::same_as&lt;decltype(n)&gt;;
+            {  i[n]  } -&gt; std::convertible_to&lt;std::iter_reference_t&lt;I&gt;&gt;;
+        };
+}}
+{{dcl end}}
+
+where the exposition-only concept {{tt|__LegacyBidirectionalIterator}} is described in {{rlp|BidirectionalIterator#Concept|LegacyBidirectionalIterator}}.
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=299|paper=N3066|std=C++98|before=the return type of {{c|a[n]}} was required&lt;br&gt;to be convertible to {{c/core|const value_type&amp;}}|after=the return type is required to&lt;br&gt;be convertible to {{tt|reference}}}}
+{{dr list item|wg=lwg|dr=448|std=C++98|before=the return type of {{c|a[n]}} was required&lt;br&gt;to be convertible to {{tt|value_type}}|after=the return type is required to be&lt;br&gt;convertible to {{c/core|const value_type&amp;}}&lt;ref&gt;{{lwg|299}} was reopened after this resolution.&lt;/ref&gt;}}
+{{dr list item|wg=lwg|dr=1079|std=C++98|before={{c|b - a}} was defined using {{c|a &lt; b}},&lt;br&gt;resulted in circular definition|after=removed {{c|a &lt; b}} from the definition}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++98|before=convertibility to {{c/core|bool}} was too weak to reflect the expectation of implementations|after=requirements strengthened}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc random_access_iterator}}
+{{see_also_iterator_library}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

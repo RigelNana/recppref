@@ -1,0 +1,93 @@
+{{cpp/title|make_tuple}}
+{{cpp/utility/tuple/navbar}}
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl|since=c++11|notes={{mark|constexpr since C++14}}|1=
+template&lt; class... Types &gt;
+std::tuple&lt;VTypes...&gt; make_tuple( Types&amp;&amp;... args );
+}}
+{{dcl end}}
+
+Creates a tuple object, deducing the target type from the types of arguments.
+
+For each {{tt|Ti}} in {{tt|Types...}}, the corresponding type {{tt|Vi}} in {{tt|VTypes...}} is {{c|std::decay&lt;Ti&gt;::type}} unless application of {{lc|std::decay}} results in {{c|std::reference_wrapper&lt;X&gt;}} for some type {{tt|X}}, in which case the deduced type is {{tt|X&amp;}}.
+
+===Parameters===
+{{par begin}}
+{{par|args|zero or more arguments to construct the tuple from}}
+{{par end}}
+
+===Return value===
+A {{lc|std::tuple}} object containing the given values, created as if by {{c|std::tuple&lt;VTypes...&gt;(std::forward&lt;Types&gt;(t)...).}}
+
+===Possible implementation===
+{{eq fun|1=
+template &lt;class T&gt;
+struct unwrap_refwrapper
+{
+    using type = T;
+};
+
+template &lt;class T&gt;
+struct unwrap_refwrapper&lt;std::reference_wrapper&lt;T&gt;&gt;
+{
+    using type = T&amp;;
+};
+
+template &lt;class T&gt;
+using unwrap_decay_t = typename unwrap_refwrapper&lt;typename std::decay&lt;T&gt;::type&gt;::type;
+// or use std::unwrap_ref_decay_t (since C++20)
+
+template &lt;class... Types&gt;
+constexpr // since C++14
+std::tuple&lt;unwrap_decay_t&lt;Types&gt;...&gt; make_tuple(Types&amp;&amp;... args)
+{
+    return std::tuple&lt;unwrap_decay_t&lt;Types&gt;...&gt;(std::forward&lt;Types&gt;(args)...);
+}
+}}
+
+===Example===
+{{example|
+|code=
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+#include &lt;functional&gt;
+
+std::tuple&lt;int, int&gt; f() // this function returns multiple values
+{
+    int x = 5;
+    return std::make_tuple(x, 7); // return {x,7}; in C++17
+}
+
+int main()
+{
+    // heterogeneous tuple construction
+    int n = 1;
+    auto t = std::make_tuple(10, "Test", 3.14, std::ref(n), n);
+    n = 7;
+    std::cout &lt;&lt; "The value of t is ("
+              &lt;&lt; std::get&lt;0&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;1&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;2&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;3&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;4&gt;(t) &lt;&lt; ")\n";
+
+    // function returning multiple values
+    int a, b;
+    std::tie(a, b) = f();
+    std::cout &lt;&lt; a &lt;&lt; ' ' &lt;&lt; b &lt;&lt; '\n';
+}
+|output=
+The value of t is (10, Test, 3.14, 7, 1)
+5 7
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tie}}
+{{dsc inc|cpp/utility/tuple/dsc forward_as_tuple}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_cat}}
+{{dsc inc|cpp/utility/dsc apply}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

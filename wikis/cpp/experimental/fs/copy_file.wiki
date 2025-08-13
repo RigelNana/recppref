@@ -1,0 +1,94 @@
+{{cpp/experimental/fs/title|copy_file}}
+{{cpp/experimental/fs/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/filesystem}}
+{{dcl|num=1|since=fs_ts|1=
+bool copy_file( const path&amp; from, const path&amp; to );
+bool copy_file( const path&amp; from, const path&amp; to, error_code&amp; ec );
+}}
+{{dcl|num=2|since=fs_ts|1=
+bool copy_file( const path&amp; from, const path&amp; to, copy_options options );
+bool copy_file( const path&amp; from, const path&amp; to, copy_options options, error_code&amp; ec );
+}}
+{{dcl end}}
+
+@1@ The default, equivalent to {{v|2}} with {{tt|copy_options::none}} used as {{c|options}}.
+@2@ Copies a single file from {{c|from}} to {{c|to}}, using the copy options indicated by {{c|options}}. The behavior is undefined if there is more than one option in any of the {{rlp|copy_options}} option group present in {{c|options}} (even in the groups not relevant to {{tt|copy_file}}).
+
+* If the destination file does not exist,
+:* copies the contents and the attributes of the file to which {{c|from}} resolves to the file to which {{c|to}} resolves (symlinks are followed).
+* Otherwise, if the destination file already exists:
+:* If {{c|to}} and {{c|from}} are the same as determined by {{ltt|cpp/experimental/fs/equivalent|equivalent(from, to)}}, report an error.
+:* Otherwise, if none of the copy_file control options are set in {{c|options}}, report an error.
+:* Otherwise, if {{tt|copy_options::skip_existing}} is set in {{c|options}}, do nothing.
+:* Otherwise, if {{tt|copy_options::overwrite_existing}} is set in {{c|options}}, copy the contents and the attributes of the file to which {{c|from}} resolves to the file to which {{c|to}} resolves.
+:* Otherwise, if {{tt|copy_options::update_existing}} is set in {{c|options}}, only copy the file if {{c|from}} is newer than {{c|to}}, as defined by {{ltt|cpp/experimental/fs/last_write_time|last_write_time()}}.
+
+The non-throwing overloads return {{c|false}} if an error occurs.
+
+===Parameters===
+{{par begin}}
+{{par|from|path to the source file}}
+{{par|to|path to the target file}}
+{{par|ec|out-parameter for error reporting in the non-throwing overload}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the file was copied, {{c|false}} otherwise.
+
+===Exceptions===
+{{cpp/experimental/fs/error_handling|from|to}}
+
+===Notes===
+The functions involve at most one direct or indirect call to {{ltt|cpp/experimental/fs/status|status(to)}} (used both to determine if the file exists, and, for {{tt|copy_options::update_existing}} option, its last write time).
+
+Error is reported when {{tt|copy_file}} is used to copy a directory: use {{ltt|cpp/experimental/fs/copy|copy}} for that.
+
+{{tt|copy_file}} follows symlinks: use {{ltt|cpp/experimental/fs/copy_symlink|copy_symlink}} or {{ltt|cpp/experimental/fs/copy|copy}} with {{tt|copy_options::copy_symlinks}} for that.
+
+===Example===
+{{example
+|code=
+#include &lt;experimental/filesystem&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+namespace fs = std::experimental::filesystem;
+
+int main()
+{
+    fs::create_directory("sandbox");
+    std::ofstream("sandbox/file1.txt").put('a');
+
+    fs::copy_file("sandbox/file1.txt", "sandbox/file2.txt");
+
+    // now there are two files in sandbox:
+    std::cout &lt;&lt; "file1.txt holds : "
+              &lt;&lt; std::ifstream("sandbox/file1.txt").rdbuf() &lt;&lt; '\n';
+    std::cout &lt;&lt; "file2.txt holds : "
+              &lt;&lt; std::ifstream("sandbox/file2.txt").rdbuf() &lt;&lt; '\n';
+
+    // fail to copy directory
+    fs::create_directory("sandbox/abc");
+    try
+    {
+        fs::copy_file("sandbox/abc", "sandbox/def");
+    }
+    catch (fs::filesystem_error&amp; e)
+    {
+        std::cout &lt;&lt; "Could not copy sandbox/abc: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    fs::remove_all("sandbox");
+}
+|p=true
+|output=
+file1.txt holds : a
+file2.txt holds : a
+Could not copy sandbox/abc: copy_file: Is a directory: "sandbox/abc", "sandbox/def"
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/fs/dsc copy_options}}
+{{dsc inc|cpp/experimental/fs/dsc copy_symlink}}
+{{dsc inc|cpp/experimental/fs/dsc copy}}
+{{dsc end}}

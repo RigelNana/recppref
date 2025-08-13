@@ -1,0 +1,65 @@
+{{cpp/memory/pmr/title|null_memory_resource}}
+{{cpp/memory/navbar}}
+{{ddcl|header=memory_resource|since=c++17|
+std::pmr::memory_resource* null_memory_resource() noexcept;
+}}
+
+Returns a pointer to a {{tt|memory_resource}} that doesn't perform any allocation.
+
+=== Return value ===
+Returns a pointer {{tt|p}} to a static storage duration object of a type derived from {{lc|std::pmr::memory_resource}}, with the following properties:
+* its {{tt|allocate()}} function always throws {{lc|std::bad_alloc}};
+* its {{tt|deallocate()}} function has no effect;
+* for any {{tt|memory_resource}} {{tt|r}}, {{c|p-&gt;is_equal(r)}} returns {{c|&amp;r {{==}} p}}.
+
+The same value is returned every time this function is called.
+
+===Example===
+{{example
+|The program demos the main usage of {{tt|null_memory_resource}}: ensure that a memory pool which requires memory allocated on the stack will NOT allocate memory on the heap if it needs more memory.
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;memory_resource&gt;
+#include &lt;string&gt;
+#include &lt;unordered_map&gt;
+
+int main()
+{
+    // allocate memory on the stack
+    std::array&lt;std::byte, 20000&gt; buf;
+
+    // without fallback memory allocation on heap
+    std::pmr::monotonic_buffer_resource pool{buf.data(), buf.size(),
+                                             std::pmr::null_memory_resource()};
+
+    // allocate too much memory
+    std::pmr::unordered_map&lt;long, std::pmr::string&gt; coll{&amp;pool};
+    try
+    {
+        for (std::size_t i = 0; i &lt; buf.size(); ++i)
+        {
+            coll.emplace(i, "just a string with number " + std::to_string(i));
+
+            if (i &amp;&amp; i % 50 == 0)
+                std::clog &lt;&lt; "size: " &lt;&lt; i &lt;&lt; "...\n";
+        }
+    }
+    catch (const std::bad_alloc&amp; e)
+    {
+        std::cerr &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+
+    std::cout &lt;&lt; "size: " &lt;&lt; coll.size() &lt;&lt; '\n';
+}
+|p=true
+|output=
+size: 50...
+size: 100...
+size: 150...
+std::bad_alloc
+size: 183
+}}
+
+{{langlinks|de|es|ja|ru|zh}}

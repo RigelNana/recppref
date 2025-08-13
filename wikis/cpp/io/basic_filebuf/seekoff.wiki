@@ -1,0 +1,107 @@
+{{cpp/io/basic_filebuf/title|seekoff}}
+{{cpp/io/basic_filebuf/navbar}}
+{{ddcl|1=
+protected:
+virtual pos_type seekoff( off_type off,
+                          std::ios_base::seekdir dir,
+                          std::ios_base::openmode which = std::ios_base::in {{!}} std::ios_base::out );
+}}
+
+Repositions the file pointer, if possible, to the position that corresponds to exactly {{c|off}} characters from beginning, end, or current position of the file (depending on the value of {{c|dir}}).
+
+If the associated file is not open ({{c|1=is_open() == false}}), fails immediately.
+
+If the multibyte character encoding is state-dependent ({{ltt|cpp/locale/codecvt/encoding|codecvt::encoding()}} returned {{c|-1}}) or variable-length ({{tt|codecvt::encoding()}} returned {{c|0}}) and the offset {{c|off}} is not {{c|0}}, fails immediately: this function cannot determine the number of bytes that correspond to {{c|off}} characters.
+
+If {{c|dir}} is not {{lc|std::basic_ios::cur}} or the offset {{c|off}} is not {{c|0}}, and the most recent operation done on this filebuf object was output (that is, either the put buffer is not empty, or the most recently called function was {{lc|overflow()}}), then calls {{c|std::codecvt::unshift}} to determine the unshift sequence necessary, and writes that sequence to the file by calling {{lc|overflow()}}.
+
+Then converts the argument {{c|dir}} to a value {{c|whence}} of type {{c|int}} as follows:
+
+{{dsc begin}}
+{{dsc hitem|value of {{c|dir}}|value of {{c|whence}}}}
+{{dsc|{{c|std::basic_ios::beg}}|{{lc|SEEK_SET}}}}
+{{dsc|{{c|std::basic_ios::end}}|{{lc|SEEK_END}}}}
+{{dsc|{{c|std::basic_ios::cur}}|{{lc|SEEK_CUR}}}}
+{{dsc end}}
+
+Then, if the character encoding is fixed-width ({{tt|codecvt::encoding()}} returns some positive number {{c|width}}), moves the file pointer as if by {{c|std::fseek(file, width*off, whence)}}.
+
+Otherwise, moves the file pointer as if by {{c|std::fseek(file, 0, whence)}}.
+
+The {{tt|openmode}} argument, required by the base class function signature, is usually ignored, because {{tt|std::basic_filebuf}} maintains only one file position.
+
+===Parameters===
+{{par begin}}
+{{par|off|relative position to set the position indicator to}}
+{{par|dir|defines base position to apply the relative offset to. It can be one of the following constants:
+{{cpp/io/ios_base/seekdir consts}}}}
+{{par|which|defines which of the input and/or output sequences to affect. It can be one or a combination of the following constants:
+{{cpp/io/ios_base/openmode streambuf consts}}}}
+{{par end}}
+
+===Return value===
+A newly constructed object of type {{c|pos_type}} which stores the resulting file position, or {{c|pos_type(off_type(-1))}} on failure.
+
+===Notes===
+{{tt|seekoff()}} is called by {{c|std::basic_streambuf::pubseekoff}}, which is called by {{c|std::basic_istream::seekg}}, {{c|std::basic_ostream::seekp}}, {{c|std::basic_istream::tellg}}, and {{c|std::basic_ostream::tellp}}.
+
+===Example===
+{{example
+|code=
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+
+template&lt;typename CharT&gt;
+int get_encoding(const std::basic_istream&lt;CharT&gt;&amp; stream)
+{
+    using Facet = std::codecvt&lt;CharT, char, std::mbstate_t&gt;;
+    return std::use_facet&lt;Facet&gt;(stream.getloc()).encoding();
+}
+
+int main()
+{
+    // prepare a 10-byte file holding 4 characters ("zß水𝄋") in UTF-8
+    std::ofstream("text.txt") &lt;&lt; "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9d\x84\x8b";
+
+    // open using a non-converting encoding
+    std::ifstream f1("text.txt");
+    std::cout &lt;&lt; "f1's locale's encoding() returns "
+              &lt;&lt; get_encoding(f1) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(3, beg) returns "
+              &lt;&lt; f1.rdbuf()-&gt;pubseekoff(3, std::ios_base::beg) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(0, end) returns "
+              &lt;&lt; f1.rdbuf()-&gt;pubseekoff(0, std::ios_base::end) &lt;&lt; '\n';
+
+    // open using UTF-8
+    std::wifstream f2("text.txt");
+    f2.imbue(std::locale("en_US.UTF-8"));
+    std::cout &lt;&lt; "f2's locale's encoding() returns "
+              &lt;&lt; get_encoding(f2) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(3, beg) returns "
+              &lt;&lt; f2.rdbuf()-&gt;pubseekoff(3, std::ios_base::beg) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(0, end) returns "
+              &lt;&lt; f2.rdbuf()-&gt;pubseekoff(0, std::ios_base::end) &lt;&lt; '\n';
+}
+|output=
+f1's locale's encoding() returns 1
+pubseekoff(3, beg) returns 3
+pubseekoff(0, end) returns 10
+f2's locale's encoding() returns 0
+pubseekoff(3, beg) returns -1
+pubseekoff(0, end) returns 10
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=55|std=C++98|before={{tt|seekoff}} returned an undefined&lt;br&gt;invalid stream position on failure|after={{c|pos_type(off_type(-1))}}&lt;br&gt;is returned on failure}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc pubseekoff}}
+{{dsc inc|cpp/io/basic_filebuf/dsc seekpos}}
+{{dsc inc|cpp/io/c/dsc fseek}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

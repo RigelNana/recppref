@@ -1,0 +1,123 @@
+{{cpp/title|quoted}}
+{{cpp/io/manip/navbar}}
+{{dcl begin}}
+{{dcl header|iomanip}}
+{{dcl item|since=c++14|num=1|1=
+template&lt; class CharT &gt;
+/*unspecified*/ quoted( const CharT* s,
+                        CharT delim = CharT('"'), CharT escape = CharT('\\') );
+}}
+{{dcl item|since=c++14|num=2|1=
+template&lt; class CharT, class Traits, class Allocator &gt;
+/*unspecified*/ quoted( const std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; s,
+                        CharT delim = CharT('"'), CharT escape = CharT('\\') );
+}}
+{{dcl item|since=c++17|num=3|1=
+template&lt; class CharT, class Traits&gt;
+/*unspecified*/ quoted( std::basic_string_view&lt;CharT, Traits&gt; s,
+                        CharT delim = CharT('"'), CharT escape = CharT('\\') );
+}}
+{{dcl item|since=c++14|num=4|1=
+template&lt; class CharT, class Traits, class Allocator &gt;
+/*unspecified*/ quoted( std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; s,
+                        CharT delim=CharT('"'), CharT escape=CharT('\\') );
+}}
+{{dcl end}}
+
+Allows insertion and extraction of quoted strings, such as the ones found in {{enwiki|Comma-separated values|CSV}} or {{enwiki|XML}}.
+
+@1-3@ When used in an expression {{c|out &lt;&lt; quoted(s, delim, escape)}}, where {{tt|out}} is an output stream with {{tt|char_type}} equal to {{tt|CharT}} and, for overloads (2,3), {{tt|traits_type}} equal to {{tt|Traits}}, behaves as a {{named req|FormattedOutputFunction}}, which inserts into {{c|out}} a sequence of characters {{tt|seq}} constructed as follows:
+:@a@ First, the character {{c|delim}} is added to the sequence.
+:@b@ Then every character from {{c|s}}, except if the next character to output equals {{c|delim}} or equals {{c|escape}} (as determined by the stream's {{c|traits_type::eq}}), then first appends an extra copy of {{c|escape}}.
+:@c@ In the end, {{c|delim}} is appended to {{tt|seq}} once more.
+
+:Then, if {{c|seq.size() &lt; out.width()}}, adds {{c|out.width()-seq.size()}} copies of the fill character {{c|out.fill()}} either at the end of the sequence (if {{c|ios_base::left}} is set in {{c|out.flags()}}) or at the beginning of the sequence (in all other cases).
+
+:Finally, outputs each character from the resulting sequence as if by calling {{c|out.rdbuf()-&gt;sputn(seq, n)}}, where {{c|1=n=std::max(out.width(), seq.size())}} and {{c|out.width(0)}} to cancel the effects of {{lc|std::setw}}, if any.
+
+@4@ When used in an expression {{c|in &gt;&gt; quoted(s, delim, escape)}}, where {{tt|in}} is an input stream with {{tt|char_type}} equal to {{tt|CharT}} and {{tt|traits_type}} equal to {{tt|Traits}}, extracts characters from {{c|in}}, using {{lc|std::basic_istream::operator&gt;&gt;}}, according to the following rules:
+:@a@ If the first character extracted does not equal {{c|delim}} (as determined by the stream's {{tt|traits_type::eq}}), then simply performs {{c|in &gt;&gt; s}}.
+:@b@ Otherwise (if the first character is the delimiter):
+::@1@ Turns off the {{lc|skipws}} flag on the input stream.
+::@2@ Empties the destination string by calling {{c|s.clear()}}.
+::@3@ Extracts characters from {{tt|in}} and appends them to {{c|s}}, except that whenever an {{c|escape}} character is extracted, it is ignored and the next character is appended to {{c|s}}. Extraction stops when {{c|1= !in == true}} or when an unescaped {{c|delim}} character is found.
+::@4@ Discards the final (unescaped) {{c|delim}} character.
+::@5@ Restores the {{lc|skipws}} flag on the input stream to its original value.
+
+===Parameters===
+{{par begin}}
+{{par|s|the string to insert or extract}}
+{{par|delim|the character to use as the delimiter, defaults to {{c|"}}}}
+{{par|escape|the character to use as the escape character, defaults to {{c|\}}}}
+{{par end}}
+
+===Return value===
+Returns an object of unspecified type such that the described behavior takes place.
+
+===Exceptions===
+Throws {{lc|std::ios_base::failure}} if {{c|operator&gt;&gt;}} or {{c|operator&lt;&lt;}} throws.
+
+===Notes===
+{{feature test macro|__cpp_lib_quoted_string_io|std=C++14|value=201304L|{{tt|std::quoted}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+void default_delimiter()
+{
+    const std::string in = "std::quoted() quotes this string and embedded \"quotes\" too";
+    std::stringstream ss;
+    ss &lt;&lt; std::quoted(in);
+    std::string out;
+    ss &gt;&gt; std::quoted(out);
+
+    std::cout &lt;&lt; "Default delimiter case:\n"
+                 "read in     [" &lt;&lt; in &lt;&lt; "]\n"
+                 "stored as   [" &lt;&lt; ss.str() &lt;&lt; "]\n"
+                 "written out [" &lt;&lt; out &lt;&lt; "]\n\n";
+}
+
+void custom_delimiter()
+{
+    const char delim{'$'};
+    const char escape{'%'};
+
+    const std::string in = "std::quoted() quotes this string and embedded $quotes$ $too";
+    std::stringstream ss;
+    ss &lt;&lt; std::quoted(in, delim, escape);
+    std::string out;
+    ss &gt;&gt; std::quoted(out, delim, escape);
+
+    std::cout &lt;&lt; "Custom delimiter case:\n"
+                 "read in     [" &lt;&lt; in &lt;&lt; "]\n"
+                 "stored as   [" &lt;&lt; ss.str() &lt;&lt; "]\n"
+                 "written out [" &lt;&lt; out &lt;&lt; "]\n\n";
+}
+
+int main()
+{
+    default_delimiter();
+    custom_delimiter();
+}
+|output=
+Default delimiter case:
+read in     [std::quoted() quotes this string and embedded "quotes" too]
+stored as   ["std::quoted() quotes this string and embedded \"quotes\" too"]
+written out [std::quoted() quotes this string and embedded "quotes" too]
+
+Custom delimiter case:
+read in     [std::quoted() quotes this string and embedded $quotes$ $too]
+stored as   [$std::quoted() quotes this string and embedded %$quotes%$ %$too$]
+written out [std::quoted() quotes this string and embedded $quotes$ $too]
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc format}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

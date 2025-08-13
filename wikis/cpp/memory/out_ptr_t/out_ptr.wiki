@@ -1,0 +1,73 @@
+{{cpp/title|out_ptr}}
+{{cpp/memory/out_ptr_t/navbar}}
+{{ddcl|header=memory|since=c++23|1=
+template&lt; class Pointer = void, class Smart, class... Args &gt;
+auto out_ptr( Smart&amp; s, Args&amp;&amp;... args );
+}}
+
+Returns an {{ltt std|cpp/memory/out_ptr_t}} with deduced template arguments that captures arguments for resetting by reference.
+
+The program is ill-formed if construction of the return value (see below) is ill-formed.
+
+===Parameters===
+{{par begin}}
+{{par|s|the object (typically a smart pointer) to adapt}}
+{{par|args...|the arguments for resetting to capture}}
+{{par end}}
+
+===Return value===
+{{c|std::out_ptr_t&lt;Smart, P, Args&amp;&amp;&gt;(s, std::forward&lt;Args&gt;(args)...)}}, where {{tt|P}} is
+* {{tt|Pointer}}, if {{tt|Pointer}} is not same as {{c|void}}. Otherwise,
+* {{c|Smart::pointer}}, if it is valid and denotes a type. Otherwise,
+* {{c|Smart::element_type*}}, if {{c|Smart::element_type}} is valid and denotes a type. Otherwise,
+* {{c|std::pointer_traits&lt;Smart&gt;::element_type*}}.
+
+===Notes===
+Users may specify the template argument for the template parameter {{tt|Pointer}}, in order to interoperate with foreign functions that take a {{c|Pointer*}}.
+
+As all arguments for resetting are captured by reference, the returned {{tt|out_ptr_t}} should be a temporary object destroyed at the end of the full-expression containing the call to the foreign function, in order to avoid dangling references.
+
+{{ftm begin|sort=yes}}
+{{ftm|std=C++23|value=202106L|__cpp_lib_out_ptr|rowspan="2"|{{tt|std::out_ptr}}, {{lc|std::inout_ptr}}}}
+{{ftm|std=C++26|value=202311L|-|freestanding {{tt|std::out_ptr}} and {{lc|std::inout_ptr}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|Use {{tt|std::out_ptr}} to adapt a smart pointer for [https://www.sqlite.org/c3ref/open.html {{tt|sqlite3_open}}], which expects a {{tt|sqlite3**}} as an out parameter.
+|code=
+#include &lt;memory&gt;
+#include &lt;sqlite3.h&gt;
+
+int main()
+{
+    auto close_db = [](sqlite3* db) { sqlite3_close(db); };
+
+    {
+        // open an in-memory database, and manage its lifetime with std::unique_ptr
+        std::unique_ptr&lt;sqlite3, decltype(close_db)&gt; up;
+        sqlite3_open(":memory:", std::out_ptr(up));
+
+        sqlite3* db = up.get();
+        // do something with db ...
+    }
+    {
+        // same as above, but use a std::shared_ptr
+        std::shared_ptr&lt;sqlite3&gt; sp;
+        sqlite3_open(":memory:", std::out_ptr(sp, close_db));
+
+        sqlite3* db = sp.get();
+        // do something with db ...
+    }
+}
+|output=
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/inout_ptr_t/dsc inout_ptr}}
+{{dsc inc|cpp/memory/unique_ptr/dsc make_unique}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,101 @@
+{{cpp/title|uncaught_exception|uncaught_exceptions}}
+{{cpp/error/navbar}}
+{{dcl begin}}
+{{dcl header|exception}}
+{{dcl rev begin|num=1}}
+{{dcl|until=c++11|
+bool uncaught_exception() throw();
+}}
+{{dcl|since=c++11|deprecated=c++17|removed=c++20|
+bool uncaught_exception() noexcept;
+}}
+{{dcl rev end}}
+{{dcla|num=2|since=c++17|constexpr=c++26|
+int uncaught_exceptions() noexcept;
+}}
+{{dcl end}}
+
+@1@ Detects if the current thread has a live exception object, that is, an exception has been thrown or rethrown and not yet entered a matching catch clause, {{lc|std::terminate}} or {{lc|std::unexpected}}. In other words, {{tt|std::uncaught_exception}} detects if {{lsd|cpp/language/throw#Stack unwinding}} is currently in progress.
+@2@ Detects how many exceptions in the current thread have been thrown or rethrown and not yet entered their matching catch clauses.
+
+Sometimes it's safe to throw an exception even while {{rev inl|until=c++17|{{c|1=std::uncaught_exception() == true}}}} {{rev inl|since=c++17|{{c|1=std::uncaught_exceptions() &gt; 0}}}}. For example, if {{lsd|cpp/language/throw#Stack unwinding}} causes an object to be destructed, the destructor for that object could run code that throws an exception as long as the exception is caught by some catch block before escaping the destructor.
+
+===Parameters===
+(none)
+
+===Return value===
+@1@ {{c|true}} if stack unwinding is currently in progress in this thread, {{c|false}} otherwise.
+@2@ The number of uncaught exception objects in the current thread.
+
+===Notes===
+An example where int-returning {{tt|uncaught_exceptions}} is used is the [https://www.boost.org/doc/libs/release/libs/log/doc/html/index.html boost.log] library: the expression {{c|BOOST_LOG(logger) &lt;&lt; foo();}} first creates a guard object and records the number of uncaught exceptions in its constructor. The output is performed by the guard object's destructor unless {{c|foo()}} throws (in which case the number of uncaught exceptions in the destructor is greater than what the constructor observed).
+
+{{ltt|cpp/experimental/scope_fail|std::experimental::scope_fail}} and {{ltt|cpp/experimental/scope_success|std::experimental::scope_success}} in LFTS v3 rely on the functionality of {{tt|uncaught_exceptions}}, because their destructors need to do different things that depend on whether is called during stack unwinding.
+
+{{ftm begin|sort=yes}}
+{{ftm|__cpp_lib_uncaught_exceptions|value=201411L|std=C++17|{{tt|std::uncaught_exceptions}}}}
+{{ftm|__cpp_lib_constexpr_exceptions|value=202411L|std=C++26|{{c/core|constexpr}} for exception types}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;exception&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+struct Foo
+{
+    char id{'?'};
+    int count = std::uncaught_exceptions();
+
+    ~Foo()
+    {
+        count == std::uncaught_exceptions()
+            ? std::cout &lt;&lt; id &lt;&lt; ".~Foo() called normally\n"
+            : std::cout &lt;&lt; id &lt;&lt; ".~Foo() called during stack unwinding\n";
+    }
+};
+
+int main()
+{
+    Foo f{'f'};
+
+    try
+    {
+        Foo g{'g'};
+        std::cout &lt;&lt; "Exception thrown\n";
+        throw std::runtime_error("test exception");
+    }
+    catch (const std::exception&amp; e)
+    {
+        std::cout &lt;&lt; "Exception caught: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+|p=true
+|output=
+Exception thrown
+g.~Foo() called during stack unwinding
+Exception caught: test exception
+f.~Foo() called normally
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=70|std=C++98|before=the exception specification of {{tt|uncaught_exception()}} was missing|after=specified as {{tt|throw()}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/error/dsc terminate}}
+{{dsc inc|cpp/error/dsc exception_ptr}}
+{{dsc inc|cpp/error/dsc current_exception}}
+{{dsc end}}
+
+===External links===
+{{elink begin}}
+{{elink|[http://www.gotw.ca/gotw/047.htm GOTW issue 47: Uncaught Exceptions]}}
+{{elink|{{stddoc|n4152|Rationale for {{tt|std::uncaught_exceptions}}}} (N4125)}}
+{{elink end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

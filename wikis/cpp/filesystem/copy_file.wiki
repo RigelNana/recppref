@@ -1,0 +1,115 @@
+{{cpp/filesystem/title|copy_file}}
+{{cpp/filesystem/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|num=1|since=c++17|1=
+bool copy_file( const std::filesystem::path&amp; from,
+                const std::filesystem::path&amp; to );
+}}
+{{dcl|num=2|since=c++17|1=
+bool copy_file( const std::filesystem::path&amp; from,
+                const std::filesystem::path&amp; to,
+                std::error_code&amp; ec );
+}}
+{{dcl|num=3|since=c++17|1=
+bool copy_file( const std::filesystem::path&amp; from,
+                const std::filesystem::path&amp; to,
+                std::filesystem::copy_options options );
+}}
+{{dcl|num=4|since=c++17|1=
+bool copy_file( const std::filesystem::path&amp; from,
+                const std::filesystem::path&amp; to,
+                std::filesystem::copy_options options,
+                std::error_code&amp; ec );
+}}
+{{dcl end}}
+
+@1,2@ The default, equivalent to {{v|3,4}} with {{tt|copy_options::none}} used as {{c|options}}.
+@3,4@ Copies a single file from {{c|from}} to {{c|to}}, using the copy options indicated by {{c|options}}. The behavior is undefined if there is more than one option in any of the {{rlp|copy_options}} option group present in {{c|options}} (even in the groups not relevant to {{lc|std::filesystem::copy_file|filesystem::copy_file}}).
+* If {{lc|std::filesystem::is_regular_file|!filesystem::is_regular_file(from)}} (either because the source file doesn't exist or because it is not a regular file), report an error.
+* Otherwise, if the destination file does not exist,
+:* copies the contents and the attributes of the file to which {{c|from}} resolves to the file to which {{c|to}} resolves (symlinks are followed).
+* Otherwise, if the destination file already exists,
+:* report an error if any of the following is true:
+::* {{c|to}} and {{c|from}} are the same as determined by {{lc|std::filesystem::equivalent|filesystem::equivalent(from, to)}};
+::* {{c|to}} is not a regular file as determined by {{lc|std::filesystem::is_regular_file|!filesystem::is_regular_file(to)}};
+::* none of the {{lc|std::filesystem::copy_file|filesystem::copy_file}} control options are set in {{c|options}}.
+:* Otherwise, if {{tt|copy_options::skip_existing}} is set in {{c|options}}, do nothing.
+:* Otherwise, if {{tt|copy_options::overwrite_existing}} is set in {{c|options}}, copy the contents and the attributes of the file to which {{c|from}} resolves to the file to which {{c|to}} resolves.
+:* Otherwise, if {{tt|copy_options::update_existing}} is set in {{c|options}}, only copy the file if {{c|from}} is newer than {{c|to}}, as defined by {{lc|std::filesystem::last_write_time|filesystem::last_write_time()}}.
+
+The non-throwing overloads return {{c|false}} if an error occurs.
+
+===Parameters===
+{{par begin}}
+{{par|from|path to the source file}}
+{{par|to|path to the target file}}
+{{par|ec|out-parameter for error reporting in the non-throwing overload}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the file was copied, {{c|false}} otherwise.
+
+===Exceptions===
+{{cpp/filesystem/error_handling|from|to|throw=1,3/2,4}}
+
+===Notes===
+The functions involve at most one direct or indirect call to {{lc|std::filesystem::status|filesystem::status(to)}} (used both to determine if the file exists, and, for {{tt|filesystem::copy_options::update_existing}} option, its last write time).
+
+Error is reported when {{lc|std::filesystem::copy_file|filesystem::copy_file}} is used to copy a directory: use {{lc|std::filesystem::copy|filesystem::copy}} for that.
+
+{{lc|std::filesystem::copy_file|filesystem::copy_file}} follows symlinks: use {{lc|std::filesystem::copy_symlink|filesystem::copy_symlink}} or {{lc|std::filesystem::copy|filesystem::copy}} with {{tt|filesystem::copy_options::copy_symlinks}} for that.
+
+===Example===
+{{example
+|code=
+#include &lt;filesystem&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    fs::create_directory("sandbox");
+    std::ofstream("sandbox/file1.txt").put('a');
+
+    fs::copy_file("sandbox/file1.txt", "sandbox/file2.txt");
+
+    // now there are two files in sandbox:
+    std::cout &lt;&lt; "file1.txt holds: "
+              &lt;&lt; std::ifstream("sandbox/file1.txt").rdbuf() &lt;&lt; '\n';
+    std::cout &lt;&lt; "file2.txt holds: "
+              &lt;&lt; std::ifstream("sandbox/file2.txt").rdbuf() &lt;&lt; '\n';
+
+    // fail to copy directory
+    fs::create_directory("sandbox/abc");
+    try
+    {
+        fs::copy_file("sandbox/abc", "sandbox/def");
+    }
+    catch (fs::filesystem_error&amp; e)
+    {
+        std::cout &lt;&lt; "Could not copy sandbox/abc: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    fs::remove_all("sandbox");
+}
+|p=true
+|output=
+file1.txt holds: a
+file2.txt holds: a
+Could not copy sandbox/abc: copy_file: Is a directory: "sandbox/abc", "sandbox/def"
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|dr=3014|wg=lwg|std=C++17|before={{tt|error_code}} overload marked noexcept but can allocate memory|after=noexcept removed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/dsc copy_options}}
+{{dsc inc|cpp/filesystem/dsc copy_symlink}}
+{{dsc inc|cpp/filesystem/dsc copy}}
+{{dsc end}}
+
+{{langlinks|es|ja|zh}}

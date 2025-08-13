@@ -1,0 +1,169 @@
+{{cpp/experimental/title|propagate_const}}
+{{cpp/experimental/lib extensions 2/propagate_const/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/propagate_const}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class T &gt;
+class propagate_const;
+}}
+{{dcl end}}
+
+{{tt|std::experimental::propagate_const}} is a const-propagating wrapper for pointers and pointer-like objects. It treats the wrapped pointer as a pointer to {{tt|const}} when accessed through a {{tt|const}} access path, hence the name.
+
+The class satisfies the requirements of {{named req|MoveConstructible}} and {{named req|MoveAssignable}} if the underlying pointer-like type satisfies the corresponding requirement, but {{tt|propagate_const}} is neither {{named req|CopyConstructible}} nor {{named req|CopyAssignable}}.
+
+{{par begin}}
+{{par hreq}}
+{{par req|{{tt|T}} must be cv-unqualified pointer-to-object type or a cv-unqualified pointer-like class type, as specified below.}}
+{{par end}}
+
+===Requirements on pointer-like class types===
+If {{tt|T}} is a class type, it must satisfy the requirements in this subsection.
+
+Given
+* {{tt|t}}, a modifiable [[cpp/language/value_category|lvalue expression]] of type {{tt|T}},
+* {{tt|ct}}, an lvalue of type {{c|const T}} that denotes the same object as {{tt|t}} (equivalent to {{c|std::as_const(t)}} since C++17),
+* {{tt|element_type}}, an object type.
+
+The following expressions must be valid and have their specified effects:
+
+{|table class=wikitable
+|-
+!Expression||Return type||Pre-conditions||Operational semantics
+|-
+|{{c|1=t.get()}}
+|{{c|element_type*}}
+|
+|
+|-
+|{{c|1=ct.get()}}
+|{{c|element_type*}} or {{c|const element_type*}}
+|
+|{{c|1=t.get() == ct.get()}}
+|-
+|{{c|1=*t}}
+|{{c|element_type&amp;}}
+|{{c|1=t.get() != nullptr}}
+|{{c|*t}} refers to the same object as {{c|*(t.get())}}
+|-
+|{{c|1=*ct}}
+|{{c|element_type&amp;}} or {{c|const element_type&amp;}}
+|{{c|1=ct.get() != nullptr}}
+|{{c|*ct}} refers to the same object as {{c|*(ct.get())}}
+|-
+|{{c|1=t.operator-&gt;()}}
+|{{c|element_type*}}
+|{{c|1=t.get() != nullptr}}
+|{{c|1=t.operator-&gt;() == t.get()}}
+|-
+|{{c|1=ct.operator-&gt;()}}
+|{{c|element_type*}} or {{c|const element_type*}}
+|{{c|1=ct.get() != nullptr}}
+|{{c|1=ct.operator-&gt;() == ct.get()}}
+|-
+|{{c|1=(bool)t}}
+|{{c|bool}}
+|
+|{{c|(bool)t}} is equivalent to {{c|1=t.get() != nullptr}}
+|-
+|{{c|1=(bool)ct}}
+|{{c|bool}}
+|
+|{{c|(bool)ct}} is equivalent to {{c|1=ct.get() != nullptr}}
+|}
+
+Further, {{tt|T}} and {{c|const T}} shall be contextually convertible to {{c|bool}}.
+
+In addition, if {{tt|T}} is implicitly convertible to {{c|element_type*}}, then {{c|(element_type*)t}} shall be equal to {{c|t.get()}}. Similarly, if {{c|const T}} is implicitly convertible to {{c|const element_type*}}, then {{c|(const element_type*)ct}} shall be equal to {{c|ct.get()}}.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{c|element_type}}|{{c|std::remove_reference_t&lt;decltype(*std::declval&lt;T&amp;&gt;())&gt;}}, the type of the object pointed to by {{tt|T}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/propagate_const/dsc constructor}}
+{{dsc inc|cpp/experimental/propagate_const/dsc destructor}}
+{{dsc inc|cpp/experimental/propagate_const/dsc operator{{=}}}}
+{{dsc inc|cpp/experimental/propagate_const/dsc swap}}
+
+{{dsc h2|Observers}}
+{{dsc inc|cpp/experimental/propagate_const/dsc get}}
+{{dsc inc|cpp/experimental/propagate_const/dsc operator bool}}
+{{dsc inc|cpp/experimental/propagate_const/dsc operator*}}
+{{dsc inc|cpp/experimental/propagate_const/dsc operator element_type*}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/propagate_const/dsc operator_cmp}}
+{{dsc inc|cpp/experimental/propagate_const/dsc swap2}}
+{{dsc inc|cpp/experimental/propagate_const/dsc get_underlying}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/propagate_const/dsc hash}}
+{{dsc inc|cpp/experimental/propagate_const/dsc cmp_func}}
+{{dsc end}}
+
+===Example===
+{{example
+|code=
+#include &lt;experimental/propagate_const&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct X
+{
+    void g() const { std::cout &lt;&lt; "X::g (const)\n"; }
+    void g() { std::cout &lt;&lt; "X::g (non-const)\n"; }
+};
+ 
+struct Y
+{
+    Y() : m_propConstX(std::make_unique&lt;X&gt;()), m_autoPtrX(std::make_unique&lt;X&gt;()) {}
+ 
+    void f() const
+    {
+        std::cout &lt;&lt; "Y::f (const)\n";
+        m_propConstX-&gt;g();
+        m_autoPtrX-&gt;g();
+    }
+ 
+    void f()
+    {
+        std::cout &lt;&lt; "Y::f (non-const)\n";
+        m_propConstX-&gt;g();
+        m_autoPtrX-&gt;g();
+    }
+ 
+    std::experimental::propagate_const&lt;std::unique_ptr&lt;X&gt;&gt; m_propConstX;
+    std::unique_ptr&lt;X&gt; m_autoPtrX;
+};
+    
+int main()
+{
+    Y y;
+    y.f();
+    
+    const Y cy;
+    cy.f();
+}
+|output=
+Y::f (non-const)
+X::g (non-const)
+X::g (non-const)
+Y::f (const)
+X::g (const)
+X::g (non-const)
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3136|std=LFTSv2|before=meaningless {{tt|T}} like {{c|int* const}}, {{c|void*}}, or {{c|const PtrLike}} were allowed|after=disallowed}}
+{{dr list end}}
+
+{{langlinks|de|es|it|fr|ja|pt|ru|zh}}

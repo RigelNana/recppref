@@ -1,0 +1,172 @@
+{{title|{{tt|static_assert}} declaration {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+Performs compile-time assertion checking.
+
+===Syntax===
+{{anchor|Version 1}}{{anchor|Version 2}}{{anchor|Version 3}}
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|static_assert(}} {{spar|bool-constexpr}} {{ttb|,}} {{spar|unevaluated-string}} {{ttb|)}}
+}}
+{{sdsc|num=2|notes={{mark since c++17}}|
+{{ttb|static_assert(}} {{spar|bool-constexpr}} {{ttb|)}}
+}}
+{{sdsc|num=3|notes={{mark since c++26}}|
+{{ttb|static_assert(}} {{spar|bool-constexpr}} {{ttb|,}} {{spar|constant-expression}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+{{anchor|error message}}
+Declares a static assertion. If the assertion fails, the program is ill-formed, and a diagnostic error message may be generated.
+@1@ A static assertion with fixed error message.
+@2@ A static assertion without error message.
+@3@ A static assertion with user-generated error message.
+@@ This syntax can only be matched if syntax {{vl|1}} does not match.
+
+===Explanation===
+{{par begin}}
+{{par|{{spar|bool-constexpr}}|{{rrev multi|rev1=
+a {{rlp|constant expression#Converted constant expression|contextually converted constant expression of type {{c/core|bool}}}}. Built-in conversions are not allowed, except for non-{{rlp|list initialization#Narrowing conversions|narrowing}} {{rlp|implicit conversion#Integral conversions|integral conversions}} to {{c/core|bool}}.
+|since2=c++23|rev2=an expression {{rlp|implicit conversion#Contextual conversions|contextually converted to {{c/core|bool}}}} where the conversion is a {{rlp|constant expression}}
+}}}}
+{{par|{{spar|unevaluated-string}}|an {{rlp|string literal#Unevaluated strings|unevaluated string literal}} that will appear as the error message}}
+{{par|{{spar|constant-expression}}|a {{rlp|constant expression}} {{c|msg}} satisfying all following conditions:
+* {{c|msg.size()}} is implicitly convertible to {{lc|std::size_t}}.
+* {{c|msg.data()}} is implicitly convertible to {{c/core|const char*}}.}}
+{{par end}}
+
+A {{c/core|static_assert}} declaration may appear at namespace and block {{rlp|scope}} (as a {{rlp|declarations|block declaration}}) and inside a class body (as a {{rlp|class|member declaration}}).
+
+If {{spar|bool-constexpr}} is well-formed and evaluates to {{c|true}}, or is evaluated in the context of a template definition and the template is uninstantiated, this declaration has no effect. Otherwise a compile-time error is issued, and the user-provided message, if any, is included in the diagnostic message.
+
+The text of the user-provided message is determined as follows:
+* If the message matches the syntactic requirements of {{spar|unevaluated-string}}, the text of the message is the text of the {{spar|unevaluated-string}}.
+{{rrev|since=c++26|
+* Otherwise, given the following values:
+:* Let {{c|msg}} denote the value of {{spar|constant-expression}}.
+:* Let {{c|len}} denote the value of {{c|msg.size()}}, which must be a {{rlpsd|constant expression#Converted constant expression}} of type {{lc|std::size_t}}.
+:* Let {{c|ptr}} denote the expression {{c|msg.data()}}, {{rlp|implicit conversion|implicitly converted}} to {{c/core|const char*}}. {{c|ptr}} must be a {{rlpsd|constant expression#Core constant expression}}.
+: The text of the message is formed by the sequence of {{c|len}} {{rlp|charset#Code unit and literal encoding|code units}}, starting at {{c|ptr}}, of the {{rlp|charset#Code unit and literal encoding|ordinary literal encoding}}. For each integer {{c|i}} in {{range|0|len}}, {{c|ptr[i]}} must be an {{rlpsd|constant expression#Integral constant expression}}.
+}}
+
+===Notes===
+The standard does not require a compiler to print the verbatim text of {{ls|#error message}}, though compilers generally do so as much as possible.
+
+{{rrev|until=c++26|
+Since the error message has to be a string literal, it cannot contain dynamic information or even a {{rlp|constant expression}} that is not a string literal itself. In particular, it cannot contain the {{rlp|name}} of the {{rlp|template parameters|template type argument}}.
+}}
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=200410L|std=C++11|__cpp_static_assert|rowspan="3"|{{c/core|static_assert}} (syntax {{vl|1}})}}
+{{ftm|value=201411L|std=C++17|-|Single-argument {{c/core|static_assert}} (syntax {{vl|2}})}}
+{{ftm|value=202306L|std=C++26|-|user-generated error messages (syntax {{vl|3}})}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/static_assert}}
+
+===Example===
+{{example
+|code=
+#include &lt;format&gt;
+#include &lt;type_traits&gt;
+
+static_assert(03301 == 1729); // since C++17 the message string is optional
+
+template&lt;class T&gt;
+void swap(T&amp; a, T&amp; b) noexcept
+{
+    static_assert(std::is_copy_constructible_v&lt;T&gt;,
+                  "Swap requires copying");
+    static_assert(std::is_nothrow_copy_constructible_v&lt;T&gt; &amp;&amp;
+                  std::is_nothrow_copy_assignable_v&lt;T&gt;,
+                  "Swap requires nothrow copy/assign");
+    auto c = b;
+    b = a;
+    a = c;
+}
+
+template&lt;class T&gt;
+struct data_structure
+{
+    static_assert(std::is_default_constructible_v&lt;T&gt;,
+                  "Data structure requires default-constructible elements");
+};
+
+template&lt;class&gt;
+constexpr bool dependent_false = false; // workaround before CWG2518/P2593R1
+
+template&lt;class T&gt;
+struct bad_type
+{
+    static_assert(dependent_false&lt;T&gt;, "error on instantiation, workaround");
+    static_assert(false, "error on instantiation"); // OK because of CWG2518/P2593R1
+};
+
+struct no_copy
+{
+    no_copy(const no_copy&amp;) = delete;
+    no_copy() = default;
+};
+
+struct no_default
+{
+    no_default() = delete;
+};
+
+#if __cpp_static_assert &gt;= 202306L
+// Not real C++ yet (std::format should be constexpr to work):
+static_assert(sizeof(int) == 4, std::format("Expected 4, got {}", sizeof(int)));
+#endif
+
+int main()
+{
+    int a, b;
+    swap(a, b);
+    
+    no_copy nc_a, nc_b;
+    swap(nc_a, nc_b); // 1
+    
+    [[maybe_unused]] data_structure&lt;int&gt; ds_ok;
+    [[maybe_unused]] data_structure&lt;no_default&gt; ds_error; // 2
+}
+|p=true
+|output=
+1: error: static assertion failed: Swap requires copying
+2: error: static assertion failed: Data structure requires default-constructible elements
+3: error: static assertion failed: Expected 4, got 2
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2039|std=C++11|before=only the expression before conversion is required to be constant|after=the conversion must also be&lt;br&gt;valid in a constant expression}}
+{{dr list item|wg=cwg|dr=2518|paper=P2593R1|std=C++11|before=uninstantiated {{c|static_assert(false, "");}} was ill-formed|after=made well-formed}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=9.1|title=Preamble|id=dcl.pre|p=10}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.1|title=Preamble|id=dcl.pre|p=6}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10|title=Declarations|id=dcl.dcl|p=6}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7|title=Declarations|id=dcl.dcl|p=4}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7|title=Declarations|id=dcl.dcl|p=4}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/preprocessor/dsc error}}
+{{dsc inc|cpp/error/dsc assert}}
+{{dsc inc|cpp/types/dsc enable_if}}
+{{dsc|[[cpp/meta#Type_traits|'''Type traits''']] {{mark c++11}}|define compile-time template-based interfaces to query the properties of types|nomono=true}}
+{{dsc see c|c/language/_Static_assert|Static assertion|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

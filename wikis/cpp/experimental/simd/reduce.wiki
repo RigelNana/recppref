@@ -1,0 +1,123 @@
+{{cpp/experimental/title|reduce|hmin|hmax}}
+{{cpp/experimental/simd/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/simd}}
+{{dcl|since=parallelism_ts_2|num=1|1=
+template&lt; class T, class Abi, class BinaryOperation = std::plus&lt;&gt; &gt;
+T reduce( const simd&lt;T, Abi&gt;&amp; v, BinaryOperation binary_op = {} );
+}}
+{{dcl|since=parallelism_ts_2|num=2|1=
+template&lt; class M, class V, class BinaryOperation &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x,
+        typename V::value_type identity_element, BinaryOperation binary_op = {} );
+}}
+{{dcl|since=parallelism_ts_2|num=3|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::plus&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=4|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::multiplies&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=5|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::bit_and&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=6|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::bit_or&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=7|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::bit_xor&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=8|
+template&lt; class T, class Abi &gt;
+T hmin( const simd&lt;T, Abi&gt;&amp; v ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=9|
+template&lt; class M, class V &gt;
+typename V::value_type
+hmin( const const_where_expression&lt;M, V&gt;&amp; x ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=10|
+template&lt; class T, class Abi &gt;
+T hmax( const simd&lt;T, Abi&gt;&amp; v ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=11|
+template&lt; class M, class V &gt;
+typename V::value_type
+hmax( const const_where_expression&lt;M, V&gt;&amp; x ) noexcept;
+}}
+{{dcl end}}
+
+@1@ Reduces all values in {{c|v}} over {{c|binary_op}}.
+@2@ Reduces the values in {{c|x}} where the associated mask element is {{c/core|true}} over {{c|binary_op}}.
+@3@ Returns the sum of all values in {{c|x}} where the associated mask element is {{c/core|true}}.
+@4@ Returns the product of all values in {{c|x}} where the associated mask element is {{c/core|true}}.
+@5@ Returns the aggregation using bitwise-and of all values in {{c|x}} where the associated mask element is {{c/core|true}}.
+@6@ Returns the aggregation using bitwise-or of all values in {{c|x}} where the associated mask element is {{c/core|true}}.
+@7@ Returns the aggregation using bitwise-xor of all values in {{c|x}} where the associated mask element is {{c/core|true}}.
+@8@ Reduces all values in {{c|v}} over {{c|std::min}}.
+@9@ Reduces all values in {{c|x}} where the associated mask element is {{c/core|true}} over {{c|std::min}}.
+@10@ Reduces all values in {{c|v}} over {{c|std::max}}.
+@11@ Reduces all values in {{c|x}} where the associated mask element is {{c/core|true}} over {{c|std::max}}.
+
+The behavior is non-deterministic if {{c|binary_op}} is not associative or not commutative.
+
+===Parameters===
+{{par begin}}
+{{par|v|the {{rlpt|simd}} vector to apply the reduction to}}
+{{par|x|the return value of a {{rlpt|where}} expression to apply the reduction to}}
+{{par|identity_element|a value that acts as identity element for {{c|binary_op}}; {{c|1=binary_op(identity_element, a) == a}} must hold for all finite {{c|a}} of type {{c|V::value_type}}}}
+{{par|binary_op|binary {{named req|FunctionObject}} that will be applied in unspecified order to arguments of type {{c|V::value_type}} or {{c|simd&lt;V::value_type, A&gt;}}, with unspecified ABI tag {{tt|A}}. {{c|binary_op(v, v)}} must be convertible to {{tt|V}}}}
+{{par end}}
+
+===Return value===
+The result of operation of the type:
+@1,8,10@ {{tt|T}}
+@2-7,9,11@ {{c|V::value_type}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;experimental/simd&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+namespace stdx = std::experimental;
+
+int main()
+{
+    using V = stdx::native_simd&lt;double&gt;;
+
+    alignas(stdx::memory_alignment_v&lt;V&gt;) std::array&lt;V::value_type, 1024&gt; data;
+    std::iota(data.begin(), data.end(), 0);
+
+    V::value_type acc{};
+    for (std::size_t i = 0; i &lt; data.size(); i += V::size())
+        acc += stdx::reduce(V(&amp;data[i], stdx::vector_aligned), std::plus{});
+    std::cout &lt;&lt; "sum of data = " &lt;&lt; acc &lt;&lt; '\n';
+
+    using W = stdx::fixed_size_simd&lt;int, 4&gt;;
+    alignas(stdx::memory_alignment_v&lt;W&gt;) std::array&lt;int, 4&gt; arr{2, 5, 4, 1};
+    auto w = W(&amp;arr[0], stdx::vector_aligned);
+    assert(stdx::hmin(w) == 1 and stdx::hmax(w) == 5);
+}
+|output=
+sum of data = 523776
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc reduce}}
+{{dsc end}}

@@ -1,0 +1,148 @@
+{{title|Conditional inclusion}}
+{{cpp/preprocessor/navbar}}
+The preprocessor supports conditional compilation of parts of source file. This behavior is controlled by {{tt|#if}}, {{tt|#else}}, {{tt|#elif}}, {{tt|#ifdef}}, {{tt|#ifndef}}{{rev inl|since=c++23|, {{tt|#elifdef}}, {{tt|#elifndef}}}}, and {{tt|#endif}} directives.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|#if}} {{spar|expression}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#ifdef}} {{spar|identifier}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#ifndef}} {{spar|identifier}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#elif}} {{spar|expression}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#elifdef}} {{spar|identifier}}|notes={{mark since c++23}}}}
+{{sdsc|{{ttb|#elifndef}} {{spar|identifier}}|notes={{mark since c++23}}}}
+{{sdsc|{{ttb|#else}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#endif}}|notes=&lt;nowiki/&gt;}}
+{{sdsc end}}
+
+===Explanation===
+The conditional preprocessing block starts with {{tt|#if}}, {{tt|#ifdef}} or {{tt|#ifndef}} directive, then optionally includes any number of {{tt|#elif}}{{rev inl|since=c++23|, {{tt|#elifdef}}, or {{tt|#elifndef}}}} directives, then optionally includes at most one {{tt|#else}} directive and is terminated with {{tt|#endif}} directive. Any inner conditional preprocessing blocks are processed separately.
+
+Each of {{tt|#if}}, {{tt|#ifdef}}, {{tt|#ifndef}}, {{tt|#elif}}{{rev inl|since=c++23|, {{tt|#elifdef}}, {{tt|#elifndef}}}}, and {{tt|#else}} directives control the code block until the first {{tt|#elif}}{{rev inl|since=c++23|, {{tt|#elifdef}}, {{tt|#elifndef}}}}, {{tt|#else}}, {{tt|#endif}} directive not belonging to any inner conditional preprocessing blocks.
+
+{{tt|#if}}, {{tt|#ifdef}} and {{tt|#ifndef}} directives test the specified condition (see below) and if it evaluates to true, compiles the controlled code block. In that case subsequent {{tt|#else}}{{rev inl|since=c++23|, {{tt|#elifdef}}, {{tt|#elifndef}},}} and {{tt|#elif}} directives are ignored. Otherwise, if the specified condition evaluates false, the controlled code block is skipped and the subsequent {{tt|#else}}{{rev inl|since=c++23|, {{tt|#elifdef}}, {{tt|#elifndef}},}} or {{tt|#elif}} directive (if any) is processed. If the subsequent directive is {{tt|#else}}, the code block controlled by the {{tt|#else}} directive is unconditionally compiled. Otherwise, the {{tt|#elif}}{{rev inl|since=c++23|, {{tt|#elifdef}}, or {{tt|#elifndef}}}} directive acts as if it was {{tt|#if}} directive: checks for condition, compiles or skips the controlled code block based on the result, and in the latter case processes subsequent {{tt|#elif}}{{rev inl|since=c++23|, {{tt|#elifdef}}, {{tt|#elifndef}},}} and {{tt|#else}} directives. The conditional preprocessing block is terminated by {{tt|#endif}} directive.
+
+===Condition evaluation===
+
+===={{c/core|#if, #elif}}====
+The {{spar|expression}} may contain:
+* unary operators in form {{ttb|defined}}{{nbsp}}{{spar|identifier}} or {{ttb|defined (}}{{spar|identifier}}{{ttb|)}}. The result is {{c|1}} if the {{spar|identifier}} was [[cpp/preprocessor/replace|defined as a macro name]], otherwise the result is {{c|0}}. {{rev inl|since=c++17|{{tt|__has_­include}} {{rev inl|since=c++20|and {{tt|__has_cpp_attribute}}}} are treated as if they were the names of defined macros in this context.}}
+* {{mark since c++17}} {{ltt|cpp/preprocessor/include|__has_include}} expressions, which detects whether a header or source file exists.
+* {{mark since c++20}} {{ltt|cpp/feature_test#Attributes|__has_cpp_attribute}} expressions, which detects whether a given attribute token is supported and its supported version.
+
+After all macro expansion and evaluation of {{tt|defined}}{{rev inl|since=c++17|, {{tt|__has_include}}}}{{rev inl|since=c++20|, and {{tt|__has_cpp_attribute}}}} expressions, any identifier which is not a [[cpp/language/bool_literal|boolean literal]] is replaced with the number {{c|0}} (this includes identifiers that are lexically keywords, but not alternative tokens like {{c|and}}).
+
+Then the expression is evaluated as an [[cpp/language/constant expression#Integral constant expression|integral constant expression]].
+
+If the {{spar|expression}} evaluates to nonzero value, the controlled code block is included and skipped otherwise.
+
+Note: Until the resolution of {{cwg|1955}}, {{tt|#if ''cond1''}} ... {{tt|#elif ''cond2''}} is different from {{tt|#if ''cond1''}} ... {{tt|#else}} followed by {{tt|#if ''cond2''}} because if {{tti|cond1}} is true, the second {{tt|#if}} is skipped and {{tti|cond2}} does not need to be well-formed, while {{tt|#elif}}'s {{tti|cond2}} must be a valid expression. As of CWG 1955, {{tt|#elif}} that leads the skipped code block is also skipped.
+
+====Combined directives====
+Checks if the identifier was [[cpp/preprocessor/replace|defined as a macro name]].
+
+{{tt|#ifdef}}{{nbsp}}{{spar|identifier}} is essentially equivalent to {{tt|#if defined}}{{nbsp}}{{spar|identifier}}.
+
+{{tt|#ifndef}}{{nbsp}}{{spar|identifier}} is essentially equivalent to {{tt|#if !defined}}{{nbsp}}{{spar|identifier}}.
+
+{{rrev|since=c++23|
+{{tt|#elifdef}}{{nbsp}}{{spar|identifier}} is essentially equivalent to {{tt|#elif defined}}{{nbsp}}{{spar|identifier}}.
+
+{{tt|#elifndef}}{{nbsp}}{{spar|identifier}} is essentially equivalent to {{tt|#elif !defined}}{{nbsp}}{{spar|identifier}}.
+}}
+
+===Notes===
+While {{tt|#elifdef}} and {{tt|#elifndef}} directives target C++23, implementations are encouraged to backport them to the older language modes as conforming extensions.
+
+===Example===
+{{example|
+|code=
+#define ABCD 2
+#include &lt;iostream&gt;
+
+int main()
+{
+
+#ifdef ABCD
+    std::cout &lt;&lt; "1: yes\n";
+#else
+    std::cout &lt;&lt; "1: no\n";
+#endif
+
+#ifndef ABCD
+    std::cout &lt;&lt; "2: no1\n";
+#elif ABCD == 2
+    std::cout &lt;&lt; "2: yes\n";
+#else
+    std::cout &lt;&lt; "2: no2\n";
+#endif
+
+#if !defined(DCBA) &amp;&amp; (ABCD &lt; 2*4-3)
+    std::cout &lt;&lt; "3: yes\n";
+#endif
+
+
+// Note that if a compiler does not support C++23's #elifdef/#elifndef
+// directives then the "unexpected" block (see below) will be selected.
+#ifdef CPU
+    std::cout &lt;&lt; "4: no1\n";
+#elifdef GPU
+    std::cout &lt;&lt; "4: no2\n";
+#elifndef RAM
+    std::cout &lt;&lt; "4: yes\n"; // expected block
+#else
+    std::cout &lt;&lt; "4: no!\n"; // unexpectedly selects this block by skipping
+                             // unknown directives and "jumping" directly
+                             // from "#ifdef CPU" to this "#else" block
+#endif
+
+// To fix the problem above we may conditionally define the
+// macro ELIFDEF_SUPPORTED only if the C++23 directives
+// #elifdef/#elifndef are supported.
+#if 0
+#elifndef UNDEFINED_MACRO
+#define ELIFDEF_SUPPORTED
+#else
+#endif
+
+#ifdef ELIFDEF_SUPPORTED
+    #ifdef CPU
+        std::cout &lt;&lt; "4: no1\n";
+    #elifdef GPU
+        std::cout &lt;&lt; "4: no2\n";
+    #elifndef RAM
+        std::cout &lt;&lt; "4: yes\n"; // expected block
+    #else
+        std::cout &lt;&lt; "4: no3\n";
+    #endif
+#else // when #elifdef unsupported use old verbose `#elif defined`
+    #ifdef CPU
+        std::cout &lt;&lt; "4: no1\n";
+    #elif defined GPU
+        std::cout &lt;&lt; "4: no2\n";
+    #elif !defined RAM
+        std::cout &lt;&lt; "4: yes\n"; // expected block
+    #else
+        std::cout &lt;&lt; "4: no3\n";
+    #endif
+#endif
+}
+|p=true
+|output=
+1: yes
+2: yes
+3: yes
+4: no!
+4: yes
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1955|std=C++98|before=failed {{c/core|#elif}}'s expression was required to be valid|after=failed {{c/core|#elif}} is skipped}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/preprocessor/conditional|Conditional inclusion|nomono=true}}
+{{dsc end}}
+
+{{langlinks|ar|de|es|fr|it|ja|pt|ru|zh}}

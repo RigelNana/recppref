@@ -1,0 +1,89 @@
+{{cpp/utility/functional/function_ref/title|function_ref}}
+{{cpp/utility/functional/function_ref/navbar}}
+
+{{dcl begin}}
+{{dcla|num=1|since=c++26|
+template&lt; class F &gt;
+function_ref( F* f ) noexcept;
+}}
+{{dcla|num=2|since=c++26|
+template&lt; class F &gt;
+function_ref( F&amp;&amp; f ) noexcept;
+}}
+{{dcl|num=3|since=c++26|
+template&lt; auto f &gt;
+function_ref( std::nontype_t&lt;f&gt; ) noexcept;
+}}
+{{dcla|num=4|since=c++26|
+template&lt; auto f, class U &gt;
+function_ref( std::nontype_t&lt;f&gt;, U&amp;&amp; obj ) noexcept;
+}}
+{{dcla|num=5|since=c++26|
+template&lt; auto f, class T &gt;
+function_ref( std::nontype_t&lt;f&gt;, /*cv*/ T* obj ) noexcept;
+}}
+{{dcl|num=6|since=c++26|1=
+function_ref( const function_ref&amp; other ) = default;
+}}
+{{dcl end}}
+
+Creates a new {{tt|std::function_ref}}.
+
+@1@ Initializes {{rlpsi|/#bound-entity}} with {{c|f}}, and {{rlpsi|/#thunk-ptr}} with the address of a function {{tti|thunk}}. The behavior is undefined if {{c|f}} is a null pointer.
+* {{cpp/enable_if|both {{c|std::is_function_v&lt;F&gt;}} and {{c|/*is-invocable-using*/&lt;F&gt;}} are {{c|true}}}}.
+@2@ Initializes {{tti|bound-entity}} with {{c|std::addressof(f)}}, and {{tti|thunk-ptr}} with the address of a function {{tti|thunk}}.
+* Let {{c|T}} be {{c|std::remove_reference_t&lt;F&gt;}}. {{cpp/enable_if|:
+** {{c|std::remove_cvref_t&lt;F&gt;}} is not the same type as {{tt|function_ref}},
+** {{c|std::is_member_pointer_v&lt;T&gt;}} is {{c|false}}, and
+** {{c|/*is-invocable-using*/&lt;/*cv*/ T&amp;&gt;}} is {{c|true}}}}.
+@3@ Initializes {{tti|bound-entity}} with a pointer to an unspecified object or null pointer value, and {{tti|thunk-ptr}} with the address of a function {{tti|thunk}}.
+* Let {{c|F}} be {{c|decltype(f)}}. {{cpp/enable_if|{{c|/*is-invocable-using*/&lt;F&gt;}} is {{c|true}}}}.
+* The program is ill-formed if {{c|f !{{=}} nullptr}} is {{c|false}} when {{c|std::is_pointer_v&lt;F&gt; {{!!}} std::is_member_pointer_v&lt;F&gt;}} is {{c|true}}.
+@4@ Initializes {{tti|bound-entity}} with {{c|std::addressof(obj)}}, and {{tti|thunk-ptr}} with the address of a function {{tti|thunk}}.
+* Let {{c|T}} be {{c|std::remove_reference_t&lt;U&gt;}} and {{c|F}} be {{c|decltype(f)}}. {{cpp/enable_if|:
+** {{c|std::is_rvalue_reference_v&lt;U&amp;&amp;&gt;}} is {{c|false}}, and
+** {{c|/*is-invocable-using*/&lt;F, /*cv*/ T&amp;&gt;}} is {{c|true}}}}.
+* The program is ill-formed if {{c|f !{{=}} nullptr}} is {{c|false}} when {{c|std::is_pointer_v&lt;F&gt; {{!!}} std::is_member_pointer_v&lt;F&gt;}} is {{c|true}}.
+@5@ Initializes {{tti|bound-entity}} with {{c|obj}}, and {{tti|thunk-ptr}} with the address of a function {{tti|thunk}}. The behavior is undefined if {{c|obj}} is a null pointer when {{c|std::is_member_pointer_v&lt;F&gt;}} is {{c|true}}.
+* Let {{c|F}} be {{c|decltype(f)}}. {{cpp/enable_if|{{c|/*is-invocable-using*/&lt;F, /*cv*/ T*&gt;}} is {{c|true}}}}.
+* The program is ill-formed if {{c|f !{{=}} nullptr}} is {{c|false}} when {{c|std::is_pointer_v&lt;F&gt; {{!!}} std::is_member_pointer_v&lt;F&gt;}} is {{c|true}}.
+@6@ Defaulted copy constructor copies the {{tti|bound-entity}} and {{tti|thunk-ptr}} of {{c|other}}.
+
+The address of a function {{tti|thunk}} is used to initialize {{tti|thunk-ptr}} such that a call to {{box|{{tti|thunk}}{{c/core|(}}{{tti|bound-entity}}{{c/core|,}}{{tti| call-args}}{{c/core|...)}}}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to:
+{|class="wikitable"
+!Overloads
+!Expression-equivalence
+|-
+!{{vl|1,3}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(f,}}{{tti| call-args}}{{c/core|...)}}}}
+|-
+!{{vl|2}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(static_cast&lt;}}{{spar|cv}}{{c/core| T&amp;&gt;(f),}}{{tti| call-args}}{{c/core|...)}}}}
+|-
+!{{vl|4}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(f, static_cast&lt;}}{{spar|cv}}{{c/core| T&amp;&gt;(obj),}}{{tti| call-args}}{{c/core|...)}}}}
+|-
+!{{vl|5}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(f, obj,}}{{tti| call-args}}{{c/core|...)}}}}
+|}
+
+{{c|/*is-invocable-using*/&lt;T...&gt;}} is {{c|true}} if and only if:
+* {{c|std::is_nothrow_invocable_r_v&lt;R, T..., Args...&gt;}} is {{c|true}} if {{spar|noex}} is {{c|true}}, or
+* {{c|std::is_invocable_r_v&lt;R, T..., Args...&gt;}} is {{c|true}}
+
+===Parameters===
+{{par begin}}
+{{par|other|another {{tt|function_ref}} to copy from}}
+{{par|f|a function or a {{named req|Callable}} object to wrap}}
+{{par|obj|an object or pointer to bound}}
+{{par end}}
+
+===Example===
+{{example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/move_only_function/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

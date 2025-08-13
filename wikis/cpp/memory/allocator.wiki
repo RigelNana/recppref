@@ -1,0 +1,128 @@
+{{cpp/title|allocator}}
+{{cpp/memory/allocator/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|1=
+template&lt; class T &gt;
+struct allocator;
+}}
+{{dcl|num=2|deprecated=c++17|removed=c++20|1=
+template&lt;&gt;
+struct allocator&lt;void&gt;;
+}}
+{{dcl end}}
+
+The {{tt|std::allocator}} class template is the default {{named req|Allocator}} used by all standard library containers if no user-specified allocator is provided. The default allocator is stateless, that is, all instances of the given allocator are interchangeable, compare equal and can deallocate memory allocated by any other instance of the same allocator type.
+
+{{rrev|until=c++20|
+The explicit specialization for {{c/core|void}} lacks the member typedefs {{tt|reference}}, {{tt|const_reference}}, {{tt|size_type}} and {{tt|difference_type}}. This specialization declares no member functions.
+}}
+
+{{rrev|since=c++17|
+The default allocator satisfies [[cpp/named req/Allocator#Allocator completeness requirements|allocator completeness requirements]].
+}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|pointer}} {{mark life|deprecated=c++17|removed=c++20}}|{{tt|T*}}}}
+{{dsc|{{tt|const_pointer}} {{mark life|deprecated=c++17|removed=c++20}}|{{c/core|const T*}}}}
+{{dsc|{{tt|reference}} {{mark life|deprecated=c++17|removed=c++20}}|{{tt|T&amp;}}}}
+{{dsc|{{tt|const_reference}} {{mark life|deprecated=c++17|removed=c++20}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|size_type}}&lt;!-- deprecated in C++17, undeprecated by P0619 --&gt;|{{lc|std::size_t}}}}
+{{dsc|{{tt|difference_type}}&lt;!-- deprecated in C++17, undeprecated by P0619 --&gt;|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|propagate_on_container_move_assignment}} {{mark c++11}}&lt;!-- LWG2103 --&gt;|{{lc|std::true_type}}}}
+{{dsc|{{tt|rebind}} {{mark life|deprecated=c++17|removed=c++20}}|{{c|template&lt; class U &gt;
+struct rebind
+{
+    typedef allocator&lt;U&gt; other;
+};}}}}
+{{dsc|{{tt|is_always_equal}} {{mark life|appear=c++11|deprecated=c++23|removed=c++26}}&lt;!-- LWG2108, LWG3170 --&gt;|{{lc|std::true_type}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc allocator}}
+{{dsc inc|cpp/memory/allocator/dsc ~allocator}}
+{{dsc inc|cpp/memory/allocator/dsc address}}
+{{dsc inc|cpp/memory/allocator/dsc allocate}}
+{{dsc inc|cpp/memory/allocator/dsc allocate_at_least}}
+{{dsc inc|cpp/memory/allocator/dsc deallocate}}
+{{dsc inc|cpp/memory/allocator/dsc max_size}}
+{{dsc inc|cpp/memory/allocator/dsc construct}}
+{{dsc inc|cpp/memory/allocator/dsc destroy}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc operator_cmp}}
+{{dsc end}}
+
+===Notes===
+The member template class {{tt|rebind}} provides a way to obtain an allocator for a different type. For example, {{c/core|std::list&lt;T, A&gt;}} allocates nodes of some internal type {{tt|Node&lt;T&gt;}}, using the allocator {{rev inl|until=c++11|{{tt|A::rebind&lt;Node&lt;T&gt;&gt;::other}}}}{{rev inl|since=c++11|{{c/core|std::allocator_traits&lt;A&gt;::rebind_alloc&lt;Node&lt;T&gt;&gt;}}, which is implemented in terms of {{tt|A::rebind&lt;Node&lt;T&gt;&gt;::other}} if A is an {{tt|std::allocator}}}}.
+
+Member type {{tt|is_always_equal}} is deprecated via {{lwg|3170}}, because it makes custom allocators derived from {{tt|std::allocator}} treated as always equal by default. {{c/core|std::allocator_traits&lt;std::allocator&lt;T&gt;&gt;::is_always_equal}} is not deprecated and its member constant {{tt|value}} is {{c|true}} for any {{tt|T}}.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    // default allocator for ints
+    std::allocator&lt;int&gt; alloc1;
+    
+    // demonstrating the few directly usable members
+    static_assert(std::is_same_v&lt;int, decltype(alloc1)::value_type&gt;);
+    int* p1 = alloc1.allocate(1); // space for one int
+    alloc1.deallocate(p1, 1);     // and it is gone
+    
+    // Even those can be used through traits though, so no need
+    using traits_t1 = std::allocator_traits&lt;decltype(alloc1)&gt;; // The matching trait
+    p1 = traits_t1::allocate(alloc1, 1);
+    traits_t1::construct(alloc1, p1, 7);  // construct the int
+    std::cout &lt;&lt; *p1 &lt;&lt; '\n';
+    traits_t1::deallocate(alloc1, p1, 1); // deallocate space for one int
+    
+    // default allocator for strings
+    std::allocator&lt;std::string&gt; alloc2;
+    // matching traits
+    using traits_t2 = std::allocator_traits&lt;decltype(alloc2)&gt;;
+    
+    // Rebinding the allocator using the trait for strings gets the same type
+    traits_t2::rebind_alloc&lt;std::string&gt; alloc_ = alloc2;
+    
+    std::string* p2 = traits_t2::allocate(alloc2, 2); // space for 2 strings
+    
+    traits_t2::construct(alloc2, p2, "foo");
+    traits_t2::construct(alloc2, p2 + 1, "bar");
+    
+    std::cout &lt;&lt; p2[0] &lt;&lt; ' ' &lt;&lt; p2[1] &lt;&lt; '\n';
+    
+    traits_t2::destroy(alloc2, p2 + 1);
+    traits_t2::destroy(alloc2, p2);
+    traits_t2::deallocate(alloc2, p2, 2);
+}
+|output=
+7
+foo bar
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2103|std=C++11|before=redundant comparison between {{tt|allocator}} might be required|after={{tt|propagate_on_container_move_assignment}} provided}}
+{{dr list item|wg=lwg|dr=2108|std=C++11|before=there was no way to show {{tt|allocator}} is stateless|after={{tt|is_always_equal}} provided}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator_traits}}
+{{dsc inc|cpp/memory/dsc scoped_allocator_adaptor}}
+{{dsc inc|cpp/memory/dsc uses_allocator}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

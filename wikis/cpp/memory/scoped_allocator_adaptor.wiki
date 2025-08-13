@@ -1,0 +1,142 @@
+{{cpp/title|scoped_allocator_adaptor}}
+{{cpp/memory/scoped_allocator_adaptor/navbar}}
+{{ddcl|header=scoped_allocator|since=c++11|1=
+template&lt; class OuterAlloc, class... InnerAllocs &gt;
+class scoped_allocator_adaptor
+    : public OuterAlloc;
+}}
+
+The {{tt|std::scoped_allocator_adaptor}} class template is an allocator which can be used with multilevel containers (vector of sets of lists of tuples of maps, etc). It is instantiated with one outer allocator type {{tt|OuterAlloc}} and zero or more inner allocator types {{tt|InnerAlloc...}}. A container constructed directly with a {{tt|scoped_allocator_adaptor}} uses {{tt|OuterAlloc}} to allocate its elements, but if an element is itself a container, it uses the first inner allocator. The elements of that container, if they are themselves containers, use the second inner allocator, etc. If there are more levels to the container than there are inner allocators, the last inner allocator is reused for all further nested containers.
+
+The purpose of this adaptor is to correctly initialize stateful allocators in nested containers, such as when all levels of a nested container must be placed in the same shared memory segment. The adaptor's constructor takes the arguments for all allocators in the list, and each nested container obtains its allocator's state from the adaptor as needed.
+
+For the purpose of {{tt|scoped_allocator_adaptor}}, if the next inner allocator is {{tt|A}}, any class {{tt|T}} for which {{c|1=std::uses_allocator&lt;T,A&gt;::value == true}} participates in the recursion as if it was a container. Additionally, {{lc|std::pair}} is treated as such a container by specific overloads of {{l2tt|cpp/memory/scoped_allocator_adaptor/construct}}.
+
+Typical implementation holds an instance of a {{tt|std::scoped_allocator_adaptor&lt;InnerAllocs...&gt;}} as a member object.
+
+Note that {{ltt|cpp/memory/polymorphic_allocator|std::pmr::polymorphic_allocator}}s propagate to nested containers following {{lsd|cpp/memory/uses allocator#Uses-allocator construction}} and do not need (and do not work with) {{tt|std::scoped_allocator_adaptor}}.
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|outer_allocator_type}}|{{tt|OuterAlloc}}}}
+{{dsc|{{tt|inner_allocator_type}}|
+* {{c/core|scoped_allocator_adaptor&lt;OuterAlloc&gt;}} if {{c|1=sizeof...(InnerAllocs)}} is zero
+* {{c/core|scoped_allocator_adaptor&lt;InnerAllocs...&gt;}} otherwise}}
+{{dsc|{{tt|value_type}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::value_type}}}}
+{{dsc|{{tt|size_type}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::size_type}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::difference_type}}}}
+{{dsc|{{tt|pointer}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::pointer}}}}
+{{dsc|{{tt|const_pointer}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::const_pointer}}}}
+{{dsc|{{tt|void_pointer}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::void_pointer}}}}
+{{dsc|{{tt|const_void_pointer}}|{{c/core|std::allocator_traits&lt;OuterAlloc&gt;::const_void_pointer}}}}
+{{dsc end}}
+
+
+Given the set of {{tt|OuterAlloc}} and {{tt|InnerAlloc...}} as {{tt|Allocs}}:
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|propagate_on_container_copy_assignment}}|
+* {{lc|std::true_type}} if there exists a type {{tt|A}} in {{tt|Allocs}} such that {{c multi|std::allocator_traits&lt;A&gt;::|    propagate_on_container_copy_assignment::value}} is {{c|true}}
+* {{lc|std::false_type}} otherwise}}
+{{dsc|{{tt|propagate_on_container_move_assignment}}|
+* {{lc|std::true_type}} if there exists a type {{tt|A}} in {{tt|Allocs}} such that {{c multi|std::allocator_traits&lt;A&gt;::|    propagate_on_container_move_assignment::value}} is {{c|true}}
+* {{lc|std::false_type}} otherwise}}
+{{dsc|{{tt|propagate_on_container_swap}}|
+* {{lc|std::true_type}} if there exists a type {{tt|A}} in {{tt|Allocs}} such that {{c multi|std::allocator_traits&lt;A&gt;::|    propagate_on_container_swap::value}} is {{c|true}}
+* {{lc|std::false_type}} otherwise}}
+{{dsc|{{tt|is_always_equal}}|
+* {{lc|std::true_type}} if there exists a type {{tt|A}} in {{tt|Allocs}} such that {{c multi|std::allocator_traits&lt;A&gt;::|    is_always_equal::value}} is {{c|true}}
+* {{lc|std::false_type}} otherwise}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc scoped_allocator_adaptor}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc ~scoped_allocator_adaptor}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc operator{{=}}}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc inner_allocator}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc outer_allocator}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc allocate}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc deallocate}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc max_size}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc construct}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc destroy}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc select_on_container_copy_construction}}
+{{dsc h2|Exposition-only function templates}}
+{{dsc expos mem fun|cpp/memory/scoped_allocator_adaptor/helpers|title=''outermost''|obtains the outermost allocator}}
+{{dsc expos mem fun|cpp/memory/scoped_allocator_adaptor/helpers|title=''outermost-construct''|constructs an object using the outermost allocator}}
+{{dsc expos mem fun|cpp/memory/scoped_allocator_adaptor/helpers|title=''outermost-destroy''|destroys an object using the outermost allocator}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/scoped_allocator_adaptor/dsc operator cmp}}
+{{dsc end}}
+
+===[[cpp/memory/scoped_allocator_adaptor/deduction guides|Deduction guides]]{{mark since c++17}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc hitem|Class|Definition}}
+{{dsc|{{tt|rebind}}{{nbsp}}|{{c|
+template&lt; class T &gt;
+struct rebind
+{
+    using other {{=}} scoped_allocator_adaptor
+                      &lt;std::allocator_traits&lt;OuterAlloc&gt;::template rebind_alloc&lt;T&gt;, 
+                       InnerAllocs...&gt;;
+};
+}}
+}}
+{{dsc end}}
+
+===Example===
+{{example
+|code=
+#include &lt;boost/interprocess/allocators/adaptive_pool.hpp&gt;
+#include &lt;boost/interprocess/managed_shared_memory.hpp&gt;
+#include &lt;scoped_allocator&gt;
+#include &lt;vector&gt;
+
+namespace bi = boost::interprocess;
+
+template&lt;class T&gt;
+using alloc = bi::adaptive_pool&lt;T, bi::managed_shared_memory::segment_manager&gt;;
+
+using ipc_row = std::vector&lt;int, alloc&lt;int&gt;&gt;;
+
+using ipc_matrix = std::vector&lt;ipc_row, std::scoped_allocator_adaptor&lt;alloc&lt;ipc_row&gt;&gt;&gt;;
+
+int main()
+{
+    bi::managed_shared_memory s(bi::create_only, "Demo", 65536);
+    
+    // create vector of vectors in shared memory
+    ipc_matrix v(s.get_segment_manager());
+    
+    // for all these additions, the inner vectors obtain their allocator arguments
+    // from the outer vector's scoped_allocator_adaptor
+    v.resize(1);
+    v[0].push_back(1);
+    v.emplace_back(2);
+    std::vector&lt;int&gt; local_row = {1, 2, 3};
+    v.emplace_back(local_row.begin(), local_row.end());
+    
+    bi::shared_memory_object::remove("Demo");
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++11|dr=2108|before=there was no way to show if {{tt|scoped_allocator_adaptor}} is stateless|after=provided {{tt|is_always_equal}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator_traits}}
+{{dsc inc|cpp/memory/dsc uses_allocator}}
+{{dsc inc|cpp/memory/dsc allocator}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

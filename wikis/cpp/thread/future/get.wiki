@@ -1,0 +1,110 @@
+{{cpp/thread/future/title|get}}
+{{cpp/thread/future/navbar}}
+
+{{dcl begin}}
+{{dcl h|Main template}}
+{{dcl|num=1|since=c++11|
+T get();
+}}
+{{dcl h|{{c/core|std::future&lt;T&amp;&gt;}} specializations}}
+{{dcl|num=2|since=c++11|
+T&amp; get();
+}}
+{{dcl h|{{c/core|std::future&lt;void&gt;}} specialization}}
+{{dcl|num=3|since=c++11|
+void get();
+}}
+{{dcl end}}
+
+The {{tt|get}} member function waits (by calling {{lc|wait()}}) until the shared state is ready, then retrieves the value stored in the shared state (if any). Right after calling this function, {{lc|valid()}} is {{c|false}}.
+
+If {{lc|valid()}} is {{c|false}} before the call to this function, the behavior is undefined.
+
+===Return value===
+@1@ The value {{c|v}} stored in the shared state, as {{c|std::move(v)}}.
+@2@ The reference stored as value in the shared state.
+@3@ (none)
+
+===Exceptions===
+If an exception was stored in the shared state referenced by the future (e.g. via a call to {{l2tf std|cpp/thread/promise/set_exception}}) then that exception will be thrown.
+
+===Notes===
+The C++ standard recommends the implementations to detect the case when {{lc|valid()}} is {{c|false}} before the call and throw a {{lc|std::future_error}} with an error condition of {{lc|std::future_errc::no_state}}.
+
+===Example===
+{{example|code=
+#include &lt;chrono&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::string time()
+{
+    static auto start = std::chrono::steady_clock::now();
+    std::chrono::duration&lt;double&gt; d = std::chrono::steady_clock::now() - start;
+    return "[" + std::to_string(d.count()) + "s]";
+}
+
+int main()
+{
+    using namespace std::chrono_literals;
+    
+    {
+        std::cout &lt;&lt; time() &lt;&lt; " launching thread\n";
+        std::future&lt;int&gt; f = std::async(std::launch::async, []
+        {
+            std::this_thread::sleep_for(1s);
+            return 7;
+        });
+        std::cout &lt;&lt; time() &lt;&lt; " waiting for the future, f.valid() = "
+                  &lt;&lt; f.valid() &lt;&lt; '\n';
+        int n = f.get();
+        std::cout &lt;&lt; time() &lt;&lt; " f.get() returned " &lt;&lt; n &lt;&lt; ", f.valid() = "
+                  &lt;&lt; f.valid() &lt;&lt; '\n';
+    }
+    
+    {
+        std::cout &lt;&lt; time() &lt;&lt; " launching thread\n";
+        std::future&lt;int&gt; f = std::async(std::launch::async, []
+        {
+            std::this_thread::sleep_for(1s);
+            return true ? throw std::runtime_error("7") : 7;
+        });
+        std::cout &lt;&lt; time() &lt;&lt; " waiting for the future, f.valid() = "
+                  &lt;&lt; f.valid() &lt;&lt; '\n';
+        
+        try
+        {
+            int n = f.get();
+            std::cout &lt;&lt; time() &lt;&lt; " f.get() returned " &lt;&lt; n
+                      &lt;&lt; ", f.valid() = " &lt;&lt; f.valid() &lt;&lt; '\n';
+        }
+        catch (const std::exception&amp; e)
+        {
+            std::cout &lt;&lt; time() &lt;&lt; " caught exception " &lt;&lt; e.what()
+                      &lt;&lt; ", f.valid() = " &lt;&lt; f.valid() &lt;&lt; '\n';
+        }
+    }
+}
+|p=true
+|output=
+[0.000004s] launching thread
+[0.000461s] waiting for the future, f.valid() = 1
+[1.001156s] f.get() returned with 7, f.valid() = 0
+[1.001192s] launching thread
+[1.001275s] waiting for the future, f.valid() = 1
+[2.002356s] caught exception 7, f.valid() = 0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2096|std=C++11|before=overload {{v|1}} needed to check whether {{tt|T}} is {{named req|MoveAssignable}}|after=not required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/future/dsc valid|future}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

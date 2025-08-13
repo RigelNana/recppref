@@ -1,0 +1,334 @@
+{{cpp/title|shared_ptr}}
+{{cpp/memory/shared_ptr/navbar}}
+{{ddcl|header=memory|since=c++11|1=
+template&lt; class T &gt; class shared_ptr;
+}}
+
+{{tt|std::shared_ptr}} is a smart pointer that retains shared ownership of an object through a pointer. Several {{tt|shared_ptr}} objects may own the same object. The object is destroyed and its memory deallocated when either of the following happens:
+* the last remaining {{tt|shared_ptr}} owning the object is destroyed;
+* the last remaining {{tt|shared_ptr}} owning the object is assigned another pointer via {{lc|1=operator=}} or {{lc|reset()}}.
+
+The object is destroyed using [[cpp/language/delete|delete-expression]] or a custom deleter that is supplied to {{tt|shared_ptr}} during construction.
+
+A {{tt|shared_ptr}} can share ownership of an object while storing a pointer to another object. This feature can be used to point to member objects while owning the object they belong to. The stored pointer is the one accessed by {{lc|get()}}, the dereference and the comparison operators. The managed pointer is the one passed to the deleter when use count reaches zero.
+
+A {{tt|shared_ptr}} may also own no objects, in which case it is called ''empty'' (an empty {{tt|shared_ptr}} may have a non-null stored pointer if the aliasing constructor was used to create it).
+
+All specializations of {{tt|shared_ptr}} meet the requirements of {{named req|CopyConstructible}}, {{named req|CopyAssignable}}, and {{named req|LessThanComparable}} and are [[cpp/language/implicit_cast|contextually convertible]] to {{tt|bool}}.
+
+All member functions (including copy constructor and copy assignment) can be called by multiple threads on different {{tt|shared_ptr}} objects without additional synchronization even if these objects are copies and share ownership of the same object. If multiple threads of execution access the same {{tt|shared_ptr}} object without synchronization and any of those accesses uses a non-const member function of {{tt|shared_ptr}} then a data race will occur; the {{ltt|cpp/memory/shared_ptr/atomic2|std::atomic&lt;shared_ptr&gt;}} can be used to prevent the data race.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|element_type}}|{{rev begin}}
+{{rev|until=c++17|{{c/core|T}}}}
+{{rev|since=c++17|{{c/core|std::remove_extent_t&lt;T&gt;}}}}
+{{rev end}}
+}}
+{{dsc|{{tt|weak_type}} {{mark since c++17}}|{{c/core|std::weak_ptr&lt;T&gt;}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc destructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator{{=}}}}
+
+{{dsc h2|Modifiers}}
+{{dsc inc|cpp/memory/shared_ptr/dsc reset}}
+{{dsc inc|cpp/memory/shared_ptr/dsc swap}}
+
+{{dsc h2|Observers}}
+{{dsc inc|cpp/memory/shared_ptr/dsc get}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator*}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator_at}}
+{{dsc inc|cpp/memory/shared_ptr/dsc use_count}}
+{{dsc inc|cpp/memory/shared_ptr/dsc unique}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator bool}}
+{{dsc inc|cpp/memory/shared_ptr/dsc owner_before}}
+{{dsc inc|cpp/memory/shared_ptr/dsc owner_hash}}
+{{dsc inc|cpp/memory/shared_ptr/dsc owner_equal}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc allocate_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc pointer_cast}}
+{{dsc inc|cpp/memory/shared_ptr/dsc get_deleter}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator_cmp}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator_ltlt}}
+{{dsc inc|cpp/memory/shared_ptr/dsc swap2}}
+{{dsc break}}
+{{dsc inc|cpp/memory/shared_ptr/dsc atomic}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc atomic2}}
+{{dsc inc|cpp/memory/shared_ptr/dsc hash}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}} {{mark since c++17}}===
+
+===Notes===
+The ownership of an object can only be shared with another {{tt|shared_ptr}} by copy constructing or copy assigning its value to another {{tt|shared_ptr}}. Constructing a new {{tt|shared_ptr}} using the raw underlying pointer owned by another {{tt|shared_ptr}} leads to undefined behavior.
+
+{{tt|std::shared_ptr}} may be used with an [[cpp/language/incomplete type|incomplete type]] {{tt|T}}. However, the constructor from a raw pointer ({{c|template&lt;class Y&gt; shared_ptr(Y*)}}) and the {{c|template&lt;class Y&gt; void reset(Y*)}} member function may only be called with a pointer to a complete type (note that {{lc|std::unique_ptr}} may be constructed from a raw pointer to an incomplete type).
+
+The {{tt|T}} in {{c/core|std::shared_ptr&lt;T&gt;}} may be a function type: in this case it manages a pointer to function, rather than an object pointer. This is sometimes used to keep a dynamic library or a plugin loaded as long as any of its functions are referenced:
+{{source|
+void del(void(*)()) {}
+
+void fun() {}
+
+int main()
+{
+    std::shared_ptr&lt;void()&gt; ee(fun, del);
+    (*ee)();
+}
+}}
+
+===Implementation notes===
+In a typical implementation, {{tt|shared_ptr}} holds only two pointers:
+* the stored pointer (one returned by {{lc|get()}});
+* a pointer to ''control block''.
+
+The control block is a dynamically-allocated object that holds:
+* either a pointer to the managed object or the managed object itself;
+* the deleter (type-erased);
+* the allocator (type-erased);
+* the number of {{tt|shared_ptr}}s that own the managed object;
+* the number of {{tt|weak_ptr}}s that refer to the managed object.
+
+When {{tt|shared_ptr}} is created by calling {{lc|std::make_shared}} or {{lc|std::allocate_shared}}, the memory for both the control block and the managed object is created with a single allocation. The managed object is constructed in-place in a data member of the control block. When {{tt|shared_ptr}} is created via one of the {{tt|shared_ptr}} constructors, the managed object and the control block must be allocated separately. In this case, the control block stores a pointer to the managed object.
+
+The pointer held by the {{tt|shared_ptr}} directly is the one returned by {{lc|get()}}, while the pointer/object held by the control block is the one that will be deleted when the number of shared owners reaches zero. These pointers are not necessarily equal.
+
+The destructor of {{tt|shared_ptr}} decrements the number of shared owners of the control block. If that counter reaches zero, the control block calls the destructor of the managed object. The control block does not deallocate itself until the {{lc|std::weak_ptr}} counter reaches zero as well.
+
+In existing implementations, the number of weak pointers is incremented ([https://stackoverflow.com/questions/43297517/stdshared-ptr-internals-weak-count-more-than-expected], [https://www.reddit.com/r/cpp/comments/3eia29/stdshared_ptrs_secret_constructor/ctfeh1p]) if there is a shared pointer to the same control block.
+
+To satisfy thread safety requirements, the reference counters are typically incremented using an equivalent of {{lc|std::atomic::fetch_add}} with {{lc|std::memory_order_relaxed}} (decrementing requires stronger ordering to safely destroy the control block).
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+struct Base
+{
+    Base() { std::cout &lt;&lt; "Base::Base()\n"; }
+
+    // Note: non-virtual destructor is OK here
+    ~Base() { std::cout &lt;&lt; "Base::~Base()\n"; }
+};
+
+struct Derived : public Base
+{
+    Derived() { std::cout &lt;&lt; "Derived::Derived()\n"; }
+
+    ~Derived() { std::cout &lt;&lt; "Derived::~Derived()\n"; }
+};
+
+void print(auto rem, std::shared_ptr&lt;Base&gt; const&amp; sp)
+{
+    std::cout &lt;&lt; rem &lt;&lt; "\n\tget() = " &lt;&lt; sp.get()
+              &lt;&lt; ", use_count() = " &lt;&lt; sp.use_count() &lt;&lt; '\n';
+}
+
+void thr(std::shared_ptr&lt;Base&gt; p)
+{
+    std::this_thread::sleep_for(987ms);
+    std::shared_ptr&lt;Base&gt; lp = p; // thread-safe, even though the
+                                  // shared use_count is incremented
+    {
+        static std::mutex io_mutex;
+        std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+        print("Local pointer in a thread:", lp);
+    }
+}
+
+int main()
+{
+    std::shared_ptr&lt;Base&gt; p = std::make_shared&lt;Derived&gt;();
+
+    print("Created a shared Derived (as a pointer to Base)", p);
+
+    std::thread t1{thr, p}, t2{thr, p}, t3{thr, p};
+    p.reset(); // release ownership from main
+
+    print("Shared ownership between 3 threads and released ownership from main:", p);
+
+    t1.join();
+    t2.join();
+    t3.join();
+
+    std::cout &lt;&lt; "All threads completed, the last one deleted Derived.\n";
+}
+|p=true
+|output=
+Base::Base()
+Derived::Derived()
+Created a shared Derived (as a pointer to Base)
+	get() = 0x118ac30, use_count() = 1
+Shared ownership between 3 threads and released ownership from main:
+	get() = 0, use_count() = 0
+Local pointer in a thread:
+	get() = 0x118ac30, use_count() = 5
+Local pointer in a thread:
+	get() = 0x118ac30, use_count() = 4
+Local pointer in a thread:
+	get() = 0x118ac30, use_count() = 2
+Derived::~Derived()
+Base::~Base()
+All threads completed, the last one deleted Derived.
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct MyObj
+{
+    MyObj() { std::cout &lt;&lt; "MyObj constructed\n"; }
+
+    ~MyObj() { std::cout &lt;&lt; "MyObj destructed\n"; }
+};
+
+struct Container : std::enable_shared_from_this&lt;Container&gt; // note: public inheritance
+{
+    std::shared_ptr&lt;MyObj&gt; memberObj;
+
+    void CreateMember() { memberObj = std::make_shared&lt;MyObj&gt;(); }
+
+    std::shared_ptr&lt;MyObj&gt; GetAsMyObj()
+    {
+        // Use an alias shared ptr for member
+        return std::shared_ptr&lt;MyObj&gt;(shared_from_this(), memberObj.get());
+    }
+};
+
+#define COUT(str) std::cout &lt;&lt; '\n' &lt;&lt; str &lt;&lt; '\n'
+
+#define DEMO(...) std::cout &lt;&lt; #__VA_ARGS__ &lt;&lt; " = " &lt;&lt; __VA_ARGS__ &lt;&lt; '\n'
+
+int main()
+{
+    COUT("Creating shared container");
+    std::shared_ptr&lt;Container&gt; cont = std::make_shared&lt;Container&gt;();
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("Creating member");
+    cont-&gt;CreateMember();
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("Creating another shared container");
+    std::shared_ptr&lt;Container&gt; cont2 = cont;
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+    DEMO(cont2.use_count());
+    DEMO(cont2-&gt;memberObj.use_count());
+
+    COUT("GetAsMyObj");
+    std::shared_ptr&lt;MyObj&gt; myobj1 = cont-&gt;GetAsMyObj();
+    DEMO(myobj1.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+    DEMO(cont2.use_count());
+    DEMO(cont2-&gt;memberObj.use_count());
+
+    COUT("Copying alias obj");
+    std::shared_ptr&lt;MyObj&gt; myobj2 = myobj1;
+    DEMO(myobj1.use_count());
+    DEMO(myobj2.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+    DEMO(cont2.use_count());
+    DEMO(cont2-&gt;memberObj.use_count());
+
+    COUT("Resetting cont2");
+    cont2.reset();
+    DEMO(myobj1.use_count());
+    DEMO(myobj2.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("Resetting myobj2");
+    myobj2.reset();
+    DEMO(myobj1.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("Resetting cont");
+    cont.reset();
+    DEMO(myobj1.use_count());
+    DEMO(cont.use_count());
+}
+|output=
+
+Creating shared container
+cont.use_count() = 1
+cont-&gt;memberObj.use_count() = 0
+
+Creating member
+MyObj constructed
+cont.use_count() = 1
+cont-&gt;memberObj.use_count() = 1
+
+Creating another shared container
+cont.use_count() = 2
+cont-&gt;memberObj.use_count() = 1
+cont2.use_count() = 2
+cont2-&gt;memberObj.use_count() = 1
+
+GetAsMyObj
+myobj1.use_count() = 3
+cont.use_count() = 3
+cont-&gt;memberObj.use_count() = 1
+cont2.use_count() = 3
+cont2-&gt;memberObj.use_count() = 1
+
+Copying alias obj
+myobj1.use_count() = 4
+myobj2.use_count() = 4
+cont.use_count() = 4
+cont-&gt;memberObj.use_count() = 1
+cont2.use_count() = 4
+cont2-&gt;memberObj.use_count() = 1
+
+Resetting cont2
+myobj1.use_count() = 3
+myobj2.use_count() = 3
+cont.use_count() = 3
+cont-&gt;memberObj.use_count() = 1
+
+Resetting myobj2
+myobj1.use_count() = 2
+cont.use_count() = 2
+cont-&gt;memberObj.use_count() = 1
+
+Resetting cont
+myobj1.use_count() = 1
+cont.use_count() = 0
+MyObj destructed
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc inc|cpp/memory/dsc weak_ptr}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,81 @@
+{{cpp/thread/jthread/title|get_stop_source}}
+{{cpp/thread/jthread/navbar}}
+{{ddcl|since=c++20|
+std::stop_source get_stop_source() noexcept;
+}}
+
+Returns a {{lc|std::stop_source}} associated with the same shared stop-state as held internally by the {{tt|jthread}} object.
+
+===Parameters===
+(none)
+
+===Return value===
+A value of type {{lc|std::stop_source}} associated with stop-state held internally by {{tt|jthread}} object.
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string_view&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+int main()
+{
+    std::cout &lt;&lt; std::boolalpha;
+    auto print = [](std::string_view name, const std::stop_source&amp; source)
+    {
+        std::cout &lt;&lt; name &lt;&lt; ": stop_possible = " &lt;&lt; source.stop_possible();
+        std::cout &lt;&lt; ", stop_requested = " &lt;&lt; source.stop_requested() &lt;&lt; '\n';
+    };
+
+    // A worker thread
+    auto worker = std::jthread([](std::stop_token stoken)
+    {
+        for (int i = 10; i; --i)
+        {
+            std::this_thread::sleep_for(300ms);
+            if (stoken.stop_requested())
+            {
+                std::cout &lt;&lt; "  Sleepy worker is requested to stop\n";
+                return;
+            }
+            std::cout &lt;&lt; "  Sleepy worker goes back to sleep\n";
+        }
+    });
+
+    std::stop_source stop_source = worker.get_stop_source();
+    print("stop_source", stop_source);
+
+    std::cout &lt;&lt; "\nPass source to other thread:\n";
+    auto stopper = std::thread(
+        [](std::stop_source source)
+        {
+            std::this_thread::sleep_for(500ms);
+            std::cout &lt;&lt; "Request stop for worker via source\n";
+            source.request_stop();
+        },
+        stop_source);
+    stopper.join();
+    std::this_thread::sleep_for(200ms);
+    std::cout &lt;&lt; '\n';
+
+    print("stop_source", stop_source);
+}
+|p=true
+|output=
+stop_source: stop_possible = true, stop_requested = false
+
+Pass source to other thread:
+  Sleepy worker goes back to sleep
+Request stop for worker via source
+  Sleepy worker is requested to stop
+
+stop_source: stop_possible = true, stop_requested = true
+}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

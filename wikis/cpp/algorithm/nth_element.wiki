@@ -1,0 +1,145 @@
+{{cpp/title|nth_element}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|constexpr=c++20|
+template&lt; class RandomIt &gt;
+void nth_element( RandomIt first, RandomIt nth, RandomIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt &gt;
+void nth_element( ExecutionPolicy&amp;&amp; policy,
+                  RandomIt first, RandomIt nth, RandomIt last );}}
+{{dcla|num=3|constexpr=c++20|
+template&lt; class RandomIt, class Compare &gt;
+void nth_element( RandomIt first, RandomIt nth, RandomIt last,
+                  Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt, class Compare &gt;
+void nth_element( ExecutionPolicy&amp;&amp; policy,
+                  RandomIt first, RandomIt nth, RandomIt last,
+                  Compare comp );
+}}
+{{dcl end}}
+
+{{tt|nth_element}} rearranges elements in {{range|first|last}} such that after the rearrangement:
+* The element pointed at by {{c|nth}} is changed to whatever element would occur in that position if {{range|first|last}} were sorted.
+* For every iterator {{c|i}} in {{range|first|nth}} and every iterator {{c|j}} in {{range|nth|last}}, the following condition is met:
+:@1,2@ {{rev inl|until=c++20|{{c|bool(*j &lt; *i)}}}}{{rev inl|since=c++20|{{c|std::less{}(*j, *i)}}}} is {{c|false}}.
+:@3,4@ {{c|bool(comp(*j, *i))}} is {{c|false}}.
+
+
+@1@ Elements are hypothetically {{rlp|/#Requirements|sorted}} with respect to {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}.
+
+@3@ Elements are hypothetically sorted with respect to {{c|comp}}.
+
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+If any of the following conditions is satisfied, the behavior is undefined:
+* {{range|first|nth}} or {{range|nth|last}} is not a [[cpp/iterator#Ranges|valid range]].
+{{rev begin}}
+{{rev|until=c++11|
+* The type of {{c|*first}} is not {{named req|Swappable}}.
+}}
+{{rev|since=c++11|
+* {{tt|RandomIt}} is not {{named req|ValueSwappable}}.
+* The type of {{c|*first}} is not {{named req|MoveConstructible}}.
+* The type of {{c|*first}} is not {{named req|MoveAssignable}}.
+}}
+{{rev end}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|random access iterators defining the range sort}}
+{{par|nth|random access iterator defining the sort partition point}}
+{{par exec pol}}
+{{par cmp ord|comp|p1=RandomIt}}
+{{par hreq}}
+{{par req named|RandomIt|RandomAccessIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|last - first}}:
+@1@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} comparisons using {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} on average.
+@2@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} comparisons using {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}}, and {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N·log(N))}} swaps.
+@3@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} applications of the comparator {{c|comp}} on average.
+@4@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} applications of the comparator {{c|comp}}, and {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N·log(N))}} swaps.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting_behavior|singular=no}}
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L4718 libstdc++], [https://github.com/llvm/llvm-project/blob/ed2d364/libcxx/include/__algorithm/nth_element.h libc++], and [https://github.com/microsoft/STL/blob/e97bb2b50a12816ce68cc5147b7a3a21fb68bfa3/stl/inc/algorithm#L8849-L8894 MSVC STL].
+
+===Notes===
+The algorithm used is typically {{enwiki|Introselect}} although other {{enwiki|Selection algorithm}} with suitable average-case complexity are allowed.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+void printVec(const std::vector&lt;int&gt;&amp; vec)
+{
+    std::cout &lt;&lt; "v = {";
+    for (char sep[]{0, ' ', 0}; const int i : vec)
+        std::cout &lt;&lt; sep &lt;&lt; i, sep[0] = ',';
+    std::cout &lt;&lt; "};\n";
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{5, 10, 6, 4, 3, 2, 6, 7, 9, 3};
+    printVec(v);
+    
+    auto m = v.begin() + v.size() / 2;
+    std::nth_element(v.begin(), m, v.end());
+    std::cout &lt;&lt; "\nThe median is " &lt;&lt; v[v.size() / 2] &lt;&lt; '\n';
+    // The consequence of the inequality of elements before/after the Nth one:
+    assert(std::accumulate(v.begin(), m, 0) &lt; std::accumulate(m, v.end(), 0));
+    printVec(v);
+    
+    // Note: comp function changed
+    std::nth_element(v.begin(), v.begin() + 1, v.end(), std::greater{});
+    std::cout &lt;&lt; "\nThe second largest element is " &lt;&lt; v[1] &lt;&lt; '\n';
+    std::cout &lt;&lt; "The largest element is " &lt;&lt; v[0] &lt;&lt; '\n';
+    printVec(v);
+}
+|p=true
+|output=
+v = {5, 10, 6, 4, 3, 2, 6, 7, 9, 3};
+
+The median is 6
+v = {3, 2, 3, 4, 5, 6, 10, 7, 9, 6};
+
+The second largest element is 9
+The largest element is 10
+v = {10, 9, 6, 7, 6, 3, 5, 4, 3, 2};
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before=after the rearrangement, only one element before {{c|nth}}&lt;br&gt;was required to be not greater than one element after {{c|nth}}|after=corrected the&lt;br&gt;requirement}}
+{{dr list item|wg=lwg|dr=2163|std=C++98|before=overload {{vl|1}} used {{c/core|operator&gt;}} to compare the elements|after=changed to {{c/core|operator&lt;}}}}
+{{dr list item|paper=P0896R4|std=C++98|before={{range|first|nth}} and {{range|nth|last}}&lt;br&gt;were not required to be valid ranges|after=the behavior is undefined&lt;br&gt;if any of them is invalid}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc max_element}}
+{{dsc inc|cpp/algorithm/dsc min_element}}
+{{dsc inc|cpp/algorithm/dsc partial_sort_copy}}
+{{dsc inc|cpp/algorithm/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/dsc sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc nth_element}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

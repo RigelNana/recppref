@@ -1,0 +1,119 @@
+{{cpp/title|counting_semaphore|binary_semaphore}}
+{{cpp/thread/counting_semaphore/navbar}}
+{{dcl begin}}
+{{dcl header|semaphore}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::ptrdiff_t LeastMaxValue = /* implementation-defined */ &gt;
+class counting_semaphore;
+}}
+{{dcl|num=2|since=c++20|1=
+using binary_semaphore = std::counting_semaphore&lt;1&gt;;
+}}
+{{dcl end}}
+
+@1@ A {{tt|counting_semaphore}} is a lightweight synchronization primitive that can control access to a shared resource. Unlike a {{lc|std::mutex}}, a {{tt|counting_semaphore}} allows more than one concurrent access to the same resource, for at least {{tt|LeastMaxValue}} concurrent accessors. The program is ill-formed if {{tt|LeastMaxValue}} is negative.
+
+@2@ {{tt|binary_semaphore}} is an alias for specialization of {{tt|std::counting_semaphore}} with {{tt|LeastMaxValue}} being {{c|1}}. Implementations may implement {{tt|binary_semaphore}} more efficiently than the default implementation of {{tt|std::counting_semaphore}}.
+
+A {{tt|counting_semaphore}} contains an internal counter initialized by the constructor. This counter is decremented by calls to {{lc|acquire()}} and related methods, and is incremented by calls to {{lc|release()}}. When the counter is zero, {{lc|acquire()}} blocks until the counter is incremented, but {{lc|try_acquire()}} does not block; {{lc|try_acquire_for()}} and {{lc|try_acquire_until()}} block until the counter is incremented or a timeout is reached.
+
+Similar to {{lc|std::condition_variable::wait()}}, {{tt|counting_semaphore}}'s {{lc|try_acquire()}} can spuriously fail.
+
+Specializations of {{tt|std::counting_semaphore}} are not {{named req|DefaultConstructible}}, {{named req|CopyConstructible}}, {{named req|MoveConstructible}}, {{named req|CopyAssignable}}, or {{named req|MoveAssignable}}.
+
+===Data Members===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|counter|private=yes|The internal counter of type {{lc|std::ptrdiff_t}}.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc constructor}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc destructor}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc operator{{=}}}}
+
+{{dsc h2|Operations}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc release}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc acquire}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc try_acquire}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc try_acquire_for}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc try_acquire_until}}
+
+{{dsc h2|Constants}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc max}}
+{{dsc end}}
+
+===Notes===
+As its name indicates, the {{tt|LeastMaxValue}} is the ''minimum'' max value, not the ''actual'' max value. Thus {{lc|max()}} can yield a number larger than {{tt|LeastMaxValue}}.
+
+Unlike {{lc|std::mutex}} a {{tt|counting_semaphore}} is not tied to threads of execution - acquiring a semaphore can occur on a different thread than releasing the semaphore, for example. All operations on {{tt|counting_semaphore}} can be performed concurrently and without any relation to specific threads of execution, with the exception of the destructor which cannot be performed concurrently but can be performed on a different thread.
+
+Semaphores are also often used for the semantics of signaling/notifying rather than mutual exclusion, by initializing the semaphore with {{c|0}} and thus blocking the receiver(s) that try to {{lc|acquire()}}, until the notifier "signals" by invoking {{c|release(n)}}. In this respect semaphores can be considered alternatives to {{lc|std::condition_variable}}s, often with better performance.
+
+{{feature test macro|__cpp_lib_semaphore|{{tt|std::counting_semaphore}}, {{tt|std::binary_semaphore}}|std=C++20|value=201907L}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;semaphore&gt;
+#include &lt;thread&gt;
+
+// global binary semaphore instances
+// object counts are set to zero
+// objects are in non-signaled state
+std::binary_semaphore
+    smphSignalMainToThread{0},
+    smphSignalThreadToMain{0};
+
+void ThreadProc()
+{
+    // wait for a signal from the main proc
+    // by attempting to decrement the semaphore
+    smphSignalMainToThread.acquire();
+
+    // this call blocks until the semaphore's count
+    // is increased from the main proc
+
+    std::cout &lt;&lt; "[thread] Got the signal\n"; // response message
+
+    // wait for 3 seconds to imitate some work
+    // being done by the thread
+    using namespace std::literals;
+    std::this_thread::sleep_for(3s);
+
+    std::cout &lt;&lt; "[thread] Send the signal\n"; // message
+
+    // signal the main proc back
+    smphSignalThreadToMain.release();
+}
+
+int main()
+{
+    // create some worker thread
+    std::thread thrWorker(ThreadProc);
+
+    std::cout &lt;&lt; "[main] Send the signal\n"; // message
+
+    // signal the worker thread to start working
+    // by increasing the semaphore's count
+    smphSignalMainToThread.release();
+
+    // wait until the worker thread is done doing the work
+    // by attempting to decrement the semaphore's count
+    smphSignalThreadToMain.acquire();
+
+    std::cout &lt;&lt; "[main] Got the signal\n"; // response message
+    thrWorker.join();
+}
+|output=
+[main] Send the signal
+[thread] Got the signal
+[thread] Send the signal
+[main] Got the signal
+}}
+
+{{langlinks|es|ja|ru|zh}}

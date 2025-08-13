@@ -1,0 +1,172 @@
+{{cpp/ranges/view title|cartesian_product}}
+{{cpp/ranges/cartesian_product_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::input_range First, ranges::forward_range... Vs &gt;
+    requires (ranges::view&lt;First&gt; &amp;&amp; ... &amp;&amp; ranges::view&lt;Vs&gt;)
+class cartesian_product_view
+    : public ranges::view_interface&lt;cartesian_product_view&lt;First, Vs...&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /*unspecified*/ cartesian_product = /*unspecified*/;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range... Rs &gt;
+    requires /* see below */
+constexpr ranges::view auto cartesian_product( Rs&amp;&amp;... rs );
+}}
+{{dcl h|Helper concepts}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; bool Const, class First, class... Vs &gt;
+concept /*cartesian-product-is-random-access*/ =
+    (ranges::random_access_range&lt;/*maybe-const*/&lt;Const, First&gt;&gt; &amp;&amp; ... &amp;&amp;
+        (ranges::random_access_range&lt;/*maybe-const*/&lt;Const, Vs&gt;&gt; &amp;&amp;
+            ranges::sized_range&lt;/*maybe-const*/&lt;Const, Vs&gt;&gt;));
+}}
+{{dcl|num=4|notes={{mark expos}}|1=
+template&lt; class R &gt;
+concept /*cartesian-product-common-arg*/ =
+    ranges::common_range&lt;R&gt; {{!!}}
+        (ranges::sized_range&lt;R&gt; &amp;&amp; ranges::random_access_range&lt;R&gt;);
+}}
+{{dcl|num=5|notes={{mark expos}}|1=
+template&lt; bool Const, class First, class... Vs &gt;
+concept /*cartesian-product-is-bidirectional*/ =
+    (ranges::bidirectional_range&lt;/*maybe-const*/&lt;Const, First&gt;&gt; &amp;&amp; ... &amp;&amp;
+        (ranges::bidirectional_range&lt;/*maybe-const*/&lt;Const, Vs&gt;&gt; &amp;&amp;
+            /*cartesian-product-common-arg*/&lt;/*maybe-const*/&lt;Const, Vs&gt;&gt;));
+}}
+{{dcl|num=6|notes={{mark expos}}|1=
+template&lt; class First, class... Vs &gt;
+concept /*cartesian-product-is-common*/ =
+    /*cartesian-product-common-arg*/&lt;First&gt;;
+}}
+{{dcl|num=7|notes={{mark expos}}|1=
+template&lt; class... Vs &gt;
+concept /*cartesian-product-is-sized*/ =
+    (ranges::sized_range&lt;Vs&gt; &amp;&amp; ...);
+}}
+{{dcl|num=8|notes={{mark expos}}|1=
+template&lt; bool Const, template&lt;class&gt; class FirstSent, class First, class... Vs &gt;
+concept /*cartesian-is-sized-sentinel*/ =
+    (std::sized_sentinel_for&lt;FirstSent&lt;/*maybe-const*/&lt;Const, First&gt;&gt;,
+        ranges::iterator_t&lt;/*maybe-const*/&lt;Const, First&gt;&gt;&gt; &amp;&amp; ... &amp;&amp;
+            (ranges::sized_range&lt;/*maybe-const*/&lt;Const, Vs&gt;&gt; &amp;&amp;
+                std::sized_sentinel_for&lt;ranges::iterator_t&lt;
+                    /*maybe-const*/&lt;Const, Vs&gt;&gt;,
+                        ranges::iterator_t&lt;/*maybe-const*/&lt;Const, Vs&gt;&gt;&gt;));
+}}
+{{dcl h|Helper function templates}}
+{{dcl|num=9|notes={{mark expos}}|1=
+template&lt; /*cartesian-product-common-arg*/ R &gt;
+constexpr auto /*cartesian-common-arg-end*/( R&amp; r )
+{
+    if constexpr (ranges::common_range&lt;R&gt;)
+        return ranges::end(r);
+    else
+        return ranges::begin(r) + ranges::distance(r);
+}
+}}
+{{dcl end}}
+
+@1@ {{tt|cartesian_product_view}} is a range adaptor that takes ''n'' {{lconcept|view}}s, where ''n &gt; 0'', and produces a {{lconcept|view}} of tuples calculated by the {{enwiki|Cartesian product#n-ary Cartesian product|n-ary cartesian product}} of the provided ranges. The size of produced view is a multiple of sizes of provided ranges, while each element is a tuple (of references) of the size ''n''.
+
+@2@ {{tt|views::cartesian_product}} is a customization point object.
+* When calling with no argument, {{c|views::cartesian_product()}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|views::single(std::tuple())}}.
+* Otherwise, {{c|views::cartesian_product(rs...)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|ranges::cartesian_product_view&lt;views::all_t&lt;decltype((rs))&gt;...&gt;(rs...)}}.
+
+@3@ Determines if {{tt|cartesian_product}} is a random access range (see also {{lconcept|random_access_range}}).
+
+@4@ Determines if {{tt|cartesian_product}} is a common range (see also {{lconcept|common_range}}).
+
+@5@ Determines if {{tt|cartesian_product}} is a bidirectional range (see also {{lconcept|bidirectional_range}}).
+
+@6@ Determines if {{tt|cartesian_product}} satisfies the helper concept {{c/core|/*cartesian-product-is-common*/}} (see also {{lconcept|common_range}}).
+
+@7@ Determines if {{tt|cartesian_product}} is a sized range (see also {{lconcept|sized_range}}).
+
+@8@ Determines if {{tt|cartesian_product}} uses sized sentinel.
+
+@9@ Returns the end of the produced {{lconcept|view}}. Participates in overload resolution only if {{tt|cartesian_product}} satisfies the helper concept {{c/core|/*cartesian-product-common-arg*/}}.
+
+The {{tt|First}} {{lconcept|range}} passed to {{tt|cartesian_product_view}} is treated specially, since it is only passed through a single time. As a result, several constrains are relaxed on it:
+* {{tt|First}} is an {{lconcept|input_range}} instead of {{lconcept|forward_range}};
+* {{tt|First}} does not have to be a {{lconcept|sized_range}} in order for the {{tt|cartesian_product_view}} to be {{lconcept|random_access_range}} or {{lconcept|common_range}};
+* {{tt|First}} does not have to be {{lconcept|common_range}} in order for the {{tt|cartesian_product_view}} to be {{lconcept|bidirectional_range}}.
+&lt;!----&gt;
+{{cpp/ranges/cpo|views|cartesian_product}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|base_|private=yes|spec={{c/core|std::tuple&lt;First, Vs...&gt;}}|An object that holds all adapted {{lconcept|view}} objects.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|cartesian_product_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|cartesian_product_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|cartesian_product_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|cartesian_product_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/cartesian_product_view/iterator|the iterator type}}
+{{dsc end}}
+
+===Notes===
+{{feature test macro|__cpp_lib_ranges_cartesian_product|std=C++23|value=202207L|{{tt|std::ranges::cartesian_product_view}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+void print(std::tuple&lt;char const&amp;, int const&amp;, std::string const&amp;&gt; t, int pos)
+{
+    const auto&amp; [a, b, c] = t;
+    std::cout &lt;&lt; '(' &lt;&lt; a &lt;&lt; ' ' &lt;&lt; b &lt;&lt; ' ' &lt;&lt; c &lt;&lt; ')' &lt;&lt; (pos % 4 ? " " : "\n");
+}
+
+int main()
+{
+    const auto x = std::array{'A', 'B'};
+    const auto y = std::vector{1, 2, 3};
+    const auto z = std::list&lt;std::string&gt;{"α", "β", "γ", "δ"};
+
+    for (int i{1}; auto const&amp; tuple : std::views::cartesian_product(x, y, z))
+        print(tuple, i++);
+}
+|output=
+(A 1 α) (A 1 β) (A 1 γ) (A 1 δ)
+(A 2 α) (A 2 β) (A 2 γ) (A 2 δ)
+(A 3 α) (A 3 β) (A 3 γ) (A 3 δ)
+(B 1 α) (B 1 β) (B 1 γ) (B 1 δ)
+(B 2 α) (B 2 β) (B 2 γ) (B 2 δ)
+(B 3 α) (B 3 β) (B 3 γ) (B 3 δ)
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Cartesian product view|id=range.stride|section=26.7.31}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc zip_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

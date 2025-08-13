@@ -1,0 +1,114 @@
+{{cpp/title|any_cast}}
+{{cpp/utility/any/navbar}}
+{{dcl begin}}
+{{dcl header|any}}
+{{dcl|since=c++17|num=1|
+template&lt; class T &gt;
+T any_cast( const any&amp; operand );
+}}
+{{dcl|since=c++17|num=2|
+template&lt; class T &gt;
+T any_cast( any&amp; operand );
+}}
+{{dcl|since=c++17|num=3|
+template&lt; class T &gt;
+T any_cast( any&amp;&amp; operand );
+}}
+{{dcla|since=c++17|num=4|
+template&lt; class T &gt;
+const T* any_cast( const any* operand ) noexcept;
+}}
+{{dcl|since=c++17|num=5|
+template&lt; class T &gt;
+T* any_cast( any* operand ) noexcept;
+}}
+{{dcl end}}
+
+Performs type-safe access to the contained object.
+
+Let {{tt|U}} be {{c/core|std::remove_cv_t&lt;std::remove_reference_t&lt;T&gt;&gt;}}.
+
+@1@ The program is ill-formed if {{c|std::is_constructible_v&lt;T, const U&amp;&gt;}} is {{c|false}}.
+@2@ The program is ill-formed if {{c|std::is_constructible_v&lt;T, U&amp;&gt;}} is {{c|false}}.
+@3@ The program is ill-formed if {{c|std::is_constructible_v&lt;T, U&gt;}} is {{c|false}}.
+@4,5@ The program is ill-formed if {{c|std::is_void_v&lt;T&gt;}} is {{c|true}}.
+
+===Parameters===
+{{par begin}}
+{{par|operand|target {{tt|any}} object}}
+{{par end}}
+
+===Return value===
+@1,2@ Returns {{c|static_cast&lt;T&gt;(*std::any_cast&lt;U&gt;(&amp;operand))}}.
+@3@ Returns {{c|static_cast&lt;T&gt;(std::move(*std::any_cast&lt;U&gt;(&amp;operand)))}}.
+@4,5@ If {{c|operand}} is not a null pointer, and the {{ltt|cpp/language/typeid}} of the requested {{tt|T}} matches that of the contents of {{c|operand}}, a pointer to the value contained by operand, otherwise a null pointer.
+
+===Exceptions===
+@1-3@ Throws {{lc|std::bad_any_cast}} if the {{ltt|cpp/language/typeid}} of the requested {{tt|T}} does not match that of the contents of {{c|operand}}.
+
+===Example===
+{{example
+|code=
+#include &lt;any&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+int main()
+{
+    // Simple example
+    auto a1 = std::any(12);
+    std::cout &lt;&lt; "1) a1 is int: " &lt;&lt; std::any_cast&lt;int&gt;(a1) &lt;&lt; '\n';
+    
+    try
+    {
+        auto s = std::any_cast&lt;std::string&gt;(a1); // throws
+    }
+    catch (const std::bad_any_cast&amp; e)
+    {
+        std::cout &lt;&lt; "2) " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    
+    // Pointer example
+    if (int* i = std::any_cast&lt;int&gt;(&amp;a1))
+        std::cout &lt;&lt; "3) a1 is int: " &lt;&lt; *i &lt;&lt; '\n';
+    else if (std::string* s = std::any_cast&lt;std::string&gt;(&amp;a1))
+        std::cout &lt;&lt; "3) a1 is std::string: " &lt;&lt; *s &lt;&lt; '\n';
+    else
+        std::cout &lt;&lt; "3) a1 is another type or unset\n";
+    
+    // Advanced example
+    a1 = std::string("hello");
+    auto&amp; ra = std::any_cast&lt;std::string&amp;&gt;(a1); // reference
+    ra[1] = 'o';
+    
+    std::cout &lt;&lt; "4) a1 is string: "
+              &lt;&lt; std::any_cast&lt;const std::string&amp;&gt;(a1) &lt;&lt; '\n'; // const reference
+    
+    auto s1 = std::any_cast&lt;std::string&amp;&amp;&gt;(std::move(a1)); // rvalue reference
+    // Note: “s1” is a move-constructed std::string:
+    static_assert(std::is_same_v&lt;decltype(s1), std::string&gt;);
+    
+    // Note: the std::string in “a1” is left in valid but unspecified state
+    std::cout &lt;&lt; "5) a1.size(): "
+              &lt;&lt; std::any_cast&lt;std::string&gt;(&amp;a1)-&gt;size() // pointer
+              &lt;&lt; '\n'
+              &lt;&lt; "6) s1: " &lt;&lt; s1 &lt;&lt; '\n';
+}
+|p=true
+|output=
+1) a1 is int: 12
+2) bad any_cast
+3) a1 is int: 12
+4) a1 is string: hollo
+5) a1.size(): 0
+6) s1: hollo
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3305|std=c++17|before=the behavior of overloads {{vl|4,5}} was unclear if {{tt|T}} is {{c/core|void}}|after=the program ill-formed in this case}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

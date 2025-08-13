@@ -1,0 +1,87 @@
+{{cpp/title | fsetpos}}
+{{cpp/io/c/navbar}}
+{{ddcl | header=cstdio |
+int fsetpos( std::FILE* stream, const std::fpos_t* pos );
+}}
+
+Sets the file position indicator and the multibyte parsing state (if any) for the C file stream {{tt|stream}} according to the value pointed to by {{tt|pos}}. 
+
+Besides establishing new parse state and position, a call to this function undoes the effects of {{lc|std::ungetc}} and clears the end-of-file state, if it is set.
+
+If a read or write error occurs, the error indicator ({{lc|std::ferror}}) for the stream is set.
+
+===Parameters===
+{{par begin}}
+{{par | stream | file stream to modify}}
+{{par | pos | pointer to a {{c|fpos_t}} object obtained from {{lc|std::fgetpos}} called on a stream associated with the same file}}
+{{par end}}
+
+===Return value===
+{{c|0}} upon success, nonzero value otherwise. Also, sets {{lc|errno}} on failure.
+
+===Notes===
+After seeking to a non-end position in a wide stream, the next call to any output function may render the remainder of the file undefined, e.g. by outputting a multibyte sequence of a different length.
+
+===Example===
+{{example
+| code=
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+ 
+int main()
+{
+    // Prepare an array of floating-point values.
+    const int SIZE = 5;
+    double A[SIZE] = {1., 2., 3., 4., 5.};
+    // Write array to a file.
+    std::FILE * fp = std::fopen("test.bin", "wb");
+    std::fwrite(A, sizeof(double), SIZE, fp);
+    std::fclose(fp);
+ 
+    // Read the values into array B.
+    double B[SIZE];
+    fp = std::fopen("test.bin", "rb");
+    std::fpos_t pos;
+    if (std::fgetpos(fp, &amp;pos) != 0)      // current position: start of file
+    {
+       std::perror("fgetpos()");
+       std::fprintf(stderr, "fgetpos() failed in file %s at line # %d\n",
+                    __FILE__, __LINE__-3);
+       std::exit(EXIT_FAILURE);
+    }
+
+    int ret_code = std::fread(B, sizeof(double), 1, fp);      // read one value
+    // current position: after reading one value
+    std::printf("%.1f; read count = %d\n", B[0], ret_code);   // print one value and ret_code
+    
+    if (std::fsetpos(fp, &amp;pos) != 0)   // reset current position to start of file
+    {
+       if (std::ferror(fp))
+       {
+          std::perror("fsetpos()");
+          std::fprintf(stderr, "fsetpos() failed in file %s at line # %d\n",
+                       __FILE__, __LINE__-5);
+          std::exit(EXIT_FAILURE);
+       }
+    }
+
+    ret_code = std::fread(B, sizeof(double), 1, fp);         // re-read first value
+    std::printf("%.1f; read count = %d\n", B[0], ret_code);  // print one value and ret_code
+    std::fclose(fp);
+ 
+    return EXIT_SUCCESS; 
+}
+| output=
+1.0; read count = 1
+1.0; read count = 1
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc | cpp/io/c/dsc fgetpos}}
+{{dsc inc | cpp/io/c/dsc ftell}}
+{{dsc inc | cpp/io/c/dsc fseek}}
+{{dsc see c | c/io/fsetpos}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,215 @@
+{{title|Default-initialization}}
+{{cpp/language/initialization/navbar}}
+This is the initialization performed when an object is constructed with no initializer.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar sep|T object}}{{ttb|;}}}}
+{{sdsc|num=2|{{ttb|new}} {{spar|T}}
+}}
+{{sdsc end}}
+
+===Explanation===
+Default-initialization is performed in three situations:
+@1@ when a variable with automatic, static, or thread-local {{rlp|storage duration}} is declared with no initializer;
+@2@ when an object with dynamic storage duration is created by a {{rlp|new|new-expression}} with no initializer;
+@3@ when a base class or a non-static data member is not mentioned in a {{rlp|constructor|constructor initializer list}} and that constructor is called.
+
+The effects of default-initialization are:
+* if {{tt|T}} is a (possibly cv-qualified) {{rev inl|until=c++11|non-POD}} class type, the constructors are considered and subjected to {{rlp|overload resolution}} against the empty argument list. The constructor selected (which is one of the {{rlp|default constructor}}s) is called to provide the initial value for the new object;
+* if {{tt|T}} is an array type, every element of the array is default-initialized;
+* otherwise, no initialization is performed (see [[#Notes|notes]]).
+
+{{rev begin}}
+{{rev|until=c++11|
+Only (possibly cv-qualified) non-POD class types (or arrays thereof) with automatic storage duration were considered to be default-initialized when no initializer is used. Scalars and POD types with dynamic storage duration were considered to be not initialized (since C++11, this situation was reclassified as a form of default-initialization).
+}}
+
+===Default-initialization of a const object===
+If a program calls for the default-initialization of an object of a {{rlp|cv|const}}-qualified type {{tt|T}}, T shall be a ''const-default-constructible'' class type or array thereof.
+
+A class type {{tt|T}} is const-default-constructible if default-initialization of {{tt|T}} would invoke a user-provided constructor of {{tt|T}} {{rev inl|since=c++11|(not inherited from a base class)}} or if
+{{rrev multi|until1=c++11|rev1=
+* each direct non-static data member {{tt|M}} of {{tt|T}} is of class type {{tt|X}} (or array thereof), {{tt|X}} is const-default-constructible, and
+* {{tt|T}} has no direct {{rlp|union#Union-like classes|variant members}}, and
+|rev2=
+* each direct non-variant non-static data member {{tt|M}} of {{tt|T}} has a {{rlp|data members#Member initialization|default member initializer}} or, if {{tt|M}} is of class type {{tt|X}} (or array thereof), {{tt|X}} is const-default-constructible,
+* if {{tt|T}} is a union with at least one non-static data member, exactly one {{rlp|union#Union-like classes|variant member}} has a default member initializer,
+* if {{tt|T}} is not a union, for each anonymous union member with at least one non-static data member (if any), exactly one non-static data member has a default member initializer, and
+}}
+each {{rlp|object#Potentially constructed subobjects|potentially constructed}} base class of {{tt|T}} is const-default-constructible.
+
+===Indeterminate and erroneous values===
+{{rev begin}}
+{{rev|until=c++26|
+When storage for an object with automatic or dynamic storage duration is obtained, the object has an ''indeterminate value''.
+
+If no initialization is performed for an object, that object retains an indeterminate value until that value is replaced.
+}}
+{{rev|since=c++26|
+When storage for an object with automatic or dynamic storage duration is obtained, the bytes comprising the storage for the object have the following initial value:
+* If the object has dynamic storage duration, or is the object associated with a variable or {{rlp|function|function parameter}} whose first declaration is marked with {{attr|indeterminate}}, the bytes have ''indeterminate values''.
+* Otherwise, the bytes have ''erroneous values'', where each value is determined by the implementation independently of the state of the program.
+
+If no initialization is performed for an object (including {{rlpsd|object#Subobjects}}), such a byte retains its initial value until that value is replaced.
+* If any bit in the {{rlp|object#Object representation and value representation|value representation}} has an indeterminate value, the object has an ''indeterminate value''.
+* Otherwise, if any bit in the value representation has an erroneous value, the object has an ''erroneous value''.
+}}
+{{rev end}}
+
+If an evaluation produces an indeterminate value, the behavior is {{rlp|ub|undefined}}.
+
+{{rrev|since=c++26|
+If an evaluation produces an erroneous value, the behavior is {{rlp|ub|erroneous}}.
+}}
+
+====Special cases====
+The following types are ''uninitialized-friendly'':&lt;!-- for exposition only, not defined in the standard --&gt;
+{{rrev|since=c++17|
+* {{ltt std|cpp/types/byte}}
+}}
+* {{c/core|unsigned char}}
+* {{c/core|char}}, if its underlying type is {{c/core|unsigned char}}
+
+Given an indeterminate{{rev inl|since=c++26| or erroneous}} value {{c|value}}, the ''uninitialized result value'' of {{c|value}} is:&lt;!-- for exposition only, not defined in the standard --&gt;
+* An indeterminate value, if {{c|value}} is also an indeterminate value.
+{{rrev|since=c++26|
+* {{c|value}}, if {{c|value}} is an erroneous value.
+}}
+
+If an evaluation {{c|eval}} produces an indeterminate{{rev inl|since=c++26| or erroneous}} value {{c|value}} of an uninitialized-friendly type, the behavior is well-defined in the following cases:
+
+* {{c|eval}} is the evaluation of one of the following expressions and operands:
+:* The second or third operand of a {{rlp|operator other#Conditional operator|conditional expression}}.
+:* The right operand of a {{rlp|operator other#Built-in comma operator|comma expression}}.
+:* The operand of an {{rlp|implicit conversion#Integral conversions|integral conversion}}, {{rlp|explicit cast}} or {{rlpt|static_cast}} to an uninitialized-friendly type.
+:* A {{rlp|expressions#Discarded-value expressions|discarded-value expression}}.
+: In this case, the result of the operation is the uninitialized result value of {{c|value}}.
+
+* {{c|eval}} is an evaluation of the right operand of a {{rlp|operator assignment#Built-in simple assignment operator|simple assignment operator}} whose left operand is an lvalue of an uninitialized-friendly type.
+: In this case, the value of the object referred to by the left operand is replaced by the uninitialized result value of {{c|value}}.
+
+* {{c|eval}} is the evaluation of the initialization expression when initializing an object of an uninitialized-friendly type.
+{{rrev|since=c++17|
+:* {{c|value}} cannot be of type {{ltt std|cpp/types/byte}} if the object being initialized is not of type {{ltt std|cpp/types/byte}}.
+}}
+: In this case, that object is initialized to the uninitialized result value of {{c|value}}.
+
+Converting an indeterminate value of an uninitialized-friendly type produces an indeterminate value.
+
+{{rrev|since=c++26|
+Converting an erroneous value of an uninitialized-friendly type produces an erroneous value, the result of the conversion is the value of the converted operand.
+}}
+
+{{source|1=
+// Case 1: Uninitialized objects with dynamic storage duration
+// All C++ versions: indeterminate value + undefined behavior
+int f(bool b)
+{
+    unsigned char* c = new unsigned char;
+    unsigned char d = *c; // OK, “d” has an indeterminate value
+    int e = d;            // undefined behavior
+    return b ? d : 0;     // undefined behavior if “b” is true
+}
+
+// Case 2: Uninitialized objects with automatic storage duration
+// until C++26: indeterminate value + undefined behavior
+// since C++26: erroneous value + erroneous behavior
+int g(bool b)
+{
+    unsigned char c;     // “c” has an indeterminate/erroneous value
+    
+    unsigned char d = c; // no undefined/erroneous behavior,
+                         // but “d” has an indeterminate/erroneous value
+    
+    assert(c == d);      // holds, but both integral promotions have
+                         // undefined/erroneous behavior
+    
+    int e = d;           // undefined/erroneous behavior
+    return b ? d : 0;    // undefined/erroneous behavior if “b” is true
+}
+
+// Same as case 2
+void h()
+{
+    int d1, d2;  // “d1” and “d2” have indeterminate/erroneous values
+    int e1 = d1; // undefined/erroneous behavior
+    int e2 = d1; // undefined/erroneous behavior
+    
+    assert(e1 == e2); // holds
+    assert(e1 == d1); // holds, undefined/erroneous behavior
+    assert(e2 == d1); // holds, undefined/erroneous behavior
+    
+    // no undefined/erroneous behavior,
+    // but “d2” has an indeterminate/erroneous value
+    std::memcpy(&amp;d2, &amp;d1, sizeof(int));
+    
+    assert(e1 == d2); // holds, undefined/erroneous behavior
+    assert(e2 == d2); // holds, undefined/erroneous behavior
+}
+}}
+
+===Notes===
+References and const scalar objects cannot be default-initialized.
+
+{{feature test macro|value=201907L|std=C++20|__cpp_constexpr|Trivial default-initialization and {{rlp|asm|asm-declaration}} in {{c/core|constexpr}} functions}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;string&gt;
+
+struct T1 { int mem; };
+
+struct T2
+{
+    int mem;
+    T2() {} // “mem” is not in the initializer list
+};
+
+int n; // static non-class, a two-phase initialization is done:
+       // 1) zero-initialization initializes n to zero
+       // 2) default-initialization does nothing, leaving n being zero
+
+int main()
+{
+    [[maybe_unused]]
+    int n;            // non-class, the value is indeterminate
+    std::string s;    // class, calls default constructor, the value is ""
+    std::string a[2]; // array, default-initializes the elements, the value is {"", ""}
+//  int&amp; r;           // Error: a reference
+//  const int n;      // Error: a const non-class
+//  const T1 t1;      // Error: const class with implicit default constructor
+    [[maybe_unused]]
+    T1 t1;            // class, calls implicit default constructor
+    const T2 t2;      // const class, calls the user-provided default constructor
+                      // t2.mem is default-initialized
+}
+|output=
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=178|std=C++98|before=there was no value-initialization;&lt;br&gt;empty initializer invoked default-initialization&lt;br&gt;(though {{c|new T()}} also performs zero-initialization)|after=empty initializer invokes&lt;br&gt;value-initialization}}
+{{dr list item|wg=cwg|dr=253|std=C++98|before=default-initialization of a const object could not&lt;br&gt;call an implicitly declared default constructor|after=allowed if all subobjects are initialized}}
+{{dr list item|wg=cwg|dr=616|std=C++98|before=lvalue to rvalue conversion of any&lt;br&gt;uninitialized object was always UB|after=indeterminate {{c/core|unsigned char}} is allowed}}
+{{dr list item|wg=cwg|dr=1787|std=C++98|before=read from an indeterminate {{c/core|unsigned char}}&lt;br&gt;cached in a register was UB|after=made well-defined}}
+{{dr list end}}
+
+===See also===
+* {{rlp|converting constructor}}
+* {{rlp|default constructor}}
+* {{rlpt|explicit}}
+* {{rlp|initialization}}
+** {{rlp|aggregate initialization}}
+** {{rlp|constant initialization}}
+** {{rlp|copy initialization|copy-initialization}}
+** {{rlp|direct initialization|direct-initialization}}
+** {{rlp|list initialization|list-initialization}}
+** {{rlp|reference initialization}}
+** {{rlp|value initialization|value-initialization}}
+** {{rlp|zero initialization|zero-initialization}}
+* {{rlpt|new}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

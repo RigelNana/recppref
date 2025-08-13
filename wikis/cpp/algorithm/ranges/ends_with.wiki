@@ -1,0 +1,147 @@
+{{cpp/ranges/title|ends_with}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++23|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires (std::forward_iterator&lt;I1&gt; {{!!}} std::sized_sentinel_for&lt;S1, I1&gt;) &amp;&amp;
+         (std::forward_iterator&lt;I2&gt; {{!!}} std::sized_sentinel_for&lt;S2, I2&gt;) &amp;&amp;
+         std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr bool ends_with( I1 first1, S1 last1,
+                          I2 first2, S2 last2, Pred pred = {},
+                          Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcla|num=2|since=c++23|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires (ranges::forward_range&lt;R1&gt; {{!!}} ranges::sized_range&lt;R1&gt;) &amp;&amp;
+         (ranges::forward_range&lt;R2&gt; {{!!}} ranges::sized_range&lt;R2&gt;) &amp;&amp;
+         std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                    ranges::iterator_t&lt;R2&gt;,
+                                    Pred, Proj1, Proj2&gt;
+constexpr bool ends_with( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                          Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+Checks whether the second range matches the suffix of the first range.
+
+@1@ Let {{c|N1}} be {{c|ranges::distance(first1, last1)}} and {{c|N2}} be {{c|ranges::distance(first2, last2)}}:
+* If {{c|N1 &lt; N2}} is {{c|true}}, returns {{c|false}}.
+* Otherwise, returns {{c multi|ranges::equal(std::move(first1) + (N1 - N2), last1,|              std::move(first2), last2, pred, proj1, proj2)}}.
+
+@2@ Let {{c|N1}} be {{c|ranges::distance(r1)}} and {{c|N2}} be {{c|ranges::distance(r2)}}.
+* If {{c|N1 &lt; N2}} is {{c|true}}, returns {{c|false}}.
+* Otherwise, returns {{c multi|ranges::equal(views::drop(ranges::ref_view(r1),|                          N1 - static_cast&lt;decltype(N1)&gt;(N2)),|              r2, pred, proj1, proj2)}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the range of elements to examine}}
+{{par|r1|the range of elements to examine}}
+{{par|first2, last2|the range of elements to be used as the suffix}}
+{{par|r2|the range of elements to be used as the suffix}}
+{{par|pred|the binary predicate that compares the projected elements}}
+{{par|proj1|the projection to apply to the elements of the range to examine}}
+{{par|proj2|the projection to apply to the elements of the range to be used as the suffix}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the second range matches the suffix of the first range, {{c|false}} otherwise.
+
+===Complexity===
+Generally linear: at most {{mathjax-or|\(\scriptsize \min(N1,N2) \)|min(N1,N2)}} applications of the predicate and both projections. The predicate and both projections are not applied if {{c|N1 &lt; N2}} is {{c|true}}.
+
+If both {{c|N1}} and {{c|N2}} can be calculated in constant time (i.e. both iterator-sentinel type pairs model {{lconcept|sized_sentinel_for}}, or both range types model {{lconcept|sized_range}}) and {{c|N1 &lt; N2}} is {{c|true}}, the time complexity is constant.
+
+===Possible implementation===
+{{eq fun|1=
+struct ends_with_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires (std::forward_iterator&lt;I1&gt; {{!!}} std::sized_sentinel_for&lt;S1, I1&gt;) &amp;&amp;
+             (std::forward_iterator&lt;I2&gt; {{!!}} std::sized_sentinel_for&lt;S2, I2&gt;) &amp;&amp;
+             std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr bool operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        const auto n1 = ranges::distance(first1, last1);
+        const auto n2 = ranges::distance(first2, last2);
+        if (n1 &lt; n2)
+            return false;
+        ranges::advance(first1, n1 - n2);
+        return ranges::equal(std::move(first1), last1,
+                             std::move(first2), last2,
+                             pred, proj1, proj2);
+    }
+    
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires (ranges::forward_range&lt;R1&gt; {{!!}} ranges::sized_range&lt;R1&gt;) &amp;&amp;
+             (ranges::forward_range&lt;R2&gt; {{!!}} ranges::sized_range&lt;R2&gt;) &amp;&amp;
+             std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                        ranges::iterator_t&lt;R2&gt;,
+                                        Pred, Proj1, Proj2&gt;
+    constexpr bool operator()(R1&amp;&amp; r1, R2&amp;&amp; r2,
+                              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        const auto n1 = ranges::distance(r1);
+        const auto n2 = ranges::distance(r2);
+        if (n1 &lt; n2)
+            return false;
+        return ranges::equal(views::drop(ranges::ref_view(r1),
+                                         n1 - static_cast&lt;decltype(n1)&gt;(n2)),
+                             r2, pred, proj1, proj2);
+    }
+};
+
+inline constexpr ends_with_fn ends_with{};
+}}
+
+===Notes===
+{{feature test macro|__cpp_lib_ranges_starts_ends_with|std=C++23|value=202106L|{{lc|std::ranges::starts_with}}, {{tt|std::ranges::ends_with}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+
+static_assert
+(
+    ! std::ranges::ends_with("for", "cast") &amp;&amp;
+    std::ranges::ends_with("dynamic_cast", "cast") &amp;&amp;
+    ! std::ranges::ends_with("as_const", "cast") &amp;&amp;
+    std::ranges::ends_with("bit_cast", "cast") &amp;&amp;
+    ! std::ranges::ends_with("to_underlying", "cast") &amp;&amp;
+    std::ranges::ends_with(std::array{1, 2, 3, 4}, std::array{3, 4}) &amp;&amp;
+    ! std::ranges::ends_with(std::array{1, 2, 3, 4}, std::array{4, 5})
+);
+
+int main() {}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=4105|std=C++23|before=overload {{vl|2}} calculated the size&lt;br&gt;difference by {{c|N1 - N2}}&lt;ref&gt;Its result might be of an [[cpp/iterator/is-integer-like|integer-class type]], in this case {{lc|ranges::drop_view}} cannot be constructed.&lt;/ref&gt;|after=changed to&lt;br&gt;{{c|N1 - static_cast&lt;decltype(N1)&gt;(N2)}}}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc starts_with}}
+{{dsc inc|cpp/string/basic_string/dsc ends_with}}
+{{dsc inc|cpp/string/basic_string_view/dsc ends_with}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

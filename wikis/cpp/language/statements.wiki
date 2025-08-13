@@ -1,0 +1,308 @@
+{{title|Statements}}
+{{cpp/language/statements/navbar}}
+
+''Statements'' are fragments of the C++ program that are executed in sequence. The body of any function is a sequence of statements. For example:
+
+{{source|1=
+int main()
+{
+    int n = 1;                        // declaration statement
+    n = n + 1;                        // expression statement
+    std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; '\n'; // expression statement
+    return 0;                         // return statement
+}
+}}
+
+C++ includes the following types of statements:
+@1@ labeled statements;
+@2@ expression statements;
+@3@ compound statements;
+@4@ selection statements;
+@5@ iteration statements;
+@6@ jump statements;
+@7@ declaration statements;
+@8@ try blocks;
+@9@ atomic and synchronized blocks {{mark since tm ts}}.
+
+===Labeled statements===
+A labeled statement labels a statement for control flow purposes.
+
+{{sdsc begin}}
+{{sdsc|
+{{spar|label statement}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|label}}|the label applied to the statement (defined below)}}
+{{par|{{spar|statement}}|the statement which the label applies to, it can be a labeled statement itself, allowing multiple labels}}
+{{par end}}
+
+====Labels====
+{{spar|label}} is defined as
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{spar|identifier}} {{ttb|:}}
+}}
+{{sdsc|num=2|
+{{spar optional|attr}} {{ttb|case}} {{spar|constexpr}} {{ttb|:}}
+}}
+{{sdsc|num=3|
+{{spar optional|attr}} {{ttb|default:}}
+}}
+{{sdsc end}}
+
+@1@ target for {{rlp|goto}};
+@2@ {{c/core|case}} label in a {{rlp|switch}} statement;
+@3@ {{c/core|default}} label in a {{rlp|switch}} statement.
+
+{{rrev|since=c++11|
+An {{rlp|attributes|attribute}} sequence {{spar|attr}} may appear just at the beginning of the label (in which case it applies to the label), or just before any statement itself, in which case it applies to the entire statement.
+}}
+
+A label with an identifier declared inside a function matches all goto statements with the same identifier in that function, in all nested blocks, before and after its own declaration.
+
+Two labels in a function must not have the same identifier.
+
+{{rrev|since=c++23|
+Besides being added to a statement, labels can also be used anywhere in [[#Compound statements|compound statements]].
+}}
+
+Labels are not found by {{rlp|unqualified lookup}}: a label can have the same name as any other entity in the program.
+
+{{source|
+void f()
+{
+    {
+        goto label; // label in scope even though declared later
+        label:      // label can appear at the end of a block standalone since C++23
+    }
+    goto label; // label ignores block scope
+}
+
+void g()
+{
+    goto label; // error: label not in scope in g()
+}
+}}
+
+====Control-flow-limited statements====
+The following statements are ''control-flow-limited statements''{{sep}}:
+* The {{spar|compound-statement}} of a {{rlp|try|{{c/core|try}} block}}.
+* The {{spar|compound-statement}} of a {{rlp|catch|handler}}.
+{{rev begin}}
+{{rev|since=c++17|
+* All [[#Substatements|substatements]] of a {{rlp|if#Constexpr if|constexpr {{c/core|if}} statement}}.
+}}
+{{rev|since=c++23|
+* All substatements of a {{rlp|if#Consteval if|consteval {{c/core|if}} statement}}.
+}}
+{{rev end}}
+
+For each control-flow-limited statement {{tt|S}}:
+* All {{c/core|goto}} target labels delcared in {{tt|S}} can only be referred to by statements in {{tt|S}}.
+* Each {{c/core|case}} or {{c/core|default}} label appearing within {{tt|S}} can only be associated with a {{rlp|switch|{{c/core|switch}} statement}} within {{tt|S}}.
+
+===Expression statements===
+An expression statement is an expression followed by a semicolon.
+
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|attr}} {{spar optional|expression}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} optional sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|expression}}|an {{rlp|expressions|expression}}}}
+{{par end}}
+
+Most statements in a typical C++ program are expression statements, such as assignments or function calls.
+
+An expression statement without an expression is called a ''null statement''. It is often used to provide an empty body to a {{rlp|for}} or {{rlp|while}} loop. {{rev inl|until=c++23|It can also be used to carry a label in the end of a compound statement.}}
+
+===Compound statements===
+A compound statement or ''block'' groups a sequence of statements into a single statement.
+
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|attr}} {{ttb|{}} {{spar optional|statement...}} {{spar optional|label...}}{{mark since c++23}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+When one statement is expected, but multiple statements need to be executed in sequence (for example, in an {{rlp|if}} statement or a loop), a compound statement may be used:
+
+{{source|1=
+if (x &gt; 5)          // start of if statement
+{                   // start of block
+    int n = 1;      // declaration statement
+    std::cout &lt;&lt; n; // expression statement
+}                   // end of block, end of if statement
+}}
+
+Each compound statement introduces its own block {{rlp|scope}}; variables declared inside a block are destroyed at the closing brace in reverse order:
+
+{{source|
+int main()
+{ // start of outer block
+    {                                // start of inner block
+        std::ofstream f("test.txt"); // declaration statement
+        f &lt;&lt; "abc\n";                // expression statement
+    }                                // end of inner block, f is flushed and closed
+    std::ifstream f("test.txt"); // declaration statement
+    std::string str;             // declaration statement
+    f &gt;&gt; str;                    // expression statement
+} // end of outer block, str is destroyed, f is closed
+}}
+
+{{rrev|since=c++23|
+A [[#Labeled statements|label]] at the end of a compound statement is treated as if it were followed by a null statement.
+}}
+
+===Selection statements===
+A selection statement chooses between one of several control flows.
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|if constexpr}}{{mark optional}} {{ttb|(}} {{spar optional|init-statement}} {{spar|condition}} {{ttb|)}} {{spar|statement}}
+}}
+{{sdsc|num=2|
+{{spar optional|attr}} {{ttb|if constexpr}}{{mark optional}} {{ttb|(}} {{spar optional|init-statement}} {{spar|condition}} {{ttb|)}} {{spar|statement}}&lt;br&gt;{{nbspt|4}}{{ttb|else}} {{spar|statement}}
+}}
+{{sdsc|num=3|
+{{spar optional|attr}} {{ttb|switch (}} {{spar optional|init-statement}} {{spar|condition}} {{ttb|)}} {{spar|statement}} 
+}}
+{{sdsc|num=4|notes={{mark since c++23}}|
+{{spar optional|attr}} {{ttb|if !}}{{mark optional}} {{ttb|consteval}} {{spar|compound-statement}}
+}}
+{{sdsc|num=5|notes={{mark since c++23}}|
+{{spar optional|attr}} {{ttb|if !}}{{mark optional}} {{ttb|consteval}} {{spar|compound-statement}} {{ttb|else}} {{spar|statement}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|if}} statement;
+@2@ {{rlp|if}} statement with an else clause;
+@3@ {{rlp|switch}} statement;
+@4@ {{rlp|if#Consteval if|consteval if}} statement;
+@5@ {{rlp|if#Consteval if|consteval if}} statement with an else clause.
+
+===Iteration statements===
+An iteration statement repeatedly executes some code.
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|while (}} {{spar|condition}} {{ttb|)}} {{spar|statement}}
+}}
+{{sdsc|num=2|
+{{spar optional|attr}} {{ttb|do}} {{spar|statement}} {{ttb|while (}} {{spar|expression}} {{ttb|)}} {{ttb|;}} 
+}}
+{{sdsc|num=3|
+{{spar optional|attr}} {{ttb|for (}} {{spar optional|init-statement condition}} {{ttb|;}} {{spar optional|expression}} {{ttb|)}} {{spar|statement}}
+}}
+{{sdsc|num=4|notes={{mark since c++11}}|
+{{spar optional|attr}} {{ttb|for}}&lt;br&gt;{{nbspt|4}}{{ttb|(}} {{spar optional|init-statement}}{{mark since c++20}} {{spar|for-range-decl}} {{ttb|:}} {{spar|for-range-init}} {{ttb|)}} {{spar|statement}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|while}} loop;
+@2@ {{rlp|do|do-while}} loop;
+@3@ {{rlp|for|for}} loop;
+@4@ {{rlp|range-for|range for}} loop.
+
+===Jump statements===
+A jump statement unconditionally transfers control flow.
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|break;}}
+}}
+{{sdsc|num=2|
+{{spar optional|attr}} {{ttb|continue;}}
+}}
+{{sdsc|num=3|
+{{spar optional|attr}} {{ttb|return}} {{spar optional|expression}} {{ttb|;}}
+}}
+{{sdsc|num=4|notes={{mark since c++11}}|
+{{spar optional|attr}} {{ttb|return}} {{spar|braced-init-list}} {{ttb|;}}
+}}
+{{sdsc|num=5|
+{{spar optional|attr}} {{ttb|goto}} {{spar|identifier}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|break}} statement;
+@2@ {{rlp|continue}} statement;
+@3@ {{rlp|return}} statement with an optional expression;
+@4@ {{rlp|return}} statement using {{rlp|list initialization}};
+@5@ {{rlp|goto}} statement.
+
+Note: for all jump statements, transfer out of a loop, out of a block, or back past an initialized variable with automatic storage duration involves the destruction of objects with automatic storage duration that are in scope at the point transferred from but not at the point transferred to. If multiple objects were initialized, the order of destruction is the opposite of the order of initialization.
+
+===Declaration statements===
+A declaration statement introduces one or more identifiers into a block.
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|block-declaration}}
+}}
+{{sdsc end}}
+
+@1@ See {{rlp|declarations|Declarations}} and {{rlp|initialization|Initialization}} for details.
+
+==={{c/core|try}} blocks===
+A {{c/core|try}} block catches exceptions thrown when executing other statements.
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|try}} {{spar|compound-statement handler-sequence}}
+}}
+{{sdsc end}}
+
+@1@ See {{rlp|try|{{c/core|try}} block}} for details.
+
+
+{{rrev|since=tm_ts|
+===Atomic and synchronized blocks===
+An atomic and synchronized block provides {{rlp|transactional memory}}.
+
+{{sdsc begin}}
+{{sdsc|num=1|notes={{mark since tm ts}}|
+{{ttb|synchronized}} {{spar|compound-statement}}
+}}
+{{sdsc|num=2|notes={{mark since tm ts}}|
+{{ttb|atomic_noexcept}} {{spar|compound-statement}}
+}}
+{{sdsc|num=3|notes={{mark since tm ts}}|
+{{ttb|atomic_cancel}} {{spar|compound-statement}}
+}}
+{{sdsc|num=4|notes={{mark since tm ts}}|
+{{ttb|atomic_commit}} {{spar|compound-statement}}
+}}
+{{sdsc end}}
+@1@ {{rlp|transactional memory#Synchronized blocks|synchronized block}}, executed in single total order with all synchronized blocks;
+@2@ {{rlp|transactional memory#Atomic blocks|atomic block}} that aborts on exceptions;
+@3@ {{rlp|transactional memory#Atomic blocks|atomic block}} that rolls back on exceptions;
+@4@ {{rlp|transactional memory#Atomic blocks|atomic block}} that commits on exceptions.
+}}
+
+===Substatements===&lt;!-- CWG 2309 --&gt;
+A ''substatement'' of a statement is one of the following:
+* For a [[#Labeled statements|labeled statement]], its {{spar sep|statement}}.
+* For a [[#Compound statements|compound statement]], any statement of its {{spar sep|statement...}}.
+* For a [[#Selection statements|selection statement]], any of its {{spar sep|statement}}{{rev inl|since=c++23| or {{spar sep|compound-statement}}}}.
+* For an [[#Iteration statements|iteration statement]], its {{spar sep|statement}}.
+
+A statement {{c|S1}} ''encloses'' a statement {{c|S2}} if any of the following conditions is satisfied:
+* {{c|S2}} is a substatement of {{c|S1}}
+* {{c|S1}} is a selection statement or iteration statement, and {{c|S2}} is the {{spar|init-statement}} of {{c|S1}}.
+* {{c|S1}} is a {{rlp|try|{{c/core|try}} block}}, and {{c|S2}} is either its {{spar|compound-statement}} or the {{spar|compound-statement}} of any {{rlp|catch|handler}} in its {{spar sep|handler-seq}}.
+* {{c|S1}} encloses a statement {{c|S3}} and {{c|S3}} encloses {{c|S2}}.
+
+A statement {{c|S1}} is ''enclosed by'' a statement {{c|S2}} if {{c|S2}} encloses {{c|S1}}.
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/statements|Statements|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

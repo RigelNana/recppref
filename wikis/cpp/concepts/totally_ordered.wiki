@@ -1,0 +1,103 @@
+{{cpp/title|totally_ordered|totally_ordered_with}}
+{{cpp/concepts/navbar}}
+{{dcl begin}}
+{{dcl header|concepts}}
+{{dcl|since=c++20|num=1|1=
+template&lt; class T &gt;
+concept totally_ordered =
+    std::equality_comparable&lt;T&gt; &amp;&amp; __PartiallyOrderedWith&lt;T, T&gt;;
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class T, class U &gt;
+concept totally_ordered_with =
+    std::totally_ordered&lt;T&gt; &amp;&amp;
+    std::totally_ordered&lt;U&gt; &amp;&amp;
+    std::equality_comparable_with&lt;T, U&gt; &amp;&amp;
+    std::totally_ordered&lt;
+        std::common_reference_t&lt;
+            const std::remove_reference_t&lt;T&gt;&amp;,
+            const std::remove_reference_t&lt;U&gt;&amp;&gt;&gt; &amp;&amp;
+    __PartiallyOrderedWith&lt;T, U&gt;;
+}}
+{{dcl h|Helper concepts}}
+{{dcl|notes={{mark expos}}|num=3|1=
+template&lt; class T, class U &gt;
+concept __PartiallyOrderedWith =
+    requires(const std::remove_reference_t&lt;T&gt;&amp; t,
+             const std::remove_reference_t&lt;U&gt;&amp; u) {
+        { t &lt;  u } -&gt; boolean-testable;
+        { t &gt;  u } -&gt; boolean-testable;
+        { t &lt;= u } -&gt; boolean-testable;
+        { t &gt;= u } -&gt; boolean-testable;
+        { u &lt;  t } -&gt; boolean-testable;
+        { u &gt;  t } -&gt; boolean-testable;
+        { u &lt;= t } -&gt; boolean-testable;
+        { u &gt;= t } -&gt; boolean-testable;
+    };
+}}
+{{dcl end}}
+
+@1@ The concept {{tt|std::totally_ordered}} specifies that the comparison operators {{tt|1===,!=,&lt;,&gt;,&lt;=,&gt;=}} on a type yield results consistent with a {{enwiki|Total order#Strict and non-strict total orders|strict total order}} on the type.
+
+@2@ The concept {{tt|std::totally_ordered_with}} specifies that the comparison operators {{tt|1===,!=,&lt;,&gt;,&lt;=,&gt;=}} on (possibly mixed) {{tt|T}} and {{tt|U}} operands yield results consistent with a strict total order. Comparing mixed operands yields results equivalent to comparing the operands converted to their common type.
+
+@3@ The exposition-only concept {{tti|__PartiallyOrderedWith}} specifies that a value of type {{tt|T}} and a value of type {{tt|U}} can be compared in a partial order with each other (in either order) using {{tt|&lt;}}, {{tt|&gt;}}, {{tt|1=&lt;=}}, and {{tt|1=&gt;=}}, and the results of the comparisons are consistent.
+
+===Semantic requirements===
+These concepts are modeled only if they are satisfied and all concepts they subsume are modeled.
+
+@1@ {{c|std::totally_ordered&lt;T&gt;}} is modeled only if, given lvalues {{tt|a}}, {{tt|b}} and {{tt|c}} of type {{c|const std::remove_reference_t&lt;T&gt;}}:
+* Exactly one of {{c|bool(a &lt; b)}}, {{c|bool(a &gt; b)}} and {{c|1=bool(a == b)}} is {{c|true}};
+* If {{c|bool(a &lt; b)}} and {{c|bool(b &lt; c)}} are both {{c|true}}, then {{c|bool(a &lt; c)}} is {{c|true}};
+* {{c|1=bool(a &gt; b) == bool(b &lt; a)}}
+* {{c|1=bool(a &gt;= b) == !bool(a &lt; b)}}
+* {{c|1=bool(a &lt;= b) == !bool(b &lt; a)}}
+
+@2@ {{c|std::totally_ordered_with&lt;T, U&gt;}} is modeled only if, given
+* {{tt|t}} and {{tt|t2}}, lvalues denoting distinct equal objects of types {{c|const std::remove_reference_t&lt;T&gt;}} and {{c|std::remove_reference_t&lt;T&gt;}} respectively, and
+* {{tt|u}} and {{tt|u2}}, lvalues denoting distinct equal objects of types {{c|const std::remove_reference_t&lt;U&gt;}} and {{c|std::remove_reference_t&lt;U&gt;}} respectively,
+let {{tt|C}} be {{c|std::common_reference_t&lt;const std::remove_reference_t&lt;T&gt;&amp;, const std::remove_reference_t&lt;U&gt;&amp;&gt;}}, and, given an expression {{tt|E}} and a type {{tt|C}}, let {{c|CONVERT_TO&lt;C&gt;(E)}} be:
+{{rrev multi|rev1=
+* {{c|static_cast&lt;C&gt;(std::as_const(E))}}.
+|since2=c++23|rev2=
+* {{c|static_cast&lt;const C&amp;&gt;(std::as_const(E))}} if that is a valid expression,
+* {{c|static_cast&lt;const C&amp;&gt;(std::move(E))}} otherwise.
+}}
+the following are true: 
+* {{c|1=bool(t &lt; u) == bool(CONVERT_TO&lt;C&gt;(t2) &lt; CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(t &gt; u) == bool(CONVERT_TO&lt;C&gt;(t2) &gt; CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(t &lt;= u) == bool(CONVERT_TO&lt;C&gt;(t2) &lt;= CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(t &gt;= u) == bool(CONVERT_TO&lt;C&gt;(t2) &gt;= CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(u &lt; t) == bool(CONVERT_TO&lt;C&gt;(u2) &lt; CONVERT_TO&lt;C&gt;(t2))}}
+* {{c|1=bool(u &gt; t) == bool(CONVERT_TO&lt;C&gt;(u2) &gt; CONVERT_TO&lt;C&gt;(t2))}}
+* {{c|1=bool(u &lt;= t) == bool(CONVERT_TO&lt;C&gt;(u2) &lt;= CONVERT_TO&lt;C&gt;(t2))}}
+* {{c|1=bool(u &gt;= t) == bool(CONVERT_TO&lt;C&gt;(u2) &gt;= CONVERT_TO&lt;C&gt;(t2))}}
+
+@3@ {{c|__PartiallyOrderedWith&lt;T, U&gt;}} is modeled only if given
+* any lvalue {{tt|t}} of type {{c|const std::remove_reference_t&lt;T&gt;}}, and
+* any lvalue {{tt|u}} of type {{c|const std::remove_reference_t&lt;U&gt;}},
+the following are true:
+* {{c|t &lt; u}}, {{c|1=t &lt;= u}}, {{c|t &gt; u}}, {{c|1=t &gt;= u}}, {{c|1=u &lt; t}}, {{c|1=u &lt;= t}}, {{c|u &gt; t}}, and {{c|1=u &gt;= t}} have the same domain;
+* {{c|1=bool(t &lt; u) == bool(u &gt; t)}};
+* {{c|1=bool(u &lt; t) == bool(t &gt; u)}};
+* {{c|1=bool(t &lt;= u) == bool(u &gt;= t)}}; and
+* {{c|1=bool(u &lt;= t) == bool(t &gt;= u)}}.
+
+{{cpp/concepts/equality preservation}}
+
+{{cpp/concepts/implicit expression variations}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=18.5.5|title=Concept {{tt|totally_ordered}}|id=concept.totallyordered}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=18.5.4|title=Concept {{tt|totally_ordered}}|id=concept.totallyordered}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/compare/dsc three_way_comparable}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

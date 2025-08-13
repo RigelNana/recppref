@@ -1,0 +1,109 @@
+{{cpp/title|atomic_fetch_sub|atomic_fetch_sub_explicit}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_sub( std::atomic&lt;T&gt;* obj,
+                    typename std::atomic&lt;T&gt;::difference_type arg ) noexcept;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_sub( volatile std::atomic&lt;T&gt;* obj,
+                    typename std::atomic&lt;T&gt;::difference_type arg ) noexcept;
+}}
+{{dcl|num=3|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_sub_explicit( std::atomic&lt;T&gt;* obj, 
+                             typename std::atomic&lt;T&gt;::difference_type arg, 
+                             std::memory_order order ) noexcept;
+}}
+{{dcl|num=4|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_sub_explicit( volatile std::atomic&lt;T&gt;* obj,
+                             typename std::atomic&lt;T&gt;::difference_type arg, 
+                             std::memory_order order ) noexcept;
+}}
+{{dcl end}}
+
+Performs atomic subtraction. Atomically subtracts {{c|arg}} from the value pointed to by {{c|obj}} and returns the value {{c|obj}} held previously. The operation is performed as if the following was executed:
+@1,2@ {{c|obj-&gt;fetch_sub(arg)}}
+@3,4@ {{c|obj-&gt;fetch_sub(arg, order)}}
+
+If {{tt|std::atomic&lt;T&gt;}} has no {{tt|fetch_sub}} member (this member is only provided for {{rlp|atomic#Specializations for integral types|integral}}{{rev inl|since=c++20|, {{rlp|atomic#Specializations for floating-point types|floating-point}}}} and {{rlp|atomic#Partial specializations|pointer}} types except {{c/core|bool}}), the program is ill-formed.
+
+===Parameters===
+{{par begin}}
+{{par|obj|pointer to the atomic object to modify}}
+{{par|arg|the value to subtract from the value stored in the atomic object}}
+{{par|order|the memory synchronization ordering}}
+{{par end}} 
+
+===Return value===
+The value immediately preceding the effects of this function in the {{lsd|cpp/atomic/memory order#Modification order}} of {{c|*obj}}.
+
+===Example===
+{{example
+|Multiple threads may use {{tt|std::atomic_fetch_sub}} to concurrently process an indexed container.
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+const int N = 50;
+std::atomic&lt;int&gt; cnt;
+std::vector&lt;int&gt; data(N);
+
+void reader(int id) 
+{
+    for (;;)
+    {
+        int idx = atomic_fetch_sub_explicit(&amp;cnt, 1, std::memory_order_relaxed);
+        if (idx &gt;= 0)
+            std::cout &lt;&lt; "reader " &lt;&lt; std::to_string(id) &lt;&lt; " processed item "
+                      &lt;&lt; std::to_string(data[idx]) &lt;&lt; '\n';
+        else
+        {
+            std::cout &lt;&lt; "reader " &lt;&lt; std::to_string(id) &lt;&lt; " done\n";
+            break;
+        }
+    }
+}
+
+int main()
+{
+    std::iota(data.begin(), data.end(), 1);
+    cnt = data.size() - 1;
+    
+    std::vector&lt;std::thread&gt; v;
+    for (int n = 0; n &lt; 5; ++n)
+        v.emplace_back(reader, n);
+    for (auto&amp; t : v)
+        t.join();
+}
+|output=
+reader 2 processed item 50
+reader 1 processed item 44
+reader 4 processed item 46
+&lt;....&gt;
+reader 0 done
+reader 4 done
+reader 3 done
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|std=C++11|paper=P0558R1|before=exact type match was required because&lt;br&gt;{{tt|T}} was deduced from multiple arguments|after={{tt|T}} is only deduced&lt;br&gt;from {{c|obj}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_sub|mem=std::atomic&lt;T&gt;}}
+{{dsc inc|cpp/atomic/dsc atomic_fetch_add}}
+{{dsc see c|c/atomic/atomic_fetch_sub|atomic_fetch_sub|atomic_fetch_sub_explicit}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

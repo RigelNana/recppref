@@ -1,0 +1,106 @@
+{{cpp/locale/time_get/title|get_time|do_get_time}}
+{{cpp/locale/time_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type get_time( iter_type beg, iter_type end, std::ios_base&amp; str,
+                    std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual iter_type do_get_time( iter_type beg, iter_type end, std::ios_base&amp; str,
+                               std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl end}}
+
+@1@ Public member function, calls the protected virtual member function {{tt|do_get_time}} of the most derived class.
+@2@ Reads successive characters from the sequence {{range|beg|end}} and parses out the time value following the same rules as the format specifier {{c|"%H:%M:%S"}} as used by the functions {{lc|std::get_time}}, {{l2tt|cpp/locale/time_get/get}}, and the POSIX function {{tt|strptime()}}.
+
+:: The parsed time is stored in the corresponding fields of the {{lc|std::tm}} structure pointed to by the argument {{c|t}}.
+
+:: If the end iterator is reached before a valid time is read, the function sets {{lc|std::ios_base::eofbit}} in {{c|err}}. If a parsing error is encountered, the function sets {{lc|std::ios_base::failbit}} in {{c|err}}.
+
+===Parameters===
+{{par begin}}
+{{par|beg|iterator designating the start of the sequence to parse}}
+{{par|end|one past the end iterator for the sequence to parse}}
+{{par|str|a stream object that this function uses to obtain locale facets when needed, e.g. {{lc|std::ctype}} to skip whitespace}}
+{{par|err|stream error flags object that is modified by this function to indicate errors}}
+{{par|t|pointer to the {{lc|std::tm}} object that will hold the result of this function call}}
+{{par end}}
+
+===Return value===
+Iterator pointing one past the last character in {{range|beg|end}} that was recognized as a part of a valid date.
+
+===Notes===
+For the alphabetic components of the default time format (if any), this function is usually case-insensitive.
+
+If a parsing error is encountered, most implementations of this function leave {{c|*t}} unmodified.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+
+void try_get_time(const std::string&amp; s)
+{
+    std::cout &lt;&lt; "Parsing the time out of '" &lt;&lt; s
+              &lt;&lt; "' in the locale " &lt;&lt; std::locale().name() &lt;&lt; '\n';
+    std::istringstream str(s);
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    
+    std::tm t;
+    std::time_get&lt;char&gt; const&amp; facet =
+        std::use_facet&lt;std::time_get&lt;char&gt;&gt;(str.getloc());
+    std::istreambuf_iterator&lt;char&gt; ret =
+        facet.get_time({str}, {}, str, err, &amp;t);
+    str.setstate(err);
+    
+    if (str)
+    {
+        std::cout &lt;&lt; "Hours: " &lt;&lt; t.tm_hour &lt;&lt; ", "
+                     "Minutes: " &lt;&lt; t.tm_min  &lt;&lt; ", "
+                     "Seconds: " &lt;&lt; t.tm_sec  &lt;&lt; '\n';
+    }
+    else
+    {
+        std::cout &lt;&lt; "Parse failed. Unparsed string: ";
+        std::copy(ret, {}, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+        std::cout &lt;&lt; '\n';
+    }
+}
+
+int main()
+{
+    std::locale::global(std::locale("ru_RU.utf8"));
+    try_get_time("21:40:11");
+    try_get_time("21-40-11");
+    
+    std::locale::global(std::locale("ja_JP.utf8"));
+    try_get_time("21時37分58秒");
+}
+|output=
+Parsing the time out of '21:40:11' in the locale ru_RU.utf8
+Hours: 21, Minutes: 40, Seconds: 11
+Parsing the time out of '21-40-11' in the locale ru_RU.utf8
+Parse failed. Unparsed string: -40-11
+Parsing the time out of '21時37分58秒' in the locale ja_JP.utf8
+Hours: 21, Minutes: 37, Seconds: 58
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=248|std=C++98|before={{tt|eofbit}} was not set upon reaching the end iterator|after=sets {{tt|eofbit}} if a valid time has not been read}}
+{{dr list item|wg=lwg|dr=461|std=C++98|before={{tt|do_get_time}} needed to parse localized time representation|after=parses with {{c|"%H:%M:%S"}} format}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc get_time}}
+{{dsc end}}
+
+{{langlinks|ja|zh}}

@@ -1,0 +1,112 @@
+{{cpp/named req/title|LayoutMapping|notes={{mark since c++23}}}}
+{{cpp/named req/navbar}}
+
+{{named req|LayoutMapping}} controls the mapping of a multidimensional index to a one-dimensional offset to data handle in {{c/core|std::mdspan}}.
+
+===Requirements===
+A type {{tt|M}} satisfies {{named req/core|LayoutMapping}} if it models {{lconcept|copyable}} and {{lconcept|equality_comparable}}, and the following are {{c|true}}:
+* {{c|std::is_nothrow_move_constructible_v&lt;M&gt;}}
+* {{c|std::is_nothrow_move_assignable_v&lt;M&gt;}}
+* {{c|std::is_nothrow_swappable_v&lt;M&gt;}}
+
+And, given the following types and values, the expressions shown in the table below are valid and have the indicated semantics:
+
+====Legend====
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|M}}|a layout mapping class}}
+{{dsc hitem|Value|Definition}}
+{{dsc|{{c|m}}|a value of type (possibly const-qualified) {{tt|M}}}}
+{{dsc|{{c|i}}, {{c|j}}|packs of (possibly const-qualified) integers that are multidimensional indices in {{c|m.extents()}}}}
+{{dsc|{{c|r}}|a (possibly const-qualified) rank index of {{c/core|typename M​::​extents_type}}}}
+{{dsc|{{c|d_r}}|a pack of (possibly const-qualified) integers for which {{c|sizeof...(d_r) {{==}} M​::​extents_type​::​rank()}} is {{c|true}}, the element at rank index {{c|r}} is equal to {{c|1}}, and all other elements are equal to {{c|0}}}}
+{{dsc end}}
+
+====Member types====
+{|class=wikitable
+!Name||Type||Requirements
+|-
+|{{tt|M::extents_type}}||Specialization of class template {{c/core|std::extents}}||
+|-
+|{{tt|M::index_type}}||{{c/core|typename M::extents_type::index_type}}||
+|-
+|{{tt|M::rank_type}}||{{c/core|typename M::extents_type::rank_type}}||
+|-
+|{{tt|M::layout_type}}||Layout mapping policy {{tt|MP}} where {{c/core|typename MP::template mapping&lt;E&gt;}} is {{tt|M}}&lt;br&gt;for some extents type {{tt|E}}||{{named req|LayoutMappingPolicy}} for which {{tt|M}} is mapping type of {{tt|MP}}
+|}
+
+====Member functions and operators====
+&lt;div style="max-width: 100%; overflow-x: scroll;"&gt;
+{|class=wikitable
+!Expression||Return type||Semantics
+|-
+|{{c|m.extents()}}||{{c/core|const typename M​::​extents_type&amp;}}||Returns constant reference to associated multidimensional index space
+|-
+|{{c|m(i...)}}||{{c/core|typename M​::​index_type}}||
+* Returns a nonnegative integer {{c|o}} such that {{c|o &lt; std::numeric_limits&lt;typename M​::​index_type&gt;​::​max()}} and {{c|o &lt;{{=}} std::numeric_limits&lt;std::size_t&gt;​::​max()}} are both {{c|true}}.
+* Such expression is equivalent to {{c|m(static_cast&lt;typename M::index_type&gt;(i)...)}}.
+|-
+|{{c|m.required_span_size()}}||{{c/core|typename M​::​index_type}}||
+* Returns {{c|1}} plus the maximum value of {{c|m(i...)}} for all {{c|i}} if the size of the multidimensional index space {{c|m.extents()}} is not 0. 
+* Otherwise, returns {{c|0}}.
+|-
+|{{c|m.is_unique()}}||{{c/core|bool}}||Returns {{c|true}} only if for every {{c|i}} and {{c|j}} where {{c|(i !{{=}} j {{!!}} ...)}} is {{c|true}}, {{c|m(i...) !{{=}} m(j...)}} is {{c|true}}. &lt;ref group="note"&gt;A mapping can return {{c|false}} even if the condition is met. For certain layouts, it is possibly not feasible to determine efficiently whether the layout is unique.&lt;/ref&gt;
+|-
+|{{c|m.is_exhaustive()}}||{{c/core|bool}}||Returns {{c|true}} only if for all {{c|k}} in the range {{range|0|m.required_span_size()}}, there exists an {{c|i}} such that {{c|m(i...)}} equals {{c|k}}. &lt;ref group="note"&gt;Same as above, but in the case of exhaustive layouts.&lt;/ref&gt;
+|-
+|{{c|m.is_strided()}}||{{c/core|bool}}||Returns {{c|true}} only if for every rank index {{c|r}} of {{c|m.extents()}}, there exists an integer {{c|s_r}} such that, for all {{c|i}} where {{c|(i + d_r)}} is a multidimensional index in {{c|m.extents()}}, {{c|m((i + d_r)...) - m(i...)}} equals {{c|s_r}}. &lt;ref group="note"&gt;Same as above, but in the case of strided layouts.&lt;/ref&gt;
+|-
+|{{c|m.stride(r)}}||{{c/core|typename M​::​index_type}}||
+* The precondition is that {{c|m.is_strided()}} is {{c|true}}.
+* Returns a stride {{c|s_r}} at rank index {{c|r}} as defined in {{c|m.is_strided()}} above. 
+|-
+|{{c|M::is_always_unique()}}||{{c/core|bool}}||
+* Returns {{c|true}} only if {{c|m.is_unique()}} is {{c|true}} for all possible objects {{c|m}} of type {{tt|M}}. &lt;ref group="note"&gt;A mapping can return {{c|false}} even if the condition is met. For certain layout mappings, it is possibly not feasible to determine whether every instance is unique.&lt;/ref&gt;
+* The return value is always a constant expression.
+|-
+|{{c|M::is_always_exhaustive()}}||{{c/core|bool}}||
+* Returns {{c|true}} only if {{c|m.is_exhaustive()}} is {{c|true}} for all possible objects {{c|m}} of type {{tt|M}}. &lt;ref group="note"&gt;Same as above, but in the case of exhaustive instances.&lt;/ref&gt;
+* The return value is always a constant expression.
+|-
+|{{c|M::is_always_strided()}}||{{c/core|bool}}||
+* Returns {{c|true}} only if {{c|m.is_strided()}} is {{c|true}} for all possible objects {{c|m}} of type {{tt|M}}. &lt;ref group="note"&gt;Same as above, but in the case of strided instances.&lt;/ref&gt;
+* The return value is always a constant expression.
+|-
+|}
+&lt;references group="note"/&gt;
+&lt;/div&gt;
+
+===Concept===
+For the constraints uses under {{lc|std::layout_stride::mapping}}, the following exposition-only concept is defined.
+{{ddcla|anchor=layout-mapping-alike|expos=yes|1=
+template&lt; class M &gt;
+concept /*layout-mapping-alike*/ = requires 
+{
+    requires /*is-extents*/&lt;typename M::extents_type&gt;;
+    { M::is_always_strided() }    -&gt; std::same_as&lt;bool&gt;;
+    { M::is_always_exhaustive() } -&gt; std::same_as&lt;bool&gt;;
+    { M::is_always_unique() }     -&gt; std::same_as&lt;bool&gt;;
+    std::bool_constant&lt;M::is_always_strided()&gt;::value;
+    std::bool_constant&lt;M::is_always_exhaustive()&gt;::value;
+    std::bool_constant&lt;M::is_always_unique()&gt;::value;
+};
+}}
+
+Defines the minimal usability constraints of the {{named req/core|LayoutMapping}} requirement. This concept checks that the predicate mapping trait functions above exist, are constant expressions, and have a return type of {{c/core|bool}}.
+
+{{c/core|/*is-extents*/&lt;E&gt;}} is {{c|true}} if and only if {{tt|E}} is a specialization of {{lc|std::extents}}.
+
+===Standard library===
+The following standard library types satisfy {{named req/core|LayoutMapping}} requirements:
+{{dsc begin}}
+{{dsc inc|cpp/container/mdspan/layout_left/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_right/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_stride/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_left_padded/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_right_padded/dsc mapping}}
+{{dsc end}}
+
+===See also===
+* {{named req|LayoutMappingPolicy}}
+
+{{langlinks|es|ja|ru|zh}}

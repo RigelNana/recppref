@@ -1,0 +1,91 @@
+{{cpp/filesystem/title|hash_value}}
+{{cpp/filesystem/path/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|since=c++17|1=
+std::size_t hash_value( const std::filesystem::path&amp; p ) noexcept;
+}}
+{{dcl end}}
+
+===Parameters===
+{{par begin}}
+{{par|p|a {{lc|std::filesystem::path}} object}}
+{{par end}}
+
+===Return value===
+A hash value such that if for two paths, {{c|1=p1 == p2}} then {{c|1=hash_value(p1) == hash_value(p2)}}.
+
+The return value is consistent with {{ltt|cpp/filesystem/path/hash|std::hash}}.
+
+===Notes===
+Equality of two paths is determined by comparing each component separately, so, for example {{c|"a//b"}} equals {{c|"a/b"}} and has the same {{tt|hash_value}}.
+
+{{tt|hash_value}} originates from the [https://www.boost.org/doc/libs/release/libs/filesystem/doc/index.htm Boost.filesystem] library where it was used for interoperability with boost.hash (which calls {{tt|hash_value}} found by [[cpp/language/adl|argument-dependent lookup]] or [https://www.boost.org/doc/libs/1_76_0/doc/html/hash/reference.html#id-1_3_11_11_2_2_27-bb {{tt|boost::hash_value}}] where available).
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;filesystem&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;unordered_set&gt;
+namespace fs = std::filesystem;
+
+void show_hash(fs::path const&amp; p)
+{
+    std::cout &lt;&lt; std::hex &lt;&lt; std::uppercase &lt;&lt; std::setw(16)
+              &lt;&lt; fs::hash_value(p) &lt;&lt; " : " &lt;&lt; p &lt;&lt; '\n';
+}
+
+int main()
+{
+    auto tmp1 = fs::path{"/tmp"};
+    auto tmp2 = fs::path{"/tmp/../tmp"};
+    assert(!(tmp1 == tmp2));
+    assert(fs::equivalent(tmp1, tmp2));
+    show_hash(tmp1);
+    show_hash(tmp2);
+
+    for (auto s : {"/a///b", "/a//b", "/a/c", "...", "..", ".", ""})
+        show_hash(s);
+
+    // A hash function object to work with unordered_* containers:
+    struct PathHash
+    {
+        std::size_t operator()(fs::path const&amp; p) const noexcept
+        {
+            return fs::hash_value(p);
+        }
+    };
+    std::unordered_set&lt;fs::path, PathHash&gt; dirs{
+        "/bin", "/bin", "/lib", "/lib", "/opt", "/opt", "/tmp", "/tmp/../tmp"};
+    for (fs::path const&amp; p : dirs)
+        std::cout &lt;&lt; p &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+6050C47ADB62DFE5 : "/tmp"
+62795A58B69AD90A : "/tmp/../tmp"
+FF302110C9991974 : "/a///b"
+FF302110C9991974 : "/a//b"
+FD6167277915D464 : "/a/c"
+C42040F82CD8B542 : "..."
+D2D30154E0B78BBC : ".."
+D18C722215ED0530 : "."
+               0 : ""
+"/tmp/../tmp" "/opt" "/lib" "/tmp" "/bin"
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/path/dsc compare}}
+{{dsc inc|cpp/filesystem/path/dsc operator_cmp}}
+{{dsc inc|cpp/filesystem/dsc equivalent}}
+{{dsc inc|cpp/utility/dsc hash}}
+{{dsc inc|cpp/filesystem/path/dsc hash}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,266 @@
+{{title|Definitions and ODR (One Definition Rule)}}
+{{cpp/language/basics/navbar}}
+''Definitions'' are {{rlp|declarations}} that fully define the entity introduced by the declaration. Every declaration is a definition, except for the following:
+
+* A function declaration without a function body:
+{{source|
+int f(int); // declares, but does not define f
+}}
+* Any declaration with an {{c/core|extern}} {{rlp|storage duration|storage class specifier}} or with a {{rlp|language linkage}} specifier (such as {{c/core|extern "C"}}) without an initializer:
+{{source|1=
+extern const int a;     // declares, but does not define a
+extern const int b = 1; // defines b
+}}
+* Declaration of a {{rev inl|since=c++17|non-inline}} {{rlp|static|static data member}} inside a class definition:
+{{source|
+struct S
+{
+    int n;               // defines S::n
+    static int i;        // declares, but does not define S::i
+    inline static int x; // defines S::x
+};                       // defines S
+
+int S::i;                // defines S::i
+}}
+{{rrev|since=c++17|
+* {{mark deprecated}} Namespace scope declaration of a static data member that was defined within the class with the {{rlpt|constexpr}} specifier:
+{{source|1=
+struct S
+{
+    static constexpr int x = 42; // implicitly inline, defines S::x
+};
+
+constexpr int S::x; // declares S::x, not a redefinition
+}}
+}}
+* Declaration of a class name (by {{rlpsd|class#Forward declaration}} or by the use of the elaborated type specifier in another declaration):
+{{source|
+struct S;             // declares, but does not define S
+
+class Y f(class T p); // declares, but does not define Y and T (and also f and p)
+}}
+{{rrev|since=c++11|
+* An {{rlp|enum|opaque declaration}} of an enumeration:
+{{source|
+enum Color : int; // declares, but does not define Color
+}}
+}}
+* Declaration of a {{rlp|template parameters|template parameter}}:
+{{source|
+template&lt;typename T&gt; // declares, but does not define T
+}}
+* A parameter declaration in a function declaration that isn't a definition:
+{{source|
+int f(int x); // declares, but does not define f and x
+
+int f(int x)  // defines f and x
+{
+    return x + a;
+}
+}}
+* A {{rlp|typedef}} declaration:
+{{source|1=
+typedef S S2; // declares, but does not define S2 (S may be incomplete)
+}}
+{{rrev|since=c++11|
+* An {{rlp|type alias|alias-declaration}}:
+{{source|1=
+using S2 = S; // declares, but does not define S2 (S may be incomplete)
+}}
+}}
+* A {{rlp|using declaration|using-declaration}}:
+{{source|1=
+using N::d; // declares, but does not define d
+}}
+{{rev begin}}
+{{rev|since=c++17|
+* Declaration of a {{rlp|class template argument deduction#Explicit deduction guides|deduction guide}} (does not define any entities)
+}}
+{{rev|since=c++11|
+* A {{rlp|static_assert}} declaration (does not define any entities)
+* An {{rlp|declarations|attribute declaration}} (does not define any entities)
+}}
+{{rev end}}
+* An {{rlp|declarations|empty declaration}} (does not define any entities)
+* A {{rlp|namespace#Using-directives|using-directive}} (does not define any entities)
+{{rrev|since=c++11|
+* An {{rlp|class template#Class template instantiation|explicit instantiation declaration}} (an "extern template"):
+{{source|1=
+extern template
+f&lt;int, char&gt;; // declares, but does not define f&lt;int, char&gt;
+}}
+}}
+* An {{rlp|template specialization|explicit specialization}} whose declaration is not a definition:
+{{source|1=
+template&lt;&gt;
+struct A&lt;int&gt;; // declares, but does not define A&lt;int&gt;
+}}
+
+An {{rlp|asm|asm declaration}} does not define any entities, but it is classified as a definition.
+
+Where necessary, the compiler may implicitly define the {{rlp|default constructor}}, {{rlp|copy constructor}}, {{rlp|move constructor}}, {{rlp|as operator|copy assignment operator}}, {{rlp|move operator|move assignment operator}}, and the {{rlp|destructor}}.
+
+If the definition of any object results in an object of {{rlp|incomplete type}} or {{rlp|abstract class|abstract class type}}, the program is ill-formed.
+
+{{anchor|ODR}}
+===One Definition Rule===
+Only one definition of any variable, function, class type, enumeration type{{rev inl|since=c++20|{{rlp|constraints|, concept}}}} or template is allowed in any one translation unit (some of these may have multiple declarations, but only one definition is allowed).
+
+One and only one definition of every non-{{rlp|inline}} function or variable that is ''odr-used'' (see below) is required to appear in the entire program (including any standard and user-defined libraries). The compiler is not required to diagnose this violation, but the behavior of the program that violates it is undefined.
+
+For an inline function{{rev inl|since=c++17| or inline variable}}, a definition is required in every translation unit where it is ''odr-used''{{sep}}.
+
+For a class, a definition is required wherever the class is used in a way that requires it to be {{rlp|incomplete type|complete}}.
+
+There can be more than one definition in a program of each of the following: class type, enumeration type, inline function{{rev inl|since=c++17|, inline variable}}, {{rlpsd|templates#Templated entity}} (template or member of template, but not full {{rlp|template specialization}}), as long as all following conditions are satisfied:
+* Each definition appears in a different translation unit.
+{{rrev|since=c++20|
+* The definitions are not {{rlp|modules|attached to a named module}}.
+}}
+* Each definition consists of the same sequence of {{rlpsd|translation phases#Tokens}} (typically, appears in the same header).
+* Name lookup from within each definition finds the same entities (after {{rlp|overload resolution}}), except that:
+:* Constants with internal or no linkage may refer to different objects as long as they are not odr-used and have the same values in every definition.
+{{rrev|since=c++11|
+:* {{rlp|lambda|Lambda expressions}} that are not in a default argument{{rev inl|since=c++20| or a default template argument}} are uniquely identified by the sequence of tokens used to define them.
+}}
+* Overloaded operators, including conversion, allocation, and deallocation functions refer to the same function from each definition (unless referring to one defined within the definition).
+* Corresponding entities have the same language linkage in each definition (e.g. the include file is not inside an {{c/core|extern "C"}} block).
+* If a {{tt|const}} object is {{rlp|constant initialization|constant-initialized}} in any of the definitions, it is constant-initialized in each definition.
+* The rules above apply to every default argument used in each definition.
+* If the definition is for a class with an implicitly-declared constructor, every translation unit where it is odr-used must call the same constructor for the base and members.
+{{rrev|since=c++20|
+* If the definition is for a class with a defaulted {{rlp|default comparisons|three-way comparison}}, every translation unit where it is odr-used must call the same comparison operator for the base and members.
+}}
+* If the definition is for a template, then all these requirements apply to both names at the point of definition and dependent names at the point of instantiation.
+
+If all these requirements are satisfied, the program behaves as if there is only one definition in the entire program. Otherwise, the program is ill-formed, no diagnostic required.
+
+Note: in C, there is no program-wide ODR for types, and even extern declarations of the same variable in different translation units may have different types [[c/language/type#Compatible types|as long as they are compatible]]. In C++, the source-code tokens used in declarations of the same type must be the same as described above: if one .cpp file defines {{c|struct S { int x; };}} and the other .cpp file defines {{c|struct S { int y; };}}, the behavior of the program that links them together is undefined. This is usually resolved with {{rlp|namespace|unnamed namespaces}}.
+
+====Naming an entity====
+A variable is ''named'' by an expression if the expression is an identifier expression that denotes it.
+
+A function is ''named'' by an expression or conversion in following cases:
+* A function whose name appears as an expression or conversion (including named function, overloaded operator, {{rlp|cast operator|user-defined conversion}}, user-defined placement forms of {{ltt|cpp/memory/new/operator new}}, non-default initialization) is named by that expression if it is selected by overload resolution, except when it is an unqualified pure virtual member function or a pointer-to-member to a pure virtual function.
+* An [[cpp/memory/new/operator new|allocation]] or [[cpp/memory/new/operator delete|deallocation]] function for a class is named by a {{rlp|new|new expression}} appearing in an expression.
+* A deallocation function for a class is named by a {{rlp|delete|delete expression}} appearing in an expression.
+* A constructor selected to copy or move an object is considered to be named by the expression or conversion even if {{rlp|copy elision}} takes place. {{rev inl|since=c++17|Using a prvalue in some contexts does not copy or move an object, see {{rlp|copy elision#Mandatory elision of copy/move operations|mandatory elision}}.}}
+
+A potentially evaluated expression or conversion odr-uses a function if it names it.
+{{rrev|since=c++11|&lt;!-- P0859R0 --&gt;
+A potentially constant evaluated expression or conversion that names a constexpr function makes it {{rlp|constant expression#Functions and variables needed for constant evaluation|needed for constant evaluation}}, which triggers definition of a defaulted function or instantiation of a function template specialization, even if the expression is unevaluated.
+}}
+
+====Potential results====
+The set of ''potential results'' of an expression {{c|E}} is a (possibly empty) set of identifier expressions that appear within {{c|E}}, combined as follows:
+* If {{c|E}} is an {{rlp|expressions#Primary expressions|identifier expression}}, the expression {{c|E}} is its only potential result.
+* If {{c|E}} is a subscript expression ({{c|E1[E2]}}) where one of the operands is an array, the potential results of that operand is included in the set.
+* If {{c|E}} is a class member access expression of the form {{c|E1.E2}} or {{c|E1.template E2}} naming a non-static data member, the potential results of {{c|E1}} is included in the set.
+* If {{c|E}} is a class member access expression naming a static data member, the identifier expression designating the data member is included in the set.
+* If {{c|E}} is a pointer-to-member access expression of the form {{c|E1.*E2}} or {{c|E1.*template E2}} whose second operand is a constant expression, the potential results of {{c|E1}} are included in the set.
+* If {{c|E}} is an expression in parentheses ({{c|(E1)}}), the potential results of {{c|E1}} are included in the set.
+* If {{c|E}} is a glvalue conditional expression ({{c|E1 ? E2 : E3}}, where {{c|E2}} and {{c|E3}} are glvalues), the union of the potential results of {{c|E2}} and {{c|E3}} are both included in the set.
+* If {{c|E}} is a comma expression ({{c|E1, E2}}), the potential results of {{c|E2}} are in the set of potential results.
+* Otherwise, the set is empty.
+
+{{anchor|ODR-use}}
+====ODR-use (informal definition)====
+An object is odr-used if its value is read (unless it is a compile time constant) or written, its address is taken, or a reference is bound to it,
+
+A reference is odr-used if it is used and its referent is not known at compile time,
+
+A function is odr-used if a function call to it is made or its address is taken.
+
+If an entity is odr-used, its definition must exist somewhere in the program; a violation of that is usually a link-time error.
+
+{{source|1=
+struct S
+{
+    static const int x = 0; // static data member
+    // a definition outside of class is required if it is odr-used
+};
+
+const int&amp; f(const int&amp; r);
+
+int n = b ? (1, S::x) // S::x is not odr-used here
+          : f(S::x);  // S::x is odr-used here: a definition is required
+}}
+
+====ODR-use (formal definition)====
+A variable {{c|x}} that is named by a {{rlp|expressions#Potentially-evaluated expressions|potentially-evaluated expression}} {{c|expr}} that appears at a point {{tt|P}} is odr-used by {{c|expr}}, unless any of the following conditions is satisfied:
+* {{c|x}} is a reference that is {{rlpsd|constant expression#Usable in constant expressions}} at {{tt|P}}.
+* {{rev inl|until=c++26|{{c|x}} is not a reference and }}{{c|expr}} is an element of the set of potential results of an expression {{c|E}}, and any of the following conditions is satisfied:
+** {{c|E}} is a {{rlp|expressions#Discarded-value expressions|discarded-value expression}}, and no lvalue-to-rvalue conversion is applied to it.
+** {{c|x}} is a{{rev inl|since=c++26| non-volatile}} object that is usable in constant expressions at {{tt|P}} and has no mutable subobjects, and any of the following conditions is satisfied:
+{{rrev|since=c++26|
+::* {{c|E}} is a {{rlp|operator member access|class member access expression}} naming a {{rlp|data members|non-static data member}} of reference type and whose object expression has non-volatile-qualified type.
+}}
+::* {{c|E}} has non-volatile-qualified non-class type, and the lvalue-to-rvalue conversion is applied to it.
+{{source|1=
+struct S { static const int x = 1; }; // applying lvalue-to-rvalue conversion
+                                      // to S::x yields a constant expression
+
+int f()
+{
+    S::x;        // discarded-value expression does not odr-use S::x
+    
+    return S::x; // expression where lvalue-to-rvalue conversion
+                 // applies does not odr-use S::x
+}
+}}
+
+{{c|*this}} is odr-used if {{c|this}} appears as a potentially-evaluated expression (including the implicit {{c|this}} in a non-static member function call expression).
+
+{{rrev|since=c++17|
+A {{rlp|structured binding}} is odr-used if it appears as a potentially-evaluated expression.&lt;!---P0588R1--&gt;
+}}
+
+A function is odr-used in following cases:
+* A function is odr-used if it is named by (see below) a potentially-evaluated expression or conversion.
+* A {{rlp|virtual|virtual member function}} is odr-used if it is not a pure virtual member function (addresses of virtual member functions are required to construct the vtable).
+* A non-placement allocation or deallocation function for a class is odr-used by the definition of a constructor of that class.
+* A non-placement deallocation function for a class is odr-used by the definition of the destructor of that class, or by being selected by the lookup at the point of definition of a virtual destructor.
+* An assignment operator in a class {{tt|T}} that is a member or base of another class {{tt|U}} is odr-used by an implicitly-defined copy-assignment or move-assignment functions of {{tt|U}}.
+* A constructor (including default constructors) for a class is odr-used by the {{rlp|initialization}} that selects it.
+* A destructor for a class is odr-used if it is {{rlp|destructor#Potentially-invoked destructor|potentially invoked}}.
+
+{{todo|list of all situations where odr-use makes a difference}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=261|std=C++98|before=a deallocation function for a polymorphic class&lt;br&gt;might be odr-used even if there were no relevant&lt;br&gt;new or delete expressions in the program|after=supplemented the&lt;br&gt;odr-use cases to cover&lt;br&gt;constructors and destructors}}
+{{dr list item|wg=cwg|dr=678|std=C++98|before=an entity could have definitions&lt;br&gt;with different language linkages|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=1472|std=C++98|before=reference variables which satisfy the requirements for&lt;br&gt;appearing in a constant expression were odr-used even&lt;br&gt;if the lvalue-to-rvalue conversion is immediately applied|after=they are not&lt;br&gt;odr-used in this case}}
+{{dr list item|wg=cwg|dr=1614|std=C++98|before=taking address of a pure virtual function odr-used it|after=the function is not odr-used}}
+{{dr list item|wg=cwg|dr=1741|std=C++98|before=constant objects that are immediately lvalue-to-rvalue&lt;br&gt;converted in potentially-evaluated expressions were odr-used|after=they are not odr-used}}
+{{dr list item|wg=cwg|dr=1926|std=C++98|before=array subscript expressions did not propagate potential results|after=they propagate}}
+{{dr list item|wg=cwg|dr=2242|std=C++98|before=it was unclear whether a {{tt|const}} object that is only&lt;br&gt;constant-initialized in part of its definitions violates ODR|after=ODR is not violated; the object is&lt;br&gt;constant-initialized in this case}}
+{{dr list item|wg=cwg|dr=2300|std=C++11|before=lambda expressions in different translation&lt;br&gt;units could never have the same closure type|after=the closure type can be the&lt;br&gt;same under one definition rule}}
+{{dr list item|wg=cwg|dr=2353|std=C++98|before=a static data member was not a potential result&lt;br&gt;of a member access expression accessing it|after=it is}}
+{{dr list item|wg=cwg|dr=2433|std=C++14|before=a variable template could not have&lt;br&gt;multiple definitions in a program|after=it can}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=6.3|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.3|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,117 @@
+{{title|deduction guides for {{tt|std::span}}}}
+{{cpp/container/span/navbar}}
+{{dcl begin}}
+{{dcl header|span}}
+{{dcl rev multi|num=1|until1=c++26|since1=c++20
+|dcl1=
+template&lt; class It, class EndOrSize &gt;
+span( It, EndOrSize ) -&gt; span&lt;std::remove_reference_t&lt;std::iter_reference_t&lt;It&gt;&gt;&gt;;
+|dcl2=
+template&lt; class It, class EndOrSize &gt;
+span( It, EndOrSize ) -&gt; span&lt;std::remove_reference_t&lt;std::iter_reference_t&lt;It&gt;&gt;,
+                              /*maybe-static-ext*/&lt;EndOrSize&gt;&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T, std::size_t N &gt;
+span( T (&amp;)[N] ) -&gt; span&lt;T, N&gt;;
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class T, std::size_t N &gt;
+span( std::array&lt;T, N&gt;&amp; ) -&gt; span&lt;T, N&gt;;
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class T, std::size_t N &gt;
+span( const std::array&lt;T, N&gt;&amp; ) -&gt; span&lt;const T, N&gt;;
+}}
+{{dcl|num=5|since=c++20|1=
+template&lt; class R &gt;
+span( R&amp;&amp; ) -&gt; span&lt;std::remove_reference_t&lt;std::ranges::range_reference_t&lt;R&gt;&gt;&gt;;
+}}
+{{dcl end}}
+
+The following [[cpp/language/class template argument deduction|deduction guides]] are provided for {{tt|span}}.
+
+@1@ Allows the element type to be deduced from the iterator-sentinel pair. {{rev inl|since=c++26|It also allows the static extent to be deduced if {{tt|EndOrSize}} satisfies {{lti|cpp/header/span#Concept integral-constant-like|integral-constant-like}}.}}. {{cpp/enable_if|{{tt|It}} satisfies {{lconcept|contiguous_iterator}}}}.
+
+@2-4@ Allows the static extent to be deduced from built-in arrays and {{lc|std::array}}.
+
+@5@ Allows the element type to be deduced from ranges. {{cpp/enable_if|{{tt|R}} satisfies {{lconcept|contiguous_range}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;span&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+ 
+void print(std::string_view rem = "", std::size_t size_of = 0, std::size_t extent = 0)
+{
+    if (rem.empty())
+    {
+        std::cout &lt;&lt; "name │ sizeof │ extent\n"
+                     "─────┼────────┼────────\n";
+        return;
+    }
+    std::cout &lt;&lt; std::setw(4) &lt;&lt; rem &lt;&lt; " │ " &lt;&lt; std::setw(6) &lt;&lt; size_of &lt;&lt; " │ ";
+    if (extent == std::dynamic_extent)
+        std::cout &lt;&lt; "dynamic";
+    else
+        std::cout &lt;&lt; extent;
+    std::cout &lt;&lt; '\n';
+}
+ 
+int main()
+{
+    int a[]{1, 2, 3, 4, 5};
+ 
+    print();
+    std::span s1{std::begin(a), std::end(a)}; // guide (1)
+    print("s1", sizeof s1, s1.extent);
+ 
+    std::span s2{std::begin(a), 3}; // guide (1)
+    print("s2", sizeof s2, s2.extent);
+
+#if __cplusplus &gt; 202302L
+    std::span s3{std::begin(a), std::integral_constant&lt;std::size_t, 2&gt;{}&lt;!----&gt;}; // guide (1)
+    print("s3", sizeof s3, s3.extent);
+#endif // C++26
+ 
+    std::span s4{a}; // guide (2)
+    print("s4", sizeof s4, s4.extent);
+ 
+    std::span&lt;int&gt; s5{a}; // does not use a guide, makes a dynamic span
+    print("s5", sizeof s5, s5.extent);
+ 
+    std::array arr{6, 7, 8};
+    std::span s6{arr}; // guide (3)
+    print("s6", sizeof s6, s6.extent);
+    s6[0] = 42; // OK, element_type is 'int'
+ 
+    const std::array arr2{9, 10, 11};
+    std::span s7{arr2}; // guide (4)
+    print("s7", sizeof s7, s7.extent);
+    // s7[0] = 42; // Error: element_type is 'const int'
+ 
+    std::vector v{66, 69, 99};
+    std::span s8{v}; // guide (5)
+    print("s8", sizeof s8, s8.extent);
+}
+|p=true
+|output=
+name │ sizeof │ extent
+─────┼────────┼────────
+  s1 │     16 │ dynamic
+  s2 │     16 │ dynamic
+  s3 │      8 │ 2
+  s4 │      8 │ 5
+  s5 │     16 │ dynamic
+  s6 │      8 │ 3
+  s7 │      8 │ 3
+  s8 │     16 │ dynamic
+}}
+
+{{langlinks|es|ja|ru|zh}}

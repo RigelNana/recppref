@@ -1,0 +1,76 @@
+{{cpp/thread/condition_variable/title|wait_until}}
+{{cpp/thread/condition_variable/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+template&lt; class Clock, class Duration &gt;
+std::cv_status
+    wait_until( std::unique_lock&lt;std::mutex&gt;&amp; lock,
+                const std::chrono::time_point&lt;Clock, Duration&gt;&amp; abs_time );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class Clock, class Duration, class Predicate &gt;
+bool wait_until( std::unique_lock&lt;std::mutex&gt;&amp; lock,
+                 const std::chrono::time_point&lt;Clock, Duration&gt;&amp; abs_time,
+                 Predicate pred );
+}}
+{{dcl end}}
+
+{{tt|wait_until}} causes the current thread to block until the condition variable is notified, the given time point has been reached, or a spurious wakeup occurs. {{c|pred}} can be optionally provided to detect spurious wakeup.
+
+@1@ Atomically calls {{c|lock.unlock()}} and blocks on {{c|*this}}.
+@@ The thread will be unblocked when {{lc|notify_all()}} or {{lc|notify_one()}} is executed, or {{c|abs_time}} is reached. It may also be unblocked spuriously.
+@@ When unblocked, calls {{c|lock.lock()}} (possibly blocking on the lock), then returns.
+
+@2@ Equivalent to {{c multi|while (!pred())|    if (wait_until(lock, abs_time) {{==}} std::cv_status::timeout)|        return pred();|return true;}}.
+@@ This overload may be used to ignore spurious awakenings while waiting for a specific condition to become true.
+
+Right after {{tt|wait_until}} returns, {{c|lock.owns_lock()}} is {{c|true}}, and {{c|lock.mutex()}} is locked by the calling thread. If these postconditions cannot be satisfied&lt;ref&gt;This can happen if the re-locking of the mutex throws an exception.&lt;/ref&gt;, calls {{lc|std::terminate}}.
+
+If any of the following conditions is satisfied, the behavior is undefined:
+* {{c|lock.owns_lock()}} is {{c|false}}.
+* {{c|lock.mutex()}} is not locked by the calling thread.
+* If some other threads are also waiting on {{c|*this}}, {{c|lock.mutex()}} is different from the mutex unlocked by the waiting functions ({{lc|wait}}, {{lc|wait_for}} and {{tt|wait_until}}) called on {{c|*this}} by those threads.
+
+&lt;references/&gt;
+
+===Parameters===
+{{par begin}}
+{{par|lock|an lock which must be locked by the calling thread}}
+{{par|abs_time|the time point where waiting expires}}
+{{par|pred|the predicate to check whether the waiting can be completed}}
+{{par hreq}}
+{{par req named|Predicate|FunctionObject}}
+{{par req|{{c|pred()}} must be a valid expression, and its type and value category must meet the {{named req|BooleanTestable}} requirements.}}
+{{par end}}
+
+===Return value===
+@1@ {{c|std::cv_status::timeout}} if {{c|abs_time}} has been reached, otherwise {{c|std::cv_status::no_timeout}}.
+@2@ The latest result of {{c|pred()}} before returning to the caller.
+
+===Exceptions===
+@1@ Timeout-related exceptions.
+@2@ Timeout-related exceptions, and any exception thrown by {{c|pred}}.
+
+===Notes===
+{{cpp/thread/wait until clock note|cv|param=abs_time}}
+
+{{cpp/thread/condition_variable/single total order note}}
+
+===Example===
+{{cpp/thread/condition_variable/example1|condition_variable}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2093|std=C++11|before=timeout-related exceptions were missing in the specification|after=mentions these exceptions}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++11|before=convertibility to {{c/core|bool}} was too weak to reflect the expectation of implementations|after=requirements strengthened}}
+{{dr list item|wg=lwg|dr=2135|std=C++11|before=the behavior was unclear if {{c|lock.lock()}} throws an exception|after=calls {{lc|std::terminate}} in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

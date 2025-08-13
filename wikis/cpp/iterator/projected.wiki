@@ -1,0 +1,93 @@
+{{cpp/title|projected}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl rev multi|num=1
+|since1=c++20|dcl1=
+template&lt; std::indirectly_readable I,
+          std::indirectly_regular_unary_invocable&lt;I&gt; Proj &gt;
+struct projected
+{
+    using value_type = std::remove_cvref_t&lt;std::indirect_result_t&lt;Proj&amp;, I&gt;&gt;;
+    std::indirect_result_t&lt;Proj&amp;, I&gt; operator*() const; // not defined
+};
+|since2=c++26|dcl2=
+template&lt; std::indirectly_readable I,
+          std::indirectly_regular_unary_invocable&lt;I&gt; Proj &gt;
+using projected = /*projected-impl*/&lt;I, Proj&gt;::/*__type*/; // see (3)
+}}
+{{dcl|num=2|since=c++20|until=c++26|1=
+template&lt; std::weakly_incrementable I, class Proj &gt;
+struct incrementable_traits&lt;std::projected&lt;I, Proj&gt;&gt;
+{
+    using difference_type = std::iter_difference_t&lt;I&gt;;
+};
+}}
+{{dcl|num=3|since=c++26|notes={{mark expos}}|1=
+template&lt; class I, class Proj &gt;
+struct /*projected-impl*/
+{
+    struct /*__type*/
+    {
+        using value_type = std::remove_cvref_t&lt;std::indirect_result_t&lt;Proj&amp;, I&gt;&gt;;
+        using difference_type = std::iter_difference_t&lt;I&gt;; // conditionally present
+
+        std::indirect_result_t&lt;Proj&amp;, I&gt; operator*() const; // not defined
+    };
+};
+}}
+{{dcl end}}
+
+@1@ {{rev inl|until=c++26|Class}}{{rev inl|since=c++26|Alias}} template {{tt|projected}} combines an {{lconcept|indirectly_readable}} type {{tt|I}} and a callable object type {{tt|Proj}} into a new {{tt|indirectly_readable}} type whose reference type is the result of applying {{tt|Proj}} to the {{c|std::iter_reference_t&lt;I&gt;}}.
+
+@2@ This specialization of {{lc|std::incrementable_traits}} makes {{c|std::projected&lt;I, Proj&gt;}} a {{lconcept|weakly_incrementable}} type when {{tt|I}} is also a {{tt|weakly_incrementable}} type.
+
+@3@ An indirect layer used for avoiding unexpected [[cpp/language/adl|argument-dependent lookup]]. The member type {{tt|difference_type}} exists only if {{tt|I}} models {{lconcept|weakly_incrementable}}.
+
+{{tt|projected}} is used only to constrain algorithms that accept callable objects and projections, and hence its {{c|operator*()}} is not defined.
+
+===Template parameters===
+{{par begin}}
+{{par|I|an indirectly readable type}}
+{{par|Proj|projection applied to a dereferenced {{tt|I}}}}
+{{par end}}
+
+===Notes===
+The indirect layer prevents {{tt|I}} and {{tt|Proj}} to be associated classes of {{tt|projected}}. When an associated class of {{tt|I}} or {{tt|Proj}} is an incomplete class type, the indirect layer avoids the unnecessary attempt to inspect the definition of that type that results in hard error.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iterator&gt;
+
+template&lt;class T&gt;
+struct Holder
+{
+    T t;
+};
+
+struct Incomplete;
+
+using P = Holder&lt;Incomplete&gt;*;
+
+static_assert(std::equality_comparable&lt;P&gt;); // OK
+static_assert(std::indirectly_comparable&lt;P*, P*, std::equal_to&lt;&gt;&gt;); // Error before C++26
+static_assert(std::sortable&lt;P*&gt;); // Error before C++26
+
+int main()
+{
+    P a[10] = {}; // ten null pointers
+    assert(std::count(a, a + 10, nullptr) == 10); // OK
+    assert(std::ranges::count(a, a + 10, nullptr) == 10); // Error before C++26
+}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc projected_value_t}}
+{{dsc end}}
+
+{{langlinks|es|ja|zh}}

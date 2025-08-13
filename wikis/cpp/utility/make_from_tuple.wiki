@@ -1,0 +1,101 @@
+{{cpp/title|make_from_tuple}}
+{{cpp/utility/navbar}}
+
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl rev multi
+|since1=c++17|dcl1=
+template&lt; class T, class Tuple &gt;
+constexpr T make_from_tuple( Tuple&amp;&amp; t );
+|since2=c++23|dcl2=
+template&lt; class T, tuple-like Tuple &gt;
+constexpr T make_from_tuple( Tuple&amp;&amp; t );
+}}
+{{dcl end}}
+
+Construct an object of type {{tt|T}}, using the elements of the tuple {{c|t}} as the arguments to the constructor.
+
+Given the exposition-only function {{c|/*make-from-tuple-impl*/}} defined as follows:&lt;br&gt;
+{{box|
+{{c/core|template&lt;class T,}}{{nbspt}}{{lti|cpp/utility/tuple/tuple-like}}{{nbspt}}{{c/core|Tuple, std::size_t... I&gt; // no constraint on Tuple before C++23}}&lt;br&gt;
+&lt;!-- The requires-clause added by LWG 3528 is absent here because it is not applicable in C++17, its condition is moved to the ill-formed cases below. --&gt;
+{{c/core|constexpr T /*make-from-tuple-impl*/(Tuple&amp;&amp; t, std::index_sequence&lt;I...&gt;)}}&lt;br&gt;
+{{tt|{}}&lt;br&gt;
+{{nbspt|4}}{{c/core|return T(std::get&lt;I&gt;(std::forward&lt;Tuple&gt;(t))...);}}&lt;br&gt;
+{{tt|}&lt;!----&gt;}}
+}}
+
+The effect is equivalent to:&lt;br&gt;{{c multi
+|return /*make-from-tuple-impl*/&lt;T&gt;(
+|    std::forward&lt;Tuple&gt;(t),
+|    std::make_index_sequence&lt;std::tuple_size_v&lt;std::remove_reference_t&lt;Tuple&gt;&gt;&gt;{}
+|);
+}}.
+
+If
+{{rrev|since=c++23|
+* {{c|std::tuple_size_v&lt;std::remove_reference_t&lt;Tuple&gt;&gt;}} is {{c|1}} and {{c multi
+|std::reference_constructs_from_temporary_v&lt;
+|    T, decltype(std::get&lt;0&gt;(std::declval&lt;Tuple&gt;()))&gt;}} is {{c|true}}, or
+}}
+* {{c|std::is_constructible_v&lt;T, decltype(std::get&lt;I&gt;(std::declval&lt;Tuple&gt;()))...&gt;}} is {{c|false}},
+the program is ill-formed.
+
+===Parameters===
+{{par begin}}
+{{par|t|tuple whose elements to be used as arguments to the constructor of {{tt|T}}}}
+{{par end}}
+
+===Return value===
+The constructed {{tt|T}} object or reference.
+
+===Notes===
+{{rev begin}}
+{{rev|until=c++23|
+{{tt|Tuple}} need not be {{lc|std::tuple}}, and instead may be anything that supports {{ltt std|cpp/utility/tuple/get}} and {{ltt std|cpp/utility/tuple_size}}; in particular, {{lc|std::array}} and {{lc|std::pair}} may be used.
+}}
+{{rev|since=c++23|
+{{tt|Tuple}} is constrained to be tuple-like, i.e. each type therein is required to be a specialization of {{lc|std::tuple}} or another type (such as {{lc|std::array}} and {{lc|std::pair}}) that models {{lti|cpp/utility/tuple/tuple-like}}.
+}}
+{{rev end}}
+
+Due to [[cpp/language/copy elision|guaranteed copy elision]], {{tt|T}} need not be movable.
+
+{{feature test macro|__cpp_lib_make_from_tuple|{{tt|std::make_from_tuple}}|value=201606L|std=C++17}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+
+struct Foo
+{
+    Foo(int first, float second, int third)
+    {
+        std::cout &lt;&lt; first &lt;&lt; ", " &lt;&lt; second &lt;&lt; ", " &lt;&lt; third &lt;&lt; '\n';
+    }
+};
+
+int main()
+{
+    auto tuple = std::make_tuple(42, 3.14f, 0);
+    std::make_from_tuple&lt;Foo&gt;(std::move(tuple));
+}
+|output=
+42, 3.14, 0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3528|std=C++17|before=cast containing {{c/core|reinterpret_cast}} etc. was allowed in the case of 1-tuple|after=prohibited}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc make_tuple}}
+{{dsc inc|cpp/utility/tuple/dsc forward_as_tuple}}
+{{dsc inc|cpp/utility/dsc apply}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

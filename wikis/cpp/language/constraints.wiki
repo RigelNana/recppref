@@ -1,0 +1,480 @@
+{{title|Constraints and concepts {{mark since c++20}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+{{rlp|class template|Class templates}}, {{rlp|function template}}s (include {{rlp|lambda|generic lambda}}s), and other {{rlp|templates#Templated entity|templated function}}s (typically members of class templates) might be associated with a ''constraint'', which specifies the requirements on template arguments, which can be used to select the most appropriate function overloads and template specializations.
+
+Named sets of such {{rlp|requires|requirements}} are called ''concepts''. Each concept is a predicate, evaluated at compile time, and becomes a part of the interface of a template where it is used as a constraint:
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;concepts&gt;
+#include &lt;functional&gt;
+#include &lt;string&gt;
+
+// Declaration of the concept “Hashable”, which is satisfied by any type “T”
+// such that for values “a” of type “T”, the expression std::hash&lt;T&gt;{}(a)
+// compiles and its result is convertible to std::size_t
+template&lt;typename T&gt;
+concept Hashable = requires(T a)
+{
+    { std::hash&lt;T&gt;{}(a) } -&gt; std::convertible_to&lt;std::size_t&gt;;
+};
+
+struct meow {};
+
+// Constrained C++20 function template:
+template&lt;Hashable T&gt;
+void f(T) {}
+//
+// Alternative ways to apply the same constraint:
+// template&lt;typename T&gt;
+//     requires Hashable&lt;T&gt;
+// void f(T) {}
+//
+// template&lt;typename T&gt;
+// void f(T) requires Hashable&lt;T&gt; {}
+//
+// void f(Hashable auto /* parameter-name */) {}
+
+int main()
+{
+    using std::operator""s;
+    
+    f("abc"s);    // OK, std::string satisfies Hashable
+    // f(meow{}); // Error: meow does not satisfy Hashable
+}
+}}
+
+Violations of constraints are detected at compile time, early in the template instantiation process, which leads to easy to follow error messages:
+
+{{source|1=
+std::list&lt;int&gt; l = {3, -1, 10};
+std::sort(l.begin(), l.end()); 
+// Typical compiler diagnostic without concepts:
+// invalid operands to binary expression ('std::_List_iterator&lt;int&gt;' and
+// 'std::_List_iterator&lt;int&gt;')
+//                           std::__lg(__last - __first) * 2);
+//                                     &lt;nowiki&gt;~~~~~~ ^ ~~~~~~~&lt;/nowiki&gt;
+// ... 50 lines of output ...
+//
+// Typical compiler diagnostic with concepts:
+// error: cannot call std::sort with std::_List_iterator&lt;int&gt;
+// note:  concept RandomAccessIterator&lt;std::_List_iterator&lt;int&gt;&gt; was not satisfied
+}}
+
+The intent of concepts is to model semantic categories (Number, Range, RegularFunction) rather than syntactic restrictions (HasPlus, Array). According to [https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#t20-avoid-concepts-without-meaningful-semantics ISO C++ core guideline T.20], "The ability to specify meaningful semantics is a defining characteristic of a true concept, as opposed to a syntactic constraint."
+
+===Concepts===
+A concept is a named set of {{rlp|requires|requirements}}. The definition of a concept must appear at namespace scope.
+
+The definition of a concept has the form
+
+{{sdsc begin}}
+{{sdsc|{{ttb|template &lt;}} {{spar|template-parameter-list}} {{ttb|&gt;}}
+{{ttb|concept}} {{spar optional|concept-name attr}} {{ttb|1==}} {{spar|constraint-expression}}{{ttb|;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|sequence of any number of {{rlp|attributes}}}}
+{{par end}}
+
+{{source|1=
+// concept
+template&lt;class T, class U&gt;
+concept Derived = std::is_base_of&lt;U, T&gt;::value;
+}}
+
+Concepts cannot recursively refer to themselves and cannot be constrained:
+
+{{source|1=
+template&lt;typename T&gt;
+concept V = V&lt;T*&gt;; // error: recursive concept
+
+template&lt;class T&gt;
+concept C1 = true;
+template&lt;C1 T&gt;
+concept Error1 = true; // Error: C1 T attempts to constrain a concept definition
+template&lt;class T&gt; requires C1&lt;T&gt;
+concept Error2 = true; // Error: the requires clause attempts to constrain a concept
+}}
+
+Explicit instantiations, explicit specializations, or partial specializations of concepts are not allowed (the meaning of the original definition of a constraint cannot be changed).
+
+Concepts can be named in an id-expression. The value of the id-expression is {{c|true}} if the constraint expression is satisfied, and {{c|false}} otherwise.
+
+Concepts can also be named in a type-constraint, as part of
+
+* {{rlp|template parameters#Type template parameter|type template parameter declaration}},
+* {{rlp|auto|placeholder type specifier}},
+* [[cpp/language/requires#Compound Requirements|compound requirement]].
+
+In a {{spar|type-constraint}}, a concept takes one less template argument than its parameter list demands, because the contextually deduced type is implicitly used as the first argument of the concept.
+
+{{source|1=
+template&lt;class T, class U&gt;
+concept Derived = std::is_base_of&lt;U, T&gt;::value;
+
+template&lt;Derived&lt;Base&gt; T&gt;
+void f(T); // T is constrained by Derived&lt;T, Base&gt; 
+}}
+
+===Constraints===
+A constraint is a sequence of logical operations and operands that specifies requirements on template arguments. They can appear within {{rlp|requires|{{c/core|requires}} expressions}} or directly as bodies of concepts.
+
+There are {{rev inl|until=c++26|three}}{{rev inl|since=c++26|four}} types of constraints:
+@1@ conjunctions
+@2@ disjunctions
+@3@ atomic constraints
+
+{{rrev|since=c++26|
+@4@ fold expanded constraints
+}}
+
+The constraint associated with a declaration is determined by [[#Constraint normalization|normalizing]] a logical AND expression whose operands are in the following order:
+# the constraint expression introduced for each constrained {{rlpsd|template parameters#Type template parameter}} or non-type template parameter declared with a constrained {{rlp|auto|placeholder type}}, in order of appearance;
+# the constraint expression in the {{rlp|constraints#Requires clauses|{{c/core|requires}} clause}} after the template parameter list;
+# the constraint expression introduced for each parameter with constrained {{rlp|auto|placeholder type}} in an {{rlpsd|function template#Abbreviated function template}} declaration;
+# the constraint expression in the trailing {{rlp|constraints#Requires clauses|{{c/core|requires}} clause}}.
+
+This order determines the order in which constraints are instantiated when checking for satisfaction.
+
+====Redeclarations====
+A constrained declaration may only be redeclared using the same syntactic form. No diagnostic is required:
+
+{{source|1=
+
+// These first two declarations of f are fine
+template&lt;Incrementable T&gt;
+void f(T) requires Decrementable&lt;T&gt;;
+
+template&lt;Incrementable T&gt;
+void f(T) requires Decrementable&lt;T&gt;; // OK, redeclaration
+
+// Inclusion of this third, logically-equivalent-but-syntactically-different
+// declaration of f is ill-formed, no diagnostic required
+template&lt;typename T&gt;
+    requires Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt;
+void f(T);
+
+// The following two declarations have different constraints:
+// the first declaration has Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt;
+// the second declaration has Decrementable&lt;T&gt; &amp;&amp; Incrementable&lt;T&gt;
+// Even though they are logically equivalent.
+
+template&lt;Incrementable T&gt; 
+void g(T) requires Decrementable&lt;T&gt;;
+
+template&lt;Decrementable T&gt; 
+void g(T) requires Incrementable&lt;T&gt;; // ill-formed, no diagnostic required
+}}
+
+====Conjunctions====
+The conjunction of two constraints is formed by using the {{tt|&amp;&amp;}} operator in the constraint expression:
+
+{{source|1=
+template&lt;class T&gt;
+concept Integral = std::is_integral&lt;T&gt;::value;
+template&lt;class T&gt;
+concept SignedIntegral = Integral&lt;T&gt; &amp;&amp; std::is_signed&lt;T&gt;::value;
+template&lt;class T&gt;
+concept UnsignedIntegral = Integral&lt;T&gt; &amp;&amp; !SignedIntegral&lt;T&gt;;
+}}
+
+A conjunction of two constraints is satisfied only if both constraints are satisfied. Conjunctions are evaluated left to right and short-circuited (if the left constraint is not satisfied, template argument substitution into the right constraint is not attempted: this prevents failures due to substitution outside of immediate context).
+
+{{source|
+
+template&lt;typename T&gt;
+constexpr bool get_value() { return T::value; }
+
+template&lt;typename T&gt;
+    requires (sizeof(T) &gt; 1 &amp;&amp; get_value&lt;T&gt;())
+void f(T);   // #1
+
+void f(int); // #2
+
+void g()
+{
+    f('A'); // OK, calls #2. When checking the constraints of #1,
+            // 'sizeof(char) &gt; 1' is not satisfied, so get_value&lt;T&gt;() is not checked
+}
+
+}}
+
+====Disjunctions====
+The disjunction of two constraints is formed by using the {{tt|{{!!}}}} operator in the constraint expression.
+
+A disjunction of two constraints is satisfied if either constraint is satisfied. Disjunctions are evaluated left to right and short-circuited (if the left constraint is satisfied, template argument substitution into the right constraint is not attempted). 
+
+{{source|1=
+template&lt;class T = void&gt;
+    requires EqualityComparable&lt;T&gt; {{!!}} Same&lt;T, void&gt;
+struct equal_to;
+}}
+
+====Atomic constraints====
+An atomic constraint consists of an expression {{c|E}} and a mapping from the template parameters that appear within {{c|E}} to template arguments involving the template parameters of the constrained entity, called its ''parameter mapping''. 
+
+Atomic constraints are formed during {{lsd|#Constraint normalization}}. {{c|E}} is never a logical AND or logical OR expression (those form conjunctions and disjunctions, respectively).
+
+Satisfaction of an atomic constraint is checked by substituting the parameter mapping and template arguments into the expression {{c|E}}. If the substitution results in an invalid type or expression, the constraint is not satisfied. Otherwise, {{c|E}}, after any lvalue-to-rvalue conversion, must be a prvalue constant expression of type {{c/core|bool}}, and the constraint is satisfied if and only if it evaluates to {{c|true}}. 
+
+The type of {{c|E}} after substitution must be exactly {{c/core|bool}}. No conversion is permitted:
+
+{{source|1=
+template&lt;typename T&gt;
+struct S
+{
+    constexpr operator bool() const { return true; }
+};
+
+template&lt;typename T&gt;
+    requires (S&lt;T&gt;{})
+void f(T);   // #1
+
+void f(int); // #2
+
+void g()
+{
+    f(0); // error: S&lt;int&gt;{} does not have type bool when checking #1,
+          // even though #2 is a better match
+}
+}}
+
+Two atomic constraints are considered ''identical'' if they are formed from the same expression at the source level and their parameter mappings are equivalent.
+
+{{source|1=
+template&lt;class T&gt;
+constexpr bool is_meowable = true;
+
+template&lt;class T&gt;
+constexpr bool is_cat = true;
+
+template&lt;class T&gt;
+concept Meowable = is_meowable&lt;T&gt;;
+
+template&lt;class T&gt;
+concept BadMeowableCat = is_meowable&lt;T&gt; &amp;&amp; is_cat&lt;T&gt;;
+
+template&lt;class T&gt;
+concept GoodMeowableCat = Meowable&lt;T&gt; &amp;&amp; is_cat&lt;T&gt;;
+
+template&lt;Meowable T&gt;
+void f1(T); // #1
+
+template&lt;BadMeowableCat T&gt;
+void f1(T); // #2
+
+template&lt;Meowable T&gt;
+void f2(T); // #3
+
+template&lt;GoodMeowableCat T&gt;
+void f2(T); // #4
+
+void g()
+{
+    f1(0); // error, ambiguous:
+           // the is_meowable&lt;T&gt; in Meowable and BadMeowableCat forms distinct atomic
+           // constraints that are not identical (and so do not subsume each other)
+    
+    f2(0); // OK, calls #4, more constrained than #3
+           // GoodMeowableCat got its is_meowable&lt;T&gt; from Meowable
+}
+
+}}
+
+{{rrev|since=c++26|
+====Fold expanded constraints====
+A ''fold expanded constraint'' is formed from a constraint {{tt|C}} and a fold operator (either {{tt|&amp;&amp;}} or {{tt|{{!!}}}}). A fold expanded constraint is a {{rlp|parameter pack|pack expansion}}.
+
+Let {{c|N}} be the number of elements in the pack expansion parameters:
+* If the pack expansion is invalid (such as expanding packs of different size), the fold expanded constraint is not satisfied.
+* If {{c|N}} is {{c|0}}, the fold expanded constraint is satisfied if the fold operator is {{tt|&amp;&amp;}}, or not satisfied if the fold operator is {{tt|{{!!}}}}.
+* For a fold expanded constraint with a positive {{c|N}},for each {{c|i}} in {{closed range|1|N}}, each pack expansion parameter is replaced with the corresponding {{c|i}}th element in increasing order:
+:* For fold expanded constraints whose fold operator is {{tt|&amp;&amp;}}, if the replacement of the {{c|j}}th element violates {{tt|C}}, the fold expanded constraint is not satisfied. In this case, no substitution takes place for any {{c|i}} greater than {{c|j}}. Otherwise, the fold expanded constraint is satisfied.
+:* For fold expanded constraints whose fold operator is {{tt|{{!!}}}}, if the replacement of the {{c|j}}th element satisfies {{tt|C}}, the fold expanded constraint is satisfied. In this case, no substitution takes place for any {{c|i}} greater than {{c|j}}. Otherwise, the fold expanded constraint is not satisfied.
+
+
+{{source|1=
+template &lt;class T&gt; concept A = std::is_move_constructible_v&lt;T&gt;;
+template &lt;class T&gt; concept B = std::is_copy_constructible_v&lt;T&gt;;
+template &lt;class T&gt; concept C = A&lt;T&gt; &amp;&amp; B&lt;T&gt;;
+
+// in C++23, these two overloads of g() have distinct atomic constraints 
+// that are not identical and so do not subsume each other: calls to g() are ambiguous
+// in C++26, the folds are expanded and constraint on overload #2 (both move and copy
+// required), subsumes constraint on overload #1 (just the move is required)
+template &lt;class... T&gt;
+requires (A&lt;T&gt; &amp;&amp; ...) void g(T...); // #1
+
+template &lt;class... T&gt;
+requires (C&lt;T&gt; &amp;&amp; ...) void g(T...); // #2
+
+}}
+
+}}
+
+====Constraint normalization====
+''Constraint normalization'' is the process that transforms a constraint expression into a sequence of conjunctions and disjunctions of atomic constraints. The ''normal form'' of an expression is defined as follows:
+* The normal form of an expression {{c|(E)}} is the normal form of {{c|E}}.
+* The normal form of an expression {{c|E1 &amp;&amp; E2}} is the conjunction of the normal forms of {{c|E1}} and {{c|E2}}.
+* The normal form of an expression {{c|E1 {{!!}} E2}} is the disjunction of the normal forms of {{c|E1}} and {{c|E2}}.
+* The normal form of an expression {{c|C&lt;A1, A2, ... , AN&gt;}}, where {{tt|C}} names a concept, is the normal form of the constraint expression of {{tt|C}}, after substituting {{tt|A1}}, {{tt|A2}}, ... , {{tt|AN}} for {{tt|C}}'s respective template parameters in the parameter mappings of each atomic constraint of {{tt|C}}. If any such substitution into the parameter mappings results in an invalid type or expression, the program is ill-formed, no diagnostic required.
+
+{{source|1=
+template&lt;typename T&gt;
+concept A = T::value {{!!}} true;
+
+template&lt;typename U&gt;
+concept B = A&lt;U*&gt;; // OK: normalized to the disjunction of 
+                   // - T::value (with mapping T -&gt; U*) and
+                   // - true (with an empty mapping).
+                   // No invalid type in mapping even though
+                   // T::value is ill-formed for all pointer types
+
+template&lt;typename V&gt;
+concept C = B&lt;V&amp;&gt;; // Normalizes to the disjunction of
+                   // - T::value (with mapping T-&gt; V&amp;*) and
+                   // - true (with an empty mapping).
+                   // Invalid type V&amp;* formed in mapping =&gt; ill-formed NDR
+}}
+
+{{rrev|since=c++26|
+* The normal form of expressions {{c|(E &amp;&amp; ...)}} and {{c|(... &amp;&amp; E)}} is a fold expanded constraint, where {{tt|C}} is the normal form of {{c|E}} and the fold operator is {{tt|&amp;&amp;}}.
+* The normal form of expressions {{c|(E {{!!}} ...)}} and {{c|(... {{!!}} E)}} is a fold expanded constraint, where {{tt|C}} is the normal form of {{c|E}} and the fold operator is {{tt|{{!!}}}}.
+* The normal forms of expressions {{c|(E1 &amp;&amp; ... &amp;&amp; E2)}} and {{c|(E1 {{!!}} ... {{!!}} E2)}} are the normal forms of
+:* {{c|(E1 &amp;&amp; ...) &amp;&amp; E2}} and {{c|(E1 {{!!}} ...) {{!!}} E2}} respectively, if {{c|E1}} contains an unexpanded pack, or
+:* {{c|E1 &amp;&amp; (... &amp;&amp; E2)}} and {{c|E1 {{!!}} (... {{!!}} E2)}} respectively otherwise.
+}}
+
+* The normal form of any other expression {{c|E}} is the atomic constraint whose expression is {{c|E}} and whose parameter mapping is the identity mapping. This includes all {{rlp|fold|fold expressions}}, even those folding over the {{tt|&amp;&amp;}} or {{tt|{{!!}}}} operators.
+
+User-defined overloads of {{tt|&amp;&amp;}} or {{tt|{{!!}}}} have no effect on constraint normalization.
+
+{{anchor|Requires clauses}}
+==={{c/core|requires}} clauses===
+The keyword {{ltt|cpp/keyword/requires}} is used to introduce a ''{{c/core|requires}} clause'', which specifies constraints on template arguments or on a function declaration.
+{{source|1=
+template&lt;typename T&gt;
+void f(T&amp;&amp;) requires Eq&lt;T&gt;; // can appear as the last element of a function declarator
+
+template&lt;typename T&gt; requires Addable&lt;T&gt; // or right after a template parameter list
+T add(T a, T b) { return a + b; }
+}}
+
+In this case, the keyword {{c/core|requires}} must be followed by some constant expression (so it's possible to write {{c|requires true}}), but the intent is that a named concept (as in the example above) or a conjunction/disjunction of named concepts or a {{rlp|requires|requires expression}} is used.
+
+The expression must have one of the following forms:
+* A {{rlp|expressions#Primary expressions|primary expression}}, e.g. {{c|Swappable&lt;T&gt;}}, {{c|std::is_integral&lt;T&gt;::value}}, {{c|(std::is_object_v&lt;Args&gt; &amp;&amp; ...)}}, or any parenthesized expression.
+* A sequence of primary expressions joined with the operator {{tt|&amp;&amp;}}.
+* A sequence of aforementioned expressions joined with the operator {{tt|{{!!}}}}.
+
+{{source|1=
+template&lt;class T&gt;
+constexpr bool is_meowable = true;
+
+template&lt;class T&gt;
+constexpr bool is_purrable() { return true; }
+
+template&lt;class T&gt;
+void f(T) requires is_meowable&lt;T&gt;; // OK
+
+template&lt;class T&gt;
+void g(T) requires is_purrable&lt;T&gt;(); // error, is_purrable&lt;T&gt;() is not a primary expression
+
+template&lt;class T&gt;
+void h(T) requires (is_purrable&lt;T&gt;()); // OK
+}}
+
+===Partial ordering of constraints===
+Before any further analysis, constraints are [[#Constraint normalization|normalized]] by substituting the body of every named concept and every {{rlp|requires|requires expression}} until what is left is a sequence of conjunctions and disjunctions on atomic constraints.
+
+A constraint {{tt|P}} is said to ''subsume'' constraint {{tt|Q}} if it can be proven that {{tt|P}} {{enwiki|Logical consequence|implies}} {{tt|Q}} up to the identity of atomic constraints in P and Q. (Types and expressions are not analyzed for equivalence: {{tt|N &gt; 0}} does not subsume {{tt|1=N &gt;= 0}}).
+
+Specifically, first {{tt|P}} is converted to disjunctive normal form and {{tt|Q}} is converted to conjunctive normal form. {{tt|P}} subsumes {{tt|Q}} if and only if:
+* every disjunctive clause in the disjunctive normal form of {{tt|P}} subsumes every conjunctive clause in the conjunctive normal form of {{tt|Q}}, where
+* a disjunctive clause subsumes a conjunctive clause if and only if there is an atomic constraint {{tt|U}} in the disjunctive clause and an atomic constraint {{tt|V}} in the conjunctive clause such that {{tt|U}} subsumes {{tt|V}}; 
+* an atomic constraint {{tt|A}} subsumes an atomic constraint {{tt|B}} if and only if they are identical using the rules described [[#Atomic constraints|above]].
+{{rrev|since=c++26|
+* A fold expanded constraint {{tt|A}} subsumes another fold expanded constraint {{tt|B}} if they have the same fold operator, the constraint {{tt|C}} of {{tt|A}} subsumes that of {{tt|B}}, and both {{tt|C}} contain an equivalent unexpanded pack.
+}}
+
+Subsumption relationship defines partial order of constraints, which is used to determine:
+* the best viable candidate for a non-template function in {{rlp|overload resolution}}
+* the {{rlp|overloaded address|address of a non-template function}} in an overload set
+* the best match for a template template argument
+* partial ordering of class template specializations
+* {{rlp|function template#Function template overloading|partial ordering}} of function templates
+
+{{todo|backlinks from the above to here}}
+
+If declarations {{tt|D1}} and {{tt|D2}} are constrained and {{tt|D1}}'s associated constraints subsume {{tt|D2}}'s associated constraints (or if {{tt|D2}} is unconstrained), then {{tt|D1}} is said to be ''at least as constrained'' as {{tt|D2}}. If {{tt|D1}} is at least as constrained as {{tt|D2}}, and {{tt|D2}} is not at least as constrained as {{tt|D1}}, then {{tt|D1}} is ''more constrained'' than {{tt|D2}}.
+
+If all following conditions are satisfied, a non-template function {{tt|F1}} is ''more partial-ordering-constrained'' than a non-template function {{tt|F2}}:
+* They have the same parameter-type-list{{rev inl|since=c++23|, omitting the types of {{rlpsd|member functions#Explicit object parameter}}s}}.
+* If they are member functions, both are direct members of the same class.
+* If both are non-static member functions, they have the same types for their object parameters.
+* {{tt|F1}} is more constrained than {{tt|F2}}.
+
+{{source|1=
+template&lt;typename T&gt;
+concept Decrementable = requires(T t) { --t; };
+template&lt;typename T&gt;
+concept RevIterator = Decrementable&lt;T&gt; &amp;&amp; requires(T t) { *t; };
+
+// RevIterator subsumes Decrementable, but not the other way around
+
+template&lt;Decrementable T&gt;
+void f(T); // #1
+
+template&lt;RevIterator T&gt;
+void f(T); // #2, more constrained than #1
+
+f(0);       // int only satisfies Decrementable, selects #1
+f((int*)0); // int* satisfies both constraints, selects #2 as more constrained
+
+template&lt;class T&gt;
+void g(T); // #3 (unconstrained)
+
+template&lt;Decrementable T&gt;
+void g(T); // #4
+
+g(true); // bool does not satisfy Decrementable, selects #3
+g(0);    // int satisfies Decrementable, selects #4 because it is more constrained
+
+template&lt;typename T&gt;
+concept RevIterator2 = requires(T t) { --t; *t; };
+
+template&lt;Decrementable T&gt;
+void h(T); // #5
+
+template&lt;RevIterator2 T&gt;
+void h(T); // #6
+
+h((int*)0); // ambiguous
+}}
+
+===Notes===
+{{ftm begin|std=1|comment=1|core=true}}
+{{ftm|std=C++20|value=201907L|__cpp_concepts|rowspan="2"|[[#top|Constraints]]}}
+{{ftm|std=C++20|value=202002L|-|Conditionally trivial {{rlpsd|member functions#Special member functions}}}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/concept}},
+{{ltt|cpp/keyword/requires}},
+{{ltt|cpp/keyword/typename}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2428|std=C++20|before=could not apply attributes to concepts|after=allowed}}
+{{dr list end}}
+
+===See also===
+* [[cpp/experimental/constraints|Concepts TS]]
+* [[cpp/named req|Named requirements]]
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc requires}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

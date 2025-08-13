@@ -1,0 +1,143 @@
+{{cpp/title|minmax}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|since=c++11|constexpr=c++14|
+template&lt; class T &gt;
+std::pair&lt;const T&amp;, const T&amp;&gt; minmax( const T&amp; a, const T&amp; b );
+}}
+{{dcla|num=2|since=c++11|constexpr=c++14|
+template&lt; class T, class Compare &gt;
+std::pair&lt;const T&amp;, const T&amp;&gt; minmax( const T&amp; a, const T&amp; b,
+                                      Compare comp );
+}}
+{{dcla|num=3|since=c++11|constexpr=c++14|
+template&lt; class T &gt;
+std::pair&lt;T, T&gt; minmax( std::initializer_list&lt;T&gt; ilist );
+}}
+{{dcla|num=4|since=c++11|constexpr=c++14|
+template&lt; class T, class Compare &gt;
+std::pair&lt;T, T&gt; minmax( std::initializer_list&lt;T&gt; ilist,
+                        Compare comp );
+}}
+{{dcl end}}
+
+Returns the lowest and the greatest of the given values.
+
+@1,2@ Returns references to the smaller and the greater of {{c|a}} and {{c|b}}.
+:@1@ Uses {{c/core|operator&lt;}} to compare the values.
+:@@ If {{tt|T}} is not {{named req|LessThanComparable}}, the behavior is undefined.
+:@2@ Use the comparison function {{c|comp}} to compare the values.
+
+@3,4@ Returns the smallest and the greatest of the values in initializer list {{c|ilist}}.
+@@ If {{c|ilist.size()}} is zero, or {{tt|T}} is not {{named req|CopyConstructible}}, the behavior is undefined.
+:@3@ Uses {{c/core|operator&lt;}} to compare the values.
+:@@ If {{tt|T}} is not {{named req|LessThanComparable}}, the behavior is undefined.
+:@4@ Use the comparison function {{c|comp}} to compare the values.
+
+===Parameters===
+{{par begin}}
+{{par|a, b|the values to compare}}
+{{par|ilist|initializer list with the values to compare}}
+{{par cmp|comp|t1=T}}
+{{par end}}
+
+===Return value===
+@1,2@ Returns the result of {{c|std::pair&lt;const T&amp;, const T&amp;&gt;(a, b)}} if {{c|a &lt; b}} or if {{c|a}} is equivalent to {{c|b}}. Returns the result of {{c|std::pair&lt;const T&amp;, const T&amp;&gt;(b, a)}} if {{c|b &lt; a}}.
+
+@3,4@ A pair with the smallest value in {{c|ilist}} as the first element and the greatest as the second. If several elements are equivalent to the smallest, the leftmost such element is returned. If several elements are equivalent to the largest, the rightmost such element is returned.
+
+===Complexity===
+@1@ Exactly one comparison using {{c/core|operator&lt;}}.
+
+@2@ Exactly one application of the comparison function {{c|comp}}.
+
+@3,4@ Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|ilist.size()}}:
+:@3@ At most {{mathjax-or|\(\scriptsize \frac{3N}{2}\)|{{mfrac|3N|2}}}} comparisons using {{c/core|operator&lt;}}.
+:@4@ At most {{mathjax-or|\(\scriptsize \frac{3N}{2}\)|{{mfrac|3N|2}}}} applications of the comparison function {{c|comp}}.
+
+===Possible implementation===
+{{eq impl
+|title1=minmax (1)|ver1=1|1=
+template&lt;class T&gt;
+constexpr std::pair&lt;const T&amp;, const T&amp;&gt; minmax(const T&amp; a, const T&amp; b)
+{
+    return (b &lt; a) ? std::pair&lt;const T&amp;, const T&amp;&gt;(b, a)
+                   : std::pair&lt;const T&amp;, const T&amp;&gt;(a, b);
+}
+|title2=minmax (2)|ver2=2|2=
+template&lt;class T, class Compare&gt;
+constexpr std::pair&lt;const T&amp;, const T&amp;&gt; minmax(const T&amp; a, const T&amp; b, Compare comp)
+{
+    return comp(b, a) ? std::pair&lt;const T&amp;, const T&amp;&gt;(b, a)
+                      : std::pair&lt;const T&amp;, const T&amp;&gt;(a, b);
+}
+|title3=minmax (3)|ver3=3|3=
+template&lt;class T&gt;
+constexpr std::pair&lt;T, T&gt; minmax(std::initializer_list&lt;T&gt; ilist)
+{
+    auto p = std::minmax_element(ilist.begin(), ilist.end());
+    return std::pair(*p.first, *p.second);
+}
+|title4=minmax (4)|ver4=4|4=
+template&lt;class T, class Compare&gt;
+constexpr std::pair&lt;T, T&gt; minmax(std::initializer_list&lt;T&gt; ilist, Compare comp)
+{
+    auto p = std::minmax_element(ilist.begin(), ilist.end(), comp);
+    return std::pair(*p.first, *p.second);
+}
+}}
+
+===Notes===
+For overloads {{vl|1,2}}, if one of the parameters is a temporary, the reference returned becomes a dangling reference at the end of the full expression that contains the call to {{tt|minmax}}:
+{{source|1=
+int n = 1;
+auto p = std::minmax(n, n + 1);
+int m = p.first; // ok
+int x = p.second; // undefined behavior
+
+// Note that structured bindings have the same issue
+auto [mm, xx] = std::minmax(n, n + 1);
+xx; // undefined behavior
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstdlib&gt;
+#include &lt;ctime&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v{3, 1, 4, 1, 5, 9, 2, 6};
+    std::srand(std::time(0));
+    std::pair&lt;int, int&gt; bounds = std::minmax(std::rand() % v.size(),
+                                             std::rand() % v.size());
+    
+    std::cout &lt;&lt; "v[" &lt;&lt; bounds.first &lt;&lt; "," &lt;&lt; bounds.second &lt;&lt; "]: ";
+    for (int i = bounds.first; i &lt; bounds.second; ++i)
+        std::cout &lt;&lt; v[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+v[2,7]: 4 1 5 9 2
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2239|std=C++11|before={{tt|T}} was required to be {{named req|LessThanComparable}} for overloads {{vl|2,4}}|after=not required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc min}}
+{{dsc inc|cpp/algorithm/dsc max}}
+{{dsc inc|cpp/algorithm/dsc minmax_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc minmax}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

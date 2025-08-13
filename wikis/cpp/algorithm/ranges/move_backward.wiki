@@ -1,0 +1,147 @@
+{{cpp/ranges/title|move_backward|move_backward_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::bidirectional_iterator I2 &gt;
+requires std::indirectly_movable&lt;I1, I2&gt;
+constexpr move_backward_result&lt;I1, I2&gt;
+    move_backward( I1 first, S1 last, I2 result );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::bidirectional_range R, std::bidirectional_iterator I &gt;
+requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+constexpr move_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+    move_backward( R&amp;&amp; r, I result );
+}}
+{{dcl h|Helper types}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I, class O &gt;
+using move_backward_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ Moves the elements in the range, defined by {{range|first|last}}, to another range {{range|result - N|result}}, where {{c|1=N = ranges::distance(first, last)}}. The elements are moved in reverse order (the last element is moved first), but their relative order is preserved. The behavior is undefined if {{c|result}} is within {{tt|'''('''first, last''']'''}}. In such a case, {{lc|ranges::move}} may be used instead.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}}, and {{c|ranges::end(r)}} as {{c|last}}.
+
+The elements in the ''moved-from'' range will still contain valid values of the appropriate type, but not necessarily the same values as before the move, as if using {{c|1=*(result - n) = ranges::iter_move(last - n)}} for each integer {{tt|n}}, where {{c|1=0 ≤ n &lt; N}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of elements to move}}
+{{par|last|the end of the range of elements to move}}
+{{par|r|the range of the elements to move}}
+{{par|result|the end of the destination range}}
+{{par end}}
+
+===Return value===
+{{c|{last, result - N} }}.
+
+===Complexity===
+@1@ Exactly {{c|N}} move assignments.
+
+@2@ Exactly {{c|ranges::distance(r)}} move assignments.
+
+===Notes===
+When moving overlapping ranges, {{lc|ranges::move}} is appropriate when moving to the left (beginning of the destination range is outside the source range) while {{lc|ranges::move_backward}} is appropriate when moving to the right (end of the destination range is outside the source range).
+
+===Possible implementation===
+{{eq fun|1=
+struct move_backward_fn
+{
+    template&lt;std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::bidirectional_iterator I2&gt;
+    requires std::indirectly_movable&lt;I1, I2&gt;
+    constexpr ranges::move_backward_result&lt;I1, I2&gt;
+        operator()(I1 first, S1 last, I2 result) const
+    {
+        auto i {last};
+        for (; i != first; *--result = ranges::iter_move(--i))
+        {}
+        return {std::move(last), std::move(result)};
+    }
+
+    template&lt;ranges::bidirectional_range R, std::bidirectional_iterator I&gt;
+    requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+    constexpr ranges::move_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+        operator()(R&amp;&amp; r, I result) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr move_backward_fn move_backward {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+using Vec = std::vector&lt;std::string&gt;;
+
+void print(std::string_view rem, Vec const&amp; vec)
+{
+    std::cout &lt;&lt; rem &lt;&lt; "[" &lt;&lt; vec.size() &lt;&lt; "]: ";
+    for (const std::string&amp; s : vec)
+        std::cout &lt;&lt; (s.size() ? s : std::string{"·"}) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    Vec a{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"};
+    Vec b(a.size());
+
+    print("Before move:\n" "a", a);
+    print("b", b);
+
+    std::ranges::move_backward(a, b.end());
+
+    print("\n" "Move a &gt;&gt; b:\n" "a", a);
+    print("b", b);
+
+    std::ranges::move_backward(b.begin(), b.end(), a.end());
+    print("\n" "Move b &gt;&gt; a:\n" "a", a);
+    print("b", b);
+
+    std::ranges::move_backward(a.begin(), a.begin()+3, a.end());
+    print("\n" "Overlapping move a[0, 3) &gt;&gt; a[5, 8):\n" "a", a);
+}
+|p=true &lt;!-- the state of RHS object after move is unspecified --&gt;
+|output=
+Before move:
+a[8]: ▁ ▂ ▃ ▄ ▅ ▆ ▇ █
+b[8]: · · · · · · · ·
+
+Move a &gt;&gt; b:
+a[8]: · · · · · · · ·
+b[8]: ▁ ▂ ▃ ▄ ▅ ▆ ▇ █
+
+Move b &gt;&gt; a:
+a[8]: ▁ ▂ ▃ ▄ ▅ ▆ ▇ █
+b[8]: · · · · · · · ·
+
+Overlapping move a[0, 3) &gt;&gt; a[5, 8):
+a[8]: · · · ▄ ▅ ▁ ▂ ▃
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,39 @@
+{{cpp/experimental/title|when_any}}
+{{cpp/experimental/concurrency/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/future}}
+{{dcl|since=concurrency|1=
+template&lt; class Sequence &gt;
+struct when_any_result {
+    std::size_t index;
+    Sequence futures;
+};
+}}
+{{dcl|num=1|since=concurrency|1=
+template&lt; class InputIt &gt;
+auto when_any( InputIt first, InputIt last )
+    -&gt; future&lt;when_any_result&lt;std::vector&lt;typename std::iterator_traits&lt;InputIt&gt;::value_type&gt;&gt;&gt;; 
+}}
+{{dcl|num=2|since=concurrency|1=
+template&lt; class... Futures &gt;
+auto when_any( Futures&amp;&amp;... futures )
+    -&gt; future&lt;when_any_result&lt;std::tuple&lt;std::decay_t&lt;Futures&gt;...&gt;&gt;&gt;;
+}}
+{{dcl end}}
+
+Create a {{lc|std::experimental::future|future}} object that becomes ready when at least one of the input {{tt|future}}s and {{lc|std::experimental::shared_future|shared_future}}s become ready. The behavior is undefined if any input {{tt|future}} or {{tt|shared_future}} is invalid.
+
+In particular, let {{tt|Sequence}} be a {{c|std::vector&lt;typename std::iterator_traits&lt;InputIt&gt;::value_type&gt;}} for {{v|1}} and {{c|std::tuple&lt;std::decay_t&lt;Futures&gt;...&gt;}} for {{v|2}}. This function template creates a shared state containing {{tt|when_any_result&lt;Sequence&gt;}} and returns a future referring to the shared state. Every input {{tt|future}} is moved into the corresponding object in the {{tt|futures}} member of the {{tt|when_any_result&lt;Sequence&gt;}} in the shared state, and every input {{tt|shared_future}} is copied to the corresponding object  in the {{tt|futures}} member of the {{tt|when_any_result&lt;Sequence&gt;}} in the shared state. The order of the objects in the {{tt|Sequence}} matches the order of arguments.
+
+@1@ This function does not participate in overload resolution unless {{tt|InputIt}}'s value type (i.e., {{c|typename std::iterator_traits&lt;InputIt&gt;::value_type}}) is a {{lc|std::experimental::future}} or {{lc|std::experimental::shared_future}}.
+@2@ This function does not participate in overload resolution unless every argument is either a (possibly cv-qualified) {{lc|std::experimental::shared_future}} or a cv-unqualified {{lc|std::experimental::future}}. (Formally, for every type {{tt|Fn}} in {{tt|Futures}}, either {{c|std::remove_reference_t&lt;Fn&gt;}} is {{c|std::experimental::future&lt;Rn&gt;}}, or {{c|std::decay_t&lt;Fn&gt;}} is {{c|std::experimental::shared_future&lt;Rn&gt;}}.)
+
+After this call, every input {{tt|future}} is no longer valid; every input {{tt|shared_future}} remains valid.
+
+===Return value===
+A {{tt|future}} referring to the shared state created by the call. The future is always {{c|valid()}}, and it becomes ready when at least one of the input {{tt|future}}s and {{tt|shared_future}}s the call are ready. The {{tt|index}} member of the {{tt|when_any_result}} contains the position of the ready {{tt|future}} or {{tt|shared_future}} in the {{c|futures}} member.
+
+@1@ If the range is empty (i.e., {{c|first {{==}} last}}), the returned {{tt|future}} is ready immediately; the {{tt|futures}} field of the {{tt|when_any_result}} is an empty vector, and the {{tt|index}} field is {{c|size_t(-1)}}.
+@2@ If no argument is provided, the returned {{tt|future}} is ready immediately; the {{tt|futures}} field of the {{tt|when_any_result}} is an empty tuple, and the {{tt|index}} field is {{c|size_t(-1)}}.
+
+{{langlinks|zh}}

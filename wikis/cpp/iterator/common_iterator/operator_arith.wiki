@@ -1,0 +1,88 @@
+{{cpp/iterator/common_iterator/title|1=operator++}}
+{{cpp/iterator/common_iterator/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+constexpr common_iterator&amp; operator++();
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr decltype(auto) operator++( int );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=3|notes={{mark expos}}|1=
+class /*postfix_proxy*/ {
+    std::iter_value_t&lt;I&gt; keep_;
+    constexpr postfix_proxy(std::iter_reference_t&lt;I&gt;&amp;&amp; x)
+        : keep_(std::forward&lt;std::iter_reference_t&lt;I&gt;&gt;(x)) {}
+public:
+    constexpr const std::iter_value_t&lt;I&gt;&amp; operator*() const noexcept {
+        return keep_;
+    }
+};
+}}
+{{dcl end}}
+
+Increments the underlying iterator.
+
+The behavior is undefined if the underlying {{lc|std::variant}} member object {{tt|''var''}} does not hold an object of type {{tt|I}}, i.e. {{c|std::holds_alternative&lt;I&gt;(var)}} is equal to {{c|false}}.
+
+Let {{tt|it}} denote the iterator of type {{tt|I}} held by {{tt|''var''}}, that is {{c|std::get&lt;I&gt;(var)}}.
+
+@1@ Pre-increments by one. Equivalent to {{c|++it; return *this;}}.
+
+@2@ Post-increments by one:
+* Equivalent to: {{c|1=auto tmp = *this; ++*this; return tmp;}}, if {{c|I}} models {{lconcept|forward_iterator}}.
+* Equivalent to: {{c|return it++;}}, if the variable definition {{c|1=auto&amp;&amp; ref = *it++;}} is well-formed, or either
+:* {{c|std::indirectly_readable&lt;I&gt;}} or
+:* {{c|std::constructible_from&lt;std::iter_value_t&lt;I&gt;, std::iter_reference_t&lt;I&gt;&gt;}} or
+:* {{c|std::move_constructible&lt;std::iter_value_t&lt;I&gt;&gt;}}
+:: is {{c|false}}.
+* Equivalent to: {{c|postfix_proxy p(**this); ++*this; return p;}} otherwise, where {{tt|''postfix_proxy''}} is an exposition only helper type {{v|3}}.
+
+===Parameters===
+(none)
+
+===Return value===
+@1@ {{c|*this}}
+@2@ A copy of {{c|*this}} that was made before the change, or a result of post-increment of the underlying iterator, or a proxy keeping the value of the current element, as described above.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+
+int main()
+{
+    const auto il = {1, 2, 3, 4, 5, 6};
+
+    using CI = std::common_iterator&lt;
+                   std::counted_iterator&lt;std::initializer_list&lt;int&gt;::iterator&gt;,
+                   std::default_sentinel_t
+                   &gt;;
+
+    CI first{std::counted_iterator{std::begin(il), std::ssize(il) - 2}&lt;!----&gt;};
+
+    for (; first != std::default_sentinel; ++first)
+        std::cout &lt;&lt; *first &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1 2 3 4
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2259R1|std=C++20|before=post increment might discard its result in more situations|after=a proxy class is used to keep the result}}
+{{dr list item|wg=lwg|dr=3546|std=C++20|before=initialization of the proxy object was sometimes ill-formed|after=situation and definition adjusted}}
+{{dr list item|wg=lwg|dr=3574|std=C++20|before={{tt|variant}} was fully constexpr (P2231R1) but {{tt|common_iterator}} was not|after=also made constexpr}}
+{{dr list item|wg=lwg|dr=3595|std=C++20|before=functions of the proxy type lacked constexpr and noexcept|after=added}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator-|common_iterator}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

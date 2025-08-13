@@ -1,0 +1,138 @@
+{{cpp/title|codecvt}}
+{{cpp/locale/codecvt/navbar}}
+{{ddcl|header=locale|
+template&lt; 
+    class InternT, 
+    class ExternT, 
+    class StateT
+&gt; class codecvt;
+}}
+
+Class template {{tt|std::codecvt}} encapsulates conversion of character strings, including wide and multibyte, from one encoding to another. All file I/O operations performed through {{c/core|std::basic_fstream&lt;CharT&gt;}} use the {{c/core|std::codecvt&lt;CharT, char, std::mbstate_t&gt;}} facet of the locale imbued in the stream.
+
+{{inheritance diagram/std-codecvt}}
+
+===Specializations===
+The standard library is guaranteed to provide the following specializations (they are {{rlp|locale|required to be implemented by any locale object}}):
+{{dsc begin}}
+{{dsc header|locale}}
+{{dsc|{{c/core|std::codecvt&lt;char, char, std::mbstate_t&gt;}}|identity conversion}}
+{{dsc|{{c/core|std::codecvt&lt;char16_t, char, std::mbstate_t&gt;}}&lt;br&gt;{{mark life|since=c++11|deprecated=c++20}}|conversion between UTF-16 and UTF-8}}
+{{dsc|{{c/core|std::codecvt&lt;char16_t, char8_t, std::mbstate_t&gt;}}&lt;br&gt;{{mark since c++20}}{{mark deprecated}}|conversion between UTF-16 and UTF-8}}
+{{dsc|{{c/core|std::codecvt&lt;char32_t, char, std::mbstate_t&gt;}}&lt;br&gt;{{mark life|since=c++11|deprecated=c++20}}|conversion between UTF-32 and UTF-8}}
+{{dsc|{{c/core|std::codecvt&lt;char32_t, char8_t, std::mbstate_t&gt;}}&lt;br&gt;{{mark since c++20}}{{mark deprecated}}|conversion between UTF-32 and UTF-8}}
+{{dsc|{{c/core|std::codecvt&lt;wchar_t, char, std::mbstate_t&gt;}}|conversion between the system's native wide and the single-byte narrow character sets}}
+{{dsc end}}
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|intern_type}}|{{tt|InternT}}}}
+{{dsc|{{tt|extern_type}}|{{tt|ExternT}}}}
+{{dsc|{{tt|state_type}}|{{tt|StateT}}}}
+{{dsc end}}
+
+{{cpp/locale/facet data members}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|cpp/locale/codecvt/codecvt|constructs a new {{tt|codecvt}} facet}}
+{{dsc inc|cpp/locale/codecvt/dsc out}}
+{{dsc inc|cpp/locale/codecvt/dsc in}}
+{{dsc inc|cpp/locale/codecvt/dsc unshift}}
+{{dsc inc|cpp/locale/codecvt/dsc encoding}}
+{{dsc inc|cpp/locale/codecvt/dsc always_noconv}}
+{{dsc inc|cpp/locale/codecvt/dsc length}}
+{{dsc inc|cpp/locale/codecvt/dsc max_length}}
+{{dsc end}}
+
+===Protected member functions===
+{{dsc begin}}
+{{dsc prot mem dtor|cpp/locale/codecvt/~codecvt|destructs a {{tt|codecvt}} facet}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in}}
+{{dsc inc|cpp/locale/codecvt/dsc do_unshift}}
+{{dsc inc|cpp/locale/codecvt/dsc do_encoding}}
+{{dsc inc|cpp/locale/codecvt/dsc do_always_noconv}}
+{{dsc inc|cpp/locale/codecvt/dsc do_length}}
+{{dsc inc|cpp/locale/codecvt/dsc do_max_length}}
+{{dsc end}}
+
+{{cpp/locale/codecvt_base/inherit}}
+
+===Example===
+{{example
+|The following examples reads a UTF-8 file using a locale which implements UTF-8 conversion in {{c/core|codecvt&lt;wchar_t, char, std::mbstate_t&gt;}} and converts a UTF-8 string to UTF-16 using one of the standard specializations of {{tt|std::codecvt}}.
+|code=
+#include &lt;codecvt&gt;
+#include &lt;cstdint&gt;
+#include &lt;fstream&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;string&gt;
+
+// utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
+template&lt;class Facet&gt;
+struct deletable_facet : Facet
+{
+    template&lt;class... Args&gt;
+    deletable_facet(Args&amp;&amp;... args) : Facet(std::forward&lt;Args&gt;(args)...) {}
+    ~deletable_facet() {}
+};
+
+int main()
+{
+    // UTF-8 narrow multibyte encoding
+    std::string data = reinterpret_cast&lt;const char*&gt;(+u8"z\u00df\u6c34\U0001f34c");
+                       // or reinterpret_cast&lt;const char*&gt;(+u8"zß水🍌")
+                       // or "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9f\x8d\x8c"
+    
+    std::ofstream("text.txt") &lt;&lt; data;
+    
+    // using system-supplied locale's codecvt facet
+    std::wifstream fin("text.txt");
+    // reading from wifstream will use codecvt&lt;wchar_t, char, std::mbstate_t&gt;
+    // this locale's codecvt converts UTF-8 to UCS4 (on systems such as Linux)
+    fin.imbue(std::locale("en_US.UTF-8"));
+    std::cout &lt;&lt; "The UTF-8 file contains the following UCS4 code units:\n" &lt;&lt; std::hex;
+    for (wchar_t c; fin &gt;&gt; c;)
+        std::cout &lt;&lt; "U+" &lt;&lt; std::setw(4) &lt;&lt; std::setfill('0')
+                  &lt;&lt; static_cast&lt;uint32_t&gt;(c) &lt;&lt; ' ';
+    
+    // using standard (locale-independent) codecvt facet
+    std::wstring_convert&lt;
+        deletable_facet&lt;std::codecvt&lt;char16_t, char, std::mbstate_t&gt;&gt;, char16_t&gt; conv16;
+    std::u16string str16 = conv16.from_bytes(data);
+    
+    std::cout &lt;&lt; "\n\nThe UTF-8 file contains the following UTF-16 code units:\n"
+              &lt;&lt; std::hex;
+    for (char16_t c : str16)
+        std::cout &lt;&lt; "U+" &lt;&lt; std::setw(4) &lt;&lt; std::setfill('0')
+                  &lt;&lt; static_cast&lt;uint16_t&gt;(c) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+The UTF-8 file contains the following UCS4 code units:
+U+007a U+00df U+6c34 U+1f34c 
+
+The UTF-8 file contains the following UTF-16 code units:
+U+007a U+00df U+6c34 U+d83c U+df4c 
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3767|std=C++20|before={{c/core|std::codecvt&lt;char16_t, char8_t, std::mbstate_t&gt;}} and&lt;br&gt;{{c/core|std::codecvt&lt;char32_t, char8_t, std::mbstate_t&gt;}} are locale-independent|after=deprecated them}}
+{{dr list end}}
+
+===See also===
+{{cpp/locale/unicode string conversions}}
+{{dsc begin}}
+{{dsc inc|cpp/locale/dsc codecvt_base}}
+{{dsc inc|cpp/locale/dsc codecvt_byname}}
+{{dsc inc|cpp/locale/dsc codecvt_utf8}}
+{{dsc inc|cpp/locale/dsc codecvt_utf16}}
+{{dsc inc|cpp/locale/dsc codecvt_utf8_utf16}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

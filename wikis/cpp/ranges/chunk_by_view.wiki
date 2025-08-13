@@ -1,0 +1,129 @@
+{{cpp/ranges/view title|chunk_by}}
+{{cpp/ranges/chunk_by_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::forward_range V, std::indirect_binary_predicate&lt;iterator_t&lt;V&gt;,
+          ranges::iterator_t&lt;V&gt;&gt; Pred &gt;
+    requires ranges::view&lt;V&gt; &amp;&amp; std::is_object_v&lt;Pred&gt;
+class chunk_by_view
+    : public ranges::view_interface&lt;chunk_by_view&lt;V, Pred&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /* unspecified */ chunk_by = /* unspecified */ ;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R, class Pred &gt;
+    requires /* see below */
+constexpr ranges::view auto chunk_by( R&amp;&amp; r, Pred&amp;&amp; pred );
+}}
+{{dcl|since=c++23|1=
+template&lt; class Pred &gt;
+constexpr /*range adaptor closure*/ chunk_by( Pred&amp;&amp; pred );
+}}
+{{dcl end}}
+
+@1@ {{tt|chunk_by_view}} is a range adaptor that takes a {{lconcept|view}} and an invocable object {{c|pred}} (the binary predicate), and produces a {{lconcept|view}} of subranges (chunks), by splitting the underlying view between each pair of adjacent elements for which {{c|pred}} returns {{c|false}}. The first element of each such pair belongs to the previous chunk, and the second element belongs to the next chunk.
+
+@2@ The name {{c|views::chunk_by}} denotes a {{named req|RangeAdaptorObject}}. Given a subexpression {{c|e}} and {{c|f}}, the expression {{c|views::chunk_by(e, f)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|chunk_by_view(e, f)}}.
+
+{{tt|chunk_by_view}} always models {{lconcept|forward_range}}, and models {{lconcept|bidirectional_range}} and/or {{lconcept|common_range}}, if adapted {{lconcept|view}} type models the corresponding concepts.
+{{tt|chunk_by_view}} never models {{lconcept|borrowed_range}} or {{lconcept|sized_range}}.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|base_|id=base|spec={{tt|V}}|the underlying {{lconcept|view}}}}
+{{dsc expos mem obj|pred_|id=pred|spec={{lti|cpp/ranges/copyable_wrapper|movable-box}}{{tti|&lt;Pred&gt;}}|an object that wraps the predicate used to split the elements of {{tti|base_}}}}
+{{dsc expos mem obj|begin_|id=begin|spec={{rlpi|non-propagating-cache|non-propagating-cache}}{{tti|&lt;iterator&gt;}}|an object that caches the iterator to the first element}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc pred|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|chunk_by_view}}
+{{dsc expos mem fun|cpp/ranges/chunk_by_view/helpers#find_next|title=''find_next''|returns an iterator to the begin of the next subrange}}
+{{dsc expos mem fun|cpp/ranges/chunk_by_view/helpers#find_prev|title=''find_prev''|returns an iterator to the begin of the previous subrange}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid|operator[]=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/chunk_by_view/iterator|the iterator type}}
+{{dsc end}}
+
+===Notes===
+In order to provide the amortized constant time complexity required by the {{lconcept|range}} concept, the result of {{rltf|begin}} is cached within the {{tt|chunk_by_view}} object. If the underlying range is modified after the first call to {{rltf|begin}}, subsequent uses of the {{tt|chunk_by_view}} object might have unintuitive behavior.
+
+{{feature test macro|__cpp_lib_ranges_chunk_by|std=C++23|value=202202L|{{tt|std::ranges::chunk_by_view}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+void print_chunks(auto view, std::string_view separator = ", ")
+{
+    for (auto const subrange : view)
+    {
+        std::cout &lt;&lt; '[';
+        for (std::string_view prefix; auto const&amp; elem : subrange)
+            std::cout &lt;&lt; prefix &lt;&lt; elem, prefix = separator;
+        std::cout &lt;&lt; "] ";
+    }
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::initializer_list v1 = {1, 2, 3, 1, 2, 3, 3, 3, 1, 2, 3};
+    auto fn1 = std::ranges::less{};
+    auto view1 = v1 {{!}} std::views::chunk_by(fn1);
+    print_chunks(view1);
+
+    std::initializer_list v2 = {1, 2, 3, 4, 4, 0, 2, 3, 3, 3, 2, 1};
+    auto fn2 = std::ranges::not_equal_to{};
+    auto view2 = v2 {{!}} std::views::chunk_by(fn2);
+    print_chunks(view2);
+
+    std::string_view v3 = "__cpp_lib_ranges_chunk_by";
+    auto fn3 = [](auto x, auto y) { return not(x == '_' or y == '_'); };
+    auto view3 = v3 {{!}} std::views::chunk_by(fn3);
+    print_chunks(view3, "");
+
+    std::string_view v4 = "\u007a\u00df\u6c34\u{1f34c}"; // "zß水🍌"
+    auto fn4 = [](auto, auto ß) { return 128 == ((128 + 64) &amp; ß); };
+    auto view4 = v4 {{!}} std::views::chunk_by(fn4);
+    print_chunks(view4, "");
+}
+|output=
+[1, 2, 3] [1, 2, 3] [3] [3] [1, 2, 3] 
+[1, 2, 3, 4] [4, 0, 2, 3] [3] [3, 2, 1] 
+[_] [_] [cpp] [_] [lib] [_] [ranges] [_] [chunk] [_] [by]
+[z] [ß] [水] [🍌] 
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Chunk by view|id=range.chunk.by|section=26.7.30}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc chunk_view}}
+{{dsc inc|cpp/ranges/dsc slide_view}}
+{{dsc inc|cpp/ranges/dsc stride_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,88 @@
+{{cpp/title|recursive_mutex}}
+{{cpp/thread/recursive_mutex/navbar}}
+{{ddcl|header=mutex|since=c++11|1=
+class recursive_mutex;
+}}
+
+The {{tt|recursive_mutex}} class is a synchronization primitive that can be used to protect shared data from being simultaneously accessed by multiple threads.
+
+{{tt|recursive_mutex}} offers exclusive, recursive ownership semantics:
+
+* A calling thread ''owns'' a {{tt|recursive_mutex}} for a period of time that starts when it successfully calls either [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]] or [[cpp/thread/mutex/try_lock|{{tt|try_lock}}]].  During this period, the thread may make additional calls to [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]] or [[cpp/thread/recursive_mutex/try_lock|{{tt|try_lock}}]]. The period of ownership ends when the thread makes a matching number of calls to [[cpp/thread/recursive_mutex/unlock|{{tt|unlock}}]].
+* When a thread owns a {{tt|recursive_mutex}}, all other threads will block (for calls to [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]]) or receive a {{c|false}} return value (for [[cpp/thread/recursive_mutex/try_lock|{{tt|try_lock}}]]) if they attempt to claim ownership of the {{tt|recursive_mutex}}.
+* The maximum number of times that a {{tt|recursive_mutex}} may be locked is unspecified, but after that number is reached, calls to [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]] will throw {{lc|std::system_error}} and calls to [[cpp/thread/mutex/try_lock|{{tt|try_lock}}]] will return {{c|false}}.
+
+The behavior of a program is undefined if a {{tt|recursive_mutex}} is destroyed while still owned by some thread. The {{tt|recursive_mutex}} class satisfies all requirements of {{named req|Mutex}} and {{named req|StandardLayoutType}}.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc inc|cpp/thread/dsc native_handle_type|recursive_mutex}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/mutex/dsc constructor|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc destructor|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc operator{{=}}}}
+
+{{dsc h2|Locking}}
+{{dsc inc|cpp/thread/mutex/dsc lock|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock|recursive_mutex}}
+
+{{dsc h2|Native handle}}
+{{dsc inc|cpp/thread/mutex/dsc native_handle|recursive_mutex}}
+{{dsc end}}
+
+===Example===
+{{example
+|One use case for {{tt|recursive_mutex}} is protecting shared state in a class whose member functions may call each other.
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+class X
+{
+    std::recursive_mutex m;
+    std::string shared;
+public:
+    void fun1()
+    {
+        std::lock_guard&lt;std::recursive_mutex&gt; lk(m);
+        shared = "fun1";
+        std::cout &lt;&lt; "in fun1, shared variable is now " &lt;&lt; shared &lt;&lt; '\n';
+    }
+    void fun2()
+    {
+        std::lock_guard&lt;std::recursive_mutex&gt; lk(m);
+        shared = "fun2";
+        std::cout &lt;&lt; "in fun2, shared variable is now " &lt;&lt; shared &lt;&lt; '\n';
+        fun1(); // recursive lock becomes useful here
+        std::cout &lt;&lt; "back in fun2, shared variable is " &lt;&lt; shared &lt;&lt; '\n';
+    }
+};
+
+int main() 
+{
+    X x;
+    std::thread t1(&amp;X::fun1, &amp;x);
+    std::thread t2(&amp;X::fun2, &amp;x);
+    t1.join();
+    t2.join();
+}
+|p=true
+|output=
+in fun1, shared variable is now fun1
+in fun2, shared variable is now fun2
+in fun1, shared variable is now fun1
+back in fun2, shared variable is fun1
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc mutex}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

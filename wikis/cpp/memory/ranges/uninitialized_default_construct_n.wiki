@@ -1,0 +1,130 @@
+{{cpp/ranges/title|uninitialized_default_construct_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|Call signature}}
+{{dcla|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-iterator I &gt;
+    requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+I uninitialized_default_construct_n( I first,
+                                     std::iter_difference_t&lt;I&gt; count );
+}}
+{{dcl end}}
+
+Constructs objects of type {{c/core|std::iter_value_t&lt;I&gt;}} in the uninitialized memory area {{counted range|first|count}} by [[cpp/language/default initialization|default-initialization]], as if by
+{{c multi|
+return ranges::uninitialized_default_construct(std::counted_iterator(first, count),|
+                                               std::default_sentinel).base();
+}}
+
+If an exception is thrown during the initialization, the objects already constructed are destroyed in an unspecified order.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of elements to initialize}}
+{{par|count|the number of elements to construct}}
+{{par end}}
+
+===Return value===
+As described above.
+
+===Complexity===
+Linear in {{c|count}}.
+
+===Exceptions===
+Any exception thrown on construction of the elements in the destination range.
+
+===Notes===
+An implementation may skip the objects construction (without changing the observable effect) if no non-trivial default constructor is called while default-initializing a {{c/core|std::iter_value_t&lt;I&gt;}} object, which can be detected by {{lc|std::is_trivially_default_constructible}}.
+
+===Notes===
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} for [[cpp/memory#Uninitialized memory algorithms|specialized memory algorithms]]}}
+
+===Possible implementation===
+{{eq fun|1=
+struct uninitialized_default_construct_n_fn
+{
+    template&lt;no-throw-forward-iterator I&gt;
+        requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+    constexpr I operator()(I first, std::iter_difference_t&lt;I&gt; count) const
+    {
+        auto iter = std::counted_iterator(first, count);
+        return ranges::uninitialized_default_construct(iter, std::default_sentinel).base();
+    }
+};
+
+inline constexpr uninitialized_default_construct_n_fn uninitialized_default_construct_n{};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    struct S { std::string m{"█▓▒░ █▓▒░ "}; };
+    
+    constexpr int n{4};
+    alignas(alignof(S)) char out[n * sizeof(S)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;S*&gt;(out)};
+        auto last = std::ranges::uninitialized_default_construct_n(first, n);
+        
+        auto count{1};
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; count++ &lt;&lt; ' ' &lt;&lt; it-&gt;m &lt;&lt; '\n';
+
+        std::ranges::destroy(first, last);
+    }
+    catch (...)
+    {
+        std::cout &lt;&lt; "Exception!\n";
+    }
+    
+    // For scalar types, uninitialized_default_construct_n
+    // generally does not zero-fill the given uninitialized memory area.
+    constexpr int sample[]{1, 2, 3, 4, 5, 6};
+    int v[]{1, 2, 3, 4, 5, 6};
+    std::ranges::uninitialized_default_construct_n(std::begin(v), std::size(v));
+    if (std::memcmp(v, sample, sizeof(v)) == 0)
+    {
+        // Maybe undefined behavior, pending CWG 1997:
+        // for (const int i : v) { std::cout &lt;&lt; i &lt;&lt; ' '; }
+        for (const int i : sample)
+            std::cout &lt;&lt; i &lt;&lt; ' ';
+    }
+    else
+        std::cout &lt;&lt; "Unspecified!";
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+1 █▓▒░ █▓▒░
+2 █▓▒░ █▓▒░
+3 █▓▒░ █▓▒░
+4 █▓▒░ █▓▒░
+1 2 3 4 5 6
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=this algorithm might create objects on a {{c/core|const}} storage|after=kept disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_default_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_default_construct_n}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

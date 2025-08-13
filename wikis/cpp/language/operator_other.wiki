@@ -1,0 +1,402 @@
+{{title|Other operators}}
+{{cpp/language/expressions/navbar}}
+{|class="wikitable" style="font-size:85%;"
+|-
+!rowspan="2"|Operator&lt;br&gt;name
+!rowspan="2" style="width: 9%"|Syntax
+!rowspan="2"|{{rlp|operators|Over&amp;#8203;load&amp;#8203;able}}
+!colspan="2"|Prototype examples (for {{c/core|class T}})
+|-
+!Inside class definition
+!Outside class definition
+|-
+|function call
+|{{tt|a(a1, a2)}}
+|{{yes}}
+|{{c|R T::operator()(Arg1 &amp;a1, Arg2 &amp;a2, ...);}}
+|{{n/a}}
+|-
+|comma
+|{{tt|a, b}}
+|{{yes}}
+|{{c|T2&amp; T::operator,(T2 &amp;b);}}
+|{{c|T2&amp; operator,(const T &amp;a, T2 &amp;b);}}
+|-
+|conditional operator
+|{{tt|a ? b : c}}
+|{{no}}
+|{{n/a}}
+|{{n/a}}
+|}
+
+The ''function call'' operator provides function semantics for any object.
+
+The ''conditional operator'' (colloquially referred to as ''ternary conditional''{{sep}}) checks the boolean value of the first expression and,  depending on the resulting value, evaluates and returns either the second or the third expression.
+
+===Built-in function call operator===
+Function call expressions have the following form:
+{{sdsc begin}}
+{{sdsc|{{spar sep|function}}{{ttb|(}}{{spar|arg1}}{{ttb|,}} {{spar|arg2}}{{ttb|,}} {{spar|arg3}}{{ttb|,}}...{{ttb|)}}}} 
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|function}}|an expression function type or function pointer type}}
+{{par|{{spar|arg1}}{{ttb|,}} {{spar|arg2}}{{ttb|,}} {{spar|arg3}}{{ttb|,}}...|a possibly empty list of arbitrary expressions{{rev inl|since=c++11| or {{rlp|initialization|brace-enclosed initializer lists}}}}, except the comma operator is not allowed at the top level to avoid ambiguity}}
+{{par end}}
+
+For a call to a non-member function or to a {{rlp|static|static member function}}, {{spar|function}} can be an lvalue that refers to a function (in which case the {{rlpsd|implicit conversion#Function-to-pointer conversion}} is suppressed), or a prvalue of function pointer type.
+
+The function (or member) name specified by {{spar|function}} can be overloaded, {{rlp|overload resolution}} rules used to decide which overload is to be called.
+
+If {{spar|function}} specifies a member function, it may be virtual, in which case the final overrider of that function will be called, using dynamic dispatch at runtime.
+
+To call the function, 
+{{rrev multi|until1=c++17|rev1=
+The expression {{spar|function}} as well as all expressions {{spar|arg1}}, {{spar|arg2}}, {{spar|arg3}}, etc, provided as arguments are evaluated in arbitrary order, {{rlp|eval order|unsequenced}} with respect to each other.
+|rev2=
+{{spar|function}} is sequenced before each of {{spar|arg1}}, {{spar|arg2}}, {{spar|arg3}} as well as {{rlp|default arguments}}, if any. The argument expressions are evaluated in arbitrary order, {{rlp|eval order|indeterminately sequenced}} with respect to each other.
+}}
+
+Each function parameter is initialized with its corresponding argument after {{rlp|implicit conversion}} if necessary.
+* If there is no corresponding argument, the corresponding {{rlp|default arguments|default argument}} is used, and if there is none, the program is ill-formed.
+* If the call is made to a member function, then the {{c|this}} pointer to current object is converted as if by explicit cast to the {{c|this}} pointer expected by the function.
+* The initialization and destruction of each parameter occurs in the context of the {{rlp|expressions#Full-expressions|full-expression}} where the function call appears, which means, for example, that if a constructor or destructor of a parameter throws an exception, the {{rlp|try#Function try block|function {{c/core|try}} blocks}} of the called function are not considered.
+
+If the function is a variadic function, {{rlp|variadic arguments#Default conversions|default argument promotions}} are applied to all arguments matched by the ellipsis parameter.
+
+It is implementation-defined whether a parameter is destroyed when the function in which it is defined exits or at the end of the enclosing full-expression. Parameters are always destroyed in the reverse order of their construction.
+
+The return type of a function call expression is the return type of the chosen function, decided using static binding (ignoring the {{c/core|virtual}} keyword), even if the overriding function that is actually called returns a different type. This allows the overriding functions to return pointers or references to classes that are derived from the return type returned by the base function, i.e. C++ supports {{enwiki|Covariant return type|covariant return types}}. If {{spar|function}} specifies a destructor, the return type is {{c/core|void}}.
+
+{{rrev|since=c++17|
+When an object of class type {{tt|X}} is passed to or returned from a function, if each copy constructor, move constructor, and destructor of {{tt|X}} is either trivial or deleted, and {{tt|X}} has at least one non-deleted copy or move constructor, implementations are permitted to create a temporary object to hold the function parameter or result object.
+
+The temporary object is constructed from the function argument or return value, respectively, and the function's parameter or return object is initialized as if by using the non-deleted trivial constructor to copy the temporary (even if that constructor is inaccessible or would not be selected by overload resolution to perform a copy or move of the object).
+
+This allows objects of small class types, such as {{lc|std::complex}} or {{lc|std::span}}, to be passed to or returned from functions in registers.
+}}
+
+The value category of a function call expression is lvalue if the function returns an lvalue reference or an rvalue reference to function, is an xvalue if the function returns an rvalue reference to object, and is a prvalue otherwise. If the function call expression is a prvalue of object type, it must have {{rlp|type#Incomplete type|complete type}}{{rev inl|since=c++11| except when used as the operand of {{rlpt|decltype}} (or as the right operand of a [[#Built-in comma operator|built-in comma operator]] that is the operand of {{c/core|decltype}})}}.
+
+Function call expression is similar in syntax to value initialization {{c|T()}}, to {{rlp|explicit cast|function-style cast}} expression {{c|T(A1)}}, and to direct initialization of a temporary {{c|T(A1, A2, A3, ...)}}, where {{tt|T}} is the name of a type.
+
+{{example
+|code=
+#include &lt;cstdio&gt;
+
+struct S
+{
+    int f1(double d)
+    {
+        return printf("%f \n", d); // variable argument function call
+    }
+    
+    int f2()
+    {
+        return f1(7); // member function call, same as this-&gt;f1()
+                      // integer argument converted to double
+    }
+};
+
+void f()
+{
+    puts("function called"); // function call
+}
+
+int main()
+{
+    f();    // function call
+    S s;
+    s.f2(); // member function call
+}
+|output=
+function called
+7.000000 
+}}
+
+===Built-in comma operator===
+Comma expressions have the following form:
+{{sdsc begin}}
+{{sdsc|{{spar|E1}} {{ttb|,}} {{spar|E2}}}} 
+{{sdsc end}}
+
+In a comma expression {{c|E1, E2}}, the expression {{c|E1}} is evaluated, its result is {{rlp|expressions#Discarded-value expressions|discarded}} (although if it has class type, it won't be destroyed {{rlp|lifetime#Temporary object lifetime|until the end of the containing full expression}}), and its side effects are completed before evaluation of the expression {{c|E2}} begins {{rev inl|until=c++17|(note that a user-defined {{tt|operator,}} cannot guarantee sequencing)}}. 
+
+The type, value, and value category of the result of the comma expression are exactly the type, value, and value category of the second operand, {{c|E2}}. If {{c|E2}} is a temporary {{rev inl|since=c++17|expression}}, the result of the expression is that temporary {{rev inl|since=c++17|expression}}. If {{c|E2}} is a bit-field, the result is a bit-field.
+
+The comma in various comma-separated lists, such as function argument lists ({{c|f(a, b, c)}}) and initializer lists {{c|1=int a[] = {1, 2, 3} }}, is not the comma operator. If the comma operator needs to be used in such contexts, it has to be parenthesized: {{c|f(a, (n++, n + b), c)}}.
+
+{{rrev multi
+|since1=c++20|rev1=
+Using an unparenthesized comma expression as second (right) argument of a {{rlp|operator member access#Built-in subscript operator|subscript operator}} is deprecated.
+
+For example, {{c|a[b, c]}} is deprecated and {{c|a[(b, c)]}} is not.
+|since2=c++23|rev2=
+An unparenthesized comma expression cannot be second (right) argument of a {{rlp|operator member access#Built-in subscript operator|subscript operator}}. For example, {{c|a[b, c]}} is either ill-formed or equivalent to {{c|a.operator[](b, c)}}.
+
+Parentheses are needed when using a comma expression as the subscript, e.g., {{c|a[(b, c)]}}.
+}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+int main()
+{
+    // comma is often used to execute more than one expression
+    // where the language grammar allows only one expression:
+    
+    // * in the third component of the for loop
+    for (int i = 0, j = 10; i &lt;= j; ++i, --j)
+    //            ^list separator      ^comma operator
+        std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; " j = " &lt;&lt; j &lt;&lt; '\n';
+    
+    // * in a return statement
+    // return log("an error!"), -1;
+    
+    // * in an initializer expression
+    // MyClass(const Arg&amp; arg)
+    // : member{ throws_if_bad(arg), arg }
+    
+    // etc.
+    
+    // comma operators can be chained; the result of the last
+    // (rightmost) expression is the result of the whole chain:
+    int n = 1;
+    int m = (++n, std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; '\n', ++n, 2 * n);
+    
+    // m is now 6
+    std::cout &lt;&lt; "m = " &lt;&lt; (++m, m) &lt;&lt; '\n';
+}
+|output=
+i = 0 j = 10
+i = 1 j = 9
+i = 2 j = 8
+i = 3 j = 7
+i = 4 j = 6
+i = 5 j = 5
+n = 2
+m = 7
+}}
+
+===Conditional operator===
+The conditional operator expressions have the form 
+
+{{sdsc begin}}
+{{sdsc|{{spar|E1}} {{ttb|?}} {{spar|E2}} {{ttb|:}} {{spar|E3}}}} 
+{{sdsc end}}
+
+The first operand of the conditional operator is evaluated and {{rlp|implicit conversion|contextually converted}} to {{c/core|bool}}. After both the value evaluation and all side effects of the first operand are completed, if the result was {{c|true}}, the second operand is evaluated. If the result was {{c|false}}, the third operand is evaluated.
+
+The type and value category of the conditional expression {{c|E1 ? E2 : E3}} are determined according to the following rules:
+
+* If either {{c|E2}} or {{c|E3}} has type {{c/core|void}}:
+:* If both {{c|E2}} and {{c|E3}} are of type {{c/core|void}}, the result is a prvalue of type {{c/core|void}}.
+:* Otherwise, if the operand of type {{c/core|void}} is a (possibly parenthesized) {{rlp|throw|{{c/core|throw}} expression}}, the result has the type and the value category of the other expression. If the other expression is a {{rlp|bit field|bit-field}}, the result is a bit-field.&lt;ref&gt; Such conditional operator was commonly used in C++11 {{rlp|constexpr|constexpr programming}} prior to C++14.&lt;/ref&gt;
+:* Otherwise, the program is ill-formed.
+{{source|1=
+2 + 2 == 4 ? throw 123 : throw 456;
+
+std::string str = 2 + 2 == 4 ? "OK" : throw std::logic_error("2 + 2 != 4");
+}}
+
+* Otherwise, if {{c|E2}} or {{c|E3}} are {{rev inl|until=c++11|lvalue bit-fields}}{{rev inl|since=c++11|glvalue bit-fields of the same value category}} and of types ''cv1'' {{tt|T}} and ''cv2'' {{tt|T}}, respectively, the operands are considered to be of type ''cv'' {{tt|T}} for the remainder of this section, where cv is the union of ''cv1'' and ''cv2''.
+
+* Otherwise, if {{c|E2}} and {{c|E3}} have different types, at least one of which is a (possibly cv-qualified) class type, or both are {{rev inl|until=c++11|lvalues}}{{rev inl|since=c++11|glvalues of the same value category}} and have the same type except for cv-qualification, then an attempt is made to form an {{rlp|implicit conversion|implicit conversion sequence}}.&lt;ref&gt;Member access{{rev inl|since=c++11|, whether a conversion function is deleted}} and whether an operand is a bit-field are ignored.&lt;/ref&gt;
+: Attempts are made to form an implicit conversion sequence from an operand expression {{c|X}} of type {{tt|TX}} to a ''target type'' related to the type {{tt|TY}} of the operand expression {{c|Y}} as follows:
+:* If {{c|Y}} is an lvalue, the target type is {{tt|TY&amp;}}, but an implicit conversion sequence can only be formed if the reference would {{rlp|reference initialization#Direct binding|bind directly}} to {{rev inl|until=c++11|an lvalue}}{{rev inl|since=c++11|a glvalue}}.
+{{rrev|since=c++11|
+:* If {{c|Y}} is an xvalue, the target type is {{tt|TY&amp;&amp;}}, but an implicit conversion sequence can only be formed if the reference would bind directly.
+}}
+:* If {{c|Y}} is {{rev inl|until=c++11|an rvalue}}{{rev inl|since=c++11|a prvalue}} or if none of the conversion sequences above can be formed, and at least one of {{tt|TX}} and {{tt|TY}} is a (possibly cv-qualified) class type:
+::* If {{tt|TX}} and {{tt|TY}} are the same class type (ignoring cv-qualification):
+:::* If {{tt|TY}} is at least as cv-qualified as {{tt|TX}}, the target type is {{tt|TY}}.
+:::* Otherwise, no conversion sequence is formed.
+::* Otherwise, if {{tt|TY}} is a base class of {{tt|TX}}, the target type is {{tt|TY}} with the cv-qualifiers of {{tt|TX}}.
+::* Otherwise, the target type is the type of {{c|Z}}, where {{c|Z}} is the value of {{c|Y}} after applying the lvalue-to-rvalue, array-to-pointer, and function-to-pointer {{rlp|implicit conversion|standard conversions}}.
+:* Otherwise, no conversion sequence is formed.
+: Using this process, it is determined whether an implicit conversion sequence can be formed from {{c|E2}} to the target type determined for the {{c|E3}}, and vice versa.
+:* If both sequences can be formed, or one can be formed but it is the ambiguous conversion sequence, the program is ill-formed.
+:* If no conversion sequence can be formed, the operands are left unchanged.
+:* Otherwise, if exactly one conversion sequence can be formed, that conversion is applied to the chosen operand and the converted operand is used in place of the original operand for the remaining process.
+{{source|1=
+struct A {};
+
+struct B : A {};
+
+using T = const B;
+
+A a = true ? A() : T(); // Y = A(), TY = A, X = T(), TX = const B, Target = const A
+}}
+
+{{rev begin}}
+{{rev|until=c++11|
+* If {{c|E2}} and {{c|E3}} are lvalues of the same type, then the result is an lvalue of that type, and is a bit-field if at least one of {{c|E2}} and {{c|E3}} is a bit-field.
+}}
+{{rev|since=c++11|
+* If {{c|E2}} and {{c|E3}} are glvalues of the same type and the same value category, then the result has the same type and value category, and is a bit-field if at least one of {{c|E2}} and {{c|E3}} is a bit-field.
+}}
+{{rev end}}
+
+* Otherwise, the result is {{rev inl|until=c++11|an rvalue}}{{rev inl|since=c++11|a prvalue}}.
+:* If {{c|E2}} and {{c|E3}} do not have the same type, and either has (possibly cv-qualified) class type, {{rlp|overload resolution}} is performed using the [[#Overloads|built-in candidates]] to attempt to convert the operands to built-in types.
+::* If the overload resolution fails, the program is ill-formed.
+::* Otherwise, the selected conversions are applied and the converted operands are used in place of the original operands for the remaining process.
+:* The array-to-pointer and function-to-pointer conversions are applied to (possibly-converted) {{c|E2}} and {{c|E3}}. After those conversions, at least one of the following conditions must hold, otherwise the program is ill-formed:
+::* {{c|E2}} and {{c|E3}} have the same type. In this case, the result is of that type and the result is {{rlp|copy initialization|copy-initialized}} using the selected operand.
+::* Both {{c|E2}} and {{c|E3}} have arithmetic or enumeration type. In this case, {{rlp|usual arithmetic conversions}} are applied to bring them to their common type, and the result is of that type.
+::* At least one of {{c|E2}} and {{c|E3}} is a pointer. In this case, lvalue-to-rvalue, pointer{{rev inl|since=c++17|, function pointer}} and qualification conversions are applied to bring them to their {{rlpsd|pointer#Composite pointer type}}, and the result is of that type.
+::* At least one of {{c|E2}} and {{c|E3}} is a pointer to members. In this case, lvalue-to-rvalue, pointer-to-member{{rev inl|since=c++17|, function pointer}} and qualification conversions are applied to bring them to their {{rlpsd|pointer#Composite pointer type}}, and the result is of that type.
+{{rrev|since=c++11|
+::* Both {{c|E2}} and {{c|E3}} are null pointer constants, and at least one of which is of type {{lc|std::nullptr_t}}. In this case, the result is of type {{lc|std::nullptr_t}}.
+}}
+{{source|1=
+int* intPtr;
+
+using Mixed = decltype(true ? nullptr : intPtr);
+
+static_assert(std::is_same_v&lt;Mixed, int*&gt;); // nullptr becoming int*
+
+struct A
+{
+    int* m_ptr;
+} a;
+
+int* A::* memPtr = &amp;A::m_ptr; // memPtr is a pointer to member m_ptr of A
+
+// memPtr makes nullptr as type of pointer to member m_ptr of A
+static_assert(std::is_same_v&lt;decltype(false ? memPtr : nullptr), int*A::*&gt;);
+
+// a.*memPtr is now just pointer to int and nullptr also becomes pointer to int
+static_assert(std::is_same_v&lt;decltype(false ? a.*memPtr : nullptr), int*&gt;);
+}}
+
+&lt;references/&gt;
+
+{{todo|any chance to make this more readable without losing the fine point? At the very least, a one-line micro-example for each bullet point would help tremendously}}
+
+====Overloads====
+For every pair of promoted arithmetic types {{tt|L}} and {{tt|R}} and for every type {{tt|P}}, where {{tt|P}} is a pointer, pointer-to-member, or scoped enumeration type, the following function signatures participate in overload resolution:
+{{dcl begin}}
+{{dcl|LR operator?:(bool, L, R);}}
+{{dcl|P operator?:(bool, P, P);}}
+{{dcl end}}
+where LR is the result of {{rlp|usual arithmetic conversions}} performed on {{tt|L}} and {{tt|R}}.
+
+The operator “{{tt|?:}}” cannot be overloaded, these function signatures only exist for the purpose of overload resolution.
+
+{{rrev|since=c++11|
+The result type of a conditional operator is also accessible as the binary type trait {{lc|std::common_type}}.
+}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+struct Node
+{
+    Node* next;
+    int data;
+    
+    // deep-copying copy constructor
+    Node(const Node&amp; other)
+        : next(other.next ? new Node(*other.next) : NULL)
+        , data(other.data)
+    {}
+    
+    Node(int d) : next(NULL), data(d) {}
+    
+    ~Node() { delete next; }
+};
+
+int main()
+{   
+    // simple rvalue example
+    int n = 1 &gt; 2 ? 10 : 11;  // 1 &gt; 2 is false, so n = 11
+    
+    // simple lvalue example
+    int m = 10; 
+    (n == m ? n : m) = 7; // n == m is false, so m = 7
+    
+    //output the result
+    std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; "\nm = " &lt;&lt; m;
+}
+|output=
+n = 11
+m = 7
+}}
+
+===Standard library===
+Many classes in the standard library overload {{tt|operator()}} to be used as function objects.
+{{dsc begin}}
+{{dsc inc|cpp/memory/default_delete/dsc operator()}}
+{{dsc inc|cpp/utility/functional/plus/dsc operator()}}
+{{dsc inc|cpp/utility/functional/minus/dsc operator()}}
+{{dsc inc|cpp/utility/functional/multiplies/dsc operator()}}
+{{dsc inc|cpp/utility/functional/divides/dsc operator()}}
+{{dsc inc|cpp/utility/functional/modulus/dsc operator()}}
+{{dsc inc|cpp/utility/functional/negate/dsc operator()}}
+{{dsc inc|cpp/utility/functional/equal_to/dsc operator()}}
+{{dsc inc|cpp/utility/functional/not_equal_to/dsc operator()}}
+{{dsc inc|cpp/utility/functional/greater/dsc operator()}}
+{{dsc inc|cpp/utility/functional/less/dsc operator()}}
+{{dsc inc|cpp/utility/functional/greater_equal/dsc operator()}}
+{{dsc inc|cpp/utility/functional/less_equal/dsc operator()}}
+{{dsc inc|cpp/utility/functional/logical_and/dsc operator()}}
+{{dsc inc|cpp/utility/functional/logical_or/dsc operator()}}
+{{dsc inc|cpp/utility/functional/logical_not/dsc operator()}}
+{{dsc inc|cpp/utility/functional/bit_and/dsc operator()}}
+{{dsc inc|cpp/utility/functional/bit_or/dsc operator()}}
+{{dsc inc|cpp/utility/functional/bit_xor/dsc operator()}}
+{{dsc inc|cpp/utility/functional/unary_negate/dsc operator()}}
+{{dsc inc|cpp/utility/functional/binary_negate/dsc operator()}}
+{{dsc inc|cpp/utility/functional/reference_wrapper/dsc operator()}}
+{{dsc inc|cpp/utility/functional/function/dsc operator()}}
+{{dsc inc|cpp/utility/functional/move_only_function/dsc operator()}}
+{{dsc inc|cpp/utility/functional/copyable_function/dsc operator()}}
+{{dsc inc|cpp/coroutine/coroutine_handle/dsc operator()}}
+{{dsc inc|cpp/locale/locale/dsc operator()}}
+{{dsc inc|cpp/container/value_compare/dsc operator()|map}}
+{{dsc inc|cpp/container/value_compare/dsc operator()|multimap}}
+{{dsc inc|cpp/thread/packaged_task/dsc operator()}}
+{{dsc inc|cpp/numeric/random/engine/dsc operator()|linear_congruential_engine}}&lt;!--and all other engines--&gt;
+{{dsc inc|cpp/numeric/random/distribution/dsc operator()|uniform_int_distribution}}&lt;!--and all other distributions--&gt;
+{{dsc end}}
+
+The comma operator is not overloaded by any class in the standard library. The boost library uses {{c|operator,}} in [https://www.boost.org/doc/libs/release/libs/assign/doc/index.html#intro boost.assign], [https://www.boost.org/doc/libs/release/libs/spirit/doc/html/index.html boost.spirit], and other libraries. The database access library [https://soci.sourceforge.net/doc.html SOCI] also overloads {{c|operator,}}.
+
+===Defect reports===
+{{dr list begin}}
+&lt;!--the resolution of CWG 324 changed the semantics of operators having bit-field operands, the DR item is noted in the 'bit-field' page--&gt;
+{{dr list item|wg=cwg|dr=446|std=C++98|before=it was unspecified whether a temporary is created for an&lt;br&gt;lvalue-to-rvalue conversion on the conditional operator|after=always creates a temporary if&lt;br&gt;the operator returns a class rvalue}}
+{{dr list item|wg=cwg|dr=462|std=C++98|before=if the second operand of a comma operator is a temporary,&lt;br&gt;it was unspecified whether its lifetime will be extended when&lt;br&gt;the result of the comma expression is bound to a reference|after=the result of the comma expression&lt;br&gt;is the temporary in this case&lt;br&gt;(hence its lifetime is extended)}}
+{{dr list item|wg=cwg|dr=587|std=C++98|before=when the second and third operands of a conditional&lt;br&gt;operator are lvalues of the same type except for&lt;br&gt;cv-qualification, the result was an lvalue if these&lt;br&gt;operands have class types or an rvalue otherwise|after=the result is always&lt;br&gt;an lvalue in this case}}
+{{dr list item|wg=cwg|dr=1029|std=C++98|before=the type of a destructor call was unspecified|after=specified as {{c/core|void}}}}
+{{dr list item|wg=cwg|dr=1550|std=C++98|before=parenthesized {{c/core|throw}} expressions were not allowed in&lt;br&gt;conditional expressions if other operand is non-{{c/core|void}}|after=accepted}}
+{{dr list item|wg=cwg|dr=1560|std=C++98|before={{c/core|void}} operand of conditional operators caused&lt;br&gt;gratuitous lvalue-to-rvalue conversion on the&lt;br&gt;other operand, always resulting in rvalue|after=a conditional expression&lt;br&gt;with a {{c/core|void}} can be lvalue}}
+{{dr list item|wg=cwg|dr=1642|std=C++98|before=the expression {{spar|function}} in a function call&lt;br&gt;expression could be a function pointer lvalue|after=not allowed}}
+{{dr list item|wg=cwg|dr=1805|std=C++98|before=when determining the target type for the implicit conversion&lt;br&gt;sequence, the way to convert {{c|Y}} to {{c|Z}} was unclear|after=made clear}}
+{{dr list item|wg=cwg|dr=1895|std=C++98&lt;br&gt;C++11|before=unclear if deleted (C++11) or inaccessible (C++98)&lt;br&gt;conversion function prevents conversion in&lt;br&gt;conditional expressions, and conversions from base&lt;br&gt;class to derived class prvalue were not considered&lt;!-- or, as summarized in https://github.com/llvm-mirror/clang/blob/0d385d/test/SemaCXX/conditional-expr.cpp#L115, "for rvalues, hierarchy takes precedence over other conversions" --&gt;|after=handled like&lt;br&gt;overload resolution}}
+{{dr list item|wg=cwg|dr=1932|std=C++98|before=same-type bit-fields were missing in conditional expressions|after=handled by underlying types}}
+{{dr list item|wg=cwg|dr=2226|std=C++11|before=when determining the target type of the other&lt;br&gt;operand of a conditional operator, reference could&lt;br&gt;not bind to an xvalue if that operand is an lvalue|after=allowed}}
+{{dr list item|wg=cwg|dr=2283|std=C++17|before=the type completeness requirement for function call&lt;br&gt;operator was accidently removed by {{stddoc|P0135R1}}|after=restored the requirement}}
+{{dr list item|wg=cwg|dr=2321|std=C++98|before=when determining the target type of the other operand&lt;br&gt;of a conditional operator, a derived class type could&lt;br&gt;not be converted to a less cv-qualified base class type|after=allowed to convert to the base&lt;br&gt;class type with the cv-qualification&lt;br&gt;from the derived class operand}}
+{{dr list item|wg=cwg|dr=2715|std=C++98|before=the initialization and destruction of each&lt;br&gt;parameter would occur within the context of&lt;br&gt;the calling function, which might not exist&lt;ref&gt;For example, functions can be called in the initializer of a namespace-scope variable, there is no “calling function” in this context.&lt;/ref&gt;|after=occurs within the context of&lt;br&gt;the enclosing full-expression}}
+{{dr list item|wg=cwg|dr=2850|std=C++98|before=the destruction order of parameters was unclear|after=made clear}}
+{{dr list item|wg=cwg|dr=2865|std=C++98|before=if {{tt|TX}} and {{tt|TY}} are the same class type and {{tt|TX}} is&lt;br&gt;more cv-qualified than {{tt|TY}}, an implicit conversion&lt;br&gt;sequence could still be formed from a prvalue {{c|Y}}|after=no conversion sequence&lt;br&gt;will be formed in this case}}
+{{dr list item|wg=cwg|dr=2906|std=C++98|before=lvalue-to-rvalue conversions were unconditionally applied&lt;br&gt;in the rvalue result case for the conditional operator|after=only applied in some cases}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{rlp|operator precedence|Operator precedence}}&lt;br&gt;
+{{rlp|operators|Operator overloading}}
+
+{{cpp/language/operators}}
+
+{{dsc begin}}
+{{dsc see c|c/language/operator other|Other operators|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

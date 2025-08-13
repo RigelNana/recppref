@@ -1,0 +1,98 @@
+{{title|{{tt|consteval}} specifier {{mark since c++20}}}}
+{{cpp/language/declarations/navbar}}
+:*{{ttb|consteval}} - specifies that a function is an ''immediate function'', that is, every call to the function must produce a compile-time constant
+
+===Explanation===
+The {{tt|consteval}} specifier declares a function or function template to be an ''immediate function'', that is, every {{rlp|expressions#Potentially-evaluated expressions|potentially-evaluated}} call to the function must (directly or indirectly) produce a compile time {{rlp|constant expression}}.
+
+An immediate function is a {{rlp|constexpr#constexpr function|constexpr function}}, subject to its requirements as the case may be. Same as {{tt|constexpr}}, a {{tt|consteval}} specifier implies {{tt|inline}}. However, it may not be applied to destructors, allocation functions, or deallocation functions.
+
+A function or function template declaration specifying {{tt|consteval}} may not also specify {{tt|constexpr}}, and any redeclarations of that function or function template must also specify {{tt|consteval}}.
+
+A {{rlp|expressions#Potentially-evaluated expressions|potentially-evaluated}} invocation of an immediate function whose innermost non-block scope is not a {{rlp|scope#Function parameter scope|function parameter scope}} of an immediate function {{rev inl|since=c++23| or the true-branch of a {{rlp|if#Consteval if|consteval if statement}}}} must produce a constant expression; such an invocation is known as an ''immediate invocation''.
+
+{{source|1=&lt;!-- from P1073R3 --&gt;
+consteval int sqr(int n)
+{
+    return n*n;
+}
+constexpr int r = sqr(100); // OK
+
+int x = 100;
+int r2 = sqr(x);            // Error: Call does not produce a constant
+
+consteval int sqrsqr(int n)
+{
+    return sqr(sqr(n));     // Not a constant expression at this point, but OK
+}
+
+constexpr int dblsqr(int n)
+{
+    return 2 * sqr(n);      // Error: Enclosing function is not consteval
+                            // and sqr(n) is not a constant
+}
+}}
+
+An {{rlp|identifiers#In expressions|identifier expression}} that denotes an immediate function may only appear within a subexpression of an immediate invocation or within an ''immediate function context'' (i.e. a context mentioned above, in which a call to an immediate function needs not to be a constant expression). A pointer or reference to an immediate function can be taken but cannot escape constant expression evaluation:
+
+{{source|1=
+consteval int f() { return 42; }
+consteval auto g() { return &amp;f; }
+consteval int h(int (*p)() = g()) { return p(); }
+constexpr int r = h();  // OK
+constexpr auto e = g(); // ill-formed: a pointer to an immediate function is
+                        // not a permitted result of a constant expression
+}}
+
+===Notes===
+{{ftm begin|std=1|core=1}}
+{{ftm|std=C++20|value=201811L|__cpp_consteval|rowspan="2"|Immediate functions}}
+{{ftm|std=C++23|dr=20|value=202211L|-|Making {{c/core|consteval}} propagate up}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/consteval}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+
+// This function might be evaluated at compile-time, if the input
+// is known at compile-time. Otherwise, it is executed at run-time.
+constexpr unsigned factorial(unsigned n)
+{
+    return n &lt; 2 ? 1 : n * factorial(n - 1);
+}
+
+// With consteval we enforce that the function will be evaluated at compile-time.
+consteval unsigned combination(unsigned m, unsigned n)
+{
+    return factorial(n) / factorial(m) / factorial(n - m);
+}
+
+static_assert(factorial(6) == 720);
+static_assert(combination(4, 8) == 70);
+
+int main(int argc, const char*[])
+{
+    constexpr unsigned x{factorial(4)};
+    std::cout &lt;&lt; x &lt;&lt; '\n';
+    
+    [[maybe_unused]]
+    unsigned y = factorial(argc); // OK
+//  unsigned z = combination(argc, 7); // error: 'argc' is not a constant expression
+}
+|output=
+24
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc constexpr}}
+{{dsc inc|cpp/language/dsc constinit}}
+{{dsc|{{rlp|constant expression}}| defines an {{rlp|expressions|expression}} that can be evaluated at compile time}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

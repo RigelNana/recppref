@@ -1,0 +1,176 @@
+{{cpp/ranges/title|is_heap_until}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt; std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr I is_heap_until( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;std::projected
+                   &lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    is_heap_until( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Within the specified range, finds the longest range which starting from the beginning of the specified range and represents a [[cpp/algorithm#Heap operations|heap]] with respect to {{c|comp}} and {{c|proj}}.
+
+@1@ The specified range is {{range|first|last}}.
+
+@2@ The specified range is {{c|r}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to examine}}
+{{par|r|the range of elements to examine}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+The last iterator {{c|iter}} in the specified range for which:
+@1@ The range {{range|first|iter}} is a heap with respect to {{c|comp}} and {{c|proj}}.
+@2@ The range {{range|ranges::begin(r)|iter}} is a heap with respect to {{c|comp}} and {{c|proj}}.
+
+===Complexity===
+{{mathjax-or|\(\scriptsize O(N) \)|O(N)}} applications of {{c|comp}} and {{c|proj}}, where {{mathjax-or|\(\scriptsize N \)|N}} is:
+@1@ {{c|ranges::distance(first, last)}}
+@2@ {{c|ranges::distance(r)}}
+
+===Possible implementation===
+{{eq fun|1=
+struct is_heap_until_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Proj = std::identity,
+             std::indirect_strict_weak_order
+                 &lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr I operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        std::iter_difference_t&lt;I&gt; n{ranges::distance(first, last)}, dad{0}, son{1};
+        for (; son != n; ++son)
+        {
+            if (std::invoke(comp, std::invoke(proj, *(first + dad)),
+                                  std::invoke(proj, *(first + son))))
+                return first + son;
+            else if ((son % 2) == 0)
+                ++dad;
+        }
+        return first + n;
+    }
+    
+    template&lt;ranges::random_access_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order
+                 &lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr is_heap_until_fn is_heap_until{};
+}}
+
+===Example===
+{{example
+|The example renders a given vector as a (balanced) {{enwiki|Binary tree}}.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+void out(const auto&amp; what, int n = 1)
+{
+    while (n-- &gt; 0)
+        std::cout &lt;&lt; what;
+}
+
+void draw_bin_tree(auto first, auto last)
+{
+    auto bails = [](int n, int w)
+    {
+        auto b = [](int w) { out("┌"), out("─", w), out("┴"), out("─", w), out("┐"); };
+        n /= 2;
+        if (!n)
+            return;
+        for (out(' ', w); n-- &gt; 0;)
+            b(w), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto data = [](int n, int w, auto&amp; first, auto last)
+    {
+        for (out(' ', w); n-- &gt; 0 &amp;&amp; first != last; ++first)
+            out(*first), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto tier = [&amp;](int t, int m, auto&amp; first, auto last)
+    {
+        const int n{1 &lt;&lt; t};
+        const int w{(1 &lt;&lt; (m - t - 1)) - 1};
+        bails(n, w), data(n, w, first, last);
+    };
+    
+    const auto size{std::ranges::distance(first, last)};
+    const int m{static_cast&lt;int&gt;(std::ceil(std::log2(1 + size)))};
+    for (int i{}; i != m; ++i)
+        tier(i, m, first, last);
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{3, 1, 4, 1, 5, 9};
+    std::ranges::make_heap(v);
+    
+    // probably mess up the heap
+    v.push_back(2);
+    v.push_back(6);
+    
+    out("v after make_heap and push_back:\n");
+    draw_bin_tree(v.begin(), v.end());
+    
+    out("the max-heap prefix of v:\n");
+    const auto heap_end = std::ranges::is_heap_until(v);
+    draw_bin_tree(v.begin(), heap_end);
+}
+|output=&lt;nowiki/&gt;
+v after make_heap and push_back: 
+       9               
+   ┌───┴───┐       
+   5       4       
+ ┌─┴─┐   ┌─┴─┐   
+ 1   1   3   2   
+┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ 
+6 
+the max-heap prefix of v: 
+   9       
+ ┌─┴─┐   
+ 5   4   
+┌┴┐ ┌┴┐ 
+1 1 3 2
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc make_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc push_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc pop_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort_heap}}
+{{dsc inc|cpp/algorithm/dsc is_heap_until}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

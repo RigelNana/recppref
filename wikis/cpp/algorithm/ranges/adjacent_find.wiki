@@ -1,0 +1,131 @@
+{{cpp/ranges/title|adjacent_find}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+          std::indirect_binary_predicate&lt;
+              std::projected&lt;I, Proj&gt;,
+              std::projected&lt;I, Proj&gt;&gt; Pred = ranges::equal_to &gt;
+constexpr I
+    adjacent_find( I first, S last, Pred pred = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::forward_range R, class Proj = std::identity,
+          std::indirect_binary_predicate&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;,
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred = ranges::equal_to &gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    adjacent_find( R&amp;&amp; r, Pred pred = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Searches the range {{range|first|last}} for the first two consecutive equal elements.
+
+@1@ Elements are compared using {{c|pred}} (after projecting with the projection {{c|proj}}).
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to examine}}
+{{par|r|the range of the elements to examine}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+An iterator to the first of the first pair of identical elements, that is, the first iterator {{tt|it}} such that {{c|bool(std::invoke(pred, std::invoke(proj1, *it), std::invoke(proj, *(it + 1))))}} is {{c|true}}.
+
+If no such elements are found, an iterator equal to {{c|last}} is returned.
+
+===Complexity===
+Exactly {{c|min((result - first) + 1, (last - first) - 1)}} applications of the predicate and projection where {{tt|result}} is the return value.
+
+===Possible implementation===
+{{eq fun|1=
+struct adjacent_find_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_binary_predicate&lt;
+                 std::projected&lt;I, Proj&gt;,
+                 std::projected&lt;I, Proj&gt;&gt; Pred = ranges::equal_to&gt;
+    constexpr I operator()(I first, S last, Pred pred = {}, Proj proj = {}) const
+    {
+        if (first == last)
+            return first;
+        auto next = ranges::next(first);
+        for (; next != last; ++next, ++first)
+            if (std::invoke(pred, std::invoke(proj, *first), std::invoke(proj, *next)))
+                return first;
+        return next;
+    }
+
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             std::indirect_binary_predicate&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;,
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred = ranges::equal_to&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Pred pred = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::ref(pred), std::ref(proj));
+    }
+};
+
+inline constexpr adjacent_find_fn adjacent_find;
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+constexpr bool some_of(auto&amp;&amp; r, auto&amp;&amp; pred) // some but not all
+{
+    return std::ranges::cend(r) != std::ranges::adjacent_find(r,
+        [&amp;pred](auto const&amp; x, auto const&amp; y)
+        {
+            return pred(x) != pred(y);
+        });
+}
+
+// test some_of
+constexpr auto a = {0, 0, 0, 0}, b = {1, 1, 1, 0}, c = {1, 1, 1, 1};
+auto is_one = [](auto x){ return x == 1; };
+static_assert(!some_of(a, is_one) &amp;&amp; some_of(b, is_one) &amp;&amp; !some_of(c, is_one));
+
+int main()
+{
+    const auto v = {0, 1, 2, 3, 40, 40, 41, 41, 5}; /*
+                                ^^          ^^       */
+    namespace ranges = std::ranges;
+
+    if (auto it = ranges::adjacent_find(v.begin(), v.end()); it == v.end())
+        std::cout &lt;&lt; "No matching adjacent elements\n";
+    else
+        std::cout &lt;&lt; "The first adjacent pair of equal elements is at ["
+                  &lt;&lt; ranges::distance(v.begin(), it) &lt;&lt; "] == " &lt;&lt; *it &lt;&lt; '\n';
+
+    if (auto it = ranges::adjacent_find(v, ranges::greater()); it == v.end())
+        std::cout &lt;&lt; "The entire vector is sorted in ascending order\n";
+    else
+        std::cout &lt;&lt; "The last element in the non-decreasing subsequence is at ["
+                  &lt;&lt; ranges::distance(v.begin(), it) &lt;&lt; "] == " &lt;&lt; *it &lt;&lt; '\n';
+}
+|output=
+The first adjacent pair of equal elements is at [4] == 40
+The last element in the non-decreasing subsequence is at [7] == 41
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique}}
+{{dsc inc|cpp/algorithm/dsc adjacent_find}}
+{{dsc end}}
+
+{{langlinks|es|ja|zh}}

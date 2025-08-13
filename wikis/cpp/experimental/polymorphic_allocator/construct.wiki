@@ -1,0 +1,100 @@
+{{cpp/experimental/pmr/polymorphic_allocator/title|construct}}
+{{cpp/experimental/lib extensions/pmr/polymorphic_allocator/navbar}}
+{{dcl begin}}
+{{dcl|since=libfund_ts|num=1|
+template&lt; class U, class... Args &gt;
+void construct( U* p, Args&amp;&amp;... args );
+}}
+{{dcl|since=libfund_ts|num=2|
+template&lt; class T1, class T2, class... Args1, class... Args2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p,
+                std::piecewise_construct_t,
+                std::tuple&lt;Args1...&gt; x,
+                std::tuple&lt;Args2...&gt; y );
+}}
+{{dcl|since=libfund_ts|num=3|
+template&lt; class T1, class T2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p );
+}}
+{{dcl|since=libfund_ts|num=4|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, U&amp;&amp; x, V&amp;&amp; y );
+}}
+{{dcl|since=libfund_ts|num=5|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, const std::pair&lt;U, V&gt;&amp; xy );
+}}
+{{dcl|since=libfund_ts|num=6|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, std::pair&lt;U, V&gt;&amp;&amp; xy );
+}}
+{{dcl end}}
+
+Constructs an object in allocated, but not initialized storage pointed to by {{c|p}} the provided constructor arguments. If the object is of type that itself uses allocators, or if it is std::pair, passes {{tt|this-&gt;resource()}} down to the constructed object.
+
+1) If {{c|1=std::uses_allocator&lt;U, memory_resource*&gt;::value == false}} (the type {{tt|U}} does not use allocators) and {{c|1=std::is_constructible&lt;U, Args...&gt;::value == true}}, then constructs the object as if by {{c|::new((void *) p) U(std::forward&lt;Args&gt;(args)...);}}.
+
+Otherwise, if {{c|1=std::uses_allocator&lt;U, memory_resource*&gt;::value == true}} (the type {{tt|U}} uses allocators, e.g. it is a container) and {{c|1=std::is_constructible&lt;U, std::allocator_arg_t, memory_resource*, Args...&gt;::value == true}}, then constructs the object as if by {{c|::new((void *) p) U(std::allocator_arg, this-&gt;resource(), std::forward&lt;Args&gt;(args)...);}}.
+
+Otherwise, if {{c|1=std::uses_allocator&lt;U, memory_resource*&gt;::value == true}} (the type {{tt|U}} uses allocators, e.g. it is a container) and {{c|1=std::is_constructible&lt;U, Args..., memory_resource*&gt;::value == true}}, then constructs the object as if by {{c|::new((void *) p) U(std::forward&lt;Args&gt;(args)..., this-&gt;resource());}}.
+
+Otherwise, the program is ill-formed.
+
+2) First, if either {{tt|T1}} or {{tt|T2}} is allocator-aware, modifies the tuples {{c|x}} and {{c|y}} to include {{tt|this-&gt;resource()}}, resulting in the two new tuples {{tt|xprime}} and {{tt|yprime}}, according to the following three rules:
+
+2a) if {{tt|T1}} is not allocator-aware ({{c|1=std::uses_allocator&lt;T1, memory_resource*&gt;::value == false}}) and {{c|1=std::is_constructible&lt;T1, Args1...&gt;::value == true}}, then {{tt|xprime}} is {{c|x}}, unmodified.
+
+2b) if {{tt|T1}} is allocator-aware ({{c|1=std::uses_allocator&lt;T1, memory_resource*&gt;::value == true}}), and its constructor takes an allocator tag ({{c|1=std::is_constructible&lt;T1, std::allocator_arg_t, memory_resource*, Args1...&gt;::value == true}}, then {{tt|xprime}} is
+{{c|std::tuple_cat(std::make_tuple(std::allocator_arg, this-&gt;resource()), std::move(x))}}.
+
+2c) if {{tt|T1}} is allocator-aware ({{c|1=std::uses_allocator&lt;T1, memory_resource*&gt;::value == true}}), and its constructor takes the allocator as the last argument ({{c|1=std::is_constructible&lt;T1, Args1..., memory_resource*&gt;::value == true}}), then {{tt|xprime}} is {{c|std::tuple_cat(std::move(x), std::make_tuple(this-&gt;resource()))}}.
+
+2d) Otherwise, the program is ill-formed.
+
+Same rules apply to {{tt|T2}} and the replacement of {{c|y}} with {{tt|yprime}}.
+
+Once {{tt|xprime}} and {{tt|yprime}} are constructed, constructs the pair {{c|p}} in allocated storage as if by {{c|::new((void *) p) pair&lt;T1, T2&gt;(std::piecewise_construct, std::move(xprime), std::move(yprime));}}.
+
+3) Equivalent to {{c|construct(p, std::piecewise_construct, std::tuple&lt;&gt;(), std::tuple&lt;&gt;())}}, that is, passes the memory resource on to the pair's member types if they accept them.
+
+4) Equivalent to
+
+{{c|
+construct(p, std::piecewise_construct, std::forward_as_tuple(std::forward&lt;U&gt;(x)),
+                                       std::forward_as_tuple(std::forward&lt;V&gt;(y)))
+}}
+
+5) Equivalent to
+
+{{c|
+construct(p, std::piecewise_construct, std::forward_as_tuple(xy.first),
+                                       std::forward_as_tuple(xy.second))
+}}
+
+6) Equivalent to
+
+{{c|
+construct(p, std::piecewise_construct, std::forward_as_tuple(std::forward&lt;U&gt;(xy.first)),
+                                       std::forward_as_tuple(std::forward&lt;V&gt;(xy.second)))
+}}
+
+===Parameters===
+{{par begin}}
+{{par|p|pointer to allocated, but not initialized storage}}
+{{par|args...|the constructor arguments to pass to the constructor of {{tt|T}}}}
+{{par|x|the constructor arguments to pass to the constructor of {{tt|T1}}}}
+{{par|y|the constructor arguments to pass to the constructor of {{tt|T2}}}}
+{{par|xy|the pair whose two members are the constructor arguments for {{tt|T1}} and {{tt|T2}}}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Notes===
+This function is called (through {{lc|std::allocator_traits}}) by any allocator-aware object, such as {{lc|std::vector}}, that was given a {{lc|std::polymorphic_allocator}} as the allocator to use. Since {{tt|memory_resource*}} implicitly converts to {{tt|polymorphic_allocator}}, the memory resource pointer will propagate to any allocator-aware subobjects using polymorphic allocators. 
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator_traits/dsc construct}}
+{{dsc inc|cpp/memory/allocator/dsc construct}}
+{{dsc end}}

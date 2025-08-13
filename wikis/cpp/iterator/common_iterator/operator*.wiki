@@ -1,0 +1,95 @@
+{{cpp/iterator/common_iterator/title|operator*,-&gt;}}
+{{cpp/iterator/common_iterator/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr decltype(auto) operator*();
+}}
+{{dcl|num=2|since=c++20|
+constexpr decltype(auto) operator*() const
+    requires /*dereferenceable*/&lt;const I&gt;;
+}}
+{{dcl|num=3|since=c++20|
+constexpr auto operator-&gt;() const
+    requires /* see description */;
+}}
+{{dcl h|Helper types}}
+{{dcl|num=4|notes={{mark expos}}|
+class /*proxy*/ {
+    std::iter_value_t&lt;I&gt; keep_;
+    constexpr proxy(std::iter_reference_t&lt;I&gt;&amp;&amp; x)
+        : keep_(std::move(x)) {}
+public:
+    constexpr const std::iter_value_t&lt;I&gt;* operator-&gt;() const noexcept {
+        return std::addressof(keep_);
+    }
+};
+}}
+{{dcl end}}
+
+Returns pointer or reference to the current element, or a proxy holding it.
+
+The behavior is undefined if the underlying {{lc|std::variant}} member object {{tt|''var''}} does not hold an object of type {{tt|I}}, i.e. {{c|std::holds_alternative&lt;I&gt;(var)}} is equal to {{c|false}}.
+
+Let {{tt|it}} denote the iterator of type {{tt|I}} held by {{tt|''var''}}, that is {{c|std::get&lt;I&gt;(var)}}.
+
+@1,2@ Returns the result of dereferencing {{tt|it}}.
+
+@3@ Returns a pointer or underlying iterator to the current element, or a proxy holding it:
+* Equivalent to {{c|return it;}}, if {{tt|I}} is a pointer type or if the expression {{c|it.operator-&gt;()}} is well-formed.
+* Otherwise, equivalent to {{c|1=auto&amp;&amp; tmp = *it; return std::addressof(tmp);}}, if {{c|std::iter_reference_t&lt;I&gt;}} is a reference type.
+* Otherwise, equivalent to {{c|return proxy(*it);}}, where {{tt|''proxy''}} is an exposition only class {{v|4}}.
+
+@@ The expression in the {{tt|requires}}-clause is equivalent to&lt;br&gt;&lt;!--
+--&gt;{{c|
+std::indirectly_readable&lt;const I&gt; &amp;&amp; (
+    requires(const I&amp; i) { i.operator-&gt;(); } {{!!}}
+    std::is_reference_v&lt;std::iter_reference_t&lt;I&gt;&gt; {{!!}}
+    std::constructible_from&lt;std::iter_value_t&lt;I&gt;, std::iter_reference_t&lt;I&gt;&gt;
+)}}.
+
+===Parameters===
+(none)
+
+===Return value===
+@1,2@ Reference to the current element, or prvalue temporary. Equivalent to {{c|*it}}.
+@3@ Pointer or iterator to the current element or proxy holding it as described above.
+
+===Example===
+{{example
+|code=
+#include &lt;complex&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+
+using std::complex_literals::operator""i;
+
+int main()
+{
+    const auto il = {1i, 3.14 + 2i, 3i, 4i, 5i};
+
+    using CI = std::common_iterator&lt;
+        std::counted_iterator&lt;decltype(il)::iterator&gt;,
+        std::default_sentinel_t&gt;;
+
+    CI ci{std::counted_iterator{std::next(begin(il), 1), std::ssize(il) - 1}&lt;!----&gt;};
+
+    std::cout &lt;&lt; *ci &lt;&lt; ' ' &lt;&lt; ci-&gt;real() &lt;&lt; '\n';
+}
+|output=
+(3.14,2) 3.14
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3574|std=C++20|before={{tt|variant}} was fully constexpr (P2231R1) but {{tt|common_iterator}} was not|after=also made constexpr}}
+{{dr list item|wg=lwg|dr=3595|std=C++20|before=functions of the proxy type lacked constexpr and noexcept|after=added}}
+{{dr list item|wg=lwg|dr=3672|std=C++20|before={{tt|operator-&gt;}} might return by reference in usual cases|after=always returns by value}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc constructor|common_iterator}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,186 @@
+{{title|{{tt|return}} statement}}
+{{cpp/language/statements/navbar}}
+Terminates the current function and returns the specified value (if any) to the caller.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar optional|attr}} {{ttb|return}} {{spar optional|expression}} {{ttb|;}}
+}}
+{{sdsc|num=2|notes={{mark since c++11}}|1=
+{{spar optional|attr}} {{ttb|return}} {{spar|braced-init-list}} {{ttb|;}}
+}}
+{{sdsc|num=3|notes={{mark since c++20}}|1=
+{{spar optional|attr}} {{ttb|co_return}} {{spar optional|expression}} {{ttb|;}}
+}}
+{{sdsc|num=4|notes={{mark since c++20}}|1=
+{{spar optional|attr}} {{ttb|co_return}} {{spar|braced-init-list}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|expression}}|{{rlp|expressions|expression}}, convertible to the function return type}}
+{{par|{{spar|braced-init-list}}|{{rlp|initialization|brace-enclosed initializer list}}}}
+{{par end}}
+
+===Explanation===
+@1@ Evaluates the {{spar|expression}}, terminates the current function and returns the result of the {{spar|expression}} to the caller, after {{rlp|implicit cast|implicit conversion}} to the function return type. The {{spar|expression}} is optional in functions whose return type is (possibly cv-qualified) {{c/core|void}}, and disallowed in constructors and in destructors.
+
+@2@ Uses {{rlp|list initialization|copy-list-initialization}} to construct the return value of the function.
+
+@3,4@ In a coroutine, the keyword {{lc|co_return}} must be used instead of {{lc|return}} for the final suspension point (see {{rlp|coroutines}} for details).
+
+{{rrev multi
+|rev1=
+There is a {{rlp|eval order#Sequence point rules (until C++11)|sequence point}} between the copy-initialization of the result of the function call and the destruction of all temporaries at the end of {{spar|expression}}.
+|since2=c++11|rev2=
+The copy-initialization of the result of the function call is {{rlp|eval order|sequenced-before}} the destruction of all temporaries at the end of {{spar|expression}}, which, in turn, is ''sequenced-before'' the destruction of local variables of the block enclosing the return statement.
+}}
+
+{{rrev|since=c++26|
+If the return type of the function is a reference type and a {{c/core|return}} statement {{v|1,2}} binds the returned reference to the result of a [[cpp/language/reference initialization#Lifetime of a temporary|temporary expression]], the program is ill-formed.
+}}
+
+If control reaches the end of
+* a function with the return type (possibly cv-qualified) {{c/core|void}},
+* a constructor,
+* a destructor, or
+* a {{rlp|try#Function try block|function {{c/core|try}} block}} for a function with the return type (possibly cv-qualified) {{c/core|void}}
+without encountering a return statement, {{c|return;}} is executed.
+
+If control reaches the end of the {{rlp|main function|{{tt|main}} function}}, {{c|return 0;}} is executed.
+
+Flowing off the end of a value-returning function, except the {{tt|main}} function{{rev inl|since=c++20| and specific {{rlp|coroutines}}}}, without a return statement is undefined behavior.
+
+In a function returning (possibly cv-qualified) {{c/core|void}}, the return statement with {{spar|expression}} can be used, if the expression type is (possibly cv-qualified) {{c/core|void}}.
+
+{{rrev|since=c++14|
+If the return type of a function is specified as a {{rlp|auto|placeholder type}}, it will be {{rlp|function#Return type deduction|deduced}} from the return value.
+}}
+
+===Notes===
+Returning by value may involve construction and copy/move of a temporary object, unless {{rlp|copy elision}} is used. Specifically, the conditions for copy/move are as follows:
+
+{{rrev|since=c++11|
+====Automatic move from local variables and parameters====
+The {{spar|expression}} is ''move-eligible'' if it is a (possibly parenthesized) {{rlp|identifiers|identifier expression}} that names a variable of automatic storage duration whose type is
+:* a non-volatile object type
+{{rrev|since=c++20|:* or a non-volatile rvalue reference to object type}}
+
+and that variable is declared
+:* in the body or
+:* as a parameter
+: of the innermost enclosing function or lambda expression.
+
+{{rrev multi|rev1=
+If the {{spar|expression}} is move-eligible, {{rlp|overload resolution}} to select the constructor to use for initialization of the returned value {{rev inl|since=c++20|or, for {{c/core|co_return}}, to select the overload of {{c|promise.return_value()}}}} is performed ''twice''{{sep}}:
+* first as if {{spar|expression}} were an rvalue expression (thus it may select the {{rlp|move constructor}}), and
+:* if the first overload resolution failed or
+{{rrev|until=c++20|
+:* it succeeded, but did not select the {{rlp|move constructor}} (formally, the first parameter of the selected constructor was not an rvalue reference to the (possibly cv-qualified) type of {{spar|expression}})
+}}
+
+* then overload resolution is performed as usual, with {{spar|expression}} considered as an lvalue (so it may select the {{rlp|copy constructor}}).
+|since2=c++23|rev2=
+If the {{spar|expression}} is move-eligible, it is treated as an xvalue (thus overload resolution may select the {{rlp|move constructor}}).
+}}
+}}
+
+{{rrev|since=c++17|
+====Guaranteed copy elision====
+If {{spar|expression}} is a prvalue, the result object is initialized directly by that expression. This does not involve a copy or move constructor when the types match (see {{rlp|copy elision}}).
+}}
+{{feature test macro|std=C++23|value=202207L|__cpp_implicit_move|Simpler [[#Automatic move from local variables and parameters|implicit move]]}}
+
+===Keywords===
+{{ltt|cpp/keyword/return}},
+{{ltt|cpp/keyword/co_return}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+void fa(int i)
+{
+    if (i == 2)
+        return;
+    std::cout &lt;&lt; "fa("&lt;&lt; i &lt;&lt; ")\n";
+} // implied return;
+
+int fb(int i)
+{
+    if (i &gt; 4)
+        return 4;
+    std::cout &lt;&lt; "fb(" &lt;&lt; i &lt;&lt; ")\n";
+    return 2;
+}
+
+std::pair&lt;std::string, int&gt; fc(const char* p, int x)
+{
+    return {p, x};
+}
+
+void fd()
+{
+    return fa(10); // fa(10) is a void expression
+}
+
+int main()
+{
+    fa(1); // prints its argument, then returns
+    fa(2); // does nothing when i == 2, just returns
+    
+    int i = fb(5); // returns 4
+    i = fb(i);     // prints its argument, returns 2
+    std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n'
+              &lt;&lt; "fc(~).second = " &lt;&lt; fc("Hello", 7).second &lt;&lt; '\n';
+    
+    fd();
+}
+
+struct MoveOnly
+{
+    MoveOnly() = default;
+    MoveOnly(MoveOnly&amp;&amp;) = default;
+};
+
+MoveOnly move_11(MoveOnly arg)
+{
+    return arg; // OK. implicit move
+}
+
+MoveOnly move_11(MoveOnly&amp;&amp; arg)
+{
+    return arg; // OK since C++20. implicit move
+}
+
+MoveOnly&amp;&amp; move_23(MoveOnly&amp;&amp; arg)
+{
+    return arg; // OK since C++23. implicit move
+}
+|output=
+fa(1)
+fb(4)
+i = 2
+fc(~).second = 7
+fa(10)
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1541|std=C++98|before={{spar|expression}} could not be omitted if the return type is cv-qualified {{c/core|void}}|after=it can be omitted}}
+{{dr list item|wg=cwg|dr=1579|std=C++11|before=return by converting move constructor was not allowed|after=converting move&lt;br&gt;constructor lookup enabled}}
+{{dr list item|wg=cwg|dr=1885|std=C++98|before=sequencing of the destruction of automatic variables was not explicit|after=sequencing rules added}}
+{{dr list end}}
+
+===See also===
+* {{rlp|copy elision}}
+{{dsc begin}}
+{{dsc see c|c/language/return|{{tt|return}} statement|nomono=true}}
+{{dsc end}}
+
+{{langlinks|ar|de|es|fr|it|ja|pt|ru|zh}}

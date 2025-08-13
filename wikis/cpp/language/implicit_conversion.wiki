@@ -1,0 +1,495 @@
+{{title|Implicit conversions}}
+{{cpp/language/expressions/navbar}}
+
+Implicit conversions are performed whenever an expression of some type {{tt|T1}} is used in context that does not accept that type, but accepts some other type {{tt|T2}}; in particular:
+* when the expression is used as the argument when calling a function that is declared with {{tt|T2}} as parameter;
+* when the expression is used as an operand with an operator that expects {{tt|T2}};
+* when initializing a new object of type {{tt|T2}}, including {{tt|return}} statement in a function returning {{tt|T2}};
+* when the expression is used in a {{c/core|switch}} statement ({{tt|T2}} is integral type);
+* when the expression is used in an {{c/core|if}} statement or a loop ({{tt|T2}} is {{c/core|bool}}).
+The program is well-formed (compiles) only if there exists one unambiguous ''implicit conversion sequence'' from {{tt|T1}} to {{tt|T2}}. 
+
+If there are multiple overloads of the function or operator being called, after the implicit conversion sequence is built from {{tt|T1}} to each available {{tt|T2}}, {{rlp|overload resolution}} rules decide which overload is compiled.
+
+Note: in arithmetic expressions, the destination type for the implicit conversions on the operands to binary operators is determined by a separate set of rules: {{rlp|usual arithmetic conversions}}.
+
+===Order of the conversions===
+Implicit conversion sequence consists of the following, in this order:
+@1@ zero or one ''standard conversion sequence'';
+@2@ zero or one ''user-defined conversion'';
+@3@ zero or one ''standard conversion sequence'' (only if a user-defined conversion is used).
+
+When considering the argument to a constructor or to a user-defined conversion function, only one standard conversion sequence is allowed (otherwise user-defined conversions could be effectively chained). When converting from one non-class type to another non-class type, only a standard conversion sequence is allowed.
+
+A standard conversion sequence consists of the following, in this order:
+@1@ zero or one conversion from the following set:
+* ''lvalue-to-rvalue conversion'',
+* ''array-to-pointer conversion'', and
+* ''function-to-pointer conversion'';
+@2@ zero or one ''numeric promotion'' or ''numeric conversion'';
+
+{{rrev|since=c++17|
+@3@ zero or one ''function pointer conversion'';
+}}
+@4@ zero or one ''qualification conversion''.
+
+A user-defined conversion consists of zero or one non-explicit single-argument {{rlp|converting constructor}} or non-explicit {{rlp|cast operator|conversion function}} call.
+
+An expression {{c|e}} is said to be ''implicitly convertible to {{tt|T2}}'' if and only if {{tt|T2}} can be {{rlp|copy initialization|copy-initialized}} from {{c|e}}, that is the declaration {{c|1=T2 t = e;}} is well-formed (can be compiled), for some invented temporary {{tt|t}}. Note that this is different from {{rlp|direct initialization}} ({{c|1=T2 t(e)}}), where explicit constructors and conversion functions would additionally be considered.
+
+====Contextual conversions====
+{{rrev|since=c++11|
+In the following contexts, the type {{c/core|bool}} is expected and the implicit conversion is performed if the declaration {{c|1=bool t(e);}} is well-formed (that is, an explicit conversion function such as {{c|explicit T::operator bool() const;}} is considered). Such expression {{c|e}} is said to be ''contextually converted to {{c/core|bool}}''.
+* the controlling expression of {{c/core|if}}, {{c/core|while}}, {{c/core|for}};
+* the operands of the built-in logical operators {{tt|!}}, {{tt|&amp;&amp;}} and {{tt|{{!!}}}};
+* the first operand of the conditional operator {{tt|?:}};
+* the predicate in a {{rlpt|static_assert}} declaration;
+* the expression in a {{rlpt|noexcept spec|noexcept}} specifier;
+{{rrev|since=c++20|
+* the expression in an {{rlpt|explicit}} specifier;
+}}
+}}
+
+In the following contexts, a context-specific type {{tt|T}} is expected, and the expression {{c|e}} of class type {{tt|E}} is only allowed if
+{{rrev multi|until1=c++14|rev1=
+* {{tt|E}} has a single {{rev inl|since=c++11|non-explicit}} {{rlp|cast operator|user-defined conversion function}} to an allowable type.
+|rev2=
+* there is exactly one type {{tt|T}} among the allowable types such that {{tt|E}} has non-explicit conversion functions whose return types are (possibly cv-qualified) {{tt|T}} or reference to (possibly cv-qualified) {{tt|T}}, and
+* {{c|e}} is implicitly convertible to {{tt|T}}.
+}}
+
+Such expression {{c|e}} is said to be ''contextually implicitly converted'' to the specified type {{tt|T}}. {{rev inl|since=c++11|Note that explicit conversion functions are not considered, even though they are considered in contextual conversions to {{c/core|bool}}.}}
+* the argument of the {{rlp|delete|delete-expression}} ({{tt|T}} is any object pointer type);
+* {{lsd|cpp/language/constant expression#Integral constant expression}}, where a literal class is used ({{tt|T}} is any integral or unscoped enumeration type, the selected user-defined conversion function must be {{rlp|constexpr}});
+* the controlling expression of the {{rlpt|switch}} statement ({{tt|T}} is any integral or enumeration type).
+
+{{source|1=
+#include &lt;cassert&gt;
+
+template&lt;typename T&gt;
+class zero_init
+{
+    T val;
+public:
+    zero_init() : val(static_cast&lt;T&gt;(0)) {}
+    zero_init(T val) : val(val) {}
+    operator T&amp;() { return val; }
+    operator T() const { return val; }
+};
+
+int main()
+{
+    zero_init&lt;int&gt; i;
+    assert(i == 0);
+    
+    i = 7;
+    assert(i == 7);
+    
+    switch (i) {}     // error until C++14 (more than one conversion function)
+                      // OK since C++14 (both functions convert to the same type int)
+    switch (i + 0) {} // always okay (implicit conversion)
+}
+}}
+
+===Value transformations===
+Value transformations are conversions that change the {{rlp|value category}} of an expression. They take place whenever an expression appears as an operand of an operator that expects an expression of a different value category:
+* Whenever a glvalue appears as an operand of an operator that requires a prvalue for that operand, the ''lvalue-to-rvalue'', ''array-to-pointer'', or ''function-to-pointer'' standard conversions are applied to convert the expression to a prvalue.
+{{rrev|since=c++17|
+* Unless otherwise specified, whenever a prvalue appears as an operand of an operator that expects a glvalue for that operand, the ''temporary materialization conversion'' is applied to convert the expression to an xvalue.
+}}
+
+{{anchor|Lvalue to rvalue conversion}}&lt;!-- Keep the old links valid --&gt;
+====Lvalue-to-rvalue conversion====
+{{rev inl|until=c++11|An {{rlps|value category#lvalue}}}}{{rev inl|since=c++11|A {{rlps|value category#glvalue}}}} of any non-function, non-array type {{tt|T}} can be implicitly converted to {{rev inl|until=c++11|an {{rlps|value category#rvalue}}}}{{rev inl|since=c++11|a {{rlps|value category#prvalue}}}}:
+* If {{tt|T}} is not a class type, the type of the {{rev inl|until=c++11|rvalue}}{{rev inl|since=c++11|prvalue}} is the cv-unqualified version of {{tt|T}}.
+* Otherwise, the type of the {{rev inl|until=c++11|rvalue}}{{rev inl|since=c++11|prvalue}} is {{tt|T}}.
+
+If an lvalue-to-rvalue conversion from an {{rlpsd|type#Incomplete type}} is required by a program, that program is ill-formed.
+
+Given the object to which the {{rev inl|until=c++11|lvalue}}{{rev inl|since=c++11|glvalue}} refers as {{c|obj}}:
+{{rev begin}}
+{{rev|until=c++11|
+* When an lvalue-to-rvalue conversion occurs within the operand of {{rlpt|sizeof}}, the value contained in {{c|obj}} is not accessed, since that operator {{rlp|expressions#Potentially-evaluated expressions|does not evaluate}} its operand.
+
+* The result of the conversion is the value contained in {{c|obj}}. If one of {{tt|T}} and the type of {{c|obj}} is a signed integer type, and the other is the corresponding unsigned integer type, the result is the value of type {{tt|T}} with the same value representation of {{c|obj}}.
+}}
+{{rev|since=c++11|
+* When an lvalue-to-rvalue conversion is applied to an expression {{c|E}}, the value contained in {{c|obj}} is not accessed if:
+:* {{c|E}} is not {{rlp|expressions#Potentially-evaluated expressions|potentially evaluated}}, or
+:* the evaluation of {{c|E}} results in the evaluation of a member {{c|Ex}} of the set of {{rlp|definition#ODR-use|potential results}} of {{c|E}}, and {{c|Ex}} names a variable {{c|x}} that is not {{rlp|definition#ODR-use|odr-used}} by {{c|Ex}}.
+
+* The result of the conversion is determined as follows:
+:* If {{tt|T}} is (possibly cv-qualified) {{lc|std::nullptr_t}}, the result is a {{rlp|pointer#Null pointers|null pointer constant}}. {{c|obj}} is not accessed by the conversion, so there is no side effect even if {{tt|T}} is volatile-qualified, and the glvalue can refer to an inactive member of a union.
+:* Otherwise, if {{tt|T}} is a class type:
+{{rev begin}}
+{{rev|until=c++17|
+::* The conversion {{rlp|copy initialization|copy-initializes}} a {{rlp|lifetime#Temporary object lifetime|temporary}} of type {{tt|T}} from the glvalue, and the result of the conversion is a prvalue for the temporary.
+}}
+{{rev|since=c++17|
+::* The conversion {{rlp|copy initialization|copy-initializes}} the [[#Temporary materialization|result object]] from the glvalue.
+}}
+{{rev end}}
+:* Otherwise, if {{c|obj}} contains an invalid pointer value, the behavior is implementation-defined.
+:* Otherwise, if the bits in the {{rlp|object#Object representation and value representation|value representation}} of {{c|obj}} are not valid for {{c|obj}}'s type, the behavior is undefined.
+:* Otherwise, {{rev inl|since=c++20|{{c|obj}} is read, and}} the result is the value contained in {{c|obj}}. If one of {{tt|T}} and the type of {{c|obj}} is a signed integer type, and the other is the corresponding unsigned integer type, the result is the value of type {{tt|T}} with the same value representation of {{c|obj}}.
+}}
+{{rev end}}
+
+This conversion models the act of reading a value from a memory location into a CPU register.
+
+====Array-to-pointer conversion====
+{{anchor|Array to pointer conversion}}&lt;!-- Keep the old links valid --&gt;
+An {{rlps|value category#lvalue}} or {{rlps|value category#rvalue}} of type “array of {{c|N}} {{tt|T}}” or “array of unknown bound of {{tt|T}}” can be implicitly converted to a {{rlps|value category#prvalue}} of type “pointer to {{tt|T}}”. {{rev inl|since=c++17|If the array is a prvalue, {{lsd|#Temporary materialization}} occurs.}} The resulting pointer refers to the first element of the array (see {{rlps|array#Array-to-pointer decay}} for details).
+
+====Function-to-pointer conversion====
+{{anchor|Function to pointer}}&lt;!-- Keep the old links valid --&gt;
+An {{rlps|value category#lvalue}} of function type can be implicitly converted to a {{rlps|value category#prvalue}} {{rlp|pointer#Pointers to functions|pointer to that function}}. This does not apply to non-static member functions because lvalues that refer to non-static member functions do not exist.
+
+{{rrev|since=c++17|
+====Temporary materialization====
+A {{rlps|value category#prvalue}} of any complete type {{tt|T}} can be converted to an xvalue of the same type {{tt|T}}. This conversion initializes a {{rlp|lifetime#Temporary object lifetime|temporary object}} of type T from the prvalue by evaluating the prvalue with the temporary object as its result object, and produces an xvalue denoting the temporary object.
+ 
+If {{tt|T}} is a class or array of class type, it must have an accessible and non-deleted destructor.
+{{source|1=
+struct S { int m; };
+int i = S().m; // member access expects glvalue as of C++17;
+               // S() prvalue is converted to xvalue
+}}
+
+Temporary materialization occurs in the following situations:
+* when {{rlp|reference initialization|binding a reference}} to a prvalue;
+* when {{rlp|operator member access|accessing}} a non-static {{rlp|data members|data member}} of a class prvalue;
+* when {{rlp|operator other#Built-in function call operator|invoking}} an {{rlp|member functions|implicit object member function}} of a class prvalue;
+* when performing an array-to-pointer conversion (see above) or {{rlp|operator member access#Built-in subscript operator|subscripting}} on an array prvalue;
+* when initializing an object of type {{c/core|std::initializer_list&lt;T&gt;}} from a {{rlp|initialization|braced-enclosed initializer list}};
+* when a prvalue appears as a {{rlp|expressions#Discarded-value expressions|discarded-value expression}}.
+
+Note that temporary materialization does '''not''' occur when initializing an object from a prvalue of the same type (by {{rlp|direct initialization|direct-initialization}} or {{rlp|copy initialization|copy-initialization}}): such object is initialized directly from the initializer. This ensures “guaranteed copy elision”.
+}}
+
+===Integral promotion===
+{{rlps|value category#prvalue}}s of small integral types (such as {{c/core|char}}) and unscoped enumeration types may be converted to prvalues of larger integral types (such as {{c/core|int}}). In particular, {{rlp|operator arithmetic|arithmetic operators}} do not accept types smaller than {{c/core|int}} as arguments, and integral promotions are automatically applied after lvalue-to-rvalue conversion, if applicable. This conversion always preserves the value.
+
+The following implicit conversions in this section are classified as ''integral promotions''.
+
+Note that for a given source type, the destination type of integral promotion is unique, And all other conversions are not promotions. For example, {{rlp|overload resolution}} chooses {{c/core|char}} -&gt; {{c/core|int}} (promotion) over {{c/core|char}} -&gt; {{c/core|short}} (conversion).
+
+====Promotion from integral types====
+A prvalue of type {{c/core|bool}} can be converted to a prvalue of type {{c/core|int}}, with {{c|false}} becoming {{c|0}} and {{c|true}} becoming {{c|1}}.
+
+For a prvalue {{c|val}} of an integral type {{tt|T}} except {{c/core|bool}}:
+@1@ If {{c|val}} is the result of an lvalue-to-rvalue conversion applied to a {{rlp|bit field|bit-field}},
+* {{c|val}} can be converted to a prvalue of type {{c/core|int}} if {{c/core|int}} can represent all the values of the bit-field;
+* otherwise, {{c|val}} can be converted to {{c/core|unsigned int}} if {{c/core|unsigned int}} can represent all the values of the bit-field;
+* otherwise, {{c|val}} can be converted according to the rules specified in item (3).
+@2@ Otherwise ({{c|val}} is not converted from a bit-field),
+* if {{tt|T}} is {{rev inl|since=c++20|{{c/core|char8_t}}, }}{{rev inl|since=c++11|{{c/core|char16_t}}, {{c/core|char32_t}} or }}{{c/core|wchar_t}}, {{c|val}} can be converted according to the rules specified in item (3);
+* otherwise, if the {{rlp|usual arithmetic conversions#Integer conversion rank|integer conversion rank}} of {{tt|T}} is lower than the rank of {{c/core|int}}:
+:* {{c|val}} can be converted to a prvalue of type {{c/core|int}} if {{c/core|int}} can represent all the values of {{tt|T}};
+:* otherwise, {{c|val}} can be converted to a prvalue of type {{c/core|unsigned int}}.
+@3@ In the cases specified by item (1) (a converted bit-field not fitting {{c/core|unsigned int}}) or item (2) ({{tt|T}} is one of the given character types), {{c|val}} can be converted to a prvalue of the first of the following types that can represent all the values of its underlying type:
+:* {{c/core|int}}
+:* {{c/core|unsigned int}}
+:* {{c/core|long}}
+:* {{c/core|unsigned long}}
+{{rrev|since=c++11|
+:* {{c/core|long long}}
+:* {{c/core|unsigned long long}}
+:* the underlying type of {{tt|T}}
+}}
+
+====Promotion from enumeration types====
+A prvalue of an unscoped {{rlp|enum|enumeration}} type whose underlying type is not fixed can be converted to a prvalue of the first type from the following list able to hold their entire value range:
+* {{c/core|int}}
+* {{c/core|unsigned int}}
+* {{c/core|long}}
+* {{c/core|unsigned long}}
+{{rrev|since=c++11|
+* {{c/core|long long}}
+* {{c/core|unsigned long long}}
+* the {{rlp|types#Extended integer types|extended integer type}} such that
+:* its {{rlpsd|usual arithmetic conversions#Integer conversion rank}} is greater than the rank of {{c/core|long long}},
+:* its integer conversion rank is the lowest among all extended integer types, and
+:* it is signed if there are two types with the lowest integer conversion rank among all extended integer types.
+}}
+
+
+{{rrev|since=c++11|
+A prvalue of an unscoped enumeration type whose underlying type is fixed can be converted to its underlying type. Moreover, if the underlying type is also subject to integral promotion, to the promoted underlying type. Conversion to the unpromoted underlying type is better for the purposes of {{rlp|overload resolution}}.
+}}
+
+===Floating-point promotion===
+A {{rlps|value category#prvalue}} of type {{c/core|float}} can be converted to a prvalue of type {{c/core|double}}. The value does not change.
+
+This conversion is called ''floating-point promotion''.
+
+===Numeric conversions===
+Unlike the promotions, numeric conversions may change the values, with potential loss of precision.
+
+====Integral conversions====
+A {{rlps|value category#prvalue}} of an integer type or of an unscoped enumeration type can be converted to any other integer type. If the conversion is listed under integral promotions, it is a promotion and not a conversion.
+* If the destination type is unsigned, the resulting value is the smallest unsigned value equal to the source value {{enwiki|Modular arithmetic|modulo}} {{math|2{{su|p=n}}}} where {{math|n}} is the number of bits used to represent the destination type.
+:* That is, depending on whether the destination type is wider or narrower, signed integers are sign-extended&lt;ref&gt;This only applies if the arithmetic is two's complement which is only required for the [[cpp/types/integer|exact-width integer types]]. Note, however, that at the moment all platforms with a C++ compiler use two's complement arithmetic.&lt;/ref&gt; or truncated and unsigned integers are zero-extended or truncated respectively.
+* If the destination type is signed, the value does not change if the source integer can be represented in the destination type. Otherwise the result is {{rev inl|until=c++20|implementation-defined}}{{rev inl|since=c++20|the unique value of the destination type equal to the source value modulo {{math|2{{su|p=n}}}} where {{math|n}} is the number of bits used to represent the destination type}} (note that this is different from {{rlp|operator arithmetic#Overflows|signed integer arithmetic overflow}}, which is undefined).
+* If the source type is {{c/core|bool}}, the value {{c|false}} is converted to zero and the value {{c|true}} is converted to the value one of the destination type (note that if the destination type is {{c/core|int}}, this is an integer promotion, not an integer conversion).
+* If the destination type is {{c/core|bool}}, this is a [[#Boolean conversions|boolean conversion]] (see below).
+&lt;references/&gt;
+
+====Floating-point conversions====
+{{rev begin}}
+{{rev|until=c++23|
+A {{rlps|value category#prvalue}} of a floating-point type can be converted to a prvalue of any other floating-point type.
+}}
+{{rev|since=c++23|
+A {{rlps|value category#prvalue}} of a floating-point type can be converted to a prvalue of any other floating-point type with a greater or equal {{rlpsd|usual arithmetic conversions#Floating-point conversion rank}}.
+
+A {{rlps|value category#prvalue}} of a standard floating-point type can be converted to a prvalue of any other standard floating-point type.
+
+{{rlpt|static_cast}} can be used to explicitly convert a prvalue of floating-point type to any other floating-point type.
+}}
+{{rev end}}
+
+If the conversion is listed under floating-point promotions, it is a promotion and not a conversion.
+* If the source value can be represented exactly in the destination type, it does not change.
+* If the source value is between two representable values of the destination type, the result is one of those two values (it is implementation-defined which one, although if IEEE arithmetic is supported, rounding defaults [[cpp/numeric/fenv/FE_round|to nearest]]).
+* Otherwise, the behavior is undefined.
+
+====Floating–integral conversions====
+A {{rlps|value category#prvalue}} of floating-point type can be converted to a prvalue of any integer type. The fractional part is truncated, that is, the fractional part is discarded.
+* If the truncated value cannot fit into the destination type, the behavior is undefined (even when the destination type is unsigned, modulo arithmetic does not apply).
+* If the destination type is {{c/core|bool}}, this is a boolean conversion (see [[#Boolean conversions|below]]).
+
+A prvalue of integer or unscoped enumeration type can be converted to a prvalue of any floating-point type. The result is exact if possible.
+* If the value can fit into the destination type but cannot be represented exactly, it is implementation defined whether the closest higher or the closest lower representable value will be selected, although if IEEE arithmetic is supported, rounding defaults [[cpp/numeric/fenv/FE_round|to nearest]].
+* If the value cannot fit into the destination type, the behavior is undefined.
+* If the source type is {{c/core|bool}}, the value {{c|false}} is converted to zero, and the value {{c|true}} is converted to one.
+
+====Pointer conversions====
+A {{rlp|pointer#Null pointers|null pointer constant}} can be converted to any pointer type, and the result is the null pointer value of that type. Such conversion (known as ''null pointer conversion'') is allowed to convert to a cv-qualified type as a single conversion, that is, it is not considered a combination of numeric and qualifying conversions.
+
+A {{rlps|value category#prvalue}} pointer to any (optionally cv-qualified) object type {{tt|T}} can be converted to a prvalue pointer to (identically cv-qualified) {{c/core|void}}. The resulting pointer represents the same location in memory as the original pointer value.
+* If the original pointer is a null pointer value, the result is a null pointer value of the destination type.
+
+A prvalue {{c|ptr}} of type “pointer to (possibly cv-qualified) {{tt|Derived}}” can be converted to a prvalue of type “pointer to (possibly cv-qualified) {{tt|Base}}”, where {{tt|Base}} is a {{rlp|derived class|base class}} of {{tt|Derived}}, and {{tt|Derived}} is a {{rlp|type#Incomplete types|complete}} class type. If the {{tt|Base}} is inaccessible or ambiguous, the program is ill-formed.
+* If {{c|ptr}} is a null pointer value, the result is also a null pointer value.
+* Otherwise, if {{tt|Base}} is a {{rlp|derived class#Virtual base classes|virtual base class}} of {{tt|Derived}} and {{c|ptr}} does not point to an object whose type is [[#Similar types|similar]] to {{tt|Derived}} and that is within its {{rlp|lifetime}} or within its period of construction or destruction, the behavior is undefined.
+* Otherwise, the result is a pointer to the base class subobject of the derived class object.
+
+====Pointer-to-member conversions====
+A {{rlp|pointer#Null pointers|null pointer constant}} can be converted to any pointer-to-member type, and the result is the null member pointer value of that type. Such conversion (known as ''null member pointer conversion'') is allowed to convert to a cv-qualified type as a single conversion, that is, it is not considered a combination of numeric and qualifying conversions.
+
+A {{rlps|value category#prvalue}} of type “pointer to member of {{tt|Base}} of type (possibly cv-qualified) {{tt|T}}” can be converted to a prvalue of type “pointer to member of {{tt|Derived}} of type (identically cv-qualified) {{tt|T}}”, where {{tt|Base}} is a base class of {{tt|Derived}}, and {{tt|Derived}} is a complete class type. If {{tt|Base}} is inaccessible, ambiguous, or virtual base of {{tt|Derived}} or is a base of some intermediate virtual base of {{tt|Derived}}, the program is ill-formed.
+* If {{tt|Derived}} does not contain the original member and is not a base class of the class containing the original member, the behavior is undefined.
+* Otherwise, the resulting pointer can be dereferenced with a {{tt|Derived}} object, and it will access the member within the {{tt|Base}} base subobject of that {{tt|Derived}} object.
+
+====Boolean conversions====
+A {{rlps|value category#prvalue}} of integral, floating-point, unscoped enumeration, pointer, and pointer-to-member types can be converted to a prvalue of type {{c/core|bool}}.
+
+The value zero (for integral, floating-point, and unscoped enumeration) and the null pointer and the null pointer-to-member values become {{c|false}}. All other values become {{c|true}}.
+
+{{rrev|since=c++11|
+In the context of a {{rlp|direct initialization|direct-initialization}}, a {{c/core|bool}} object may be initialized from a prvalue of type {{lc|std::nullptr_t}}, including {{c|nullptr}}. The resulting value is {{c|false}}. However, this is not considered to be an implicit conversion.
+}}
+
+===Qualification conversions===
+Generally speaking:
+* A {{rlps|value category#prvalue}} of type pointer to {{rlp|cv|cv-qualified}} type {{tt|T}} can be converted to a prvalue pointer to a more cv-qualified same type {{tt|T}} (in other words, constness and volatility can be added).
+* A prvalue of type pointer to member of cv-qualified type {{tt|T}} in class {{tt|X}} can be converted to a prvalue pointer to member of {{rlp|cv#Conversions|more cv-qualified}} type {{tt|T}} in class {{tt|X}}.
+
+The formal definition of “qualification conversion” is given [[#Combining cv-qualifications|below]].
+
+====Similar types====
+Informally, two types are ''similar'' if, ignoring top-level cv-qualification:
+* they are the same type; or
+* they are both pointers, and the pointed-to types are similar; or
+* they are both pointers to member of the same class, and the types of the pointed-to members are similar; or
+* they are both arrays and the array element types are similar.
+
+For example:
+*{{c/core|const int* const *}} and {{c/core|int**}} are similar;
+*{{c/core|int (*)(int*)}} and {{c/core|int (*)(const int*)}} are not similar;
+*{{c/core|const int (*)(int*)}} and {{c/core|int (*)(int*)}} are not similar;
+*{{c/core|int (*)(int* const)}} and {{c/core|int (*)(int*)}} are similar (they are the same type);
+*{{c/core|std::pair&lt;int, int&gt;}} and {{c/core|std::pair&lt;const int, int&gt;}} are not similar.
+
+Formally, type similarity is defined in terms of qualification-decomposition.
+
+A ''qualification-decomposition'' of a type {{tt|T}} is a sequence of components {{tt|cv_i}} and {{tt|P_i}} such that {{tt|T}} is “{{tt|cv_0 P_0 cv_1 P_1 ... cv_n−1 P_n−1 cv_n U}}” for non-negative {{c|n}}, where
+* each {{tt|cv_i}} is a set of {{c/core|const}} and {{c/core|volatile}}, and
+* each {{tt|P_i}} is
+:* “pointer to”,
+:* “pointer to member of class {{tt|C_i}} of type”,
+:* “array of {{c|N_i}}”, or
+:* “array of unknown bound of”.
+
+If {{tt|P_i}} designates an array, the cv-qualifiers {{tt|cv_i+1}} on the element type are also taken as the cv-qualifiers {{tt|cv_i}} of the array.
+
+{{source|1=
+// T is “pointer to pointer to const int”, it has 3 qualification-decompositions:
+// n = 0 -&gt; cv_0 is empty, U is “pointer to pointer to const int”
+// n = 1 -&gt; cv_0 is empty, P_0 is “pointer to”,
+//          cv_1 is empty, U is “pointer to const int”
+// n = 2 -&gt; cv_0 is empty, P_0 is “pointer to”,
+//          cv_1 is empty, P_1 is “pointer to”,
+//          cv_2 is “const", U is “int”
+using T = const int**;
+
+// substitute any of the following type to U gives one of the decompositions:
+// U = U0 -&gt; the decomposition with n = 0: U0
+// U = U1 -&gt; the decomposition with n = 1: pointer to [U1]
+// U = U2 -&gt; the decomposition with n = 2: pointer to [pointer to [const U2]]
+using U2 = int;
+using U1 = const U2*;
+using U0 = U1*;
+}}
+
+Two types {{tt|T1}} and {{tt|T2}} are ''similar'' if there exists a qualification-decomposition for each of them, where all following conditions are satisfied for the two qualification-decompositions:
+* They have the same {{c|n}}.
+* The types denoted by {{tt|U}} are the same.
+* The corresponding {{tt|P_i}} components are the same {{rev inl|since=c++20|or one is “array of {{c|N_i}}” and the other is “array of unknown bound of”}} for all {{c|i}}.
+
+{{source|1=
+// the qualification-decomposition with n = 2:
+// pointer to [volatile pointer to [const int]]
+using T1 = const int* volatile *;
+
+// the qualification-decomposition with n = 2:
+// const pointer to [pointer to [int]]
+using T2 = int** const;
+
+// For the two qualification-decompositions above
+// although cv_0, cv_1 and cv_2 are all different,
+// they have the same n, U, P_0 and P_1,
+// therefore types T1 and T2 are similar.
+}}
+
+====Combining cv-qualifications====
+In the description below, the longest qualification-decomposition of type {{tt|Tn}} is denoted as {{tt|Dn}}, and its components are denoted as {{tt|cvn_i}} and {{tt|Pn_i}}.
+
+{{rev begin}}
+{{rev|until=c++20|
+A prvalue expression of type {{tt|T1}} can be converted to type {{tt|T2}} if all following conditions are satisfied:
+* {{tt|T1}} and {{tt|T2}} are similar.
+* For every non-zero {{c|i}}, if {{c/core|const}} is in {{tt|cv1_i}}, then {{c/core|const}} is also in {{tt|cv2_i}}, and similarly for {{c/core|volatile}}.
+* For every non-zero {{c|i}}, if {{tt|cv1_i}} and {{tt|cv2_i}} are different, then {{c/core|const}} is in {{tt|cv2_k}} for every {{c|k}} in {{range|1|i}}.
+
+The ''qualification-combined type'' of two types {{tt|T1}} and {{tt|T2}} is a type {{tt|T3}} similar to {{tt|T1}} such that
+* {{tt|cv3_0}} is empty,
+* for every non-zero {{c|i}}, {{tt|cv3_i}} is the union of {{tt|cv1_i}} and {{tt|cv2_i}}, and
+* if {{tt|cv3_i}} is different from {{tt|cv1_i}} or {{tt|c2_i}}, then {{c/core|const}} is added to {{tt|cv3_k}} for every {{c|k}} in {{range|1|i}}.
+}}
+{{rev|since=c++20|
+The ''qualification-combined type'' of two types {{tt|T1}} and {{tt|T2}} is a type {{tt|T3}} similar to {{tt|T1}}, where {{tt|D3}} satisfies all following conditions:
+* {{tt|cv3_0}} is empty.
+* For every non-zero {{c|i}}, {{tt|cv3_i}} is the union of {{tt|cv1_i}} and {{tt|cv2_i}}.
+* If {{tt|P1_i}} or {{tt|P2_i}} is “array of unknown bound of”, {{tt|P3_i}} is “array of unknown bound of”, otherwise it is {{tt|P1_i}}.
+* If {{tt|cv3_i}} is different from {{tt|cv1_i}} or {{tt|cv2_i}}, or {{tt|P3_i}} is different from {{tt|P1_i}} or {{tt|P2_i}}, then {{c/core|const}} is added to {{tt|cv3_k}} for every {{c|k}} in {{range|1|i}}.
+
+A prvalue of type {{tt|T1}} can be converted to type {{tt|T2}} if the qualification-combined type of {{tt|T1}} and {{tt|T2}} is cv-unqualified {{tt|T2}}.
+}}
+{{rev end}}
+
+{{source|1=
+// longest qualification-decomposition of T1 (n = 2):
+// pointer to [pointer to [char]]
+using T1 = char**;
+
+// longest qualification-decomposition of T2 (n = 2):
+// pointer to [pointer to [const char]]
+using T2 = const char**;
+
+// Determining the cv3_i and T_i components of D3 (n = 2):
+// cv3_1 = empty (union of empty cv1_1 and empty cv2_1)
+// cv3_2 = “const” (union of empty cv1_2 and “const” cv2_2)
+// P3_0 = “pointer to” (no array of unknown bound, use P1_0)
+// P3_1 = “pointer to” (no array of unknown bound, use P1_1)
+// All components except cv_2 are the same, cv3_2 is different from cv1_2,
+// therefore add “const” to cv3_k for each k in [1, 2): cv3_1 becomes “const”.
+// T3 is “pointer to const pointer to const char”, i.e., const char* const *.
+using T3 = /* the qualification-combined type of T1 and T2 */;
+
+int main()
+{
+    const char c = 'c';
+    char* pc;
+    T1 ppc = &amp;pc;
+    T2 pcc = ppc; // Error: T3 is not the same as cv-unqualified T2,
+                  //        no implicit conversion.
+    
+    *pcc = &amp;c;
+    *pc = 'C';    // If the erroneous assignment above is allowed,
+                  // the const object “c” may be modified.
+}
+}}
+
+Note that in the C programming language, {{c/core|const}}/{{c/core|volatile}} can be added to the first level only:
+{{source|1=
+char** p = 0;
+char * const* p1 = p;       // OK in C and C++
+const char* const * p2 = p; // error in C, OK in C++
+}}
+
+{{rrev|since=c++17|
+===Function pointer conversions===
+* A {{rlps|value category#prvalue}} of type pointer to non-throwing function can be converted to a prvalue pointer to potentially-throwing function.
+* A prvalue of type pointer to non-throwing member function can be converted to a prvalue pointer to potentially-throwing member function.
+
+{{source|1=
+void (*p)();
+void (**pp)() noexcept = &amp;p; // error: cannot convert to pointer to noexcept function
+
+struct S
+{
+    typedef void (*p)();
+    operator p();
+};
+void (*q)() noexcept = S(); // error: cannot convert to pointer to noexcept function
+}}
+}}
+
+===The safe bool problem===
+Until C++11, designing a class that should be usable in boolean contexts (e.g. {{c|if (obj) { ... }&lt;!----&gt;}}) presented a problem: given a user-defined conversion function, such as {{c|T::operator bool() const;}}, the implicit conversion sequence allowed one additional standard conversion sequence after that function call, which means the resultant {{c/core|bool}} could be converted to {{c/core|int}}, allowing such code as {{c|obj &lt;&lt; 1;}} or {{c|1=int i = obj;}}.
+
+One early solution for this can be seen in {{lc|std::basic_ios}}, which initially defines {{c|operator void*}}, so that the code such as {{c|if (std::cin) {...}&lt;!----&gt;}} compiles because {{c/core|void*}} is convertible to {{c/core|bool}}, but {{c|1=int n = std::cout;}} does not compile because {{c/core|void*}} is not convertible to {{c/core|int}}. This still allows nonsense code such as {{c|delete std::cout;}} to compile.
+
+Many pre-C++11 third party libraries were designed with a more elaborate solution, known as the [https://en.wikibooks.org/wiki/More_C++_Idioms/Safe_bool Safe Bool idiom]. {{lc|std::basic_ios}} also allowed this idiom via {{lwg|468}}, and {{c|operator void*}} was replaced (see {{lsd|cpp/io/basic_ios/operator bool#Notes}}).
+
+Since C++11, {{rlp|explicit|explicit bool conversion}} can also be used to resolve the safe bool problem.
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=170|std=C++98|before=the behavior of pointer-to-member conversions was unclear&lt;br&gt;if the derived class does not have the original member|after=made clear}}
+{{dr list item|wg=cwg|dr=172|std=C++98|before=enumeration type was promoted based on its underlying type|after=based on its value range instead}}
+{{dr list item|wg=cwg|dr=330|paper=N4261|std=C++98|before=the conversion from {{c/core|double* const (*p)[3]}}&lt;br&gt;to {{c/core|double const * const (*p)[3]}} was invalid|after=made valid}}
+{{dr list item|wg=cwg|dr=519|std=C++98|before=null pointer values were not guaranteed to be&lt;br&gt;preserved when converting to another pointer type|after=always preserved}}
+{{dr list item|wg=cwg|dr=616|std=C++98|before=the behavior of lvalue to rvalue conversion of&lt;br&gt;any uninitialized object and pointer objects&lt;br&gt;of invalid values was always undefined|after=indeterminate {{c/core|unsigned char}}&lt;br&gt;is allowed; use of invalid pointers&lt;br&gt;is implementation-defined}}
+{{dr list item|wg=cwg|dr=685|std=C++98|before=the underlying type of an enumeration type was&lt;br&gt;not prioritized in integral promotion if it is fixed|after=prioritized}}
+{{dr list item|wg=cwg|dr=707|std=C++98|before=integer to floating point conversion&lt;br&gt;had defined behavior in all cases|after=the behavior is undefined if&lt;br&gt;the value being converted is&lt;br&gt;out of the destination range}}
+{{dr list item|wg=cwg|dr=1423|std=C++11|before={{lc|std::nullptr_t}} was convertible to {{c/core|bool}}&lt;br&gt;in both direct- and copy-initialization|after=direct-initialization only}}
+{{dr list item|wg=cwg|dr=1773|std=C++11|before=a name expression that appears in a potentially-evaluated&lt;br&gt;expression such that the object named is not odr-used might&lt;br&gt;still be evaluated during an lvalue-to-rvalue conversion|after=not evaluated}}
+{{dr list item|wg=cwg|dr=1781|std=C++11|before={{lc|std::nullptr_t}} to {{c/core|bool}} was considered an implicit&lt;br&gt;conversion even though it is only valid for direct-initialization|after=no longer considered&lt;br&gt;an implicit conversion}}
+{{dr list item|wg=cwg|dr=1787|std=C++98|before=the behavior of reading from an indeterminate&lt;br&gt;{{c/core|unsigned char}} cached in a register was undefined|after=made well-defined}}
+{{dr list item|wg=cwg|dr=1981|std=C++11|before=contextual conversions considered explicit conversion functions|after=not considered}}
+{{dr list item|wg=cwg|dr=2140|std=C++11|before=it was unclear whether lvalue-to-rvalue conversions from&lt;br&gt;{{lc|std::nullptr_t}} lvalues fetch these lvalues from memory|after=not fetched}}
+{{dr list item|wg=cwg|dr=2310|std=C++98|before=for derived-to-base pointer conversions and&lt;br&gt;base-to-derived pointer-to-member conversions,&lt;br&gt;the derived class type could be incomplete|after=must be complete}}
+{{dr list item|wg=cwg|dr=2484|std=C++20|before={{c/core|char8_t}} and {{c/core|char16_t}} had different integral&lt;br&gt;promotion strategies, but they can fit both of them|after={{c/core|char8_t}} should be promoted&lt;br&gt;in the same way as {{c/core|char16_t}}}}
+{{dr list item|wg=cwg|dr=2485|std=C++98|before=integral promotions involving bit-fields were not specified well|after=improved the specification}}
+{{dr list item|wg=cwg|dr=2813|std=C++23|before=temporary materialization would occur when an explicit&lt;br&gt;object member function of a class prvalue is invoked|after=will not occur&lt;br&gt;in this case}}
+{{dr list item|wg=cwg|dr=2861|std=C++98|before=a pointer to a type-inaccessible object could be&lt;br&gt;converted a pointer to a base class subobject|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=2879|std=C++17|before=temporary materialization conversion was applied on prvalue&lt;br&gt;as an operand of an operator that expects glvalue|after=not applied in some cases}}
+{{dr list item|wg=cwg|dr=2899|std=C++98|before=lvalue-to-rvalue conversions could be applied to lvalues&lt;br&gt;designating objects with invalid value representations|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=2901|std=C++98|before=the result of lvalue-to-rvalue conversion from an {{c/core|unsigned int}}&lt;br&gt;lvalue referring to an {{c/core|int}} object with value {{c|-1}} was unclear|after=made clear}}
+{{dr list end}}
+
+===See also===
+* {{rlpt|const_cast}}
+* {{rlpt|static_cast}}
+* {{rlpt|dynamic_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast}}
+* {{rlp|cast operator|user-defined conversion}}
+{{dsc begin}}
+{{dsc see c|c/language/conversion|Implicit conversions|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

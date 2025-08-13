@@ -1,0 +1,94 @@
+{{cpp/thread/shared_lock/title|shared_lock}}
+{{cpp/thread/shared_lock/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++14|
+shared_lock() noexcept;
+}}
+{{dcl|num=2|since=c++14|
+shared_lock( shared_lock&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=3|since=c++14|
+explicit shared_lock( mutex_type&amp; m );
+}}
+{{dcl|num=4|since=c++14|
+shared_lock( mutex_type&amp; m, std::defer_lock_t t ) noexcept;
+}}
+{{dcl|num=5|since=c++14|
+shared_lock( mutex_type&amp; m, std::try_to_lock_t t );
+}}
+{{dcl|num=6|since=c++14|
+shared_lock( mutex_type&amp; m, std::adopt_lock_t t );
+}}
+{{dcl|num=7|since=c++14|
+template&lt; class Rep, class Period &gt;
+shared_lock( mutex_type&amp; m, 
+             const std::chrono::duration&lt;Rep,Period&gt;&amp; timeout_duration );
+}}
+{{dcl|num=8|since=c++14|1=
+template&lt; class Clock, class Duration &gt;
+shared_lock( mutex_type&amp; m, 
+             const std::chrono::time_point&lt;Clock,Duration&gt;&amp; timeout_time );
+}}
+{{dcl end}}
+
+Constructs a {{tt|shared_lock}}, optionally locking the supplied mutex.
+
+@1@ Constructs a {{tt|shared_lock}} with no associated mutex.
+@2@ Move constructor. Initializes the {{tt|shared_lock}} with the contents of {{c|other}}. Leaves {{c|other}} with no associated mutex.
+@3-8@ Constructs a {{tt|shared_lock}} with {{c|m}} as the associated mutex. Additionally:
+:@3@ Locks the associated mutex in shared mode by calling {{c|m.lock_shared()}}.
+:@4@ Does not lock the associated mutex.
+:@5@ Tries to lock the associated mutex in shared mode without blocking by calling {{c|m.try_lock_shared()}}.
+:@6@ Assumes the calling thread already holds a shared lock (i.e., a lock acquired by {{tt|lock_shared}}, {{tt|try_lock_shared}}, {{tt|try_lock_shared_for}}, or {{tt|try_lock_shared_until}}) on {{c|m}}. The behavior is undefined if not so.
+@7@ Tries to lock the associated mutex in shared mode by calling {{c|m.try_lock_shared_for(timeout_duration)}}, which blocks until specified {{c|timeout_duration}} has elapsed or the lock is acquired, whichever comes first. May block for longer than {{c|timeout_duration}}. The behavior is undefined if {{tt|Mutex}} does not meet the {{named req|SharedTimedLockable}} requirements.
+@8@ Tries to lock the associated mutex in shared mode by calling {{c|m.try_lock_shared_until(timeout_time)}}, which blocks until specified {{c|timeout_time}} has been reached or the lock is acquired, whichever comes first. May block for longer than until {{c|timeout_time}} has been reached. The behavior is undefined if {{tt|Mutex}} does not meet the {{named req|SharedTimedLockable}} requirements.
+
+===Parameters===
+{{par begin}}
+{{par|other|another {{tt|shared_lock}} to initialize the state with}}
+{{par|m|mutex to associate with the lock and optionally acquire ownership of}}
+{{par|t|tag parameter used to select constructors with different locking strategies}}
+{{par|timeout_duration|maximum duration to block for}}
+{{par|timeout_time|maximum time point to block until}}
+{{par end}}
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+
+std::shared_timed_mutex m;
+int i = 10;
+
+void read_shared_var(int id)
+{
+     // both the threads get access to the integer i
+     std::shared_lock&lt;std::shared_timed_mutex&gt; slk(m);
+     const int ii = i; // reads global i
+
+     std::osyncstream(std::cout) &lt;&lt; '#' &lt;&lt; id &lt;&lt; " read i as " &lt;&lt; ii &lt;&lt; "...\n";
+     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+     std::osyncstream(std::cout) &lt;&lt; '#' &lt;&lt; id &lt;&lt; " woke up..." &lt;&lt; std::endl;
+}
+
+int main()
+{
+     std::thread r1{read_shared_var, 1};
+     std::thread r2{read_shared_var, 2};
+
+     r1.join();
+     r2.join();
+}
+|p=true
+|output=
+#2 read i as 10...
+#1 read i as 10...
+#2 woke up...
+#1 woke up...
+}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

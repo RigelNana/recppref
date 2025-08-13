@@ -1,0 +1,116 @@
+{{cpp/ranges/title|for_each_n|for_each_n_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, class Proj = std::identity,
+          std::indirectly_unary_invocable&lt;std::projected&lt;I, Proj&gt;&gt; Fun &gt;
+constexpr for_each_n_result&lt;I, Fun&gt;
+    for_each_n( I first, std::iter_difference_t&lt;I&gt; n, Fun f, Proj proj = {});
+}}
+{{dcl h|Helper types}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class I, class F &gt;
+using for_each_n_result = ranges::in_fun_result&lt;I, F&gt;;
+}}
+{{dcl end}}
+
+@1@ Applies the given function object {{c|f}} to the projected result by {{c|proj}} of dereferencing each iterator in the range {{range|first|first + n}}, in order.
+
+If the iterator type is mutable, {{c|f}} may modify the elements of the range through the dereferenced iterator. If {{c|f}} returns a result, the result is ignored. If {{c|n}} is less than zero, the behavior is undefined.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|iterator denoting the begin of the range to apply the function to}}
+{{par|n|the number of elements to apply the function to}}
+{{par|f|the function to apply to the projected range {{range|first|first + n}}}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+An object {{c|1={first + n, std::move(f)} }}, where {{c|first + n}} may be evaluated as {{c|std::ranges::next(std::move(first), n)}} depending on iterator category.
+
+===Complexity===
+Exactly {{c|n}} applications of {{c|f}} and {{c|proj}}.
+
+===Possible implementation===
+{{source|1=
+struct for_each_n_fn
+{
+    template&lt;std::input_iterator I, class Proj = std::identity,
+             std::indirectly_unary_invocable&lt;std::projected&lt;I, Proj&gt;&gt; Fun&gt;
+    constexpr for_each_n_result&lt;I, Fun&gt;
+        operator()(I first, std::iter_difference_t&lt;I&gt; n, Fun fun, Proj proj = Proj{}) const
+    {
+        for (; n-- &gt; 0; ++first)
+            std::invoke(fun, std::invoke(proj, *first));
+        return {std::move(first), std::move(fun)};
+    }
+};
+
+inline constexpr for_each_n_fn for_each_n {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+struct P
+{
+    int first;
+    char second;
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const P&amp; p)
+    {
+        return os &lt;&lt; '{' &lt;&lt; p.first &lt;&lt; ",'" &lt;&lt; p.second &lt;&lt; "'}";
+    }
+};
+
+auto print = [](std::string_view name, auto const&amp; v)
+{
+    std::cout &lt;&lt; name &lt;&lt; ": ";
+    for (auto n = v.size(); const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; (--n ? ", " : "\n");
+};
+
+int main()
+{
+    std::array a {1, 2, 3, 4, 5};
+    print("a", a);
+    // Negate first three numbers:
+    std::ranges::for_each_n(a.begin(), 3, [](auto&amp; n) { n *= -1; });
+    print("a", a);
+
+    std::array s { P{1,'a'}, P{2, 'b'}, P{3, 'c'}, P{4, 'd'} };
+    print("s", s);
+    // Negate data members 'P::first' using projection:
+    std::ranges::for_each_n(s.begin(), 2, [](auto&amp; x) { x *= -1; }, &amp;P::first);
+    print("s", s);
+    // Capitalize data members 'P::second' using projection:
+    std::ranges::for_each_n(s.begin(), 3, [](auto&amp; c) { c -= 'a'-'A'; }, &amp;P::second);
+    print("s", s);
+}
+|output=
+a: 1, 2, 3, 4, 5
+a: -1, -2, -3, 4, 5
+s: {1,'a'}, {2,'b'}, {3,'c'}, {4,'d'}
+s: {-1,'a'}, {-2,'b'}, {3,'c'}, {4,'d'}
+s: {-1,'A'}, {-2,'B'}, {3,'C'}, {4,'d'}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc range-for}}
+{{dsc inc|cpp/algorithm/ranges/dsc for_each}}
+{{dsc inc|cpp/algorithm/dsc for_each_n}}
+{{dsc inc|cpp/algorithm/dsc for_each}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

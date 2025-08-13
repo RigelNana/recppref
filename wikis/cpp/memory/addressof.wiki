@@ -1,0 +1,128 @@
+{{cpp/title|addressof}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++11|notes={{mark constexpr since c++17}}|
+template&lt; class T &gt;
+T* addressof( T&amp; arg ) noexcept;
+}}
+{{dcl|since=c++11|num=2|1=
+template&lt; class T &gt;
+const T* addressof( const T&amp;&amp; ) = delete;
+}}
+{{dcl end}}
+
+@1@ Obtains the actual address of the object or function {{c|arg}}, even in presence of overloaded {{c|operator&amp;}}.
+@2@ Rvalue overload is deleted to prevent taking the address of {{c|const}} rvalues.
+
+{{rrev|since=c++17|
+The expression {{tt|std::addressof(e)}} is a [[cpp/language/constant_expression|constant subexpression]], if {{c|e}} is an lvalue constant subexpression.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|arg|lvalue object or function}}
+{{par end}}
+
+===Return value===
+Pointer to {{c|arg}}.
+
+===Possible implementation===
+The implementation below is not {{c|constexpr}}, because {{c|reinterpret_cast}} is not usable in a constant expression. Compiler support is needed (see below).
+{{eq fun
+|1=
+template&lt;class T&gt;
+typename std::enable_if&lt;std::is_object&lt;T&gt;::value, T*&gt;::type addressof(T&amp; arg) noexcept
+{
+    return reinterpret_cast&lt;T*&gt;(
+               &amp;const_cast&lt;char&amp;&gt;(
+                   reinterpret_cast&lt;const volatile char&amp;&gt;(arg)));
+}
+
+template&lt;class T&gt;
+typename std::enable_if&lt;!std::is_object&lt;T&gt;::value, T*&gt;::type addressof(T&amp; arg) noexcept
+{
+    return &amp;arg;
+}
+}}
+
+Correct implementation of this function requires compiler support: [https://github.com/gcc-mirror/gcc/blob/b8806796ec64585de39ca6ee3b7b30cc08f27d62/libstdc++-v3/include/bits/move.h#L47-L50 GNU libstdc++], [https://github.com/llvm/llvm-project/blob/5146b57b403b3a512dc64e766695b13803ef3b54/libcxx/include/__memory/addressof.h#L21-L28 LLVM libc++], [https://github.com/microsoft/STL/blob/1e312b38db8df1dfbea17adc344454feb8d00dd9/stl/inc/type_traits#L1548-L1551 Microsoft STL].
+
+===Notes===
+{{feature test macro|__cpp_lib_addressof_constexpr|std=C++17|value=201603L|{{c|constexpr}} {{tt|std::addressof}}}}
+
+{{c|constexpr}} for {{tt|addressof}} is added by {{wg21|LWG2296}}, and MSVC STL applies the change to C++14 mode as a defect report.
+
+There are some weird cases where use of built-in {{c|operator&amp;}} is ill-formed due to [[cpp/language/adl|argument-dependent lookup]] even if it is not overloaded, and {{tt|std::addressof}} can be used instead.
+
+{{source|1=
+template&lt;class T&gt;
+struct holder { T t; };
+
+struct incomp;
+
+int main()
+{
+    holder&lt;holder&lt;incomp&gt;*&gt; x{};
+    // &amp;x; // error: argument-dependent lookup attempts to instantiate holder&lt;incomp&gt;
+    std::addressof(x); // OK
+}
+}}
+
+===Example===
+{{example
+|{{c|operator&amp;}} may be overloaded for a pointer wrapper class to obtain a pointer to pointer:
+|p=true
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+template&lt;class T&gt;
+struct Ptr
+{
+    T* pad; // add pad to show difference between 'this' and 'data'
+    T* data;
+    Ptr(T* arg) : pad(nullptr), data(arg)
+    {
+        std::cout &lt;&lt; "Ctor this = " &lt;&lt; this &lt;&lt; '\n';
+    }
+
+    ~Ptr() { delete data; }
+    T** operator&amp;() { return &amp;data; }
+};
+
+template&lt;class T&gt;
+void f(Ptr&lt;T&gt;* p)
+{
+    std::cout &lt;&lt; "Ptr   overload called with p = " &lt;&lt; p &lt;&lt; '\n';
+}
+
+void f(int** p)
+{
+    std::cout &lt;&lt; "int** overload called with p = " &lt;&lt; p &lt;&lt; '\n';
+}
+
+int main()
+{
+    Ptr&lt;int&gt; p(new int(42));
+    f(&amp;p);                // calls int** overload
+    f(std::addressof(p)); // calls Ptr&lt;int&gt;* overload, (= this)
+}
+|output=
+Ctor this = 0x7fff59ae6e88
+int** overload called with p = 0x7fff59ae6e90
+Ptr   overload called with p = 0x7fff59ae6e88
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2598|std=C++11|before={{c|std::addressof&lt;const T&gt;}} could take address of rvalues|after=disallowed by a deleted overload}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator}}
+{{dsc inc|cpp/memory/pointer_traits/dsc pointer_to}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,268 @@
+{{title|{{tt|switch}} statement}}
+{{cpp/language/statements/navbar}}
+Transfers control to one of several statements, depending on the value of a condition.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|attr}} {{ttb|switch}} {{ttb|(}} {{spar optional|init-statement}} {{spar|condition}} {{ttb|)}} {{spar|statement}} 
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}}}
+{{par|{{spar|init-statement}}|{{mark since c++17}} any of the following:
+* an {{rlp|statements#Expression statements|expression statement}} (which may be a null statement {{c|;}})
+* a {{rlpsd|declarations#Simple declaration}}, typically a declaration of a variable with initializer, but it may declare arbitrarily many variables or {{rlp|structured binding}}s
+{{rrev|since=c++23|
+* an {{rlp|type alias|alias declaration}}
+}}
+Note that any {{spar|init-statement}} must end with a semicolon. This is why it is often described informally as an expression or a declaration followed by a semicolon.}}
+{{par|{{spar|condition}}|a [[#Condition|condition]]}}
+{{par|{{spar|statement}}|a statement (typically a compound statement)}}
+{{par end}}
+
+{{cpp/language/condition|usage=determine which label the control will go to}}
+
+====Type====
+{{spar|condition}} can only yield the following types:
+* integral types
+* enumeration types
+* class types
+
+If the yielded value is of a class type, it is contextually implicitly converted to an integral or enumeration type.
+
+If the (possibly converted) type is subject to {{rlpsd|implicit conversion#Integral promotion}}s , the yielded value is converted to the promoted type.
+
+===Labels===
+Any statement within the {{c/core|switch}} statement can be labeled with one or more following labels:
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|case}} {{spar|constant-expression}} {{ttb|:}}
+}}
+{{sdsc|num=2|
+{{spar optional|attr}} {{ttb|default:}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}}}
+{{par|{{spar|constant-expression}}|a {{rlpsd|constant expression#Converted constant expression}} of the adjusted type of the {{c/core|switch}} condition}}
+{{par end}}
+
+
+A {{c/core|case}} or {{c/core|default}} label is associated with the innermost {{c/core|switch}} statement enclosing it.
+
+If any of the following conditions is satisfied, the program is ill-formed:
+* A {{c/core|switch}} statement is associated with multiple {{c/core|case}} labels whose {{spar sep|constant-expression}}s have the same value after conversions.
+* A {{c/core|switch}} statement is associated with multiple {{c/core|default}} labels.
+
+===Control flow transfer===
+When the condition of a {{c/core|switch}} statement yields a (possibly converted) value:
+* If one of the associated {{c/core|case}} label constants has the same value, control is passed to the statement labeled by the matched {{c/core|case}} label.
+* Otherwise, if there is an associated {{c/core|default}} label, control is passed to the statement labeled by the {{c/core|default}} label.
+* Otherwise, none of the statements in the {{c/core|switch}} statement will be executed.
+
+{{c/core|case}} and {{c/core|default}} labels in themselves do not alter the flow of control. To exit from a {{c/core|switch}} statement from the middle, see {{rlp|break|{{c/core|break}} statements}}.
+
+Compilers may issue warnings on fallthrough (reaching the next {{c/core|case}} or {{c/core|default}} label without a {{c/core|break}}){{rev inl|since=c++17| unless the attribute {{attr|fallthrough}} appears immediately before the {{c/core|case}} label to indicate that the fallthrough is intentional}}.
+
+{{source|
+switch (1)
+{
+    case 1:
+        std::cout &lt;&lt; '1'; // prints "1",
+    case 2:
+        std::cout &lt;&lt; '2'; // then prints "2"
+}
+}}
+{{source|
+switch (1)
+{
+    case 1:
+        std::cout &lt;&lt; '1'; // prints "1"
+        break;            // and exits the switch
+    case 2:
+        std::cout &lt;&lt; '2';
+        break;
+}
+}}
+
+{{rrev|since=c++17|
+{{anchor|switch statements with initializer}}
+==={{c/core|switch}} statements with initializer===
+If {{spar|init-statement}} is used, the switch statement is equivalent to
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|init-statement}}&lt;br&gt;
+:{{ttb|switch}} {{ttb|(}} {{spar|condition}} {{ttb|)}} {{spar|statement}}&lt;br&gt;
+{{ttb|}}}
+}}
+{{sdsc end}}
+
+Except that names declared by the {{spar|init-statement}} (if {{spar|init-statement}} is a declaration) and names declared by {{spar|condition}} (if {{spar|condition}} is a declaration) are in the same scope, which is also the scope of {{spar|statement}}.
+}}
+
+===Notes===
+Because transfer of control is {{rlp|goto|not permitted to enter the scope}} of a variable, if a declaration statement is encountered inside the {{spar|statement}}, it has to be scoped in its own compound statement:
+
+{{source|1=
+switch (1)
+{
+    case 1:
+        int x = 0; // initialization
+        std::cout &lt;&lt; x &lt;&lt; '\n';
+        break;
+    default:
+        // compilation error: jump to default:
+        // would enter the scope of 'x' without initializing it
+        std::cout &lt;&lt; "default\n";
+        break;
+}
+}}
+
+{{source|1=
+switch (1)
+{
+    case 1:
+        {
+            int x = 0;
+            std::cout &lt;&lt; x &lt;&lt; '\n';
+            break;
+        } // scope of 'x' ends here
+    default:
+        std::cout &lt;&lt; "default\n"; // no error
+        break;
+}
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/switch}},
+{{ltt|cpp/keyword/case}},
+{{ltt|cpp/keyword/default}}
+
+===Example===
+{{example
+|The following code shows several usage cases of the {{c/core|switch}} statement:
+|code=
+#include &lt;iostream&gt;
+
+int main()
+{
+    const int i = 2;
+    switch (i)
+    {
+        case 1:
+            std::cout &lt;&lt; '1';
+        case 2:              // execution starts at this case label
+            std::cout &lt;&lt; '2';
+        case 3:
+            std::cout &lt;&lt; '3';
+            [[fallthrough]]; // C++17 attribute to silent the warning on fallthrough
+        case 5:
+            std::cout &lt;&lt; "45";
+            break;           // execution of subsequent statements is terminated
+        case 6:
+            std::cout &lt;&lt; '6';
+    }
+    
+    std::cout &lt;&lt; '\n';
+    
+    switch (i)
+    {
+        case 4:
+            std::cout &lt;&lt; 'a';
+        default:
+            std::cout &lt;&lt; 'd'; // there are no applicable constant expressions 
+                              // therefore default is executed
+    }
+    
+    std::cout &lt;&lt; '\n';
+    
+    switch (i)
+    {
+        case 4:
+            std::cout &lt;&lt; 'a'; // nothing is executed
+    }
+    
+    // when enumerations are used in a switch statement, many compilers
+    // issue warnings if one of the enumerators is not handled
+    enum color { RED, GREEN, BLUE };
+    switch (RED)
+    {
+        case RED:
+            std::cout &lt;&lt; "red\n";
+            break;
+        case GREEN:
+            std::cout &lt;&lt; "green\n";
+            break;
+        case BLUE:
+            std::cout &lt;&lt; "blue\n";
+            break;
+    }
+    
+    // the C++17 init-statement syntax can be helpful when there is
+    // no implicit conversion to integral or enumeration type
+    struct Device
+    {
+        enum State { SLEEP, READY, BAD };
+        auto state() const { return m_state; }
+        
+        /* ... */
+        
+    private:
+        State m_state{};
+    };
+    
+    switch (auto dev = Device{}; dev.state())
+    {
+        case Device::SLEEP:
+            /* ... */
+            break;
+        case Device::READY:
+            /* ... */
+            break;
+        case Device::BAD:
+            /* ... */
+            break;
+    }
+    
+    // pathological examples
+    
+    // the statement does not have to be a compound statement
+    switch (0)
+        std::cout &lt;&lt; "this does nothing\n";
+    
+    // labels do not require a compound statement either
+    switch (int n = 1)
+        case 0:
+        case 1:
+            std::cout &lt;&lt; n &lt;&lt; '\n';
+}
+|output=
+2345
+d
+red
+1
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1767|std=C++98|before={{spar sep|condition}}s of types that are not subject to&lt;br&gt;integral promotion could not be promoted|after=do not promote&lt;br&gt;{{spar sep|condition}}s of these types}}
+{{dr list item|wg=cwg|dr=2629|std=C++98|before={{spar|condition}} could be a declaration of a floating-point variable|after=prohibited}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/switch}}
+{{dsc end}}
+
+===External links===
+{{elink begin}}
+{{elink|{{enwiki|Duff's device|Loop unrolling using Duff's Device}}}}
+{{elink|{{enwiki|Coroutine#C|Duff's device can be used to implement coroutines in C/C++}}}}
+{{elink end}}
+
+{{langlinks|ar|de|es|fr|it|ja|pt|ru|zh}}

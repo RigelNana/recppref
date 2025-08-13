@@ -1,0 +1,180 @@
+{{cpp/container/inplace_vector/title|inplace_vector}}
+{{cpp/container/inplace_vector/navbar}}
+{{dcl begin}}
+{{dcl|since=c++26|num=1|
+constexpr inplace_vector() noexcept;
+}}
+{{dcl|since=c++26|num=2|
+constexpr explicit inplace_vector( size_type count );
+}}
+{{dcl|since=c++26|num=3|
+constexpr inplace_vector( size_type count, const T&amp; value );
+}}
+{{dcl|since=c++26|num=4|
+template&lt; class InputIt &gt;
+constexpr inplace_vector( InputIt first, InputIt last );
+}}
+{{dcl|since=c++26|num=5|
+template&lt; /*container-compatible-range*/&lt;T&gt; R &gt;
+constexpr inplace_vector( std::from_range_t, R&amp;&amp; rg );
+}}
+{{dcl|since=c++26|num=6|
+constexpr inplace_vector( const inplace_vector&amp; other );
+}}
+{{dcl|since=c++26|num=7|1=
+constexpr inplace_vector( inplace_vector&amp;&amp; other )
+    noexcept(N == 0 {{!!}} std::is_nothrow_move_constructible_v&lt;T&gt;);
+}}
+{{dcl|since=c++26|num=8|
+constexpr inplace_vector( std::initializer_list&lt;T&gt; init );
+}}
+{{dcl end}}
+
+Constructs a new {{tt|inplace_vector}} from a variety of data sources.
+
+@1@ Constructs an empty {{tt|inplace_vector}} whose {{c|1=data() == nullptr}} and {{c|1=size() == 0}}.
+
+@2@ Constructs an {{tt|inplace_vector}} with {{c|count}} default-inserted elements.
+
+@3@ Constructs an {{tt|inplace_vector}} with {{c|count}} copies of elements with value {{c|value}}.
+
+@4@ Constructs an {{tt|inplace_vector}} with the contents of the range {{range|first|last}}.
+
+@5@ Constructs an {{tt|inplace_vector}} with the contents of the range {{c|rg}}.
+@@ For the definition of {{c/core|/*container-compatible-range*/}}, see {{l2tt|cpp/ranges/to}}.
+
+@6@ A {{lt|cpp/language/copy constructor}}. Constructs an {{tt|inplace_vector}} with the copy of the contents of {{c|other}}.
+@@ The constructor is a {{lsd|cpp/language/copy constructor#Trivial copy constructor}}  if {{c|N &gt; 0}} and {{c|std::is_trivially_copy_constructible_v&lt;T&gt;}} are both {{c|true}}.
+
+@7@ A {{lt|cpp/language/move constructor}}. Constructs an {{tt|inplace_vector}} with the contents of {{c|other}} using move semantics.
+@@ The constructor is a {{lsd|cpp/language/move constructor#Trivial move constructor}} if {{c|N &gt; 0}} and {{c|std::is_trivially_move_constructible_v&lt;T&gt;}} are both {{c|true}}.
+
+@8@ Constructs an {{tt|inplace_vector}} with the contents of the initializer list {{c|init}}.
+
+===Parameters===
+{{par begin}}
+{{par|count|the size of the container}}
+{{par|value|the value to initialize elements of the container with}}
+{{par|first, last|the range {{range|first|last}} to copy the elements from}}
+{{par|rg|the range of values to initialize elements of the container with}}
+{{par|other|another {{tt|inplace_vector}} to be used as source to initialize the elements of the container with}}
+{{par|init|initializer list to initialize the elements of the container with}}
+{{par hreq}}
+{{par req named|T|DefaultInsertable|overloads=2,3}}
+{{par end}}
+
+===Complexity===
+@1@ Constant.
+@2,3@ Linear in {{c|count}}.
+@4@ Linear in {{c|std::distance(first, last)}}.
+@5@ Linear in {{c|std::ranges::distance(rg)}}.
+@6,7@ Linear in size of {{c|other}}.
+@8@ Linear in size of {{c|init}}.
+
+===Exceptions===
+@2,3@ Throws {{lc|std::bad_alloc}} if {{c|count &gt; N}}.
+@5@ Throws {{lc|std::bad_alloc}} if {{c|std::ranges::size(rg) &gt; N}}.
+@8@ Throws {{lc|std::bad_alloc}} if {{c|init.size() &gt; N}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;initializer_list&gt;
+#include &lt;inplace_vector&gt;
+#include &lt;new&gt;
+#include &lt;print&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    std::inplace_vector&lt;int, 4&gt; v1; // overload (1)
+    assert(v1.size() == 0 &amp;&amp; v1.capacity() == 4);
+    
+    std::inplace_vector&lt;int, 0&gt; v2; // overload (1), N == 0 is allowed
+    assert(v2.size() == 0 &amp;&amp; v2.capacity() == 0);
+    
+    std::inplace_vector&lt;int, 5&gt; v3(3); // overload (2)
+    assert(v3.size() == 3 &amp;&amp; v3.capacity() == 5);
+    std::println("v3 = {}", v3);
+    
+    try
+    {
+        std::inplace_vector&lt;int, 3&gt; v(4); // overload (2), throws: count &gt; N
+    }
+    catch(const std::bad_alloc&amp; ex1)
+    {
+        std::println("ex1.what(): {}", ex1.what());
+    }
+    
+    std::inplace_vector&lt;int, 5&gt; v4(3, 8); // overload (3)
+    assert(v4.size() == 3 &amp;&amp; v4.capacity() == 5);
+    std::println("v4 = {}", v4);
+    
+    try
+    {
+        std::inplace_vector&lt;int, 3&gt; v(4, 2); // overload (3), throws: count &gt; N
+    }
+    catch(const std::bad_alloc&amp; ex2)
+    {
+        std::println("ex2.what(): {}", ex2.what());
+    }
+    
+    const auto init = {1, 2, 3};
+    
+    std::inplace_vector&lt;int, 4&gt; v5(init.begin(), init.end()); // overload (4)
+    assert(v5.size() == 3 &amp;&amp; v5.capacity() == 4);
+    std::println("v5 = {}", v5);
+    
+    std::inplace_vector&lt;int, 4&gt; v6(std::from_range, init); // overload (5)
+    assert(v6.size() == 3 &amp;&amp; v6.capacity() == 4);
+    std::println("v6 = {}", v6);
+    
+    std::inplace_vector&lt;int, 4&gt; v7(v6); // overload (6)
+    assert(v7.size() == 3 &amp;&amp; v7.capacity() == 4);
+    std::println("v7 = {}", v7);
+    assert(v6.size() == 3);
+    
+    std::inplace_vector&lt;int, 4&gt; v8(std::move(v6)); // overload (7)
+    // Note that after the move v6 is left in valid but indeterminate state.
+    assert(v8.size() == 3 &amp;&amp; v8.capacity() == 4);
+    std::println("v8 = {}", v8);
+    
+    std::inplace_vector&lt;int, 4&gt; v9(init); // overload (8)
+    assert(v9.size() == 3 &amp;&amp; v9.capacity() == 4);
+    std::println("v9 = {}", v9);
+    
+    try
+    {
+        std::inplace_vector&lt;int, 2&gt; v(init); // overload (8), throws: init.size() &gt; N
+    }
+    catch(const std::bad_alloc&amp; ex3)
+    {
+        std::println("ex3.what(): {}", ex3.what());
+    }
+}
+|p=true
+|output=
+v3 = [0, 0, 0]
+ex1.what(): std::bad_alloc
+v4 = [42, 42, 42]
+ex2.what(): std::bad_alloc
+v5 = [1, 2, 3]
+v6 = [1, 2, 3]
+v7 = [1, 2, 3]
+v8 = [1, 2, 3]
+v9 = [1, 2, 3]
+ex3.what(): std::bad_alloc
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc operator{{=}}|inplace_vector}}
+{{dsc inc|cpp/container/dsc capacity|inplace_vector}}
+{{dsc inc|cpp/container/dsc data|inplace_vector}}
+{{dsc inc|cpp/container/dsc size|inplace_vector}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pl|pt|ru|zh}}

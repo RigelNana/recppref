@@ -1,0 +1,99 @@
+{{cpp/utility/optional/title|transform}}
+{{cpp/utility/optional/navbar}}
+{{dcl begin}}
+{{dcl | num=1 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;;
+}}
+{{dcl | num=2 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;;
+}}
+{{dcl | num=3 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;&amp;;
+}}
+{{dcl | num=4 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;&amp;;
+}}
+{{dcl end}}
+
+If {{c|*this}} contains a value, invokes {{tt|f}} with the contained value as an argument, and returns an {{tt|std::optional}} that contains the result of that invocation; otherwise, returns an empty {{tt|std::optional}}.
+
+The type of contained value in the result (denoted by {{tt|U}} below) must be a non-array object type, and must not be {{lc|std::in_place_t}} or {{lc|std::nullopt_t}}). Otherwise, the program is ill-formed.
+
+@1@ Let {{tt|U}} be {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, T&amp;&gt;&gt;}}. If {{c|*this}} contains a value, returns a {{c|std::optional&lt;U&gt;}} whose contained value is [[cpp/language/direct_initialization|direct-initialized]] from {{c|std::invoke(std::forward&lt;F&gt;(f), **this)}} (unlike {{rlpt|and_then|and_then()}}, which must return an {{lc|std::optional}} directly). Otherwise, returns an empty {{c|std::optional&lt;U&gt;}}.&lt;br&gt;The program is ill-formed if the variable definition {{c|U x(std::invoke(std::forward&lt;F&gt;(f), **this));}} is ill-formed.
+
+@2@ Same as {{v|1}}, except that {{tt|U}} is {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, const T&amp;&gt;&gt;}}.
+
+@3@ Let {{tt|U}} be {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, T&gt;&gt;}}. If {{c|*this}} contains a value, returns a {{c|std::optional&lt;U&gt;}} whose contained value is direct-initialized from {{c|std::invoke(std::forward&lt;F&gt;(f), std::move(**this))}}. Otherwise, returns an empty {{c|std::optional&lt;U&gt;}}.&lt;br&gt;The program is ill-formed if the variable definition {{c|U x(std::invoke(std::forward&lt;F&gt;(f), std::move(**this)));}} is ill-formed.
+
+@4@ Same as {{v|3}}, except that {{tt|U}} is {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, const T&gt;&gt;}}.
+
+===Parameters===
+{{par begin}}
+{{par | f | a suitable function or {{named req|Callable}} object whose call signature returns a non-reference type}}
+{{par end}}
+
+===Return value===
+An {{lc|std::optional}} containing the result of {{tt|f}} or an empty {{lc|std::optional}}, as described above.
+
+===Notes===
+Because {{tt|transform}} directly constructs a {{tt|U}} object at the right location, rather than passing it to a constructor, {{c|std::is_move_constructible_v&lt;U&gt;}} can be {{c|false}}.
+
+As the callable {{tt|f}} can't return a reference type, it cannot be a [[cpp/language/pointer#Pointers to data members|pointer to data member]].
+
+Some languages call this operation [[enwiki:Map_(higher-order_function)|''map'']].
+
+{{feature test macro|__cpp_lib_optional|std=C++23|value=202110L|{{rlp|/#Monadic operations|Monadic operations}} in {{lc|std::optional}}}}
+
+===Example===
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;optional&gt;
+
+struct A { /* ... */ };
+struct B { /* ... */ };
+struct C { /* ... */ };
+struct D { /* ... */ };
+
+auto A_to_B(A) -&gt; B { /* ... */ std::cout &lt;&lt; "A =&gt; B \n"; return {}; }
+auto B_to_C(B) -&gt; C { /* ... */ std::cout &lt;&lt; "B =&gt; C \n"; return {}; }
+auto C_to_D(C) -&gt; D { /* ... */ std::cout &lt;&lt; "C =&gt; D \n"; return {}; }
+
+void try_transform_A_to_D(std::optional&lt;A&gt; o_A)
+{
+    std::cout &lt;&lt; (o_A ? "o_A has a value\n" : "o_A is empty\n");
+
+    std::optional&lt;D&gt; o_D = o_A.transform(A_to_B)
+                              .transform(B_to_C)
+                              .transform(C_to_D);
+
+    std::cout &lt;&lt; (o_D ? "o_D has a value\n\n" : "o_D is empty\n\n");
+};
+
+int main()
+{
+    try_transform_A_to_D( A{} );
+    try_transform_A_to_D( {} );
+}
+|output=
+o_A has a value
+A =&gt; B
+B =&gt; C
+C =&gt; D
+o_D has a value
+
+o_A is empty
+o_D is empty
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc | cpp/utility/optional/dsc value_or}}
+{{dsc inc | cpp/utility/optional/dsc and_then}}
+{{dsc inc | cpp/utility/optional/dsc or_else}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

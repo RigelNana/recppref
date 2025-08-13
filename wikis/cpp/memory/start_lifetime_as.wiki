@@ -1,0 +1,117 @@
+{{cpp/title|start_lifetime_as|start_lifetime_as_array}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|{{tt|std::start_lifetime_as}}}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class T &gt;
+T* start_lifetime_as( void* p ) noexcept;
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; class T &gt;
+const T* start_lifetime_as( const void* p ) noexcept;
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; class T &gt;
+volatile T* start_lifetime_as( volatile void* p ) noexcept;
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class T &gt;
+const volatile T* start_lifetime_as( const volatile void* p ) noexcept;
+}}
+{{dcl h|{{tt|std::start_lifetime_as_array}}}}
+{{dcl|num=5|since=c++23|1=
+template&lt; class T &gt;
+T* start_lifetime_as_array( void* p, std::size_t n ) noexcept;
+}}
+{{dcl|num=6|since=c++23|1=
+template&lt; class T &gt;
+const T* start_lifetime_as_array( const void* p,
+                                  std::size_t n ) noexcept;
+}}
+{{dcl|num=7|since=c++23|1=
+template&lt; class T &gt;
+volatile T* start_lifetime_as_array( volatile void* p,
+                                     std::size_t n ) noexcept;
+}}
+{{dcl|num=8|since=c++23|1=
+template&lt; class T &gt;
+const volatile T* start_lifetime_as_array( const volatile void* p,
+                                           std::size_t n ) noexcept;
+}}
+{{dcl end}}
+
+@1-4@ [[cpp/language/object#Object creation|Implicitly creates]] a complete object of type {{tt|T}} (whose address is {{c|p}}) and objects nested within it. The value of each created object {{tti|obj}} of {{named req|TriviallyCopyable}} type {{tt|U}} is determined in the same manner as for a call to {{c|std::bit_cast&lt;U&gt;(E)}} except that the storage is not actually accessed, where {{tt|E}} is the lvalue of type {{tt|U}} denoting {{tti|obj}}. Otherwise, the values of such created objects are unspecified.
+* {{tt|T}} shall be an {{named req|ImplicitLifetimeType}} and shall be a [[cpp/language/type#Incomplete type|complete type]]. Otherwise, the program is ill-formed.
+* The behavior is undefined if:
+:* {{range|p|(char*)p + sizeof(T)}} does not denote a region of allocated storage that is a subset of the region of storage reachable through {{c|p}}, or
+:* the region is not suitably aligned for the {{tt|T}}.
+* Note that the unspecified value can be indeterminate.
+@5-8@ [[cpp/language/object#Object creation|Implicitly creates]] an array with element type {{tt|T}} and length {{c|n}}. To be precise, if {{c|n &gt; 0}} is {{c|true}}, it is equivalent to {{c|std::start_lifetime_as&lt;U&gt;(p)}} where {{tt|U}} is the type "array of {{c|n}} {{tt|T}}s". Otherwise, the function has no effects.
+* {{tt|T}} shall be a [[cpp/language/type#Incomplete type|complete type]]. Otherwise, the program is ill-formed.
+* The behavior is undefined if:
+:* Non-null {{c|p}} is not suitably aligned for an array of {{tt|T}}, or
+:* {{c|1=n &lt;= std::size_t(-1) / sizeof(T)}} is {{c|false}}, or
+:* {{c|n &gt; 0}} and {{range|(char*)p|(char*)p + (n * sizeof(T))}} does not denote a region of allocated storage that is a subset of the region of storage reachable through {{c|p}}.
+
+===Parameters===
+{{par begin}}
+{{par|p|the address of the region consisting objects}}
+{{par|n|the number of the element of the array to be created}}
+{{par end}}
+
+===Return value===
+@1-4@ A pointer to the complete object as described above.
+@5-8@ A pointer to the first element of the created array, if any; otherwise, a pointer that compares equal to {{c|p}}.
+
+===Notes===
+{{c|new (void_ptr) unsigned char[size]}} or {{c|new (void_ptr) std::byte[size]}} works as an untyped version of {{tt|std::start_lifetime_as}}, but it does not keep the object representation.
+
+{{c|std::start_lifetime_as}} handles non-array types as well as arrays of known bound, while {{c|std::start_lifetime_as_array}} handles arrays of unknown bound.
+
+{{feature test macro|__cpp_lib_start_lifetime_as|std=C++23|value=202207L|Explicit lifetime management}}
+
+===Example===
+{{example
+|code=
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+int main()
+{
+    alignas(std::complex&lt;float&gt;) unsigned char network_data[sizeof(std::complex&lt;float&gt;)]
+    {
+        0xcd, 0xcc, 0xcc, 0x3d, 0xcd, 0xcc, 0x4c, 0x3e
+    };
+
+//  auto d = *reinterpret_cast&lt;std::complex&lt;float&gt;*&gt;(network_data);
+//  std::cout &lt;&lt; d &lt;&lt; '\n'; // UB: network_data does not point to a complex&lt;float&gt;
+
+//  auto d1 = *std::launder(reinterpret_cast&lt;std::complex&lt;float&gt;*&gt;(network_data));
+//  std::cout &lt;&lt; d1 &lt;&lt; '\n'; // UB: implicitly created objects have dynamic storage
+//                                  duration and have indeterminate value initially,
+//                                  even when an array which provides storage for
+//                                  them has determinate bytes.
+//                                  See also CWG2721.
+
+    auto d2 = *std::start_lifetime_as&lt;std::complex&lt;float&gt;&gt;(network_data);
+    std::cout &lt;&lt; d2 &lt;&lt; '\n'; // OK
+}
+|p=true
+|output=
+(0.1,0.2)
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Explicit lifetime management|id=obj.lifetime|section=20.2.6}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/dsc bit_cast}}
+{{dsc inc|cpp/container/span/dsc as_bytes}}
+{{dsc end}}
+
+{{langlinks|ar|de|es|fr|it|ja|pl|pt|ru|zh}}

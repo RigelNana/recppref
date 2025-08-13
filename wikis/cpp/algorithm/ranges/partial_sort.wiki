@@ -1,0 +1,148 @@
+{{cpp/ranges/title|partial_sort}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;I, Comp, Proj&gt;
+constexpr I
+    partial_sort( I first, I middle, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::random_access_range R,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    partial_sort( R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle, Comp comp = {},
+                  Proj proj = {} );
+}}
+{{dcl end}}
+
+@1@ Rearranges elements such that the range {{range|first|middle}} contains the sorted {{c|middle - first}} smallest elements in the range {{range|first|last}}.
+
+@@ The order of equal elements is ''not'' guaranteed to be preserved. The order of the remaining elements in the range {{range|middle|last}} is ''unspecified''.
+
+@@ The elements are compared using the given binary comparison function {{c|comp}} and projected using {{c|proj}} function object.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|iterator-sentinel defining the range to sort}}
+{{par|r|the range to sort}}
+{{par|middle|the iterator defining the last element to be sorted}}
+{{par|comp|comparator to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+An iterator equal to {{c|last}}.
+
+===Complexity===
+{{mathjax-or|\(\scriptsize \mathcal{O}(N\cdot\log{(M)})\)|𝓞(N&amp;middot;log(M))}} comparisons and twice as many projections, where {{mathjax-or|\(\scriptsize N\)|N}} is {{c|ranges::distance(first, last)}}, {{mathjax-or|\(\scriptsize M\)|M}} is {{c|ranges::distance(first, middle)}}.
+
+===Possible implementation===
+{{eq fun|1=
+struct partial_sort_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Comp = ranges::less, class Proj = std::identity&gt;
+    requires std::sortable&lt;I, Comp, Proj&gt;
+    constexpr I
+        operator()(I first, I middle, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        if (first == middle)
+            return ranges::next(first, last);
+        ranges::make_heap(first, middle, comp, proj);
+        auto it {middle};
+        for (; it != last; ++it)
+        {
+            if (std::invoke(comp, std::invoke(proj, *it), std::invoke(proj, *first)))
+            {
+                ranges::pop_heap(first, middle, comp, proj);
+                ranges::iter_swap(middle - 1, it);
+                ranges::push_heap(first, middle, comp, proj);
+            }
+        }
+        ranges::sort_heap(first, middle, comp, proj);
+        return it;
+    }
+
+    template&lt;ranges::random_access_range R, class Comp = ranges::less,
+             class Proj = std::identity&gt;
+    requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), std::move(middle), ranges::end(r),
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr partial_sort_fn partial_sort {};
+}}
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+void print(const auto&amp; v)
+{
+    for (const char e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+void underscore(int n)
+{
+    while (n-- &gt; 0)
+        std::cout &lt;&lt; "^ ";
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    static_assert('A' &lt; 'a');
+    std::vector&lt;char&gt; v {'x', 'P', 'y', 'C', 'z', 'w', 'P', 'o'};
+    print(v);
+    const int m {3};
+    std::ranges::partial_sort(v, v.begin() + m);
+    print(v), underscore(m);
+
+    static_assert('1' &lt; 'a');
+    std::string s {"3a1b41c5"};
+    print(s);
+    std::ranges::partial_sort(s.begin(), s.begin() + m, s.end(), std::greater {});
+    print(s), underscore(m);
+}
+|output=
+x P y C z w P o
+C P P y z x w o
+^ ^ ^
+3 a 1 b 4 1 c 5
+c b a 1 3 1 4 5
+^ ^ ^
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc nth_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc make_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc pop_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc push_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort_heap}}
+{{dsc inc|cpp/algorithm/dsc partial_sort}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

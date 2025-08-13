@@ -1,0 +1,110 @@
+{{title|MATH_ERRNO, MATH_ERREXCEPT, math_errhandling}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl|since=c++11|
+#define MATH_ERRNO        1
+}}
+{{dcl|since=c++11|
+#define MATH_ERREXCEPT    2
+}}
+{{dcl|since=c++11|
+#define math_errhandling  /*implementation defined*/
+}}
+{{dcl end}}
+
+The macro constant {{tt|math_errhandling}} expands to an expression of type {{c/core|int}} that is either equal to {{tt|MATH_ERRNO}}, or equal to {{tt|MATH_ERREXCEPT}}, or equal to their bitwise OR ({{c|MATH_ERRNO {{!}} MATH_ERREXCEPT}}).
+
+The value of {{tt|math_errhandling}} indicates the type of error handling that is performed by the floating-point operators and [[cpp/numeric/math|functions]]:
+
+{{dsc begin}}
+{{dsc hitem|Constant|Explanation}}
+{{dsc|{{tt|MATH_ERREXCEPT}}|Indicates that floating-point exceptions are used: at least {{lc|FE_DIVBYZERO}}, {{lc|FE_INVALID}}, and {{lc|FE_OVERFLOW}} are defined in {{header|cfenv}}.}}
+{{dsc|{{tt|MATH_ERRNO}}|Indicates that floating-point operations use the variable {{lc|errno}} to report errors.}}
+{{dsc end}}
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559), {{c|math_errhandling &amp; MATH_ERREXCEPT}} is required to be non-zero.
+
+The following floating-point error conditions are recognized:
+
+{|table class=wikitable
+|-
+!Condition||Explanation||errno||Floating-point exception||Example
+|-
+|Domain error
+|The argument is outside the range in which the operation is mathematically defined (the description of [[cpp/numeric/math|each function]] lists the required domain errors)
+|{{lc|EDOM}}
+|{{lc|FE_INVALID}}
+|{{c|std::acos(2)}}
+|-
+|Pole error
+|The mathematical result of the function is exactly infinite or undefined
+|{{lc|ERANGE}}
+|{{lc|FE_DIVBYZERO}}
+|{{c|std::log(0.0)}}, {{c|1.0 / 0.0}}
+|-
+|Range error due to overflow
+|The mathematical result is finite, but becomes infinite after rounding, or becomes the largest representable finite value after rounding down
+|{{lc|ERANGE}}
+|{{lc|FE_OVERFLOW}}
+|{{c|std::pow(DBL_MAX, 2)}}
+|-
+|Range error due to underflow
+|The result is non-zero, but becomes zero after rounding, or becomes subnormal with a loss of precision
+|{{lc|ERANGE}} or unchanged (implementation-defined)
+|{{lc|FE_UNDERFLOW}} or nothing (implementation-defined)
+|{{c|DBL_TRUE_MIN / 2}}
+|-
+|Inexact result
+|The result has to be rounded to fit in the destination type
+|Unchanged
+|{{lc|FE_INEXACT}} or nothing (unspecified)
+|{{c|std::sqrt(2)}}, {{c|1.0 / 10.0}}
+|}
+
+===Notes===
+Whether {{lc|FE_INEXACT}} is raised by the mathematical library functions is unspecified in general, but may be explicitly specified in the description of the function (e.g. {{lc|std::rint}} vs {{lc|std::nearbyint}}).
+
+Before C++11, floating-point exceptions were not specified, {{lc|EDOM}} was required for any domain error, {{lc|ERANGE}} was required for overflows and implementation-defined for underflows.
+
+===Example===
+{{example
+|code=
+#include &lt;cerrno&gt;
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout &lt;&lt; "MATH_ERRNO is "
+              &lt;&lt; (math_errhandling &amp; MATH_ERRNO ? "set" : "not set") &lt;&lt; '\n'
+              &lt;&lt; "MATH_ERREXCEPT is "
+              &lt;&lt; (math_errhandling &amp; MATH_ERREXCEPT ? "set" : "not set") &lt;&lt; '\n';
+    std::feclearexcept(FE_ALL_EXCEPT);
+    errno = 0;
+    std::cout &lt;&lt;  "log(0) = " &lt;&lt; std::log(0) &lt;&lt; '\n';
+    if (errno == ERANGE)
+        std::cout &lt;&lt; "errno = ERANGE (" &lt;&lt; std::strerror(errno) &lt;&lt; ")\n";
+    if (std::fetestexcept(FE_DIVBYZERO))
+        std::cout &lt;&lt; "FE_DIVBYZERO (pole error) reported\n";
+}
+|p=true
+|output=
+MATH_ERRNO is set
+MATH_ERREXCEPT is set
+log(0) = -inf
+errno = ERANGE (Numerical result out of range)
+FE_DIVBYZERO (pole error) reported
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/fenv/dsc FE_exceptions}}
+{{dsc inc|cpp/error/dsc errno}}
+{{dsc see c|c/numeric/math/math_errhandling}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

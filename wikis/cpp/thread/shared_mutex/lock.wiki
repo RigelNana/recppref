@@ -1,0 +1,118 @@
+{{cpp/thread/shared_mutex/title|lock}}
+{{cpp/thread/shared_mutex/navbar}}
+{{ddcl|since={{cpp/std|shared_mutex}}|
+void lock();
+}}
+
+Acquires an exclusive ownership of the {{tt|shared_mutex}}. If another thread is holding an exclusive lock or a shared lock on the same {{tt|shared_mutex}} the a call to {{tt|lock}} will block execution until all such locks are released. While {{tt|shared_mutex}} is locked in an exclusive mode, no other lock of any kind can also be held.
+
+If {{tt|lock}} is called by a thread that already owns the {{tt|shared_mutex}} in any mode (exclusive or shared), the behavior is undefined.
+A prior {{lc|unlock()}} operation on the same mutex ''synchronizes-with'' (as defined in {{lc|std::memory_order}}) this operation.
+
+===Parameters===
+(none)
+
+===Return value===
+(none)
+
+===Exceptions===
+Throws {{lc|std::system_error}} when errors occur, including errors from the underlying operating system that would prevent {{tt|lock}} from meeting its specifications. The mutex is not locked in the case of any exception being thrown.
+
+===Notes===
+{{tt|lock()}} is usually not called directly: {{lc|std::unique_lock}}, {{ltt std|cpp/thread/scoped_lock}}, and {{lc|std::lock_guard}} are used to manage exclusive locking.
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+std::mutex stream_mutx;
+void print(auto const&amp; v)
+{
+    std::unique_lock&lt;std::mutex&gt; lock(stream_mutx);
+    std::cout &lt;&lt; std::this_thread::get_id() &lt;&lt; " saw: ";
+    for (auto e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    using namespace std::chrono_literals;
+    constexpr int N_READERS = 5;
+    constexpr int LAST = -999;
+
+    std::shared_mutex smtx;
+    int product = 0;
+
+    auto writer = [&amp;smtx, &amp;product](int start, int end)
+    {
+        for (int i = start; i &lt; end; ++i)
+        {
+            auto data = i;
+            {
+                std::unique_lock&lt;std::shared_mutex&gt; lock(smtx); // better than:
+                                                                // smtx.lock();
+                product = data;
+            }
+            std::this_thread::sleep_for(3ms);
+        }
+
+        smtx.lock(); // lock manually
+        product = LAST;
+        smtx.unlock();
+    };
+
+    auto reader = [&amp;smtx, &amp;product]
+    {
+        int data = 0;
+        std::vector&lt;int&gt; seen;
+        do
+        {
+            {
+                // better to use:
+                std::shared_lock lock(smtx); // smtx.lock_shared();
+                data = product;
+            }                                // smtx.unlock_shared();
+
+            seen.push_back(data);
+            std::this_thread::sleep_for(2ms);
+        }
+        while (data != LAST);
+
+        print(seen);
+    };
+
+    std::vector&lt;std::thread&gt; threads;
+    threads.emplace_back(writer, 1, 13);
+    threads.emplace_back(writer, 42, 52);
+
+    for (int i = 0; i &lt; N_READERS; ++i)
+        threads.emplace_back(reader);
+
+    for (auto&amp;&amp; t : threads)
+        t.join();
+}
+|p=true
+|output=
+127755840 saw: 43 3 3 4 46 5 6 7 7 8 9 51 10 11 11 12 -999
+144541248 saw: 2 44 3 4 46 5 6 7 7 8 9 51 10 11 11 12 -999
+110970432 saw: 42 2 3 45 4 5 47 6 7 8 8 9 10 11 11 12 -999
+119363136 saw: 42 2 3 4 46 5 6 7 7 8 9 9 10 11 11 12 12 -999
+136148544 saw: 2 44 3 4 46 5 6 48 7 8 9 51 10 11 11 12 12 -999
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc lock_shared|shared_mutex}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

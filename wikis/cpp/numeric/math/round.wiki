@@ -1,0 +1,217 @@
+{{cpp/title|round|roundf|roundl|lround|lroundf|lroundl|llround|llroundf|llroundl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl h|Rounding to floating-point types}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+float       round ( float num );
+double      round ( double num );
+long double round ( long double num );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            round ( /* floating-point-type */ num );
+}}
+{{dcl|num=2|since=c++11|notes={{mark|constexpr since C++23}}|
+float       roundf( float num );
+}}
+{{dcl|num=3|since=c++11|notes={{mark|constexpr since C++23}}|
+long double roundl( long double num );
+}}
+{{dcl h|Rounding to {{c/core|long}}}}
+{{dcl rev multi|num=4|since1=c++11|dcl1=
+long lround ( float num );
+long lround ( double num );
+long lround ( long double num );
+|since2=c++23|dcl2=
+constexpr long lround( /* floating-point-type */ num );
+}}
+{{dcl|num=5|since=c++11|notes={{mark|constexpr since C++23}}|
+long lroundf( float num );
+}}
+{{dcl|num=6|since=c++11|notes={{mark|constexpr since C++23}}|
+long lroundl( long double num );
+}}
+{{dcl h|Rounding to {{c/core|long long}}}}
+{{dcl rev multi|num=7|since1=c++11|dcl1=
+long long llround ( float num );
+long long llround ( double num );
+long long llround ( long double num );
+|since2=c++23|dcl2=
+constexpr long long llround( /* floating-point-type */ num );
+}}
+{{dcl|num=8|since=c++11|notes={{mark|constexpr since C++23}}|
+long long llroundf( float num );
+}}
+{{dcl|num=9|since=c++11|notes={{mark|constexpr since C++23}}|
+long long llroundl( long double num );
+}}
+{{dcl h|[[#Notes|Additional overloads]]}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark|constexpr since C++23}}|
+template&lt; class Integer &gt;
+double round( Integer num );
+}}
+{{dcl|num=B|since=c++11|notes={{mark|constexpr since C++23}}|
+template&lt; class Integer &gt;
+long lround( Integer num );
+}}
+{{dcl|num=C|since=c++11|notes={{mark|constexpr since C++23}}|
+template&lt; class Integer &gt;
+long long llround( Integer num );
+}}
+{{dcl end}}
+
+@1-3@ Computes the nearest integer value to {{c|num}} (in floating-point format), rounding halfway cases away from zero, regardless of the current rounding mode.{{rev inl|since=c++23| The library provides overloads of {{tt|std::round}} for all cv-unqualified floating-point types as the type of the parameter {{c|num}}.}}
+@4-9@ Computes the nearest integer value to {{c|num}} (in integer format), rounding halfway cases away from zero, regardless of the current rounding mode.{{rev inl|since=c++23| The library provides overloads of {{tt|std::lround}} and {{tt|std::llround}} for all cv-unqualified floating-point types as the type of the parameter {{c|num}}.}}
+@A-C@ Additional overloads are provided for all integer types, which are treated as {{c/core|double}}.
+
+===Parameters===
+{{par begin}}
+{{par|num|floating-point or integer value}}
+{{par end}}
+
+===Return value===
+If no errors occur, the nearest integer value to {{c|num}}, rounding halfway cases away from zero, is returned.
+
+{{plot|left=Return value|bottom={{c|num}}|math-round_away_zero.svg}}
+
+If a domain error occurs, an implementation-defined value is returned.
+
+===Error handling===
+Errors are reported as specified in {{lc|math_errhandling}}.
+
+If the result of {{tt|std::lround}} or {{tt|std::llround}} is outside the range representable by the return type, a domain error or a range error may occur.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+: For the {{tt|std::round}} function:
+:* The current [[cpp/numeric/fenv/FE_round|rounding mode]] has no effect.
+:* If {{c|num}} is ±∞, it is returned, unmodified.
+:* If {{c|num}} is ±0, it is returned, unmodified.
+:* If {{c|num}} is NaN, NaN is returned.
+: For {{tt|std::lround}} and {{tt|std::llround}} functions:
+:* {{lc|FE_INEXACT}} is never raised.
+:* The current [[cpp/numeric/fenv/FE_round|rounding mode]] has no effect.
+:* If {{c|num}} is ±∞, {{lc|FE_INVALID}} is raised and an implementation-defined value is returned.
+:* If the result of the rounding is outside the range of the return type, {{lc|FE_INVALID}} is raised and an implementation-defined value is returned.
+:* If {{c|num}} is NaN, {{lc|FE_INVALID}} is raised and an implementation-defined value is returned.
+
+===Notes===
+{{lc|FE_INEXACT}} may be (but is not required to be) raised by {{tt|std::round}} when rounding a non-integer finite value.
+
+The largest representable floating-point values are exact integers in all standard floating-point formats, so {{tt|std::round}} never overflows on its own; however the result may overflow any integer type (including {{lc|std::intmax_t}}), when stored in an integer variable.
+
+[https://pubs.opengroup.org/onlinepubs/9699919799/functions/lround.html POSIX specifies] that all cases where {{tt|std::lround}} or {{tt|std::llround}} raise {{lc|FE_INEXACT}} are domain errors.
+
+The {{c/core|double}} version of {{tt|std::round}} behaves as if implemented as follows:
+{{source|1=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+
+#pragma STDC FENV_ACCESS ON
+
+double round(double x)
+{
+    const int save_round = std::fegetround();
+    std::fesetround(FE_TOWARDZERO);
+    const double result = std::rint(std::copysign(0.5 + std::fabs(x), x));
+    std::fesetround(save_round);
+    return result;
+}
+}}
+
+{{cpp/numeric/math/additional integer overload note|round}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cfenv&gt;
+#include &lt;cfloat&gt;
+#include &lt;climits&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+
+// #pragma STDC FENV_ACCESS ON
+
+double custom_round(double x)
+{
+    const int save_round = std::fegetround();
+    std::fesetround(FE_TOWARDZERO);
+    const double result = std::rint(std::copysign(0.5 + std::fabs(x), x));
+    std::fesetround(save_round);
+    return result;
+}
+
+void test_custom_round()
+{
+    for (const double x :
+        {
+            0.0, 0.3,
+            0.5 - DBL_EPSILON / 2,
+            0.5,
+            0.5 + DBL_EPSILON / 2,
+            0.7, 1.0, 2.3, 2.5, 2.7, 3.0,
+            static_cast&lt;double&gt;(INFINITY)
+        })
+        assert(round(+x) == custom_round(+x) &amp;&amp; round(-x) == custom_round(-x));
+}
+
+int main()
+{
+    test_custom_round();
+
+    std::cout &lt;&lt; std::showpos;
+
+    // round
+    std::cout &lt;&lt; "round(+2.3) = " &lt;&lt; std::round(2.3)
+              &lt;&lt; "  round(+2.5) = " &lt;&lt; std::round(2.5)
+              &lt;&lt; "  round(+2.7) = " &lt;&lt; std::round(2.7) &lt;&lt; '\n'
+              &lt;&lt; "round(-2.3) = " &lt;&lt; std::round(-2.3)
+              &lt;&lt; "  round(-2.5) = " &lt;&lt; std::round(-2.5)
+              &lt;&lt; "  round(-2.7) = " &lt;&lt; std::round(-2.7) &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "round(-0.0) = " &lt;&lt; std::round(-0.0)  &lt;&lt; '\n'
+              &lt;&lt; "round(-Inf) = " &lt;&lt; std::round(-INFINITY) &lt;&lt; '\n';
+    
+    // lround
+    std::cout &lt;&lt; "lround(+2.3) = " &lt;&lt; std::lround(2.3)
+              &lt;&lt; "  lround(+2.5) = " &lt;&lt; std::lround(2.5)
+              &lt;&lt; "  lround(+2.7) = " &lt;&lt; std::lround(2.7) &lt;&lt; '\n'
+              &lt;&lt; "lround(-2.3) = " &lt;&lt; std::lround(-2.3)
+              &lt;&lt; "  lround(-2.5) = " &lt;&lt; std::lround(-2.5)
+              &lt;&lt; "  lround(-2.7) = " &lt;&lt; std::lround(-2.7) &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "lround(-0.0) = " &lt;&lt; std::lround(-0.0)  &lt;&lt; '\n'
+              &lt;&lt; "lround(-Inf) = " &lt;&lt; std::lround(-INFINITY) &lt;&lt; '\n';
+    
+    // error handling
+    std::feclearexcept(FE_ALL_EXCEPT);
+    
+    std::cout &lt;&lt; "std::lround(LONG_MAX+1.5) = "
+              &lt;&lt; std::lround(LONG_MAX + 1.5) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    FE_INVALID was raised\n";
+}
+|p=true
+|output=
+round(+2.3) = +2  round(+2.5) = +3  round(+2.7) = +3
+round(-2.3) = -2  round(-2.5) = -3  round(-2.7) = -3
+round(-0.0) = -0
+round(-Inf) = -inf
+lround(+2.3) = +2  lround(+2.5) = +3  lround(+2.7) = +3
+lround(-2.3) = -2  lround(-2.5) = -3  lround(-2.7) = -3
+lround(-0.0) = +0
+lround(-Inf) = -9223372036854775808
+std::lround(LONG_MAX+1.5) = -9223372036854775808
+    FE_INVALID was raised
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc floor}}
+{{dsc inc|cpp/numeric/math/dsc ceil}}
+{{dsc inc|cpp/numeric/math/dsc trunc}}
+{{dsc see c|c/numeric/math/round}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

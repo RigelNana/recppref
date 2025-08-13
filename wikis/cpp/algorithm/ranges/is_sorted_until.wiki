@@ -1,0 +1,124 @@
+{{cpp/ranges/title|is_sorted_until}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr I
+    is_sorted_until( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; std::forward_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    is_sorted_until( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Examines the range {{range|first|last}} and finds the largest range beginning at {{c|first}} in which the elements are sorted in non-descending order.
+
+A sequence is sorted with respect to a comparator {{c|comp}} if for any iterator {{tt|it}} pointing to the sequence and any non-negative integer {{tt|n}} such that {{tt|it + n}} is a valid iterator pointing to an element of the sequence, {{c|std::invoke(comp, std::invoke(proj, *(it + n)), std::invoke(proj, *it))}} evaluates to {{c|false}}.
+
+@1@ Elements are compared using the given binary comparison function {{c|comp}}.
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|iterator-sentinel defining the range to find its sorted upper bound}}
+{{par|r|the range to find its sorted  upper bound}}
+{{par|comp|comparison function to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+The upper bound of the largest range beginning at {{c|first}} in which the elements are sorted in non-descending order. That is, the last iterator {{tt|it}} for which range {{range|first|it}} is sorted.
+
+===Complexity===
+Linear in the distance between {{c|first}} and {{c|last}}.
+
+===Possible implementation===
+{{eq fun
+|1=
+struct is_sorted_until_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr I operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        if (first == last)
+            return first;
+
+        for (auto next = first; ++next != last; first = next)
+            if (std::invoke(comp, std::invoke(proj, *next), std::invoke(proj, *first)))
+                return next;
+
+        return first;
+    }
+  
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::ref(comp), std::ref(proj));
+    }
+};
+
+inline constexpr is_sorted_until_fn is_sorted_until;
+}}
+
+===Notes===
+{{tt|ranges::is_sorted_until}} returns an iterator equal to {{c|last}} for empty ranges and ranges of length one.
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;random&gt;
+
+int main()
+{
+    std::random_device rd;
+    std::mt19937 g {rd()};
+    std::array nums {3, 1, 4, 1, 5, 9};
+ 
+    constexpr int min_sorted_size = 4;
+    int sorted_size = 0;
+    do
+    {
+        std::ranges::shuffle(nums, g);
+        const auto sorted_end = std::ranges::is_sorted_until(nums);
+        sorted_size = std::ranges::distance(nums.begin(), sorted_end);
+ 
+        std::ranges::copy(nums, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+        std::cout &lt;&lt; " : " &lt;&lt; sorted_size &lt;&lt; " leading sorted element(s)\n";
+    }
+    while (sorted_size &lt; min_sorted_size);
+}
+|p=true
+|output=
+4 1 9 5 1 3  : 1 leading sorted element(s)
+4 5 9 3 1 1  : 3 leading sorted element(s)
+9 3 1 4 5 1  : 1 leading sorted element(s)
+1 3 5 4 1 9  : 3 leading sorted element(s)
+5 9 1 1 3 4  : 2 leading sorted element(s)
+4 9 1 5 1 3  : 2 leading sorted element(s)
+1 1 4 9 5 3  : 4 leading sorted element(s)
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_sorted}}
+{{dsc inc|cpp/algorithm/dsc is_sorted_until}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

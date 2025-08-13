@@ -1,0 +1,128 @@
+{{cpp/title|atomic_thread_fence}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|since=c++11|1=
+extern "C" void atomic_thread_fence( std::memory_order order ) noexcept;
+}}
+{{dcl end}}
+
+Establishes [[cpp/atomic/memory_order|memory synchronization ordering]] of non-atomic and relaxed atomic accesses, as instructed by {{c|order}}, without an associated atomic operation. Note however, that at least one atomic operation is required to set up the synchronization, as described below.
+
+====Fence-atomic synchronization====
+A release fence F in thread A synchronizes-with atomic [[cpp/atomic/memory_order|acquire operation]] Y in thread B, if
+
+* there exists an atomic store X (with any memory order),
+* Y reads the value written by X (or the value would be written by [[cpp/atomic/memory_order|release sequence headed by X]] if X were a release operation),
+* F is sequenced-before X in thread A.
+
+In this case, all non-atomic and relaxed atomic stores that are [[cpp/atomic/memory_order|sequenced-before]] F in thread A will [[cpp/atomic/memory_order|happen-before]] all non-atomic and relaxed atomic loads from the same locations made in thread B after Y.
+
+====Atomic-fence synchronization====
+An atomic [[cpp/atomic/memory_order|release operation]] X in thread A synchronizes-with an acquire fence F in thread B, if
+
+* there exists an atomic read Y (with any memory order),
+* Y reads the value written by X (or by the [[cpp/atomic/memory_order|release sequence headed by X]]),
+* Y is sequenced-before F in thread B.
+
+In this case, all non-atomic and relaxed atomic stores that are [[cpp/atomic/memory_order|sequenced-before]] X in thread A will [[cpp/atomic/memory_order|happen-before]] all non-atomic and relaxed atomic loads from the same locations made in thread B after F.
+
+====Fence-fence synchronization====
+A release fence FA in thread A synchronizes-with an acquire fence FB in thread B, if
+
+* there exists an atomic object M,
+* there exists an atomic write X (with any memory order) that modifies M in thread A,
+* FA is sequenced-before X in thread A,
+* there exists an atomic read Y (with any memory order) in thread B,
+* Y reads the value written by X (or the value would be written by [[cpp/atomic/memory_order|release sequence headed by X]] if X were a release operation),
+* Y is sequenced-before FB in thread B.
+
+In this case, all non-atomic and relaxed atomic stores that are [[cpp/atomic/memory_order|sequenced-before]] FA in thread A will [[cpp/atomic/memory_order|happen-before]] all non-atomic and relaxed atomic loads from the same locations made in thread B after FB.
+
+===Parameters===
+{{par begin}}
+{{par|order|the memory ordering executed by this fence}}
+{{par end}} 
+
+===Return value===
+(none)
+
+===Notes===
+On x86 (including x86-64), {{tt|atomic_thread_fence}} functions issue no CPU instructions and only affect compile-time code motion, except for {{c|std::atomic_thread_fence(std::memory_order_seq_cst)}}.
+
+{{tt|atomic_thread_fence}} imposes stronger synchronization constraints than an atomic store operation with the same {{lc|std::memory_order}}. While an atomic store-release operation prevents all preceding reads and writes from moving past the store-release, an {{tt|atomic_thread_fence}} with {{c|std::memory_order_release}} ordering prevents all preceding reads and writes from moving past all subsequent stores.
+
+Fence-fence synchronization can be used to add synchronization to a sequence of several relaxed atomic operations, for example:
+{{source|1=
+// Global
+std::string computation(int);
+void print(std::string);
+
+std::atomic&lt;int&gt; arr[3] = {-1, -1, -1};
+std::string data[1000]; //non-atomic data
+
+// Thread A, compute 3 values.
+void ThreadA(int v0, int v1, int v2)
+{
+//  assert(0 &lt;= v0, v1, v2 &lt; 1000);
+    data[v0] = computation(v0);
+    data[v1] = computation(v1);
+    data[v2] = computation(v2);
+    std::atomic_thread_fence(std::memory_order_release);
+    std::atomic_store_explicit(&amp;arr[0], v0, std::memory_order_relaxed);
+    std::atomic_store_explicit(&amp;arr[1], v1, std::memory_order_relaxed);
+    std::atomic_store_explicit(&amp;arr[2], v2, std::memory_order_relaxed);
+}
+
+// Thread B, prints between 0 and 3 values already computed.
+void ThreadB()
+{
+    int v0 = std::atomic_load_explicit(&amp;arr[0], std::memory_order_relaxed);
+    int v1 = std::atomic_load_explicit(&amp;arr[1], std::memory_order_relaxed);
+    int v2 = std::atomic_load_explicit(&amp;arr[2], std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_acquire);
+//  v0, v1, v2 might turn out to be -1, some or all of them.
+//  Otherwise it is safe to read the non-atomic data because of the fences:
+    if (v0 != -1)
+        print(data[v0]);
+    if (v1 != -1)
+        print(data[v1]);
+    if (v2 != -1)
+        print(data[v2]);
+}
+}}
+
+===Example===
+Scan an array of mailboxes, and process only the ones intended for us, without unnecessary synchronization.
+This example uses atomic-fence synchronization.
+{{source|1=
+const int num_mailboxes = 32;
+std::atomic&lt;int&gt; mailbox_receiver[num_mailboxes];
+std::string mailbox_data[num_mailboxes];
+
+// The writer threads update non-atomic shared data 
+// and then update mailbox_receiver[i] as follows:
+mailbox_data[i] = ...;
+std::atomic_store_explicit(&amp;mailbox_receiver[i], receiver_id, std::memory_order_release);
+
+// Reader thread needs to check all mailbox[i], but only needs to sync with one.
+for (int i = 0; i &lt; num_mailboxes; ++i)
+    if (std::atomic_load_explicit(&amp;mailbox_receiver[i],
+        std::memory_order_relaxed) == my_id)
+    {
+        // synchronize with just one writer
+        std::atomic_thread_fence(std::memory_order_acquire);
+        // guaranteed to observe everything done in the writer thread
+        // before the atomic_store_explicit()
+        do_work(mailbox_data[i]);
+    }
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc memory_order}}
+{{dsc inc|cpp/atomic/dsc atomic_signal_fence}}
+{{dsc see c|c/atomic/atomic_thread_fence}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

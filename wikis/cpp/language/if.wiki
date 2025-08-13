@@ -1,0 +1,410 @@
+{{title|{{tt|if}} statement}}
+{{cpp/language/statements/navbar}}
+Conditionally executes another statement.
+
+Used where code needs to be executed based on a condition{{rev inl|since=c++23|, or whether the {{c/core|if}} statement is evaluated in a manifestly constant-evaluated context}}.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|attr}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}}&lt;br&gt;{{ttb|(}} {{spar optional|init-statement}} {{spar|condition}} {{ttb|)}} {{spar|statement-true}}
+}}
+{{sdsc|num=2|
+{{spar optional|attr}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}}&lt;br&gt;{{ttb|(}} {{spar optional|init-statement}} {{spar|condition}} {{ttb|)}} {{spar|statement-true}} {{ttb|else}} {{spar|statement-false}}
+}}
+
+{{sdsc|num=3|notes={{mark since c++23}}|
+{{spar optional|attr}} {{ttb|if}} {{ttb|!}}{{mark optional}} {{ttb|consteval}} {{spar|compound-statement}}
+}}
+{{sdsc|num=4|notes={{mark since c++23}}|
+{{spar optional|attr}} {{ttb|if}} {{ttb|!}}{{mark optional}} {{ttb|consteval}} {{spar|compound-statement}} {{ttb|else}} {{spar|statement}}
+}}
+{{sdsc end}}
+
+@1@ {{c/core|if}} statement without an {{c/core|else}} branch
+@2@ {{c/core|if}} statement with an {{c/core|else}} branch
+@3@ consteval if statement without an {{c/core|else}} branch
+@4@ consteval if statement with an {{c/core|else}} branch
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}}}
+{{par|{{ttb|constexpr}}|{{mark since c++17}} if present, the statement becomes a [[#Constexpr if|constexpr if statement]]}}
+{{par|{{spar|init-statement}}|{{mark since c++17}} either
+* an {{rlp|statements|expression statement}} (which may be a null statement {{c|;}})
+* a  {{rlp|declarations|simple declaration}}, typically a declaration of a variable with initializer, but it may declare arbitrary many variables or be a {{rlp|structured binding}} declaration
+{{rrev|since=c++23|
+* an {{rlp|type alias|alias declaration}}
+}}
+Note that any {{spar|init-statement}} must end with a semicolon. This is why it is often described informally as an expression or a declaration followed by a semicolon.}}
+{{par|{{spar|condition}}|a [[#Condition|condition]]}}
+{{par|{{spar|statement-true}}|the {{rlp|statements|statement}} to be executed if {{spar|condition}} yields {{c|true}}}}
+{{par|{{spar|statement-false}}|the statement to be executed if {{spar|condition}} yields {{c|false}}}}
+{{par|{{spar|compound-statement}}|the {{rlp|statements#Compound statements|compound statement}} to be executed if the {{c/core|if}} statement is evaluated in a {{rlp|constant expression#Manifestly constant-evaluated expressions|manifestly constant-evaluated context}} (or is not evaluated in such a context if {{tt|!}} is preceding {{c/core|consteval}})}}
+{{par|{{spar|statement}}|the statement (must be a compound statement, see {{rlp|if#Consteval if|below}}) to be executed if the {{c/core|if}} statement is not evaluated in a manifestly constant-evaluated context (or is evaluated in such a context if {{tt|!}} is preceding {{c/core|consteval}})}}
+{{par end}}
+
+{{cpp/language/condition|usage=determine which branch the control will go to|bool=yes}}
+
+===Branch selection===
+If the {{spar|condition}} yields {{c|true}}, {{spar|statement-true}} is executed.
+
+If the {{c/core|else}} part of the {{c/core|if}} statement is present and {{spar|condition}} yields {{c|false}}, {{spar|statement-false}} is executed.
+
+If the {{c/core|else}} part of the {{c/core|if}} statement is present and {{spar|statement-true}} is also an {{c/core|if}} statement, then that inner {{c/core|if}} statement must contain an {{c/core|else}} part as well (in other words, in nested {{c/core|if}} statements, the {{c/core|else}} is associated with the closest {{c/core|if}} that does not yet have an associated {{c/core|else}}).
+
+{{example|code=
+#include &lt;iostream&gt;
+
+int main()
+{
+    // simple if-statement with an else clause
+    int i = 2;
+    if (i &gt; 2)
+        std::cout &lt;&lt; i &lt;&lt; " is greater than 2\n";
+    else
+        std::cout &lt;&lt; i &lt;&lt; " is not greater than 2\n";
+    
+    // nested if-statement
+    int j = 1;
+    if (i &gt; 1)
+        if (j &gt; 2)
+            std::cout &lt;&lt; i &lt;&lt; " &gt; 1 and " &lt;&lt; j &lt;&lt; " &gt; 2\n";
+        else // this else is part of if (j &gt; 2), not of if (i &gt; 1)
+            std::cout &lt;&lt; i &lt;&lt; " &gt; 1 and " &lt;&lt; j &lt;&lt; " &lt;= 2\n";
+    
+    // declarations can be used as conditions with dynamic_cast
+    struct Base
+    {
+        virtual ~Base() {}
+    };
+    
+    struct Derived : Base
+    {
+        void df() { std::cout &lt;&lt; "df()\n"; }
+    };
+    
+    Base* bp1 = new Base;
+    Base* bp2 = new Derived;
+    
+    if (Derived* p = dynamic_cast&lt;Derived*&gt;(bp1)) // cast fails, returns nullptr
+        p-&gt;df(); // not executed
+
+    if (auto p = dynamic_cast&lt;Derived*&gt;(bp2)) // cast succeeds
+        p-&gt;df(); // executed
+}
+|output=
+2 is not greater than 2
+2 &gt; 1 and 1 &lt;= 2
+df()
+}}
+
+{{rrev|since=c++17|
+==={{c/core|if}} statements with initializer===
+If {{spar|init-statement}} is used, the {{c/core|if}} statement is equivalent to
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|init-statement}}&lt;br&gt;
+:{{spar optional|attr}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}} {{ttb|(}} {{spar|condition}} {{ttb|)}}&lt;br&gt;
+::{{spar|statement-true}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+or
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|init-statement}}&lt;br&gt;
+:{{spar optional|attr}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}} {{ttb|(}} {{spar|condition}} {{ttb|)}}&lt;br&gt;
+::{{spar|statement-true}}&lt;br&gt;
+:{{ttb|else}}
+::{{spar|statement-false}}&lt;br&gt;
+{{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc end}}
+
+Except that names declared by the {{spar|init-statement}} (if {{spar|init-statement}} is a declaration) and names declared by {{spar|condition}} (if {{spar|condition}} is a declaration) are in the same scope, which is also the scope of both {{spar sep|statement}}s.
+
+{{source|1=
+std::map&lt;int, std::string&gt; m;
+std::mutex mx;
+extern bool shared_flag; // guarded by mx
+
+int demo()
+{
+    if (auto it = m.find(10); it != m.end())
+        return it-&gt;second.size();
+    
+    if (char buf[10]; std::fgets(buf, 10, stdin))
+        m[0] += buf;
+    
+    if (std::lock_guard lock(mx); shared_flag)
+    {
+        unsafe_ping();
+        shared_flag = false;
+    }
+    
+    if (int s; int count = ReadBytesWithSignal(&amp;s))
+    {
+        publish(count);
+        raise(s);
+    }
+    
+    if (const auto keywords = {"if", "for", "while"};
+        std::ranges::any_of(keywords, [&amp;tok](const char* kw) { return tok == kw; }))
+    {
+        std::cerr &lt;&lt; "Token must not be a keyword\n";
+    }
+}
+}}
+}}
+
+
+{{rrev|since=c++17|
+===Constexpr if===
+The statement that begins with {{c/core|if constexpr}} is known as the ''constexpr if statement''. All substatements of a constexpr if statement are {{rlpsd|statements#Control-flow-limited statements}}.
+
+In a constexpr if statement, {{spar|condition}} must be {{rev inl|until=c++23|a {{rlp|constant expression#Converted constant expression|contextually converted constant expression of type {{c/core|bool}}}}}}{{rev inl|since=c++23|an expression {{rlp|implicit conversion#Contextual conversions|contextually converted to {{c/core|bool}}}}, where the conversion is a {{rlp|constant expression}}}}.
+
+If {{spar|condition}} yields {{c|true}}, then {{spar|statement-false}} is discarded (if present), otherwise, {{spar|statement-true}} is discarded.
+
+The {{c/core|return}} statements in a discarded statement do not participate in function return type deduction:
+{{source|1=
+template&lt;typename T&gt;
+auto get_value(T t)
+{
+    if constexpr (std::is_pointer_v&lt;T&gt;)
+        return *t; // deduces return type to int for T = int*
+    else
+        return t;  // deduces return type to int for T = int
+}
+}}
+
+The discarded statement can {{rlp|definition#One Definition Rule|ODR-use}} a variable that is not defined:
+{{source|
+extern int x; // no definition of x required
+
+int f()
+{
+    if constexpr (true)
+        return 0;
+    else if (x)
+        return x;
+    else
+        return -x;
+}
+}}
+
+Outside a template, a discarded statement is fully checked. {{c/core|if constexpr}} is not a substitute for the {{ltt|cpp/preprocessor/conditional|#if}} preprocessing directive:
+
+{{source|1=
+void f()
+{
+    if constexpr(false)
+    {
+        int i = 0;
+        int *p = i; // Error even though in discarded statement
+    }
+}
+}}
+
+If a constexpr if statement appears inside a {{rlpsd|templates#Templated entity}}, and if {{spar|condition}} is not {{rlp|dependent name#Value-dependent expressions|value-dependent}} after instantiation, the discarded statement is not instantiated when the enclosing template is instantiated.
+{{source|
+template&lt;typename T, typename ... Rest&gt;
+void g(T&amp;&amp; p, Rest&amp;&amp; ...rs)
+{
+    // ... handle p
+    if constexpr (sizeof...(rs) &gt; 0)
+        g(rs...); // never instantiated with an empty argument list
+}
+}}
+
+The condition remains value-dependent after instantiation is a nested template:
+{{source|1=
+template&lt;class T&gt;
+void g()
+{
+    auto lm = [=](auto p)
+    {
+        if constexpr (sizeof(T) == 1 &amp;&amp; sizeof p == 1)
+        {
+            // this condition remains value-dependent after instantiation of g&lt;T&gt;,
+            // which affects implicit lambda captures
+            // this compound statement may be discarded only after
+            // instantiation of the lambda body
+        }
+    };
+}
+}}
+
+The discarded statement cannot be ill-formed for every possible specialization:
+{{source|1=
+template&lt;typename T&gt;
+void f()
+{
+    if constexpr (std::is_arithmetic_v&lt;T&gt;)
+        // ...
+    else {
+        using invalid_array = int[-1]; // ill-formed: invalid for every T
+        static_assert(false, "Must be arithmetic"); // ill-formed before CWG2518
+    }
+}
+}}
+
+The common workaround before the implementation of {{cwg|2518}} for such a catch-all statement is a type-dependent expression that is always {{c|false}}:
+{{source|1=
+template&lt;typename&gt;
+constexpr bool dependent_false_v = false;
+
+template&lt;typename T&gt;
+void f()
+{
+    if constexpr (std::is_arithmetic_v&lt;T&gt;)
+        // ...
+    else {
+        // workaround before CWG2518
+        static_assert(dependent_false_v&lt;T&gt;, "Must be arithmetic");
+    }
+}
+}}
+
+A {{rlp|typedef|typedef declaration}} {{rev inl|since=c++23|or {{rlp|type alias|alias declaration}}}} can be used as the {{spar|init-statement}} of a constexpr if statement to reduce the scope of the type alias.
+
+{{example}}
+}}
+
+
+{{rrev|since=c++23|
+===Consteval if===
+The statement that begins with {{c/core|if consteval}} is known as the ''consteval if statement''. All substatements of a consteval if statement are {{rlpsd|statements#Control-flow-limited statements}}.
+
+{{spar|statement}} must be a compound statement, and it will still be treated as a part of the consteval if statement even if it is not a compound statement (and thus results in a compilation error):
+{{example|code=
+constexpr void f(bool b)
+{
+    if (true)
+        if consteval {}
+        else ; // error: not a compound-statement
+               // else not associated with outer if
+}
+}}
+
+If a consteval if statement is evaluated in a {{rlp|constant expression#Manifestly constant-evaluated expressions|manifestly constant-evaluated context}}, {{spar|compound-statement}} is executed. Otherwise, {{spar|statement}} is executed if it is present.
+
+If the statement begins with {{c/core|if !consteval}}, the {{spar|compound-statement}} and {{spar|statement}} (if any) must both be compound statements. Such statements are not considered consteval if statements, but are equivalent to consteval if statements:
+* {{c|if !consteval {/* stmt */ }&lt;!----&gt;}} is equivalent to&lt;br&gt;
+: {{c|if consteval {} else {/* stmt */}&lt;!----&gt;}}.
+* {{c|if !consteval {/* stmt-1 */} else {/* stmt-2 */}&lt;!----&gt;}} is equivalent to&lt;br&gt;
+: {{c|if consteval {/* stmt-2 */} else {/* stmt-1 */}&lt;!----&gt;}}.
+
+{{spar|compound-statement}} in a consteval if statement (or {{spar|statement}} in the negative form) is in an {{rlp|consteval|immediate function context}}, in which a call to an immediate function needs not to be a constant expression.
+
+{{example
+|code=
+#include &lt;cmath&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+
+constexpr bool is_constant_evaluated() noexcept
+{
+    if consteval { return true; } else { return false; }
+}
+
+constexpr bool is_runtime_evaluated() noexcept
+{
+    if not consteval { return true; } else { return false; }
+}
+
+consteval std::uint64_t ipow_ct(std::uint64_t base, std::uint8_t exp)
+{
+    if (!base) return base;
+    std::uint64_t res{1};
+    while (exp)
+    {
+        if (exp &amp; 1) res *= base;
+        exp /= 2;
+        base *= base;
+    }
+    return res;
+}
+
+constexpr std::uint64_t ipow(std::uint64_t base, std::uint8_t exp)
+{
+    if consteval // use a compile-time friendly algorithm
+    {
+        return ipow_ct(base, exp);
+    }
+    else // use runtime evaluation
+    {
+        return std::pow(base, exp);
+    }
+}
+
+int main(int, const char* argv[])
+{
+    static_assert(ipow(0, 10) == 0 &amp;&amp; ipow(2, 10) == 1024);
+    std::cout &lt;&lt; ipow(std::strlen(argv[0]), 3) &lt;&lt; '\n';
+}
+}}
+}}
+
+===Notes===
+If {{spar|statement-true}} or {{spar|statement-false}} is not a compound statement, it is treated as if it were:
+{{source|
+if (x)
+    int i;
+// i is no longer in scope
+}}
+is the same as
+{{source|
+if (x)
+{
+    int i;
+}
+// i is no longer in scope
+}}
+
+The scope of the name introduced by {{spar|condition}}, if it is a declaration, is the combined scope of both statements' bodies:
+{{source|1=
+if (int x = f())
+{
+    int x; // error: redeclaration of x
+}
+else
+{
+    int x; // error: redeclaration of x
+}
+}}
+
+If {{spar|statement-true}} is entered by {{rlpt|goto}} or {{lc|longjmp}}, {{spar|condition}} is not evaluated and {{spar|statement-false}} is not executed.
+
+{{rrev|since=c++17|until=c++23|
+Built-in conversions are not allowed in the {{spar|condition}} of a constexpr if statement, except for non-{{rlp|list initialization#Narrowing conversions|narrowing}} {{rlp|implicit conversion#Integral conversions|integral conversions}} to {{c/core|bool}}.
+}}
+
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=201606L|std=C++17|__cpp_if_constexpr|{{c/core|constexpr}} {{tt|if}}}}
+{{ftm|value=202106L|std=C++23|__cpp_if_consteval|{{c/core|consteval}} {{tt|if}}}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/if}},
+{{ltt|cpp/keyword/else}},
+{{ltt|cpp/keyword/constexpr}},
+{{ltt|cpp/keyword/consteval}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=631|std=C++98|before=the control flow was unspecified if the&lt;br&gt;first substatement is reached via a label|after=the condition is not evaluated and the second&lt;br&gt;substatement is not executed (same as in C)}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_constant_evaluated}}
+{{dsc see c|c/language/if|{{c/core|if}} statement|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

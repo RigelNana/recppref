@@ -1,0 +1,80 @@
+{{cpp/title|wctomb}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cstdlib|
+int wctomb( char* s, wchar_t wc );
+}}
+
+Converts a wide character {{c|wc}} to multibyte encoding and stores it (including any shift sequences) in the char array whose first element is pointed to by {{c|s}}. No more than {{c|MB_CUR_MAX}} characters are stored. The conversion is affected by the current locale's LC_CTYPE category.
+
+If {{c|wc}} is the null character, the null byte is written to {{c|s}}, preceded by any shift sequences necessary to restore the initial shift state.
+
+If {{c|s}} is a null pointer, resets the global conversion state and determines whether shift sequences are used.
+
+===Parameters===
+{{par begin}}
+{{par|s|pointer to the character array for output}}
+{{par|wc|wide character to convert}}
+{{par end}}
+
+===Return value===
+If {{c|s}} is not a null pointer, returns the number of bytes that are contained in the multibyte representation of {{c|wc}} or {{c|-1}} if {{c|wc}} is not a valid character. 
+
+If {{c|s}} is a null pointer, resets its internal conversion state to represent the initial shift state and returns {{c|0}} if the current multibyte encoding is not state-dependent (does not use shift sequences) or a non-zero value if the current multibyte encoding is state-dependent (uses shift sequences).
+
+===Notes===
+Each call to {{tt|wctomb}} updates the internal global conversion state (a static object of type {{lc|std::mbstate_t}}, only known to this function). If the multibyte encoding uses shift states, this function is not reentrant. In any case, multiple threads should not call {{tt|wctomb}} without synchronization: {{lc|std::wcrtomb}} may be used instead.
+
+===Example===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+void print_wide(const std::wstring&amp; wstr)
+{
+    bool shifts = std::wctomb(nullptr, 0); // reset the conversion state
+    std::cout &lt;&lt; "shift sequences are " &lt;&lt; (shifts ? "" : "not" )
+              &lt;&lt; " used\n" &lt;&lt; std::uppercase &lt;&lt; std::setfill('0');
+    for (const wchar_t wc : wstr)
+    {
+        std::string mb(MB_CUR_MAX, '\0');
+        const int ret = std::wctomb(&amp;mb[0], wc);
+        const char* s = ret &gt; 1 ? "s" : "";
+        std::cout &lt;&lt; "multibyte char '" &lt;&lt; mb &lt;&lt; "' is " &lt;&lt; ret
+                  &lt;&lt; " byte" &lt;&lt; s &lt;&lt; ": [" &lt;&lt; std::hex;
+        for (int i{0}; i != ret; ++i)
+        {
+            const int c = 0xFF &amp; mb[i];
+            std::cout &lt;&lt; (i ? " " : "") &lt;&lt; std::setw(2) &lt;&lt; c;
+        }
+        std::cout &lt;&lt; "]\n" &lt;&lt; std::dec;
+    }
+}
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    // UTF-8 narrow multibyte encoding
+    std::wstring wstr = L"z\u00df\u6c34\U0001d10b"; // or L"zß水𝄋"
+    print_wide(wstr);
+}
+|output=
+shift sequences are not used
+multibyte char 'z' is 1 byte: [7A]
+multibyte char 'ß' is 2 bytes: [C3 9F]
+multibyte char '水' is 3 bytes: [E6 B0 B4]
+multibyte char '𝄋' is 4 bytes: [F0 9D 84 8B]
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbtowc}}
+{{dsc inc|cpp/string/multibyte/dsc wcrtomb}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc see c|c/string/multibyte/wctomb}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

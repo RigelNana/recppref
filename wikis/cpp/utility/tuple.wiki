@@ -1,0 +1,169 @@
+{{cpp/title|tuple}}
+{{cpp/utility/tuple/navbar}}
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl|since=c++11|1=
+template&lt; class... Types &gt;
+class tuple;
+}}
+{{dcl end}}
+
+Class template {{tt|std::tuple}} is a fixed-size collection of heterogeneous values. It is a generalization of {{lc|std::pair}}.
+
+If {{c|std::is_trivially_destructible&lt;Ti&gt;::value}} is {{c|true}} for every {{tt|Ti}} in {{tt|Types}}, the destructor of {{tt|std::tuple}} is trivial.
+
+If a program declares an [[cpp/language/template specialization|explicit]] or [[cpp/language/partial specialization|partial]] specialization of {{tt|std::tuple}}, the program is ill-formed, no diagnostic required.
+
+===Template parameters===
+{{par begin}}
+{{par|Types...|the types of the elements that the tuple stores. Empty list is supported.}}
+{{par end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc constructor}}
+{{dsc inc|cpp/utility/tuple/dsc operator{{=}}}}
+{{dsc inc|cpp/utility/tuple/dsc swap}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc make_tuple}}
+{{dsc inc|cpp/utility/tuple/dsc tie}}
+{{dsc inc|cpp/utility/tuple/dsc forward_as_tuple}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_cat}}
+{{dsc inc|cpp/utility/tuple/dsc get}}
+{{dsc inc|cpp/utility/tuple/dsc operator_cmp}}
+{{dsc inc|cpp/utility/tuple/dsc swap2}}
+{{dsc end}}
+
+===Helper concepts===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple-like}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_size}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_element}}
+{{dsc inc|cpp/utility/tuple/dsc uses_allocator}}
+{{dsc inc|cpp/utility/tuple/dsc basic_common_reference}}
+{{dsc inc|cpp/utility/tuple/dsc common_type}}
+{{dsc inc|cpp/utility/format/dsc tuple_formatter|tuple}}
+{{dsc inc|cpp/utility/tuple/dsc ignore}}
+{{dsc end}}
+
+===Helper specializations===
+{{dcl begin}}
+{{dcl|since=c++23|1=
+template&lt; class... Ts &gt;
+constexpr bool enable_nonlocking_formatter_optimization&lt;std::tuple&lt;Ts...&gt;&gt; 
+ = (enable_nonlocking_formatter_optimization&lt;Ts&gt; &amp;&amp; ...);
+}}
+{{dcl end}}
+This specialization of {{ltt std|cpp/utility/format/enable_nonlocking_formatter_optimization}} enables efficient implementation of {{ltt std|cpp/io/print}} and {{ltt std|cpp/io/println}} for printing a {{tt|tuple}} object when each element type enables it.
+
+==={{rl|deduction guides|Deduction guides}} {{mark since c++17}}===
+
+===Notes===
+Since the "shape" of a tuple – its size, the types of its elements, and the ordering of those types – are part of its type signature, they must all be available at compile time and can only depend on other compile-time information. This means that many conditional operations on tuples – in particular, conditional prepend/append and filter – are only possible if the conditions can be evaluated at compile time. For example, given a {{c/core|std::tuple&lt;int, double, int&gt;}}, it is possible to filter on types – e.g. returning a {{c/core|std::tuple&lt;int, int&gt;}} – but not to filter on whether or not each element is positive (which would have a different type signature depending on runtime values of the tuple), unless all the elements were themselves {{c/core|constexpr}}.
+
+As a workaround, one can work with tuples of {{c/core|std::optional}}, but there is still no way to adjust the size based on runtime information.
+
+Until {{stddoc|N4387}} (applied as a defect report for C++11), a function could not return a tuple using copy-list-initialization:
+{{source|1=
+std::tuple&lt;int, int&gt; foo_tuple()
+{
+    return {1, -1};  // Error until N4387
+    return std::tuple&lt;int, int&gt;{1, -1}; // Always works
+    return std::make_tuple(1, -1); // Always works
+}
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+
+std::tuple&lt;double, char, std::string&gt; get_student(int id)
+{
+    switch (id)
+    {
+        case 0: return {3.8, 'A', "Lisa Simpson"};
+        case 1: return {2.9, 'C', "Milhouse Van Houten"};
+        case 2: return {1.7, 'D', "Ralph Wiggum"};
+        case 3: return {0.6, 'F', "Bart Simpson"};
+    }
+    
+    throw std::invalid_argument("id");
+}
+
+int main()
+{
+    const auto student0 = get_student(0);
+    std::cout &lt;&lt; "ID: 0, "
+              &lt;&lt; "GPA: " &lt;&lt; std::get&lt;0&gt;(student0) &lt;&lt; ", "
+              &lt;&lt; "grade: " &lt;&lt; std::get&lt;1&gt;(student0) &lt;&lt; ", "
+              &lt;&lt; "name: " &lt;&lt; std::get&lt;2&gt;(student0) &lt;&lt; '\n';
+    
+    const auto student1 = get_student(1);
+    std::cout &lt;&lt; "ID: 1, "
+              &lt;&lt; "GPA: " &lt;&lt; std::get&lt;double&gt;(student1) &lt;&lt; ", "
+              &lt;&lt; "grade: " &lt;&lt; std::get&lt;char&gt;(student1) &lt;&lt; ", "
+              &lt;&lt; "name: " &lt;&lt; std::get&lt;std::string&gt;(student1) &lt;&lt; '\n';
+    
+    double gpa2;
+    char grade2;
+    std::string name2;
+    std::tie(gpa2, grade2, name2) = get_student(2);
+    std::cout &lt;&lt; "ID: 2, "
+              &lt;&lt; "GPA: " &lt;&lt; gpa2 &lt;&lt; ", "
+              &lt;&lt; "grade: " &lt;&lt; grade2 &lt;&lt; ", "
+              &lt;&lt; "name: " &lt;&lt; name2 &lt;&lt; '\n';
+    
+    // C++17 structured binding:
+    const auto [gpa3, grade3, name3] = get_student(3);
+    std::cout &lt;&lt; "ID: 3, "
+              &lt;&lt; "GPA: " &lt;&lt; gpa3 &lt;&lt; ", "
+              &lt;&lt; "grade: " &lt;&lt; grade3 &lt;&lt; ", "
+              &lt;&lt; "name: " &lt;&lt; name3 &lt;&lt; '\n';
+}
+|output=
+ID: 0, GPA: 3.8, grade: A, name: Lisa Simpson
+ID: 1, GPA: 2.9, grade: C, name: Milhouse Van Houten
+ID: 2, GPA: 1.7, grade: D, name: Ralph Wiggum
+ID: 3, GPA: 0.6, grade: F, name: Bart Simpson
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2796|std=C++11|before=triviality of the destructor of {{tt|std::tuple}} was unspecified|after=specified}}
+{{dr list item|wg=lwg|dr=3990|std=C++11|before=a program could declare an explicit or&lt;br&gt;partial specialization of {{tt|std::tuple}}|after=the program is ill-formed in this&lt;br&gt;case (no diagnostic required)}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=22.4|title=Tuples|id=tuple}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=20.5|title=Tuples|id=tuple}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=23.5|title=Tuples|id=tuple}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=20.4|title=Tuples|id=tuple}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=20.4|title=Tuples|id=tuple}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc pair}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|ko|pt|ru|zh}}

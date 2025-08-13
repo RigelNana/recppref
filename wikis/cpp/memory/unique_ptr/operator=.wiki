@@ -1,0 +1,105 @@
+{{cpp/memory/unique_ptr/title|operator{{=}}}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcla|num=1|constexpr=c++23|1=
+unique_ptr&amp; operator=( unique_ptr&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=2|constexpr=c++23|1=
+template&lt; class U, class E &gt;
+unique_ptr&amp; operator=( unique_ptr&lt;U, E&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=3|constexpr=c++23|1=
+unique_ptr&amp; operator=( std::nullptr_t ) noexcept;
+}}
+{{dcl|num=4|1=
+unique_ptr&amp; operator=( const unique_ptr&amp; ) = delete;
+}}{{dcl end}}
+
+@1@ Move assignment operator. Transfers ownership from {{c|r}} to {{c|*this}} as if by calling {{c|reset(r.release())}} followed by assigning {{lc|get_deleter()}} from {{c|std::forward&lt;Deleter&gt;(r.get_deleter())}}.
+@@ {{cpp/enable if|{{c|std::is_move_assignable&lt;Deleter&gt;::value}} is {{c|true}}}}.
+@@ If {{tt|Deleter}} is not a reference type, the behavior is undefined if
+* {{tt|Deleter}} is not {{named req|MoveAssignable}}, or
+* assigning {{lc|get_deleter()}} from an [[cpp/language/value category|rvalue]] of type {{tt|Deleter}} would throw an exception.
+@@ Otherwise ({{tt|Deleter}} is a reference type), the behavior is undefined if
+* {{tt|std::remove_reference&lt;Deleter&gt;::type}} is not {{named req|CopyAssignable}}, or
+* assigning {{lc|get_deleter()}} from an [[cpp/language/value category|lvalue]] of type {{tt|Deleter}} would throw an exception.
+
+@2@ Converting assignment operator. Transfers ownership from {{c|r}} to {{c|*this}} as if by calling {{c|reset(r.release())}} followed by assigning {{lc|get_deleter()}} from {{c|std::forward&lt;E&gt;(r.get_deleter())}}.
+@@ {{cpp/enable if|all following conditions are satisfied}}:
+* {{c|std::is_assignable&lt;Deleter&amp;, E&amp;&amp;&gt;::value}} is {{c|true}}.
+* For the primary template, all following conditions are satisfied:
+** {{tt|U}} is not an array type.
+** {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::pointer}} is implicitly convertible to {{tt|pointer}}, and.
+* For the array specialization ({{tt|unique_ptr&lt;T[]&gt;}}), all following conditions are satisfied:
+** {{tt|U}} is an array type.
+** {{tt|pointer}} is the same type as {{tt|element_type*}}.
+** {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::pointer}} is the same type as {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::element_type*}}.
+** {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::element_type(*)[]}} is convertible to {{tt|element_type(*)[]}}.
+@@ If {{tt|E}} is not a reference type, the behavior is undefined if assigning {{lc|get_deleter()}} from an [[cpp/language/value category|rvalue]] of type {{tt|E}} is ill-formed or would throw an exception.
+@@ Otherwise ({{tt|E}} is a reference type), the behavior is undefined if assigning {{lc|get_deleter()}} from an [[cpp/language/value category|lvalue]] of type {{tt|E}} is ill-formed or would throw an exception.
+
+@3@ Effectively the same as calling {{lc|reset()}}.
+
+@4@ Copy assignment operator is explicitly deleted.
+
+===Parameters===
+{{par begin}}
+{{par|r|smart pointer from which ownership will be transferred}}
+{{par end}} 
+
+===Return value===
+{{c|*this}}
+
+===Notes===
+As a move-only type, {{tt|unique_ptr}}'s assignment operator only accepts [[cpp/language/value category|rvalues]] arguments (e.g. the result of {{lc|std::make_unique}} or a {{lc|std::move}}'d {{tt|unique_ptr}} variable).
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+ 
+struct Foo
+{
+    int id;
+    Foo(int id) : id(id) { std::cout &lt;&lt; "Foo " &lt;&lt; id &lt;&lt; '\n'; }
+    ~Foo() { std::cout &lt;&lt; "~Foo " &lt;&lt; id &lt;&lt; '\n'; }
+};
+
+int main() 
+{
+    std::unique_ptr&lt;Foo&gt; p1(std::make_unique&lt;Foo&gt;(1));
+    
+    {
+        std::cout &lt;&lt; "Creating new Foo...\n";
+        std::unique_ptr&lt;Foo&gt; p2(std::make_unique&lt;Foo&gt;(2));
+        // p1 = p2; // Error ! can't copy unique_ptr
+        p1 = std::move(p2);
+        std::cout &lt;&lt; "About to leave inner block...\n";
+        
+        // Foo instance will continue to live, 
+        // despite p2 going out of scope
+    }
+    
+    std::cout &lt;&lt; "About to leave program...\n";
+}
+|output=
+Foo 1
+Creating new Foo...
+Foo 2
+~Foo 1
+About to leave inner block...
+About to leave program...
+~Foo 2
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2047|std=C++11|before=for overload {{v|2}}, {{lc|get_deleter()}} was assigned from&lt;br&gt;{{c|std::forward&lt;Deleter&gt;(r.get_deleter())}}|after=corrected to&lt;br&gt;{{c|std::forward&lt;E&gt;(r.get_deleter())}}}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before={{tt|1=unique_ptr&lt;T[]&gt;::operator=}}&lt;br&gt;rejected qualification conversions|after=accepts}}
+{{dr list item|wg=lwg|dr=2228|paper=N4366|std=C++11|before=the converting assignment operator&lt;br&gt;was missing the assignability constraint|after=added the constraint}}
+{{dr list item|wg=lwg|dr=2246|std=C++11|before=the assignment target of the converted&lt;br&gt;deleter of {{c|r}} was not specified|after=specified as {{lc|get_deleter()}}}} 
+{{dr list item|wg=lwg|dr=2899|std=C++11|before=the move assignment operator was not constrained|after=constrained}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

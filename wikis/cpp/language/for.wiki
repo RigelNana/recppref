@@ -1,0 +1,164 @@
+{{title|{{tt|for}} loop}}
+{{cpp/language/statements/navbar}}
+Conditionally executes a statement repeatedly, where the statement does not need to manage the loop condition.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{spar optional|attr}} {{ttb|for (}} {{spar|init-statement}}&lt;!-- Please do NOT add a semicolon here! Semicolon is a part of init-statement. --&gt; {{spar optional|condition}} {{ttb|;}} {{spar optional|expression}} {{ttb|)}} {{spar|statement}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}}}
+{{par|{{spar|init-statement}}|one of
+* an {{rlp|statements#Expression statements|expression statement}} (which may be a null statement {{c|;}})
+* a  {{rlpsd|declarations#Simple declaration}} (typically a declaration of a loop counter variable with initializer), it may declare arbitrary many variables{{rev inl|since=c++17| or {{rlp|structured binding}}s}}
+{{rrev|since=c++23|
+* an {{rlp|type alias|alias declaration}}
+}}
+Note that any {{spar|init-statement}} must end with a semicolon. This is why it is often described informally as an expression or a declaration followed by a semicolon.}}
+{{par|{{spar|condition}}|a [[#Condition|condition]]}}
+{{par|{{spar|expression}}|an {{rlp|expressions|expression}} (typically an expression that increments the loop counter)}}
+{{par|{{spar|statement}}|a {{rlp|statements|statement}} (typically a compound statement)}}
+{{par end}}
+
+{{cpp/language/condition|usage=determine whether {{spar|statement}} will be executed|bool=yes}}
+
+===Explanation===
+A {{c/core|for}} statement equivalent to:
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|init-statement}}&lt;br&gt;
+:{{ttb|while (}} {{spar|condition}} {{ttb|)}}&lt;br&gt;
+:{{ttb|{}}&lt;br&gt;
+::{{spar|statement}}&lt;br&gt;
+::{{spar|expression}} {{ttb|;}}&lt;br&gt;
+:{{ttb|}&lt;!----&gt;}}
+{{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+Except that
+* The scope of {{spar|init-statement}} and the scope of {{spar|condition}} are the same.
+* The scope of {{spar|statement}} and the scope of {{spar|expression}} are disjoint and nested within the scope of {{spar|init-statement}} and {{spar|condition}}.
+* Executing a {{rlp|continue|{{c/core|continue}} statement}} in {{spar|statement}} will evaluate {{spar|expression}}.
+* Empty {{spar|condition}} is equivalent to {{c|true}}.
+
+If the loop needs to be terminated within {{spar|statement}}, a {{rlp|break|{{c/core|break}} statement}} can be used as terminating statement.
+
+If the current iteration needs to be terminated within {{spar|statement}}, a {{rlp|continue|{{c/core|continue}} statement}} can be used as shortcut.
+
+===Notes===
+As is the case with {{rlpt|while}} loop, if {{spar|statement}} is not a compound statement, the scope of variables declared in it is limited to the loop body as if it was a compound statement.
+{{source|
+for (;;)
+    int n;
+// n goes out of scope
+}}
+
+{{cpp/language/process guarantee note}}
+
+While in C names declared in the scope of {{spar|init-statement}} and {{spar|condition}} can be shadowed in the scope of {{spar|statement}}, it is forbidden in C++:
+{{source|1=
+for (int i = 0;;)
+{
+    long i = 1;   // valid C, invalid C++
+    // ...
+}
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/for}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::cout &lt;&lt; "1) typical loop with a single statement as the body:\n";
+    for (int i = 0; i &lt; 10; ++i)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    
+    std::cout &lt;&lt; "\n\n" "2) init-statement can declare multiple names, as\n"
+                 "long as they can use the same decl-specifier-seq:\n";
+    for (int i = 0, *p = &amp;i; i &lt; 9; i += 2)
+        std::cout &lt;&lt; i &lt;&lt; ':' &lt;&lt; *p &lt;&lt; ' ';
+    
+    std::cout &lt;&lt; "\n\n" "3) condition may be a declaration:\n";
+    char cstr[] = "Hello";
+    for (int n = 0; char c = cstr[n]; ++n)
+        std::cout &lt;&lt; c;
+    
+    std::cout &lt;&lt; "\n\n" "4) init-statement can use the auto type specifier:\n";
+    std::vector&lt;int&gt; v = {3, 1, 4, 1, 5, 9};
+    for (auto iter = v.begin(); iter != v.end(); ++iter)
+        std::cout &lt;&lt; *iter &lt;&lt; ' ';
+    
+    std::cout &lt;&lt; "\n\n" "5) init-statement can be an expression:\n";
+    int n = 0;
+    for (std::cout &lt;&lt; "Loop start\n";
+         std::cout &lt;&lt; "Loop test\n";
+         std::cout &lt;&lt; "Iteration " &lt;&lt; ++n &lt;&lt; '\n')
+    {
+        if (n &gt; 1)
+            break;
+    }
+    
+    std::cout &lt;&lt; "\n" "6) constructors and destructors of objects created\n"
+                 "in the loop's body are called per each iteration:\n";
+    struct S
+    {
+        S(int x, int y) { std::cout &lt;&lt; "S::S(" &lt;&lt; x &lt;&lt; ", " &lt;&lt; y &lt;&lt; "); "; }
+        ~S() { std::cout &lt;&lt; "S::~S()\n"; }
+    };
+    for (int i{0}, j{5}; i &lt; j; ++i, --j)
+        S s{i, j};
+    
+    std::cout &lt;&lt; "\n" "7) init-statement can use structured bindings:\n";
+    long arr[]{1, 3, 7};
+    for (auto [i, j, k] = arr; i + j &lt; k; ++i)
+        std::cout &lt;&lt; i + j &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1) typical loop with a single statement as the body:
+0 1 2 3 4 5 6 7 8 9
+
+2) init-statement can declare multiple names, as
+long as they can use the same decl-specifier-seq:
+0:0 2:2 4:4 6:6 8:8
+
+3) condition may be a declaration:
+Hello
+
+4) init-statement can use the auto type specifier:
+3 1 4 1 5 9
+
+5) init-statement can be an expression:
+Loop start
+Loop test
+Iteration 1
+Loop test
+Iteration 2
+Loop test
+
+6) constructors and destructors of objects created
+in the loop's body are called per each iteration:
+S::S(0, 5); S::~S()
+S::S(1, 4); S::~S()
+S::S(2, 3); S::~S()
+
+7) init-statement can use structured bindings:
+4 5 6
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc range-for}}
+{{dsc see c|c/language/for}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

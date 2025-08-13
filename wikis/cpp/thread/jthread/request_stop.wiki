@@ -1,0 +1,99 @@
+{{cpp/thread/jthread/title|request_stop}}
+{{cpp/thread/jthread/navbar}}
+{{ddcl|since=c++20|
+bool request_stop() noexcept;
+}}
+
+Issues a stop request to the internal stop-state, if it has not yet already had stop requested.
+
+The determination is made atomically, and if stop was requested, the stop-state is atomically updated to avoid race conditions, such that:
+* {{c|stop_requested()}} and {{c|stop_possible()}} can be concurrently invoked on other {{lc|std::stop_token}}s and {{lc|std::stop_source}}s of the same shared stop-state.
+* {{c|request_stop()}} can be concurrently invoked from multiple threads on the same {{tt|jthread}} object or on other {{lc|std::stop_source}} objects associated with the same stop-state, and only one will actually perform the stop request.
+However, see the Notes section.
+
+===Parameters===
+(none)
+
+===Return value===
+{{c|true}} if this invocation made a stop request, otherwise {{c|false}}.
+
+===Postconditions===
+For a {{lc|std::stop_token}} retrieved by {{c|get_stop_token()}} or a {{lc|std::stop_source}} retrieved by {{c|get_stop_source()}}, {{c|stop_requested()}} is {{c|true}}.
+
+===Notes===
+If the {{c|request_stop()}} does issue a stop request (i.e., returns {{c|true}}), then any {{lc|std::stop_callbacks}} registered for the same associated stop-state will be invoked synchronously, on the same thread {{c|request_stop()}} is issued on. If an invocation of a callback exits via an exception, {{lc|std::terminate}} is called.
+
+If a stop request has already been made, this function returns {{c|false}}. However there is no guarantee that another thread or {{lc|std::stop_source}} object which has just (successfully) requested stop for the same stop-state is not still in the middle of invoking a {{lc|std::stop_callback}} function.
+
+If the {{c|request_stop()}} does issue a stop request (i.e., returns {{c|true}}), then all condition variables of base type {{lc|std::condition_variable_any}} registered with an interruptible wait for {{lc|std::stop_token}}s associated with the {{tt|jthread}}'s internal stop-state will be awoken.
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+// Helper function to quickly show which thread printed what
+void print(auto txt)
+{
+    std::cout &lt;&lt; std::this_thread::get_id() &lt;&lt; ' ' &lt;&lt; txt;
+}
+
+int main()
+{
+    // A sleepy worker thread
+    std::jthread sleepy_worker(
+        [](std::stop_token stoken)
+        {
+            for (int i = 10; i; --i)
+            {
+                std::this_thread::sleep_for(300ms);
+                if (stoken.stop_requested())
+                {
+                    print("Sleepy worker is requested to stop\n");
+                    return;
+                }
+                print("Sleepy worker goes back to sleep\n");
+            }
+        });
+
+    // A waiting worker thread
+    // The condition variable will be awoken by the stop request.
+    std::jthread waiting_worker(
+        [](std::stop_token stoken)
+        {
+            std::mutex mutex;
+            std::unique_lock lock(mutex);
+            std::condition_variable_any().wait(lock, stoken, []{ return false; });
+            print("Waiting worker is requested to stop\n");
+            return;
+        });
+
+    // Sleep this thread to give threads time to spin
+    std::this_thread::sleep_for(400ms);
+
+    // std::jthread::request_stop() can be called explicitly:
+    print("Requesting stop of sleepy worker\n");
+    sleepy_worker.request_stop();
+    sleepy_worker.join();
+    print("Sleepy worker joined\n");
+
+    // Or automatically using RAII:
+    // waiting_worker's destructor will call request_stop()
+    // and join the thread automatically.
+}
+|p=true
+|output=
+140287602706176 Sleepy worker goes back to sleep
+140287623300928 Requesting stop of sleepy worker
+140287602706176 Sleepy worker is requested to stop
+140287623300928 Sleepy worker joined
+140287594313472 Waiting worker is requested to stop
+}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

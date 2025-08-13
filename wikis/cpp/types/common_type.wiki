@@ -1,0 +1,181 @@
+{{cpp/title|common_type}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|1=
+template&lt; class... T &gt;
+struct common_type;
+}}
+{{dcl end}}
+
+Determines the common type among all types {{tt|T...}}, that is the type all {{tt|T...}} can be implicitly converted to. If such a type exists (as determined according to the rules below), the member {{tt|type}} names that type. Otherwise, there is no member {{tt|type}}.
+
+* If {{c|sizeof...(T)}} is zero, there is no member {{tt|type}}.
+* If {{c|sizeof...(T)}} is one (i.e., {{tt|T...}} contains only one type {{tt|T0}}), the member {{tt|type}} names the same type as {{c/core|std::common_type&lt;T0, T0&gt;::type}} if it exists; otherwise there is no member {{tt|type}}.
+* If {{c|sizeof...(T)}} is two (i.e., {{tt|T...}} contains exactly two types {{tt|T1}} and {{tt|T2}}),
+:* If applying {{lc|std::decay}} to at least one of {{tt|T1}} and {{tt|T2}} produces a different type, the member {{tt|type}} names the same type as {{c/core|std::common_type&lt;std::decay&lt;T1&gt;::type, std::decay&lt;T2&gt;::type&gt;::type}}, if it exists; if not, there is no member {{tt|type}};
+:* Otherwise, if there is a user specialization for {{c/core|std::common_type&lt;T1, T2&gt;}}, that specialization is used;
+:* Otherwise, if {{c/core|std::decay&lt;decltype(false ? std::declval&lt;T1&gt;() : std::declval&lt;T2&gt;())&gt;::type}} is a valid type, the member {{tt|type}} denotes that type, see [[cpp/language/operator_other#Conditional_operator|the conditional operator]];
+{{rrev|since=c++20|1=
+:* Otherwise, if {{c/core|std::decay&lt;decltype(false ? std::declval&lt;CR1&gt;() : std::declval&lt;CR2&gt;())&gt;::type}} is a valid type, where {{tt|CR1}} and {{tt|CR2}} are {{c/core|const std::remove_reference_t&lt;T1&gt;&amp;}} and {{c/core|const std::remove_reference_t&lt;T2&gt;&amp;}} respectively, the member {{tt|type}} denotes that type;
+}}
+:* Otherwise, there is no member {{tt|type}}.
+* If {{c|sizeof...(T)}} is greater than two (i.e., {{tt|T...}} consists of the types {{tt|T1, T2, R...}}), then if {{c/core|std::common_type&lt;T1, T2&gt;::type}} exists, the member {{tt|type}} denotes {{c/core|std::common_type&lt;typename std::common_type&lt;T1, T2&gt;::type, R...&gt;::type}} if such a type exists. In all other cases, there is no member {{tt|type}}.
+
+{{cpp/types/cvaub|pack=T|packonly=yes}}
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|type}}|the common type for all {{tt|T}}}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|since=c++14|1=
+template&lt; class... T &gt;
+using common_type_t = typename common_type&lt;T...&gt;::type;
+}}
+{{dcl end}}
+
+===Specializations===
+Users may specialize {{tt|common_type}} for types {{tt|T1}} and {{tt|T2}} if
+* At least one of {{tt|T1}} and {{tt|T2}} depends on a user-defined type, and
+* {{lc|std::decay}} is an identity transformation for both {{tt|T1}} and {{tt|T2}}.
+
+If such a specialization has a member named {{tt|type}}, it must be a public and unambiguous member that names a cv-unqualified non-reference type to which both {{tt|T1}} and {{tt|T2}} are explicitly convertible. Additionally, {{c/core|std::common_type&lt;T1, T2&gt;::type}} and {{c/core|std::common_type&lt;T2, T1&gt;::type}} must denote the same type.
+
+A program that adds {{tt|common_type}} specializations in violation of these rules has undefined behavior.
+
+Note that the behavior of a program that adds a specialization to any other template {{rev inl|since=c++20|(except for {{ltt|cpp/types/common_reference|std::basic_common_reference}})}} from {{tt|&lt;type_traits&gt;}} is undefined.
+
+The following specializations are already provided by the standard library:
+
+{{dsc begin}}
+{{dsc inc|cpp/chrono/duration/dsc common_type}}
+{{dsc inc|cpp/chrono/time_point/dsc common_type}}
+{{dsc inc|cpp/utility/pair/dsc common_type}}
+{{dsc inc|cpp/utility/tuple/dsc common_type}}
+{{dsc inc|cpp/iterator/basic_const_iterator/dsc common_type}}
+{{dsc end}}
+
+===Possible implementation===
+{{eq fun
+|1=
+// primary template (used for zero types)
+template&lt;class...&gt;
+struct common_type {};
+
+// one type
+template&lt;class T&gt;
+struct common_type&lt;T&gt; : common_type&lt;T, T&gt; {};
+
+namespace detail
+{
+    template&lt;class...&gt;
+    using void_t = void;
+    
+    template&lt;class T1, class T2&gt;
+    using conditional_result_t = decltype(false ? std::declval&lt;T1&gt;() : std::declval&lt;T2&gt;());
+    
+    template&lt;class, class, class = void&gt;
+    struct decay_conditional_result {};
+    template&lt;class T1, class T2&gt;
+    struct decay_conditional_result&lt;T1, T2, void_t&lt;conditional_result_t&lt;T1, T2&gt;&gt;&gt;
+        : std::decay&lt;conditional_result_t&lt;T1, T2&gt;&gt; {};
+    
+    template&lt;class T1, class T2, class = void&gt;
+    struct common_type_2_impl : decay_conditional_result&lt;const T1&amp;, const T2&amp;&gt; {};
+    
+    // C++11 implementation:
+    // template&lt;class, class, class = void&gt;
+    // struct common_type_2_impl {};
+    
+    template&lt;class T1, class T2&gt;
+    struct common_type_2_impl&lt;T1, T2, void_t&lt;conditional_result_t&lt;T1, T2&gt;&gt;&gt;
+        : decay_conditional_result&lt;T1, T2&gt; {};
+}
+
+// two types
+template&lt;class T1, class T2&gt;
+struct common_type&lt;T1, T2&gt; 
+    : std::conditional&lt;std::is_same&lt;T1, typename std::decay&lt;T1&gt;::type&gt;::value &amp;&amp;
+                       std::is_same&lt;T2, typename std::decay&lt;T2&gt;::type&gt;::value,
+                       detail::common_type_2_impl&lt;T1, T2&gt;,
+                       common_type&lt;typename std::decay&lt;T1&gt;::type,
+                                   typename std::decay&lt;T2&gt;::type&gt;&gt;::type {};
+
+// 3+ types
+namespace detail
+{
+    template&lt;class AlwaysVoid, class T1, class T2, class... R&gt;
+    struct common_type_multi_impl {};
+    template&lt;class T1, class T2, class...R&gt;
+    struct common_type_multi_impl&lt;void_t&lt;typename common_type&lt;T1, T2&gt;::type&gt;, T1, T2, R...&gt;
+        : common_type&lt;typename common_type&lt;T1, T2&gt;::type, R...&gt; {};
+}
+
+template&lt;class T1, class T2, class... R&gt;
+struct common_type&lt;T1, T2, R...&gt;
+    : detail::common_type_multi_impl&lt;void, T1, T2, R...&gt; {};
+}}
+
+===Notes===
+For arithmetic types not subject to promotion, the common type may be viewed as the type of the (possibly mixed-mode) arithmetic expression such as {{c|T0() + T1() + ... + Tn()}}.
+
+===Examples===
+{{example
+|Demonstrates mixed-mode arithmetic on a program-defined class:
+|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+template&lt;class T&gt;
+struct Number { T n; };
+
+template&lt;class T, class U&gt;
+constexpr Number&lt;std::common_type_t&lt;T, U&gt;&gt;
+    operator+(const Number&lt;T&gt;&amp; lhs, const Number&lt;U&gt;&amp; rhs)
+{
+    return {lhs.n + rhs.n};
+}
+
+void describe(const char* expr, const Number&lt;int&gt;&amp; x)
+{
+    std::cout &lt;&lt; expr &lt;&lt; "  is  Number&lt;int&gt;{" &lt;&lt; x.n &lt;&lt; "}\n";
+}
+
+void describe(const char* expr, const Number&lt;double&gt;&amp; x)
+{
+    std::cout &lt;&lt; expr &lt;&lt; "  is  Number&lt;double&gt;{" &lt;&lt; x.n &lt;&lt; "}\n";
+}
+
+int main()
+{
+    Number&lt;int&gt; i1 = {1}, i2 = {2};
+    Number&lt;double&gt; d1 = {2.3}, d2 = {3.5};
+    describe("i1 + i2", i1 + i2);
+    describe("i1 + d2", i1 + d2);
+    describe("d1 + i2", d1 + i2);
+    describe("d1 + d2", d1 + d2);
+}
+|output=
+i1 + i2  is  Number&lt;int&gt;{3}
+i1 + d2  is  Number&lt;double&gt;{4.5}
+d1 + i2  is  Number&lt;double&gt;{4.3}
+d1 + d2  is  Number&lt;double&gt;{5.8}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++11|dr=2141|before=the result type of the conditional operator was not decayed|after=decayed the result type}}
+{{dr list item|wg=lwg|std=C++11|dr=2408|before={{tt|common_type}} was not SFINAE-friendly|after= made SFINAE-friendly}}
+{{dr list item|wg=lwg|std=C++11|dr=2460|before={{tt|common_type}} specializations were nearly impossible to write|after=reduced the number of&lt;br&gt;specializations needed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/concepts/dsc common_with}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

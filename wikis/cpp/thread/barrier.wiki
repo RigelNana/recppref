@@ -1,0 +1,128 @@
+{{cpp/title|barrier}}
+{{cpp/thread/barrier/navbar}}
+{{ddcl|header=barrier|since=c++20|1=
+template&lt; class CompletionFunction = /* see below */ &gt;
+class barrier;
+}}
+
+The class template {{tt|std::barrier}} provides a thread-coordination mechanism that blocks a group of threads of known size until all threads in that group have reached the barrier. Unlike {{lc|std::latch}}, barriers are reusable: once a group of arriving threads are unblocked, the barrier can be reused. Unlike {{lc|std::latch}}, barriers execute a possibly empty callable before unblocking threads.
+
+A barrier object's lifetime consists of one or more phases. Each phase defines a ''phase synchronization point'' where waiting threads block. Threads can arrive at the barrier, but defer waiting on the ''phase synchronization point'' by calling {{rlt|arrive}}. Such threads can later block on the ''phase synchronization point'' by calling {{rlt|wait}}.
+
+A barrier ''phase'' consists of the following steps:
+# The ''expected count'' is decremented by each call to {{rlt|arrive}} or {{rlt|arrive_and_drop}}.
+# When the expected count reaches zero, the ''phase completion step'' is run, meaning that the [[#Data members|{{tti|completion}}]] is invoked, and all threads blocked on the phase synchronization point are unblocked. The end of the completion step {{lsd|cpp/atomic/memory_order#Strongly happens-before}} all calls that were unblocked by the completion step return.&lt;br&gt;&lt;!--
+--&gt;Exactly once after the expected count reaches zero, a thread executes the completion step during its call to {{rlt|arrive}}, {{rlt|arrive_and_drop}}, or {{rlt|wait}}, except that it is implementation-defined whether the step executes if no thread calls {{rlt|wait}}.
+# When the completion step finishes, the expected count is reset to the value specified at construction less the number of calls to {{rlt|arrive_and_drop}} since, and the next ''barrier phase'' begins.
+
+Concurrent invocations of the member functions of {{tt|barrier}}, except for the destructor, do not introduce data races.
+
+===Template parameters===
+{{par begin}}
+{{par|CompletionFunction|a function object type}}
+{{par req named|CompletionFunction|Destructible|MoveConstructible|notes={{c|std::is_nothrow_invocable_v&lt;CompletionFunction&amp;&gt;}} must be {{c|true}}.}}
+{{par end}}
+
+The default template argument of {{tt|CompletionFunction}} is an unspecified function object type that additionally meets the requirements of {{named req|DefaultConstructible}}. Calling an lvalue of it with no arguments has no effects.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|arrival_token}}|an unspecified object type meeting requirements of {{named req|MoveConstructible}}, {{named req|MoveAssignable}} and {{named req|Destructible}}}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|completion|spec={{tt|CompletionFunction}}|a completion function object which is called on every phase completion step}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/barrier/dsc constructor}}
+{{dsc inc|cpp/thread/barrier/dsc destructor}}
+{{dsc mem fun|nolink=true|operator{{=}}|notes={{cmark deleted}}|{{tt|barrier}} is not assignable}}
+
+{{dsc inc|cpp/thread/barrier/dsc arrive}}
+{{dsc inc|cpp/thread/barrier/dsc wait}}
+{{dsc inc|cpp/thread/barrier/dsc arrive_and_wait}}
+{{dsc inc|cpp/thread/barrier/dsc arrive_and_drop}}
+
+{{dsc h2|Constants}}
+{{dsc inc|cpp/thread/barrier/dsc max}}
+{{dsc end}}
+
+===Notes===
+{{ftm begin|std=1|sort=1|comment=1}}
+{{ftm|__cpp_lib_barrier|rowspan="2"|{{ttt|std::barrier}}|std=C++20|value=201907L}}
+{{ftm|-|Relaxed guarantees for phase completion|std=C++20|dr=yes|value=202302L}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;barrier&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    const auto workers = {"Anil", "Busara", "Carl"};
+
+    auto on_completion = []() noexcept
+    {
+        // locking not needed here
+        static auto phase =
+            "... done\n"
+            "Cleaning up...\n";
+        std::cout &lt;&lt; phase;
+        phase = "... done\n";
+    };
+
+    std::barrier sync_point(std::ssize(workers), on_completion);
+
+    auto work = [&amp;](std::string name)
+    {
+        std::string product = "  " + name + " worked\n";
+        std::osyncstream(std::cout) &lt;&lt; product;  // ok, op&lt;&lt; call is atomic
+        sync_point.arrive_and_wait();
+
+        product = "  " + name + " cleaned\n";
+        std::osyncstream(std::cout) &lt;&lt; product;
+        sync_point.arrive_and_wait();
+    };
+
+    std::cout &lt;&lt; "Starting...\n";
+    std::vector&lt;std::jthread&gt; threads;
+    threads.reserve(std::size(workers));
+    for (auto const&amp; worker : workers)
+        threads.emplace_back(work, worker);
+}
+|p=true
+|output=
+Starting...
+  Anil worked
+  Carl worked
+  Busara worked
+... done
+Cleaning up...
+  Busara cleaned
+  Carl cleaned
+  Anil cleaned
+... done
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2588R3|std=C++20|before=old phase completion guarantees might prevent hardware acceleration|after=relaxed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc latch}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

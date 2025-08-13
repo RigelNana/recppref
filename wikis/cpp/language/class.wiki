@@ -1,0 +1,300 @@
+{{title|Class declaration}}
+{{cpp/language/classes/navbar}}
+Classes are user-defined types, defined by class-specifier, which appears in {{spar|decl-specifier-seq}} of the {{rlp|declarations|declaration}} syntax.
+
+===Syntax===
+The class specifier has the following syntax:
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar|class-key}} {{spar optional|attr}} {{spar|class-head-name}} {{ttb|final}}{{mark optional}} {{spar optional|base-clause}} {{ttb|{}} {{spar|member-specification}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=2|1=
+{{spar|class-key}} {{spar optional|attr}} {{spar optional|base-clause}} {{ttb|{}} {{spar|member-specification}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+@1@ Named class definition
+@2@ Unnamed class definition
+
+{{par begin}}
+{{par|{{spar|class-key}}|one of {{ltt|cpp/keyword/class}}, {{ltt|cpp/keyword/struct}} and {{ltt|cpp/keyword/union}}. The keywords {{c/core|class}} and {{c/core|struct}} are identical except for the default {{rlp|access|member access}} and the default {{rlp|derived class|base class access}}. If it is {{c/core|union}}, the declaration introduces a {{rlp|union|union type}}.}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}, may include {{rlpt|alignas|alignas}} specifier}}
+{{par|{{spar|class-head-name}}|the name of the class that's being defined, optionally {{rlp|identifiers#Qualified identifiers|qualified}}}}
+{{par|{{ttb|final}}|{{mark since c++11}} if present, the class {{rlp|final|cannot be derived}}}}
+{{par|{{spar|base-clause}}|list of one or more base classes and the model of inheritance used for each (see {{rlp|derived class}})}}
+{{par|{{spar|member-specification}}|list of access specifiers, member object and member function declarations and definitions ([[#Member specification|see below]])}}
+{{par end}}
+
+===Forward declaration===
+A declaration of the following form
+{{sdsc begin}}
+{{sdsc|1=
+{{spar|class-key}} {{spar|attr}} {{spar|identifier}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+Declares a class type which will be defined later in this scope. Until the definition appears, this class name has {{rlp|incomplete type}}. This allows classes that refer to each other:
+{{source|
+class Vector; // forward declaration
+
+class Matrix
+{
+    // ...
+    friend Vector operator*(const Matrix&amp;, const Vector&amp;);
+};
+
+class Vector
+{
+    // ...
+    friend Vector operator*(const Matrix&amp;, const Vector&amp;);
+};
+}}
+and if a particular source file only uses pointers and references to the class, this makes it possible to reduce {{c/core|#include}} dependencies:
+{{source|
+// In MyStruct.h
+#include &lt;iosfwd&gt; // contains forward declaration of std::ostream
+
+struct MyStruct
+{
+    int value;
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const S&amp; s);
+    // definition provided in MyStruct.cpp file which uses #include &lt;ostream&gt;
+};
+}}
+
+If forward declaration appears in local scope, it ''hides'' previously declared class, variable, function, and all other declarations of the same name that may appear in enclosing scopes:
+{{source|
+struct s { int a; };
+struct s; // does nothing (s already defined in this scope)
+
+void g()
+{
+    struct s; // forward declaration of a new, local struct "s"
+              // this hides global struct s until the end of this block
+    
+    s* p; // pointer to local struct s
+    
+    struct s { char* p; }; // definitions of the local struct s
+}
+}}
+
+Note that a new class name may also be introduced by an {{rlp|elaborated type specifier}} which appears as part of another declaration, but only if {{rlp|lookup|name lookup}} can't find a previously declared class with the same name.
+
+{{source|1=
+class U;
+
+namespace ns
+{
+    class Y f(class T p); // declares function ns::f and declares ns::T and ns::Y
+    
+    class U f(); // U refers to ::U
+    
+    // can use pointers and references to T and Y
+    Y* p;
+    T* q;
+}
+}}
+
+===Member specification===
+The member specification, or the ''body'' of a class definition, is a brace-enclosed sequence of any number of the following:
+@1@ Member declarations of the form
+{{sdsc begin}}
+{{sdsc|{{spar optional|attr}} {{spar optional|decl-specifier-seq}} {{spar optional|member-declarator-list}} {{ttb|;}}
+}}
+{{sdsc end}}
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}}}
+{{par|{{spar|decl-specifier-seq}}|sequence of {{rlp|declarations#Specifiers|specifiers}}. It is only optional in the declarations of constructors, destructors, and user-defined type {{rlp|cast operator|conversion functions}}}}
+{{par|{{spar|member-declarator-list}}|similar to an {{rlp|declarations|init-declarator-list}}, but additionally allows {{rlp|bit field|bit-field declaration}}, {{rlp|abstract class|pure-specifier}}{{rev inl|since=c++11|, and virt-specifier ({{tt|{{rlp|override}}}} or {{tt|{{rlp|final}}}})}}, and does not allow {{rlp|direct initialization|direct-non-list-initialization syntax}}.}}
+{{par end}}
+This declaration may declare {{rlp|static}} and non-static {{rlp|data members}} and {{rlp|member functions}}, member {{rlp|typedef}}s, member {{rlp|enum|enumerations}}, and {{rlp|nested classes}}. It may also be a {{rlp|friend|friend declaration}}.
+{{source|1=
+class S
+{
+    int d1;             // non-static data member
+    int a[10] = {1, 2}; // non-static data member with initializer (C++11)
+    
+    static const int d2 = 1; // static data member with initializer
+    
+    virtual void f1(int) = 0; // pure virtual member function
+    
+    std::string d3, *d4, f2(int); // two data members and a member function
+    
+    enum { NORTH, SOUTH, EAST, WEST };
+    
+    struct NestedS
+    {
+        std::string s;
+    } d5, *d6;
+    
+    typedef NestedS value_type, *pointer_type;
+};
+}}
+@2@ Function definitions, which both declare and define {{rlp|member functions}} or {{rlp|friend|friend functions}}. A semicolon after a member function definition is optional. All functions that are defined inside a class body are automatically {{rlp|inline}}{{rev inl|since=c++20|, unless they are attached to a {{rlp|modules|named module}}}}.
+{{source|
+class M
+{
+    std::size_t C;
+    std::vector&lt;int&gt; data;
+public:
+    M(std::size_t R, std::size_t C) : C(C), data(R*C) {} // constructor definition
+    
+    int operator()(std::size_t r, std::size_t c) const // member function definition
+    {
+        return data[r * C + c];
+    }
+    
+    int&amp; operator()(std::size_t r, std::size_t c) // another member function definition
+    {
+        return data[r * C + c];
+    }
+};
+}}
+@3@ {{rlp|access|Access specifiers}} {{tt|public:}}, {{tt|protected:}}, and {{tt|private:}}
+{{source|
+class S
+{
+public:
+    S();          // public constructor
+    S(const S&amp;);  // public copy constructor
+    virtual ~S(); // public virtual destructor
+private:
+    int* ptr; // private data member
+};}}
+@4@ {{rlp|using declaration|Using-declarations}}:
+{{source|
+class Base
+{
+protected:
+    int d;
+};
+
+class Derived : public Base
+{
+public:
+    using Base::d;    // make Base's protected member d a public member of Derived
+    using Base::Base; // inherit all bases' constructors (C++11)
+};
+}}
+@5@ {{rlpt|static_assert}} declarations:
+{{source|
+template&lt;typename T&gt;
+struct Foo
+{
+    static_assert(std::is_floating_point&lt;T&gt;::value, "Foo&lt;T&gt;: T must be floating point");
+};
+}}
+@6@ {{rlp|member template|member template declarations}}:
+{{source|
+struct S
+{
+    template&lt;typename T&gt;
+    void f(T&amp;&amp; n);
+    
+    template&lt;class CharT&gt;
+    struct NestedS
+    {
+        std::basic_string&lt;CharT&gt; s;
+    };
+};
+}}
+
+{{rrev|since=c++11|
+@7@ {{rlp|type alias|alias declarations}}:
+{{source|1=
+template&lt;typename T&gt;
+struct identity
+{
+    using type = T;
+};
+}}
+}}
+
+{{rrev|since=c++17|
+@8@ {{rlp|deduction guide}}s of member class templates:
+{{source|
+struct S
+{
+    template&lt;class CharT&gt;
+    struct NestedS
+    {
+        std::basic_string&lt;CharT&gt; s;
+    };
+    
+    template&lt;class CharT&gt;
+    NestedS(std::basic_string&lt;CharT&gt;) -&gt; NestedS&lt;CharT&gt;;
+};
+}}
+}}
+
+{{rrev|since=c++20|
+@9@ {{rlp|enum#Using-enum-declaration|Using-enum-declaration}}s:
+{{source|1=
+enum class color { red, orange, yellow };
+
+struct highlight
+{
+    using enum color;
+};
+}}
+}}
+
+===Local classes===
+A class declaration can appear inside the body of a function, in which case it defines a ''local class''. The name of such a class only exists within the function scope, and is not accessible outside.
+* Members of a local class can only be declared in the definition of that class, except that members that are {{rlp|nested types|nested classes}} can also be declared in the nearest enclosing {{rlpsd|scope#Block scope}} of that class.
+* A class nested within a local class is also a local class.
+* A local class cannot have static data members.
+* Member functions of a local class have no linkage.
+* Member functions of a local class have to be defined entirely inside the class body.
+* Local classes{{rev inl|since=c++14| other than {{rlp|lambda|closure types}}}} cannot have member templates.
+* Local classes cannot have {{rlp|friend#Template friends|friend templates}}.
+* Local classes cannot define {{rlp|friend|friend functions}} inside the class definition.
+* A local class inside a function (including member function) can access the same names that the enclosing function can access.
+{{rrev|until=c++11|
+* Local classes could not be used as template arguments.
+}}
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3};
+    
+    struct Local
+    {
+        bool operator()(int n, int m)
+        {
+            return n &gt; m;
+        }
+    };
+    
+    std::sort(v.begin(), v.end(), Local()); // since C++11
+    
+    for (int n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=3 2 1
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/class}},
+{{ltt|cpp/keyword/struct}},
+{{ltt|cpp/keyword/union}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1693|std=C++98|before=member declarations could not be empty|after=empty declaration allowed}}
+{{dr list item|wg=cwg|dr=1930|std=C++98|before={{spar|member-declarator-list}} could be empty when {{spar|decl-specifier-seq}}&lt;br&gt;contains a storage class specifier or cv qualifier|after=the list must not be empty}}
+{{dr list item|wg=cwg|dr=2890|std=C++98|before=it was unclear where the members of nested classes can be declared|after=made clear}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/struct|Struct declaration}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

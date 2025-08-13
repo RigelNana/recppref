@@ -1,0 +1,61 @@
+{{cpp/execution/title|scheduler}}
+{{cpp/execution/navbar}}
+{{dcl begin}}
+{{dcl header|execution}}
+{{dcl|num=1|since=c++26|1=
+template&lt; class Sch &gt;
+concept scheduler =
+    std::derived_from&lt;
+        typename std::remove_cvref_t&lt;Sch&gt;::scheduler_concept,
+        scheduler_t&gt; &amp;&amp;
+    /*queryable*/&lt;Sch&gt; &amp;&amp;
+    requires(Sch&amp;&amp; sch)
+    {
+        { 
+            std::execution::schedule(std::forward&lt;Sch&gt;(sch))
+        } -&gt; std::execution::sender;
+        {
+            auto(
+                std::execution::get_completion_scheduler&lt;
+                    std::execution::set_value_t&gt;(
+                        std::execution::get_env(
+                            std::execution::schedule(
+                                std::forward&lt;Sch&gt;(sch)))))
+        } -&gt; std::same_as&lt;std::remove_cvref_t&lt;Sch&gt;&gt;;
+    } &amp;&amp;
+    std::equality_comparable&lt;std::remove_cvref_t&lt;Sch&gt;&gt; &amp;&amp;
+    std::copy_constructible&lt;std::remove_cvref_t&lt;Sch&gt;&gt;;
+};
+}}
+{{dcl h|Helper tag type}}
+{{dcl|num=2|since=c++26|1=
+struct scheduler_t {};
+}}
+{{dcl end}}
+
+The concept {{tt|scheduler}} is modeled by types that are ''schedulers'', that is, lightweight handlers to execution resources such as thread pools that work with the C++ execution library.
+
+===Semantic requirements===
+Given a scheduler of type {{tt|Sch}} and execution environment of type {{tt|Env}} such that {{c|sender_in&lt;schedule_result_t&lt;Sch&gt;, Env&gt;}} is satisfied, then {{c|/*sender-in-of*/&lt;schedule_result_t&lt;Sch&gt;, Env&gt;}} is modeled.
+
+The scheduler's copy constructor, destructor, equality comparison, or swap member functions must be non-throwing.
+
+All of those member functions as well as the scheduler type's {{tt|schedule}} function must be thread-safe.
+
+Two schedulers are equal only if they represent the same execution resource.
+
+For a given scheduler {{tt|sch}}, the expression {{c|get_completion_scheduler&lt;set_value_t&gt;(get_env(schedule(sch)))}} compares equal to {{tt|sch}}.
+
+For a given scheduler {{tt|sch}}, if the expression {{c|get_domain(sch)}} is well-formed, then the expression {{c|get_domain(get_env(schedule(sch)))}} is also well-formed and has the same type.
+
+The destructor of a scheduler must not block pending completion of any receivers connected to the sender objects returned from schedule (the underlying resource may provide a separate API to wait for completion of submitted function objects)
+
+===Examples===
+{{cpp/execution/hello_world_example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/execution/dsc schedule}}
+{{dsc end}}
+
+{{langlinks|cs|de|es|fr|it|ja|ko|pl|pt|ru|zh}}

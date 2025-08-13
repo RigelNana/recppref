@@ -1,0 +1,165 @@
+{{cpp/ranges/title|shift_left|shift_right}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++23|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr ranges::subrange&lt;I&gt;
+    shift_left( I first, S last, std::iter_difference_t&lt;I&gt; n );
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; ranges::forward_range R &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    shift_left( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr ranges::subrange&lt;I&gt;
+    shift_right( I first, S last, std::iter_difference_t&lt;I&gt; n );
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; ranges::forward_range R &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    shift_right( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl end}}
+
+Shifts the elements in the range {{range|first|last}} or {{c|r}} by {{tt|n}} positions. The behavior is undefined if {{range|first|last}} is not a valid range.
+
+@1@ Shifts the elements towards the beginning of the range:
+* If {{c|1=n == 0 {{!!}} n &gt;= last - first}}, there are no effects.
+* If {{c|1=n &lt; 0}}, the behavior is undefined.
+* Otherwise, for every integer {{tt|i}} in {{range|0|last - first - n}}, moves the element originally at position {{c|first + n + i}} to position {{c|first + i}}. The moves are performed in increasing order of {{tt|i}} starting from {{c|0}}.
+
+@3@ Shifts the elements towards the end of the range:
+* If {{c|1=n == 0 {{!!}} n &gt;= last - first}}, there are no effects.
+* If {{c|1=n &lt; 0}}, the behavior is undefined.
+* Otherwise, for every integer {{tt|i}} in {{range|0|last - first - n}}, moves the element originally at position {{c|first + i}} to position {{c|first + n + i}}. If {{tt|I}} models {{lconcept|bidirectional_iterator}}, then the moves are performed in decreasing order of {{tt|i}} starting from {{c|last - first - n - 1}}.
+
+@2,4@ Same as {{v|1}} or {{v|3}} respectively, but uses {{c|r}} as the range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+Elements that are in the original range but not the new range are left in a valid but unspecified state.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the original range}}
+{{par|last|the end of the original range}}
+{{par|r|the range of elements to shift}}
+{{par|n|the number of positions to shift}}
+{{par end}}
+
+===Return value===
+@1,2@ {{c|{first, /*NEW_LAST*/}&lt;!----&gt;}}, where {{tt|''NEW_LAST''}} is the end of the resulting range and equivalent to:
+* {{c|first + (last - first - n)}}, if {{tt|n}} is less than {{c|last - first}};
+* {{c|first}} otherwise.
+@3,4@ {{c|{/*NEW_FIRST*/, last}&lt;!----&gt;}}, where {{tt|''NEW_FIRST''}} is the beginning of the resulting range and equivalent to:
+* {{c|first + n}}, if {{tt|n}} is less than {{c|last - first}};
+* {{c|last}} otherwise.
+
+===Complexity===
+@1,2@ At most {{c|ranges::distance(first, last) - n}} assignments.
+@3,4@ At most {{c|ranges::distance(first, last) - n}} assignment or swaps.
+
+===Notes===
+{{tt|ranges::shift_left}} / {{tt|ranges::shift_right}} has better efficiency on common implementations if {{tt|I}} models {{lconcept|bidirectional_iterator}} or (better) {{lconcept|random_access_iterator}}.
+
+{{cpp/algorithm/notes swap vectorization}}
+
+{{feature test macro|__cpp_lib_shift|std=C++23|value=202202L|[[#Top|{{tt|std::ranges::shift_left}}]] and [[#Top|{{tt|std::ranges::shift_right}}]]}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int value{0};
+    bool specified_state{true};
+
+    S(int v = 0) : value{v} {}
+    S(S const&amp; rhs) = default;
+    S(S&amp;&amp; rhs) { *this = std::move(rhs); }
+    S&amp; operator=(S const&amp; rhs) = default;
+    S&amp; operator=(S&amp;&amp; rhs)
+    {
+        if (this != &amp;rhs)
+        {
+            value = rhs.value;
+            specified_state = rhs.specified_state;
+            rhs.specified_state = false;
+        }
+        return *this;
+    }
+};
+
+template&lt;typename T&gt;
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::vector&lt;T&gt; const&amp; v)
+{
+    for (const auto&amp; s : v)
+    {
+        if constexpr (std::is_same_v&lt;T, S&gt;)
+            s.specified_state ? os &lt;&lt; s.value &lt;&lt; ' ' : os &lt;&lt; ". ";
+        else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+            os &lt;&lt; (s.empty() ? "." : s) &lt;&lt; ' ';
+        else
+            os &lt;&lt; s &lt;&lt; ' ';
+    }
+    return os;
+}
+
+int main()
+{
+    std::cout &lt;&lt; std::left;
+
+    std::vector&lt;S&gt; a{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;int&gt; b{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;std::string&gt; c{"α", "β", "γ", "δ", "ε", "ζ", "η"};
+
+    std::cout &lt;&lt; "vector&lt;S&gt; \tvector&lt;int&gt; \tvector&lt;string&gt;\n";
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+    std::ranges::shift_left(a, 3);
+    std::ranges::shift_left(b, 3);
+    std::ranges::shift_left(c, 3);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+    std::ranges::shift_right(a, 2);
+    std::ranges::shift_right(b, 2);
+    std::ranges::shift_right(c, 2);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+    std::ranges::shift_left(a, 8); // has no effect: n &gt;= last - first
+    std::ranges::shift_left(b, 8); // ditto
+    std::ranges::shift_left(c, 8); // ditto
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+//  std::ranges::shift_left(a, -3); // UB
+}
+|p=true&lt;!--accessing objects after move--&gt;
+|output=
+vector&lt;S&gt;       vector&lt;int&gt;     vector&lt;string&gt;
+1 2 3 4 5 6 7   1 2 3 4 5 6 7   α β γ δ ε ζ η
+4 5 6 7 . . .   4 5 6 7 5 6 7   δ ε ζ η . . .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate}}
+{{dsc inc|cpp/algorithm/dsc shift}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

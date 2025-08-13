@@ -1,0 +1,147 @@
+{{cpp/ranges/view title|slide}}
+{{cpp/ranges/slide_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::forward_range V &gt;
+    requires ranges::view&lt;V&gt;
+class slide_view
+    : public ranges::view_interface&lt;slide_view&lt;V&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /* unspecified */ slide = /* unspecified */;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R &gt;
+constexpr ranges::view auto slide( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl|since=c++23|1=
+template&lt; class DifferenceType &gt;
+constexpr /* range adaptor object */ slide( DifferenceType&amp;&amp; n );
+}}
+{{dcl h|Helper concepts}}
+{{dcla|anchor=slide-caches-nothing|num=3|notes={{mark expos}}|1=
+template&lt; class V &gt;
+concept /*slide-caches-nothing*/ =
+    ranges::random_access_range&lt;V&gt; &amp;&amp; ranges::sized_range&lt;V&gt;;
+}}
+{{dcla|anchor=slide-caches-last|num=4|notes={{mark expos}}|1=
+template&lt; class V &gt;
+concept /*slide-caches-last*/ =
+    !/*slide-caches-nothing*/&lt;V&gt; &amp;&amp;
+    ranges::bidirectional_range&lt;V&gt; &amp;&amp; ranges::common_range&lt;V&gt;;
+}}
+{{dcla|anchor=slide-caches-first|num=5|notes={{mark expos}}|1=
+template&lt; class V &gt;
+concept /*slide-caches-first*/ =
+    !/*slide-caches-nothing*/&lt;V&gt; &amp;&amp; !/*slide-caches-last*/&lt;V&gt;;
+}}
+{{dcl end}}
+
+@1@ {{tt|slide_view}} is a range adaptor that takes a {{lconcept|view}} and a number {{c|n}} and produces a view whose {{tt|''m''{{sup|th}}}} element (a "window") is a view over the {{tt|''m''{{sup|th}}}} through {{tt|''(m + n - 1)''{{sup|th}}}} elements of the original view.
+
+@@ Let {{c|s}} be the size of the original view. Then the size of produced view is:
+* {{c|s - n + 1}}, if {{c|1=s &gt;= n}},
+* {{c|0}} otherwise, and the resulting view is empty.
+
+@2@ The name {{c|views::slide}} denotes a {{named req|RangeAdaptorObject}}. Given subexpressions {{c|e}} and {{c|n}}, the expression {{c|views::slide(e, n)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|slide_view(e, n)}}.
+&lt;!-- @3-5@ --&gt;
+
+If {{c|n}} is not greater than {{c|0}}, the behavior is undefined.
+
+{{tt|slide_view}} always models {{lconcept|forward_range}}, and models {{lconcept|bidirectional_range}}, {{lconcept|random_access_range}}, or {{lconcept|sized_range}} if adapted {{lconcept|view}} type models the corresponding concept.
+&lt;!-- {{tt|slide_view}} models {{lconcept|common_range}} if --&gt;
+&lt;!-- {{cpp/ranges/cpo|views|slide}} --&gt;
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member object|Definition}}
+{{dsc expos mem obj|base_|private=yes|The underlying {{lconcept|view}} of type {{tt|V}}.}}
+{{dsc expos mem obj|n_|private=yes|The "window size" of type {{c/core|ranges::range_difference_t&lt;V&gt;}}.}}
+{{dsc expos mem obj|cached_begin_|private=yes|maybe=(present only if {{tt|V}} models the {{lsi|#slide-caches-first}})|An [[cpp/ranges#Non-propagating cache|optional-like]] object.}}
+{{dsc expos mem obj|cached_end_|private=yes|maybe=(present only if {{tt|V}} models the {{lsi|#slide-caches-last}})|An [[cpp/ranges#Non-propagating cache|optional-like]] object.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|slide_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/slide_view/iterator|notes={{mark c++23}}|the iterator type}}
+{{dsc expos mem tclass|cpp/ranges/slide_view/sentinel|notes={{mark c++23}}|the sentinel type used when {{tt|slide_view}} is not a {{lconcept|common_range}}}}
+{{dsc end}}
+
+===Helper templates===
+{{ddcl|since=c++23|1=
+template&lt; class V &gt;
+constexpr bool ranges::enable_borrowed_range&lt;slide_view&lt;V&gt;&gt; =
+    ranges::enable_borrowed_range&lt;V&gt;;
+}}
+This specialization of {{ltt|cpp/ranges/borrowed_range|ranges::enable_borrowed_range}} makes {{tt|slide_view}} satisfy {{lconcept|borrowed_range}} when the underlying view satisfies it.
+
+===Notes===
+{{cpp/ranges/adjacent vs slide}}
+
+{{feature test macro|__cpp_lib_ranges_slide|std=C++23|value=202202L|{{tt|std::ranges::slide_view}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+auto print_subrange = [](std::ranges::viewable_range auto&amp;&amp; r)
+{
+    std::cout &lt;&lt; '[';
+    for (char space[]{0,0}; auto elem : r)
+        std::cout &lt;&lt; space &lt;&lt; elem, *space = ' ';
+    std::cout &lt;&lt; "] ";
+};
+
+int main()
+{
+    const auto v = {1, 2, 3, 4, 5, 6};
+    
+    std::cout &lt;&lt; "All sliding windows of width:\n";
+    for (const unsigned width : std::views::iota(1U, 1U + v.size()))
+    {
+        auto const windows = v {{!}} std::views::slide(width);
+        std::cout &lt;&lt; "W = " &lt;&lt; width &lt;&lt; ": ";
+        std::ranges::for_each(windows, print_subrange);
+        std::cout &lt;&lt; '\n';
+    }
+}
+|output=
+All sliding windows of width W:
+W = 1: [1] [2] [3] [4] [5] [6] 
+W = 2: [1 2] [2 3] [3 4] [4 5] [5 6] 
+W = 3: [1 2 3] [2 3 4] [3 4 5] [4 5 6] 
+W = 4: [1 2 3 4] [2 3 4 5] [3 4 5 6] 
+W = 5: [1 2 3 4 5] [2 3 4 5 6] 
+W = 6: [1 2 3 4 5 6]
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Slide view|id=range.slide|section=26.7.29}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc adjacent_view}}
+{{dsc inc|cpp/ranges/dsc chunk_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

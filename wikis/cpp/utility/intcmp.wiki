@@ -1,0 +1,161 @@
+{{cpp/title|cmp_equal, cmp_not_equal, cmp_less, cmp_greater, cmp_less_equal, cmp_greater_equal}}
+{{cpp/utility/navbar}}
+
+{{dcl begin}}
+{{dcl header|utility}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_equal( T t, U u ) noexcept;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_not_equal( T t, U u ) noexcept;
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_less( T t, U u ) noexcept;
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_greater( T t, U u ) noexcept;
+}}
+{{dcl|num=5|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_less_equal( T t, U u ) noexcept;
+}}
+{{dcl|num=6|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_greater_equal( T t, U u ) noexcept;
+}}
+{{dcl end}}
+
+Compare the values of two integers {{c|t}} and {{c|u}}. Unlike builtin comparison operators, negative signed integers always compare ''less than'' (and ''not equal to'') unsigned integers: the comparison is safe against non-value-preserving integer conversion.
+
+{{source|1=
+-1 &gt; 0u; // true
+std::cmp_greater(-1, 0u); // false
+}}
+ 
+It is a compile-time error if either {{tt|T}} or {{tt|U}} is a non-[[cpp/language/types#Integer types|integer]] type, a character type, or {{c/core|bool}}.
+
+===Parameters===
+{{par begin}}
+{{par|t|left-hand argument}}
+{{par|u|right-hand argument}}
+{{par end}}
+
+===Return value===
+@1@ {{c|true}} if {{c|t}} is equal to {{c|u}}.
+@2@ {{c|true}} if {{c|t}} is not equal to {{c|u}}.
+@3@ {{c|true}} if {{c|t}} is less than {{c|u}}.
+@4@ {{c|true}} if {{c|t}} is greater than {{c|u}}.
+@5@ {{c|true}} if {{c|t}} is less or equal to {{c|u}}.
+@6@ {{c|true}} if {{c|t}} is greater or equal to {{c|u}}.
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;class T, class U&gt;
+constexpr bool cmp_equal(T t, U u) noexcept
+{
+    if constexpr (std::is_signed_v&lt;T&gt; == std::is_signed_v&lt;U&gt;)
+        return t == u;
+    else if constexpr (std::is_signed_v&lt;T&gt;)
+        return t &gt;= 0 &amp;&amp; std::make_unsigned_t&lt;T&gt;(t) == u;
+    else
+        return u &gt;= 0 &amp;&amp; std::make_unsigned_t&lt;U&gt;(u) == t;
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_not_equal(T t, U u) noexcept
+{
+    return !cmp_equal(t, u);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_less(T t, U u) noexcept
+{
+    if constexpr (std::is_signed_v&lt;T&gt; == std::is_signed_v&lt;U&gt;)
+        return t &lt; u;
+    else if constexpr (std::is_signed_v&lt;T&gt;)
+        return t &lt; 0 {{!!}} std::make_unsigned_t&lt;T&gt;(t) &lt; u;
+    else
+        return u &gt;= 0 &amp;&amp; t &lt; std::make_unsigned_t&lt;U&gt;(u);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_greater(T t, U u) noexcept
+{
+    return cmp_less(u, t);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_less_equal(T t, U u) noexcept
+{
+    return !cmp_less(u, t);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_greater_equal(T t, U u) noexcept
+{
+    return !cmp_less(t, u);
+}
+}}
+
+===Notes===
+These functions cannot be used to compare {{lt|cpp/language/enum}}s (including {{ltt std|cpp/types/byte}}), {{c/core|char}}, {{c/core|char8_t}}, {{c/core|char16_t}}, {{c/core|char32_t}}, {{c/core|wchar_t}} and {{c/core|bool}}.
+
+{{feature test macro|__cpp_lib_integer_comparison_functions|value=202002L|std=C++20|{{ls|cpp/utility#Integer comparison functions}}}}
+
+===Example===
+{{example
+|The example below might produce ''different signedness comparison'' warning if compiled without an appropriate warning suppression flag, e.g., {{tt|-Wno-sign-compare}} (gcc/clang with {{tt|-Wall -Wextra}}, see also [https://stackoverflow.com/questions/3378560 SO: disabling a specific warning]).
+|code=
+#include &lt;utility&gt;
+
+// Uncommenting the next line will disable "signed/unsigned comparison" warnings:
+// #pragma GCC diagnostic ignored "-Wsign-compare"
+
+int main()
+{
+    static_assert(sizeof(int) == 4); // precondition
+
+    // Quite surprisingly
+    static_assert(-1 &gt; 1U); //&lt; warning: sign-unsign comparison
+    // because after implicit conversion of -1 to the RHS type (`unsigned int`)
+    // the expression is equivalent to:
+    static_assert(0xFFFFFFFFU &gt; 1U);
+    static_assert(0xFFFFFFFFU == static_cast&lt;unsigned&gt;(-1));
+
+    // In contrast, the cmp_* family compares integers as most expected -
+    // negative signed integers always compare less than unsigned integers:
+    static_assert(std::cmp_less(-1, 1U));
+    static_assert(std::cmp_less_equal(-1, 1U));
+    static_assert(!std::cmp_greater(-1, 1U));
+    static_assert(!std::cmp_greater_equal(-1, 1U));
+
+    static_assert(-1 == 0xFFFFFFFFU); //&lt; warning: sign-unsign comparison
+    static_assert(std::cmp_not_equal(-1, 0xFFFFFFFFU));
+}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc equal_to}}
+{{dsc inc|cpp/utility/functional/dsc not_equal_to}}
+{{dsc inc|cpp/utility/functional/dsc less}}
+{{dsc inc|cpp/utility/functional/dsc greater}}
+{{dsc inc|cpp/utility/functional/dsc less_equal}}
+{{dsc inc|cpp/utility/functional/dsc greater_equal}}
+{{dsc inc|cpp/utility/functional/ranges/dsc equal_to}}
+{{dsc inc|cpp/utility/functional/ranges/dsc not_equal_to}}
+{{dsc inc|cpp/utility/functional/ranges/dsc less}}
+{{dsc inc|cpp/utility/functional/ranges/dsc greater}}
+{{dsc inc|cpp/utility/functional/ranges/dsc less_equal}}
+{{dsc inc|cpp/utility/functional/ranges/dsc greater_equal}}
+{{dsc inc|cpp/utility/compare/dsc compare_three_way}}
+{{dsc inc|cpp/utility/dsc in_range}}
+{{dsc inc|cpp/types/dsc numeric_limits}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

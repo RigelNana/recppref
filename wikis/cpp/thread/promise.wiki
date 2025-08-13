@@ -1,0 +1,107 @@
+{{cpp/title|promise}}
+{{cpp/thread/promise/navbar}}
+{{dcl begin}}
+{{dcl header|future}}
+{{dcl|num=1|since=c++11|
+template&lt; class R &gt; class promise;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class R &gt; class promise&lt;R&amp;&gt;;
+}}
+{{dcl|num=3|since=c++11|
+template&lt;&gt; class promise&lt;void&gt;;
+}}
+{{dcl end}}
+
+@1@ Base template.
+@2@ Non-void specialization, used to communicate objects between threads.
+@3@ void specialization, used to communicate stateless events.
+
+The class template {{tt|std::promise}} provides a facility to store a value or an exception that is later acquired asynchronously via a {{lc|std::future}} object created by the {{tt|std::promise}} object. Note that the {{tt|std::promise}} object is meant to be used only once.
+
+Each promise is associated with a ''shared state'', which contains some state information and a ''result'' which may be not yet evaluated, evaluated to a value (possibly void) or evaluated to an exception. A promise may do three things with the shared state:
+* ''make ready'': the promise stores the result or the exception in the shared state. Marks the state ready and unblocks any thread waiting on a future associated with the shared state.
+* ''release'': the promise gives up its reference to the shared state. If this was the last such reference, the shared state is destroyed. Unless this was a shared state created by {{c|std::async}} which is not yet ready, this operation does not block.
+* ''abandon'': the promise stores the exception of type {{lc|std::future_error}} with error code {{lc|std::future_errc::broken_promise}}, makes the shared state ''ready'', and then ''releases'' it.
+
+The promise is the "push" end of the promise-future communication channel: the operation that stores a value in the shared state ''synchronizes-with'' (as defined in {{lc|std::memory_order}}) the successful return from any function that is waiting on the shared state (such as {{lc|std::future::get}}). Concurrent access to the same shared state may conflict otherwise: for example multiple callers of {{lc|std::shared_future::get}} must either all be read-only or provide external synchronization.
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc constructor}}
+{{dsc inc|cpp/thread/promise/dsc destructor}}
+{{dsc inc|cpp/thread/promise/dsc operator{{=}}}}
+{{dsc inc|cpp/thread/promise/dsc swap}}
+
+{{dsc h2|Getting the result}}
+{{dsc inc|cpp/thread/promise/dsc get_future}}
+
+{{dsc h2|Setting the result}}
+{{dsc inc|cpp/thread/promise/dsc set_value}}
+{{dsc inc|cpp/thread/promise/dsc set_value_at_thread_exit}}
+{{dsc inc|cpp/thread/promise/dsc set_exception}}
+{{dsc inc|cpp/thread/promise/dsc set_exception_at_thread_exit}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc swap2}}
+{{dsc end}}
+
+===Helper classes===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc uses_allocator}}
+{{dsc end}}
+
+===Example===
+{{example
+|This example shows how {{tt|promise&lt;int&gt;}} can be used as signals between threads.
+|code=
+#include &lt;chrono&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+ 
+void accumulate(std::vector&lt;int&gt;::iterator first,
+                std::vector&lt;int&gt;::iterator last,
+                std::promise&lt;int&gt; accumulate_promise)
+{
+    int sum = std::accumulate(first, last, 0);
+    accumulate_promise.set_value(sum); // Notify future
+}
+
+void do_work(std::promise&lt;void&gt; barrier)
+{
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    barrier.set_value();
+}
+ 
+int main()
+{
+    // Demonstrate using promise&lt;int&gt; to transmit a result between threads.
+    std::vector&lt;int&gt; numbers = {1, 2, 3, 4, 5, 6};
+    std::promise&lt;int&gt; accumulate_promise;
+    std::future&lt;int&gt; accumulate_future = accumulate_promise.get_future();
+    std::thread work_thread(accumulate, numbers.begin(), numbers.end(),
+                            std::move(accumulate_promise));
+
+    // future::get() will wait until the future has a valid result and retrieves it.
+    // Calling wait() before get() is not needed
+    // accumulate_future.wait(); // wait for result
+    std::cout &lt;&lt; "result=" &lt;&lt; accumulate_future.get() &lt;&lt; '\n';
+    work_thread.join(); // wait for thread completion
+    
+    // Demonstrate using promise&lt;void&gt; to signal state between threads.
+    std::promise&lt;void&gt; barrier;
+    std::future&lt;void&gt; barrier_future = barrier.get_future();
+    std::thread new_work_thread(do_work, std::move(barrier));
+    barrier_future.wait();
+    new_work_thread.join();
+}
+|output=
+result=21
+}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

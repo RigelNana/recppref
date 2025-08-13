@@ -1,0 +1,161 @@
+{{cpp/title|unique}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt &gt;
+ForwardIt unique( ForwardIt first, ForwardIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt unique( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt last );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt, class BinaryPred &gt;
+ForwardIt unique( ForwardIt first, ForwardIt last, BinaryPred p );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt, class BinaryPred &gt;
+ForwardIt unique( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt last, BinaryPred p );
+}}
+{{dcl end}}
+
+Removes all except the first element from every consecutive group of equivalent elements from the range {{range|first|last}} and returns a past-the-end iterator for the new end of the range.
+
+@1@ Elements are compared using {{c/core|1=operator==}}.
+@@ If {{c/core|1=operator==}} does not establish an {{enwiki|equivalence relation}}, the behavior is undefined.
+
+@3@ Elements are compared using the given binary predicate {{c|p}}.
+@@ If {{c|p}} does not establish an equivalence relation, the behavior is undefined.
+
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+===Explanation===
+Removing is done by shifting the elements in the range in such a way that the elements that are not to be removed appear in the beginning of the range.
+* Shifting is done by {{rev inl|until=c++11|{{lt|cpp/language/copy assignment}}}}{{rev inl|since=c++11|{{lt|cpp/language/move assignment}}}}.
+* The removing operation is stable: the relative order of the elements not to be removed stays the same.
+* The underlying sequence of {{range|first|last}} is not shortened by the removing operation. Given {{c|result}} as the returned iterator:
+:* All iterators in {{range|result|last}} are still [[cpp/iterator#Dereferenceability and validity|dereferenceable]].
+{{rrev|since=c++11|
+:* Each element of {{range|result|last}} has a valid but unspecified state, because move assignment can eliminate elements by moving from elements that were originally in that range.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to process}}
+{{par exec pol}}
+{{par pred2 eq|p|p1=ForwardIt}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named deref|ForwardIt|MoveAssignable}}
+{{par end}}
+
+===Return value===
+A {{tt|ForwardIt}} to the new end of the range.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+@1,2@ Exactly {{mathjax-or|\(\scriptsize max(0,N-1)\)|max(0,N-1)}} comparisons using {{c/core|1=operator==}}.
+@3,4@ Exactly {{mathjax-or|\(\scriptsize max(0,N-1)\)|max(0,N-1)}} applications of the predicate {{c|p}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/7f2f4b87910506effb8dffffc60eeb2451573126/libstdc%2B%2B-v3/include/bits/stl_algo.h#L919-L1000 libstdc++], [https://github.com/llvm/llvm-project/blob/5ba396011377bdf4086757d56cd48fc7d3c9f2ad/libcxx/include/__algorithm/unique.h libc++], and [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L3804-L3848 MSVC STL].
+{{eq impl
+|title1=unique (1)|ver1=1|1=
+template&lt;class ForwardIt&gt;
+ForwardIt unique(ForwardIt first, ForwardIt last)
+{
+    if (first == last)
+        return last;
+    
+    ForwardIt result = first;
+    while (++first != last)
+        if (!(*result == *first) &amp;&amp; ++result != first)
+            *result = std::move(*first);
+    
+    return ++result;
+}
+|title2=unique (3)|ver2=3|2=
+template&lt;class ForwardIt, class BinaryPredicate&gt;
+ForwardIt unique(ForwardIt first, ForwardIt last, BinaryPredicate p)
+{
+    if (first == last)
+        return last;
+    
+    ForwardIt result = first;
+    while (++first != last)
+        if (!p(*result, *first) &amp;&amp; ++result != first)
+            *result = std::move(*first);
+    
+    return ++result;
+}
+}}
+
+===Notes===
+A call to {{tt|unique}} is typically followed by a call to a container's {{tt|erase}} member function to actually remove elements from the container.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    // a vector containing several duplicate elements
+    std::vector&lt;int&gt; v{1, 2, 1, 1, 3, 3, 3, 4, 5, 4};
+    auto print = [&amp;](int id)
+    {
+        std::cout &lt;&lt; "@" &lt;&lt; id &lt;&lt; ": ";
+        for (int i : v)
+            std::cout &lt;&lt; i &lt;&lt; ' ';
+        std::cout &lt;&lt; '\n';
+    };
+    print(1);
+
+    // remove consecutive (adjacent) duplicates
+    auto last = std::unique(v.begin(), v.end());
+    // v now holds {1 2 1 3 4 5 4 x x x}, where 'x' is indeterminate
+    v.erase(last, v.end());
+    print(2);
+
+    // sort followed by unique, to remove all duplicates
+    std::sort(v.begin(), v.end()); // {1 1 2 3 4 4 5}
+    print(3);
+
+    last = std::unique(v.begin(), v.end());
+    // v now holds {1 2 3 4 5 x x}, where 'x' is indeterminate
+    v.erase(last, v.end());
+    print(4);
+}
+|output=
+@1: 1 2 1 1 3 3 3 4 5 4
+@2: 1 2 1 3 4 5 4
+@3: 1 1 2 3 4 4 5
+@4: 1 2 3 4 5
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=202|std=C++98|before=the behavior was unclear if the elements are&lt;br&gt;compared using a non-equivalence relation|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/dsc remove}}
+{{dsc inc|cpp/container/dsc unique|list}}
+{{dsc inc|cpp/container/dsc unique|forward_list}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

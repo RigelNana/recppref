@@ -1,0 +1,145 @@
+{{cpp/title|partition}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt, class UnaryPred &gt;
+ForwardIt partition( ForwardIt first, ForwardIt last, UnaryPred p );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt, class UnaryPred &gt;
+ForwardIt partition( ExecutionPolicy&amp;&amp; policy, 
+                     ForwardIt first, ForwardIt last, UnaryPred p );
+}}
+{{dcl end}}
+
+@1@ Reorders the elements in the range {{range|first|last}} in such a way that all elements for which the predicate {{c|p}} returns {{c|true}} precede all elements for which predicate {{c|p}} returns {{c|false}}. Relative order of the elements is not preserved. 
+
+@2@ Same as {{v|1}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+If {{rev inl|until=c++11|the type of {{c|*first}} is not {{named req|Swappable}}}}{{rev inl|since=c++11|{{tt|ForwardIt}} is not {{named req|ValueSwappable}}}}, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to reorder}}
+{{par exec pol}}
+{{par pred1|p|if the element should be ordered before other elements|p1=ForwardIt}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|UnaryPred|Predicate}}
+{{par end}}
+
+===Return value===
+Iterator to the first element of the second group.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+
+@1@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} applications of {{c|p}}.
+@@ At most {{mathjax-or|\(\scriptsize N/2\)|N/2}} swaps if {{tt|ForwardIt}} meets the requirements of {{named req|BidirectionalIterator}}, and at most {{mathjax-or|\(\scriptsize N\)|N}} swaps otherwise.
+
+@2@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} applications of {{c|p}}.
+@@ {{mathjax-or|\(\scriptsize O(N \cdot log(N))\)|O(N·log(N))}} swaps.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===Possible implementation===
+Implements overload {{v|1}} preserving C++11 compatibility.
+{{eq fun|1=
+template&lt;class ForwardIt, class UnaryPred&gt;
+ForwardIt partition(ForwardIt first, ForwardIt last, UnaryPred p)
+{
+    first = std::find_if_not(first, last, p);
+    if (first == last)
+        return first;
+    
+    for (auto i = std::next(first); i != last; ++i)
+        if (p(*i))
+        {
+            std::iter_swap(i, first);
+            ++first;
+        }
+    
+    return first;
+}
+}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;algorithm&gt;
+#include &lt;forward_list&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+template&lt;class ForwardIt&gt;
+void quicksort(ForwardIt first, ForwardIt last)
+{
+    if (first == last)
+        return;
+    
+    auto pivot = *std::next(first, std::distance(first, last) / 2);
+    auto middle1 = std::partition(first, last, [pivot](const auto&amp; em)
+    {
+        return em &lt; pivot;
+    });
+    auto middle2 = std::partition(middle1, last, [pivot](const auto&amp; em)
+    {
+        return !(pivot &lt; em);
+    });
+    
+    quicksort(first, middle1);
+    quicksort(middle2, last);
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::cout &lt;&lt; "Original vector: ";
+    for (int elem : v)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    
+    auto it = std::partition(v.begin(), v.end(), [](int i) {return i % 2 == 0;});
+    
+    std::cout &lt;&lt; "\nPartitioned vector: ";
+    std::copy(std::begin(v), it, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; "* ";
+    std::copy(it, std::end(v), std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    
+    std::forward_list&lt;int&gt; fl {1, 30, -4, 3, 5, -4, 1, 6, -8, 2, -5, 64, 1, 92};
+    std::cout &lt;&lt; "\nUnsorted list: ";
+    for (int n : fl)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    
+    quicksort(std::begin(fl), std::end(fl));
+    std::cout &lt;&lt; "\nSorted using quicksort: ";
+    for (int fi : fl)
+        std::cout &lt;&lt; fi &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+Original vector: 0 1 2 3 4 5 6 7 8 9 
+Partitioned vector: 0 8 2 6 4 * 5 3 7 1 9 
+Unsorted list: 1 30 -4 3 5 -4 1 6 -8 2 -5 64 1 92 
+Sorted using quicksort: -8 -5 -4 -4 1 1 1 2 3 5 6 30 64 92 
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=498|std=C++98|before={{tt|std::partition}} required {{c|first}} and&lt;br&gt;{{c|last}} to be {{named req|BidirectionalIterator}}|after=only required to be&lt;br&gt;{{named req|ForwardIterator}}}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before={{tt|std::partition}} was only required to place one element&lt;br&gt;satisfying {{c|p}} before one element not satisfying {{c|p}}|after=corrected the&lt;br&gt;requirement}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc is_partitioned}}
+{{dsc inc|cpp/algorithm/dsc stable_partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

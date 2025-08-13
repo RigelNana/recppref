@@ -1,0 +1,384 @@
+{{title|Extensions for reflection}}
+{{cpp/experimental/reflect/navbar}}
+
+The C++ Extensions for Reflection, ISO/IEC TS 23619:2021, specifies modifications to the core language and defines new components for the C++ standard library listed on this page.
+
+The Reflection TS is based on the C++20 standard (except that the definition of concepts are specified in the style of [[cpp/experimental/constraints|Concepts TS]]).
+
+===Core language changes===
+====reflexpr-specifier====
+A {{spar|reflexpr-specifier}} is of form {{ttb|reflexpr}} {{ttb|(}} {{spar|reflexpr-operand}} {{ttb|)}}, and specifies a meta-object type (see below).
+
+{{spar|reflexpr-operand}} can be one of following:
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|::}}}}
+{{sdsc|num=2|{{spar|type-id}}}}
+{{sdsc|num=3|{{spar|nested-name-specifier}}{{mark optional}} {{spar|namespace-name}}}}
+{{sdsc|num=4|{{spar|id-expression}}}}
+{{sdsc|num=5|{{ttb|(}} {{spar|expression}} {{ttb|)}}}}
+{{sdsc|num=6|{{spar|function-call-expression}}}}
+{{sdsc|num=7|{{spar|functional-type-conv-expression}}}}
+{{sdsc end}}
+
+where {{spar|function-call-expression}} is
+{{sdsc begin}}
+{{sdsc|
+{{spar|postfix-expression}} {{ttb|(}} {{spar|expression-list}}{{mark optional}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+and {{spar|functional-type-conv-expression}} are following sorts of expressions which perform [[cpp/language/explicit cast|explict cast]]:
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|simple-type-specifier}} {{ttb|(}} {{spar|expression-list}}{{mark optional}} {{ttb|)}}
+}}
+{{sdsc|num=2|
+{{spar|typename-specifier}} {{ttb|(}} {{spar|expression-list}}{{mark optional}} {{ttb|)}}
+}}
+{{sdsc|num=3|
+{{spar|simple-type-specifier}} {{spar|braced-init-list}}
+}}
+{{sdsc|num=4|
+{{spar|typename-specifier}} {{spar|braced-init-list}}
+}}
+{{sdsc end}}
+
+The operand to the {{spar|reflexpr-specifier}} shall be a [[cpp/language/type|type]], [[cpp/language/namespace|namespace]], [[cpp/language/enum|enumerator]], variable, [[cpp/language/data members|data member]], [[cpp/language/function|function parameter]], [[cpp/language/lambda|captured entity]], {{spar|function-call-expression}} or {{spar|functional-type-conv-expression}}, and parenthesized expression. {{c|reflexpr(::)}} reflects the global namespace.
+
+For a {{spar|reflexpr-operand}} of form {{ttb|(}} {{spar|expression}} {{ttb|)}}, the {{spar|expression}} shall be a (possibly multi-parenthesized) {{spar|function-call-expression}} or {{spar|functional-type-conv-expression}}.
+
+If an unparenthesized operand can be treated as either a {{spar|type-id}} or a {{spar|functional-type-conv-expression}}, then it is treated as a {{spar|type-id}}. Parenthesizes can be used for disambiguation between function-style cast and a {{spar|type-id}}. For example, given a class type {{tt|X}} with default constructor, {{c|reflexpr(X())}} reflects the function type {{c|X()}}, and {{c|reflexpr((X()))}} reflects the expression {{c|X()}}.
+
+If the operand designates both an alias and a class name, the type represented by the reflexpr-specifier reflects the alias and satisfies {{tt|reflect::Alias}}.
+
+If the operand designates a name whose declaration is enclosed in a block scope and the named entity is neither captured nor a function parameter, the program is ill-formed.
+
+====Meta-object types====
+A ''meta-object type'' is an unnamed, incomplete namespace-scope class type. A type satisfies the concept {{tt|reflect::Object}} if and only if it is a meta-object type. Meta-object types may satisfy other concepts, depending on the operand to {{tt|reflexpr}}.
+
+It is unspecified whether repeatedly applying {{tt|reflexpr}} to the same operand yields the same type or a different type. If a meta-object type reflects an incomplete class type, certain type transformations cannot be applied.
+
+A meta-object type allows inspection of some properties of the operand to {{tt|reflexpr}} through type traits or type transformations on it.
+
+====Overload resolution====
+If the {{spar|postfix-expression}} of the {{spar|function-call-expression}} is of class type, i.e. {{c|e}} in the {{spar|function-call-expression}} {{c|e(args)}} is of class type, then the [[cpp/language/cast operator|user-defined conversion function]] of the type of the {{spar|postfix-expression}} ({{c|e}}) shall not be used.
+
+If {{spar|postfix-expression}} is not of class type, it shall name a function that is the unique result of overload resolution.
+
+{{source|1=
+struct Functor
+{
+    void operator()(int) const;
+
+    using fptr_t = void(*)(std::nullptr_t);
+    operator fptr_t() const;
+};
+
+using Meta0 = reflexpr(Functor{}(0));          // OK
+// using Meta1 = reflexpr(Functor{}(nullptr)); // error: conversion function used
+}}
+
+====Reflection-related====
+An ''alias'' is a name introduced by a {{ltt|cpp/language/typedef}} declaration, an [[cpp/language/type alias|alias-declaration]], or a [[cpp/language/using declaration|using-declaration]].
+
+An entity or alias {{tt|B}} is ''reflection-related'' to an entity or alias {{tt|A}} if
+# {{tt|A}} and {{tt|B}} are the same entity or alias,
+# {{tt|A}} is a variable or enumerator and {{tt|B}} is the type of {{tt|A}},
+# {{tt|A}} is an enumeration and {{tt|B}} is the underlying type of {{tt|A}},
+# {{tt|A}} is a class and {{tt|B}} is a member or base class of {{tt|A}},
+# {{tt|A}} is a non-template alias that designates the entity {{tt|B}},
+# {{tt|A}} is not the global namespace and {{tt|B}} is an enclosing class or namespace of {{tt|A}},
+# {{tt|A}} is the parenthesized expression ( {{tt|B}} ),
+# {{tt|A}} is a lambda capture of the closure type {{tt|B}},
+# {{tt|A}} is the closure type of the lambda capture {{tt|B}},
+# {{tt|B}} is the type specified by the {{spar|functional-type-conv-expression}} {{tt|A}},
+# {{tt|B}} is the function selected by overload resolution for a {{spar|function-call-expression}} {{tt|A}},
+# {{tt|B}} is the return type, a parameter type, or function type of the function {{tt|A}}, or
+# {{tt|B}} is reflection-related to an entity or alias {{tt|X}} and {{tt|X}} is reflection-related to {{tt|A}}.
+Reflection-relation relationship is reflexive and transitive, but not symmetric.
+
+Informally speaking, the case that {{tt|B}} is reflection-related to {{tt|A}} means that {{tt|B}} participates in the declaration or definition of {{tt|A}}.
+
+Zero or more successive applications of type transformations that yield meta-object types to the type denoted by a {{spar|reflexpr-specifier}} enable inspection of entities and aliases that are reflection-related to the operand; such a meta-object type is said to reflect the respective reflection-related entity or alias.
+
+{{source|1=
+struct X;
+struct B
+{
+    using X = ::X;
+    typedef X Y;
+};
+struct D : B
+{
+    using B::Y;
+};
+// ::X, but not B::X or B::Y is reflection-related to D::Y
+}}
+
+====Miscellaneous====
+* An expression used as {{spar|reflexpr-operand}} is an [[cpp/language/expressions#Unevaluated expression|unevaluated expressions]] and [[cpp/language/constant expression|potentially constant evaluated]].
+* For the purpose of determination of variables [[cpp/language/lambda#Lambda capture|captured in a lambda expression]] by a capture-default, a {{tt|reflexpr}} operand is not considered to be an unevaluated operand.
+* A function or variable of static [[cpp/language/storage duration|storage duration]] reflected by meta-object type {{tt|T}} is [[cpp/language/definition|odr-used]] by the specialization {{c|std::experimental::reflect::get_pointer&lt;T&gt;}}, as if by taking the address of an id-expression nominating the function or variable.
+* There can be more than one definition of a meta-object type, as long as all operations on this type yield the same constant expression results.
+* A type is [[cpp/language/dependent name#Dependent types|dependent]] if it is denoted by a reflexpr-specifier, and the operand
+** is a [[cpp/language/dependent name#Type-dependent expressions|type-dependent expression]] or a (possibly parenthesized) {{spar|functional-type-conv-expression}} with at least one type-dependent immediate subexpression, or
+** designates a dependent type or a member of an [[cpp/language/dependent name#Unknown specializations|unknown specialization]] or a [[cpp/language/dependent name#Value-dependent expressions|value-dependent constant expression]].
+
+====Keywords====
+{{ltt|cpp/keyword/reflexpr}}
+
+====Predefined feature testing macros====
+{{dsc begin}}
+{{dsc macro const|__cpp_reflection|notes={{mark since reflection ts}}|nolink=true|a value of at least {{c|201902}} indicates that the Reflection TS is supported}}
+{{dsc end}}
+
+===Library support===
+====Concepts====
+{{dsc begin}}
+{{dsc header|experimental/reflect}}
+{{dsc namespace|std::experimental::reflect}}
+{{dsc namespace|inline=true|std::experimental::reflect::v1}}
+{{dsc concept|cpp/experimental/reflect/Object|notes={{mark since reflection ts}}|specifies that a type is a meta-object type}}
+{{dsc concept|cpp/experimental/reflect/ObjectSequence|notes={{mark since reflection ts}}|specifies that a meta-object type is a meta-object sequence type}}
+{{dsc concept|cpp/experimental/reflect/TemplateParameterScope|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a template parameter scope}}
+{{dsc concept|cpp/experimental/reflect/Named|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an entity or alias with an associated (possibly empty) name}}
+{{dsc concept|cpp/experimental/reflect/Alias|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a type alias, namespace alias, or an alias introduced by a using-declaration}}
+{{dsc concept|cpp/experimental/reflect/RecordMember|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a {{spar|member-declaration}} of a class}}
+{{dsc concept|cpp/experimental/reflect/Enumerator|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an enumerator}}
+{{dsc concept|cpp/experimental/reflect/Variable|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a variable or data member}}
+{{dsc concept|cpp/experimental/reflect/ScopeMember|notes={{mark since reflection ts}}|specifies that a meta-object type satisfies {{tt|RecordMember}}, {{tt|Enumerator}}, or {{tt|Variable}}, or reflects a namespace other than the global namespace}}
+{{dsc concept|cpp/experimental/reflect/Typed|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an entity with a type}}
+{{dsc concept|cpp/experimental/reflect/Namespace|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a namespace}}
+{{dsc concept|cpp/experimental/reflect/GlobalScope|notes={{mark since reflection ts}}|specifies that a meta-object type reflects the global namespace}}
+{{dsc concept|cpp/experimental/reflect/Class|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a non-union class type}}
+{{dsc concept|cpp/experimental/reflect/Enum|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an enumeration type}}
+{{dsc concept|cpp/experimental/reflect/Record|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a class type}}
+{{dsc concept|cpp/experimental/reflect/Scope|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a namespace, class, enumeration, function, closure type, a template parameter scope}}
+{{dsc concept|cpp/experimental/reflect/Type|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a type}}
+{{dsc concept|cpp/experimental/reflect/Constant|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an enumerator or a constexpr variable}}
+{{dsc concept|cpp/experimental/reflect/Base|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a direct base class obtained from {{tt|get_base_classes}}}}
+{{dsc concept|cpp/experimental/reflect/FunctionParameter|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a function parameter}}
+{{dsc concept|cpp/experimental/reflect/Callable|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a function (including constructors and destructors)}}
+{{dsc concept|cpp/experimental/reflect/Expression|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an expression}}
+{{dsc concept|cpp/experimental/reflect/ParenthesizedExpression|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a parenthesized expression}}
+{{dsc concept|cpp/experimental/reflect/FunctionCallExpression|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a {{spar|function-call-expression}}}}
+{{dsc concept|cpp/experimental/reflect/FunctionalTypeConversion|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a {{spar|functional-type-conv-expression}}}}
+{{dsc concept|cpp/experimental/reflect/Function|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a function (excluding constructors and destructors)}}
+{{dsc concept|cpp/experimental/reflect/MemberFunction|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a member function (excluding constructors and destructors)}}
+{{dsc concept|cpp/experimental/reflect/SpecialMemberFunction|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a special member function}}
+{{dsc concept|cpp/experimental/reflect/Constructor|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a constructor}}
+{{dsc concept|cpp/experimental/reflect/Destructor|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a destructor}}
+{{dsc concept|cpp/experimental/reflect/Operator|notes={{mark since reflection ts}}|specifies that a meta-object type reflects an operator function or a conversion function}}
+{{dsc concept|cpp/experimental/reflect/ConversionOperator|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a conversion function}}
+{{dsc concept|cpp/experimental/reflect/Lambda|notes={{mark since reflection ts}}|specifies that a meta-object type reflects the closure type of a non-generic lambda}}
+{{dsc concept|cpp/experimental/reflect/LambdaCapture|notes={{mark since reflection ts}}|specifies that a meta-object type reflects a lambda capture}}
+{{dsc end}}
+
+====Meta-object operations====
+{{dsc begin}}
+{{dsc header|experimental/reflect}}
+{{dsc namespace|std::experimental::reflect}}
+{{dsc namespace|inline=true|std::experimental::reflect::v1}}
+
+{{dsc h2|{{tt|Object}} operations}}
+{{dsc tclass|cpp/experimental/reflect/reflects_same|notes={{mark since reflection ts}}|checks if two meta-object types reflect the same entity or alias}}
+{{dsc tclass|cpp/experimental/reflect/get_source_line|notes={{mark since reflection ts}}|obtains the presumed line number of the declaration of the reflected entity or alias}}
+{{dsc tclass|cpp/experimental/reflect/get_source_column|notes={{mark since reflection ts}}|obtains the implementation-defined column number of the declaration of the reflected entity or alias}}
+{{dsc tclass|cpp/experimental/reflect/get_source_file_name|notes={{mark since reflection ts}}|obtains the presumed file name of the declaration of the reflected entity or alias}}
+
+{{dsc h2|{{tt|ObjectSequence}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_size|notes={{mark since reflection ts}}|obtains the size of a meta-object sequence}}
+{{dsc tclass|cpp/experimental/reflect/get_element|notes={{mark since reflection ts}}|obtains the meta-object type with specified index in a sequence}}
+{{dsc tclass|cpp/experimental/reflect/unpack_sequence|notes={{mark since reflection ts}}|applies a template to the meta-object sequence}}
+
+{{dsc h2|{{tt|Named}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_unnamed|notes={{mark since reflection ts}}|checks if the reflected entity or alias is unnamed}}
+{{dsc tclass|cpp/experimental/reflect/get_name|notes={{mark since reflection ts}}|obtains the unqualified name of the reflected entity or alias}}
+{{dsc tclass|cpp/experimental/reflect/get_display_name|notes={{mark since reflection ts}}|obtains the implementation-defined display name of the reflected entity or alias}}
+
+{{dsc h2|{{tt|Alias}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_alias|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the associated entity of the reflected alias}}
+
+{{dsc h2|{{tt|Type}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_type|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the type of the reflected entity or alias}}
+{{dsc tclass|cpp/experimental/reflect/get_reflected_type|notes={{mark since reflection ts}}|obtains the type of the reflected entity or alias}}
+{{dsc tclass|cpp/experimental/reflect/is_enum|notes={{mark since reflection ts}}|checks if the meta-object type reflects an enumeration type}}
+{{dsc tclass|cpp/experimental/reflect/is_union|notes={{mark since reflection ts}}|checks if the meta-object type reflects a union type}}
+{{dsc tclass|cpp/experimental/reflect/uses_key|title=uses_class_key&lt;br&gt;uses_struct_key|notes={{mark since reflection ts}}|checks if the meta-object type reflects a non-union class type whose declaration uses {{c|class}} or {{c|struct}} respectively}}
+
+{{dsc h2|{{tt|ScopeMember}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_scope|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the scope of the reflected entity or alias}}
+
+{{dsc h2|{{tt|Base}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_class|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the base class in the given base class relationship}}
+
+{{dsc h2|{{tt|RecordMember}} and {{tt|Base}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_public|notes={{mark since reflection ts}}|checks if the reflected member or base class is public}}
+{{dsc tclass|cpp/experimental/reflect/is_protected|notes={{mark since reflection ts}}|checks if the reflected member or base class is protected}}
+{{dsc tclass|cpp/experimental/reflect/is_private|notes={{mark since reflection ts}}|checks if the reflected member or base class is private}}
+
+{{dsc h2|{{tt|Record}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_data_members|title=get_public_data_members&lt;br&gt;get_accessible_data_members&lt;br&gt;get_data_members|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect public, accessible, or all data members of the reflected class}}
+{{dsc tclass|cpp/experimental/reflect/get_member_functions|title=get_public_member_functions&lt;br&gt;get_accessible_member_functions&lt;br&gt;get_member_functions|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect public, accessible, or all member functions of the reflected class}}
+{{dsc tclass|cpp/experimental/reflect/get_constructors|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect all constructors of the reflected class}}
+{{dsc tclass|cpp/experimental/reflect/get_operators|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect all operator functions and conversion functions declared in the reflected class}}
+{{dsc tclass|cpp/experimental/reflect/get_destructor|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the destructor of the reflected class}}
+{{dsc tclass|cpp/experimental/reflect/get_member_types|title=get_public_member_types&lt;br&gt;get_accessible_member_types&lt;br&gt;get_member_types|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect public, accessible, or all nested type or member typedefs of the reflected class}}
+{{dsc tclass|cpp/experimental/reflect/get_base_classes|title=get_public_base_classes&lt;br&gt;get_accessible_base_classes&lt;br&gt;get_base_classes|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect public, accessible, or all base classes of the reflected class}}
+
+{{dsc h2|{{tt|Enum}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_scoped_enum|notes={{mark since reflection ts}}|checks whether the reflected enumeration is scoped}}
+{{dsc tclass|cpp/experimental/reflect/get_enumerators|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflects the enumerators of the reflected enumeration}}
+{{dsc tclass|cpp/experimental/reflect/get_underlying_type|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the underlying type of the reflected enumeration}}
+
+{{dsc h2|{{tt|Variable}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_constant|notes={{mark since reflection ts}}|obtains the value of the reflected variable which is a constant expression}}
+{{dsc tclass|cpp/experimental/reflect/is_thread_local|notes={{mark since reflection ts}}|checks if the variable is declared with {{c|thread_local}}}}
+
+{{dsc h2|{{tt|FunctionParameter}} operations}}
+{{dsc tclass|cpp/experimental/reflect/has_default_argument|notes={{mark since reflection ts}}|checks whether the reflected parameter has a default argument}}
+
+{{dsc h2|{{tt|Callable}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_parameters|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflects the parameters of the reflected function}}
+{{dsc tclass|cpp/experimental/reflect/is_vararg|notes={{mark since reflection ts}}|checks whether the parameter list of the reflected function contains an ellipsis parameter}}
+{{dsc tclass|cpp/experimental/reflect/is_noexcept|notes={{mark since reflection ts}}|checks whether the reflected function is non-throwing}}
+{{dsc tclass|cpp/experimental/reflect/is_deleted|notes={{mark since reflection ts}}|checks whether the reflected function is deleted}}
+
+{{dsc h2|{{tt|Variable}} and {{tt|Callable}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_constexpr|notes={{mark since reflection ts}}|checks if the reflected variable or function is constexpr}}
+
+{{dsc h2|{{tt|Namespace}} and {{tt|Callable}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_inline|notes={{mark since reflection ts}}|checks whether the reflected namespace or function is inline}}
+
+{{dsc h2|{{tt|ParenthesizedExpression}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_subexpression|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the unparenthesized expression of the reflected parethesized expression}}
+
+{{dsc h2|{{tt|FunctionCallExpression}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_callable|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the function in the reflected {{spar|function-call-expression}}}}
+
+{{dsc h2|{{tt|FunctionalTypeConversion}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_constructor|notes={{mark since reflection ts}}|obtains the meta-object type reflecting the constructor in reflected {{spar|functional-type-conv-expression}}}}
+
+{{dsc h2|{{tt|Variable}} and {{tt|Function}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_pointer|notes={{mark since reflection ts}}|get the address of the reflected variable or function, or the pointer-to-member value to the reflected non-static member}}
+
+{{dsc h2|{{tt|MemberFunction}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_qualified|title=is_const&lt;br&gt;is_volatile&lt;br&gt;has_lvalueref_qualifier&lt;br&gt;has_rvalueref_qualifier|notes={{mark since reflection ts}}|checks if the reflected member function is declared with {{c|const}}, {{c|volatile}}, {{c|&amp;}}, or {{c|&amp;&amp;}} qualifier respectively}}
+{{dsc tclass|cpp/experimental/reflect/is_override|notes={{mark since reflection ts}}|checks if the reflected member function overrides a member function of base class}}
+
+{{dsc h2|{{tt|Record}} and {{tt|MemberFunction}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_final|notes={{mark since reflection ts}}|checks if the reflected class or member function is marked with {{c|final}}}}
+
+{{dsc h2|{{tt|Variable}} and {{tt|MemberFunction}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_static|notes={{mark since reflection ts}}|checks if the reflected variable is of static storage duration, or the reflected member function is static}}
+
+{{dsc h2|{{tt|SpecialMemberFunction}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_implicitly_declared|notes={{mark since reflection ts}}|checks if the reflected special member function is implicitly declared}}
+{{dsc tclass|cpp/experimental/reflect/is_defaulted|notes={{mark since reflection ts}}|checks if the reflected special member function is defaulted in its first declaration}}
+
+{{dsc h2|{{tt|Constructor}} and {{tt|ConversionOperator}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_explicit|notes={{mark since reflection ts}}|checks if the reflected constructor or conversion function is declared with {{c|explicit}}}}
+
+{{dsc h2|{{tt|MemberFunction}} and {{tt|Destructor}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_virtual|notes={{mark since reflection ts}}|checks if the reflected member function is virtual}}
+{{dsc tclass|cpp/experimental/reflect/is_pure_virtual|notes={{mark since reflection ts}}|checks if the reflected member function is pure virtual}}
+
+{{dsc h2|{{tt|Lambda}} operations}}
+{{dsc tclass|cpp/experimental/reflect/get_captures|notes={{mark since reflection ts}}|obtains a meta-object sequence type whose elements reflect the captures of the reflected closure type}}
+{{dsc tclass|cpp/experimental/reflect/uses_default_capture|title=uses_default_copy_capture&lt;br&gt;uses_default_reference_capture|notes={{mark since reflection ts}}|checks if the capture-default of the lambda expression of the reflected closure type is {{tt|1==}} or {{tt|&amp;}} respectively}}
+{{dsc tclass|cpp/experimental/reflect/is_call_operator_const|notes={{mark since reflection ts}}|checks if the {{tt|operator()}} of the reflected closure type is declared with {{c|const}}}}
+
+{{dsc h2|{{tt|LambdaCapture}} operations}}
+{{dsc tclass|cpp/experimental/reflect/is_explictly_captured|notes={{mark since reflection ts}}|checks if the reflected lambda capture is explicitly captured}}
+{{dsc tclass|cpp/experimental/reflect/is_init_capture|notes={{mark since reflection ts}}|checks if the reflected lambda capture is an init-capture}}
+{{dsc end}}
+
+====Library feature testing macros====
+{{dsc begin}}
+{{dsc header|experimental/reflect}}
+{{dsc macro const|__cpp_lib_reflection|notes={{mark since reflection ts}}|nolink=true|a value of at least {{c|201902}} indicates that the support library of the Reflection TS is supported}}
+{{dsc end}}
+
+====Satisfaction of concepts====
+The following table lists that whether a meta-object type reflecting an operand satisfies concepts introduced by the Reflection TS.
+{|table class="wikitable"
+!Category
+!{{tt|reflexpr}} operands
+!Satisfied concepts
+|-
+|rowspan="9"|Type
+|{{spar|class-name}} designating a [[cpp/language/union|union]]
+|{{tt|reflect::Union}}
+|-
+|{{spar|class-name}} designating a [[cpp/language/lambda|closure type]]
+|{{tt|reflect::Lambda}}
+|-
+|{{spar|class-name}} designating a non-union class
+|{{tt|reflect::Record}}
+|-
+|[[cpp/language/enum|{{spar|enum-name}}]]
+|{{tt|reflect::Enum}}
+|-
+|[[cpp/language/template parameters#Type template parameter|template {{spar|type-parameter}}]]
+|{{tt|reflect::Type}}, {{tt|reflect::Alias}}
+|-
+|[[cpp/language/decltype|{{spar|decltype-specifier}}]]
+|{{tt|reflect::Type}}, {{tt|reflect::Alias}}
+|-
+|{{spar|type-name}} introduced by a [[cpp/language/namespace#Using-declarations|using-declaration]]
+|{{tt|reflect::Type}}, {{tt|reflect::Alias}}, {{tt|reflect::ScopedMember}}
+|-
+|any other {{spar|typedef-name}}
+|{{tt|reflect::Type}}, {{tt|reflect::Alias}}
+|-
+|any other {{spar|type-id}}
+|{{tt|reflect::Type}}
+|-
+|rowspan="3"|Namespace
+|[[cpp/language/namespace alias|{{spar|namespace-alias}}]]
+|{{tt|reflect::Namespace}}, {{tt|reflect::Alias}}
+|-
+|the global namespace
+|{{tt|reflect::GlobalScope}}
+|-
+|any other [[cpp/language/namespace|namespace]]
+|{{tt|reflect::Namespace}}
+|-
+|rowspan="8"|Expression
+|the name of a data member
+|{{tt|reflect::Variable}}
+|-
+|the name of a variable
+|{{tt|reflect::Variable}}
+|-
+|the name of an enumerator
+|{{tt|reflect::Enumerator}}
+|-
+|the name of a function parameter
+|{{tt|reflect::FunctionParameter}}
+|-
+|the name of a [[cpp/language/lambda#Lambda capture|captured entity]]
+|{{tt|reflect::LambdaCapture}}
+|-
+|parenthesized expression
+|{{tt|reflect::ParenthesizedExpression}}
+|-
+|{{spar|function-call-expression}}
+|{{tt|reflect::FunctionCallExpression}}
+|-
+|{{spar|functional-type-conv-expression}}
+|{{tt|reflect::FunctionalTypeConversion}}
+|}
+
+If the operand of the form id-expression is a constant expression, the type specified by the reflexpr-specifier also satisfies {{tt|reflect::Constant}}.
+
+If the reflexpr-operand designates a class member, the type represented by the reflexpr-specifier also satisfies {{tt|reflect::RecordMember}}.
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc type_info}}
+{{dsc inc|cpp/header/dsc type_traits}}
+&lt;!--{{dsc|[[cpp/experimental/meta/P1717|Compile-time Metaprogramming in C++]]}}--&gt;
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

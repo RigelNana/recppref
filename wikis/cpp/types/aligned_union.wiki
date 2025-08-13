@@ -1,0 +1,106 @@
+{{cpp/title|aligned_union}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|deprecated=c++23|1=
+template&lt; std::size_t Len, class... Types &gt;
+struct aligned_union;
+}}
+{{dcl end}}
+
+Provides the nested type {{tt|type}}, which is a [[cpp/named req/TrivialType|trivial]] [[cpp/named req/StandardLayoutType|standard-layout]] type of a size and alignment suitable for use as uninitialized storage for an object of any of the types listed in {{tt|Types}}. The size of the storage is at least {{tt|Len}}. {{tt|std::aligned_union}} also determines the strictest (largest) alignment requirement among all {{tt|Types}} and makes it available as the constant {{tt|alignment_value}}.
+
+If {{c|1=sizeof...(Types) == 0}} or if any of the types in {{tt|Types}} is not a complete object type, the behavior is undefined.
+
+It is implementation-defined whether any [[cpp/language/object#Alignment|extended alignment]] is supported.
+
+{{cpp/types/nospec}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|type}}|a trivial and standard-layout type suitable for storage of any type from {{tt|Types}}}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|since=c++14|deprecated=c++23|1=
+template&lt; std::size_t Len, class... Types &gt;
+using aligned_union_t = typename aligned_union&lt;Len,Types...&gt;::type;
+}}
+{{dcl end}}
+
+===Member constants===
+{{dsc begin}}
+{{dsc mem sconst|alignment_value|the strictest alignment requirement of all {{tt|Types}}|nolink=true}}
+{{dsc end}}
+
+===Possible implementation===
+{{eq fun|1=
+#include &lt;algorithm&gt;
+
+template&lt;std::size_t Len, class... Types&gt;
+struct aligned_union
+{
+    static constexpr std::size_t alignment_value = std::max({alignof(Types)...});
+
+    struct type
+    {
+        alignas(alignment_value) char _s[std::max({Len, sizeof(Types)...})];
+    };
+};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    std::cout &lt;&lt; sizeof(std::aligned_union_t&lt;0, char&gt;) &lt;&lt; ' ' // 1
+              &lt;&lt; sizeof(std::aligned_union_t&lt;2, char&gt;) &lt;&lt; ' ' // 2
+              &lt;&lt; sizeof(std::aligned_union_t&lt;2, char[3]&gt;) &lt;&lt; ' ' // 3 (!)
+              &lt;&lt; sizeof(std::aligned_union_t&lt;3, char[4]&gt;) &lt;&lt; ' ' // 4
+              &lt;&lt; sizeof(std::aligned_union_t&lt;1, char, int, double&gt;) &lt;&lt; ' '    // 8
+              &lt;&lt; sizeof(std::aligned_union_t&lt;12, char, int, double&gt;) &lt;&lt; '\n'; // 16 (!)
+
+    using var_t = std::aligned_union&lt;16, int, std::string&gt;;
+
+    std::cout &lt;&lt; "var_t::alignment_value = " &lt;&lt; var_t::alignment_value &lt;&lt; '\n'
+              &lt;&lt; "sizeof(var_t::type) = " &lt;&lt; sizeof(var_t::type) &lt;&lt; '\n';
+
+    var_t::type aligned_storage;
+    int* int_ptr = new(&amp;aligned_storage) int(42); // placement new
+    std::cout &lt;&lt; "*int_ptr = " &lt;&lt; *int_ptr &lt;&lt; '\n';
+
+    std::string* string_ptr = new(&amp;aligned_storage) std::string("bar");
+    std::cout &lt;&lt; "*string_ptr = " &lt;&lt; *string_ptr &lt;&lt; '\n';
+    *string_ptr = "baz";
+    std::cout &lt;&lt; "*string_ptr = " &lt;&lt; *string_ptr &lt;&lt; '\n';
+    string_ptr-&gt;~basic_string();
+}
+|p=true &lt;!-- sizeof(std::string) is unspecified --&gt;
+|output=
+1 2 3 4 8 16
+var_t::alignment_value = 8
+sizeof(var_t::type) = 32
+*int_ptr = 42
+*string_ptr = bar
+*string_ptr = baz
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2979|std=C++11|before=complete type was not required|after=requires complete types}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc alignment_of}}
+{{dsc inc|cpp/types/dsc aligned_storage}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

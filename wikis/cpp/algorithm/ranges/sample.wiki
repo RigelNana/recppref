@@ -1,0 +1,166 @@
+{{cpp/ranges/title|sample}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O, class Gen &gt;
+requires (std::forward_iterator&lt;I&gt; {{!!}} std::random_access_iterator&lt;O&gt;) &amp;&amp;
+          std::indirectly_copyable&lt;I, O&gt; &amp;&amp;
+          std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+O sample( I first, S last, O out, std::iter_difference_t&lt;I&gt; n, Gen&amp;&amp; gen );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O, class Gen &gt;
+requires (ranges::forward_range&lt;R&gt; {{!!}} std::random_access_iterator&lt;O&gt;) &amp;&amp;
+          std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt; &amp;&amp;
+          std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+O sample( R&amp;&amp; r, O out, ranges::range_difference_t&lt;R&gt; n, Gen&amp;&amp; gen );
+}}
+{{dcl end}}
+
+@1@ Selects {{c|1= M = min(n, last - first)}} elements from the sequence {{range|first|last}} (without replacement) such that each possible ''sample'' has equal probability of appearance, and writes those selected elements into the range beginning at {{c|out}}.
+
+@@ The algorithm is ''stable'' (preserves the relative order of the selected elements) only if {{tt|I}} models {{c|std::forward_iterator}}.
+
+@@ The behavior is undefined if {{c|out}} is in {{range|first|last}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}}, and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the range from which to make the sampling (''the population'')}}
+{{par|r|the range from which to make the sampling (''the population'')}}
+{{par|out|the output iterator where the samples are written}}
+{{par|n|number of samples to take}}
+{{par|gen|the random number generator used as the source of randomness}}
+{{par end}}
+
+===Return value===
+An iterator equal to {{c|out + M}}, that is the end of the resulting sample range.
+
+===Complexity===
+''Linear'': 𝓞{{c|(last - first)}}.
+
+===Notes===
+This function may implement ''selection sampling'' or {{enwiki|reservoir sampling}}.
+
+===Possible implementation===
+{{eq fun|1=
+struct sample_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+             std::weakly_incrementable O, class Gen&gt;
+    requires (std::forward_iterator&lt;I&gt; or
+              std::random_access_iterator&lt;O&gt;) &amp;&amp;
+              std::indirectly_copyable&lt;I, O&gt; &amp;&amp;
+              std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    O operator()(I first, S last, O out, std::iter_difference_t&lt;I&gt; n, Gen&amp;&amp; gen) const
+    {
+        using diff_t = std::iter_difference_t&lt;I&gt;;
+        using distrib_t = std::uniform_int_distribution&lt;diff_t&gt;;
+        using param_t = typename distrib_t::param_type;
+        distrib_t D{};
+
+        if constexpr (std::forward_iterator&lt;I&gt;)
+        {
+            // this branch preserves "stability" of the sample elements
+            auto rest{ranges::distance(first, last)};
+            for (n = ranges::min(n, rest); n != 0; ++first)
+                if (D(gen, param_t(0, --rest)) &lt; n)
+                {
+                    *out++ = *first;
+                    --n;
+                }
+            return out;
+        }
+        else
+        {
+            // O is a random_access_iterator
+            diff_t sample_size{};
+            // copy [first, first + M) elements to "random access" output
+            for (; first != last &amp;&amp; sample_size != n; ++first)
+                out[sample_size++] = *first;
+            // overwrite some of the copied elements with randomly selected ones
+            for (auto pop_size{sample_size}; first != last; ++first, ++pop_size)
+            {
+                const auto i{D(gen, param_t{0, pop_size})};
+                if (i &lt; n)
+                    out[i] = *first;
+            }
+            return out + sample_size;
+        }
+    }
+
+    template&lt;ranges::input_range R, std::weakly_incrementable O, class Gen&gt;
+    requires (ranges::forward_range&lt;R&gt; or std::random_access_iterator&lt;O&gt;) &amp;&amp;
+              std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt; &amp;&amp;
+              std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    O operator()(R&amp;&amp; r, O out, ranges::range_difference_t&lt;R&gt; n, Gen&amp;&amp; gen) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(out), n,
+                       std::forward&lt;Gen&gt;(gen));
+    }
+};
+
+inline constexpr sample_fn sample {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+void print(auto const&amp; rem, auto const&amp; v)
+{
+    std::cout &lt;&lt; rem &lt;&lt; " = [" &lt;&lt; std::size(v) &lt;&lt; "] { ";
+    for (auto const&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; "}\n";
+}
+
+int main()
+{
+    const auto in = {1, 2, 3, 4, 5, 6};
+    print("in", in);
+
+    std::vector&lt;int&gt; out;
+    const int max = in.size() + 2;
+    auto gen = std::mt19937{std::random_device{}()};
+
+    for (int n{}; n != max; ++n)
+    {
+        out.clear();
+        std::ranges::sample(in, std::back_inserter(out), n, gen);
+        std::cout &lt;&lt; "n = " &lt;&lt; n;
+        print(", out", out);
+    }
+}
+|p=true
+|output=
+in = [6] { 1 2 3 4 5 6 }
+n = 0, out = [0] { }
+n = 1, out = [1] { 5 }
+n = 2, out = [2] { 4 5 }
+n = 3, out = [3] { 2 3 5 }
+n = 4, out = [4] { 2 4 5 6 }
+n = 5, out = [5] { 1 2 3 5 6 }
+n = 6, out = [6] { 1 2 3 4 5 6 }
+n = 7, out = [6] { 1 2 3 4 5 6 }
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc shuffle}}
+{{dsc inc|cpp/algorithm/dsc sample}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

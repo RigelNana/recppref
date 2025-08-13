@@ -1,0 +1,155 @@
+{{cpp/container/vector/title|reserve}}
+{{cpp/container/vector/navbar}}
+{{ddcl|notes={{mark constexpr since c++20}}|
+void reserve( size_type new_cap );
+}}
+
+Increase the capacity of the vector (the total number of elements that the vector can hold without requiring reallocation) to a value that's greater or equal to {{c|new_cap}}. If {{c|new_cap}} is greater than the current {{lc|capacity()}}, new storage is allocated, otherwise the function does nothing.
+
+{{tt|reserve()}} does not change the size of the vector.
+
+{{cpp/container/note iterator invalidation|vector|reserve}}
+
+After a call to {{tt|reserve()}}, insertions will not trigger reallocation unless the insertion would make the size of the vector greater than the value of {{lc|capacity()}}.
+
+===Parameters===
+{{par begin}}
+{{par|new_cap|new capacity of the vector, in number of elements}}
+{{par hreq}}
+{{par req insertable|T|MoveInsertable|notes={{mark since c++11}}}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Exceptions===
+* {{lc|std::length_error}} if {{c|new_cap &gt; max_size()}}.
+* Any exception thrown by {{tt|Allocator::allocate()}} (typically {{lc|std::bad_alloc}}).
+
+If an exception is thrown, this function has no effect ([[cpp/language/exceptions#Exception safety|strong exception guarantee]]).
+{{rrev|since=c++11|
+If {{tt|T}}'s move constructor is not {{c/core|noexcept}} and T is not {{named req|CopyInsertable}} into {{c|*this}}, vector will use the throwing move constructor. If it throws, the guarantee is waived and the effects are unspecified.
+}}
+
+===Complexity===
+At most linear in the {{lc|size()}} of the container.
+
+===Notes===
+Correctly using {{tt|reserve()}} can prevent unnecessary reallocations, but inappropriate uses of {{tt|reserve()}} (for instance, calling it before every {{lc|push_back()}} call) may actually increase the number of reallocations (by causing the capacity to grow linearly rather than exponentially) and result in increased computational complexity and decreased performance. For example, a function that receives an arbitrary vector by reference and appends elements to it should usually ''not'' call {{tt|reserve()}} on the vector, since it does not know of the vector's usage characteristics.
+
+When inserting a range, the range version of {{lc|insert()}} is generally preferable as it preserves the correct capacity growth behavior, unlike {{tt|reserve()}} followed by a series of {{lc|push_back()}}s.
+
+{{tt|reserve()}} cannot be used to reduce the capacity of the container; to that end {{lc|shrink_to_fit()}} is provided.
+
+===Example===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;new&gt;
+#include &lt;vector&gt;
+
+// minimal C++11 allocator with debug output
+template&lt;class Tp&gt;
+struct NAlloc
+{
+    typedef Tp value_type;
+    
+    NAlloc() = default;
+    template&lt;class T&gt;
+    NAlloc(const NAlloc&lt;T&gt;&amp;) {}
+    
+    Tp* allocate(std::size_t n)
+    {
+        n *= sizeof(Tp);
+        Tp* p = static_cast&lt;Tp*&gt;(::operator new(n));
+        std::cout &lt;&lt; "allocating " &lt;&lt; n &lt;&lt; " bytes @ " &lt;&lt; p &lt;&lt; '\n';
+        return p;
+    }
+    
+    void deallocate(Tp* p, std::size_t n)
+    {
+        std::cout &lt;&lt; "deallocating " &lt;&lt; n * sizeof *p &lt;&lt; " bytes @ " &lt;&lt; p &lt;&lt; "\n\n";
+        ::operator delete(p);
+    }
+};
+
+template&lt;class T, class U&gt;
+bool operator==(const NAlloc&lt;T&gt;&amp;, const NAlloc&lt;U&gt;&amp;) { return true; }
+
+template&lt;class T, class U&gt;
+bool operator!=(const NAlloc&lt;T&gt;&amp;, const NAlloc&lt;U&gt;&amp;) { return false; }
+
+int main()
+{
+    constexpr int max_elements = 32;
+    
+    std::cout &lt;&lt; "using reserve: \n";
+    {
+        std::vector&lt;int, NAlloc&lt;int&gt;&gt; v1;
+        v1.reserve(max_elements); // reserves at least max_elements * sizeof(int) bytes
+
+        for (int n = 0; n &lt; max_elements; ++n)
+            v1.push_back(n);
+    }
+    
+    std::cout &lt;&lt; "not using reserve: \n";
+    {
+        std::vector&lt;int, NAlloc&lt;int&gt;&gt; v1;
+        
+        for (int n = 0; n &lt; max_elements; ++n)
+        {
+            if (v1.size() == v1.capacity())
+                std::cout &lt;&lt; "size() == capacity() == " &lt;&lt; v1.size() &lt;&lt; '\n';
+            v1.push_back(n);
+        }
+    }
+}
+|p=true
+|output=
+using reserve: 
+allocating 128 bytes @ 0xa6f840
+deallocating 128 bytes @ 0xa6f840
+
+not using reserve: 
+size() == capacity() == 0
+allocating 4 bytes @ 0xa6f840
+
+size() == capacity() == 1
+allocating 8 bytes @ 0xa6f860
+deallocating 4 bytes @ 0xa6f840
+
+size() == capacity() == 2
+allocating 16 bytes @ 0xa6f840
+deallocating 8 bytes @ 0xa6f860
+
+size() == capacity() == 4
+allocating 32 bytes @ 0xa6f880
+deallocating 16 bytes @ 0xa6f840
+
+size() == capacity() == 8
+allocating 64 bytes @ 0xa6f8b0
+deallocating 32 bytes @ 0xa6f880
+
+size() == capacity() == 16
+allocating 128 bytes @ 0xa6f900
+deallocating 64 bytes @ 0xa6f8b0
+
+deallocating 128 bytes @ 0xa6f900
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=329|std=C++98|before=reallocation might be triggered if an insertion&lt;br&gt;makes the size of the vector greater than the size&lt;br&gt;specified in the most recent call to {{tt|reserve()}}|after=only triggers if the size&lt;br&gt;of the vector becomes&lt;br&gt;greater than {{lc|capacity()}}}}
+{{dr list item|wg=lwg|dr=2033|std=C++11|before={{tt|T}} was not required to be {{named req|MoveInsertable}}|after=required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc capacity|vector}}
+{{dsc inc|cpp/container/dsc max_size|vector}}
+{{dsc inc|cpp/container/dsc resize|vector}}
+{{dsc inc|cpp/container/dsc shrink_to_fit|vector}}
+{{dsc end}}
+
+{{langlinks|cs|de|es|fr|it|ja|pt|ru|zh}}

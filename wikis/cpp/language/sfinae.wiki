@@ -1,0 +1,311 @@
+{{title|SFINAE}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+"Substitution Failure Is Not An Error"
+
+
+This rule applies during overload resolution of function templates: When {{rlp|function template#Template argument substitution|substituting}} the explicitly specified or {{rlp|template argument deduction|deduced type}} for the template parameter fails, the specialization is discarded from the {{rlp|overload resolution|overload set}} instead of causing a compile error.
+
+This feature is used in template metaprogramming.
+
+===Explanation===
+Function template parameters are substituted (replaced by template arguments) twice:
+
+* explicitly specified template arguments are substituted before template argument deduction
+* deduced arguments and the arguments obtained from the defaults are substituted after template argument deduction
+
+Substitution occurs in
+* all types used in the function type (which includes return type and the types of all parameters)
+* all types used in the template parameter declarations
+* all types used in the template argument list of a partial specialization
+{{rrev|since=c++11|
+* all expressions used in the function type
+* all expressions used in a template parameter declaration
+* all expressions used in the template argument list of a partial specialization
+}}
+{{rrev|since=c++20|
+* all expressions used in the [[cpp/language/explicit|explicit specifier]]
+}}
+
+A ''substitution failure'' is any situation when the type or expression above would be ill-formed (with a required diagnostic), if written using the substituted arguments.
+
+Only the failures in the types and expressions in the ''immediate context'' of the function type or its template parameter types {{rev inl|since=c++20|or its [[cpp/language/explicit|explicit specifier]]}} are SFINAE errors. If the evaluation of a substituted type/expression causes a side-effect such as instantiation of some template specialization, generation of an implicitly-defined member function, etc, errors in those side-effects are treated as hard errors. {{rev inl|since=c++20|A {{rlp|lambda|lambda expression}} is not considered part of the immediate context.}}
+{{todo|mini-example where this matters}}
+
+Substitution proceeds in lexical order and stops when a failure is encountered.
+
+{{rrev|since=c++11|
+If there are multiple declarations with different lexical orders (e.g. a function template declared with trailing return type, to be substituted after a parameter, and redeclared with ordinary return type that would be substituted before the parameter), and that would cause template instantiations to occur in a different order or not at all, then the program is ill-formed; no diagnostic required.
+}}
+{{source|1=
+template&lt;typename A&gt;
+struct B { using type = typename A::type; };
+
+template&lt;
+    class T,
+    class U = typename T::type,    // SFINAE failure if T has no member type
+    class V = typename B&lt;T&gt;::type&gt; // hard error if B has no member type
+                                   // (guaranteed to not occur via CWG 1227 because
+                                   // substitution into the default template argument
+                                   // of U would fail first)
+void foo (int);
+
+template&lt;class T&gt;
+typename T::type h(typename B&lt;T&gt;::type);
+
+template&lt;class T&gt;
+auto h(typename B&lt;T&gt;::type) -&gt; typename T::type; // redeclaration
+
+template&lt;class T&gt;
+void h(...) {}
+
+using R = decltype(h&lt;int&gt;(0));     // ill-formed, no diagnostic required
+}}
+
+====Type SFINAE====
+The following type errors are SFINAE errors:
+
+{{rrev|since=c++11|
+* attempting to instantiate a pack expansion containing multiple packs of different lengths
+}}
+* attempting to create an array of void, array of reference, array of function, array of negative size, array of non-integral size, or array of size zero:
+{{source|1=
+template&lt;int I&gt;
+void div(char(*)[I % 2 == 0] = nullptr)
+{
+    // this overload is selected when I is even
+}
+
+template&lt;int I&gt;
+void div(char(*)[I % 2 == 1] = nullptr)
+{
+    // this overload is selected when I is odd
+}
+}}
+* attempting to use a type on the left of a scope resolution operator {{ttb|::}} and it is not a class or enumeration:
+{{source|1=
+template&lt;class T&gt;
+int f(typename T::B*);
+
+template&lt;class T&gt;
+int f(T);
+
+int i = f&lt;int&gt;(0); // uses second overload
+}}
+* attempting to use a member of a type, where
+:* the type does not contain the specified member
+:* the specified member is not a type where a type is required
+:* the specified member is not a template where a template is required
+:* the specified member is not a non-type where a non-type is required
+{{source|1=
+template&lt;int I&gt;
+struct X {};
+
+template&lt;template&lt;class T&gt; class&gt;
+struct Z {};
+
+template&lt;class T&gt;
+void f(typename T::Y*) {}
+
+template&lt;class T&gt;
+void g(X&lt;T::N&gt;*) {}
+
+template&lt;class T&gt;
+void h(Z&lt;T::template TT&gt;*) {}
+
+struct A {};
+struct B { int Y; };
+struct C { typedef int N; };
+struct D { typedef int TT; };
+struct B1 { typedef int Y; };
+struct C1 { static const int N = 0; };
+struct D1
+{ 
+    template&lt;typename T&gt;
+    struct TT {}; 
+};
+
+int main()
+{
+    // Deduction fails in each of these cases:
+    f&lt;A&gt;(0); // A does not contain a member Y
+    f&lt;B&gt;(0); // The Y member of B is not a type
+    g&lt;C&gt;(0); // The N member of C is not a non-type
+    h&lt;D&gt;(0); // The TT member of D is not a template
+
+    // Deduction succeeds in each of these cases:
+    f&lt;B1&gt;(0); 
+    g&lt;C1&gt;(0); 
+    h&lt;D1&gt;(0);
+}
+// todo: needs to demonstrate overload resolution, not just failure
+}}
+* attempting to create a pointer to reference
+* attempting to create a reference to void
+* attempting to create pointer to member of T, where T is not a class type:
+{{source|1=
+template&lt;typename T&gt;
+class is_class
+{
+    typedef char yes[1];
+    typedef char no[2];
+    
+    template&lt;typename C&gt;
+    static yes&amp; test(int C::*); // selected if C is a class type
+    
+    template&lt;typename C&gt;
+    static no&amp; test(...);       // selected otherwise
+public:
+    static bool const value = sizeof(test&lt;T&gt;(nullptr)) == sizeof(yes);
+};
+}}
+* attempting to give an invalid type to a non-type template parameter:
+{{source|1=
+template&lt;class T, T&gt;
+struct S {};
+
+template&lt;class T&gt;
+int f(S&lt;T, T()&gt;*);
+
+struct X {};
+int i0 = f&lt;X&gt;(0);
+// todo: needs to demonstrate overload resolution, not just failure
+}}
+* attempting to perform an invalid conversion in 
+:* in a template argument expression
+:* in an expression used in function declaration:
+{{source|1=
+template&lt;class T, T*&gt; int f(int);
+int i2 = f&lt;int, 1&gt;(0); // can’t conv 1 to int*
+// todo: needs to demonstrate overload resolution, not just failure
+}}
+* attempting to create a function type with a parameter of type void
+* attempting to create a function type which returns an array type or a function type
+&lt;!-- removed by p0929r2 adopted as a DR in Jax-2018 {{rrev |since=c++11|
+* attempting to create a function type with a parameter or return type that is an {{rlp|abstract class}}
+}}--&gt;
+
+====Expression SFINAE====
+{{rev begin}}
+{{rev|until=c++11|
+Only constant expressions that are used in types (such as array bounds) were required to be treated as SFINAE (and not hard errors) before C++11.
+}}
+{{rev|since=c++11|
+The following expression errors are SFINAE errors
+
+* Ill-formed expression used in a template parameter type
+* Ill-formed expression used in the function type:
+{{source|1=
+struct X {};
+struct Y { Y(X){} }; // X is convertible to Y
+
+template&lt;class T&gt;
+auto f(T t1, T t2) -&gt; decltype(t1 + t2); // overload #1
+
+X f(Y, Y);                               // overload #2
+
+X x1, x2;
+X x3 = f(x1, x2); // deduction fails on #1 (expression x1 + x2 is ill-formed)
+                  // only #2 is in the overload set, and is called
+}}
+
+}}
+{{rev end}}
+
+====SFINAE in partial specializations====
+Deduction and substitution also occur while determining whether a specialization of a class {{rev inl|since=c++14|or variable}} template is generated by some {{rlp|partial specialization}} or the primary template. A substitution failure is not treated as a hard-error during such determination, but makes the corresponding partial specialization declaration ignored instead, as if in the overload resolution involving function templates.
+
+{{source|1=
+// primary template handles non-referenceable types:
+template&lt;class T, class = void&gt;
+struct reference_traits
+{
+    using add_lref = T;
+    using add_rref = T;
+};
+
+// specialization recognizes referenceable types:
+template&lt;class T&gt;
+struct reference_traits&lt;T, std::void_t&lt;T&amp;&gt;&gt;
+{
+    using add_lref = T&amp;;
+    using add_rref = T&amp;&amp;;
+};
+
+template&lt;class T&gt;
+using add_lvalue_reference_t = typename reference_traits&lt;T&gt;::add_lref;
+
+template&lt;class T&gt;
+using add_rvalue_reference_t = typename reference_traits&lt;T&gt;::add_rref;
+}}
+
+===Library support===
+{{rrev|since=c++11|
+The standard library component {{lc|std::enable_if}} allows for creating a substitution failure in order to enable or disable particular overloads based on a condition evaluated at compile time.
+
+In addition, many {{lsd|cpp/meta#Type traits}} must be implemented with SFINAE if appropriate compiler extensions are unavailable.
+}}
+{{rrev|since=c++17|
+The standard library component {{lc|std::void_t}} is another utility metafunction that simplifies partial specialization SFINAE applications.
+}}
+
+===Alternatives===
+Where applicable, [[cpp/iterator/iterator tags#Example|tag dispatch]]{{rev inl|since=c++17|, {{rlpt|if#Constexpr_if|if constexpr}}}}{{rev inl|since=c++20|, and {{rlp|constraints|concepts}} }} are usually preferred over use of SFINAE.
+
+{{rrev|since=c++11|{{rlpt|static_assert}} is usually preferred over SFINAE if only a conditional compile time error is wanted.}}
+
+===Examples===
+{{example
+|A common idiom is to use expression SFINAE on the return type, where the expression uses the comma operator, whose left subexpression is the one that is being examined (cast to void to ensure the user-defined operator comma on the returned type is not selected), and the right subexpression has the type that the function is supposed to return.
+|code=
+#include &lt;iostream&gt;
+
+// This overload is added to the set of overloads if C is
+// a class or reference-to-class type and F is a pointer to member function of C
+template&lt;class C, class F&gt;
+auto test(C c, F f) -&gt; decltype((void)(c.*f)(), void())
+{
+    std::cout &lt;&lt; "(1) Class/class reference overload called\n";
+}
+
+// This overload is added to the set of overloads if C is a
+// pointer-to-class type and F is a pointer to member function of C
+template&lt;class C, class F&gt;
+auto test(C c, F f) -&gt; decltype((void)((c-&gt;*f)()), void())
+{
+    std::cout &lt;&lt; "(2) Pointer overload called\n";
+}
+
+// This overload is always in the set of overloads: ellipsis
+// parameter has the lowest ranking for overload resolution
+void test(...)
+{
+    std::cout &lt;&lt; "(3) Catch-all overload called\n";
+}
+
+int main()
+{
+    struct X { void f() {} };
+    X x;
+    X&amp; rx = x;
+    test(x, &amp;X::f);  // (1)
+    test(rx, &amp;X::f); // (1), creates a copy of x
+    test(&amp;x, &amp;X::f); // (2)
+    test(42, 1337);  // (3)
+}
+|output=
+(1) Class/class reference overload called
+(1) Class/class reference overload called
+(2) Pointer overload called
+(3) Catch-all overload called
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=295|std=c++98|before=creating cv-qualified function type&lt;br&gt;could result in substitution failure|after=made not failure,&lt;br&gt;discarding cv-qualification}}
+{{dr list item|wg=cwg|dr=1227|std=c++98|before=the order of substitution was unspecified|after=same as the lexical order}}
+{{dr list item|wg=cwg|dr=2054|std=c++98|before=substitution in partial specializations was not correctly specified|after=specified}}
+{{dr list item|wg=cwg|dr=2322|std=c++11|before=declarations in different lexical orders would cause template&lt;br&gt;instantiations to occur in a different order or not at all|after=such case is ill-formed,&lt;br&gt;no diagnostic required}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

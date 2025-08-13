@@ -1,0 +1,126 @@
+{{cpp/container/flat_map/title|try_emplace}}
+{{cpp/container/flat_map/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|
+template&lt; class... Args &gt;
+std::pair&lt;iterator, bool&gt; try_emplace( const key_type&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++23|
+template&lt; class... Args &gt;
+std::pair&lt;iterator, bool&gt; try_emplace( key_type&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcla|num=3|since=c++23|
+template&lt; class K, class... Args &gt;
+std::pair&lt;iterator, bool&gt; try_emplace( K&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++23|
+template&lt; class... Args &gt;
+iterator try_emplace( const_iterator hint, const key_type&amp; k, Args&amp;&amp;... args );
+}}
+{{dcla|num=5|since=c++23|
+template&lt; class... Args &gt;
+iterator try_emplace( const_iterator hint, key_type&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl|num=6|since=c++23|
+template&lt; class K, class... Args &gt;
+iterator try_emplace( const_iterator hint, K&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+If a key equivalent to {{c|k}} already exists in the container, does nothing. Otherwise, inserts a new element into the underlying containers {{rlpi|/#Member objects|c}} with key {{c|k}} and value constructed with {{c|args}}.
+
+@1,2,4,5@ Equivalent to: {{source|1=
+auto key_it = ranges::upper_bound(c.keys, k, compare);
+auto value_it = c.values.begin() + std::distance(c.keys.begin(), key_it);
+c.keys.insert(key_it, std::forward&lt;decltype(k)&gt;(k));
+c.values.emplace(value_it, std::forward&lt;Args&gt;(args)...);
+}}
+
+@3,6@ Equivalent to: {{source|1=
+auto key_it = ranges::upper_bound(c.keys, k, compare);
+auto value_it = c.values.begin() + std::distance(c.keys.begin(), key_it);
+c.keys.emplace(key_it, std::forward&lt;K&gt;(k));
+c.values.emplace(value_it, std::forward&lt;Args&gt;(args)...);
+}}
+
+@@ The conversion from {{c|k}} into {{tt|key_type}} must construct an object {{c|u}}, for which {{c|1=find(k) == find(u)}} is {{c|true}}. Otherwise, the behavior is undefined.
+
+@@ {{cpp/enable if|:
+* The qualified-id {{tt|Compare::is_transparent}} is valid and denotes a type.
+* {{c|std::is_constructible_v&lt;key_type, K&gt;}} is {{c|true}}.
+* {{c|std::is_assignable_v&lt;mapped_type&amp;, Args...&gt;}} is {{c|true}}.
+* For {{v|3}} only, {{c|std::is_convertible_v&lt;K&amp;&amp;, const_iterator&gt;}} and {{c|std::is_convertible_v&lt;K&amp;&amp;, iterator&gt;}} are both {{c|false}}.
+|plural=yes}}
+{{cpp/container/note iterator invalidation|flat_map|try_emplace}}
+
+===Parameters===
+{{par begin}}
+{{par|k|the key used both to look up and to insert if not found}}
+{{par|hint|iterator to the position before which the new element will be inserted}}
+{{par|args|arguments to forward to the constructor of the element}}
+{{par end}}
+
+===Return value===
+@1-3@ Same as for {{rlpt|emplace}}.
+@4-6@ Same as for {{rlpt|emplace_hint}}.
+
+===Complexity===
+@1-3@ Same as for {{rlpt|emplace}}.
+@4-6@ Same as for {{rlpt|emplace_hint}}.
+
+===Notes===
+Unlike {{rlpt|insert}} or {{rlpt|emplace}}, these functions do not move from rvalue arguments if the insertion does not happen, which makes it easy to manipulate maps whose values are move-only types, such as {{c/core|std::flat_map&lt;std::string, std::unique_ptr&lt;foo&gt;&gt;}}. In addition, {{tt|try_emplace}} treats the key and the arguments to the {{tt|mapped_type}} separately, unlike {{rlpt|emplace}}, which requires the arguments to construct a {{tt|value_type}} (that is, a {{lc|std::pair}}).
+
+Overloads {{vl|3,6}} can be called without constructing an object of type {{tt|key_type}}.
+
+===Example===
+{{example
+|code=
+#include &lt;flat_map&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+void print_node(const auto&amp; node)
+{
+    std::cout &lt;&lt; '[' &lt;&lt; node.first &lt;&lt; "] = " &lt;&lt; node.second &lt;&lt; '\n';
+}
+
+void print_result(auto const&amp; pair)
+{
+    std::cout &lt;&lt; (pair.second ? "inserted: " : "ignored:  ");
+    print_node(*pair.first);
+}
+
+int main()
+{
+    using namespace std::literals;
+    std::{{{1|map}}}&lt;std::string, std::string&gt; m;
+
+    print_result(m.try_emplace( "a", "a"s));
+    print_result(m.try_emplace( "b", "abcd"));
+    print_result(m.try_emplace( "c", 10, 'c'));
+    print_result(m.try_emplace( "c", "Won't be inserted"));
+
+    for (const auto&amp; p : m)
+        print_node(p);
+}
+|output =
+inserted: [a] = a
+inserted: [b] = abcd
+inserted: [c] = cccccccccc
+ignored:  [c] = cccccccccc
+[a] = a
+[b] = abcd
+[c] = cccccccccc
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc emplace|flat_map}}
+{{dsc inc|cpp/container/dsc emplace_hint|flat_map}}
+{{dsc inc|cpp/container/dsc insert|flat_map}}
+{{dsc inc|cpp/container/dsc insert_or_assign|flat_map}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

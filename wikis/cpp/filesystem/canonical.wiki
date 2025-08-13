@@ -1,0 +1,113 @@
+{{cpp/filesystem/title|canonical|weakly_canonical}}
+{{cpp/filesystem/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|num=1|since=c++17|1=
+path canonical( const std::filesystem::path&amp; p );
+}}
+{{dcl|num=2|since=c++17|1=
+path canonical( const std::filesystem::path&amp; p,
+                std::error_code&amp; ec );
+}}
+{{dcl|num=3|since=c++17|
+path weakly_canonical( const std::filesystem::path&amp; p );
+}}
+{{dcl|num=4|since=c++17|
+path weakly_canonical( const std::filesystem::path&amp; p,
+                       std::error_code&amp; ec );
+}}
+{{dcl end}}
+
+@1,2@ Converts path {{c|p}} to a canonical absolute path, i.e. an absolute path that has no dot, dot-dot elements or symbolic links in its generic format representation. If {{c|p}} is not an absolute path, the function behaves as if it is first made absolute by {{c|std::filesystem::absolute(p)}}. The path {{c|p}} must exist.
+@3,4@ Returns a path composed by {{c|1=operator/=}} from the result of calling {{tt|canonical()}} with a path argument composed of the leading elements of {{c|p}} that exist (as determined by {{c|status(p)}} or {{c|status(p, ec)}}), if any, followed by the elements of {{c|p}} that do not exist. The resulting path is in {{rlp|path|normal form}}.
+
+===Parameters===
+{{par begin}}
+{{par|p|a path which may be absolute or relative; for {{tt|canonical}} it must be an existing path}}
+{{par|ec|error code to store error status to}}
+{{par end}}
+
+===Return value===
+@1,2@ An absolute path that resolves to the same file as {{c|std::filesystem::absolute(p)}}.
+@3,4@ A normal path of the form {{c|canonical(x)/y}}, where {{c|x}} is a path composed of the longest leading sequence of elements in {{c|p}} that exist, and {{c|y}} is a path composed of the remaining trailing non-existent elements of {{c|p}}.
+
+===Exceptions===
+{{cpp/filesystem/error_handling|p|throw=1,3/2,4}}
+
+===Notes===
+The function {{tt|canonical()}} is modeled after the POSIX [https://pubs.opengroup.org/onlinepubs/9699919799/functions/realpath.html {{tt|realpath}}].
+
+The function {{tt|weakly_canonical()}} was introduced to simplify operational semantics of {{rlpt|relative|relative()}}.
+
+===Example===
+{{example
+|code=
+#include &lt;filesystem&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    /* set up sandbox directories:
+     a
+     └── b
+         ├── c1
+         │   └── d &lt;== current path
+         └── c2
+             └── e
+    */
+    auto old = std::filesystem::current_path();
+    auto tmp = std::filesystem::temp_directory_path();
+    std::filesystem::current_path(tmp);
+    auto d1 = tmp / "a/b/c1/d";
+    auto d2 = tmp / "a/b/c2/e";
+    std::filesystem::create_directories(d1);
+    std::filesystem::create_directories(d2);
+    std::filesystem::current_path(d1);
+
+    auto p1 = std::filesystem::path("../../c2/./e");
+    auto p2 = std::filesystem::path("../no-such-file");
+    std::cout &lt;&lt; "Current path is "
+              &lt;&lt; std::filesystem::current_path() &lt;&lt; '\n'
+              &lt;&lt; "Canonical path for " &lt;&lt; p1 &lt;&lt; " is "
+              &lt;&lt; std::filesystem::canonical(p1) &lt;&lt; '\n'
+              &lt;&lt; "Weakly canonical path for " &lt;&lt; p2 &lt;&lt; " is "
+              &lt;&lt; std::filesystem::weakly_canonical(p2) &lt;&lt; '\n';
+    try
+    {
+        [[maybe_unused]] auto x_x = std::filesystem::canonical(p2);
+        // NOT REACHED
+    }
+    catch (const std::exception&amp; ex)
+    {
+        std::cout &lt;&lt; "Canonical path for " &lt;&lt; p2 &lt;&lt; " threw exception:\n"
+                  &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+
+    // cleanup
+    std::filesystem::current_path(old);
+    const auto count = std::filesystem::remove_all(tmp / "a");
+    std::cout &lt;&lt; "Deleted " &lt;&lt; count &lt;&lt; " files or directories.\n";
+}
+|p=true
+|output=
+Current path is "/tmp/a/b/c1/d"
+Canonical path for "../../c2/./e" is "/tmp/a/b/c2/e"
+Weakly canonical path for "../no-such-file" is "/tmp/a/b/c1/no-such-file"
+Canonical path for "../no-such-file" threw exception:
+filesystem error: in canonical: No such file or directory [../no-such-file] [/tmp/a/b/c1/d]
+Deleted 6 files or directories.
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2956|std=C++17|before={{tt|canonical}} has a spurious {{tt|base}} parameter|after=removed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/dsc path}}
+{{dsc inc|cpp/filesystem/dsc absolute}}
+{{dsc inc|cpp/filesystem/dsc relative}}
+{{dsc end}}
+
+{{langlinks|es|ja|zh}}

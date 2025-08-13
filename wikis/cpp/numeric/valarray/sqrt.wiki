@@ -1,0 +1,129 @@
+{{cpp/title|sqrt{{small|(std::valarray)}}}}
+{{cpp/numeric/valarray/navbar}}
+{{ddcl|header=valarray|1=
+template&lt; class T &gt;
+valarray&lt;T&gt; sqrt( const valarray&lt;T&gt;&amp; va );
+}}
+
+For each element in {{c|va}} computes the square root of the value of the element.
+
+===Parameters===
+{{par begin}}
+{{par|va|value array to apply the operation to}}
+{{par end}}
+
+===Return value===
+Value array containing square roots of the values in {{c|va}}.
+
+===Notes===
+{{cpp/numeric/valarray/notes unq|sqrt}}
+
+{{cpp/numeric/valarray/notes ret|sqrt}}
+
+===Possible implementation===
+{{cpp/numeric/valarray/impl|sqrt}}
+
+===Example===
+{{example
+|Finds all three roots (two of which can be complex conjugates) of several {{enwiki|Cubic equation}}s at once.
+|code=
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;numbers&gt;
+#include &lt;valarray&gt;
+
+using CD = std::complex&lt;double&gt;;
+using VA = std::valarray&lt;CD&gt;;
+
+// return all n complex roots out of a given complex number x
+VA root(CD x, unsigned n)
+{
+    const double mag = std::pow(std::abs(x), 1.0 / n);
+    const double step = 2.0 * std::numbers::pi / n;
+    double phase = std::arg(x) / n;
+    VA v(n);
+    for (std::size_t i{}; i != n; ++i, phase += step)
+        v[i] = std::polar(mag, phase);
+    return v;
+}
+
+// return n complex roots of each element in v; in the output valarray first
+// goes the sequence of all n roots of v[0], then all n roots of v[1], etc.
+VA root(VA v, unsigned n)
+{
+    VA o(v.size() * n);
+    VA t(n);
+    for (std::size_t i = 0; i != v.size(); ++i)
+    {
+        t = root(v[i], n);
+        for (unsigned j = 0; j != n; ++j)
+            o[n * i + j] = t[j];
+    }
+    return o;
+}
+
+// floating-point numbers comparator that tolerates given rounding error
+inline bool is_equ(CD x, CD y, double tolerance = 0.000'000'001)
+{
+    return std::abs(std::abs(x) - std::abs(y)) &lt; tolerance;
+}
+
+int main()
+{
+    // input coefficients for polynomial x³ + p·x + q
+    const VA p{1, 2, 3, 4, 5, 6, 7, 8};
+    const VA q{1, 2, 3, 4, 5, 6, 7, 8};
+
+    // the solver
+    const VA d = std::sqrt(std::pow(q / 2, 2) + std::pow(p / 3, 3));
+    const VA u = root(-q / 2 + d, 3);
+    const VA n = root(-q / 2 - d, 3);
+
+    // allocate memory for roots: 3 * number of input cubic polynomials
+    VA x[3];
+    for (std::size_t t = 0; t != 3; ++t)
+        x[t].resize(p.size());
+
+    auto is_proper_root = [](CD a, CD b, CD p) { return is_equ(a * b + p / 3.0, 0.0); };
+
+    // sieve out 6 out of 9 generated roots, leaving only 3 proper roots (per polynomial)
+    for (std::size_t i = 0; i != p.size(); ++i)
+        for (std::size_t j = 0, r = 0; j != 3; ++j)
+            for (std::size_t k = 0; k != 3; ++k)
+                if (is_proper_root(u[3 * i + j], n[3 * i + k], p[i]))
+                    x[r++][i] = u[3 * i + j] + n[3 * i + k];
+
+    std::cout &lt;&lt; "Depressed cubic equation:   Root 1: \t\t Root 2: \t\t Root 3:\n";
+    for (std::size_t i = 0; i != p.size(); ++i)
+    {
+        std::cout &lt;&lt; "x³ + " &lt;&lt; p[i] &lt;&lt; "·x + " &lt;&lt; q[i] &lt;&lt; " = 0  "
+                  &lt;&lt; std::fixed &lt;&lt; x[0][i] &lt;&lt; "  " &lt;&lt; x[1][i] &lt;&lt; "  " &lt;&lt; x[2][i]
+                  &lt;&lt; std::defaultfloat &lt;&lt; '\n';
+
+        assert(is_equ(std::pow(x[0][i], 3) + x[0][i] * p[i] + q[i], 0.0));
+        assert(is_equ(std::pow(x[1][i], 3) + x[1][i] * p[i] + q[i], 0.0));
+        assert(is_equ(std::pow(x[2][i], 3) + x[2][i] * p[i] + q[i], 0.0));
+    }
+}
+|output=
+Depressed cubic equation:   Root 1:              Root 2:                 Root 3:
+x³ + (1,0)·x + (1,0) = 0  (-0.682328,0.000000)  (0.341164,1.161541)  (0.341164,-1.161541)
+x³ + (2,0)·x + (2,0) = 0  (-0.770917,0.000000)  (0.385458,1.563885)  (0.385458,-1.563885)
+x³ + (3,0)·x + (3,0) = 0  (-0.817732,0.000000)  (0.408866,1.871233)  (0.408866,-1.871233)
+x³ + (4,0)·x + (4,0) = 0  (-0.847708,0.000000)  (0.423854,2.130483)  (0.423854,-2.130483)
+x³ + (5,0)·x + (5,0) = 0  (-0.868830,0.000000)  (0.434415,2.359269)  (0.434415,-2.359269)
+x³ + (6,0)·x + (6,0) = 0  (-0.884622,0.000000)  (0.442311,2.566499)  (0.442311,-2.566499)
+x³ + (7,0)·x + (7,0) = 0  (-0.896922,0.000000)  (0.448461,2.757418)  (0.448461,-2.757418)
+x³ + (8,0)·x + (8,0) = 0  (-0.906795,0.000000)  (0.453398,2.935423)  (0.453398,-2.935423)
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/valarray/dsc pow}}
+{{dsc inc|cpp/numeric/math/dsc sqrt}}
+{{dsc inc|cpp/numeric/complex/dsc sqrt}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

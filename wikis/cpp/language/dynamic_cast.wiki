@@ -1,0 +1,168 @@
+{{title|{{tt|dynamic_cast}} conversion}}
+{{cpp/language/expressions/navbar}}
+Safely converts pointers and references to classes up, down, and sideways along the inheritance hierarchy.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|dynamic_cast&lt;}} {{spar|target-type}} {{ttb|&gt;(}} {{spar|expression}} {{ttb|)}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|target-type}}|pointer to complete class type, reference to complete class type, or pointer to (optionally cv-qualified) {{c/core|void}}}}
+{{par|{{spar|expression}}|{{rev inl|until=c++11|lvalue}}{{rev inl|since=c++11|glvalue}} of a complete class type if {{spar|target-type}} is a reference, prvalue of a pointer to complete class type if {{spar|target-type}} is a pointer}}
+{{par end}}
+
+===Explanation===
+For the convenience of description, “{{spar|expression}} or the result is a reference to {{tt|T}}” means that “it is a glvalue of type {{tt|T}}”{{rev inl|since=c++11|, which follows the convention of {{rlpt|decltype}}}}.
+
+Only the following conversions can be done with {{c/core|dynamic_cast}}, except when such conversions would {{rlp|const_cast#Casting away constness|cast away constness}} (or volatility).
+
+@1@ If the type of {{spar|expression}} is exactly {{spar|target-type}} or a less cv-qualified version of {{spar|target-type}}, the result is the value of {{spar|expression}} with type {{spar|target-type}}.&lt;ref&gt;In other words, {{c/core|dynamic_cast}} can be used to add constness. An implicit conversion and {{c/core|static_cast}} can perform this conversion as well.&lt;/ref&gt;
+@2@ If {{spar|target-type}} is “pointer to (possibly cv-qualified) {{tt|Base}}” and the type of {{spar|expression}} is “pointer to (possibly cv-qualified) {{tt|Derived}}” such that {{tt|Base}} is a base class of {{tt|Derived}}, the result is
+* a null pointer value if {{spar|expression}} is a null pointer value, or
+* a pointer to the unique {{tt|Base}} {{rlp|object#Subobjects|subobject}} of the {{tt|Derived}} object pointed to by {{spar|expression}} otherwise.&lt;ref name="upcast"&gt;An implicit conversion and {{c/core|static_cast}} can perform this conversion as well.&lt;/ref&gt;
+@3@ If {{spar|target-type}} is “reference to (possibly cv-qualified) {{tt|Base}}” and the type of {{spar|expression}} is “(possibly cv-qualified) {{tt|Derived}}” such that {{tt|Base}} is a base class of {{tt|Derived}}, the result is the unique {{tt|Base}} subobject of the {{tt|Derived}} object referred to by {{spar|expression}}.&lt;ref name="upcast" /&gt;
+@4@ Otherwise, {{spar|expression}} is a pointer or reference to a {{rlp|object#Polymorphic objects|polymorphic type}}.
+:@a@ If {{spar|expression}} is a pointer:
+::@i@ If {{spar|expression}} is a null pointer value, the result is the null pointer value of type {{spar|target-type}}.
+::@ii@ Otherwise, if {{spar|target-type}} is “pointer to (possibly cv-qualified) {{c/core|void}}”, the result is a pointer to the {{rlp|object#Subobject|most derived object}} pointed to by {{spar|expression}}.
+::@iii@ Otherwise, if the type of {{spar|expression}} is “pointer to (possibly cv-qualified) {{tt|U}}”, {{spar|expression}} must point to an object whose type is {{rlp|implicit conversion#Similar types|similar}} to {{tt|U}} and that is within its {{rlp|lifetime}} or within its period of construction or destruction, otherwise the behavior is undefined.
+:@b@ If the type of {{spar|expression}} is “reference to (possibly cv-qualified) {{tt|U}}”, {{spar|expression}} must refer to an object whose type is similar to {{tt|U}} and that is within its lifetime or within its period of construction or destruction, otherwise the behavior is undefined.
+:@c@ Otherwise ({{spar|expression}} points/refers to a proper object), a runtime check is applied to see if the object pointed/referred to by {{spar|expression}} can be converted to the type pointed or referred to by {{spar|target-type}}.
+:@@ Let {{tt|C}} be the class type to which {{spar|target-type}} points or refers. The runtime check logically executes as follows:
+::@i@ If, in the most derived object pointed/referred to by {{spar|expression}}, {{spar|expression}} points/refers to a public base class subobject of a {{tt|C}} object, and if only one object of type {{tt|C}} is derived from the subobject pointed/referred to by {{spar|expression}}, the result points/refers to that {{tt|C}} object.&lt;ref&gt;This is known as a “downcast”.&lt;/ref&gt;
+::@ii@ Otherwise, if {{spar|expression}} points/refers to a public base class subobject of the most derived object, and the type of the most derived object has an unambiguous and public base class of type {{tt|C}}, the result points/refers to the {{tt|C}} subobject of the most derived object.&lt;ref&gt;This is known as a “sidecast”.&lt;/ref&gt;
+::@iii@ Otherwise, the runtime check fails.
+* If {{spar|target-type}} is a pointer type, the result is the null pointer value of {{spar|target-type}}.
+* If {{spar|target-type}} is a reference type, an exception of a type that would match a {{rlp|catch|handler}} of type {{lc|std::bad_cast}} is thrown.
+
+When {{c/core|dynamic_cast}} is used in a constructor or a destructor (directly or indirectly), and {{spar|expression}} refers to the object that's currently under construction/destruction, the object is considered to be the most derived object. If {{spar|target-type}} is not a pointer or reference to the constructor's/destructor's own class or one of its bases, the behavior is undefined.
+
+&lt;references/&gt;
+
+Similar to other cast expressions, the result is:
+{{rev begin}}
+{{rev|until=c++11|
+* an lvalue if {{spar|target-type}} is a reference type
+* an rvalue if {{spar|target-type}} is a pointer type
+}}
+{{rev|since=c++11|
+* an lvalue if {{spar|target-type}} is an lvalue reference type ({{spar|expression}} must be an lvalue)
+* an xvalue if {{spar|target-type}} is an rvalue reference type ({{spar|expression}} {{rev inl|until=c++17|may be lvalue or rvalue}}{{rev inl|since=c++17|must be a glvalue (prvalues are {{rlp|implicit conversion#Temporary materialization|materialized}})}} of a complete class type)
+* a prvalue if {{spar|target-type}} is a pointer type
+}}
+{{rev end}}
+
+===Notes===
+A downcast can also be performed with {{c/core|static_cast}}, which avoids the cost of the runtime check, but it is only safe if the program can guarantee (through some other logic) that the object pointed to by {{spar|expression}} is definitely {{tt|Derived}}.
+
+Some forms of {{c/core|dynamic_cast}} rely on {{enwiki|Run-time type information|run-time type identification}} (RTTI), that is, information about each polymorphic class in the compiled program. Compilers typically have options to disable the inclusion of this information.
+
+===Keywords===
+{{ltt|cpp/keyword/dynamic_cast}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct V
+{
+    virtual void f() {} // must be polymorphic to use runtime-checked dynamic_cast
+};
+
+struct A : virtual V {};
+
+struct B : virtual V
+{
+    B(V* v, A* a)
+    {
+        // casts during construction (see the call in the constructor of D below)
+        dynamic_cast&lt;B*&gt;(v); // well-defined: v of type V*, V base of B, results in B*
+        dynamic_cast&lt;B*&gt;(a); // undefined behavior: a has type A*, A not a base of B
+    }
+};
+
+struct D : A, B
+{
+    D() : B(static_cast&lt;A*&gt;(this), this) {}
+};
+
+struct Base
+{
+    virtual ~Base() {}
+};
+
+struct Derived : Base
+{
+    virtual void name() {}
+};
+
+int main()
+{
+    D d; // the most derived object
+    A&amp; a = d; // upcast, dynamic_cast may be used, but unnecessary
+    
+    [[maybe_unused]]
+    D&amp; new_d = dynamic_cast&lt;D&amp;&gt;(a); // downcast
+    [[maybe_unused]]
+    B&amp; new_b = dynamic_cast&lt;B&amp;&gt;(a); // sidecast
+    
+    Base* b1 = new Base;
+    if (Derived* d = dynamic_cast&lt;Derived*&gt;(b1); d != nullptr)
+    {
+        std::cout &lt;&lt; "downcast from b1 to d successful\n";
+        d-&gt;name(); // safe to call
+    }
+    
+    Base* b2 = new Derived;
+    if (Derived* d = dynamic_cast&lt;Derived*&gt;(b2); d != nullptr)
+    {
+        std::cout &lt;&lt; "downcast from b2 to d successful\n";
+        d-&gt;name(); // safe to call
+    }
+    
+    delete b1;
+    delete b2;
+}
+|output=
+downcast from b2 to d successful
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1269|std=C++11|before=the runtime check was not performed for xvalue&lt;br&gt;{{spar|expression}}{{sep}}s if {{spar|target-type}} is an rvalue reference type|after=performed}}
+{{dr list item|wg=cwg|dr=2861|std=C++98|before={{spar|expression}} could point/refer to a type-inaccessible object|after=the behavior is undefined in this case}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.6.1.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.6|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+
+===See also===
+* {{rlpt|const_cast}}
+* {{rlpt|static_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast}}
+* {{rlp|implicit conversion|implicit conversions}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

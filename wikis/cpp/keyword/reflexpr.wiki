@@ -1,0 +1,88 @@
+{{cpp/keyword/title|{{tt|reflexpr}} {{mark since reflection ts}}}}
+{{cpp/keyword/navbar}}
+
+{{fmbox|class=noprint|style=font-size: 0.8em|text='''Experimental Feature''' The functionality described on this page is part of the Reflection Technical Specification ISO/IEC TS 23619 {{mark since reflection ts}}.}}
+
+===Usage===
+@1@ Gets the member list of a {{rlp|class}} type, or the enumerator list of an {{rlp|enum}} type.
+@2@ Gets the name of type and member.
+@3@ Detects whether a data member is {{rlp|static}} or {{rlp|constexpr}}.
+@4@ Detects whether member function is {{rlp|virtual}}, {{rlp|public}}, {{rlp|protected}} or {{rlp|private}}.
+@5@ Get the ''row'' and ''column'' of the source code when the type defines.
+
+===Example===
+{{example
+|{{ttb|reflexpr}} provides us the meta info of the object via ''meta-object types''. Note that {{tt|std::reflect::get_data_members_t}} make programmers able to visit any class just like {{lc|std::tuple}}.
+|code=
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int b;
+    std::string s;
+    std::vector&lt;std::string&gt; v;
+};
+
+// Reflection TS
+#include &lt;experimental/reflect&gt;
+using meta_S = reflexpr(S);
+using mem = std::reflect::get_data_members_t&lt;meta_S&gt;;
+using meta = std::reflect::get_data_members_t&lt;mem&gt;;
+static_assert(std::reflect::is_public_v&lt;meta&gt;); // successful
+
+int main() {}
+}}
+
+{{example
+|We can also know the name info from {{ttb|reflexpr}}:
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+// Reflection TS
+#include &lt;experimental/reflect&gt;
+
+template&lt;typename Tp&gt;
+constexpr std::string_view nameof()
+{
+    using TpInfo = reflexpr(Tp);
+    using aliased_Info = std::experimental::reflect::get_aliased_t&lt;TpInfo&gt;;
+    return std::experimental::reflect::get_name_v&lt;aliased_Info&gt;;
+}
+
+int main()
+{
+    std::cout &lt;&lt; nameof&lt;std::string&gt;() &lt;&lt; '\n';
+    static_assert(nameof&lt;std::string&gt;() == "basic_string"); // successful
+}
+}}
+
+{{example
+|This is an example of getting the ''scope'' of a type in the [[cpp/experimental/reflect|Reflection TS]].
+|code=
+namespace Foo
+{
+    struct FooFoo
+    {
+        int FooFooFoo;
+    };
+}
+namespace Bar
+{
+    using BarBar = ::Foo::FooFoo;
+}
+using BarBarInfo = reflexpr(::Bar::BarBar);
+using BarBarScope = ::std::experimental::reflect::get_scope_t&lt;BarBarInfo&gt;; // Bar, not Foo
+
+struct Spam
+{
+    int SpamSpam;
+};
+struct Grok
+{
+    using GrokGrok = Spam::SpamSpam;
+};
+using GrokGrokInfo = reflexpr(::Grok::GrokGrok);
+using GrokGrokScope = std::experimental::reflect::get_scope_t&lt;GrokGrokInfo&gt;; // Grok, not Spam
+}}

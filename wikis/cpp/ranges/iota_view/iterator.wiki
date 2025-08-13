@@ -1,0 +1,391 @@
+{{cpp/ranges/title|{{small|iota_view&lt;W, Bound&gt;::}}''iterator''}}
+{{cpp/ranges/iota_view/navbar}}
+{{dcl begin}}
+{{dcla|num=1|anchor=no|expos=yes|
+struct /*iterator*/;
+}}
+{{dcl h|Helper alias templates}}
+{{dcla|num=2|anchor=iota-diff-t|expos=yes|1=
+template&lt; class I &gt;
+using /*iota-diff-t*/ = /* see below */;
+}}
+{{dcl h|Helper concepts}}
+{{dcla|num=3|anchor=decrementable|expos=yes|1=
+template&lt; class I &gt;
+concept /*decrementable*/ =
+    std::incrementable&lt;I&gt; &amp;&amp; requires(I i) {
+        { --i } -&gt; std::same_as&lt;I&amp;&gt;;
+        { i-- } -&gt; std::same_as&lt;I&gt;;
+    };
+}}
+{{dcla|num=4|anchor=advanceable|expos=yes|1=
+template&lt; class I &gt;
+concept /*advanceable*/ =
+    /*decrementable*/&lt;I&gt; &amp;&amp; std::totally_ordered&lt;I&gt; &amp;&amp;
+    requires(I i, const I j, const /*iota-diff-t*/&lt;I&gt; n) {
+        { i += n } -&gt; std::same_as&lt;I&amp;&gt;;
+        { i -= n } -&gt; std::same_as&lt;I&amp;&gt;;
+        I(j + n);
+        I(n + j);
+        I(j - n);
+        { j - j } -&gt; std::convertible_to&lt;/*iota-diff-t*/&lt;I&gt;&gt;;
+    };
+}}
+{{dcl end}}
+
+@1@ {{c/core|ranges::iota_view&lt;W, Bound&gt;::}}{{tti|iterator}} is the type of the iterators returned by {{rlpf|begin}} and {{rlpf|end}} of {{c/core|ranges::iota_view&lt;W, Bound&gt;}}.
+
+@2@ Calculates the difference type for both iterator types and [[cpp/iterator/is-integer-like|integer-like types]].
+* If {{tt|I}} is not an integral type, or if it is an integral type and {{c|sizeof(std::iter_difference_t&lt;I&gt;)}} is greater than {{c|sizeof(I)}}, then {{c/core|/*iota-diff-t*/&lt;I&gt;}} is {{c/core|std::iter_difference_t&lt;I&gt;}}.
+* Otherwise, {{c/core|/*iota-diff-t*/&lt;I&gt;}} is a signed integer type of width greater than the width of {{tt|I}} if such a type exists.
+* Otherwise, {{tt|I}} is one of the widest integral types, and {{c/core|/*iota-diff-t*/&lt;I&gt;}} is an unspecified [[cpp/iterator/is-integer-like|signed-integer-like type]] of width not less than the width of {{tt|I}}. It is unspecified whether {{c/core|/*iota-diff-t*/&lt;I&gt;}} models {{lconcept|weakly_incrementable}} in this case.
+
+@3@ Specifies that a type is {{lconcept|incrementable}}, and pre- and post- {{c|operator--}} for the type have common meaning.
+
+@4@ Specifies that a type is both {{lsi|#decrementable}} and {{lconcept|totally_ordered}}, and {{c|1=operator+=}}, {{c|1=operator-=}}, {{c|operator+}}, and {{c|operator-}} among the type and its different type have common meaning.
+
+{{c/core|/*iterator*/}} models
+* {{lconcept|random_access_iterator}} if {{c|W}} models {{lsi|#advanceable}} {{v|4}},
+* {{lconcept|bidirectional_iterator}} if {{c|W}} models {{lsi|#decrementable}} {{v|3}},
+* {{lconcept|forward_iterator}} if {{c|W}} models {{lconcept|incrementable}}, and
+* {{lconcept|input_iterator}} otherwise.
+
+However, it only satisfies {{named req|InputIterator}} if {{tt|W}} models {{lconcept|incrementable}}, and does not satisfy {{named req|InputIterator}} otherwise.
+
+===Semantic requirements===
+@3@ Type {{tt|I}} models {{tti|decrementable}} only if {{tt|I}} satisfies {{tti|decrementable}} and all concepts it subsumes are modeled, and given equal objects {{c|a}} and {{c|b}} of type {{tt|I}}:
+* If {{c|a}} and {{c|b}} are in the domain of both pre- and post- {{c|operator--}} (i.e. they are decrementable), then the following are all {{c|true}}:
+** {{c|1=std::addressof(--a) == std::addressof(a)}},
+** {{c|1=bool(a-- == b)}},
+** {{c|1=bool(((void)a--, a) == --b)}},
+** {{c|1=bool(++(--a) == b)}}.
+* If {{c|a}} and {{c|b}} are in the domain of both pre- and post- {{c|operator++}} (i.e. they are incrementable), then {{c|1=bool(--(++a) == b)}} is {{c|true}}.
+
+@4@ Let {{tt|D}} denote {{c/core|/*iota-diff-t*/&lt;I&gt;}}. Type {{tt|I}} models {{lsi|#advanceable}} only if {{tt|I}} satisfies {{lsi|#advanceable}} and all concepts it subsumes are modeled, and given
+* objects {{c|a}} and {{c|b}} of type {{tt|I}} and
+* value {{c|n}} of type {{tt|D}},
+such that {{c|b}} is reachable from {{c|a}} after {{c|n}} applications of {{c|++a}}, all following conditions are satisfied:
+* {{c|1=(a += n)}} is equal to {{c|b}}.
+* {{c|1=std::addressof(a += n)}} is equal to {{c|std::addressof(a)}}.
+* {{c|I(a + n)}} is equal to {{c|1=(a += n)}}.
+* For any two positive values {{c|x}} and {{c|y}} of type {{tt|D}}, if {{c|I(a + D(x + y))}} is well-defined, then {{c|I(a + D(x + y))}} is equal to {{c|I(I(a + x) + y)}}.
+* {{c|I(a + D(0))}} is equal to {{c|a}}.
+* If {{c|I(a + D(n - 1))}} is well-defined, then {{c|I(a + n)}} is equal to {{c|[](I c) { return ++c; }(I(a + D(n - 1)))}}.
+* {{c|1=(b += -n)}} is equal to {{c|a}}.
+* {{c|1=(b -= n)}} is equal to {{c|a}}.
+* {{c|1=std::addressof(b -= n)}} is equal to {{c|std::addressof(b)}}.
+* {{c|I(b - n)}} is equal to {{c|1=(b -= n)}}.
+* {{c|D(b - a)}} is equal to {{c|n}}.
+* {{c|D(a - b)}} is equal to {{c|D(-n)}}.
+* {{c|1=bool(a &lt;= b)}} is {{c|true}}.
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|iterator_concept}}|an [[cpp/iterator/iterator tags|iterator tag]], see below}}
+{{dsc|{{tt|iterator_category}}{{anchor|iterator_category}}&lt;br&gt;{{small|(only present if {{tt|W}} models {{lconcept|incrementable}} and&lt;br&gt;{{c/core|/*iota-diff-t*/&lt;W&gt;}} is an integral type)}}|{{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|value_type}}|{{tt|W}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|/*iota-diff-t*/&lt;W&gt;}}}}
+{{dsc end}}
+
+====Determining the iterator concept====
+{{tt|iterator_concept}} is defined as follows:
+* If {{tt|W}} models {{lsi|#advanceable}}, {{tt|iterator_concept}} denotes {{lc|std::random_access_iterator_tag}}.
+* Otherwise, if {{tt|W}} models {{lsi|#decrementable}}, {{tt|iterator_concept}} denotes {{lc|std::bidirectional_iterator_tag}}.
+* Otherwise, if {{tt|W}} models {{lconcept|incrementable}}, {{tt|iterator_concept}} denotes {{lc|std::forward_iterator_tag}}.
+* Otherwise, {{tt|iterator_concept}} denotes {{lc|std::input_iterator_tag}}.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|spec={{tt|W}}|value_|id=value|the current value}}
+{{dsc end}}
+
+===Member functions===
+{{member|{{small|std::ranges::iota_view::''iterator''::}}''iterator''|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+/*iterator*/() requires std::default_initializable&lt;W&gt; = default;
+}}
+{{dcl|num=2|since=c++20|
+constexpr explicit /*iterator*/( W value );
+}}
+{{dcl end}}
+
+@1@ Value initializes {{lsi|#value_}}.
+
+@2@ Initializes {{lsi|#value_}} with {{c|value}}.
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator*|2=
+{{ddcl|since=c++20|
+constexpr W operator*() const
+    noexcept(std::is_nothrow_copy_constructible_v&lt;W&gt;);
+}}
+
+Returns {{box|{{lsi|#value_}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(6, 9).begin()};
+    const int&amp; r = *it; // binds with temporary
+    assert(*it == 6 and r == 6);
+    ++it;
+    assert(*it == 7 and r == 6);
+}
+}}
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator++|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr /*iterator*/&amp; operator++();
+}}
+{{dcl|num=2|since=c++20|
+constexpr void operator++(int);
+}}
+{{dcl|num=3|since=c++20|
+constexpr /*iterator*/ operator++(int) requires std::incrementable&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ Equivalent to {{box|{{c/core|++}}{{lsi|#value_}}{{sep}}{{c/core|; return *this;}}}}.
+
+@2@ Equivalent to {{box|{{c/core|++}}{{lsi|#value_}}{{sep}}{{c/core|;}}}}.
+
+@3@ Equivalent to {{box|{{c/core|1=auto tmp = *this; ++}}{{lsi|#value_}}{{sep}}{{c/core|; return tmp;}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(8).begin()};
+    assert(*it == 8);
+    assert(*++it == 9);
+    assert(*it++ == 9);
+    assert(*it == 10);
+}
+}}
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator--|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr /*iterator*/&amp; operator--() requires /*decrementable*/&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+constexpr /*iterator*/operator--(int) requires /*decrementable*/&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ Equivalent to {{box|{{c/core|--}}{{lsi|#value_}}{{sep}}{{c/core|; return *this;}}}}.
+
+@2@ Equivalent to {{box|{{c/core|1=auto tmp = *this; --}}{{lsi|#value_}}{{sep}}{{c/core|; return tmp;}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(8).begin()};
+    assert(*it == 8);
+    assert(*--it == 7);
+    assert(*it-- == 7);
+    assert(*it == 6);
+}
+}}
+}}
+
+{{member|1={{small|std::ranges::iota_view::''iterator''::}}operator+=|2=
+{{ddcl|since=c++20|1=
+constexpr /*iterator*/&amp; operator+=( difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+
+Updates {{lsi|#value_}} and returns {{c|*this}}:
+* If {{tt|W}} is an [[cpp/iterator/is-integer-like|unsigned-integer-like type]]:
+** If {{c|n}} is non-negative, performs {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=+= static_cast&lt;W&gt;(n)}}}}.
+** Otherwise, performs {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=-= static_cast&lt;W&gt;(-n)}}}}.
+* Otherwise, performs {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=+= n}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(5).begin()};
+    assert(*it == 5);
+    assert(*(it += 3) == 8);
+}
+}}
+}}
+
+{{member|1={{small|std::ranges::iota_view::''iterator''::}}operator-=|2=
+{{ddcl|since=c++20|1=
+constexpr /*iterator*/&amp; operator-=( difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+
+Updates {{lsi|#value_}} and returns {{c|*this}}:
+* If {{tt|W}} is an [[cpp/iterator/is-integer-like|unsigned-integer-like type]]:
+** If {{c|n}} is non-negative, performs {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=-= static_cast&lt;W&gt;(n)}}}}.
+** Otherwise, performs {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=+= static_cast&lt;W&gt;(-n)}}}}.
+* Otherwise, performs {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=-= n}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(6).begin()};
+    assert(*it == 6);
+    assert(*(it -= -3) == 9);
+}
+}}
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator[]|2=
+{{ddcl|since=c++20|
+constexpr W operator[]( difference_type n ) const
+    requires /*advanceable*/&lt;W&gt;;
+}}
+
+Returns {{box|{{c/core|W(}}{{lsi|#value_}}{{nbspt}}{{c/core|+ n)}}}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(6).begin()};
+    assert(*it == 6);
+    assert(*(it + 3) == 9);
+}
+}}
+}}
+
+===Non-member functions===
+{{member|1=operator==, &lt;, &gt;, &lt;=, &gt;=, &lt;=&gt;{{petty|(std::ranges::iota_view::''iterator'')}}|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+friend constexpr bool operator==
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::equality_comparable&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+friend constexpr bool operator&lt;
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=3|since=c++20|
+friend constexpr bool operator&gt;
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=4|since=c++20|1=
+friend constexpr bool operator&lt;=
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=5|since=c++20|1=
+friend constexpr bool operator&gt;=
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=6|since=c++20|1=
+friend constexpr bool operator&lt;=&gt;
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt; &amp;&amp; std::three_way_comparable&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ Returns {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|1=== y.}}{{lsi|#value_}}}}.
+
+@2@ Returns {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|&lt; y.}}{{lsi|#value_}}}}.
+
+@3@ Returns {{c|y &lt; x}}.
+
+@4@ Returns {{c|!(y &lt; x)}}.
+
+@5@ Returns {{c|!(x &lt; y)}}.
+
+@6@ Returns {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|1=&lt;=&gt; y.}}{{lsi|#value_}}}}.
+
+{{cpp/note synthesized eq}}
+
+{{cpp/hidden friend|''iterator''|plural=yes}}
+}}
+
+{{member|1=operator+{{petty|(std::ranges::iota_view::''iterator'')}}|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+friend constexpr /*iterator*/ operator+
+    ( /*iterator*/ i, difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+friend constexpr /*iterator*/ operator+
+    ( difference_type n, /*iterator*/ i )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl end}}
+
+Equivalent to {{c|1=i += n; return i;}}.
+
+{{cpp/hidden friend|''iterator''|plural=yes}}
+}}
+
+{{member|1=operator-{{petty|(std::ranges::iota_view::''iterator'')}}|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+friend constexpr /*iterator*/ operator-
+    ( /*iterator*/ i, difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+friend constexpr difference_type operator-
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ Equivalent to {{c|1=i -= n; return i;}}.
+
+@2@ Let {{tt|D}} be {{tt|difference_type}}:
+* If {{tt|W}} is an [[cpp/iterator/is-integer-like|integer-like type]]:
+** If {{tt|W}} is signed-integer-like, returns {{box|{{c/core|D(D(x.}}{{lsi|#value_}}{{sep}}{{c/core|) - D(y.}}{{lsi|#value_}}{{sep}}{{c/core|))}}}}.
+** Otherwise, returns {{box|{{c/core|y.}}{{lsi|#value_}}{{nbspt}}{{c/core|&gt; x.}}{{lsi|#value_}}{{nbspt}}{{c/core|? D(-D(y.}}{{lsi|#value_}}{{nbspt}}{{c/core|- x.}}{{lsi|#value_}}{{sep}}{{c/core|)) : D(x.}}{{lsi|#value_}}{{nbspt}}{{c/core|- y.}}{{lsi|#value_}}{{sep}}{{c/core|)}}}}.
+* Otherwise, returns {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|- y.}}{{lsi|#value_}}}}.
+
+{{cpp/hidden friend|''iterator''|plural=yes}}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2259R1|std=C++20|before=member {{lst|#iterator_category}} is always defined|after=defined only if {{tt|W}} satisfies {{lconcept|incrementable}}}}
+{{dr list item|wg=lwg|dr=3580|std=C++20|before=bodies of {{c/core|operator+}} and {{c/core|operator-}} rule out [[cpp/language/return#Automatic move from local variables and parameters|implicit move]]|after=made suitable for implicit move}}
+{{dr list end}}
+
+{{langlinks|de|es|ja|ru|zh}}

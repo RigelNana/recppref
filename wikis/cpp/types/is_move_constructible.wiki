@@ -1,0 +1,147 @@
+{{cpp/title|is_move_constructible|is_trivially_move_constructible|is_nothrow_move_constructible}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|num=1|
+template&lt; class T &gt;
+struct is_move_constructible;
+}}
+{{dcl|since=c++11|num=2|
+template&lt; class T &gt;
+struct is_trivially_move_constructible;
+}}
+{{dcl|since=c++11|num=3|
+template&lt; class T &gt;
+struct is_nothrow_move_constructible;
+}}
+{{dcl end}}
+
+{|class="wikitable" style="text-align: center;"
+!rowspan=2|{{nbsp}}Type trait{{nbsp}}
+!colspan=2|The value of the member constant {{ttn|value}}
+|-
+!{{ttn|T}} is a [[cpp/meta#Definitions|referenceable type]]
+!{{nbsp}}{{ttn|T}} is not a referenceable type{{nbsp}}
+|-
+|{{v|1}}
+|{{c|std::is_constructible&lt;T, T&amp;&amp;&gt;::value}}
+|rowspan=3|{{c|false}}
+|-
+|{{v|2}}
+|{{c|std::is_trivially_constructible&lt;T, T&amp;&amp;&gt;::value}}
+|-
+|{{v|3}}
+|{{c|std::is_nothrow_constructible&lt;T, T&amp;&amp;&gt;::value}}
+|}
+
+{{cpp/types/cvaub}}
+
+{{cpp/types/nospec|any}}
+
+===Helper variable templates===
+{{dcl begin}}
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+inline constexpr bool is_move_constructible_v =
+    is_move_constructible&lt;T&gt;::value;
+}}
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+inline constexpr bool is_trivially_move_constructible_v =
+    is_trivially_move_constructible&lt;T&gt;::value;
+}}
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+inline constexpr bool is_nothrow_move_constructible_v =
+    is_nothrow_move_constructible&lt;T&gt;::value;
+}}
+{{dcl end}}
+
+{{cpp/types/integral_constant/inherit|{{tt|T}} is move-constructible}}
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;class T&gt;
+struct is_move_constructible :
+    std::is_constructible&lt;T, typename std::add_rvalue_reference&lt;T&gt;::type&gt; {};
+
+template&lt;class T&gt;
+struct is_trivially_move_constructible :
+    std::is_trivially_constructible&lt;T, typename std::add_rvalue_reference&lt;T&gt;::type&gt; {};
+
+template&lt;class T&gt;
+struct is_nothrow_move_constructible :
+    std::is_nothrow_constructible&lt;T, typename std::add_rvalue_reference&lt;T&gt;::type&gt; {};
+}}
+
+===Notes===
+Types without a move constructor, but with a copy constructor that accepts {{c/core|const T&amp;}} arguments, satisfy {{tt|std::is_move_constructible}}.
+
+Move constructors are usually noexcept, since otherwise they are unusable in any code that provides strong exception guarantee.
+
+In many implementations, {{tt|std::is_nothrow_move_constructible}} also checks if the destructor throws because it is effectively {{c|noexcept(T(arg))}}. Same applies to {{tt|std::is_trivially_move_constructible}}, which, in these implementations, also requires that the destructor is trivial: [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=51452 GCC bug 51452], {{lwg|2116}}.
+
+===Example===
+{{example
+|code=
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+struct Ex1
+{
+    std::string str; // member has a non-trivial but non-throwing move constructor
+};
+static_assert(std::is_move_constructible_v&lt;Ex1&gt;);
+static_assert(!std::is_trivially_move_constructible_v&lt;Ex1&gt;);
+static_assert(std::is_nothrow_move_constructible_v&lt;Ex1&gt;);
+
+struct Ex2
+{
+    int n;
+    Ex2(Ex2&amp;&amp;) = default; // trivial and non-throwing
+};
+static_assert(std::is_move_constructible_v&lt;Ex2&gt;);
+static_assert(std::is_trivially_move_constructible_v&lt;Ex2&gt;);
+static_assert(std::is_nothrow_move_constructible_v&lt;Ex2&gt;);
+
+struct NoMove1
+{
+    // prevents implicit declaration of default move constructor;
+    // however, the class is still move-constructible because its
+    // copy constructor can bind to an rvalue argument
+    NoMove1(const NoMove1&amp;) {}
+};
+static_assert(std::is_move_constructible_v&lt;NoMove1&gt;);
+static_assert(!std::is_trivially_move_constructible_v&lt;NoMove1&gt;);
+static_assert(!std::is_nothrow_move_constructible_v&lt;NoMove1&gt;);
+
+struct NoMove2
+{
+    // Not move-constructible since the lvalue reference
+    // can't bind to the rvalue argument
+    NoMove2(NoMove2&amp;) {}
+};
+static_assert(!std::is_move_constructible_v&lt;NoMove2&gt;);
+static_assert(!std::is_trivially_move_constructible_v&lt;NoMove2&gt;);
+static_assert(!std::is_nothrow_move_constructible_v&lt;NoMove2&gt;);
+
+int main() {}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2196|std=C++11|before=the behavior was unclear if {{c/core|T&amp;&amp;}} cannot be formed|after=the value produced is {{c|false}} in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_constructible}}
+{{dsc inc|cpp/types/dsc is_default_constructible}}
+{{dsc inc|cpp/types/dsc is_copy_constructible}}
+{{dsc inc|cpp/concepts/dsc move_constructible}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc inc|cpp/utility/dsc move_if_noexcept}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

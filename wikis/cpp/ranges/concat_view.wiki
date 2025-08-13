@@ -1,0 +1,184 @@
+{{cpp/ranges/view title|concat}}
+{{cpp/ranges/concat_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++26|
+template&lt; ranges::input_range... Views &gt;
+    requires (ranges::view&lt;Views&gt; &amp;&amp; ...) &amp;&amp; (sizeof...(Views) &gt; 0) &amp;&amp;
+              /*concatable*/&lt;Views...&gt;
+class concat_view
+    : public ranges::view_interface&lt;concat_view&lt;Views...&gt;&gt;
+}}
+{{dcl|num=2|since=c++26|1=
+namespace views {
+    inline constexpr /* unspecified */ concat = /* unspecified */;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++26|
+template&lt; ranges::viewable_range... Rs &gt;
+    requires /* see below */
+constexpr ranges::view auto concat( Rs&amp;&amp;... rs );
+}}
+{{dcl h|Helper type aliases}}
+{{dcla|num=3|expos=yes|anchor=concat-reference-t|1=
+template&lt; class... Rs &gt;
+using /*concat-reference-t*/ =
+    ranges::common_reference_t&lt;ranges::range_reference_t&lt;Rs&gt;...&gt;;
+}}
+{{dcla|num=4|expos=yes|anchor=concat-value-t|1=
+template&lt; class... Rs &gt;
+using /*concat-value-t*/ = std::common_type_t&lt;ranges::range_value_t&lt;Rs&gt;...&gt;;
+}}
+{{dcla|num=5|expos=yes|anchor=concat-rvalue-reference-t|1=
+template&lt; class... Rs &gt;
+using /*concat-rvalue-reference-t*/ =
+    ranges::common_reference_t&lt;ranges::range_rvalue_reference_t&lt;Rs&gt;...&gt;;
+}}
+{{dcl h|Helper concepts}}
+{{dcla|num=6|expos=yes|anchor=concat-indirectly-readable|1=
+template&lt; class Ref, class RRef, class It &gt;
+concept /*concat-indirectly-readable-impl*/ = /* see description */;
+}}
+{{dcla|num=7|expos=yes|anchor=concatable|1=
+template&lt; class... Rs &gt;
+concept /*concatable*/ = /* see description */;
+}}
+{{dcl end}}
+
+{{tt|concat_view}} presents a {{lconcept|view}} factory that takes an arbitrary number of ranges as an argument list, and provides a view that starts at the first element of the first range, ends at the last element of the last range, with all range elements sequenced in between respectively in the order given in the arguments, effectively concatenating, or chaining together the argument ranges.
+
+@1@ The class template with a template parameter that is a non-empty pack of {{lconcept|view}}s each of which models at least {{lconcept|input_range}} and is {{lsi|#concatable}} {{v|7}}.
+
+@2@ {{tt|views::concat}} is a customization point object. 
+Given a pack of subexpressions {{c|exprs}}, the expression {{c|views::concat(exprs...)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to
+* {{c|views::all(exprs...)}} if {{c|exprs}} is a pack with only one element whose type models {{lconcept|input_range}},
+* {{c|concat_view(exprs...)}} otherwise.
+
+@3@ Represents the reference type. An extra constraint is needed to make sure that each underlying range’s {{c/core|ranges::range_reference_t}} is convertible to {{c/core|ranges::common_reference_t}}.
+
+@4@ The {{rlt|iterator#Nested types|''iterator''::value_type}} that additionally respects the underlying ranges’ {{tt|value_type}} to support the cases when the underlying ranges have proxy iterators.
+
+@5@ The rvalue reference that also correctly supports the cases where underlying iterators customize {{tt|iter_move}}.
+
+@6@ Defines the {{tti|indirectly-readable}} concept for the {{rli|iterator}} so that {{tt|concat_view}} can model {{lconcept|input_range}}.
+@@ Equivalent to: {{source|1=
+template&lt; class... Rs &gt;
+concept /*concat-indirectly-readable*/ = // exposition only
+    std::common_reference_with&lt;/*concat-reference-t*/&lt;Rs...&gt;&amp;&amp;,
+                               /*concat-value-t*/&lt;Rs...&gt;&amp;&gt; &amp;&amp;
+    std::common_reference_with&lt;/*concat-reference-t*/&lt;Rs...&gt;&amp;&amp;,
+                               /*concat-rvalue-reference-t*/&lt;Rs...&gt;&amp;&amp;&gt; &amp;&amp;
+    std::common_reference_with&lt;/*concat-rvalue-reference-t*/&lt;Rs...&gt;&amp;&amp;,
+                               /*concat-value-t*/&lt;Rs...&gt; const&amp;&gt; &amp;&amp;
+    (/*concat-indirectly-readable-impl*/&lt;/*concat-reference-t*/&lt;Rs...&gt;,
+                                         /*concat-rvalue-reference-t*/&lt;Rs...&gt;,
+                                         ranges::iterator_t&lt;Rs&gt;&gt; &amp;&amp; ...);
+}}
+@@ where exposition-only concept {{c/core|/*concat-indirectly-readable-impl*/}} is
+{{source|1=
+template&lt; class Ref, class RRef, class It &gt;
+concept /*concat-indirectly-readable-impl*/ = // exposition only
+    requires(const It it) {
+        { *it } -&gt; std::convertible_to&lt;&lt;!--6_6--&gt;Ref&lt;!--9_9--&gt;&gt;;
+        { ranges::iter_move(it)} -&gt; std::convertible_to&lt;RRef&gt;;
+    };
+}}
+
+@7@ Determines whether any two or more different ranges can be adapted into a sequence that itself models a range. Equivalent to: {{source|1=
+template&lt; class... Rs &gt;
+concept /*concatable*/ {{=}} requires { // exposition only
+        typename /*concat-reference-t*/&lt;Rs...&gt;;
+        typename /*concat-value-t*/&lt;Rs...&gt;;
+        typename /*concat-rvalue-reference-t*/&lt;Rs...&gt;;
+    } &amp;&amp; /*concat-indirectly-readable*/&lt;Rs...&gt;;
+}}
+
+{{tt|concat_view}} always models {{lconcept|input_range}}, and models {{lconcept|forward_range}}, {{lconcept|bidirectional_range}}, {{lconcept|random_access_range}}, or {{lconcept|sized_range}} if each adapted {{lconcept|view}} type models the corresponding concept.
+
+{{tt|concat_view}} can be {{lconcept|common_range}} if the last underlying range models {{lconcept|common_range}}.
+
+{{cpp/ranges/cpo|views|concat}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|spec={{c/core|std::tuple&lt;Views...&gt;}}|views_|id=views|all adapted view objects}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|concat_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|concat_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|concat_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|concat_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc hitem|Class name|Definition}}
+{{dsc expos mem tclass|cpp/ranges/concat_view/iterator|the iterator type}}
+{{dsc end}}
+
+===Helper templates===
+There is no specialization of {{c/core|ranges::enable_borrowed_range}} for {{tt|concat_view}}, because this would require the iterator implementation to contain a copy of all iterators and sentinels of all underlying ranges at all times.
+
+===Notes===
+No argument {{c|views::concat()}} is ill-formed, because there is no reasonable way to determine an element type {{tt|T}}. Single argument {{c|views::concat(r)}} is expression equivalent to {{c|views::all(r)}}.
+
+{{feature test macro|__cpp_lib_ranges_concat|std=C++26|value=202403L|{{tt|std::ranges::concat_view}}}}
+
+===Example===
+{{example
+|The preliminary version can be checked out on [https://godbolt.org/z/o84hc69o9 Compiler Explorer].
+|code=
+#include &lt;cassert&gt;
+#include &lt;list&gt;
+#include &lt;print&gt;
+#include &lt;ranges&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v0{1, 2, 3}, v1{4, 5};
+    int a[]{6, 7};
+    int i{8};
+    auto ie{std::views::single(i)};
+    
+    auto con = std::views::concat(v0, v1, a, ie);
+    assert(con.size() == v0.size() + v1.size() + std::size(a) + ie.size());
+    std::println("con.size(): {}", con.size());
+    std::println("con: {}", con);
+    con[6] = 42; // con is random_access_range, operator[] returns a reference
+    assert(a[1] == 42); // a[1] was modified via con[6]
+    std::println("con: {}", con);
+    
+    std::list&lt;int&gt; l{7, 8}; // list is bidirectional range
+    auto cat = std::views::concat(v0, l);
+    std::println("cat: {}", cat);
+    // cat[0] = 13; // compile-time error: cat is bidirectional =&gt; no operator[]
+}
+|output=
+con.size(): 8
+con: [1, 2, 3, 4, 5, 6, 7, 8]
+con: [1, 2, 3, 4, 5, 6, 42, 8]
+cat: [1, 2, 3, 7, 8]
+}}
+
+===References===
+{{ref std c++26}}
+{{ref std|title=Concat view|id=range.concat|section=26.7.18}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc join_view}}
+{{dsc inc|cpp/ranges/dsc join_with_view}}
+{{dsc inc|cpp/ranges/dsc zip_view}}
+{{dsc inc|cpp/ranges/dsc cartesian_product_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

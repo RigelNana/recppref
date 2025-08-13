@@ -1,0 +1,163 @@
+{{cpp/title|visit}}
+{{cpp/utility/variant/navbar}}
+{{dcl begin}}
+{{dcl header|variant}}
+{{dcl|since=c++17|num=1|
+template&lt; class Visitor, class... Variants &gt;
+constexpr /* see below */ visit( Visitor&amp;&amp; v, Variants&amp;&amp;... values );
+}}
+{{dcl|since=c++20|num=2|
+template&lt; class R, class Visitor, class... Variants &gt;
+constexpr R visit( Visitor&amp;&amp; v, Variants&amp;&amp;... values );
+}}
+{{dcl|notes={{mark expos}}|num=3|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( std::variant&lt;Ts...&gt;&amp; value );
+}}
+{{dcl|notes={{mark expos}}|num=4|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( const std::variant&lt;Ts...&gt;&amp; value );
+}}
+{{dcl|notes={{mark expos}}|num=5|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( std::variant&lt;Ts...&gt;&amp;&amp; value );
+}}
+{{dcl|notes={{mark expos}}|num=6|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( const std::variant&lt;Ts...&gt;&amp;&amp; value );
+}}
+{{dcl end}}
+
+Applies the visitor {{c|v}} (a {{named req|Callable}} that can be called with any combination of types from Variants) to the Variants {{c|values}}.
+
+Given {{tt|VariantBases}} as {{c/core|decltype(}}{{tti|as-variant}}{{c/core|(std::forward&lt;Variants&gt;(values))...}} (a pack of {{c|sizeof...(Variants)}} types):
+@1@ Invokes {{c|v}} as if by
+{{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(std::forward&lt;Visitor&gt;(v),}}&lt;br&gt;{{c/core|       std::get&lt;indices&gt;(std::forward&lt;VariantBases&gt;(values))...)}}}},
+where {{c|indices}} is {{box|{{tti|as-variant}}{{c/core|(values).index()...}}}}.
+
+@2@ Invokes {{c|v}} as if by
+{{box|{{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}{{c/core|(std::forward&lt;Visitor&gt;(v),}}&lt;br&gt;{{c/core|          std::get&lt;indices&gt;(std::forward&lt;VariantBases&gt;(values))...)}}}},
+where {{c|indices}} is {{box|{{tti|as-variant}}{{c/core|(values).index()...}}}}.
+
+{{cpp/enable if|plural=yes|every type in {{tt|VariantBases}} is a valid type.}} If the expression denoted by {{lti|cpp/utility/functional|INVOKE}}{{rev inl|since=c++20| or {{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}}} is invalid, or the results of {{lti|cpp/utility/functional|INVOKE}}{{rev inl|since=c++20| or {{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}}} have different types or value categories for different {{c|indices}}, the program is ill-formed.
+
+@3-6@ The exposition-only {{tti|as-variant}} function templates accept a value whose type can be [[cpp/language/template argument deduction|deduced]] for {{c/core|std::variant&lt;Ts...&gt;}} (i.e., either {{c/core|std::variant&lt;Ts...&gt;}} or a type derived from {{c/core|std::variant&lt;Ts...&gt;}}), and return the {{lc|std::variant}} value with the same const-qualification and value category.
+:@3,4@ Returns {{c|value}}.
+:@5,6@ Returns {{c|std::move(value)}}.
+
+===Parameters===
+{{par begin}}
+{{par|v|a {{named req|Callable}} that accepts every possible alternative from every variant in {{c|Variants}}}}
+{{par|values|list of variants to pass to the visitor}}
+{{par end}}
+
+===Return value===
+@1@ The result of the {{lti|cpp/utility/functional|INVOKE}} operation. The return type is the type obtained from applying {{ltt|cpp/language/decltype}} to the result.
+@2@ Nothing if {{tt|R}} is (possibly cv-qualified) {{c/core|void}}; otherwise the result of the {{lti|cpp/utility/functional|INVOKE&lt;R&gt;}} operation.
+@3-6@ A {{lc|std::variant}} value converted from {{c|value}}.
+
+===Exceptions===
+Throws {{lc|std::bad_variant_access}} if {{box|{{tti|as-variant}}{{c/core|(value_i).valueless_by_exception()}}}} is {{c|true}} for any variant {{c|value_i}} in {{c|values}}.
+
+===Complexity===
+When the number of variants is zero or one, the invocation of the callable object is implemented in constant time; i.e., it does not depend on the number of types can be stored in the variant.
+
+If the number of variants is larger than one, the invocation of the callable object has no complexity requirements.
+
+===Notes===
+Let {{c|n}} be {{c|(1 * ... * std::variant_size_v&lt;std::remove_reference_t&lt;VariantBases&gt;&gt;)}}, implementations usually generate a table equivalent to an (possibly multidimensional) array of {{c|n}} function pointers for every specialization of {{tt|std::visit}}, which is similar to the implementation of [[cpp/language/virtual|virtual functions]].
+
+Implementations may also generate a [[cpp/language/switch|switch statement]] with {{c|n}} branches for {{tt|std::visit}} (e.g., the MSVC STL implementation uses a switch statement when {{c|n}} is not greater than 256).
+
+On typical implementations, the time complexity of the invocation of {{c|v}} can be considered equal to that of access to an element in an (possibly multidimensional) array or execution of a switch statement.
+
+{{ftm begin|std=yes}}
+{{ftm|std=C++23|dr=17|value=202102L|__cpp_lib_variant|{{tt|std::visit}} for classes derived from {{lc|std::variant}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;variant&gt;
+#include &lt;vector&gt;
+
+// the variant to visit
+using value_t = std::variant&lt;int, long, double, std::string&gt;;
+
+// helper type for the visitor #4
+template&lt;class... Ts&gt;
+struct overloaded : Ts... { using Ts::operator()...; };
+// explicit deduction guide (not needed as of C++20)
+template&lt;class... Ts&gt;
+overloaded(Ts...) -&gt; overloaded&lt;Ts...&gt;;
+
+int main()
+{
+    std::vector&lt;value_t&gt; vec = {10, 15l, 1.5, "hello"};
+
+    for (auto&amp; v: vec)
+    {
+        // 1. void visitor, only called for side-effects (here, for I/O)
+        std::visit([](auto&amp;&amp; arg){ std::cout &lt;&lt; arg; }, v);
+
+        // 2. value-returning visitor, demonstrates the idiom of returning another variant
+        value_t w = std::visit([](auto&amp;&amp; arg) -&gt; value_t { return arg + arg; }, v);
+
+        // 3. type-matching visitor: a lambda that handles each type differently
+        std::cout &lt;&lt; ". After doubling, variant holds ";
+        std::visit([](auto&amp;&amp; arg)
+        {
+            using T = std::decay_t&lt;decltype(arg)&gt;;
+            if constexpr (std::is_same_v&lt;T, int&gt;)
+                std::cout &lt;&lt; "int with value " &lt;&lt; arg &lt;&lt; '\n';
+            else if constexpr (std::is_same_v&lt;T, long&gt;)
+                std::cout &lt;&lt; "long with value " &lt;&lt; arg &lt;&lt; '\n';
+            else if constexpr (std::is_same_v&lt;T, double&gt;)
+                std::cout &lt;&lt; "double with value " &lt;&lt; arg &lt;&lt; '\n';
+            else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+                std::cout &lt;&lt; "std::string with value " &lt;&lt; std::quoted(arg) &lt;&lt; '\n';
+            else
+                static_assert(false, "non-exhaustive visitor!");
+        }, w);
+    }
+
+    for (auto&amp; v: vec)
+    {
+        // 4. another type-matching visitor: a class with 3 overloaded operator()'s
+        // Note: The `(auto arg)` template operator() will bind to `int` and `long`
+        //       in this case, but in its absence the `(double arg)` operator()
+        //       *will also* bind to `int` and `long` because both are implicitly
+        //       convertible to double. When using this form, care has to be taken
+        //       that implicit conversions are handled correctly.
+        std::visit(overloaded{
+            [](auto arg) { std::cout &lt;&lt; arg &lt;&lt; ' '; },
+            [](double arg) { std::cout &lt;&lt; std::fixed &lt;&lt; arg &lt;&lt; ' '; },
+            [](const std::string&amp; arg) { std::cout &lt;&lt; std::quoted(arg) &lt;&lt; ' '; }
+        }, v);
+    }
+}
+|output=
+10. After doubling, variant holds int with value 20
+15. After doubling, variant holds long with value 30
+1.5. After doubling, variant holds double with value 3
+hello. After doubling, variant holds std::string with value "hellohello"
+10 15 1.500000 "hello"
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2970|std=C++17|before=the return type of overload {{v|1}} did not preserve the&lt;br&gt;value category of the result of the {{tti|INVOKE}} operation|after=preserves}}
+{{dr list item|wg=lwg|dr=3052|paper=P2162R2|std=C++17|before=the effects were unspecified if any type&lt;br&gt;in {{tt|Variants}} is not a {{lc|std::variant}}|after=specified}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc visit}}
+{{dsc inc|cpp/utility/variant/dsc swap}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

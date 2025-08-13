@@ -1,0 +1,195 @@
+{{title|Identifiers}}
+{{cpp/language/basics/navbar}}
+An ''identifier'' is an arbitrarily long sequence of digits, underscores, lowercase and uppercase Latin letters, and most Unicode characters.
+
+The first character of a valid identifier must be one of the following:
+* uppercase Latin letters A-Z
+* lowercase Latin letters a-z
+* underscore
+* any Unicode character with the Unicode property [https://www.unicode.org/reports/tr31/#Table_Lexical_Classes_for_Identifiers XID_Start]
+
+Any other character of a valid identifier must be one of the following:
+* digits 0-9
+* uppercase Latin letters A-Z
+* lowercase Latin letters a-z
+* underscore
+* any Unicode character with the Unicode property [https://www.unicode.org/reports/tr31/#Table_Lexical_Classes_for_Identifiers XID_Continue]
+
+The lists of characters with properties XID_Start and XID_Continue can be found in [https://www.unicode.org/Public/UCD/latest/ucd/DerivedCoreProperties.txt DerivedCoreProperties.txt].
+
+Identifiers are case-sensitive (lowercase and uppercase letters are distinct), and every character is significant. Every identifier must conform to [https://www.unicode.org/charts/normalization/ Normalization Form C].&lt;!-- P1949R7 --&gt;
+
+Note: Support of Unicode identifiers is limited in most implementations, e.g. [https://gcc.gnu.org/wiki/FAQ#What_is_the_status_of_adding_the_UTF-8_support_for_identifier_names_in_GCC.3F gcc (until 10)].
+
+===In declarations===
+An identifier can be used {{rlp|declarations|to name}} objects, references, functions, enumerators, types, class members, namespaces, templates, template specializations,{{rev inl|since=c++11| parameter packs}}, goto labels, and other entities, with the following exceptions:
+* The identifiers that are [[cpp/keyword|keywords]] cannot be used for other purposes.
+{{rrev|since=c++11|
+:* The only place they can be used as non-keywords is in an {{spar|attribute-token}} (e.g. {{c/core|[[private]]}} is a valid {{rlp|attributes|attribute}}).
+}}
+* The identifiers that are {{rlp|operator alternative|alternative representations}} for certain operators and punctuators cannot be used for other purposes.
+{{rrev|since=c++11|
+* The identifiers with special meaning ({{c|final}}{{rev inl|since=c++20|, {{c|import}}, {{c|module}}}} and {{c|override}}) are used explicitly in a certain context rather than being regular identifiers.
+** Unless otherwise specified, any ambiguity as to whether a given identifier has a special meaning is resolved to interpret the token as a regular identifier.
+}}
+* Identifiers {{rev inl|since=c++11|that appear as a token or preprocessing token (i.e., not in {{spar|user-defined-string-literal}} like {{c|operator ""id}})}} of one of the following forms are reserved:
+** in the global namespace, identifiers that begin with an underscore
+** identifiers that contain a double underscore or begin with an underscore followed by an uppercase letter, except the following identifiers:
+::* {{lsd|cpp/preprocessor/replace#Predefined macros}}{{rev inl|since=c++20| (including [[cpp/feature test#Language features|language feature test macros]])}}
+{{rrev|since=c++11|
+::* {{lc|std::_Exit}}
+::* {{rlp|function#func|{{c|__func__}}}}
+}}
+::* the following macros defined in the standard library:
+:::* the C-style I/O library macros {{c|_IOFBF}}, {{c|_IOLBF}} and {{c|_IONBF}}
+{{rev begin}}
+{{rev|since=c++11|
+:::* the C compatibility macros {{c|__alignas_is_defined}} and {{c|__alignof_is_defined}} (defined in {{ltt|cpp/header/cstdalign|&lt;stdalign.h&gt;}})
+:::* the C compatibility macro {{c|__bool_true_false_are_defined}} (defined in {{ltt|cpp/header/cstdbool|&lt;stdbool.h&gt;}})
+}}
+{{rev|since=c++20|
+:::* [[cpp/feature test#Library features|library feature test macros]]
+}}
+{{rev end}}
+
+“Reserved” here means that the standard library headers {{c/core|#define}} or declare such identifiers for their internal needs, the compiler may predefine non-standard identifiers of that kind, and that name mangling algorithm may assume that some of these identifiers are not in use. If the programmer uses such identifiers, the program is ill-formed, no diagnostic required.
+
+In addition, it is undefined behavior to {{c/core|#define}} or {{c/core|#undef}} certain names in a translation unit, see [[cpp/preprocessor/replace|reserved macro names]] for more details.
+
+====Zombie identifiers====
+As of C++14, some identifiers are removed from the C++ standard library. They are listed in the [[cpp/symbol index/zombie names|list of zombie names]].
+
+However, these identifiers are still reserved for previous standardization in a certain context. Removed member function names may not be used as a name for function-like macros, and other removed member names may not be used as a name for object-like macros in portable code.
+
+===In expressions===
+An identifier that names a variable, a function, {{rev inl|since=c++20|specialization of a {{rlp|constraints|concept}},}} or an enumerator can be used as an {{rlp|expressions|expression}}. The result of an expression consisting of just the identifier is the entity named by the identifier. The {{rlp|value category}} of the expression is ''lvalue'' if the identifier names a function, a variable{{rev inl|since=c++20|, a {{rlp|template parameters#Non-type template parameter|template parameter object}}}}, or a data member, and {{rev inl|until=c++11|''rvalue''}}{{rev inl|since=c++11|''prvalue''}} otherwise (e.g. an {{rlp|enum|enumerator}} is {{rev inl|until=c++11|an rvalue}}{{rev inl|since=c++11|a prvalue}} expression{{rev inl|since=c++20|, a specialization of a concept is a bool prvalue}}).
+
+====Type====
+The type of an identifier expression is the same as the type of the entity it names.
+{{rrev|since=c++11|
+The following exceptions exist:
+* If the entity named by the (unqualified) identifier is a local entity, and would result in an intervening {{rlp|lambda|lambda expression}} capturing it by copy if it were named outside of an unevaluated operand in the declarative region in which the identifier appears, then the type of the expression is the type of a {{rlp|operator member access|class member access expression}} naming the non-static data member that would be declared for such a capture in the closure object of the innermost such intervening lambda expression.
+{{source|1=
+void f()
+{
+    float x, &amp;r = x;
+    
+    [=]
+    {
+        decltype(x) y1;        // y1 has type float
+        decltype((x)) y2 = y1; // y2 has type float const&amp; because this lambda
+                               // is not mutable and x is an lvalue
+        decltype(r) r1 = y1;   // r1 has type float&amp;
+        decltype((r)) r2 = y2; // r2 has type float const&amp;
+    };
+}
+}}
+{{rrev|since=c++20|
+* If the entity named is a {{rlpsd|template parameters#Template parameter object}} for a template parameter of type {{tt|T}}, the type of the expression is {{c/core|const T}}.
+}}
+}}
+
+====Unqualified identifiers====
+Besides suitably declared identifiers, the following can be used in expressions in the same role:
+* an {{rlp|operators|overloaded operator}} name in function notation, such as {{c|operator+}} or {{c|operator new}};
+* a {{rlp|cast operator|user-defined conversion function}} name, such as {{c|operator bool}};
+{{rrev|since=c++11|
+* a {{rlp|user literal|user-defined literal operator}} name, such as {{c|operator "" _km}};
+}}
+* a {{rlp|templates|template}} name followed by its argument list, such as {{c|MyTemplate&lt;int&gt;}};
+* the character {{c|~}} followed by a class name, such as {{c|~MyClass}};
+{{rrev|since=c++11|
+* the character {{c|~}} followed by a {{rlp|decltype}} specifier, such as {{c|~decltype(str)}}.
+}}
+{{rrev|since=c++26|
+* the character {{c|~}} followed by a {{rlpsd|pack indexing#Pack indexing specifier}}, such as {{c|~pack...[0]}}.
+}}
+
+Together with identifiers they are known as ''unqualified identifier expressions''.
+
+====Qualified identifiers====
+A ''qualified identifier expression'' is an unqualified identifier expression prepended by a scope resolution operator {{c|::}}, and optionally, a sequence of any of the following separated by scope resolution operators:
+* a namespace name;
+* a class name;
+{{rrev|since=c++11|
+* an enumeration name;
+* a {{rlp|decltype|{{tt|decltype}} specifier}} denoting a class or enumeration type.
+}}
+{{rrev|since=c++26|
+* a {{rlpsd|pack indexing#Pack indexing specifier}} denoting a class or enumeration type.
+}}
+
+For example, the expression {{c|std::string::npos}} is an expression that names the static member {{c|npos}} in the class {{c|string}} in namespace {{c|std}}. The expression {{c|::tolower}} names the function {{c|tolower}} in the global namespace. The expression {{c|::std::cout}} names the global variable {{c|cout}} in namespace {{c|std}}, which is a top-level namespace. The expression {{c|boost::signals2::connection}} names the type {{c|connection}} declared in namespace {{c|signals2}}, which is declared in namespace {{c|boost}}.
+
+The keyword {{ltt|cpp/keyword/template}} may appear in qualified identifiers as necessary to disambiguate {{rlp|dependent name|dependent template names}}.
+
+See {{rlp|qualified lookup}} for the details of the name lookup for qualified identifiers.
+
+===Implicit member access transformation===
+If an identifier expression {{c|E}} denotes a non-static non-type member of some class {{tt|C}} and all following conditions are satisfied, {{c|E}} is transformed into the class member access expression {{c|this-&gt;E}}:
+* {{c|E}} is not the right operand of a {{rlp|operator member access#Built-in member access operators|member access operator}}.
+* If {{c|E}} is a qualified identifier expression, {{c|E}} is not the un-parenthesized operand of an {{rlp|operator member access#Built-in address-of operator|address-of operator}}.
+* Any of the following conditions is satisfied:
+:* {{c|E}} is {{rlp|expressions#Potentially-evaluated expressions|potentially evaluated}}.
+:* {{tt|C}} is the innermost enclosing class at {{c|E}}.
+:* {{tt|C}} is a base class of the innermost enclosing class at {{c|E}}.
+
+This transformation does not apply in the template definition context (see {{rlp|dependent name}}s).
+
+{{source|
+struct X
+{
+    int x;
+};
+
+struct B
+{
+    int b;
+};
+
+struct D : B
+{
+    X d;
+    
+    void func()
+    {
+        d;   // OK, will be transformed into this-&gt;d
+        b;   // OK, will be transformed into this-&gt;b
+        x;   // Error: this-&gt;x is ill-formed
+        
+        d.x; // OK, will be transformed into this-&gt;d.x
+             // instead of d.this-&gt;x or this-&gt;d.this-&gt;x
+    }
+};
+}}
+
+===Names===
+A ''name'' is the use of one of the following to refer to an entity:
+* an identifier
+* an overloaded operator name in function notation ({{c|operator+}}, {{c|operator new}})
+* a user-defined conversion function name ({{c|operator bool}})
+{{rrev|since=c++11|
+* a user-defined literal operator name ({{c|operator ""_km}})
+}}
+* a template name followed by its argument list ({{c|MyTemplate&lt;int&gt;}})
+
+Every name is introduced into the program by a {{rlp|declarations|declaration}}. A name used in more than one translation unit may refer to the same or different entities, depending on {{rlpsd|storage duration#Linkage}}.
+
+When the compiler encounters an unknown name in a program, it associates it with the declaration that introduced the name by means of {{rlp|lookup|name lookup}}, except for the {{rlp|dependent name}}s in template declarations and definitions (for those names, the compiler determines whether they name a type, a template, or some other entity, which may require {{rlp|dependent name|explicit disambiguation}}).
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1440|std=C++11|before=decltype expressions preceding {{tt|::}} could denote any type|after=can only denote class&lt;br&gt;or enumeration types}}
+{{dr list item|wg=cwg|dr=1963|std=C++11|before=implementation-defined characters other than digits, non-digits&lt;br&gt;and universal character names could be used in an identifier|after=prohibited}}
+{{dr list item|wg=cwg|dr=2521|std=C++11|before=the identifier in {{spar|user-defined-string-literal}} of&lt;br&gt;a literal operator was reserved as usual|after=the rules are different}}
+{{dr list item|wg=cwg|dr=2771|std=C++98|before={{c|&amp;a}} was not transformed into {{c|&amp;this-&gt;a}} in class contexts|after=it is transformed}}
+{{dr list item|wg=cwg|dr=2777|std=C++20|before=the type of an identifier expression was unclear&lt;br&gt;if it names a template parameter object|after=made clear}}
+{{dr list item|wg=cwg|dr=2818|std=C++98|before=predefined macro names are reserved|after=they are not reserved}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/identifier|Identifiers|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

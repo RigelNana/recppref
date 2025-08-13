@@ -1,0 +1,97 @@
+{{cpp/title|notify_all_at_thread_exit}}
+{{cpp/thread/navbar}}
+{{ddcl|header=condition_variable|since=c++11|
+void notify_all_at_thread_exit( std::condition_variable&amp; cond,
+                                std::unique_lock&lt;std::mutex&gt; lk );
+}}
+
+{{tt|notify_all_at_thread_exit}} provides a mechanism to notify other threads that a given thread has completely finished, including destroying all {{ltt|cpp/keyword/thread_local}} objects. It operates as follows:
+
+* Ownership of the previously acquired lock {{c|lk}} is transferred to internal storage.
+
+* The execution environment is modified such that when the current thread exits, the condition variable {{c|cond}} is notified as if by {{c multi|lk.unlock();|cond.notify_all();}}.
+
+The implied {{c|lk.unlock()}} is [[cpp/atomic/memory_order|sequenced after]] the destruction of all objects with [[cpp/keyword/thread_local|thread local storage duration]] associated with the current thread.
+
+If any of the following conditions is satisfied, the behavior is undefined:
+* {{c|lk}} is not locked by the calling thread.
+* If some other threads are also waiting on {{c|cond}}, {{c|lk.mutex()}} is different from the mutex unlocked by the waiting functions ({{tt|wait}}, {{lc|wait_for}} and {{lc|wait_until}}) called on {{c|cond}} by those threads.
+
+===Notes===
+An equivalent effect may be achieved with the facilities provided by {{lc|std::promise}} or {{lc|std::packaged_task}}.
+
+The supplied lock {{c|lk}} is held until the thread exits. Once this function has been called, no more threads may acquire the same lock in order to wait on {{c|cond}}. If some threads are waiting on this condition variable, ensure that the condition being waited for is satisfied while holding the lock on {{c|lk}}, and that this lock is not released and reacquired prior to calling {{tt|notify_all_at_thread_exit}} to avoid confusion from spurious wakeups in other threads.
+
+In typical use cases, this function is the last thing called by a detached thread.
+
+===Parameters===
+{{par begin}}
+{{par|cond|the condition variable to notify at thread exit}}
+{{par|lk|the lock associated with the condition variable {{c|cond}}}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Example===
+{{example
+|This partial code fragment illustrates how {{tt|notify_all_at_thread_exit}} can be used to avoid accessing data that depends on thread locals while those thread locals are in the process of being destructed:
+|code=
+#include &lt;cassert&gt;
+#include &lt;condition_variable&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+ 
+std::mutex m;
+std::condition_variable cv;
+ 
+bool ready = false;
+std::string result; // some arbitrary type
+ 
+void thread_func()
+{
+    thread_local std::string thread_local_data = "42";
+    
+    std::unique_lock&lt;std::mutex&gt; lk(m);
+    
+    // assign a value to result using thread_local data
+    result = thread_local_data;
+    ready = true;
+    
+    std::notify_all_at_thread_exit(cv, std::move(lk));
+    
+}   // 1. destroy thread_locals;
+    // 2. unlock mutex;
+    // 3. notify cv.
+ 
+int main()
+{
+    std::thread t(thread_func);
+    t.detach();
+    
+    // do other work
+    // ...
+    
+    // wait for the detached thread
+    std::unique_lock&lt;std::mutex&gt; lk(m);
+    cv.wait(lk, []{ return ready; });
+    
+    // result is ready and thread_local destructors have finished, no UB
+    assert(result == "42");
+}
+|output=
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2140|std=C++11|before=the call to {{tt|notify_all_at_thread_exit}}&lt;br&gt;synchronized with calls to functions waiting on {{c|cond}}|after=updated the synchronization&lt;br&gt;requirement}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc set_value_at_thread_exit}}
+{{dsc inc|cpp/thread/packaged_task/dsc make_ready_at_thread_exit}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

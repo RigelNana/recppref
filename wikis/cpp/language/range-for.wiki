@@ -1,0 +1,242 @@
+{{title|Range-based {{tt|for}} loop {{mark since c++11}}}}
+{{cpp/language/statements/navbar}}
+Executes a {{c/core|for}} loop over a range.
+
+Used as a more readable equivalent to the traditional {{rlp|for|{{c/core|for}} loop}} operating over a range of values, such as all elements in a container.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{spar optional|attr}} {{ttb|for (}} {{spar optional|init-statement}} {{spar|item-declaration}} {{ttb|:}} {{spar|range-initializer}} {{ttb|)}} {{spar|statement}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|any number of {{rlp|attributes}}}}
+{{par|{{spar|init-statement}}|{{mark since c++20}} one of
+* an {{rlp|statements|expression statement}} (which may be a null statement {{c|;}})
+* a {{rlp|declarations|simple declaration}} (typically a declaration of a variable with initializer), it may declare arbitrarily many variables or be a {{rlp|structured binding|structured binding declaration}}
+{{rrev|since=c++23|
+* an {{rlp|type alias|alias declaration}}
+}}
+Note that any {{spar|init-statement}} must end with a semicolon. This is why it is often described informally as an expression or a declaration followed by a semicolon.}}
+{{par|{{spar|item-declaration}}|a declaration for each range item}}
+{{par|{{spar|range-initializer}}|an {{rlp|expressions|expression}} or {{rlp|initialization|brace-enclosed initializer list}}}}
+{{par|{{spar|statement}}|any {{rlp|statements|statement}} (typically a compound statement)}}
+{{par end}}
+
+===Explanation===
+The above syntax produces code equivalent to the following {{rev inl|since=c++23| except for the lifetime expansion of temporaries of {{spar|range-initializer}} (see [[#Temporary range initializer|below]])}} (the variables and expressions wrapped in {{c/core|/* */}} are for exposition only):
+
+{{rev begin}}
+{{rev|until=c++17|
+{{ttb|{}}&lt;br&gt;
+:{{ttb|auto&amp;&amp;}} {{c/core|/* range */}} {{ttb|1==}} {{spar sep|range-initializer}}{{ttb|;}}&lt;br&gt;
+:{{ttb|for (auto}} {{c/core|/* begin */}} {{ttb|1==}} {{c/core|/* begin-expr */}}{{ttb|,}} {{c/core|/* end */}} {{ttb|1==}} {{c/core|/* end-expr */}}{{ttb|;}}&lt;br&gt;
+:::{{c/core|/* begin */}} {{ttb|1=!=}} {{c/core|/* end */}}{{ttb|; ++}}{{c/core|/* begin */}}{{ttb|)}}&lt;br&gt;
+:{{ttb|{}}
+::{{spar|item-declaration}} {{ttb|1== *}}{{c/core|/* begin */}}{{ttb|;}}&lt;br&gt;
+::{{spar|statement}}&lt;br&gt;
+:{{ttb|}&lt;!----&gt;}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}&lt;br&gt;
+}}
+{{rev|since=c++17|until=c++20|
+{{ttb|{}}&lt;br&gt;
+:{{ttb|auto&amp;&amp;}} {{c/core|/* range */}} {{ttb|1==}} {{spar sep|range-initializer}}{{ttb|;}}&lt;br&gt;
+:{{ttb|auto}} {{c/core|/* begin */}} {{ttb|1==}} {{c/core|/* begin-expr */}}{{ttb|;}}&lt;br&gt;
+:{{ttb|auto}} {{c/core|/* end */}} {{ttb|1==}} {{c/core|/* end-expr */}}{{ttb|;}}&lt;br&gt;
+:{{ttb|for ( ;}} {{c/core|/* begin */}} {{ttb|1=!=}} {{c/core|/* end */}}{{ttb|; ++}}{{c/core|/* begin */}}{{ttb|)}}&lt;br&gt;
+:{{ttb|{}}
+::{{spar|item-declaration}} {{ttb|1== *}}{{c/core|/* begin */}}{{ttb|;}}&lt;br&gt;
+::{{spar|statement}}&lt;br&gt;
+:{{ttb|}&lt;!----&gt;}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}&lt;br&gt;
+}}
+{{rev|since=c++20|
+{{ttb|{}}&lt;br&gt;
+:{{spar|init-statement}}&lt;br&gt;
+:{{ttb|auto&amp;&amp;}} {{c/core|/* range */}} {{ttb|1==}} {{spar sep|range-initializer}}{{ttb|;}}&lt;br&gt;
+:{{ttb|auto}} {{c/core|/* begin */}} {{ttb|1==}} {{c/core|/* begin-expr */}}{{ttb|;}}&lt;br&gt;
+:{{ttb|auto}} {{c/core|/* end */}} {{ttb|1==}} {{c/core|/* end-expr */}}{{ttb|;}}&lt;br&gt;
+:{{ttb|for ( ;}} {{c/core|/* begin */}} {{ttb|1=!=}} {{c/core|/* end */}}{{ttb|; ++}}{{c/core|/* begin */}}{{ttb|)}}&lt;br&gt;
+:{{ttb|{}}
+::{{spar|item-declaration}} {{ttb|1== *}}{{c/core|/* begin */}}{{ttb|;}}&lt;br&gt;
+::{{spar|statement}}&lt;br&gt;
+:{{ttb|}&lt;!----&gt;}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}&lt;br&gt;
+}}
+{{rev end}}
+
+{{spar|range-initializer}} is evaluated to initialize the sequence or range to iterate. Each element of the sequence, in turn, is dereferenced and is used to initialize the variable with the type and name given in {{spar|item-declaration}}.
+
+{{spar|item-declaration}} can be one of the following:
+* a {{rlpsd|declarations#Simple declaration}} with the following restrictions:
+* It has only one {{rlp|declarations#Declarators|declarator}}.
+* The declarator must have no {{rlp|initialization|initializer}}.
+* The {{rlp|declarations#Specifiers|declaration specifier sequence}} can only contain type specifiers and {{c/core|constexpr}}, and it cannot define a {{rlp|class}} or {{rlp|enum|enumeration}}.
+
+Exposition-only expressions {{c/core|/* begin-expr */}} and {{c/core|/* end-expr */}} are defined as follows:
+* If the type of {{c/core|/* range */}} is a reference to an array type {{tt|R}}:
+:* If {{tt|R}} is of bound {{c|N}}, {{c/core|/* begin-expr */}} is {{c|/* range */}} and {{c/core|/* end-expr */}} is {{c|/* range */ + N}}.
+:* If {{tt|R}} is an array of unknown bound or an array of incomplete type, the program is ill-formed.
+* If the type of {{c/core|/* range */}} is a reference to a class type {{tt|C}}, and searches in the scope of {{tt|C}} for the names “{{tt|begin}}” and “{{tt|end}}” each find at least one declaration, then {{c/core|/* begin-expr */}} is {{c|/* range */.begin()}} and {{c/core|/* end-expr */}} is {{c|/* range */.end()}}.
+* Otherwise, {{c/core|/* begin-expr */}} is {{c|begin(/* range */)}} and {{c/core|/* end-expr */}} is {{c|end(/* range */)}}, where “{{tt|begin}}” and “{{tt|end}}” are found via {{rlp|adl|argument-dependent lookup}} (non-ADL lookup is not performed).
+
+If the loop needs to be terminated within {{spar|statement}}, a {{rlp|break|{{c/core|break}} statement}} can be used as terminating statement.
+
+If the current iteration needs to be terminated within {{spar|statement}}, a {{rlp|continue|{{c/core|continue}} statement}} can be used as shortcut.
+
+If a name introduced in {{spar|init-statement}} is redeclared in the outermost block of {{spar|statement}}, the program is ill-formed:
+{{source|1=
+for (int i : {1, 2, 3})
+    int i = 1; // error: redeclaration
+}}
+
+===Temporary range initializer===
+If {{spar|range-initializer}} returns a temporary, its lifetime is extended until the end of the loop, as indicated by binding to the forwarding reference {{c/core|/* range */}}.
+
+Lifetimes of all temporaries within {{spar|range-initializer}} are not extended{{rev inl|since=c++23| unless they would otherwise be destroyed at the end of {{spar|range-initializer}}}}.
+{{source|
+// if foo() returns by value
+for (auto&amp; x : foo().items()) { /* ... */ } // until C++23 undefined behavior  
+}}
+{{rrev|since=c++20|This problem may be worked around using {{spar|init-statement}}:
+{{source|1=
+for (T thing = foo(); auto&amp; x : thing.items()) { /* ... */ } // OK
+}}
+}}
+
+
+{{rrev|since=c++23|
+Note that even in C++23 non-reference parameters of intermediate function calls do not get a lifetime extension (because in some ABIs they are destroyed in the callee, not in the caller), but that is only a problem for functions that are buggy anyway:
+{{source|1=
+using T = std::list&lt;int&gt;;
+const T&amp; f1(const T&amp; t) { return t; }
+const T&amp; f2(T t)        { return t; } // always returns a dangling reference
+T g();
+
+void foo()
+{
+    for (auto e : f1(g())) {} // OK: lifetime of return value of g() extended
+    for (auto e : f2(g())) {} // UB: lifetime of f2's value parameter ends early
+}
+}}
+}}
+
+===Notes===
+If the {{spar|range-initializer}} is a {{rlp|initialization|braced-enclosed initializer list}}, {{c/core|/* range */}} is deduced to be a reference to a {{lc|std::initializer_list}}.
+
+It is safe, and in fact, preferable in generic code, to use deduction to forwarding reference, {{c|for (auto&amp;&amp; var : sequence)}}.
+
+The member interpretation is used if the range type has a member named “{{tt|begin}}” and a member named “{{tt|end}}”. This is done regardless of whether the member is a type, data member, function, or enumerator, and regardless of its accessibility. Thus a class like {{c|1=class meow { enum { begin = 1, end = 2 }; /* rest of class */ };}} cannot be used with the range-based {{c/core|for}} loop even if the namespace-scope “{{tt|begin}}”/“{{tt|end}}” functions are present. 
+
+While the variable declared in the {{spar|item-declaration}} is usually used in the {{spar|statement}}, doing so is not required.
+
+{{rrev|since=c++17|
+As of C++17, the types of the {{c/core|/* begin-expr */}} and the {{c/core|/* end-expr */}} do not have to be the same, and in fact the type of the {{c/core|/* end-expr */}} does not have to be an iterator: it just needs to be able to be compared for inequality with one. This makes it possible to delimit a range by a predicate (e.g. "the iterator points at a null character").}}
+
+When used with a (non-const) object that has copy-on-write semantics, the range-based {{c/core|for}} loop may trigger a deep copy by (implicitly) calling the non-const {{tt|begin()}} member function.
+
+{{rrev|since=c++17|
+If that is undesirable (for instance because the loop is not actually modifying the object), it can be avoided by using {{lc|std::as_const}}:
+
+{{source|1=
+struct cow_string { /* ... */ }; // a copy-on-write string
+cow_string str = /* ... */;
+
+// for (auto x : str) { /* ... */ } // may cause deep copy
+
+for (auto x : std::as_const(str)) { /* ... */ } 
+}}
+}}
+
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=200907L|std=C++11|__cpp_range_based_for|rowspan="3"|[[#top|Range-based {{c/core|for}} loop]]}}
+{{ftm|value=201603L|std=C++17|-|Range-based {{c/core|for}} loop with [[#Explanation|different {{tt|begin}}/{{tt|end}}]] types}}	
+{{ftm|value=202211L|std=C++23|-|Lifetime extension for all temporary objects in {{spar|range-initializer}}}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/for}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v = {0, 1, 2, 3, 4, 5};
+    
+    for (const int&amp; i : v) // access by const reference
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (auto i : v) // access by value, the type of i is int
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (auto&amp;&amp; i : v) // access by forwarding reference, the type of i is int&amp;
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    const auto&amp; cv = v;
+    
+    for (auto&amp;&amp; i : cv) // access by f-d reference, the type of i is const int&amp;
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (int n : {0, 1, 2, 3, 4, 5}) // the initializer may be a
+                                     // braced-enclosed initializer list
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    int a[] = {0, 1, 2, 3, 4, 5};
+    for (int n : a) // the initializer may be an array
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for ([[maybe_unused]] int n : a)  
+        std::cout &lt;&lt; 1 &lt;&lt; ' '; // the loop variable need not be used
+    std::cout &lt;&lt; '\n';
+    
+    for (auto n = v.size(); auto i : v) // the init-statement (C++20)
+        std::cout &lt;&lt; --n + i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (typedef decltype(v)::value_type elem_t; elem_t i : v)
+    // typedef declaration as init-statement (C++20)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (using elem_t = decltype(v)::value_type; elem_t i : v)
+    // alias declaration as init-statement (C++23)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+0 1 2 3 4 5 
+0 1 2 3 4 5 
+0 1 2 3 4 5 
+0 1 2 3 4 5 
+0 1 2 3 4 5 
+0 1 2 3 4 5 
+1 1 1 1 1 1 
+5 5 5 5 5 5 
+0 1 2 3 4 5 
+0 1 2 3 4 5 
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1442|std=C++11|before=it was unspecified whether the lookup of non-member&lt;br&gt;“{{tt|begin}}” and “{{tt|end}}” includes usual unqualified lookup|after=no usual unqualified lookup}}
+{{dr list item|wg=cwg|dr=2220|std=C++11|before=the names introduced in {{spar|init-statement}} could be redeclared|after=the program is ill-formed in this case}}
+{{dr list item|wg=cwg|dr=2825|std=C++11|before=if {{spar|range-initializer}} is a brace-enclosed initializer list,&lt;br&gt;the non-member “{{tt|begin}}” and “{{tt|end}}” will be looked up|after=will lookup member “{{tt|begin}}”&lt;br&gt;and “{{tt|end}}” in this case}}
+{{dr list item|paper=P0962R1|std=C++11|before=member interpretation was used if either&lt;br&gt;member “{{tt|begin}}” and “{{tt|end}}” is present|after=only used if both are present}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc for_each}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

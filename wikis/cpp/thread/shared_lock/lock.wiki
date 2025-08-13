@@ -1,0 +1,91 @@
+{{cpp/thread/shared_lock/title|lock}}
+{{cpp/thread/shared_lock/navbar}}
+{{dcl begin}}
+{{dcl|since=c++14|1=
+void lock();
+}}
+{{dcl end}}
+
+Locks the associated mutex in shared mode. Effectively calls {{c|mutex()-&gt;lock_shared()}}.
+
+===Parameters===
+(none)
+
+===Return value===
+(none)
+
+===Exceptions===
+* Any exceptions thrown by {{c|mutex()-&gt;lock_shared()}}.
+
+* If there is no associated mutex, {{lc|std::system_error}} with an error code of {{lc|std::errc::operation_not_permitted}}.
+
+* If the associated mutex is already locked by this {{tt|shared_lock}} (that is, {{rlp|owns_lock}} returns {{c|true}}), {{lc|std::system_error}} with an error code of {{lc|std::errc::resource_deadlock_would_occur}}.
+
+===Example===
+{{todo|show a meaningful use of shared_lock::lock}}
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::string file = "Original content."; // Simulates a file
+std::mutex output_mutex; // mutex that protects output operations.
+std::shared_mutex file_mutex; // reader/writer mutex
+
+void read_content(int id)
+{
+    std::string content;
+    {
+        std::shared_lock lock(file_mutex, std::defer_lock); // Do not lock it first.
+        lock.lock(); // Lock it here.
+        content = file;
+    }
+    std::lock_guard lock(output_mutex);
+    std::cout &lt;&lt; "Contents read by reader #" &lt;&lt; id &lt;&lt; ": " &lt;&lt; content &lt;&lt; '\n';
+}
+
+void write_content()
+{
+    {
+        std::lock_guard file_lock(file_mutex);
+        file = "New content";
+    }
+    std::lock_guard output_lock(output_mutex);
+    std::cout &lt;&lt; "New content saved.\n";
+}
+
+int main()
+{
+    std::cout &lt;&lt; "Two readers reading from file.\n"
+              &lt;&lt; "A writer competes with them.\n";
+    std::thread reader1{read_content, 1};
+    std::thread reader2{read_content, 2};
+    std::thread writer{write_content};
+    reader1.join();
+    reader2.join();
+    writer.join();
+    std::cout &lt;&lt; "The first few operations to file are done.\n";
+    reader1 = std::thread{read_content, 3};
+    reader1.join();
+}
+|p=true
+|output=
+Two readers reading from file.
+A writer competes with them.
+Contents read by reader #1: Original content.
+Contents read by reader #2: Original content.
+New content saved.
+The first few operations to file are done.
+Contents read by reader #3: New content
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/shared_lock/dsc try_lock}}
+{{dsc inc|cpp/thread/shared_lock/dsc unlock}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,80 @@
+{{cpp/title|construct_at}}
+{{cpp/memory/navbar}}
+{{ddcl|header=memory|since=c++20|
+template&lt; class T, class... Args &gt;
+constexpr T* construct_at( T* location, Args&amp;&amp;... args );
+}}
+
+Creates a {{tt|T}} object initialized with the arguments in {{c|args}} at given address {{c|location}}.
+
+Equivalent to {{box|
+{{c/core|if constexpr (std::is_array_v&lt;T&gt;)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|return ::new (}}{{rlpi|voidify}}{{sep}}{{c/core|(*location)) T[1]();}}&lt;br&gt;
+{{c/core|else}}&lt;br&gt;
+{{nbspt|4}}{{c/core|return ::new (}}{{rlpi|voidify}}{{sep}}{{c/core|(*location)) T(std::forward&lt;Args&gt;(args)...);}}
+}}{{rev inl|until=c++26|, except that {{tt|construct_at}} may be used in evaluation of {{lt|cpp/language/constant expression}}s}}.
+
+When {{tt|construct_at}} is called in the evaluation of some constant expression {{c|expr}}, {{c|location}} must point to either a storage obtained by {{c/core|std::allocator&lt;T&gt;::allocate}} or an object whose lifetime began within the evaluation of {{c|expr}}.
+
+{{cpp/enable if|all following conditions are satisfied}}:
+* {{c|std::is_unbounded_array_v&lt;T&gt;}} is {{c|false}}.
+* {{c|::new(std::declval&lt;void*&gt;()) T(std::declval&lt;Args&gt;()...)}} is well-formed when treated as an [[cpp/language/expressions#Potentially-evaluated expressions|unevaluated operand]].
+
+If {{c|std::is_array_v&lt;T&gt;}} is {{c|true}} and {{c|sizeof...(Args)}} is nonzero, the program is ill-formed.
+
+===Parameters===
+{{par begin}}
+{{par|location|pointer to the uninitialized storage on which a {{tt|T}} object will be constructed}}
+{{par|args...|arguments used for initialization}}
+{{par end}}
+
+===Return value===
+{{c|location}}
+
+===Example===
+{{example
+|code=
+#include &lt;bit&gt;
+#include &lt;memory&gt;
+
+class S
+{
+    int x_;
+    float y_;
+    double z_;
+public:
+    constexpr S(int x, float y, double z) : x_{x}, y_{y}, z_{z} {}
+    [[nodiscard("no side-effects!")]]
+    constexpr bool operator==(const S&amp;) const noexcept = default;
+};
+
+consteval bool test()
+{
+    alignas(S) unsigned char storage[sizeof(S)]{};
+    S uninitialized = std::bit_cast&lt;S&gt;(storage);
+    std::destroy_at(&amp;uninitialized);
+    S* ptr = std::construct_at(std::addressof(uninitialized), 42, 2.71f, 3.14);
+    const bool res{*ptr == S{42, 2.71f, 3.14}&lt;!----&gt;};
+    std::destroy_at(ptr);
+    return res;
+}
+static_assert(test());
+
+int main() {}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3436|std=C++20|before={{tt|construct_at}} could not create objects of array types|after=can value-initialize bounded arrays}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before={{tt|construct_at}} could create objects of cv-qualified types|after=only cv-unqualified types are permitted}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc allocate}}
+{{dsc inc|cpp/memory/allocator_traits/dsc construct}}
+{{dsc inc|cpp/memory/dsc destroy_at}}
+{{dsc inc|cpp/memory/ranges/dsc construct_at}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

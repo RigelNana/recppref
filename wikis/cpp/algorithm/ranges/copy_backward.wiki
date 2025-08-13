@@ -1,0 +1,133 @@
+{{cpp/ranges/title|copy_backward|copy_backward_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::bidirectional_iterator I2 &gt;
+requires std::indirectly_copyable&lt;I1, I2&gt;
+constexpr copy_backward_result&lt;I1, I2&gt;
+    copy_backward( I1 first, S1 last, I2 result );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::bidirectional_range R, std::bidirectional_iterator I &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+constexpr copy_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+    copy_backward( R&amp;&amp; r, I result );
+}}
+{{dcl h|Helper types}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I1, class I2 &gt;
+using copy_backward_result = ranges::in_out_result&lt;I1, I2&gt;;
+}}
+{{dcl end}}
+
+@1@ Copies the elements from the range, defined by {{range|first|last}}, to another range {{range|result - N|result}}, where {{c|1=N = ranges::distance(first, last)}}. The elements are copied in reverse order (the last element is copied first), but their relative order is preserved. The behavior is undefined if {{c|result}} is within {{tt|'''('''{{c|first}}, {{c|last}}''']'''}}. In such a case {{c|std::ranges::copy}} can be used instead.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}}, and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of elements to copy from}}
+{{par|last|the end of the range of elements to copy from}}
+{{par|r|the range of the elements to copy from}}
+{{par|result|the end of the destination range}}
+{{par end}}
+
+===Return value===
+{{c|1= {last, result - N}&lt;!----&gt;}}
+
+===Complexity===
+Exactly {{c|N}} assignments.
+
+===Notes===
+When copying overlapping ranges, {{rlpt|copy|ranges::copy}} is appropriate when copying to the left (beginning of the destination range is outside the source range) while {{tt|ranges::copy_backward}} is appropriate when copying to the right (end of the destination range is outside the source range).
+
+===Possible implementation===
+{{eq fun|1=
+struct copy_backward_fn
+{
+    template&lt;std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::bidirectional_iterator I2&gt;
+    requires std::indirectly_copyable&lt;I1, I2&gt;
+    constexpr ranges::copy_backward_result&lt;I1, I2&gt;
+        operator()(I1 first, S1 last, I2 result) const
+    {
+        I1 last1 {ranges::next(first, std::move(last))};
+        for (I1 i {last1}; i != first;)
+            *--result = *--i;
+        return {std::move(last1), std::move(result)};
+    }
+
+    template&lt;ranges::bidirectional_range R, std::bidirectional_iterator I&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+    constexpr ranges::copy_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+        operator()(R&amp;&amp; r, I result) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr copy_backward_fn copy_backward{};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+void print(std::string_view rem, std::ranges::forward_range auto const&amp; r)
+{
+    for (std::cout &lt;&lt; rem &lt;&lt; ": "; auto const&amp; elem : r)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    const auto src = {1, 2, 3, 4};
+    print("src", src);
+
+    std::vector&lt;int&gt; dst(src.size() + 2);
+    std::ranges::copy_backward(src, dst.end());
+    print("dst", dst);
+
+    std::ranges::fill(dst, 0);
+    const auto [in, out] =
+        std::ranges::copy_backward(src.begin(), src.end() - 2, dst.end());
+    print("dst", dst);
+
+    std::cout
+        &lt;&lt; "(in - src.begin) == " &lt;&lt; std::distance(src.begin(), in) &lt;&lt; '\n'
+        &lt;&lt; "(out - dst.begin) == " &lt;&lt; std::distance(dst.begin(), out) &lt;&lt; '\n';
+}
+|output=
+src: 1 2 3 4
+dst: 0 0 1 2 3 4
+dst: 0 0 0 0 1 2
+(in - src.begin) == 2
+(out - dst.begin) == 4
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_n}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc replace_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/dsc copy_backward}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,140 @@
+{{cpp/ranges/subrange/title|operator PairLike}}
+{{cpp/ranges/subrange/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+template&lt; /*different-from*/&lt;subrange&gt; PairLike &gt;
+    requires /*pair-like-convertible-from*/&lt;PairLike, const I&amp;, const S&amp;&gt;
+constexpr operator PairLike() const;
+}}
+{{dcl h|Helper concepts}}
+{{dcla|num=2|expos=yes|1=
+template&lt; class T &gt;
+concept /*pair-like*/ = /* see description */;
+}}
+{{dcla|num=3|expos=yes|1=
+template&lt; class T, class U, class V &gt;
+concept /*pair-like-convertible-from*/ = /* see description */;
+}}
+{{dcl end}}
+
+@1@ Converts {{tt|subrange}} to a pair-like type.
+@@ For the definition of {{c/core|/*different-from*/}}, see {{lsi|cpp/ranges#different-from}}{{sep}}.
+
+@2@ Determines whether a type is ''pair-like''{{sep}}.
+{{rev begin}}
+{{rev|until=c++23|
+Equivalent to:
+{{source|1=
+template&lt; class T &gt;
+concept /*pair-like*/ =
+    !std::is_reference_v&lt;T&gt; &amp;&amp; requires(T t)
+    {
+        typename std::tuple_size&lt;T&gt;::type;
+        requires std::derived_from&lt;std::tuple_size&lt;T&gt;,
+                                   std::integral_constant&lt;std::size_t, 2&gt;&gt;;
+        typename std::tuple_element_t&lt;0, std::remove_const_t&lt;T&gt;&gt;;
+        typename std::tuple_element_t&lt;1, std::remove_const_t&lt;T&gt;&gt;;
+        { std::get&lt;0&gt;(t) } -&gt; std::convertible_to&lt;
+                                  const std::tuple_element_t&lt;0, T&gt;&amp;&gt;;
+        { std::get&lt;1&gt;(t) } -&gt; std::convertible_to&lt;
+                                  const std::tuple_element_t&lt;1, T&gt;&amp;&gt;;
+    };
+}}
+}}
+{{rev|since=c++23|
+This concept is equivalent to the library-wide exposition-only concept {{lti|cpp/utility/tuple/tuple-like|pair-like}}.
+}}
+{{rev end}}
+
+@3@ Determines whether a pair-like type can be constructed from two values of possibly different given types.
+{{rev begin}}
+{{rev|until=c++23|
+Equivalent to:
+{{source|1=
+template&lt; class T, class U, class V &gt;
+concept /*pair-like-convertible-from*/ =
+    !ranges::range&lt;T&gt; &amp;&amp; /*pair-like*/&lt;T&gt; &amp;&amp;
+    std::constructible_from&lt;T, U, V&gt; &amp;&amp;
+    /*convertible-to-non-slicing*/&lt;U, std::tuple_element_t&lt;0, T&gt;&gt; &amp;&amp;
+    std::convertible_to&lt;V, std::tuple_element_t&lt;1, T&gt;&gt;;
+}}
+}}
+{{rev|since=c++23|
+Equivalent to:
+{{source|1=
+template&lt; class T, class U, class V &gt;
+concept /*pair-like-convertible-from*/ =
+    !ranges::range&lt;T&gt; &amp;&amp; !std::is_reference_v&lt;T&gt; &amp;&amp; /*pair-like*/&lt;T&gt; &amp;&amp;
+    std::constructible_from&lt;T, U, V&gt; &amp;&amp;
+    /*convertible-to-non-slicing*/&lt;U, std::tuple_element_t&lt;0, T&gt;&gt; &amp;&amp;
+    std::convertible_to&lt;V, std::tuple_element_t&lt;1, T&gt;&gt;;
+}}
+}}
+{{rev end}}
+
+===Return value===
+{{box|{{c/core|PairLike(}}{{rlpsi|/#begin_}}{{sep}}{{c/core|,}}{{nbspt}}{{rlpsi|/#end_}}{{sep}}{{c/core|)}}}}
+
+===Notes===
+Following types in the standard library are pair-like:
+* {{c/core|std::pair&lt;T, U&gt;}}
+* {{c/core|std::tuple&lt;T, U&gt;}}
+* {{c/core|std::array&lt;T, 2&gt;}}
+* {{c/core|std::ranges::subrange&lt;I, S, K&gt;}}
+{{rrev|since=c++26|
+*{{c/core|std::complex&lt;T&gt;}}
+}}
+
+
+{{rrev|until=c++23|
+A program-defined type derived from one of these types can be a pair-like type, if
+* {{ltt std|cpp/utility/tuple_size}} and {{ltt std|cpp/utility/tuple_element}} are correctly specialized for it, and
+* calls to {{c|std::get&lt;0&gt;}} and {{c|std::get&lt;1&gt;}} for its value are well-formed.
+}}
+
+Since {{tt|subrange}} specializations are {{lconcept|range}} types, conversion to them are not performed via this conversion function.
+
+{{lc|std::array}} specializations cannot be converted from {{tt|subrange}}, since they are {{lconcept|range}} types.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+using striter = std::string::const_iterator;
+
+using legacy_strview = std::pair&lt;striter, striter&gt;;
+
+void legacy_print(legacy_strview p)
+{
+    for (; p.first != p.second; ++p.first)
+        std::cout &lt;&lt; *p.first &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string dat{"ABCDE"};
+    for (auto v{&lt;!----&gt;std::ranges::subrange{dat}&lt;!----&gt;}; v; v = {v.begin(), v.end() - 1})
+    {
+        /*...*/
+        legacy_print(legacy_strview{v});
+    }
+}
+|output=
+A B C D E 
+A B C D 
+A B C 
+A B 
+A
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple-like}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,66 @@
+{{cpp/chrono/hash|time_point|tparams=class Clock, class Duration|targs=Clock, Duration|enabled={{c/core|std::hash&lt;Duration&gt;}} is enabled|example=
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;unordered_map&gt;
+
+struct my_system_clock : std::chrono::system_clock
+{
+    using time_point = std::chrono::time_point&lt;my_system_clock&gt;;
+    
+    static time_point now() noexcept
+    {
+        return time_point{std::chrono::system_clock::now().time_since_epoch()};
+    }
+
+    template&lt;class CharT, class Traits&gt;
+    friend auto operator&lt;&lt;(std::basic_ostream&lt;CharT, Traits&gt;&amp; os, const time_point&amp; tp)
+        -&gt; decltype(os)
+    {
+        return os &lt;&lt; std::chrono::system_clock::time_point{tp.time_since_epoch()};
+    }
+};
+
+using my_system_clock_tp = std::chrono::time_point&lt;my_system_clock&gt;;
+
+#if __cpp_lib_chrono &lt; 202306L
+// custom specialization of std::hash can be injected in namespace std
+template&lt;&gt;
+struct std::hash&lt;my_system_clock_tp&gt;
+{
+    std::size_t operator()(const my_system_clock_tp&amp; d) const noexcept
+    {
+        return d.time_since_epoch().count();
+    }
+};
+#endif
+
+int main()
+{
+    using namespace std::chrono_literals;
+    
+    std::unordered_map&lt;my_system_clock_tp, std::string&gt; log;
+    
+    for (int i{}; i != 4; ++i)
+    {
+        std::this_thread::sleep_for(100ms);
+        log[my_system_clock::now()] = "event #" + std::to_string(i);
+    }
+    
+    for (auto const&amp; [time, message] : log)
+        std::cout &lt;&lt; '[' &lt;&lt; time &lt;&lt; "], message: " &lt;&lt; message &lt;&lt; '\n';
+}
+|p=true
+|output=
+[2024-03-22 10:47:14.966238436], message: event #3
+[2024-03-22 10:47:14.866096194], message: event #2
+[2024-03-22 10:47:14.765965786], message: event #1
+[2024-03-22 10:47:14.665817365], message: event #0
+}}
+}}
+
+{{langlinks|ru|zh}}

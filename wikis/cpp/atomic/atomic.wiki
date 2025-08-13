@@ -1,0 +1,221 @@
+{{cpp/title|atomic}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt;
+struct atomic;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class U &gt;
+struct atomic&lt;U*&gt;;
+}}
+{{dcl sep}}
+{{dcl header|memory}}
+{{dcl|num=3|since=c++20|
+template&lt; class U &gt;
+struct atomic&lt;std::shared_ptr&lt;U&gt;&gt;;
+}}
+{{dcl|num=4|since=c++20|
+template&lt; class U &gt;
+struct atomic&lt;std::weak_ptr&lt;U&gt;&gt;;
+}}
+{{dcl sep}}
+{{dcl header|stdatomic.h}}
+{{dcl|num=5|since=c++23|
+#define _Atomic(T) /* see below */
+}}
+{{dcl end}}
+
+Each instantiation and full specialization of the {{tt|std::atomic}} template defines an atomic type. If one thread writes to an atomic object while another thread reads from it, the behavior is well-defined (see {{lt|cpp/language/memory model}} for details on data races).
+
+In addition, accesses to atomic objects may establish inter-thread synchronization and order non-atomic memory accesses as specified by {{lc|std::memory_order}}.
+
+{{tt|std::atomic}} is neither copyable nor movable.
+
+{{rrev|since=c++23|
+The compatibility macro {{tt|_Atomic}} is provided in {{header|stdatomic.h}} such that {{tt|_Atomic(T)}} is identical to {{tt|std::atomic&lt;T&gt;}} while both are well-formed.
+
+It is unspecified whether any declaration in namespace {{tt|std}} is available when {{header|stdatomic.h}} is included.
+}}
+
+===Specializations===
+====Primary template====
+The primary {{tt|std::atomic}} template may be instantiated with any {{named req|TriviallyCopyable}} type {{tt|T}} satisfying both {{named req|CopyConstructible}} and {{named req|CopyAssignable}}. The program is ill-formed if any of following values is {{c|false}}:
+* {{c|std::is_trivially_copyable&lt;T&gt;::value}}
+* {{c|std::is_copy_constructible&lt;T&gt;::value}}
+* {{c|std::is_move_constructible&lt;T&gt;::value}}
+* {{c|std::is_copy_assignable&lt;T&gt;::value}}
+* {{c|std::is_move_assignable&lt;T&gt;::value}}
+* {{c|std::is_same&lt;T, typename std::remove_cv&lt;T&gt;::type&gt;::value}}
+{{source|1=
+struct Counters { int a; int b; }; // user-defined trivially-copyable type
+std::atomic&lt;Counters&gt; cnt;         // specialization for the user-defined type
+}}
+
+{{c/core|std::atomic&lt;bool&gt;}} uses the primary template. It is guaranteed to be a [[cpp/language/classes#Standard-layout class|standard layout struct]] and has a {{lsd|cpp/language/destructor#Trivial destructor}}.
+
+====Partial specializations====
+The standard library provides partial specializations of the {{tt|std::atomic}} template for the following types with additional properties that the primary template does not have:
+
+@2@ Partial specializations {{tt|std::atomic&amp;lt;U*&gt;}} for all pointer types. These specializations have standard layout{{rev inl|until=c++20|, trivial default constructors,}} and trivial destructors. Besides the operations provided for all atomic types, these specializations additionally support atomic arithmetic operations appropriate to pointer types, such as {{rlt|fetch_add}}, {{rlt|fetch_sub}}.
+
+{{rrev|since=c++20|
+@3,4@ Partial specializations {{c/core|std::atomic&lt;std::shared_ptr&lt;U&gt;&gt;}} and {{c/core|std::atomic&lt;std::weak_ptr&lt;U&gt;&gt;}} are provided for {{lc|std::shared_ptr}} and {{lc|std::weak_ptr}}.
+
+See {{ltt|cpp/memory/shared_ptr/atomic2|std::atomic{{dsc small|&lt;std::shared_ptr&gt;}}}} and {{ltt|cpp/memory/weak_ptr/atomic2|std::atomic{{dsc small|&lt;std::weak_ptr&gt;}}}} for details.
+}}
+
+====Specializations for integral types====
+When instantiated with one of the following integral types, {{tt|std::atomic}} provides additional atomic operations appropriate to integral types such as {{rlt|fetch_add}}, {{rlt|fetch_sub}}, {{rlt|fetch_and}}, {{rlt|fetch_or}}, {{rlt|fetch_xor}}:
+:* The character types {{c/core|char}}{{rev inl|since=c++20|, {{c/core|char8_t}}}}, {{c/core|char16_t}}, {{c/core|char32_t}}, and {{c/core|wchar_t}};
+:* The standard signed integer types: {{c/core|signed char}}, {{c/core|short}}, {{c/core|int}}, {{c/core|long}}, and {{c/core|long long}};
+:* The standard unsigned integer types: {{c/core|unsigned char}}, {{c/core|unsigned short}}, {{c/core|unsigned int}}, {{c/core|unsigned long}}, and {{c/core|unsigned long long}};
+:* Any additional integral types needed by the typedefs in the header {{header|cstdint}}.
+
+Additionally, the resulting {{tt|std::atomic&lt;''Integral''&gt;}} specialization has standard layout{{rev inl|until=c++20|, a trivial default constructor,}} and a trivial destructor. Signed integer arithmetic is defined to use two's complement; there are no undefined results.
+
+{{rrev|since=c++20|
+====Specializations for floating-point types====
+When instantiated with one of the cv-unqualified floating-point types ({{c/core|float}}, {{c/core|double}}, {{c/core|long double}}{{rev inl|since=c++23| and cv-unqualified [[cpp/language/types#Extended floating-point types|extended floating-point types]]}}), {{tt|std::atomic}} provides additional atomic operations appropriate to floating-point types such as {{rlt|fetch_add}} and {{rlt|fetch_sub}}.
+
+Additionally, the resulting {{tt|std::atomic&lt;''Floating''&gt;}} specialization has standard layout and a trivial destructor.
+
+No operations result in undefined behavior even if the result is not representable in the floating-point type. The [[cpp/numeric/fenv|floating-point environment]] in effect may be different from the calling thread's floating-point environment.
+}}
+
+===Member types===
+{{dsc begin}}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|value_type}}|{{tt|T}} {{mark|regardless of whether specialized or not}}}}
+{{dsc|{{tt|difference_type}}&lt;ref&gt;{{tt|difference_type}} is not defined in the primary {{tt|std::atomic}} template or in the partial specializations for {{lc|std::shared_ptr}} and {{lc|std::weak_ptr}}.&lt;/ref&gt;|
+{{rrev multi
+|rev1=
+{{tt|value_type}} {{mark|only for {{tt|atomic&lt;''Integral''&gt;}}{{rev inl|since=c++20| and {{tt|atomic&lt;''Floating''&gt;}}}} specializations}}&lt;br&gt;
+|rev2=
+{{lc|std::ptrdiff_t}} {{mark|only for {{tt|std::atomic&amp;lt;U*&gt;}} specializations}}
+}}
+}}
+{{dsc end}}
+&lt;references/&gt;
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/atomic/dsc constructor}}
+{{dsc inc|cpp/atomic/atomic/dsc operator{{=}}}}
+{{dsc inc|cpp/atomic/atomic/dsc is_lock_free}}
+{{dsc inc|cpp/atomic/atomic/dsc store}}
+{{dsc inc|cpp/atomic/atomic/dsc load}}
+{{dsc inc|cpp/atomic/atomic/dsc operator_T}}
+{{dsc inc|cpp/atomic/atomic/dsc exchange}}
+{{dsc inc|cpp/atomic/atomic/dsc compare_exchange}}
+{{dsc inc|cpp/atomic/atomic/dsc wait|atomic}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_one|atomic}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_all|atomic}}
+{{dsc h1|Constants}}
+{{dsc inc|cpp/atomic/atomic/dsc is_always_lock_free}}
+{{dsc end}}
+
+===Specialized member functions===
+{{anchor|Specialized for integral, floating-point and pointer types}}
+{{dsc begin}}
+{{dsc h2|Specialized for integral{{rev inl|since=c++20|, floating-point}} and pointer types}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_add}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_sub}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith2}}
+{{dsc h2|Specialized for integral and pointer types only}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_max}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_min}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith}}
+{{dsc h2|Specialized for integral types only}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_and}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_or}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_xor}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith3}}
+{{dsc end}}
+
+===Type aliases===
+Type aliases are provided for {{c/core|bool}} and all integral types listed above, as follows:
+
+{{dsc begin}}
+{{dsc h2|Aliases for all {{tt|std::atomic&lt;Integral&gt;}}}}
+{{dsc inc|cpp/atomic/atomic/dsc atomic integral types}}
+{{dsc h2|Aliases for special-purpose types}}
+{{dsc inc|cpp/atomic/atomic/dsc atomic lock free aliases}}
+{{dsc end}}
+
+Note: {{tt|std::atomic_int''N''_t}}, {{tt|std::atomic_uint''N''_t}}, {{tt|std::atomic_intptr_t}}, and {{tt|std::atomic_uintptr_t}} are defined if and only if {{tt|std::int''N''_t}}, {{tt|std::uint''N''_t}}, {{lc|std::intptr_t}}, and {{lc|std::uintptr_t}} are defined, respectively. {{rrev|since=c++20|
+{{tt|std::atomic_signed_lock_free}} and {{tt|std::atomic_unsigned_lock_free}} are optional in freestanding implementations.
+}}
+
+===Notes===
+There are non-member function template equivalents for all member functions of {{tt|std::atomic}}. Those non-member functions may be additionally overloaded for types that are not specializations of {{tt|std::atomic}}, but are able to guarantee atomicity. The only such type in the standard library is {{c/core|std::shared_ptr&lt;U&gt;}}.
+
+{{tt|_Atomic}} is a [[c/keyword/_Atomic|keyword]] and used to provide [[c/language/atomic|atomic types]] in C.
+
+Implementations are recommended to ensure that the representation of {{tt|_Atomic(T)}} in C is same as that of {{tt|std::atomic&lt;T&gt;}} in C++ for every possible type {{tt|T}}. The mechanisms used to ensure atomicity and memory ordering should be compatible.
+
+On GCC and Clang, some of the functionality described here requires linking against {{tt|-latomic}}.
+
+{{ftm begin|sort=1}}
+{{ftm|__cpp_lib_atomic_ref|{{tt|std::atomic_ref}}|value=201806L|std=C++20}}
+{{ftm|__cpp_lib_constexpr_atomic|{{c/core|constexpr}} {{tt|std::atomic}} and {{lc|std::atomic_ref}}|value=202411L|std=C++26}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+std::atomic_int acnt;
+int cnt;
+
+void f()
+{
+    for (auto n{10000}; n; --n)
+    {
+        ++acnt;
+        ++cnt;
+        // Note: for this example, relaxed memory order is sufficient,
+        // e.g. acnt.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+int main()
+{
+    {
+        std::vector&lt;std::jthread&gt; pool;
+        for (int n = 0; n &lt; 10; ++n)
+            pool.emplace_back(f);
+    }
+    
+    std::cout &lt;&lt; "The atomic counter is " &lt;&lt; acnt &lt;&lt; '\n'
+              &lt;&lt; "The non-atomic counter is " &lt;&lt; cnt &lt;&lt; '\n';
+}
+|p=true
+|output=
+The atomic counter is 100000
+The non-atomic counter is 69696
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2441|std=C++11|before=typedefs for atomic versions of optional&lt;br&gt;[[cpp/types/integer|fixed width integer types]] were missing|after=added}}
+{{dr list item|wg=lwg|dr=3012|std=C++11|before={{tt|std::atomic&lt;T&gt;}} was permitted for any {{tt|T}}&lt;br&gt;that is trivially copyable but not copyable|after=such specializations are forbidden}}
+{{dr list item|wg=lwg|dr=3949|std=C++17|before=the wording requiring {{c/core|std::atomic&lt;bool&gt;}} to have a&lt;br&gt;trivial destructor was accidently dropped in C++17|after=added back}}
+{{dr list item|wg=lwg|dr=4069|paper=P3323R1|std=C++11|before=support for cv-qualified {{tt|T}} was questionable|after=disallow {{tt|T}} being cv-qualified}}
+{{dr list item|paper=P0558R1|std=C++11|before=template argument deduction for some&lt;br&gt;functions for atomic types might accidently&lt;br&gt;fail; invalid pointer operations were provided|after=specification was substantially rewritten:&lt;br&gt;member typedefs {{tt|value_type}}&lt;br&gt;and {{tt|difference_type}} are added}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_flag}}
+{{dsc inc|cpp/memory/shared_ptr/dsc atomic2}}
+{{dsc inc|cpp/memory/weak_ptr/dsc atomic2}}
+{{dsc see c|c/language/atomic|Atomic types|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

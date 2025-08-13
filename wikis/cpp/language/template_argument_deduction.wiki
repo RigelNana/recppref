@@ -1,0 +1,817 @@
+{{title|Template argument deduction}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+In order to instantiate a {{rlp|function template}}, every template argument must be known, but not every template argument has to be specified. When possible, the compiler will deduce the missing template arguments from the function arguments. This occurs when a function call is attempted, when an address of a function template is taken, and in some {{lsd|#Other contexts}}:
+{{source|1=
+template&lt;typename To, typename From&gt;
+To convert(From f);
+
+void g(double d)
+{
+    int i = convert&lt;int&gt;(d);    // calls convert&lt;int, double&gt;(double)
+    char c = convert&lt;char&gt;(d);  // calls convert&lt;char, double&gt;(double)
+    int(*ptr)(float) = convert; // instantiates convert&lt;int, float&gt;(float)
+                                // and stores its address in ptr
+}
+}}
+
+This mechanism makes it possible to use template operators, since there is no syntax to specify template arguments for an operator other than by re-writing it as a function call expression:
+{{source|1=
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::cout &lt;&lt; "Hello, world" &lt;&lt; std::endl;
+    // operator&lt;&lt; is looked up via ADL as std::operator&lt;&lt;,
+    // then deduced to operator&lt;&lt;&lt;char, std::char_traits&lt;char&gt;&gt; both times
+    // std::endl is deduced to &amp;std::endl&lt;char, std::char_traits&lt;char&gt;&gt;
+}
+}}
+
+Template argument deduction takes place after the function template {{rlp|lookup|name lookup}} (which may involve {{rlp|adl|argument-dependent lookup}}) and before {{rlpsd|function template#Template argument substitution}} (which may involve {{rlp|sfinae|SFINAE}}) and {{rlp|overload resolution}}.
+
+{{rrev|since=c++17|
+Template argument deduction is also performed when the name of a class template is used as the type of an object being constructed:
+{{source|1=
+std::pair p(2, 4.5);
+std::tuple t(4, 3, 2.5);
+std::copy_n(vi1, 3, std::back_insert_iterator(vi2));
+std::for_each(vi.begin(), vi.end(), Foo([&amp;](int i) {...}));
+auto lck = std::lock_guard(foo.mtx);
+std::lock_guard lck2(foo.mtx, ul);
+}}
+Template argument deduction for class templates takes place in declarations and in explicit cast expressions; see {{rlp|class template argument deduction}} for details.
+}}
+
+===Deduction from a function call===
+Template argument deduction attempts to determine template arguments (types for type template parameters {{ttb|T}}i, templates for template template parameters {{ttb|TT}}i, and values for non-type template parameters {{ttb|I}}i), which can be substituted into each parameter {{ttb|P}} to produce the type ''deduced'' {{ttb|A}}, which is the same as the type of the argument {{ttb|A}}, after adjustments listed below.
+
+If there are multiple parameters, each {{ttb|P}}/{{ttb|A}} pair is deduced separately and the deduced template arguments are then combined. If deduction fails or is ambiguous for any {{ttb|P}}/{{ttb|A}} pair or if different pairs yield different deduced template arguments, or if any template argument remains neither deduced nor explicitly specified, compilation fails.
+
+{{rrev|since=c++11|
+If removing references and cv-qualifiers from {{ttb|P}} gives {{c|std::initializer_list&lt;P'&gt;}} and {{ttb|A}} is a {{rlp|list initialization|braced-init-list}}, then deduction is performed for every element of the initializer list, taking {{ttb|P'}} as the parameter and the list element {{ttb|A'}} as the argument:
+{{source|1=
+template&lt;class T&gt;
+void f(std::initializer_list&lt;T&gt;);
+
+f({1, 2, 3});  // P = std::initializer_list&lt;T&gt;, A = {1, 2, 3}
+               // P'1 = T, A'1 = 1: deduced T = int
+               // P'2 = T, A'2 = 2: deduced T = int
+               // P'3 = T, A'3 = 3: deduced T = int
+               // OK: deduced T = int
+
+f({1, "abc"}); // P = std::initializer_list&lt;T&gt;, A = {1, "abc"}
+               // P'1 = T, A'1 = 1: deduced T = int
+               // P'2 = T, A'2 = "abc": deduced T = const char*
+               // error: deduction fails, T is ambiguous
+}}
+
+If removing references and cv-qualifiers from {{ttb|P}} gives {{ttb|P'}}[{{tt|N}}], and {{ttb|A}} is a non-empty braced-init-list, then deduction is performed as above, except if {{tt|N}} is a non-type template parameter, it is deduced from the length of the initializer list: &lt;!-- CWG 1591 --&gt;
+{{source|1=
+template&lt;class T, int N&gt;
+void h(T const(&amp;)[N]);
+h({1, 2, 3}); // deduced T = int, deduced N = 3
+
+template&lt;class T&gt;
+void j(T const(&amp;)[3]);
+j({42}); // deduced T = int, array bound is not a parameter, not considered
+
+struct Aggr
+{
+    int i;
+    int j;
+};
+
+template&lt;int N&gt;
+void k(Aggr const(&amp;)[N]);
+k({1, 2, 3});       // error: deduction fails, no conversion from int to Aggr
+k({{1}, {2}, {3}}); // OK: deduced N = 3
+
+template&lt;int M, int N&gt;
+void m(int const(&amp;)[M][N]);
+m({{1, 2}, {3, 4}}); // deduced M = 2, deduced N = 2
+
+template&lt;class T, int N&gt;
+void n(T const(&amp;)[N], T);
+n({{1}, {2}, {3}}, Aggr()); // deduced T = Aggr, deduced N = 3
+}}
+
+If a {{rlp|parameter pack}} appears as the last {{ttb|P}}, then the type {{ttb|P}} is matched against the type {{ttb|A}} of each remaining argument of the call. Each match deduces the template arguments for the next position in the pack expansion:
+{{source|1=
+template&lt;class... Types&gt;
+void f(Types&amp;...);
+
+void h(int x, float&amp; y)
+{
+    const int z = x;
+    f(x, y, z); // P = Types&amp;..., A1 = x: deduced first member of Types... = int
+                // P = Types&amp;..., A2 = y: deduced second member of Types... = float
+                // P = Types&amp;..., A3 = z: deduced third member of Types... = const int
+                // calls f&lt;int, float, const int&gt;
+}
+}}
+
+}}
+
+If {{ttb|P}} is a function type, pointer to function type, or pointer to member function type and if {{ttb|A}} is a {{rlp|overloaded address|set of overloaded functions}} not containing function templates, template argument deduction is attempted with each overload. If only one succeeds, that successful deduction is used. If none or more than one succeeds, the template parameter is non-deduced context (see below):
+{{source|1=
+template&lt;class T&gt;
+int f(T(*p)(T));
+
+int g(int);
+int g(char);
+
+f(g); // P = T(*)(T), A = overload set
+      // P = T(*)(T), A1 = int(int): deduced T = int
+      // P = T(*)(T), A2 = int(char): fails to deduce T
+      // only one overload works, deduction succeeds
+}}
+
+Before deduction begins, the following adjustments to {{ttb|P}} and {{ttb|A}} are made:
+@1@ If {{ttb|P}} is not a reference type,
+:@a@ if {{ttb|A}} is an array type, {{ttb|A}} is replaced by the pointer type obtained from array-to-pointer conversion;
+:@b@ otherwise, if {{ttb|A}} is a function type, {{ttb|A}} is replaced by the pointer type obtained from function-to-pointer conversion;
+:@c@ otherwise, if {{ttb|A}} is a cv-qualified type, the top-level cv-qualifiers are ignored for deduction:
+{{source|1=
+template&lt;class T&gt;
+void f(T);
+
+int a[3];
+f(a); // P = T, A = int[3], adjusted to int*: deduced T = int*
+
+void b(int);
+f(b); // P = T, A = void(int), adjusted to void(*)(int): deduced T = void(*)(int)
+
+const int c = 13;
+f(c); // P = T, A = const int, adjusted to int: deduced T = int
+}}
+@2@ If {{ttb|P}} is a cv-qualified type, the top-level cv-qualifiers are ignored for deduction.
+@3@ If {{ttb|P}} is a reference type, the referenced type is used for deduction.
+@4@ If {{ttb|P}} is an rvalue reference to a cv-unqualified template parameter (so-called {{rlpsd|reference#Forwarding references}}), and the corresponding function call argument is an lvalue, the type lvalue reference to {{ttb|A}} is used in place of {{ttb|A}} for deduction (Note: this is the basis for the action of {{lc|std::forward}}{{rev inl|since=c++17|. Note: in {{rlp|class template argument deduction}}, template parameter of a class template is never a forwarding reference}}):
+{{source|1=
+template&lt;class T&gt;
+int f(T&amp;&amp;);       // P is an rvalue reference to cv-unqualified T (forwarding reference)
+
+template&lt;class T&gt;
+int g(const T&amp;&amp;); // P is an rvalue reference to cv-qualified T (not special)
+
+int main()
+{
+    int i;
+    int n1 = f(i); // argument is lvalue: calls f&lt;int&amp;&gt;(int&amp;) (special case)
+    int n2 = f(0); // argument is not lvalue: calls f&lt;int&gt;(int&amp;&amp;)
+
+//  int n3 = g(i); // error: deduces to g&lt;int&gt;(const int&amp;&amp;), which
+                   // cannot bind an rvalue reference to an lvalue
+}
+}}
+
+After these transformations, the deduction processes as described below (cf. section {{lsd|#Deduction from a type}}) and attempts to find such template arguments that would make the deduced {{ttb|A}} (that is, {{ttb|P}} after adjustments listed above and the substitution of the deduced template parameters) identical to the ''transformed'' {{ttb|A}}, that is {{ttb|A}} after the adjustments listed above.
+
+If the usual deduction from {{ttb|P}} and {{ttb|A}} fails, the following alternatives are additionally considered:
+@1@ If {{ttb|P}} is a reference type, the deduced {{ttb|A}} (i.e., the type referred to by the reference) can be more cv-qualified than the transformed {{ttb|A}}:
+{{source|1=
+template&lt;typename T&gt;
+void f(const T&amp; t);
+
+bool a = false;
+f(a); // P = const T&amp;, adjusted to const T, A = bool:
+      // deduced T = bool, deduced A = const bool
+      // deduced A is more cv-qualified than A
+}}
+@2@ The transformed {{ttb|A}} can be another pointer or pointer to member type that can be converted to the deduced {{ttb|A}} via a {{rlpsd|implicit cast#Qualification conversions}}{{rev inl|since=c++17| or a function pointer conversion}}:
+{{source|1=
+template&lt;typename T&gt;
+void f(const T*);
+
+int* p;
+f(p); // P = const T*, A = int*:
+      // deduced T = int, deduced A = const int*
+      // qualification conversion applies (from int* to const int*)
+}}
+@3@ If {{ttb|P}} is a class and {{ttb|P}} has the form {{rlp|templates#template-id|simple-template-id}}, then the transformed {{ttb|A}} can be a derived class of the deduced {{ttb|A}}. Likewise, if {{ttb|P}} is a pointer to a class of the form ''simple-template-id'', the transformed {{ttb|A}} can be a pointer to a derived class pointed to by the deduced {{ttb|A}}:
+{{source|1=
+template&lt;class T&gt;
+struct B {};
+
+template&lt;class T&gt;
+struct D : public B&lt;T&gt; {};
+
+template&lt;class T&gt;
+void f(B&lt;T&gt;&amp;) {}
+
+void f()
+{
+    D&lt;int&gt; d;
+    f(d); // P = B&lt;T&gt;&amp;, adjusted to P = B&lt;T&gt; (a simple-template-id), A = D&lt;int&gt;:
+          // deduced T = int, deduced A = B&lt;int&gt;
+          // A is derived from deduced A
+}
+}}
+
+====Non-deduced contexts====
+In the following cases, the types, templates, and non-type values that are used to compose {{ttb|P}} do not participate in template argument deduction, but instead ''use'' the template arguments that were either deduced elsewhere or explicitly specified. If a template parameter is used only in non-deduced contexts and is not explicitly specified, template argument deduction fails.
+
+@1@ The {{spar|nested-name-specifier}} (everything to the left of the scope resolution operator {{c|::}}) of a type that was specified using a {{rlp|identifiers#Qualified identifiers|qualified-id}}:
+{{source|1=
+// the identity template, often used to exclude specific arguments from deduction
+// (available as std::type_identity as of C++20)
+template&lt;typename T&gt;
+struct identity { typedef T type; };
+
+template&lt;typename T&gt;
+void bad(std::vector&lt;T&gt; x, T value = 1);
+
+template&lt;typename T&gt;
+void good(std::vector&lt;T&gt; x, typename identity&lt;T&gt;::type value = 1);
+
+std::vector&lt;std::complex&lt;double&gt;&gt; x;
+
+bad(x, 1.2);  // P1 = std::vector&lt;T&gt;, A1 = std::vector&lt;std::complex&lt;double&gt;&gt;
+              // P1/A1: deduced T = std::complex&lt;double&gt;
+              // P2 = T, A2 = double
+              // P2/A2: deduced T = double
+              // error: deduction fails, T is ambiguous
+
+good(x, 1.2); // P1 = std::vector&lt;T&gt;, A1 = std::vector&lt;std::complex&lt;double&gt;&gt;
+              // P1/A1: deduced T = std::complex&lt;double&gt;
+              // P2 = identity&lt;T&gt;::type, A2 = double
+              // P2/A2: uses T deduced by P1/A1 because T is to the left of :: in P2
+              // OK: T = std::complex&lt;double&gt;
+}}
+
+{{rrev|since=c++26|
+@2@ A {{rlp|pack indexing#Pack indexing specifier|pack indexing specifier}} or a {{rlp|pack indexing#Pack indexing expression|pack indexing expression}}:
+{{source|1=
+template&lt;typename... Ts&gt;
+void f(Ts...[0], std::tuple&lt;Ts...&gt;);
+
+f(3, std::tuple(5, 'A'));
+// P2 = std::tuple&lt;Ts...&gt;, A2 = std::tuple&lt;int, char&gt;
+// P2/A2: deduced first member of Ts... = int
+// P2/A2: deduced second member of Ts... = char
+// P1 = Ts...[0], A1 = int: Ts...[0] is in non-deduced context
+}}
+}}
+
+{{rrev|since=c++11|&lt;!-- CWG 1387 ---&gt;
+@3@ The expression of a {{rlp|decltype}}-specifier:
+{{source|1=
+template&lt;typename T&gt;
+void f(decltype(*std::declval&lt;T&gt;()) arg);
+
+int n;
+f&lt;int*&gt;(n); // P = decltype(*declval&lt;T&gt;()), A = int: T is in non-deduced context
+}}
+}}
+
+@4@ A non-type template argument or an array bound in which a subexpression references a template parameter:
+{{source|1=
+template&lt;std::size_t N&gt;
+void f(std::array&lt;int, 2 * N&gt; a);
+
+std::array&lt;int, 10&gt; a;
+f(a); // P = std::array&lt;int, 2 * N&gt;, A = std::array&lt;int, 10&gt;:
+      // 2 * N is non-deduced context, N cannot be deduced
+      // note: f(std::array&lt;int, N&gt; a) would be able to deduce N
+}}
+
+@5@ A template parameter used in the parameter type of a function parameter that has a default argument that is being used in the call for which argument deduction is being done:
+{{source|1=
+template&lt;typename T, typename F&gt;
+void f(const std::vector&lt;T&gt;&amp; v, const F&amp; comp = std::less&lt;T&gt;());
+
+std::vector&lt;std::string&gt; v(3);
+f(v); // P1 = const std::vector&lt;T&gt;&amp;, A1 = std::vector&lt;std::string&gt; lvalue
+      // P1/A1 deduced T = std::string
+      // P2 = const F&amp;, A2 = std::less&lt;std::string&gt; rvalue
+      // P2 is non-deduced context for F (template parameter) used in the
+      // parameter type (const F&amp;) of the function parameter comp,
+      // that has a default argument that is being used in the call f(v)
+}}
+
+@6@ The parameter {{ttb|P}}, whose {{ttb|A}} is a function or a set of overloads such that more than one function matches {{ttb|P}} or no function matches {{ttb|P}} or the set of overloads includes one or more function templates:
+{{source|1=
+template&lt;typename T&gt;
+void out(const T&amp; value) { std::cout &lt;&lt; value; }
+
+out("123");     // P = const T&amp;, A = const char[4] lvalue: deduced T = char[4]
+out(std::endl); // P = const T&amp;, A = function template: T is in non-deduced context
+}}
+
+@7@ The parameter {{ttb|P}}, whose {{ttb|A}} is a braced-init-list, but {{ttb|P}} is not {{lc|std::initializer_list}}, a reference to one (possibly cv-qualified), or a reference to an array}}:
+{{source|1=
+template&lt;class T&gt;
+void g1(std::vector&lt;T&gt;);
+
+template&lt;class T&gt;
+void g2(std::vector&lt;T&gt;, T x);
+
+g1({1, 2, 3});     // P = std::vector&lt;T&gt;, A = {1, 2, 3}: T is in non-deduced context
+                   // error: T is not explicitly specified or deduced from another P/A
+
+g2({1, 2, 3}, 10); // P1 = std::vector&lt;T&gt;, A1 = {1, 2, 3}: T is in non-deduced context
+                   // P2 = T, A2 = int: deduced T = int
+}}
+
+{{rrev|since=c++11|1=
+@8@ The parameter {{ttb|P}} which is a parameter pack and does not occur at the end of the parameter list:
+{{source|1=
+template&lt;class... Ts, class T&gt;
+void f1(T n, Ts... args);
+
+template&lt;class... Ts, class T&gt;
+void f2(Ts... args, T n);
+
+f1(1, 2, 3, 4); // P1 = T, A1 = 1: deduced T = int
+                // P2 = Ts..., A2 = 2, A3 = 3, A4 = 4: deduced Ts = [int, int, int]
+
+f2(1, 2, 3, 4); // P1 = Ts...: Ts is non-deduced context
+}}
+
+@9@ The template parameter list that appears within the parameter {{ttb|P}}, and which includes a pack expansion that is not at the very end of the template parameter list:
+{{source|1=
+template&lt;int...&gt;
+struct T {};
+
+template&lt;int... Ts1, int N, int... Ts2&gt;
+void good(const T&lt;N, Ts1...&gt;&amp; arg1, const T&lt;N, Ts2...&gt;&amp;);
+
+template&lt;int... Ts1, int N, int... Ts2&gt;
+void bad(const T&lt;Ts1..., N&gt;&amp; arg1, const T&lt;Ts2..., N&gt;&amp;);
+
+T&lt;1, 2&gt; t1;
+T&lt;1, -1, 0&gt; t2;
+
+good(t1, t2); // P1 = const T&lt;N, Ts1...&gt;&amp;, A1 = T&lt;1, 2&gt;:
+              // deduced N = 1, deduced Ts1 = [2]
+              // P2 = const T&lt;N, Ts2...&gt;&amp;, A2 = T&lt;1, -1, 0&gt;:
+              // deduced N = 1, deduced Ts2 = [-1, 0]
+
+bad(t1, t2);  // P1 = const T&lt;Ts1..., N&gt;&amp;, A1 = T&lt;1, 2&gt;:
+              // &lt;Ts1..., N&gt; is non-deduced context
+              // P2 = const T&lt;Ts2..., N&gt;&amp;, A2 = T&lt;1, -1, 0&gt;:
+              // &lt;Ts2..., N&gt; is non-deduced context
+}}
+}}
+
+@10@ For {{ttb|P}} of array type (but not reference to array or pointer to array), the major array bound:
+{{source|1=
+template&lt;int i&gt;
+void f1(int a[10][i]);
+
+template&lt;int i&gt;
+void f2(int a[i][20]);    // P = int[i][20], array type
+
+template&lt;int i&gt;
+void f3(int (&amp;a)[i][20]); // P = int(&amp;)[i][20], reference to array
+
+void g()
+{
+    int a[10][20];
+    f1(a);     // OK: deduced i = 20
+    f1&lt;20&gt;(a); // OK
+    f2(a);     // error: i is non-deduced context
+    f2&lt;10&gt;(a); // OK
+    f3(a);     // OK: deduced i = 10
+    f3&lt;10&gt;(a); // OK
+}
+}}
+
+In any case, if any part of a type name is non-deduced, the entire type name is non-deduced context. However, compound types can include both deduced and non-deduced type names. For example, in {{c|A&lt;T&gt;::B&lt;T2&gt;}}, {{tt|T}} is non-deduced because of rule #1 (nested name specifier), and {{tt|T2}} is non-deduced because it is part of the same type name, but in {{c|void(*f)(typename A&lt;T&gt;::B, A&lt;T&gt;)}}, the {{tt|T}} in {{c|A&lt;T&gt;::B}} is non-deduced (because of the same rule), while the {{tt|T}} in {{c|A&lt;T&gt;}} is deduced.
+
+====Deduction from a type====
+Given a function parameter {{ttb|P}} that depends on one or more type template parameters {{ttb|T}}i, template template parameters {{ttb|TT}}i, or non-type template parameters {{ttb|I}}i, and the corresponding argument {{ttb|A}}, deduction takes place if {{ttb|P}} has one of the following forms:
+{{todo|possibly a table with micro-examples}}
+* {{tt|''cv''}}{{mark optional}} {{tt|T}};
+* {{tt|T*}};
+* {{tt|T&amp;}};
+{{rrev|since=c++11|
+* {{tt|T&amp;&amp;}};
+}}
+* {{tt|T}}{{mark optional}} {{tt|[}}{{tt|I}}{{mark optional}}{{tt|]}};
+{{rrev multi
+|rev1=
+* {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}};
+|since2=c++17&lt;!-- CWG2355 --&gt;|rev2=
+* {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}} {{tt|noexcept(}}{{tt|I}}{{mark optional}}{{tt|)}};
+}}
+* {{tt|T}}{{mark optional}} {{tt|U}}{{mark optional}}{{tt|::*}};
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;T&gt;}};
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;I&gt;}};
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;TU&gt;}};
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;&gt;}}.
+
+In the above forms,
+* {{tt|T}}{{mark optional}} or {{tt|U}}{{mark optional}} represents a type or {{spar|parameter-type-list}} that either satisfies these rules recursively, is a non-deduced context in {{tt|P}} or {{tt|A}}, or is the same non-dependent type in {{tt|P}} and {{tt|A}}.
+* {{tt|TT}}{{mark optional}} or {{tt|TU}}{{mark optional}} represents either a class template or a template template parameter.
+* {{tt|I}}{{mark optional}} represents an expression that either is an {{tt|I}}, is value-dependent in {{tt|P}} or {{tt|A}}, or has the same constant value in {{tt|P}} and {{tt|A}}.
+{{rrev|since=c++17|
+* {{tt|noexcept(}}{{tt|I}}{{mark optional}}{{tt|)}} represents an {{rlp|noexcept spec|exception specification}} in which the possibly-implicit {{c/core|noexcept}} specifier's operand satisfies the rules for an {{tt|I}}{{mark optional}} above.
+}}
+
+If {{ttb|P}} has one of the forms that include a template parameter list {{ttb|&lt;T&gt;}} or {{ttb|&lt;&lt;nowiki/&gt;I&gt;}}, then each element {{ttb|P}}i of that template argument list is matched against the corresponding template argument {{ttb|A}}i of its {{ttb|A}}. If the last {{ttb|P}}i is a pack expansion, then its pattern is compared against each remaining argument in the template argument list of {{ttb|A}}. A trailing parameter pack that is not otherwise deduced, is deduced to an empty parameter pack.
+
+If {{ttb|P}} has one of the forms that include a function parameter list {{ttb|(T)}}, then each parameter {{ttb|P}}i from that list is compared with the corresponding argument {{ttb|A}}i from {{ttb|A}}'s function parameter list. If the last {{ttb|P}}i is a pack expansion, then its declarator is compared with each remaining {{ttb|A}}i in the parameter type list of {{ttb|A}}.
+
+Forms can be nested and processed recursively:
+* {{c|X&lt;int&gt;(*)(char[6])}} is an example of {{tt|T*}}, where {{tt|T}} is {{c|X&lt;int&gt;(char[6])}};
+{{rrev multi
+|rev1=
+* {{c|X&lt;int&gt;(char[6])}} is an example of {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}}, where {{tt|T}} is {{c|X&lt;int&gt;}} and {{tt|U}} is {{c|char[6]}};
+|since2=c++17|rev2=
+* {{c|X&lt;int&gt;(char[6])}} is an example of {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}} {{tt|noexcept(}}{{tt|I}}{{mark optional}}{{tt|)}}, where {{tt|T}} is {{c|X&lt;int&gt;}}, {{tt|U}} is {{c|char[6]}}, and {{tt|I}} in the implicit {{c/core|noexcept}} specifier is {{c|false}};
+}}
+* {{c|X&lt;int&gt;}} is an example of {{tt|TT}}{{mark optional}}{{tt|&amp;lt;T&gt;}}, where {{tt|TT}} is {{tt|X}} and {{tt|T}} is {{c/core|int}}, and
+* {{c|char[6]}} is an example of {{tt|T}}{{mark optional}} {{tt|[}}{{tt|I}}{{mark optional}}{{tt|]}}, where {{tt|T}} is {{c/core|char}} and {{tt|I}} is {{c|std::size_t(6)}}.
+
+{{rrev multi|
+|until1=c++17|rev1=
+Type template argument cannot be deduced from the type of a non-type template argument:
+{{source|1=
+template&lt;typename T, T i&gt;
+void f(double a[10][i]);
+
+double v[10][20];
+f(v); // P = double[10][i], A = double[10][20]:
+      // i can be deduced to equal 20
+      // but T cannot be deduced from the type of i
+}}
+|rev2=
+When the value of the argument corresponding to a non-type template parameter P that is declared with a dependent type is deduced from an expression, the template parameters in the type of P are deduced from the type of the value.
+{{source|1=
+template&lt;long n&gt;
+struct A {};
+
+template&lt;class T&gt;
+struct C;
+
+template&lt;class T, T n&gt;
+struct C&lt;A&lt;n&gt;&gt; { using Q = T; };
+
+typedef long R;
+
+typedef C&lt;A&lt;2&gt;&gt;::Q R; // OK: T was deduced to long
+                      // from the template argument value in the type A&lt;2&gt;
+
+template&lt;auto X&gt;
+class bar {};
+
+template&lt;class T, T n&gt;
+void f(bar&lt;n&gt; x);
+
+f(bar&lt;3&gt;{}); // OK: T was deduced to int (and n to 3)
+             // from the template argument value in the type bar&lt;3&gt;
+}}
+
+The type of {{tt|N}} in the type {{tt|T[N]}} is {{lc|std::size_t}}.
+{{source|1=
+template&lt;class T, T i&gt;
+void f(int (&amp;a)[i]);
+
+int v[10];
+f(v); // OK: T is std::size_t
+}}
+
+The type of {{tt|B}} in {{c|noexcept(B)}} specifier of a function type is {{c/core|bool}}.
+{{source|1=
+template&lt;bool&gt;
+struct A {};
+
+template&lt;auto&gt;
+struct B;
+template&lt;auto X, void (*F)() noexcept(X)&gt;
+struct B&lt;F&gt; { A&lt;X&gt; ax; };
+
+void f_nothrow() noexcept;
+B&lt;f_nothrow&gt; bn; // OK: X is deduced as true and the type of X is deduced as bool.
+}}
+}}
+
+If a non-type template parameter of function template is used in the template parameter list of function parameter (which is also a template), and the corresponding template argument is deduced, the type of the deduced template argument ({{mark unreviewed dr|CWG|2091}}as specified in its enclosing template parameter list, meaning references are preserved) must match the type of the non-type template parameter exactly, except that cv-qualifiers are dropped, and except where the template argument is deduced from an array bound—in that case any integral type is allowed, even {{c/core|bool}} though it would always become {{c|true}}:
+{{source|1=
+template&lt;int i&gt;
+class A {};
+
+template&lt;short s&gt;
+void f(A&lt;s&gt;); // the type of the non-type template param is short
+
+void k1()
+{
+    A&lt;1&gt; a;  // the type of the non-type template param of a is int
+    
+    f(a);    // P = A&lt;(short)s&gt;, A = A&lt;(int)1&gt;
+             // error: deduced non-type template argument does not have the same
+             // type as its corresponding template argument
+    
+    f&lt;1&gt;(a); // OK: the template argument is not deduced,
+             // this calls f&lt;(short)1&gt;(A&lt;(short)1&gt;)
+}
+
+template&lt;int&amp;&gt;
+struct X;
+
+template&lt;int&amp; R&gt;
+void k2(X&lt;R&gt;&amp;);
+
+int n;
+void g(X&lt;n&gt; &amp;x)
+{
+    k2(x); // P = X&lt;R&gt;, A = X&lt;n&gt;
+           // parameter type is int&amp;
+           // argument type is int&amp; in struct X's template declaration
+           // OK (with CWG 2091): deduces R to refer to n
+}
+}}
+
+Type template parameter cannot be deduced from the type of a function default argument:
+{{source|1=
+template&lt;typename T&gt;
+void f(T = 5, T = 7);
+
+void g()
+{
+    f(1);     // OK: calls f&lt;int&gt;(1, 7)
+    f();      // error: cannot deduce T
+    f&lt;int&gt;(); // OK: calls f&lt;int&gt;(5, 7)
+}
+}}
+
+Deduction of template template parameter can use the type used in the template specialization used in the function call:
+{{source|1=
+template&lt;template&lt;typename&gt; class X&gt;
+struct A {}; // A is a template with a TT param
+
+template&lt;template&lt;typename&gt; class TT&gt;
+void f(A&lt;TT&gt;) {}
+
+template&lt;class T&gt;
+struct B {};
+
+A&lt;B&gt; ab;
+f(ab); // P = A&lt;TT&gt;, A = A&lt;B&gt;: deduced TT = B, calls f(A&lt;B&gt;)
+}}
+
+===Other contexts===
+Besides function calls and operator expressions, template argument deduction is used in the following situations:
+
+{{rrev|since=c++11|
+====auto type deduction====
+Template argument deduction is used in {{rlp|declarations}} of variables, when deducing the meaning of the '''{{rlp|auto|auto specifier}}''' from the variable's initializer.
+
+The parameter {{ttb|P}} is obtained as follows: in {{tt|T}}, the declared type of the variable that includes {{c/core|auto}}, every occurrence of {{c/core|auto}} is replaced with an imaginary type template parameter {{tt|U}} or, if the initialization is copy-list-initialization, with {{tt|std::initializer_list&lt;nowiki&gt;&lt;&lt;/nowiki&gt;U&gt;}}. The argument {{ttb|A}} is the initializer expression. After deduction of {{tt|U}} from {{ttb|P}} and {{ttb|A}} following the rules described above, the deduced {{tt|U}} is substituted into {{tt|P}} to get the actual variable type:
+{{source|1=
+const auto&amp; x = 1 + 2; // P = const U&amp;, A = 1 + 2:
+                       // same rules as for calling f(1 + 2) where f is
+                       // template&lt;class U&gt; void f(const U&amp; u)
+                       // deduced U = int, the type of x is const int&amp;
+
+auto l = {13}; // P = std::initializer_list&lt;U&gt;, A = {13}:
+               // deduced U = int, the type of l is std::initializer_list&lt;int&gt;
+}}
+In direct-list-initialization (but not in copy-list-initialization), when deducing the meaning of the {{rlp|auto}} from a braced-init-list, the braced-init-list must contain only one element, and the type of auto will be the type of that element:
+{{source|1=
+auto x1 = {3}; // x1 is std::initializer_list&lt;int&gt;
+auto x2{1, 2}; // error: not a single element
+auto x3{3};    // x3 is int
+               // (before N3922 x2 and x3 were both std::initializer_list&lt;int&gt;)
+}}
+}}
+
+{{rrev|since=c++14|
+====auto-returning functions====
+Template argument deduction is used in declarations of {{rlp|functions}}, when deducing the meaning of the {{rlp|auto}} specifier in the function's return type, from the return statement.
+
+For auto-returning functions, the parameter {{ttb|P}} is obtained as follows: in {{tt|T}}, the declared return type of the function that includes {{c/core|auto}}, every occurrence of {{c/core|auto}} is replaced with an imaginary type template parameter {{tt|U}}. The argument {{ttb|A}} is the expression of the {{rlp|return}} statement, and if the return statement has no operand, {{ttb|A}} is {{c|void()}}. After deduction of {{tt|U}} from {{ttb|P}} and {{ttb|A}} following the rules described above, the deduced {{tt|U}} is substituted into {{tt|T}} to get the actual return type:
+{{source|1=
+auto f() { return 42; } // P = auto, A = 42:
+                        // deduced U = int, the return type of f is int
+}}
+
+If such function has multiple return statements, the deduction is performed for each return statement. All the resulting types must be the same and become the actual return type.
+
+If such function has no return statement, {{ttb|A}} is {{c|void()}} when deducing.
+
+Note: the meaning of {{c|decltype(auto)}} placeholder in variable and function declarations does not use template argument deduction.
+}}
+
+====Overload resolution====
+Template argument deduction is used during {{rlp|overload resolution}}, when generating specializations from a candidate template function.
+{{ttb|P}} and {{ttb|A}} are the same as in a regular function call:
+{{source|1=
+std::string s;
+std::getline(std::cin, s);
+
+// "std::getline" names 4 function templates,
+// 2 of which are candidate functions (correct number of parameters)
+
+// 1st candidate template:
+// P1 = std::basic_istream&lt;CharT, Traits&gt;&amp;, A1 = std::cin
+// P2 = std::basic_string&lt;CharT, Traits, Allocator&gt;&amp;, A2 = s
+// deduction determines the type template parameters CharT, Traits, and Allocator
+// specialization std::getline&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt;&gt;
+
+// 2nd candidate template:
+// P1 = std::basic_istream&lt;CharT, Traits&gt;&amp;&amp;, A1 = std::cin
+// P2 = std::basic_string&lt;CharT, Traits, Allocator&gt;&amp;, A2 = s
+// deduction determines the type template parameters CharT, Traits, and Allocator
+// specialization std::getline&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt;&gt;
+
+// overload resolution ranks reference binding from lvalue std::cin
+// and picks the first of the two candidate specializations
+}}
+
+If deduction fails, {{mark unreviewed dr|CWG|2052}}or if deduction succeeds, but the specialization it produces would be invalid (for example, an overloaded operator whose parameters are neither class nor enumeration types), the specialization is not included in the overload set, similar to {{rlp|sfinae|SFINAE}}.
+
+====Address of an overload set====
+Template argument deduction is used when taking an {{rlp|overloaded address|address of an overload set}}, which includes function templates.
+
+The function type of the function template is {{ttb|P}}. The {{rlp|overloaded address|target type}} is the type of {{ttb|A}}:
+{{source|1=
+std::cout &lt;&lt; std::endl;
+
+// std::endl names a function template
+// type of endl P =
+// std::basic_ostream&lt;CharT, Traits&gt;&amp; (std::basic_ostream&lt;CharT, Traits&gt;&amp;)
+// operator&lt;&lt; parameter A =
+// std::basic_ostream&lt;char, std::char_traits&lt;char&gt;&gt;&amp; (*)(
+//   std::basic_ostream&lt;char, std::char_traits&lt;char&gt;&gt;&amp;
+// )
+// (other overloads of operator&lt;&lt; are not viable) &lt;!-- As is mentioned in {{rlp|overloaded address|address of a overload set}}, the type of the function must match the target exactly, no implicit conversions are considered. --&gt;
+// deduction determines the type template parameters CharT and Traits
+}}
+An additional rule is applied to the deduction in this case: when comparing function parameters {{ttb|P}}i and {{ttb|A}}i, if any {{ttb|P}}i is an rvalue reference to cv-unqualified template parameter (a "forwarding reference") and the corresponding {{ttb|A}}i is an lvalue reference, then {{ttb|P}}i is adjusted to the template parameter type (T&amp;&amp; becomes T).
+
+{{rrev|since=c++14|
+If the return type of the function template is a placeholder ({{c/core|auto}} or {{c|decltype(auto)}}), that return type is a non-deduced context and is determined from the instantiation.
+}}
+
+====Partial ordering====
+Template argument deduction is used during {{rlp|function template|partial ordering of overloaded function templates}}.
+
+{{todo|mini-example}} &lt;!-- don't lose the paragraph from 14.8.2.5/8 about matching a pack expansion against Ai which was originally a pack expansion, and 14.8.2.5/10 about the same for pack expansions in function parameter lists. it will go into the partial ordering text since this one is overcrowded.--&gt;
+
+====Conversion function template====
+Template argument deduction is used when selecting {{rlp|cast operator|user-defined conversion function}} template arguments.
+
+{{ttb|A}} is the type that is required as the result of the conversion. {{ttb|P}} is the return type of the conversion function template. If {{ttb|P}} is a reference type, then the referred type is used in place of {{ttb|P}} for the following parts of the section.
+
+If {{ttb|A}} is not a reference type:
+@a@ if the {{ttb|P}} is an array type, then the pointer type obtained by array-to-pointer conversion is used in place of {{ttb|P}};
+@b@ if the {{ttb|P}} is a function type, then the function pointer type obtained by function-to-pointer conversion is used in place of {{ttb|P}};
+@c@ if {{ttb|P}} is cv-qualified, the top-level cv-qualifiers are ignored.
+
+If {{ttb|A}} is cv-qualified, the top-level cv-qualifiers are ignored. If {{ttb|A}} is a reference type, the referred type is used by deduction.
+
+If the usual deduction from {{ttb|P}} and {{ttb|A}} (as described above) fails, the following alternatives are additionally considered:
+@a@ if {{ttb|A}} is a reference type, {{ttb|A}} can be more cv-qualified than the deduced {{ttb|A}};
+@b@ if {{ttb|A}} is a pointer or pointer to member type, the deduced {{ttb|A}} is allowed to be any pointer that can be converted to {{ttb|A}} by qualification conversion:
+{{source|1=
+struct C
+{
+    template&lt;class T&gt;
+    operator T***();
+};
+C c;
+
+const int* const* const* p1 = c;
+
+// P = T***, A = const int* const* const*
+// regular function-call deduction for
+// template&lt;class T&gt; void f(T*** p) as if called with the argument
+// of type const int* const* const* fails
+// additional deduction for conversion functions determines T = int
+// (deduced A is int***, convertible to const int* const* const*)
+}}
+
+{{rrev|since=c++17|
+@c@ if {{ttb|A}} is a function pointer type, the deduced {{ttb|A}} is allowed to be pointer to noexcept function, convertible to {{ttb|A}} by function pointer conversion;
+@d@ if {{ttb|A}} is a pointer to member function, the deduced {{ttb|A}} is allowed to be a pointer to noexcept member function, convertible to {{ttb|A}} by function pointer conversion.
+}}
+
+See {{rlp|member template#Conversion function templates|member template}} for other rules regarding conversion function templates.
+
+====Explicit instantiation====
+Template argument deduction is used in {{rlpsd|function template#Explicit instantiation}}s, {{rlp|template specialization|explicit specializations}}, and those {{rlp|friend#Template friends|friend declarations}} where the declarator-id happens to refer to a specialization of a function template (for example, {{c|friend ostream&amp; operator&lt;&lt; &lt;&gt; (...)}}), if not all template arguments are explicitly specified or defaulted, template argument deduction is used to determine which template's specialization is referred to.
+
+{{ttb|P}} is the type of the function template that is being considered as a potential match, and {{ttb|A}} is the function type from the declaration. If there are no matches or more than one match (after partial ordering), the function declaration is ill-formed:
+{{source|1=
+template&lt;class X&gt;
+void f(X a);        // 1st template f
+template&lt;class X&gt;
+void f(X* a);       // 2nd template f
+template&lt;&gt;
+void f&lt;&gt;(int* a) {} // explicit specialization of f
+
+// P1 = void(X), A1 = void(int*): deduced X = int*, f&lt;int*&gt;(int*)
+// P2 = void(X*), A2 = void(int*): deduced X = int, f&lt;int&gt;(int*)
+// f&lt;int*&gt;(int*) and f&lt;int&gt;(int*) are then submitted to partial ordering
+// which selects f&lt;int&gt;(int*) as the more specialized template
+}}
+
+An additional rule is applied to the deduction in this case: when comparing function parameters {{ttb|P}}i and {{ttb|A}}i, if any {{ttb|P}}i is an rvalue reference to cv-unqualified template parameter (a "forwarding reference") and the corresponding {{ttb|A}}i is an lvalue reference, then {{ttb|P}}i is adjusted to the template parameter type (T&amp;&amp; becomes T).
+
+====Deallocation function template====
+Template argument deduction is used when determining if a [[cpp/memory/new/operator delete|deallocation function]] template specialization matches a given placement form of {{tt|operator new}}.
+
+{{ttb|P}} is the type of the function template that is being considered as a potential match, and {{ttb|A}} is the function type of the deallocation function that would be the match for the placement operator new under consideration. If there is no match or more than one match (after overload resolution), the placement deallocation function is not called (memory leak may occur):
+{{source|1=
+struct X
+{
+    X() { throw std::runtime_error(""); }
+    
+    static void* operator new(std::size_t sz, bool b)   { return ::operator new(sz); }
+    static void* operator new(std::size_t sz, double f) { return ::operator new(sz); }
+    
+    template&lt;typename T&gt;
+    static void operator delete(void* ptr, T arg)
+    {
+        ::operator delete(ptr);
+    }
+};
+
+int main()
+{
+    try
+    {
+        X* p1 = new (true) X; // when X() throws, operator delete is looked up
+                              // P1 = void(void*, T), A1 = void(void*, bool):
+                              // deduced T = bool
+                              // P2 = void(void*, T), A2 = void(void*, double):
+                              // deduced T = double
+                              // overload resolution picks operator delete&lt;bool&gt;
+    }
+    catch(const std::exception&amp;) {}
+    
+    try
+    {
+        X* p1 = new (13.2) X; // same lookup, picks operator delete&lt;double&gt;
+    }
+    catch(const std::exception&amp;) {}
+}
+}}
+
+===Alias templates===
+{{rlp|type alias|Alias templates}} are not deduced{{rev inl|since=c++20|, except in {{rlp|class template argument deduction#Deduction for alias templates|class template argument deduction}}}}:
+{{source|1=
+template&lt;class T&gt;
+struct Alloc {};
+
+template&lt;class T&gt;
+using Vec = vector&lt;T, Alloc&lt;T&gt;&gt;;
+Vec&lt;int&gt; v;
+
+template&lt;template&lt;class, class&gt; class TT&gt;
+void g(TT&lt;int, Alloc&lt;int&gt;&gt;);
+g(v); // OK: deduced TT = vector
+
+template&lt;template&lt;class&gt; class TT&gt;
+void f(TT&lt;int&gt;);
+f(v); // error: TT cannot be deduced as "Vec" because Vec is an alias template
+}}
+
+===Implicit conversions===
+Type deduction does not consider implicit conversions (other than type adjustments listed above): that's the job for {{rlp|overload resolution}}, which happens later.
+
+{{mark unreviewed dr|CWG|1391}}However, if deduction succeeds for all parameters that participate in template argument deduction, and all template arguments that aren't deduced are explicitly specified or defaulted, then the remaining function parameters are compared with the corresponding function arguments. For each remaining parameter {{ttb|P}} with a type that was non-dependent before substitution of any explicitly-specified template arguments, if the corresponding argument {{ttb|A}} cannot be implicitly converted to {{ttb|P}}, deduction fails.
+
+Parameters with dependent types in which no template-parameters participate in template argument deduction, and parameters that became non-dependent due to substitution of explicitly-specified template arguments will be checked during overload resolution:
+{{source|1=
+template&lt;class T&gt;
+struct Z { typedef typename T::x xx; };
+
+template&lt;class T&gt;
+typename Z&lt;T&gt;::xx f(void*, T); // #1
+
+template&lt;class T&gt;
+void f(int, T);                // #2
+
+struct A {} a;
+
+int main()
+{
+    f(1, a); // for #1, deduction determines T = struct A, but the remaining argument 1
+             // cannot be implicitly converted to its parameter void*: deduction fails
+             // instantiation of the return type is not requested
+             // for #2, deduction determines T = struct A, and the remaining argument 1
+             // can be implicitly converted to its parameter int: deduction succeeds
+             // the function call compiles as a call to #2 (deduction failure is SFINAE)
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=70|std=C++98|before=whether array bounds would be deduced was not specified|after=specified as non-deduced}}
+{{dr list item|wg=cwg|dr=300|std=C++98|before=deduction took place for function parameters of form&lt;br&gt;{{tt|type(*)(T)/T(*)()/T(*)(T)}}, function pointers&lt;br&gt;match these forms but function references do not|after=change these forms to&lt;br&gt;{{tt|type(T)/T()/T(T)}} so they&lt;br&gt;can also cover references}}
+{{dr list item|wg=cwg|dr=322|std=C++98|before=type parameters of reference types were not&lt;br&gt;adjusted to use the referenced type for deduction|after=adjustment added}}
+{{dr list item|wg=cwg|dr=976|std=C++98|before=in the deduction for conversion operator templates,&lt;br&gt;{{tt|const T&amp;}} return type could never match {{tt|T}} result type|after=rules adjusted to&lt;br&gt;allow such matches}}
+{{dr list item|wg=cwg|dr=1387|std=C++11|before=the expression of a decltype-specifier was not a non-deduced context|after=it is}}
+{{dr list item|wg=cwg|dr=1391|std=C++98|before=effect of implicit conversions of the arguments&lt;br&gt;that aren't involved in deduction were not specified|after=specified as described above}}
+{{dr list item|wg=cwg|dr=1591|std=C++11|before=cannot deduce array bound and element type from a ''braced-init-list''|after=deduction allowed}}
+{{dr list item|wg=cwg|dr=2052|std=C++98|before=deducing an operator with non-class&lt;br&gt;non-enum arguments was a hard error|after=soft error if there&lt;br&gt;are other overloads}}
+{{dr list item|wg=cwg|dr=2091|std=C++98|before=deducing a reference non-type parameter did not&lt;br&gt;work due to type mismatch against the argument|after=type mismatch avoided}}
+{{dr list item|paper=N3922|std=C++11|before=direct-list-initialization of {{c/core|auto}} deduces {{lc|std::initializer_list}}|after=ill-formed for more than one&lt;br&gt;elements, deduce element&lt;br&gt;type for single element}}
+{{dr list item|wg=cwg|dr=2355|std=C++17|before=value in a {{c/core|noexcept}} specifier of a function type was not deducible|after=made deducible}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

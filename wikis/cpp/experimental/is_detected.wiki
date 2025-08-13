@@ -1,0 +1,151 @@
+{{cpp/experimental/title|is_detected|detected_t|detected_or}}
+{{cpp/experimental/lib_extensions_2/navbar}}
+
+{{dcl begin}}
+{{dcl header|experimental/type_traits}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+using is_detected = /* see below */;
+}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+using detected_t = /* see below */;
+}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Default, template&lt;class...&gt; class Op, class... Args &gt;
+using detected_or = /* see below */;
+}}
+
+{{dcl end}}
+
+The alias template {{tt|detected_or}} is an alias for an unspecified class type with two public member typedefs {{tt|value_t}} and {{tt|type}}, which are defined as follows:
+
+* If the ''template-id'' {{c|Op&lt;Args...&gt;}} denotes a valid type, then {{tt|value_t}} is an alias for {{lc|std::true_type}}, and {{tt|type}} is an alias for {{c|Op&lt;Args...&gt;}};
+* Otherwise, {{tt|value_t}} is an alias for {{lc|std::false_type}} and {{tt|type}} is an alias for {{tt|Default}}.
+
+The alias template {{tt|is_detected}} is equivalent to {{c|typename detected_or&lt;std::experimental::nonesuch, Op, Args...&gt;::value_t}}. It is an alias for {{lc|std::true_type}} if the ''template-id'' {{c|Op&lt;Args...&gt;}} denotes a valid type; otherwise it is an alias for {{lc|std::false_type}}.
+
+The alias template {{tt|detected_t}} is equivalent to {{c|typename detected_or&lt;std::experimental::nonesuch, Op, Args...&gt;::type}}. It is an alias for {{c|Op&lt;Args...&gt;}} if that ''template-id'' denotes a valid type; otherwise it is an alias for the class {{ltt|cpp/experimental/nonesuch|std::experimental::nonesuch}}.
+
+===Additional utilities===
+{{dcl begin}}
+{{dcl rev begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+constexpr bool is_detected_v = is_detected&lt;Op, Args...&gt;::value;
+}}
+{{dcl|since=libfund_ts_3|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+constexpr inline bool is_detected_v = is_detected&lt;Op, Args...&gt;::value;
+}}
+{{dcl rev end}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Default, template&lt;class...&gt; class Op, class... Args &gt;
+using detected_or_t = typename detected_or&lt;Default, Op, Args...&gt;::type;
+}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Expected, template&lt;class...&gt; class Op, class... Args &gt;
+using is_detected_exact = std::is_same&lt;Expected, detected_t&lt;Op, Args...&gt;&gt;;
+}}
+{{dcl rev begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Expected, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr bool is_detected_exact_v =
+    is_detected_exact&lt;Expected, Op, Args...&gt;::value;
+}}
+{{dcl|since=libfund_ts_3|1=
+template&lt; class Expected, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr inline bool is_detected_exact_v =
+    is_detected_exact&lt;Expected, Op, Args...&gt;::value;
+}}
+{{dcl rev end}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class To, template&lt;class...&gt; class Op, class... Args &gt;
+using is_detected_convertible =
+    std::is_convertible&lt;detected_t&lt;Op, Args...&gt;, To&gt;;
+}}
+{{dcl rev begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class To, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr bool is_detected_convertible_v =
+    is_detected_convertible&lt;To, Op, Args...&gt;::value;
+}}
+{{dcl|since=libfund_ts_3|1=
+template&lt; class To, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr inline bool is_detected_convertible_v =
+    is_detected_convertible&lt;To, Op, Args...&gt;::value;
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+The alias template {{tt|is_detected_exact}} checks whether {{c|detected_t&lt;Op, Args...&gt;}} is {{tt|Expected}}. 
+
+The alias template {{tt|is_detected_convertible}} checks whether {{c|detected_t&lt;Op, Args...&gt;}} is convertible to {{tt|To}}.
+
+===Possible implementation===
+{{source|1=
+namespace detail
+{
+    template&lt;class Default, class AlwaysVoid, template&lt;class...&gt; class Op, class... Args&gt;
+    struct detector
+    {
+        using value_t = std::false_type;
+        using type = Default;
+    };
+
+    template&lt;class Default, template&lt;class...&gt; class Op, class... Args&gt;
+    struct detector&lt;Default, std::void_t&lt;Op&lt;Args...&gt;&gt;, Op, Args...&gt;
+    {
+        using value_t = std::true_type;
+        using type = Op&lt;Args...&gt;;
+    };
+} // namespace detail
+
+template&lt;template&lt;class...&gt; class Op, class... Args&gt;
+using is_detected = typename detail::detector&lt;nonesuch, void, Op, Args...&gt;::value_t;
+
+template&lt;template&lt;class...&gt; class Op, class... Args&gt;
+using detected_t = typename detail::detector&lt;nonesuch, void, Op, Args...&gt;::type;
+
+template&lt;class Default, template&lt;class...&gt; class Op, class... Args&gt;
+using detected_or = detail::detector&lt;Default, void, Op, Args...&gt;;
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;experimental/type_traits&gt;
+
+template&lt;class T&gt;
+using copy_assign_t = decltype(std::declval&lt;T&amp;&gt;() = std::declval&lt;const T&amp;&gt;());
+
+struct Meow {};
+struct Purr { void operator=(const Purr&amp;) = delete; };
+ 
+static_assert(std::experimental::is_detected&lt;copy_assign_t, Meow&gt;::value,
+              "Meow should be copy assignable!");
+static_assert(!std::experimental::is_detected_v&lt;copy_assign_t, Purr&gt;,
+              "Purr should not be copy assignable!");
+static_assert(std::experimental::is_detected_exact_v&lt;Meow&amp;, copy_assign_t, Meow&gt;,
+              "Copy assignment of Meow should return Meow&amp;!");
+
+template&lt;class T&gt;
+using diff_t = typename T::difference_type;
+
+template&lt;class Ptr&gt;
+using difference_type = std::experimental::detected_or_t&lt;std::ptrdiff_t, diff_t, Ptr&gt;;
+
+struct Woof { using difference_type = int; };
+struct Bark {};
+
+static_assert(std::is_same&lt;difference_type&lt;Woof&gt;, int&gt;::value,
+              "Woof's difference_type should be int!");
+static_assert(std::is_same&lt;difference_type&lt;Bark&gt;, std::ptrdiff_t&gt;::value,
+              "Bark's difference_type should be ptrdiff_t!");
+
+int main() {}
+|output=
+}}
+
+{{langlinks|zh}}

@@ -1,0 +1,182 @@
+{{cpp/title|reduce}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcl|num=1|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt &gt;
+typename std::iterator_traits&lt;InputIt&gt;::value_type
+    reduce( InputIt first, InputIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+typename std::iterator_traits&lt;ForwardIt&gt;::value_type
+    reduce( ExecutionPolicy&amp;&amp; policy,
+            ForwardIt first, ForwardIt last );
+}}
+{{dcl|num=3|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class T &gt;
+T reduce( InputIt first, InputIt last, T init );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt, class T &gt;
+T reduce( ExecutionPolicy&amp;&amp; policy,
+          ForwardIt first, ForwardIt last, T init );
+}}
+{{dcl|num=5|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class T, class BinaryOp &gt;
+T reduce( InputIt first, InputIt last, T init, BinaryOp op );
+}}
+{{dcl|num=6|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt, class T, class BinaryOp &gt;
+T reduce( ExecutionPolicy&amp;&amp; policy,
+          ForwardIt first, ForwardIt last, T init, BinaryOp op );
+}}
+{{dcl end}}
+
+@1@ Equivalent to {{c|reduce(first, last, typename std::iterator_traits&lt;InputIt&gt;::value_type{})}}.
+
+@3@ Equivalent to {{c|reduce(first, last, init, std::plus&lt;&gt;())}}.
+
+@5@ Reduces the range {{range|first|last}}, possibly permuted and aggregated in unspecified manner, along with the initial value {{c|init}} over {{c|op}}.
+
+@2,4,6@ Same as {{v|1,3,5}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+Given {{c|binary_op}} as the actual binary operation:
+
+* The result is non-deterministic if the {{c|binary_op}} is not associative or not commutative (such as floating-point addition).
+
+* If any of the following values is not convertible to {{tt|T}}, the program is ill-formed:
+:* {{c|binary_op(init, *first)}}
+:* {{c|binary_op(*first, init)}}
+:* {{c|binary_op(init, init)}}
+:* {{c|binary_op(*first, *first)}}
+
+* If any of the following conditions is satisfied, the behavior is undefined:
+:* {{tt|T}} is not {{named req|MoveConstructible}}.
+:* {{c|binary_op}} modifies any element of {{range|first|last}}.
+:* {{c|binary_op}} invalidates any iterator or subrange of {{closed range|first|last}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to apply the algorithm to}}
+{{par|init|the initial value of the generalized sum}}
+{{par exec pol}}
+{{par|op|binary {{named req|FunctionObject}} that will be applied in unspecified order to the result of dereferencing the input iterators, the results of other {{c|op}} and {{c|init}}.}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par end}}
+
+===Return value===
+@1-4@ The generalized sum of {{c|init}} and the elements of {{range|first|last}} over {{c|std::plus&lt;&gt;()}}.
+
+@5,6@ The generalized sum of {{c|init}} and the elements of {{range|first|last}} over {{c|op}}.
+
+The ''generalized sum'' of a group of elements over an binary operation {{c|binary_op}} is defined as follows:
+* If the group only has one element, the sum is the value of the element.
+* Otherwise, performs the following operations in order:
+# Takes any two elements {{c|elem1}} and {{c|elem2}} from the group.
+# Calculates {{c|binary_op(elem1, elem2)}} and puts the result back to the group.
+# Repeats steps 1 and 2 until there is only one element in the group.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+
+@1-4@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} applications of {{c|std::plus&lt;&gt;()}}.
+
+@5,6@ {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} applications of {{c|op}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior}}
+
+===Notes===
+{{tt|std::reduce}} behaves like {{lc|std::accumulate}} except the elements of the range may be grouped and rearranged in arbitrary order.
+
+===Example===
+{{example
+|Side-by-side comparison between {{tt|std::reduce}} and {{lc|std::accumulate}}:
+|code=
+#if PARALLEL
+#include &lt;execution&gt;
+#define SEQ std::execution::seq,
+#define PAR std::execution::par,
+#else
+#define SEQ
+#define PAR
+#endif
+
+#include &lt;chrono&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;numeric&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::cout.imbue(std::locale("en_US.UTF-8"));
+    std::cout &lt;&lt; std::fixed &lt;&lt; std::setprecision(1);
+    
+    auto eval = [](auto fun)
+    {
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        const auto [name, result] = fun();
+        const auto t2 = std::chrono::high_resolution_clock::now();
+        const std::chrono::duration&lt;double, std::milli&gt; ms = t2 - t1;
+        std::cout &lt;&lt; std::setw(28) &lt;&lt; std::left &lt;&lt; name &lt;&lt; "sum: "
+                  &lt;&lt; result &lt;&lt; '\t' &lt;&lt; "time: " &lt;&lt; ms.count() &lt;&lt; " ms\n";
+    };
+    
+    {
+        const std::vector&lt;double&gt; v(100'000'007, 0.1);
+        
+        eval([&amp;v]{ return std::pair{"std::accumulate (double)",
+            std::accumulate(v.cbegin(), v.cend(), 0.0)}; });
+        eval([&amp;v]{ return std::pair{"std::reduce (seq, double)",
+            std::reduce(SEQ v.cbegin(), v.cend())}; });
+        eval([&amp;v]{ return std::pair{"std::reduce (par, double)",
+            std::reduce(PAR v.cbegin(), v.cend())}; });
+    }
+    
+    {
+        const std::vector&lt;long&gt; v(100'000'007, 1);
+        
+        eval([&amp;v]{ return std::pair{"std::accumulate (long)",
+            std::accumulate(v.cbegin(), v.cend(), 0l)}; });
+        eval([&amp;v]{ return std::pair{"std::reduce (seq, long)",
+            std::reduce(SEQ v.cbegin(), v.cend())}; });
+        eval([&amp;v]{ return std::pair{"std::reduce (par, long)",
+            std::reduce(PAR v.cbegin(), v.cend())}; });
+    }
+}
+|p=true
+|output=
+// POSIX: g++ -std=c++23 ./example.cpp -ltbb -O3; ./a.out
+std::accumulate (double)    sum: 10,000,000.7	time: 356.9 ms
+std::reduce (seq, double)   sum: 10,000,000.7	time: 140.1 ms
+std::reduce (par, double)   sum: 10,000,000.7	time: 140.1 ms
+std::accumulate (long)      sum: 100,000,007	time: 46.0 ms
+std::reduce (seq, long)     sum: 100,000,007	time: 67.3 ms
+std::reduce (par, long)     sum: 100,000,007	time: 63.3 ms
+
+// POSIX: g++ -std=c++23 ./example.cpp -ltbb -O3 -DPARALLEL; ./a.out
+std::accumulate (double)    sum: 10,000,000.7	time: 353.4 ms
+std::reduce (seq, double)   sum: 10,000,000.7	time: 140.7 ms
+std::reduce (par, double)   sum: 10,000,000.7	time: 24.7 ms
+std::accumulate (long)      sum: 100,000,007	time: 42.4 ms
+std::reduce (seq, long)     sum: 100,000,007	time: 52.0 ms
+std::reduce (par, long)     sum: 100,000,007	time: 23.1 ms
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/algorithm/dsc transform_reduce}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,121 @@
+{{cpp/io/basic_stringbuf/title|str}}
+{{cpp/io/basic_stringbuf/navbar}}
+{{dcl begin}}
+{{dcl rev multi|num=1|
+|until1=c++20|dcl1=
+std::basic_string&lt;CharT, Traits, Allocator&gt; str() const;
+|dcl2=
+std::basic_string&lt;CharT, Traits, Allocator&gt; str() const&amp;;
+}}
+{{dcl|num=2|since=c++20|
+template&lt;class SAlloc&gt;
+std::basic_string&lt;CharT, Traits, SAlloc&gt; str( const SAlloc&amp; a ) const;
+}}
+{{dcl|num=3|since=c++20|
+std::basic_string&lt;CharT, Traits, Allocator&gt; str() &amp;&amp;;
+}}
+{{dcl|num=4|
+void str( const std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; s );
+}}
+{{dcl|num=5|since=c++20|
+template&lt;class SAlloc&gt;
+void str( const std::basic_string&lt;CharT, Traits, SAlloc&gt;&amp; s );
+}}
+{{dcl|num=6|since=c++20|
+void str( std::basic_string&lt;CharT, Traits, Allocator&gt;&amp;&amp; s );
+}}
+{{dcl|num=7|since=c++26|
+template&lt; class StringViewLike &gt;
+void str( const StringViewLike&amp; t );
+}}
+{{dcl end}}
+
+Gets and sets the underlying string.
+
+In the descriptions below, {{c|buf}} and {{c|mode}} are {{rlp|/#Exposition-only members|exposition-only data members}} of {{c|*this}}.
+
+@1@ Creates and returns a {{lc|std::basic_string}} object containing a copy of this {{tt|std::basic_stringbuf}}'s underlying character sequence. For input-only streams, the returned string contains the characters from the range {{range/core|{{lc|eback()}}|{{lc|egptr()}}}}. For input/output or output-only streams, contains the characters from {{lc|pbase()}} to the last character in the sequence regardless of {{lc|egptr()}} and {{lc|epptr()}}.
+
+::The member character sequence in a buffer open for writing can be over-allocated for efficiency purposes. In that case, only the ''initialized characters'' are returned: these characters are the ones that were obtained from the string argument of the constructor, the string argument of the most recent call to a setter overload of {{tt|str()}}, or from a write operation. A typical implementation that uses over-allocation maintains a high-watermark pointer to track the end of the initialized part of the buffer and this overload returns the characters from {{lc|pbase()}} to the high-watermark pointer.
+
+{{rrev|since=c++20|
+::Equivalent to {{c|return std::basic_string&lt;CharT, Traits, Allocator&gt;(view(), get_allocator());}}.
+}}
+
+@2@ Same as {{v|1}}, except that {{c|a}} is used to construct the returned {{lc|std::basic_string}}. Equivalent to {{c|return std::basic_string&lt;CharT, Traits, SAlloc&gt;(view(), a);}}.
+@@ {{cpp/enable if|{{tt|SAlloc}} meets the requirements of {{named req|Allocator}}}}.
+
+@3@ Creates a {{lc|std::basic_string}} object as if by move constructing it from {{c|*this}}'s underlying character sequence in {{c|buf}}. {{c|buf}} may need to be adjusted to contain the same content as in {{v|1}} at first. After that, sets {{c|buf}} to empty and calls {{rlpf|init_buf_ptrs|''init_buf_ptrs''}}, then returns the {{lc|std::basic_string}} object.
+
+@4@ Replaces the underlying character sequence as if by {{c|1=buf = s}}, then calls {{rlpf|init_buf_ptrs|''init_buf_ptrs''}}.
+
+@5@ Same as {{v|4}}, except the type of {{c|s}}'s allocator is not {{tt|Allocator}}.
+@@ {{cpp/enable if|{{c|std::is_same_v&lt;SAlloc, Allocator&gt;}} is {{c|false}}}}.
+
+@6@ Replaces the underlying character sequence as if by {{c|1=buf = std::move(s)}}, then calls {{rlpf|init_buf_ptrs|''init_buf_ptrs''}}.
+
+@7@ {{cpp/string/sv hack|replaces the underlying character sequence as if by {{c|1=buf = sv}}, then calls {{rlpf|init_buf_ptrs|''init_buf_ptrs''}}|checkptr=false}}
+
+===Parameters===
+{{par begin}}
+{{par|s|a {{lc|std::basic_string}} object holding the replacement character sequence}}
+{{par|t|an object (convertible to {{lc|std::basic_string_view}}) holding the replacement character sequence}}
+{{par|a|allocator to use for all memory allocations of the returned {{lc|std::basic_string}}}}
+{{par end}}
+
+===Return value===
+@1-3@ A {{lc|std::basic_string}} object holding this buffer's underlying character sequence.
+@4-7@ (none)
+
+===Notes===
+This function is typically accessed through {{lc|std::basic_istringstream::str()}}, {{lc|std::basic_ostringstream::str()}}, or {{lc|std::basic_stringstream::str()}}.
+
+{{ftm begin|std=yes|comment=yes}}
+{{ftm|std=C++26|value=202306L|__cpp_lib_sstream_from_string_view|Interfacing string streams with {{lc|std::string_view}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+int main()
+{
+    int n;
+    
+    std::istringstream in;  // could also use in("1 2")
+    in.rdbuf()-&gt;str("1 2"); // set the get area
+    in &gt;&gt; n;
+    std::cout &lt;&lt; "after reading the first int from \"1 2\", the int is " 
+              &lt;&lt; n &lt;&lt; ", str() = \"" &lt;&lt; in.rdbuf()-&gt;str() &lt;&lt; "\"\n"; // or in.str()
+    
+    std::ostringstream out("1 2");
+    out &lt;&lt; 3;
+    std::cout &lt;&lt; "after writing the int '3' to output stream \"1 2\""
+              &lt;&lt; ", str() = \"" &lt;&lt; out.str() &lt;&lt; "\"\n";
+    
+    std::ostringstream ate("1 2", std::ios_base::ate); // C++11
+    ate &lt;&lt; 3;
+    std::cout &lt;&lt; "after writing the int '3' to append stream \"1 2\""
+              &lt;&lt; ", str() = \"" &lt;&lt; ate.str() &lt;&lt; "\"\n";
+}
+|output=
+after reading the first int from "1 2", the int is 1, str() = "1 2"
+after writing the int '3' to output stream "1 2", str() = "3 2"
+after writing the int '3' to append stream "1 2", str() = "1 23"
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=432|std=C++98|before=1. overload {{v|1}} did not specify the content&lt;br&gt;of the underlying character sequence&lt;br&gt;2. overload {{v|4}} did not specify how the&lt;br&gt;input and output sequences are initialized|after=both specified}}
+{{dr list item|wg=lwg|dr=562|std=C++98|before=overload {{v|4}} set {{lc|epptr()}} to point one past the last underlying&lt;br&gt;character if {{c|1=bool(mode &amp; std::ios_base::out) == true}}|after={{lc|epptr()}} can be set&lt;br&gt;beyond that position}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_stringstream/dsc str|basic_stringstream}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

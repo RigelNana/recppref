@@ -1,0 +1,88 @@
+{{cpp/experimental/ranges/title|search_n}}
+{{cpp/experimental/ranges/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/ranges/algorithm}}
+{{dcl|since=ranges|num=1|1=
+template&lt; ForwardIterator I, Sentinel&lt;I&gt; S, class T,
+          class Pred = ranges::equal_to&lt;&gt;, class Proj = ranges::identity &gt;
+    requires IndirectlyComparable&lt;I, const T*, Pred, Proj&gt;
+I search_n( I first, S last, ranges::difference_type_t&lt;I&gt; count,
+            const T&amp; value, Pred pred = Pred{}, Proj proj = Proj{} );
+}}
+{{dcl|since=ranges|num=2|1=
+template&lt; ForwardRange R, class T, class Pred = ranges::equal_to&lt;&gt;,
+          class Proj = ranges::identity &gt;
+    requires IndirectlyComparable&lt;ranges::iterator_t&lt;R&gt;, const T*, Pred, Proj&gt;
+ranges::safe_iterator_t&lt;R&gt; search_n( R&amp;&amp; r, 
+                                     ranges::difference_type_t&lt;ranges::iterator_t&lt;R&gt;&gt; count,
+                                     const T&amp; value, Pred pred = Pred{}, Proj proj = Proj{} );
+}}
+{{dcl end}}
+
+@1@ Searches the range {{range|first|last}} for the first sequence of {{c|count}} elements whose projected values are each equal to the given value {{c|value}} according to the predicate {{c|pred}}.
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to examine}}
+{{par|r|the range of elements to examine}}
+{{par|count|the length of the sequence to search for}}
+{{par|value|the value to search for}}
+{{par|pred|the predicate that compares the projected elements with {{c|value}}}}
+{{par|proj|the projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+Iterator to the beginning of the found sequence in the range {{range|first|last}}. If no such sequence is found, an iterator that compares equal to {{c|last}} is returned.
+
+===Complexity===
+At most {{c|last - first}} applications of the predicate and the projection.
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;ForwardIterator I, Sentinel&lt;I&gt; S, class T,
+         class Pred = ranges::equal_to&lt;&gt;, class Proj = ranges::identity&gt;
+    requires IndirectlyComparable&lt;I, const T*, Pred, Proj&gt;
+I search_n(I first, S last, ranges::difference_type_t&lt;I&gt; count,
+           const T&amp; value, Pred pred = Pred{}, Proj proj = Proj{})
+{
+    for (; first != last; ++first)
+    {
+        if (!ranges::invoke(pred, ranges::invoke(proj, *first), value))
+            continue;
+
+        I candidate = first;
+        ranges::difference_type_t&lt;I&gt; cur_count = 0;
+
+        while (true)
+        {
+            ++cur_count;
+            if (cur_count == count)
+                // success
+                return candidate;
+
+            ++first;
+            if (first == last)
+                // exhausted the list
+                return first;
+
+            if (!ranges::invoke(pred, ranges::invoke(proj, *first), value))
+                // too few in a row
+                break;
+        }
+    }
+    return first;
+}
+}}
+
+===Example===
+{{example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc search_n}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc find_end}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc find}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc search}}
+{{dsc end}}

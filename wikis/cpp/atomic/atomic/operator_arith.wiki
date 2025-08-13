@@ -1,0 +1,159 @@
+{{cpp/atomic/atomic/title|1=operator++,++{{small|(int)}},--,--{{small|(int)}}}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl h|member only of {{tt|atomic&lt;''Integral''}}{{sep}}{{tt|&gt;}} specializations}}
+{{dcl|num=1|since=c++11|
+T operator++() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+T operator++() volatile noexcept;
+}}
+{{dcl|num=3|since=c++11|
+T operator++( int ) noexcept;
+}}
+{{dcl|num=4|since=c++11|
+T operator++( int ) volatile noexcept;
+}}
+{{dcl|num=5|since=c++11|
+T operator--() noexcept;
+}}
+{{dcl|num=6|since=c++11|
+T operator--() volatile noexcept;
+}}
+{{dcl|num=7|since=c++11|
+T operator--( int ) noexcept;
+}}
+{{dcl|num=8|since=c++11|
+T operator--( int ) volatile noexcept;
+}}
+{{dcl h|member only of {{tt|atomic&lt;T*&gt;}} partial specialization}}
+{{dcl|num=9|since=c++11|
+T* operator++() noexcept;
+}}
+{{dcl|num=10|since=c++11|
+T* operator++() volatile noexcept;
+}}
+{{dcl|num=11|since=c++11|
+T* operator++( int ) noexcept;
+}}
+{{dcl|num=12|since=c++11|
+T* operator++( int ) volatile noexcept;
+}}
+{{dcl|num=13|since=c++11|
+T* operator--() noexcept;
+}}
+{{dcl|num=14|since=c++11|
+T* operator--() volatile noexcept;
+}}
+{{dcl|num=15|since=c++11|
+T* operator--( int ) noexcept;
+}}
+{{dcl|num=16|since=c++11|
+T* operator--( int ) volatile noexcept;
+}}
+{{dcl end}}
+
+Atomically increments or decrements the current value. The operation is read-modify-write operation.
+* {{c/core|operator++()}} performs atomic pre-increment. Equivalent to {{c|return fetch_add(1) + 1;}}.
+* {{c/core|operator++(int)}} performs atomic post-increment. Equivalent to {{c|return fetch_add(1);}}.
+* {{c/core|operator--()}} performs atomic pre-decrement. Equivalent to {{c|return fetch_sub(1) - 1;}}.
+* {{c/core|operator--(int)}} performs atomic post-decrement. Equivalent to {{c|return fetch_sub(1);}}.
+
+@1-8@ For signed integral types, arithmetic is defined to use two’s complement representation. There are no undefined results.
+
+@9-16@ The result may be an undefined address, but the operations otherwise have no undefined behavior.
+@@ If {{tt|T}} is not a complete object type, the program is ill-formed.
+
+{{rrev|since=c++20|
+It is deprecated if {{c|std::atomic&lt;T&gt;::is_always_lock_free}} is false and any {{c/core|volatile}} overload participates in overload resolution.
+}}
+
+===Return value===
+{{c/core|operator++()}} and {{c/core|operator--()}} return the value of the atomic variable after the modification. Formally, the result of incrementing/decrementing the value immediately preceding the effects of this function in the {{lsd|cpp/atomic/memory order#Modification order}} of {{c|*this}}.
+
+{{c/core|operator++(int)}} and {{c/core|operator--(int)}} return the value of the atomic variable before the modification. Formally, the value immediately preceding the effects of this function in the {{lsd|cpp/atomic/memory order#Modification order}} of {{c|*this}}.
+
+===Notes===
+Unlike most pre-increment and pre-decrement operators, the pre-increment and pre-decrement operators for atomic types do not return a reference to the modified object. They return a copy of the stored value instead.
+
+===Example===
+{{example|code=
+#include &lt;atomic&gt;
+#include &lt;chrono&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;random&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::atomic&lt;int&gt; atomic_count{0};
+
+std::mutex cout_mutex;
+int completed_writes{0};
+
+constexpr int global_max_count{72};
+constexpr int writes_per_line{8};
+constexpr int max_delay{100};
+
+template&lt;int Max&gt;
+int random_value()
+{
+    static std::uniform_int_distribution&lt;int&gt; distr{1, Max};
+    static std::random_device engine;
+    static std::mt19937 noise{engine()};
+    static std::mutex rand_mutex;
+    std::lock_guard lock{rand_mutex};
+    return distr(noise);
+}
+
+int main()
+{
+    auto work = [](const std::string id)
+    {
+        for (int count{}; (count = ++atomic_count) &lt;= global_max_count;)
+        {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(random_value&lt;max_delay&gt;()));
+            
+            // print thread `id` and `count` value
+            {
+                std::lock_guard lock{cout_mutex};
+                
+                const bool new_line = ++completed_writes % writes_per_line == 0;
+                
+                std::cout &lt;&lt; id &lt;&lt; std::setw(3) &lt;&lt; count &lt;&lt; "  "
+                          &lt;&lt; (new_line ? "\n" : "") &lt;&lt; std::flush;
+            }
+        }
+    };
+
+    std::jthread j1(work, "░"), j2(work, "▒"), j3(work, "▓"), j4(work, "█");
+}
+|p=true
+|output=
+▒  2  ░  1  ▒  5  ▒  7  █  4  ░  6  ▓  3  ▒  8  
+▓ 11  █  9  ▓ 13  ░ 10  █ 14  ▒ 12  ░ 16  ░ 19  
+▓ 15  ▒ 18  ▓ 21  ▒ 22  █ 17  █ 25  ▒ 24  █ 26  
+░ 20  ░ 29  ▒ 27  ▓ 23  ▒ 31  ▒ 33  ▓ 32  █ 28  
+░ 30  ░ 37  ▒ 34  ▓ 35  █ 36  █ 41  ▓ 40  ▒ 39  
+░ 38  ▓ 43  █ 42  ▓ 46  ▓ 48  █ 47  █ 50  ░ 45  
+▒ 44  ▒ 53  ▒ 54  ▓ 49  ▒ 55  █ 51  ▒ 57  █ 58  
+░ 52  ▓ 56  ░ 61  ▒ 59  █ 60  ▓ 62  ▒ 64  ░ 63  
+░ 68  ▓ 66  █ 65  █ 71  ▒ 67  ▓ 70  ░ 69  █ 72
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P0558R1|std=C++11|before=arithmetic permitted on pointers to (possibly cv-qualified) {{c/core|void}} or function|after=made ill-formed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_add}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_sub}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith2}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith3}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

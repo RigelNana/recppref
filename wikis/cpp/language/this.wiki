@@ -1,0 +1,136 @@
+{{title|The {{tt|this}} pointer}}
+{{cpp/language/classes/navbar}}
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|this}}}}
+{{sdsc end}}
+
+The expression {{c|this}} is a {{rlps|value category#prvalue}} {{rlp|expressions|expression}} whose value is the address of the {{rlpsd|overload resolution#Implicit object parameter}} (object on which the implicit object member function is being called). It can appear in the following contexts:
+@1@ Within the body of any {{rlp|member functions|implicit object member function}}, including {{rlp|initializer list|member initializer list}}{{rev inl|since=c++11|, and {{rlp|lambda#closure type fun operator|lambda expression body}}}}.
+@2@ Within the {{rlp|function|declaration}} of any implicit object member function anywhere after the (optional) cv-qualifier sequence, including the {{rlp|exceptions|exception specification}}{{rev inl|since=c++11| and the trailing return type}}.
+
+{{rrev|since=c++11|
+@3@ Within {{rlp|data members#Member initialization|default member initializer}}.
+@4@ Within {{rlp|lambda#Lambda capture|capture list}} of a lambda expression.
+}}
+
+===Explanation===
+{{c|this}} can only associate with the innermost enclosing class of its appearance, even if the appearance is invalid in the context:
+{{source|1=
+class Outer
+{
+    int a[sizeof(*this)];            // Error: not inside a member function
+    unsigned int sz = sizeof(*this); // OK: in default member initializer
+    
+    void f()
+    {
+        int b[sizeof(*this)];     // OK
+        
+        struct Inner
+        {
+            int c[sizeof(*this)]; // Error: not inside a member function of Inner
+                                  // “this” is not associated with Outer
+                                  // even if it is inside a member function of Outer
+        };
+    }
+};
+}}
+
+The type of {{c|this}} in a member function of class {{tt|X}} is {{tt|X*}} (pointer to X). If the member function is {{rlp|member functions#member functions with cv-qualifiers|declared with a cv-qualifier sequence}} ''cv'', the type of {{c|this}} is {{tt|''cv'' X*}} (pointer to identically cv-qualified X). Since constructors and destructors cannot be declared with cv-qualifiers, the type of {{c|this}} in them is always {{tt|X*}}, even when constructing or destroying a const object.
+
+In class templates, {{c|this}} is a {{rlp|dependent name|dependent expression}}, and explicit {{c|this-&gt;}} may be used to force another expression to become dependent.
+{{source|1=
+template&lt;typename T&gt;
+struct B
+{
+    int var;
+};
+
+template&lt;typename T&gt;
+struct D : B&lt;T&gt;
+{
+    D()
+    {
+        // var = 1;    // Error: “var” was not declared in this scope
+        this-&gt;var = 1; // OK
+    }
+};
+}}
+
+{{rlp|constructor|During construction}} of an object, if the value of the object or any of its subobjects is accessed through a glvalue that is not obtained, directly or indirectly, from the constructor's {{c|this}} pointer, the value of the object or subobject thus obtained is unspecified. In other words, the this pointer cannot be aliased in a constructor:
+{{source|1=
+extern struct D d;
+
+struct D
+{
+    D(int a) : a(a), b(d.a) {} // b(a) or b(this-&gt;a) would be correct
+    int a, b;
+};
+
+D d = D(1); // because b(d.a) did not obtain a through this, d.b is now unspecified
+}}
+
+It is possible to execute {{c|delete this;}}, if the program can guarantee that the object was allocated by {{c/core|new}}, however, this renders every pointer to the deallocated object invalid, including the {{c|this}} pointer itself: after {{c|delete this;}} returns, such member function cannot refer to a member of a class (since this involves an implicit dereference of {{tt|this}}) and no other member function may be called.
+
+This can be used in the member function of the reference-counting pointer {{rev inl|since=c++11|(for example, {{lc|std::shared_ptr}})}} responsible for decrementing the reference count, when the last reference to the managed object goes out of scope.
+
+{{source|1=
+&lt;!-- libreoffice i18nlangtag/source/languagetag/simple-langtag.cxx --&gt;
+class ref
+{
+    // ...
+    void incRef() { ++mnRef; }
+    void decRef() { if (--mnRef == 0) delete this; }
+};
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/this}} 
+
+===Example===
+{{source
+|
+|code=
+class T
+{
+    int x;
+    
+    void foo()
+    {
+        x = 6;       // same as this-&gt;x = 6;
+        this-&gt;x = 5; // explicit use of this-&gt;
+    }
+    
+    void foo() const
+    {
+    //  x = 7; // Error: *this is constant
+    }
+    
+    void foo(int x) // parameter x shadows the member with the same name
+    {
+        this-&gt;x = x; // unqualified x refers to the parameter
+                     // “this-&gt;” is required for disambiguation
+    }
+    
+    int y;
+    T(int x) : x(x),      // uses parameter x to initialize member x
+               y(this-&gt;x) // uses member x to initialize member y
+    {}
+    
+    T&amp; operator=(const T&amp; b)
+    {
+        x = b.x;
+        return *this; // many overloaded operators return *this
+    }
+};
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=760|std=C++98|before=when {{c|this}} is used in a nested class, it was&lt;br&gt;unspecified whether it is associated with&lt;br&gt;the nested class or the enclosing class|after={{c|this}} always associates with&lt;br&gt;the innermost nested class,&lt;br&gt;regardless of whether it is in&lt;br&gt;a non-static member function}}
+{{dr list item|wg=cwg|dr=2271|std=C++98|before={{c|this}} could be aliased when&lt;br&gt;constructing a non-const object|after=alias is also&lt;br&gt;prohibited in this case}}
+{{dr list item|wg=cwg|dr=2869|std=C++98|before=it was unclear whether {{c|this}} could be used in a&lt;br&gt;static member function of a non-associated class|after=made clear}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

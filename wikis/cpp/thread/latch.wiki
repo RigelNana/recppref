@@ -1,0 +1,101 @@
+{{cpp/title|latch}}
+{{cpp/thread/latch/navbar}}
+{{ddcl|header=latch|since=c++20|
+class latch;
+}}
+
+The {{tt|latch}} class is a downward counter of type {{lc|std::ptrdiff_t}} which can be used to synchronize threads. The value of the counter is initialized on creation. Threads may block on the latch until the counter is decremented to zero. There is no possibility to increase or reset the counter, which makes the latch a single-use barrier.
+
+Concurrent invocations of the member functions of {{tt|std::latch}}, except for the destructor, do not introduce data races.
+
+===Data Members===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc expos mem obj|counter|spec={{lc|std::ptrdiff_t}}|the internal counter}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/latch/dsc constructor}}
+{{dsc inc|cpp/thread/latch/dsc destructor}}
+{{dsc mem fun|nolink=true|operator{{=}}|notes={{cmark deleted}}|{{tt|latch}} is not assignable}}
+
+{{dsc inc|cpp/thread/latch/dsc count_down}}
+
+{{dsc inc|cpp/thread/latch/dsc try_wait}}
+{{dsc inc|cpp/thread/latch/dsc wait}}
+{{dsc inc|cpp/thread/latch/dsc arrive_and_wait}}
+
+{{dsc h2|Constants}}
+{{dsc inc|cpp/thread/latch/dsc max}}
+{{dsc end}}
+
+===Notes===
+{{feature test macro|__cpp_lib_latch|std=C++20|value=201907L|{{tt|std::latch}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;latch&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+struct Job
+{
+    const std::string name;
+    std::string product{"not worked"};
+    std::thread action{};
+};
+
+int main()
+{
+    Job jobs[]{&lt;!----&gt;{"Annika"}, {"Buru"}, {"Chuck"}&lt;!----&gt;};
+
+    std::latch work_done{std::size(jobs)};
+    std::latch start_clean_up{1};
+
+    auto work = [&amp;](Job&amp; my_job)
+    {
+        my_job.product = my_job.name + " worked";
+        work_done.count_down();
+        start_clean_up.wait();
+        my_job.product = my_job.name + " cleaned";
+    };
+
+    std::cout &lt;&lt; "Work is starting... ";
+    for (auto&amp; job : jobs)
+        job.action = std::thread{work, std::ref(job)};
+
+    work_done.wait();
+    std::cout &lt;&lt; "done:\n";
+    for (auto const&amp; job : jobs)
+        std::cout &lt;&lt; "  " &lt;&lt; job.product &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "Workers are cleaning up... ";
+    start_clean_up.count_down();
+    for (auto&amp; job : jobs)
+        job.action.join();
+
+    std::cout &lt;&lt; "done:\n";
+    for (auto const&amp; job : jobs)
+        std::cout &lt;&lt; "  " &lt;&lt; job.product &lt;&lt; '\n';
+}
+|output=
+Work is starting... done:
+  Annika worked
+  Buru worked
+  Chuck worked
+Workers are cleaning up... done:
+  Annika cleaned
+  Buru cleaned
+  Chuck cleaned
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc barrier}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

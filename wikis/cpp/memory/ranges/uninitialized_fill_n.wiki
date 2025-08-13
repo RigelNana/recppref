@@ -1,0 +1,114 @@
+{{cpp/ranges/title|uninitialized_fill_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|Call signature}}
+{{dcla|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-range I, class T &gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;I&gt;, const T&amp;&gt;
+I uninitialized_fill_n( I first, std::iter_difference_t&lt;I&gt; count,
+                        const T&amp; value );
+}}
+{{dcl end}}
+
+Copies {{c|value}} to an uninitialized memory area {{counted range|first|count}} as if by
+{{c multi|
+return ranges::uninitialized_fill(std::counted_iterator(first, count),|                                  std::default_sentinel, value).base();
+}}
+
+If an exception is thrown during the initialization, the objects already constructed are destroyed in an unspecified order.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of the elements to initialize}}
+{{par|count|number of elements to construct}}
+{{par|value|the value to construct the elements with}}
+{{par end}}
+
+===Return value===
+As described above.
+
+===Complexity===
+Linear in {{c|count}}.
+
+===Exceptions===
+Any exception thrown on construction of the elements in the destination range.
+
+===Notes===
+An implementation may improve the efficiency of the {{tt|ranges::uninitialized_fill_n}}, e.g. by using {{lc|ranges::fill_n}}, if the value type of the output range is {{named req|TrivialType}}.
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} for [[cpp/memory#Uninitialized memory algorithms|specialized memory algorithms]]}}
+
+===Possible implementation===
+{{eq fun|1=
+struct uninitialized_fill_n_fn
+{
+    template&lt;no-throw-forward-range I, class T&gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;I&gt;, const T&amp;&gt;
+    I operator()(I first, std::iter_difference_t&lt;I&gt; n, const T&amp; x) const
+    {
+        I rollback{first};
+        try
+        {
+            for (; n-- &gt; 0; ++first)
+                ranges::construct_at(std::addressof(*first), x);
+            return first;
+        }
+        catch (...) // rollback: destroy constructed elements
+        {
+            for (; rollback != first; ++rollback)
+                ranges::destroy_at(std::addressof(*rollback));
+            throw;
+        }
+    }
+};
+
+inline constexpr uninitialized_fill_n_fn uninitialized_fill_n{};
+}}
+
+===Example===
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    constexpr int n{3};
+    alignas(alignof(std::string)) char out[n * sizeof(std::string)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;std::string*&gt;(out)};
+        auto last = std::ranges::uninitialized_fill_n(first, n, "cppreference");
+        
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; *it &lt;&lt; '\n';
+        
+        std::ranges::destroy(first, last);
+    }
+    catch (...)
+    {
+        std::cout &lt;&lt; "Exception!\n";
+    }
+}
+|output=
+cppreference
+cppreference
+cppreference
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=this algorithm might create objects on a {{c/core|const}} storage|after=kept disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_fill}}
+{{dsc inc|cpp/memory/dsc uninitialized_fill_n}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

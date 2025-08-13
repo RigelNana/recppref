@@ -1,0 +1,197 @@
+{{cpp/ranges/title|inplace_merge}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcla|anchor=no|num=1|since=c++20|constexpr=c++26|1=
+template&lt; std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;I, Comp, Proj&gt;
+    I inplace_merge( I first, I middle, S last,
+                     Comp comp = {}, Proj proj = {} );
+}}
+{{dcla|anchor=no|num=2|since=c++20|constexpr=c++26|1=
+template&lt; ranges::bidirectional_range R, class Comp = ranges::less,
+          class Proj = std::identity &gt;
+requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+ranges::borrowed_iterator_t&lt;R&gt;
+    inplace_merge( R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle,
+                   Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Merges two consecutive ''sorted'' ranges {{range|first|middle}} and {{range|middle|last}} into one ''sorted'' range {{range|first|last}}.
+
+A sequence is said to be ''sorted'' with respect to the comparator {{c|comp}} and projection {{c|proj}} if for any iterator {{tt|it}} pointing to the sequence and any non-negative integer {{tt|n}} such that {{tt|it + n}} is a valid iterator pointing to an element of the sequence, {{c|std::invoke(comp, std::invoke(proj, *(it + n)), std::invoke(proj, *it)))}} evaluates to {{c|false}}.
+
+This merge function is ''stable'', which means that for equivalent elements in the original two ranges, the elements from the first range (preserving their original order) precede the elements from the second range (preserving their original order).
+
+@1@ Elements are compared using the given binary comparison function {{c|comp}} and projection object {{c|proj}}, and the ranges must be sorted with respect to the same.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the range, as if using {{c|ranges::begin(r)}} as {{c|first}}, and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the first sorted range}}
+{{par|middle|the end of the first range and the beginning of the second range}}
+{{par|last|the end of the second sorted range}}
+{{par|r|the range of elements to merge inplace}}
+{{par|comp|comparison to apply to the projected elements}}
+{{par|proj|projection to apply to the elements in the range}}
+{{par end}}
+
+===Return value===
+An iterator equal to {{c|last}}.
+
+===Complexity===
+Exactly {{c|N − 1}} comparisons, if additional memory buffer is available, where {{c|1=N = ranges::distance(first, last)}}. Otherwise, {{mathjax-or|\(\scriptsize \mathcal{O}(N\cdot\log{(N)})\)|𝓞(N•log(N))}} comparisons. Additionally, twice as many projections as comparisons in both cases.
+
+===Notes===
+This function attempts to allocate a temporary buffer. If the allocation fails, the less efficient algorithm is chosen.
+
+{{feature test macro|__cpp_lib_constexpr_algorithms|{{c/core|constexpr}} stable sorting|value=202306L|std=C++26}}
+
+===Possible implementation===
+This implementation only shows the slower algorithm used when no additional memory is available. See also the implementation in [https://github.com/microsoft/STL/blob/e745bad3b1d05b5b19ec652d68abb37865ffa454/stl/inc/algorithm#L7131-L7235 MSVC STL] and [https://github.com/gcc-mirror/gcc/blob/54258e22b0846aaa6bd3265f592feb161eecda75/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L2573-L2602 libstdc++].
+{{eq fun|1=&lt;!--copied from libstdc++--&gt;
+struct inplace_merge_fn
+{
+    template&lt;std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Comp = ranges::less, class Proj = std::identity&gt;
+    requires std::sortable&lt;I, Comp, Proj&gt;
+    constexpr I operator()(I first, I middle, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        I last_it = ranges::next(middle, last);
+        inplace_merge_slow(first, middle, last_it,
+                           ranges::distance(first, middle),
+                           ranges::distance(middle, last_it),
+                           std::ref(comp), std::ref(proj));
+        return last_it;
+    }
+
+    template&lt;ranges::bidirectional_range R, class Comp = ranges::less,
+             class Proj = std::identity&gt;
+    requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle,
+                   Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), std::move(middle), ranges::end(r),
+                       std::move(comp), std::move(proj));
+    }
+
+private:
+    template&lt;class I, class Comp, class Proj&gt;
+    static constexpr void inplace_merge_slow(I first, I middle, I last,
+                                             std::iter_difference_t&lt;I&gt; n1,
+                                             std::iter_difference_t&lt;I&gt; n2,
+                                             Comp comp, Proj proj)
+    {
+        if (n1 == 0 {{!!}} n2 == 0)
+            return;
+        if (n1 + n2 == 2 &amp;&amp; comp(proj(*middle), proj(*first)))
+        {
+            ranges::iter_swap(first, middle);
+            return;
+        }
+
+        I cut1 = first, cut2 = middle;
+        std::iter_difference_t&lt;I&gt; d1{}, d2{};
+
+        if (n1 &gt; n2)
+        {
+            d1 = n1 / 2;
+            ranges::advance(cut1, d1);
+            cut2 = ranges::lower_bound(middle, last, *cut1,
+                                       std::ref(comp), std::ref(proj));
+            d2 = ranges::distance(middle, cut2);
+        }
+        else
+        {
+            d2 = n2 / 2;
+            ranges::advance(cut2, d2);
+            cut1 = ranges::upper_bound(first, middle, *cut2,
+                                       std::ref(comp), std::ref(proj));
+            d1 = ranges::distance(first, cut1);
+        }
+
+        I new_middle = ranges::rotate(cut1, middle, cut2);
+        inplace_merge_slow(first, cut1, new_middle, d1, d2,
+                           std::ref(comp), std::ref(proj));
+        inplace_merge_slow(new_middle, cut2, last, n1 - d1, n2 - d2,
+                           std::ref(comp), std::ref(proj));
+    }
+};
+
+inline constexpr inplace_merge_fn inplace_merge {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;complex&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+void print(auto const&amp; v, auto const&amp; rem, int middle = -1)
+{
+    for (int i{}; auto n : v)
+        std::cout &lt;&lt; (i++ == middle ? "│ " : "") &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; rem &lt;&lt; '\n';
+}
+
+template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S&gt;
+requires std::sortable&lt;I&gt;
+void merge_sort(I first, S last)
+{
+    if (last - first &gt; 1)
+    {
+        I middle{first + (last - first) / 2};
+        merge_sort(first, middle);
+        merge_sort(middle, last);
+        std::ranges::inplace_merge(first, middle, last);
+    }
+}
+
+int main()
+{
+    // custom merge-sort demo
+    std::vector v{8, 2, 0, 4, 9, 8, 1, 7, 3};
+    print(v, ": before sort");
+    merge_sort(v.begin(), v.end());
+    print(v, ": after sort\n");
+
+    // merging with comparison function object and projection
+    using CI = std::complex&lt;int&gt;;
+    std::vector&lt;CI&gt; r{{0,1}, {0,2}, {0,3}, {1,1}, {1,2}};
+    const auto middle{std::ranges::next(r.begin(), 3)};
+    auto comp{std::ranges::less{}&lt;!----&gt;};
+    auto proj{[](CI z) { return z.imag(); }&lt;!----&gt;};
+
+    print(r, ": before merge", middle - r.begin());
+    std::ranges::inplace_merge(r, middle, comp, proj);
+    print(r, ": after merge");
+}
+|output=
+8 2 0 4 9 8 1 7 3 : before sort
+0 1 2 3 4 7 8 8 9 : after sort
+
+(0,1) (0,2) (0,3) │ (1,1) (1,2) : before merge
+(0,1) (1,1) (0,2) (1,2) (0,3) : after merge
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc merge}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_union}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_sorted}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort}}
+{{dsc inc|cpp/algorithm/dsc inplace_merge}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

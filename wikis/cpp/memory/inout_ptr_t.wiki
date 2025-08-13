@@ -1,0 +1,87 @@
+{{cpp/title|inout_ptr_t}}
+{{cpp/memory/inout_ptr_t/navbar}}
+{{ddcl|header=memory|since=c++23|
+template&lt; class Smart, class Pointer, class... Args &gt;
+class inout_ptr_t;
+}}
+
+{{tt|inout_ptr_t}} is used to adapt types such as smart pointers for foreign functions that reset ownership via a {{tt|Pointer*}} (usually {{tt|T**}} for some object type {{tt|T}}) or {{c/core|void**}} parameter.
+
+{{tt|inout_ptr_t}} captures additional arguments on construction, provides a storage for the result which such an aforementioned foreign function accesses, releases the ownership held by the adapted {{tt|Smart}} object, and finally resets the adapted {{tt|Smart}} object with the result and the captured arguments when it is destroyed.
+
+{{tt|inout_ptr_t}} behaves as if it holds following non-static data members:
+* a {{tt|Smart&amp;}} reference, which is bound to the adapted object on construction,
+* for every {{tt|T}} in {{tt|Args...}}, a member of type {{tt|T}}, which is an argument captured on construction and used for resetting while destruction, and
+* a member subobject that suitable for storing a {{tt|Pointer}} within it and providing a {{c/core|void*}} object, where the {{tt|Pointer}} or {{c/core|void*}} object is generally exposed to a foreign function for ownership resetting.
+
+If {{tt|Smart}} is not a pointer type, {{c|release()}} is called at most once on the adapted object. Implementations may call {{c|release()}} within constructor, or before resetting within destructor if the {{tt|Pointer}} value is not null.
+
+Users can control whether each argument for resetting is captured by copy or by reference, by specifying an object type or a reference type in {{tt|Args...}} respectively.
+
+===Template parameters===
+{{par begin}}
+{{par|Smart|the type of the object (typically a smart pointer) to adapt}}
+{{par|Pointer|type of the object (typically a raw pointer) to which a foreign function accesses for ownership resetting}}
+{{par|Args...|type of captured arguments used for resetting the adapted object}}
+{{par hreq}}
+{{par req named|Pointer|NullablePointer}}
+{{par req|The program is ill-formed if {{tt|Smart}} is a {{lc|std::shared_ptr}} specialization.}}
+{{par end}}
+
+===Specializations===
+Unlike most class templates in the standard library, [[cpp/language/type#Program-defined type|program-defined specializations]] of {{tt|inout_ptr_t}} that depend on at least one {{lsd|cpp/language/type#Program-defined type}} need not meet the requirements for the primary template.
+
+This license allows a program-defined specialization to expose the raw pointer stored within a non-standard smart pointer to foreign functions.
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|cpp/memory/inout_ptr_t/inout_ptr_t|notes={{mark c++23}}|constructs an {{tt|inout_ptr_t}}}}
+{{dsc mem fun|operator{{=}}|nolink=true|notes={{cmark deleted}}{{mark c++23}}|{{tt|inout_ptr_t}} is not assignable}}
+{{dsc mem dtor|cpp/memory/inout_ptr_t/~inout_ptr_t|notes={{mark c++23}}|resets the adapted smart pointer after releasing its ownership}}
+{{dsc mem fun|cpp/memory/inout_ptr_t/operator ptr|title=operator Pointer*&lt;br&gt;operator void**|notes={{mark c++23}}|converts the {{tt|inout_ptr_t}} to the address of the storage for output}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/inout_ptr_t/dsc inout_ptr}}
+{{dsc end}}
+
+===Notes===
+{{tt|inout_ptr_t}} expects that the foreign functions release the ownership represented by the value of the pointed-to {{tt|Pointer}}, and then re-initialize it. As such operation requires unique ownership, the usage with {{lc|std::shared_ptr}} is forbidden.
+
+The typical usage of {{tt|inout_ptr_t}} is creating its temporary objects by {{lc|std::inout_ptr}}, which resets the adapted smart pointer immediately. E.g. given a setter function and a smart pointer of appropriate type declared with {{c|int foreign_resetter(T**);}} and {{c|std::unique_ptr&lt;T, D&gt; up;}} respectively,
+{{source|1=
+if (int ec = foreign_resetter(std::inout_ptr(up)))
+    return ec;
+}}
+is roughly equivalent to
+{{source|1=
+T *raw_p = up.get();
+up.release();
+int ec = foreign_resetter(&amp;raw_p);
+up.reset(raw_p);
+if (ec != 0)
+    return ec;
+}}
+
+It is not recommended to create an {{tt|inout_ptr_t}} object of a {{lt|cpp/language/storage duration}} other than automatic storage duration, because such code is likely to produce dangling references and result in undefined behavior on destruction.
+
+Captured arguments are typically packed into a {{c/core|std::tuple&lt;Args...&gt;}}. Implementations may use different mechanism to provide the {{tt|Pointer}} or {{c/core|void*}} object they need hold.
+
+
+{{ftm begin|sort=yes}}
+{{ftm|std=C++23|value=202106L|__cpp_lib_out_ptr|rowspan="2"|{{tt|std::out_ptr}}, {{lc|std::inout_ptr}}}}
+{{ftm|std=C++26|value=202311L|-|freestanding {{tt|std::out_ptr}} and {{lc|std::inout_ptr}}}}
+{{ftm end}}
+
+===Example===
+{{example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc out_ptr_t}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,161 @@
+{{cpp/title|lexicographical_compare}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2 &gt;
+bool lexicographical_compare( InputIt1 first1, InputIt1 last1,
+                              InputIt2 first2, InputIt2 last2 );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2 &gt;
+bool lexicographical_compare( ExecutionPolicy&amp;&amp; policy,
+                              ForwardIt1 first1, ForwardIt1 last1,
+                              ForwardIt2 first2, ForwardIt2 last2 );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2, class Compare &gt;
+bool lexicographical_compare( InputIt1 first1, InputIt1 last1,
+                              InputIt2 first2, InputIt2 last2,
+                              Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class Compare &gt;
+bool lexicographical_compare( ExecutionPolicy&amp;&amp; policy,
+                              ForwardIt1 first1, ForwardIt1 last1,
+                              ForwardIt2 first2, ForwardIt2 last2,
+                              Compare comp );
+}}
+{{dcl end}}
+
+Checks if the first range {{range|first1|last1}} is lexicographically ''less'' than the second range {{range|first2|last2}}. 
+
+@1@ Elements are compared using {{c/core|operator&lt;}}.
+@3@ Elements are compared using the given binary comparison function {{c|comp}}.
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}. {{cpp/algorithm/parallel overload precondition|plural=true}}
+
+Lexicographical comparison is an operation with the following properties:
+* Two ranges are compared element by element.
+* The first mismatching element defines which range is lexicographically ''less'' or ''greater'' than the other.
+* If one range is a prefix of another, the shorter range is lexicographically ''less'' than the other.
+* If two ranges have equivalent elements and are of the same length, then the ranges are lexicographically ''equal''.
+* An empty range is lexicographically ''less'' than any non-empty range.
+* Two empty ranges are lexicographically ''equal''.
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the first range of elements to examine}}
+{{par|first2, last2|the second range of elements to examine}}
+{{par exec pol}}
+{{par cmp|comp|p1=InputIt1|p2=InputIt2}}
+{{par hreq}}
+{{par req named|InputIt1, InputIt2|InputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the first range is lexicographically ''less'' than the second, otherwise {{c|false}}.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} as {{c|std::distance(first1, last1)}} and {{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} as {{c|std::distance(first2, last2)}}:
+
+@1,2@ At most {{mathjax-or|\(\scriptsize 2\min(N_1,N_2)\)|2min({{su|b=1}},N{{su|b=2}})}} comparisons using {{c/core|operator&lt;}}.
+
+@3,4@ At most {{mathjax-or|\(\scriptsize 2\min(N_1,N_2)\)|2min(N{{su|b=1}},N{{su|b=2}})}} applications of the comparison function {{c|comp}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+{{eq impl
+|title1=lexicographical_compare (1)|ver1=1|1=
+template&lt;class InputIt1, class InputIt2&gt;
+bool lexicographical_compare(InputIt1 first1, InputIt1 last1,
+                             InputIt2 first2, InputIt2 last2)
+{
+    for (; (first1 != last1) &amp;&amp; (first2 != last2); ++first1, (void) ++first2)
+    {
+        if (*first1 &lt; *first2)
+            return true;
+        if (*first2 &lt; *first1)
+            return false;
+    }
+    
+    return (first1 == last1) &amp;&amp; (first2 != last2);
+}
+|title2=lexicographical_compare (3)|ver2=3|2=
+template&lt;class InputIt1, class InputIt2, class Compare&gt;
+bool lexicographical_compare(InputIt1 first1, InputIt1 last1,
+                             InputIt2 first2, InputIt2 last2, Compare comp)
+{
+    for (; (first1 != last1) &amp;&amp; (first2 != last2); ++first1, (void) ++first2)
+    {
+        if (comp(*first1, *first2))
+            return true;
+        if (comp(*first2, *first1))
+            return false;
+    }
+    
+    return (first1 == last1) &amp;&amp; (first2 != last2);
+}
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+void print(const std::vector&lt;char&gt;&amp; v, auto suffix)
+{
+    for (char c : v)
+        std::cout &lt;&lt; c &lt;&lt; ' ';
+    std::cout &lt;&lt; suffix;
+}
+
+int main()
+{
+    std::vector&lt;char&gt; v1{'a', 'b', 'c', 'd'};
+    std::vector&lt;char&gt; v2{'a', 'b', 'c', 'd'};
+    
+    for (std::mt19937 g{std::random_device{}()};
+         !std::lexicographical_compare(v1.begin(), v1.end(),
+                                       v2.begin(), v2.end());)
+    {
+        print(v1, "&gt;= ");
+        print(v2, '\n');
+        
+        std::shuffle(v1.begin(), v1.end(), g);
+        std::shuffle(v2.begin(), v2.end(), g);
+    }
+    
+    print(v1, "&lt;  ");
+    print(v2, '\n');
+}
+|p=true
+|output=
+a b c d &gt;= a b c d 
+d a b c &gt;= c b d a 
+b d a c &gt;= a d c b 
+a c d b &lt;  c d a b 
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=142|std=C++98|before=at most {{mathjax-or|\(\scriptsize \min(N_1,N_2)\)|min(N{{su|b=1}},N{{su|b=2}})}} comparisons were allowed, but that&lt;br&gt;is not possible (equivalence is determined by 2 comparisons)|after=doubled the limit}}
+{{dr list item|wg=lwg|dr=1205|std=C++98|before=the results of lexicographical comparisons involving empty ranges were unclear|after=made clear}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc equal}}
+{{dsc inc|cpp/algorithm/dsc lexicographical_compare_three_way}}
+{{dsc inc|cpp/algorithm/ranges/dsc lexicographical_compare}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

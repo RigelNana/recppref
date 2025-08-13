@@ -1,0 +1,189 @@
+{{title|Dynamic exception specification {{mark until c++17}}}}
+{{cpp/language/exceptions/navbar}}
+
+Lists the exceptions that a function might directly or indirectly throw.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|throw(}}{{spar optional|type-id-list}}{{ttb|)}}|notes={{mark life|deprecated=c++11|removed=c++17|br=yes}}}}
+{{sdsc end}}
+@1@ Explicit dynamic exception specification.
+
+{{par begin}}
+{{par|{{spar|type-id-list}}|comma-separated list of {{rlp|type#Type naming|type-id}}s{{rev inl|since=c++11|, a type-id representing a {{rlp|parameter pack#Pack expansion|pack expansion}} is followed by an ellipsis (...)}}}}
+{{par end}}
+
+An explicit dynamic exception specification shall appear only on a function declarator for a function type, pointer to function type, reference to function type, or pointer to member function type that is the top-level type of a declaration or definition, or on such a type appearing as a parameter or return type in a function declarator.
+{{source|
+void f() throw(int);            // OK: function declaration
+void (*pf)() throw (int);       // OK: pointer to function declaration
+void g(void pfa() throw(int));  // OK: pointer to function parameter declaration
+typedef int (*pf)() throw(int); // Error: typedef declaration
+}}
+
+===Explanation===
+If a function is declared with type {{tt|T}} listed in its dynamic exception specification, the function may throw exceptions of that type or a type derived from it.
+
+{{rlp|incomplete type|Incomplete types}}, pointers or references to incomplete types other than cv {{tt|void*}}{{rev inl|since=c++11|, and rvalue reference types}} are not allowed in the exception specification. Array and function types, if used, are adjusted to corresponding pointer types, top level cv-qualifications are also dropped. {{rev inl|since=c++11|{{rlp|parameter pack}}s are allowed}}.
+
+A dynamic exception specification whose set of adjusted types is empty {{rev inl|since=c++11|(after any packs are expanded)}} is non-throwing. A function with a non-throwing dynamic exception specification does not allow any exceptions.
+
+A dynamic exception specification is not considered part of a function’s type.
+
+If the function throws an exception of the type not listed in its exception specification, the function {{lc|std::unexpected}} is called. The default function calls {{lc|std::terminate}}, but it may be replaced by a user-provided function (via {{lc|std::set_unexpected}}) which may call {{lc|std::terminate}} or throw an exception. If the exception thrown from {{lc|std::unexpected}} is accepted by the exception specification, stack unwinding continues as usual. If it isn't, but {{lc|std::bad_exception}} is allowed by the exception specification, {{lc|std::bad_exception}} is thrown. Otherwise, {{lc|std::terminate}} is called.
+
+====Instantiation====
+The dynamic exception specification of a function template specialization is not instantiated along with the function declaration; it is instantiated only when ''needed'' (as defined below).
+
+The dynamic exception specification of an implicitly-declared special member function is also evaluated only when needed (in particular, implicit declaration of a member function of a derived class does not require the exception-specification of a base member function to be instantiated).
+
+When the dynamic exception specification of a function template specialization is ''needed'', but has not yet been instantiated, the dependent names are looked up and any templates used in the {{spar|expression}} are instantiated as if for the declaration of the specialization.
+
+A dynamic exception specification of a function is considered to be ''needed'' in the following contexts:
+* in an expression, where the function is selected by overload resolution
+* the function is {{rlp|definition#ODR-use|odr-used}}
+* the function would be odr-used but appears in an unevaluated operand
+{{source|1=
+template&lt;class T&gt;
+T f() throw(std::array&lt;char, sizeof(T)&gt;);
+
+int main()
+{
+    decltype(f&lt;void&gt;()) *p; // f unevaluated, but exception specification is needed
+                            // error because instantiation of the exception specification
+                            // calculates sizeof(void)
+}
+}}
+* the specification is needed to compare to another function declaration (e.g. on a virtual function overrider or on an explicit specialization of a function template)
+* in a function definition
+* the specification is needed because a defaulted special member function needs to check it in order to decide its own exception specification (this takes place only when the specification of the defaulted special member function is, itself, needed).
+
+===Potential exceptions===
+Each function {{tt|f}}, pointer to function {{tt|pf}}, and pointer to member function {{tt|pmf}} has a ''set of potential exceptions'', which consists of types that might be thrown. Set of all types indicates that any exception may be thrown. This set is defined as follows:
+@1@ If the declaration of {{tt|f}}, {{tt|pf}}, or {{tt|pmf}} uses a dynamic exception specification{{rev inl|until=c++11| that does not allow all exceptions}}, the set consists of the types listed in that specification.
+
+{{rrev|since=c++11|@2@ Otherwise, if the declaration of {{tt|f}}, {{tt|pf}}, or {{tt|pmf}} uses {{rlpt|noexcept|noexcept(true)}}, the set is empty.}}
+@3@ Otherwise, the set is the set of all types.
+
+Note: for implicitly-declared special member functions (constructors, assignment operators, and destructors){{rev inl|since=c++11| and for the inheriting constructors}}, the set of potential exceptions is a combination of the sets of the potential exceptions of everything they would call: constructors/assignment operators/destructors of non-variant non-static data members, direct bases, and, where appropriate, virtual bases (including default argument expressions, as always).
+
+Each expression {{tt|e}} has a ''set of potential exceptions''. The set is empty if {{tt|e}} is a {{rlp|constant expression|core constant expression}}, otherwise, it is the union of the sets of potential exceptions of all immediate subexpressions of {{tt|e}} (including {{rlp|default arguments|default argument expressions}}), combined with another set that depends on the form of {{tt|e}}, as follows:
+@1@ If {{tt|e}} is a function call expression, let {{tt|g}} denote the function, function pointer, or pointer to member function that is that is called, then
+:* if the declaration of {{tt|g}} uses a dynamic exception specification, the set of potential exceptions of {{tt|g}} is added to the set;
+{{rrev|since=c++11|:* if the declaration of {{tt|g}} uses {{rlpt|noexcept|noexcept(true)}}, the set is empty;}}
+:* otherwise, the set is the set of all types.
+@2@ If {{tt|e}} calls a function implicitly (it's an operator expression and the operator is overloaded, it is a {{rlp|new|new-expression}} and the allocation function is overloaded, or it is a full expression and the destructor of a temporary is called), then the set is the set of that function.
+@3@ If {{tt|e}} is a {{rlp|throw|throw-expression}}, the set is the exception that would be initialized by its operand, or the set of all types for the re-throwing throw-expression (with no operand).
+@4@ If {{tt|e}} is a {{rlpt|dynamic_cast}} to a reference to a polymorphic type, the set consists of {{lc|std::bad_cast}}.
+@5@ If {{tt|e}} is a {{rlpt|typeid}} applied to a dereferenced pointer to a polymorphic type, the set consists of {{lc|std::bad_typeid}}.
+
+{{rrev|since=c++11|@6@ If {{tt|e}} is a {{rlp|new|new-expression}} with a non-constant array size, and the selected allocation function has a non-empty set of potential exceptions, the set consists of {{lc|std::bad_array_new_length}}.}}
+{{source|1=
+void f() throw(int); // f()'s set is "int"
+void g();            // g()'s set is the set of all types
+
+struct A { A(); };                  // "new A"'s set is the set of all types
+struct B { B() noexcept; };         // "B()"'s set is empty
+struct D() { D() throw (double); }; // new D's set is the set of all types
+}}
+
+All implicitly-declared member functions {{rev inl|since=c++11|and inheriting constructors }}have exception specifications, selected as follows:
+* If the set of potential exceptions is the set of all types, the implicit exception specification {{rev inl|until=c++11|allows all exceptions (the exception specification is considered present, even though it is inexpressible in code and behaves as if there is no exception specification)}}{{rev inl|since=c++11|is {{c|noexcept(false)}}}}.
+* Otherwise, If the set of potential exceptions is not empty, the implicit exception specification lists every type from the set.
+* Otherwise, the implicit exception specification is {{rev inl|until=c++11|{{c|throw()}}}}{{rev inl|since=c++11|{{c|noexcept(true)}}}}.
+
+{{source|1=
+struct A
+{
+    A(int = (A(5), 0)) noexcept;
+    A(const A&amp;) throw();
+    A(A&amp;&amp;) throw();
+    ~A() throw(X);
+};
+
+struct B
+{
+    B() throw();
+    B(const B&amp;) = default; // exception specification is "noexcept(true)"
+    B(B&amp;&amp;, int = (throw Y(), 0)) noexcept;
+    ~B() throw(Y);
+};
+
+int n = 7;
+struct D : public A, public B
+{
+    // May throw an exception of a type that would match a handler of type
+    // std​::​bad_array_new_length, but does not throw a bad allocation exception
+    (void*) new (std::nothrow) int[n];
+
+    // D may have the following implicitly-declared members:
+    // D::D() throw(X, std::bad_array_new_length);
+    // D::D(const D&amp;) noexcept(true);
+    // D::D(D&amp;&amp;) throw(Y);
+    // D::~D() throw(X, Y);
+};
+}}
+
+===Notes===
+Clang considers the rule of instantiation of dynamic exception specification is changed in C++11 by {{wg21|CWG1330}}, see [https://github.com/llvm/llvm-project/issues/56439 LLVM #56349].
+
+===Keywords===
+{{ltt|cpp/keyword/throw}}
+
+===Example===
+{{example
+|Note: best be compiled in C++98 mode to avoid warnings. Incompatible with C++17 and newer revisions.
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;exception&gt;
+#include &lt;iostream&gt;
+
+class X {};
+class Y {};
+class Z : public X {};
+class W {};
+
+void f() throw(X, Y) 
+{
+    bool n = false;
+
+    if (n)
+        throw X(); // OK, would call std::terminate()
+    if (n)
+        throw Z(); // also OK
+
+    throw W(); // will call std::unexpected()
+}
+
+void handler()
+{
+    std::cerr &lt;&lt; "That was unexpected!\n"; // flush needed
+    std::abort();
+}
+
+int main()
+{
+    std::set_unexpected(handler);
+    f();
+}
+|output=
+That was unexpected!
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=25|std=C++98|before=the behavior of assignment and initialization&lt;br&gt;between pointers to members with different&lt;br&gt;exception specifications was unspecified|after=apply the restriction&lt;br&gt;for function pointers&lt;br&gt;and references}}
+{{dr list item|wg=cwg|dr=973|std=C++98|before=exception specification may contain functions types, but the&lt;br&gt;corresponding function pointer conversion was not specified|after=specified}}
+{{dr list item|wg=cwg|dr=1330|std=C++98|before=an exception specification might be eagerly instantiated|after=it is only instantiated only if needed}}
+{{dr list item|wg=cwg|dr=1267|std=C++11|before=rvalue reference types were allowed in exception specifications|after=not allowed}}
+{{dr list item|wg=cwg|dr=1351|std=C++98&lt;br&gt;C++11|before=default argument (C++98) and default member initializer&lt;br&gt;(C++11) were ignored in implicit exception specification|after=made considered}}
+{{dr list item|wg=cwg|dr=1777|std=C++11|before={{c|throw(T...)}} was not a non-throwing&lt;br&gt;specification even if {{c|T}} is an empty pack|after=it is non-throwing&lt;br&gt;if the pack is empty}}
+{{dr list item|wg=cwg|dr=2191|std=C++98|before=the set of potential exceptions of a {{tt|typeid}} expression&lt;br&gt;might contain {{tt|bad_typeid}} even if it cannot be thrown|after=contains {{tt|bad_typeid}}&lt;br&gt;only if it can be thrown}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc noexcept spec}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

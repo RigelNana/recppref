@@ -1,0 +1,71 @@
+{{cpp/experimental/ranges/title|common_reference}}
+{{cpp/experimental/ranges/utility/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/ranges/type_traits}}
+{{dcl|since=ranges|1=
+template&lt; class... T &gt;
+struct common_reference;
+}}
+{{dcl end}}
+
+Determines the common reference type of the types {{tt|T...}}, that is, the type to which all the types in {{tt|T...}} can be converted or bound. If such a type exists (as determined according to the rules below), the member {{tt|type}} names that type. Otherwise, there is no member {{tt|type}}. The behavior is undefined if any of the types in {{tt|T...}} is an incomplete type other than (possibly cv-qualified) {{c|void}}. 
+
+When given reference types, {{tt|common_reference}} attempts to find a reference type to which the supplied reference types can all be bound, but may return a non-reference type if it cannot find such a reference type.
+
+* If {{c|sizeof...(T)}} is zero, there is no member {{tt|type}}.
+* If {{c|sizeof...(T)}} is one (i.e., {{tt|T...}} contains only one type {{tt|T0}}), the member {{tt|type}} names the same type as {{c|T0}}.
+* If {{c|sizeof...(T)}} is two (i.e., {{tt|T...}} contains two types {{tt|T1}} and {{tt|T2}}):
+** If {{tt|T1}} and {{tt|T2}} are both reference types, and the ''simple common reference type'' {{tt|S}} of {{tt|T1}} and {{tt|T2}} (as defined below) exists, then the member type {{tt|type}} names {{tt|S}};
+** Otherwise, if {{c|basic_common_reference&lt;T1R, T2R, T1Q, T2Q&gt;::type}} exists, where {{tt|TiR}} is {{c|std::remove_cv_t&lt;std::remove_reference_t&lt;Ti&gt;&gt;}} and {{tt|TiQ}} is an alias template such that {{c|TiQ&lt;TiR&gt;}} is {{c|Ti}}, then the member type {{tt|type}} names that type;
+** Otherwise, if {{c|decltype(false? val&lt;T1&gt;() : val&lt;T2&gt;())}}, where {{tt|val}} is a function template {{c|template&lt;class T&gt; T val();}}, denotes a valid type, then the member type {{tt|type}} names that type;
+** Otherwise, if {{c|ranges::common_type_t&lt;T1, T2&gt;}} is a valid type, then the member type {{tt|type}} names that type;
+** Otherwise, there is no member type.
+* If {{c|sizeof...(T)}} is greater than two (i.e., {{tt|T...}} consists of the types {{tt|T1, T2, R...}}), then if {{c|ranges::common_reference_t&lt;T1, T2&gt;}} exists, the member {{tt|type}} denotes {{c|ranges::common_reference_t&lt;ranges::common_reference_t&lt;T1, T2&gt;, R...&gt;}} if such a type exists. In all other cases, there is no member {{tt|type}}.
+
+The ''simple common reference type'' of two reference types {{tt|T1}} and {{tt|T2}} is defined as follows:
+* If {{tt|T1}} is {{tt|''cv1'' X &amp;}} and {{tt|T2}} is {{tt|''cv2'' Y &amp;}} (i.e., both are lvalue reference types): their simple common reference type is {{c|decltype(false? std::declval&lt;cv12 X &amp;&gt;() : std::declval&lt;cv12 Y &amp;&gt;())}}, where ''cv12'' is the union of ''cv1'' and ''cv2'', if that type exists and is a reference type.
+* If {{tt|T1}} and {{tt|T2}} are both rvalue reference types: if the simple common reference type of {{tt|T1 &amp;}} and {{tt|T2 &amp;}} (determined according to the previous bullet) exists, then let {{tt|C}} denote that type's corresponding rvalue reference type. If {{c|std::is_convertible&lt;T1, C&gt;::value}} and {{c|std::is_convertible&lt;T2, C&gt;::value}} are both {{tt|true}}, then the simple common reference type of {{tt|T1}} and {{tt|T2}} is {{tt|C}}.
+* Otherwise, one of the two types must be an lvalue reference type {{tt|A &amp;}} and the other must be an rvalue reference type {{tt|B &amp;&amp;}} ({{tt|A}} and {{tt|B}} might be cv-qualified). Let {{tt|D}} denote the simple common reference type of {{c|A &amp;}} and {{c|B const &amp;}}, if any. If {{c|D}} exists and {{c|std::is_convertible&lt;B &amp;&amp;, D&gt;::value}} is {{tt|true}}, then the simple common reference type is {{tt|D}}.
+* Otherwise, there's no simple common reference type.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|type}}|the common reference type for all {{tt|T...}}}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|1=
+template&lt; class... T &gt;
+using common_reference_t = typename common_reference&lt;T...&gt;::type;
+}}
+{{dcl|1=
+template&lt; class T, class U, template&lt;class&gt; class TQual, template&lt;class&gt; class UQual &gt;
+struct basic_common_reference {};
+}}
+{{dcl end}}
+
+The class template {{tt|basic_common_reference}} is a customization point that allows users to influence the result of {{tt|common_reference}} for user-defined types (typically proxy references). The primary template is empty.
+
+===Specializations===
+A program may specialize {{tt|basic_common_reference&lt;T, U, TQual, UQual&gt;}} on the first two parameters {{tt|T}} and {{tt|U}} if {{c|std::is_same&lt;T, std::decay_t&lt;T&gt;&gt;}} and {{c|std::is_same&lt;U, std::decay_t&lt;U&gt;&gt;}} are both true and at least one of them depends on a program-defined type.
+
+If such a specialization has a member named {{tt|type}}, it must be a public and unambiguous member type that names a type to which both {{c|TQual&lt;T&gt;}} and {{c|UQual&lt;U&gt;}} are convertible. Additionally, {{c|ranges::basic_common_reference&lt;T, U, TQual, UQual&gt;::type}} and {{c|ranges::basic_common_reference&lt;U, T, UQual, TQual&gt;::type}} must denote the same type. 
+
+A program may not specialize {{tt|basic_common_reference}} on the third or fourth parameters, nor may it specialize {{tt|common_reference}} itself. A program that adds specializations in violation of these rules has undefined behavior.
+
+===Notes===
+{{todo}}
+
+===Example===
+{{example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc common_type}}
+{{dsc inc|cpp/experimental/ranges/type_traits/dsc common_type}}
+{{dsc inc|cpp/experimental/ranges/concepts/dsc CommonReference}}
+{{dsc end}}
+
+{{langlinks|zh}}

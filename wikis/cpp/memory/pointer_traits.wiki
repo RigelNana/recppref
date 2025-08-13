@@ -1,0 +1,140 @@
+{{cpp/title|pointer_traits}}
+{{cpp/memory/pointer_traits/navbar}}
+
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|since=c++11|num=1|1=
+template&lt; class Ptr &gt;
+struct pointer_traits;
+}}
+{{dcl|since=c++11|num=2|1=
+template&lt; class T &gt;
+struct pointer_traits&lt;T*&gt;;
+}}
+{{dcl end}}
+
+The {{tt|pointer_traits}} class template provides the standardized way to access certain properties of pointer-like types ([[cpp/named req/Allocator#Fancy_pointers|fancy pointers]], such as [https://www.boost.org/doc/libs/release/doc/html/interprocess/offset_ptr.html {{tt|boost::interprocess::offset_ptr}}]). The standard template {{lc|std::allocator_traits}} relies on {{tt|pointer_traits}} to determine the defaults for various typedefs required by {{named req|Allocator}}.
+
+@1@ The non-specialized {{tt|pointer_traits}} conditionally declares the following members:
+&lt;div class="t-member"&gt;
+Let {{c|/*element-type-of*/&lt;Ptr&gt;}} be
+* {{c|Ptr::element_type}} if present;
+* otherwise, {{tt|T}} if {{tt|Ptr}} is a class template specialization {{c|Template&lt;T, Args...&gt;}}, where {{c|Args...}} is zero or more type arguments;
+* otherwise, not defined.
+
+If {{c|/*element-type-of*/&lt;Ptr&gt;}} is not defined, the primary template has no members specified in this page.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|pointer}}|{{c|Ptr}}}}
+{{dsc|{{tt|element_type}}|{{c|/*element-type-of*/&lt;Ptr&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{c|Ptr::difference_type}} if present, otherwise {{lc|std::ptrdiff_t}}}}
+{{dsc end}}
+
+===Member alias templates===
+{{dsc begin}}
+{{dsc hitem|Template|Definition}}
+{{dsc|{{c|template&lt; class U &gt; using rebind}}|{{c|Ptr::rebind&lt;U&gt;}} if exists, otherwise {{c|Template&lt;U, Args...&gt;}} if {{tt|Ptr}} is a template specialization {{c|Template&lt;T, Args...&gt;}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/pointer_traits/dsc pointer_to}}
+{{dsc end}}
+&lt;/div&gt;
+
+@2@ A specialization is provided for pointer types, {{c|T*}}, which declares the following members:
+&lt;div class="t-member"&gt;
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|pointer}}|{{c|T*}}}}
+{{dsc|{{tt|element_type}}|{{c|T}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc end}}
+
+===Member alias templates===
+{{dsc begin}}
+{{dsc hitem|Template|Definition}}
+{{dsc|{{c|template&lt; class U &gt; using rebind}}|{{c|U*}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/memory/pointer_traits/dsc pointer_to}}
+{{dsc end}}
+&lt;/div&gt;
+
+===Optional member functions of program-defined specializations===
+{{dsc begin}}
+{{dsc inc|cpp/memory/pointer_traits/dsc to_address}}
+{{dsc end}}
+
+===Notes===
+The rebind member template alias makes it possible, given a pointer-like type that points to {{tt|T}}, to obtain the same pointer-like type that points to {{tt|U}}. For example,
+
+{{source|1=
+using another_pointer = std::pointer_traits&lt;std::shared_ptr&lt;int&gt;&gt;::rebind&lt;double&gt;;
+static_assert(std::is_same&lt;another_pointer, std::shared_ptr&lt;double&gt;&gt;::value);
+}}
+
+{{rrev|since=c++20|
+A specialization for user-defined fancy pointer types may provide an additional static member function {{tt|to_address}} to customize the behavior of {{lc|std::to_address}}.
+}}
+
+{{feature test macro|__cpp_lib_constexpr_memory|std=C++20|value=201811L|{{c/core|constexpr}} in {{tt|std::pointer_traits}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+template&lt;class Ptr&gt;
+struct BlockList
+{
+    // Predefine a memory block
+    struct block;
+
+    // Define a pointer to a memory block from the kind of pointer Ptr s
+    // If Ptr is any kind of T*, block_ptr_t is block*
+    // If Ptr is smart_ptr&lt;T&gt;, block_ptr_t is smart_ptr&lt;block&gt;
+    using block_ptr_t = typename std::pointer_traits&lt;Ptr&gt;::template rebind&lt;block&gt;;
+
+    struct block
+    {
+        std::size_t size{};
+        block_ptr_t next_block{};
+    };
+
+    block_ptr_t free_blocks;
+};
+
+int main()
+{
+    [[maybe_unused]]
+    BlockList&lt;int*&gt; bl1;
+    // The type of bl1.free_blocks is BlockList&lt;int*&gt;:: block*
+
+    BlockList&lt;std::shared_ptr&lt;char&gt;&gt; bl2;
+    // The type of bl2.free_blocks is
+    // std::shared_ptr&lt;BlockList&lt;std::shared_ptr&lt;char&gt;&gt;::block&gt;
+    std::cout &lt;&lt; bl2.free_blocks.use_count() &lt;&lt; '\n';
+}
+|output=
+0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3545|std=C++11|before=primary template caused hard error when {{tt|element_type}} is invalid|after=made SFINAE-friendly}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator_traits}}
+{{dsc inc|cpp/memory/dsc addressof}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

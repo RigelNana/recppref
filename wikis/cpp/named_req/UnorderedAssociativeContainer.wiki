@@ -1,0 +1,676 @@
+{{cpp/named req/title|UnorderedAssociativeContainer|notes={{mark since c++11}}}}
+{{cpp/named req/navbar}}
+
+Unordered associative containers are {{named req|Container}}s that provide fast lookup of objects based on keys.
+Worst case complexity is linear but on average much faster for most of the operations.
+
+Unordered associative containers are parametrized by {{tt|Key}}; {{tt|Hash}}, a {{named req|Hash}} function object which acts as hash function on {{tt|Key}}; and {{tt|Pred}}, a {{named req|BinaryPredicate}} evaluating equivalence between {{tt|Key}}s.
+{{lc|std::unordered_map}} and {{lc|std::unordered_multimap}} also have a mapped type {{tt|T}} associated with the {{tt|Key}}.
+
+If two {{tt|Key}}s are equal according to {{tt|Pred}}, {{tt|Hash}} must return the same value for both keys.
+
+{{rrev|since=c++20|
+If both {{tt|Hash::is_transparent}} and {{tt|Pred::is_transparent}} exist and each names a type, member functions {{tt|find}}, {{tt|contains}}, {{tt|count}}, {{tt|equal_range}}, and {{tt|bucket}} accept arguments of types other than {{tt|Key}} and expect that {{tt|Hash}} is callable with values of those types, and that {{tt|Pred}} is a transparent comparison function such as {{lc|std::equal_to&lt;&gt;}}.
+}}
+
+{{lc|std::unordered_map}} and {{lc|std::unordered_set}} can contain at most one element with a given key, {{lc|std::unordered_multiset}} and {{lc|std::unordered_multimap}} instead can have multiple elements with the same key (which must always be adjacent on iterations).
+
+For {{lc|std::unordered_set}} and {{lc|std::unordered_multiset}} the value type is the same as the key type and both {{tt|iterator}} and {{tt|const_iterator}} are constant iterators.
+For {{lc|std::unordered_map}} and {{lc|std::unordered_multimap}} the value type is {{c/core|std::pair&lt;const Key, T&gt;}}.
+
+Elements in an unordered associative container are organized into buckets, keys with the same hash will end up in the same bucket.
+The number of buckets is increased when the size of the container increases to keep the average number of elements in each bucket under a certain value.
+
+Rehashing invalidates iterator and might cause the elements to be re-arranged in different buckets but it does not invalidate references to the elements.
+
+Unordered associative containers meet the requirements of {{named req|AllocatorAwareContainer}}.
+For {{lc|std::unordered_map}} and {{lc|std::unordered_multimap}} the requirements of {{tt|value_type}} in {{named req|AllocatorAwareContainer}} apply to {{tt|key_type}} and
+{{tt|mapped_type}} (not to {{tt|value_type}}).
+
+===Requirements===
+{{dsc begin}}
+{{dsc h2|Legend}}
+{{dsc|{{tt|X}}|An unordered associative container class}}
+{{dsc|{{c|a}}|A value of type {{tt|X}}}}
+{{dsc|{{c|a2}}|A value of a type with [[cpp/container/node_handle|nodes compatible with type]]&lt;!--TODO: N4950, [container.node.overview], Table-83--&gt; {{tt|X}}}}
+{{dsc|{{c|b}}|A value of type {{tt|X}} or {{tt|const X}}}}
+{{dsc|{{c|a_uniq}}|A value of type {{tt|X}} when {{tt|X}} supports unique keys}}
+{{dsc|{{c|a_eq}}|A value of type {{tt|X}} when {{tt|X}} supports equivalent keys}}
+{{dsc|{{c|a_tran}}|A value of type {{tt|X}} or {{c/core|const X}} when the qualified identifiers {{tt|X::key_equal::is_transparent}} and {{tt|X::hasher::is_transparent}} are both valid and denote [[cpp/language/template argument deduction|types]]}}
+{{dsc|{{c|i}}, {{c|j}}|Input iterators &lt;!--TODO: {{named req|InputIterator}}s until C++23?--&gt; that refer to {{tt|value_type}}}}
+{{dsc|{{range|i|j}}|A valid range}}
+{{dsc|{{c|rg}} {{mark since c++23}}|A value of a type {{tt|R}} that models {{box|{{lti|cpp/ranges/to#container compatible range|container-compatible-range}}{{tt|&lt;value_type&gt;}}}}}}
+{{dsc|{{c|p}}, {{c|q2}}|Valid constant iterators to {{c|a}}}}
+{{dsc|{{c|q}}, {{c|q1}}|Valid dereferenceable constant iterators to {{c|a}}}}
+{{dsc|{{c|r}}|A valid dereferenceable iterator to {{c|a}}}}
+{{dsc|{{range|q1|q2}}|A valid range in {{c|a}}}}
+{{dsc|{{c|il}}|A value of type {{c/core|std::initializer_list&lt;value_type&gt;}}}}
+{{dsc|{{c|t}}|A value of type {{tt|X::value_type}}}}
+{{dsc|{{c|k}}|A value of type {{tt|key_type}}}}
+{{dsc|{{c|hf}}|A value of type {{tt|hasher}} or {{c/core|const hasher}}}}
+{{dsc|{{c|eq}}|A value of type {{tt|key_equal}} or {{c/core|const key_equal}}}}
+{{dsc|{{c|ke}}|A value such that
+* {{c|1=eq(r1, ke) == eq(ke, r1)}},
+* {{c|1=hf(r1) == hf(ke)}} if {{c|eq(r1, ke)}} is {{c|true}}, and
+* if any two of {{c|eq(r1, ke)}}, {{c|eq(r2, ke)}}, and {{c|eq(r1, r2)}} are {{c|true}}, then all three are {{c|true}},
+where {{c|r1}} and {{c|r2}} are keys of elements in {{c|a_tran}}}}
+{{dsc|{{c|kx}} {{mark since c++23}}|A value such that
+* {{c|1=eq(r1, kx) == eq(kx, r1)}},
+* {{c|1=hf(r1) == hf(kx)}} if {{c|eq(r1, kx)}} is {{c|true}},
+* if any two of {{c|eq(r1, kx)}}, {{c|eq(r2, kx)}}, and {{c|eq(r1, r2)}} are {{c|true}}, then all three are {{c|true}}, and
+* {{c|kx}} is not convertible to either {{tt|iterator}} or {{tt|const_iterator}},
+where {{c|r1}} and {{c|r2}} are keys of elements in {{c|a_tran}}}}
+{{dsc|{{c|n}}|A value of type {{tt|size_type}}}}
+{{dsc|{{c|z}}|A value of type {{c/core|float}}}}
+{{dsc|{{c|nh}} {{mark since c++17}}|An rvalue of type {{c|X::node_type}}}}
+{{dsc end}}
+
+====Member types====
+{|class=wikitable 
+!Name||Type||Requirements||Notes
+|-
+|{{tt|X::key_type}}
+|{{tt|Key}}
+|
+|
+|-
+|{{tt|X::mapped_type}}
+|{{tt|T}}
+|{{lc|std::unordered_map}} and {{lc|std::unordered_multimap}} only
+|
+|-
+|rowspan="2"|{{tt|X::value_type}}
+|{{tt|Key}}
+|{{lc|std::unordered_set}} and {{lc|std::unordered_multiset}} only. {{named req|Erasable}} in {{tt|X}}
+|
+|-
+|{{c/core|std::pair&lt;const Key, T&gt;}}
+|{{lc|std::unordered_map}} and {{lc|std::unordered_multimap}} only. {{named req|Erasable}} in {{tt|X}}
+|
+|-
+|{{tt|X::hasher}}
+|{{tt|Hash}}
+|{{named req|Hash}}
+|
+|-
+|{{tt|X::key_equal}}
+|{{tt|Pred}}
+|{{named req|CopyConstructible}}; {{named req|BinaryPredicate}} that takes two arguments of type {{tt|Key}} and expresses an equivalence relation
+|
+|-
+|{{tt|X::local_iterator}}
+|{{named req|Iterator}}
+|Category and types are the same as {{tt|X::iterator}}
+|rowspan="2"|Can be used to iterate through a single bucket, but not across buckets
+|-
+|{{tt|X::const_local_iterator}}
+|{{named req|Iterator}}
+|Category and types are the same as {{tt|X::const_iterator}}
+|-
+|{{tt|X::node_type}} {{mark since c++17}}
+|A specialization of [[cpp/container/node handle|node-handle]] class template
+|The public nested types are the same as the corresponding types in {{tt|X}}
+|
+|}
+
+====Member functions and operators====
+&lt;div style="max-width: 100%; overflow-x: scroll;"&gt;
+{|class=wikitable style="font-size:0.9em"
+!Expression||Result||Preconditions||Effects||Returns||Complexity
+|-
+|{{c|X(n, hf, eq)}}
+|
+|
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hf}} as the hash function and {{c|eq}} as the key equality predicate
+|
+|{{math|O}}({{c|n}})
+|-
+|{{c|X(n, hf)}}
+|
+|{{tt|key_equal}} is {{named req|DefaultConstructible}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hf}} as the hash function and {{c|key_equal()}} as the key equality predicate
+|
+|{{math|O}}({{c|n}})
+|-
+|{{c|X(n)}}
+|
+|{{tt|hasher}} and {{tt|key_equal}} are {{named req|DefaultConstructible}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hasher()}} as the hash function and {{c|key_equal()}} as the key equality predicate
+|
+|{{math|O}}({{c|n}})
+|-
+|{{c|1=X a = X();}}&lt;br&gt;{{c|X a;}}
+|
+|{{tt|hasher}} and {{tt|key_equal}} are {{named req|DefaultConstructible}}
+|Constructs an empty container with an unspecified number of buckets, using {{c|hasher()}} as the hash function and {{c|key_equal()}} as the key equality predicate
+|
+|Constant
+|-
+|{{c|X(i, j, n, hf, eq)}}
+|
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*i}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hf}} as the hash function and {{c|eq}} as the key equality predicate, and inserts elements from {{range|i|j}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|std::distance(i, j)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(i, j, n, hf)}}
+|
+|{{tt|key_equal}} is the {{named req|DefaultConstructible}}. {{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*i}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hf}} as the hash function and {{c|key_equal()}} as the key equality predicate, and inserts elements from {{range|i|j}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|std::distance(i, j)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(i, j, n)}}
+|
+|{{tt|hasher}} and {{tt|key_equal}} are {{named req|DefaultConstructible}}. {{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*i}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hasher()}} as the hash function and {{c|key_equal()}} as the key equality predicate, and inserts elements from {{range|i|j}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|std::distance(i, j)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(i, j)}}
+|
+|{{tt|hasher}} and {{tt|key_equal}} are {{named req|DefaultConstructible}}. {{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*i}}
+|Constructs an empty container with an unspecified number of buckets, using {{c|hasher()}} as the hash function and {{c|key_equal()}} as the key equality predicate, and inserts elements from {{range|i|j}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|std::distance(i, j)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg, n, hf, eq)
+}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*ranges::begin(rg)}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hf}} as the hash function and {{c|eq}} as the key equality predicate, and inserts elements from {{c|rg}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|ranges::distance(rg)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg, n, hf)}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|key_equal}} is {{named req|DefaultConstructible}}. {{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*ranges::begin(rg)}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hf}} as the hash function and {{c|key_equal()}} as the key equality predicate, and inserts elements from {{c|rg}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|ranges::distance(rg)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg, n)}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|hasher}} and {{tt|key_equal}} are {{named req|DefaultConstructible}}. {{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*ranges::begin(rg)}}
+|Constructs an empty container with at least {{c|n}} buckets, using {{c|hasher()}} as the hash function and {{c|key_equal()}} as the key equality predicate, and inserts elements from {{c|rg}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|ranges::distance(rg)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg)}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|hasher}} and {{tt|key_equal}} are {{named req|DefaultConstructible}}. {{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*ranges::begin(rg)}}
+|Constructs an empty container with an unspecified number of buckets, using {{c|hasher()}} as the hash function and {{c|key_equal()}} as the key equality predicate, and inserts elements from {{c|rg}} into it
+|
+|Average case {{math|O(N)}} ({{math|N}} is {{c|ranges::distance(rg)}}), worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(il)}}
+|
+|
+|{{c|X(il.begin(), il.end())}}
+|
+|
+|-
+|{{c|X(il, n)}}
+|
+|
+|{{c|X(il.begin(), il.end(), n)}}
+|
+|
+|-
+|{{c|X(il, n, hf)}}
+|
+|
+|{{c|X(il.begin(), il.end(), n, hf)}}
+|
+|
+|-
+|{{c|X(il, n, hf, eq)}}
+|
+|
+|{{c|X(il.begin(), il.end(), n, hf, eq)}}
+|
+|
+|-
+|{{c|X(b)}}
+|
+|
+|{{named req|Container}}; Copies the hash function, predicate, and maximum load factor
+|
+|Average case linear in {{c|b.size()}}, worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|1=a = b}}
+|{{tt|X&amp;}}
+|
+|{{named req|Container}}; copies the hash function, predicate, and maximum load factor
+|
+|Average case linear in {{c|b.size()}}, worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|1=a = il}}
+|{{tt|X&amp;}}
+|{{tt|value_type}} is {{named req|CopyInsertable}} into {{tt|X}} and {{named req|CopyAssignable}}
+|Assigns the range {{range|il.begin()|il.end()}} into {{c|a}}. All existing elements of {{c|a}} are either assigned to or destroyed
+|
+|Average case linear in {{c|il.size()}}, worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|b.hash_function()}}
+|{{tt|hasher}}
+|
+|
+|{{c|b}}'s hash function
+|Constant
+|-
+|{{c|b.key_eq()}}
+|{{tt|key_equal}}
+|
+|
+|{{c|b}}'s key equality predicate
+|Constant
+|-
+|{{c|a_uniq.emplace(args)}}
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  bool&gt;
+}}
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|args}}
+|Inserts a {{tt|value_type}} object {{c|t}} constructed with {{c|std::forward&lt;Args&gt;(args)...}} if and only if there is no element in the container with key equivalent to the key of {{c|t}}
+|The {{c|bool}} component of the returned pair is {{c|true}} if and only if the insertion takes place, and the iterator component of the pair points to the element with key equivalent to the key of {{c|t}}
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_uniq.size()}})
+|-
+|{{c|a_eq.emplace(args)}}
+|{{tt|iterator}}
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|args}}
+|Inserts a {{tt|value_type}} object {{c|t}} constructed with {{c|std::forward&lt;Args&gt;(args)...}}
+|An iterator pointing to the newly inserted element
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_eq.size()}})
+|-
+|{{c|a.emplace_hint(p, args)}}
+|{{tt|iterator}}
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|args}}
+|{{c multi
+|a.emplace(
+|  std::forward&lt;Args&gt;(args)...)
+}}
+|An iterator pointing to the element with the key equivalent to the newly inserted element. The {{tt|const_iterator}} {{c|p}} is a hint pointing to where the search should start. Implementations are permitted to ignore the hint
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a_uniq.insert(t)}}
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  bool&gt;
+}}
+|If {{c|t}} is a non-const rvalue, {{tt|value_type}} is {{named req|MoveInsertable}} into {{tt|X}}; otherwise, {{tt|value_type}} is {{named req|CopyInsertable}} into {{tt|X}}
+|Inserts {{c|t}} if and only if there is no element in the container with key equivalent to the key of {{c|t}}
+|The {{c|bool}} component of the returned pair indicates whether the insertion takes place, and the {{tt|iterator}} component points to the element with key equivalent to the key of {{c|t}}
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_uniq.size()}})
+|-
+|{{c|a_eq.insert(t)}}
+|{{tt|iterator}}
+|If {{c|t}} is a non-const rvalue, {{tt|value_type}} is {{named req|MoveInsertable}} into {{tt|X}}; otherwise, {{tt|value_type}} is {{named req|CopyInsertable}} into {{tt|X}}
+|Inserts {{c|t}}
+|An iterator pointing to the newly inserted element
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_eq.size()}})
+|-
+|{{c|a.insert(p, t)}}
+|{{tt|iterator}}
+|If {{c|t}} is a non-const rvalue, {{tt|value_type}} is {{named req|MoveInsertable}} into {{tt|X}}; otherwise, {{tt|value_type}} is {{named req|CopyInsertable}} into {{tt|X}}
+|{{c|a.insert(t)}}. The iterator {{c|p}} is a hint pointing to where the search should start. Implementations are permitted to ignore the hint
+|An iterator pointing to the element with the key equivalent to that of {{c|t}}
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.insert(i, j)}}
+|{{c/core|void}}
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*i}}. Neither {{c|i}} nor {{c|j}} are iterators into {{c|a}}
+|{{c|a.insert(t)}} for each element in&lt;br&gt;{{range|i|j}}
+|
+|Average case {{math|O(N)}}, where {{math|N}} is {{c|std::distance(i, j)}}, worst case {{math|O}}({{c|N·(a.size() + 1)}})
+|-
+|{{c|a.insert_range(rg)}}&lt;br&gt;{{mark since c++23}}
+|{{c/core|void}}
+|{{tt|value_type}} is {{named req|EmplaceConstructible}} into {{tt|X}} from {{c|*ranges::begin(rg)}}. {{c|rg}} and {{c|a}} do not overlap
+|{{c|a.insert(t)}} for each element {{c|t}} in {{c|rg}}
+|
+|Average case {{math|O(N)}}, where {{math|N}} is {{c|ranges::distance(rg)}}, worst case {{math|O}}({{c|N·(a.size() + 1)}})
+|-
+|{{c|a.insert(il)}}
+|
+|
+|{{c|a.insert(il.begin(), il.end())}}
+|
+|
+|-
+|{{c|a_uniq.insert(nh)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|insert_return_type}}
+|{{c|nh}} is empty or
+{{c multi
+|a_uniq.get_allocator()
+|{{==}}
+|nh.get_allocator()
+}}
+is {{c|true}}
+|If {{c|nh}} is empty, has no effect. Otherwise, inserts the element owned by {{c|nh}} if and only if there is no element in the container with a key equivalent to {{c|nh.key()}}. Ensures: If {{c|nh}} is empty, {{c|inserted}} is {{c|false}}, {{c|position}} is {{c|end()}}, and {{c|node}} is empty. Otherwise if the insertion took place, {{c|inserted}} is {{c|true}}, {{c|position}} points to the inserted element, and {{c|node}} is empty; if the insertion failed, {{c|inserted}} is {{c|false}}, {{c|node}} has the previous value of {{c|nh}}, and {{c|position}} points to an element with a key equivalent to {{c|nh.key()}}
+|
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_uniq.size()}})
+|-
+|{{c|a_eq.insert(nh)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|iterator}}
+|{{c|nh}} is empty or
+{{c multi
+|a_eq.get_allocator()
+|{{==}}
+|nh.get_allocator()
+}}
+is {{c|true}}
+|If {{c|nh}} is empty, has no effect and returns {{c|a_eq.end()}}. Otherwise, inserts the element owned by {{c|nh}} and returns an iterator  pointing to the newly inserted element. Ensures: {{c|nh}} is empty
+|
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_eq.size()}})
+|-
+|{{c|a.insert(q, nh)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|iterator}}
+|{{c|nh}} is empty or
+{{c multi
+|a.get_allocator()
+|{{==}}
+|nh.get_allocator()
+}}
+is {{c|true}}
+|If {{c|nh}} is empty, has no effect and returns {{c|a.end()}}. Otherwise, inserts the element owned by {{c|nh}} if and only if there is no element with key equivalent to {{c|nh.key()}} in containers with unique keys; always inserts the element owned by {{c|nh}} in containers with equivalent keys. The iterator {{c|q}} is a hint pointing to where the search should start. Implementations are permitted to ignore the hint. Ensures: {{c|nh}} is empty if insertion succeeds, unchanged if insertion fails
+|An iterator pointing to the element with key equivalent to {{c|nh.key()}}
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.extract(k)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|node_type}}
+|
+|Removes an element in the container with key equivalent to {{c|k}}
+|A {{tt|node_type}} owning the element if found, otherwise an empty {{tt|node_type}}
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a_tran.extract(kx)}}&lt;br&gt;{{mark since c++23}}
+|{{tt|node_type}}
+|
+|Removes an element in the container with key equivalent to {{c|kx}}
+|A {{tt|node_type}} owning the element if found, otherwise an empty {{tt|node_type}}
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|a.extract(q)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|node_type}}
+|
+|Removes the element pointed to by {{c|q}}
+|A {{tt|node_type}} owning that element
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.merge(a2)}}&lt;br&gt;{{mark since c++17}}
+|{{c/core|void}}
+|{{c multi
+|a.get_allocator()
+|{{==}}
+|a2.get_allocator()
+}}
+|Attempts to extract each element in {{c|a2}} and insert it into {{c|a}} using the hash function and key equality predicate of {{c|a}}. In containers with unique keys, if there is an element in {{c|a}} with key equivalent to the key of an element from {{c|a2}}, then that element is not extracted from {{c|a2}}. Ensures: Pointers and references to the transferred elements of {{c|a2}} refer to those same elements but as members of {{c|a}}. Iterators referring to the transferred elements and all iterators referring to {{c|a}} will be invalidated, but iterators to elements remaining in {{c|a2}} will remain valid
+|
+|Average case {{math|O(N)}}, where {{math|N}} is {{c|a2.size()}}, worst case {{math|O}}({{c|N·(a.size() + 1)}})
+|-
+|{{c|a.erase(k)}}
+|{{tt|size_type}}
+|
+|Erases all elements with key equivalent to {{c|k}}
+|The number of elements erased
+|Average case {{math|O}}({{c|a.count(k)}}), worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a_tran.erase(kx)}}&lt;br&gt;{{mark since c++23}}
+|{{tt|size_type}}
+|
+|Erases all elements with key equivalent to {{c|kx}}
+|The number of elements erased
+|Average case {{math|O}}({{c|a_tran.count(kx)}}), worst case {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|a.erase(q)}}
+|{{tt|iterator}}
+|
+|Erases the element pointed to by {{c|q}}
+|The iterator immediately following {{c|q}} prior to the erasure
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.erase(r)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|iterator}}
+|
+|Erases the element pointed to by {{c|r}}
+|The iterator immediately following {{c|r}} prior to the erasure
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.erase(q1, q2)}}
+|{{tt|iterator}}
+|
+|Erases all elements in the range&lt;br&gt;{{range|q1|q2}}
+|The iterator immediately following the erased elements prior to the erasure
+|Average case linear in {{c|std::distance(q1, q2)}}, worst case {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.clear()}}
+|{{c/core|void}}
+|
+|Erases all elements in the container. Ensures: {{c|a.empty()}} is {{c|true}}
+|
+|Linear in {{c|a.size()}}
+|-
+|{{c|b.find(k)}}
+|{{tt|iterator}}; {{tt|const_iterator}} for constant {{c|b}}
+|
+|
+|An iterator pointing to an element with key equivalent to {{c|k}}, or {{c|b.end()}} if no such element exists
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|b.size()}})
+|-
+|{{c|a_tran.find(ke)}}&lt;br&gt;{{mark since c++17}}?
+|{{tt|iterator}}; {{tt|const_iterator}} for constant {{c|a_tran}}
+|
+|
+|An iterator pointing to an element with key equivalent to {{c|ke}}, or {{c|a_tran.end()}} if no such element exists
+|Average case {{math|O(1)}}, worst case {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|b.count(k)}}
+|{{tt|size_type}}
+|
+|
+|The number of elements with key equivalent to {{c|k}}
+|Average case {{math|O}}({{c|b.count(k)}}), worst case {{math|O}}({{c|b.size()}})
+|-
+|{{c|a_tran.count(ke)}}&lt;br&gt;{{mark since c++17}}?
+|{{tt|size_type}}
+|
+|
+|The number of elements with key equivalent to {{c|ke}}
+|Average case {{math|O}}({{c|a_tran.count(ke)}}), worst case {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|b.contains(k)}}&lt;br&gt;{{mark since c++20}}?
+|
+|
+|{{c|1=b.find(k) != b.end()}}
+|
+|
+|-
+|{{c|a_tran.contains(ke)}}&lt;br&gt;{{mark since c++20}}?
+|
+|
+|{{c|1=a_tran.find(ke) != a_tran.end()}}
+|
+|
+|-
+|{{c|b.equal_range(k)}}
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  iterator&gt;
+}};
+{{cc multi
+|std::pair&lt;
+|  const_iterator,
+|  const_iterator&gt;
+}} for constant {{c|b}}
+|
+|
+|A range containing all elements with keys equivalent to {{c|k}}. Returns
+{{c multi
+|std::make_pair(
+|  b.end(), b.end())
+}}
+if no such elements exist
+|Average case {{math|O}}({{c|b.count(k)}}), worst case {{math|O}}({{c|b.size()}})
+|-
+|{{c|a_tran.equal_range(ke)}}&lt;br&gt;{{mark since c++20}}?
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  iterator&gt;}};
+{{cc multi
+|std::pair&lt;
+|  const_iterator,
+|  const_iterator&gt;
+}}
+for constant {{c|a_tran}}
+|
+|
+|A range containing all elements with keys equivalent to {{c|ke}}. Returns
+{{c multi
+|std::make_pair(
+|  a_tran.end(),
+|  a_tran.end())
+}}
+if no such elements exist
+|Average case {{math|O}}({{c|a_tran.count(ke)}}), worst case {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|b.bucket_count()}}
+|{{tt|size_type}}
+|
+|
+|The number of buckets that {{c|b}} contains
+|Constant
+|-
+|{{c|b.max_bucket_count()}}
+|{{tt|size_type}}
+|
+|
+|An upper bound on the number of buckets that {{c|b}} can ever contain
+|Constant
+|-
+|{{c|b.bucket(k)}}
+|{{tt|size_type}}
+|{{c|b.bucket_count() &gt; 0}}
+|
+|The index of the bucket in which elements with keys equivalent to {{c|k}} would be found, if any such element existed. The return value is in {{range|0|b.bucket_count()}}
+|Constant
+|-
+|{{c|a_tran.bucket(ke)}}
+|{{tt|size_type}}
+|{{c multi
+|a_tran.
+|bucket_count() &gt; 0}}
+|
+|The index of the bucket in which elements with keys equivalent to {{c|ke}} would be found, if any such element existed. The return value must be in the range {{range|0|a_tran.bucket_count()}}
+|Constant
+|-
+|{{c|b.bucket_size(n)}}
+|{{tt|size_type}}
+|{{c|n}} is in {{range|0|b.bucket_count()}}
+|
+|The number of elements in the {{c|n}}{{sup|th}} bucket
+|{{math|O}}({{c|b.bucket_size(n)}})
+|-
+|{{c|b.begin(n)}}
+|{{tt|local_iterator}}; {{tt|const_local_iterator}} for constant {{c|b}}
+|{{c|n}} is in {{range|0|b.bucket_count()}}
+|
+|An iterator referring to the first element in the bucket. If the bucket is empty, then {{c|1=b.begin(n) == b.end(n)}}
+|Constant
+|-
+|{{c|b.end(n)}}
+|{{tt|local_iterator}}; {{tt|const_local_iterator}} for constant {{c|b}}
+|{{c|n}} is in {{range|0|b.bucket_count()}}
+|
+|An iterator which is the past-the-end value for the bucket
+|Constant
+|-
+|{{c|b.cbegin(n)}}
+|{{tt|const_local_iterator}}
+|{{c|n}} is in {{range|0|b.bucket_count()}}
+|
+|An iterator referring to the first element in the bucket. If the bucket is empty, then {{c|1=b.cbegin(n) == b.cend(n)}}
+|Constant
+|-
+|{{c|b.cend(n)}}
+|{{tt|const_local_iterator}}
+|{{c|n}} is in {{range|0|b.bucket_count()}}
+|
+|An iterator which is the past-the-end value for the bucket
+|Constant
+|-
+|{{c|b.load_factor()}}
+|{{c/core|float}}
+|
+|
+|The average number of elements per bucket
+|Constant
+|-
+|{{c|b.max_load_factor()}}
+|{{c/core|float}}
+|
+|
+|A positive number that the container attempts to keep the load factor less than or equal to. The container automatically increases the number of buckets as necessary to keep the load factor below this number
+|Constant
+|-
+|{{c|a.max_load_factor(z)}}
+|{{c/core|void}}
+|{{c|z}} is positive. May change the container's maximum load factor, using {{c|z}} as a hint
+|
+|
+|Constant
+|-
+|{{c|a.rehash(n)}}
+|{{c/core|void}}
+|
+|Ensures:
+{{c multi
+|a.bucket_count() &gt;{{=}}
+|  a.size() / a.max_load_factor()
+}}
+and {{c|1=a.bucket_count() &gt;= n}}
+|
+|Average case linear in {{c|a.size()}}, worst case {{math|O(N{{sup|2}})}}
+|-
+|{{c|a.reserve(n)}}
+|
+|
+|{{c multi
+|a.rehash(std::ceil(
+|  n / a.max_load_factor()))
+}}
+|
+|
+|-
+|}
+&lt;/div&gt;
+
+{{todo|Requirements regarding member functions.}}
+
+===Standard library===
+The following standard library containers satisfy the {{named req/core|UnorderedAssociativeContainer}} requirements:
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc unordered_set}}
+{{dsc inc|cpp/container/dsc unordered_multiset}}
+{{dsc inc|cpp/container/dsc unordered_map}}
+{{dsc inc|cpp/container/dsc unordered_multimap}}
+{{dsc end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2156|std=C++11|before=the load factor after rehashing could only be&lt;br&gt;strictly lower than the maximum load factor|after=allowed to be equal}}
+{{dr list end}}
+
+{{langlinks|es|ja|zh}}

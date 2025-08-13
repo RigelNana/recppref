@@ -1,0 +1,94 @@
+{{cpp/thread/packaged_task/title|make_ready_at_thread_exit}}
+{{cpp/thread/packaged_task/navbar}}
+{{ddcl|since=c++11|
+void make_ready_at_thread_exit( ArgTypes... args );
+}}
+
+Calls the stored task as if by {{box|{{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}{{c/core|(f, args...)}}}}, where {{c|f}} is the stored task. The return value of the task or any exception thrown by it is stored in the shared state of {{c|*this}}.
+
+The shared state is only made ready after the current thread exits and all objects of thread-local storage duration are destroyed.
+
+===Parameters===
+{{par begin}}
+{{par|args|the parameters to pass on invocation of the stored task}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Exceptions===
+{{lc|std::future_error}} on the following error conditions:
+
+* The stored task has already been invoked. The error category is set to {{tt|promise_already_satisfied}}.
+* {{c|*this}} has no shared state. The error category is set to {{ltt|cpp/thread/future_errc|no_state}}.
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;thread&gt;
+#include &lt;utility&gt;
+
+struct ProgramState
+{
+    std::packaged_task&lt;void()&gt; task;
+    std::future&lt;void&gt; future;
+    std::thread worker;
+};
+
+static void worker(std::shared_ptr&lt;ProgramState&gt; state)
+{
+    state-&gt;task.make_ready_at_thread_exit(); // execute task right away
+    
+    auto status = state-&gt;future.wait_for(std::chrono::seconds(0));
+    if (status == std::future_status::timeout)
+        std::cout &lt;&lt; "worker: future is not ready yet\n";
+    else
+        std::cout &lt;&lt; "worker: future is ready\n";
+    
+    std::cout &lt;&lt; "worker: exit\n";
+}
+
+static std::shared_ptr&lt;ProgramState&gt; create_state()
+{
+    auto state = std::make_shared&lt;ProgramState&gt;();
+    state-&gt;task = std::packaged_task&lt;void()&gt;{[]
+    {
+        std::cout &lt;&lt; "task: executed\n";
+    }&lt;!----&gt;};
+    state-&gt;future = state-&gt;task.get_future();
+    state-&gt;worker = std::thread{worker, state};
+    return state;
+}
+
+int main()
+{
+    auto state = create_state();
+    
+    state-&gt;worker.join();
+    std::cout &lt;&lt; "main: worker finished\n";
+    
+    auto status = state-&gt;future.wait_for(std::chrono::seconds(0));
+    if (status == std::future_status::timeout)
+        std::cout &lt;&lt; "main: future is not ready yet\n";
+    else
+        std::cout &lt;&lt; "main: future is ready\n";
+}
+|output=
+task: executed
+worker: future is not ready yet
+worker: exit
+main: worker finished
+main: future is ready
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/packaged_task/dsc operator()}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,402 @@
+{{title|Scope}}
+{{cpp/language/basics/navbar}}
+Each {{rlp|declarations|declaration}} that appears in a C++ program is only visible in some possibly discontiguous ''scopes''.
+
+Within a scope, {{rlp|lookup|unqualified name lookup}} can be used to associate a name with its declaration.
+
+===General===
+Each program has a ''global scope'', which ''contains'' the entire program.
+
+Every other scope {{tt|S}} is introduced by
+* a {{rlp|declarations|declaration}},
+* a parameter in {{rlpsd|function#Parameter list}},
+* a {{rlp|statements|statement}}, or
+* a {{rlp|catch|handler}}.
+{{tt|S}} always appear in another scope, which thereby ''contains'' {{tt|S}}.
+
+An ''enclosing scope'' at a program point is any scope that contains it; the smallest such scope is said to be the ''immediate scope'' at that point.
+
+A scope ''intervenes'' between a program point {{tt|P}} and a scope {{tt|S}} (that does not contain {{tt|P}}) if it is or contains {{tt|S}} but does not contain {{tt|P}}.
+
+The ''parent scope'' of any scope {{tt|S}} that is not a [[#Template parameter scope|template parameter scope]] is the smallest scope that contains {{tt|S}} and is not a template parameter scope.
+
+Unless otherwise specified:
+* A declaration ''inhabits'' the immediate scope at its [[#Point of declaration|locus]].
+* A declaration’s ''target scope'' is the scope it inhabits.
+* Any names (re)introduced by a declaration are ''bound'' to it in its target scope.
+
+An entity ''belongs'' to a scope {{tt|S}} if {{tt|S}} is the target scope of a declaration of the entity.
+{{source|
+//                global  scope  scope
+//                scope     S      T
+int x;         //   ─┐                 // program point X
+               //    │
+{              //    │     ─┐
+    {          //    │      │     ─┐
+        int y; //    │      │      │   // program point Y
+    }          //    │      │     ─┘
+}              //   ─┘     ─┘
+}}
+
+In the program above:
+* The global scope, scope {{tt|S}} and scope {{tt|T}} contains program point {{tt|Y}}.
+:* In other words, these three scopes are all enclosing scopes at program point {{tt|Y}}.
+* The global scope contains scopes {{tt|S}} and {{tt|T}}, and scope {{tt|S}} contains scope {{tt|T}}.
+:* Therefore, scope {{tt|T}} is the smallest scope among all three, which means:
+::* Scope {{tt|T}} is the immediate scope at program point {{tt|Y}}.
+::* The declaration of the variable {{c|y}} inhabits scope {{tt|T}} at its locus.
+::* Scope {{tt|T}} is the target scope of the declaration of {{c|y}}.
+::* The variable {{c|y}} belongs to scope {{tt|T}}.
+:* Scope {{tt|S}} is the parent scope of scope {{tt|T}}, and the global scope is the parent scope of scope {{tt|S}}.
+* Scope {{tt|S}} intervenes between program point {{tt|X}} and scope {{tt|T}}.
+
+===Block scope===
+Each
+* {{rlp|statements#Selection statements|selection statement}} ({{rlp|if|{{c/core|if}}}}, {{rlp|switch|{{c/core|switch}}}}),
+* {{rlp|statements#Iteration statements|iteration statement}} ({{rlp|for|{{c/core|for}}}}{{rev inl|since=c++11|, {{rlp|range-for|range-{{c/core|for}}}}}}, {{rlp|while|{{c/core|while}}}}, {{rlp|do|{{c/core|do}}-{{c/core|while}}}}),
+* {{rlp|catch|handler}}, or
+* {{rlp|statements#Compound statements|compound statement}} that is not the {{spar|compound-statement}} of a handler
+introduces a ''block scope'' that includes the statement or handler.
+
+A variable that belongs to a block scope is a ''block variable''.
+
+{{source|1=
+int i = 42;
+int a[10];
+
+for (int i = 0; i &lt; 10; i++) // inner “i” inhabits the block scope
+    a[i] = i;                // introduced by the for-statement
+
+int j = i; // j = 42
+}}
+
+Block-scope {{c/core|extern}} declarations target a larger enclosing scope, but bind a name in their immediate scope.
+
+If a declaration{{rev inl|since=c++26| that is not a {{rlp|conflicting declarations#Potentially-conflict declarations|name-independent declaration}} and}} that binds a name in the block scope {{tt|S}} of
+* the {{spar|compound-statement}} of a {{rlp|function#Function definition|function body}} or {{rlp|try#Function try block|function {{c/core|try}} block}},
+{{rrev|since=c++11|
+* the compund statement {{ttb|{}} {{spar|body}} {{ttb|}&lt;!----&gt;}} of a {{rlp|lambda|lambda expression}},
+}}
+* a substatement of a selection or iteration statement that is not itself a selection or iteration statement, or
+* a handler of a function {{c/core|try}} block
+{{rlp|conflicting declarations#Potentially-conflict declarations|potentially conflicts}} with a declaration whose target scope is the parent scope of {{tt|S}}, the program is ill-formed.
+
+{{source|1=
+if (int x = f())  // declares “x”
+{ // the if-block is a substatement of the if-statement
+    int x;        // error: redeclaration of “x”
+}
+else
+{ // the else-block is also a substatement of the if-statement
+    int x;        // error: redeclaration of “x”
+}
+
+void g(int i)
+{
+    extern int i; // error: redeclaration of “i”
+}
+}}
+
+{{anchor|Function prototype scope}}
+===Function parameter scope===
+Each {{rlp|function#Parameter list|parameter declaration}} {{tt|P}} introduces a ''function parameter scope'' that includes {{tt|P}}.
+* If the declared parameter is of the parameter list of a {{rlp|function|function declaration}}:
+:* If the function declaration is a {{rlpsd|function#Function definition}}, the scope introduced is extended to the end of the function definition.
+:* Otherwise (the function declaration is a function prototype), the scope introduced is extended to the end of the function declarator.
+:* In both cases, the scope does not include the [[#Point of declaration|locus]] of the function declaration.
+{{rev begin}}
+{{rev|since=c++11|
+* If the declared parameter is of the parameter list of a {{rlp|lambda|lambda expression}}, the scope introduced is extended to the end of {{ttb|{}} {{spar|body}} {{ttb|}&lt;!----&gt;}}.
+}}
+{{rev|since=c++17|
+* If the declared parameter is of the parameter list of a {{rlp|deduction guide}}, the scope introduced is extended to the end of that deduction guide.
+}}
+{{rev|since=c++20|
+* If the declared parameter is of the parameter list of a {{rlp|requires|{{c/core|requires}} expression}}, the scope introduced is extended to the end of {{ttb|{}} {{spar|requirement-seq}} {{ttb|}&lt;!----&gt;}}.
+}}
+{{rev end}}
+
+{{source|1=
+int f(int n) // the declaration of the parameter “n”
+{            // introduces a function parameter scope
+    /* ... */
+}            // the function parameter scope ends here
+}}
+
+{{rrev|since=c++14|
+===Lambda scope===
+Each {{rlp|lambda|lambda expression}} introduces a ''lambda scope'' that starts immediately after {{ttb|[}}{{spar sep|captures}}{{ttb|]}} and extends to the end of {{ttb|{}} {{spar|body}} {{ttb|}&lt;!----&gt;}}.
+
+The {{rlp|lambda#Lambda captures|captures}} with initializers of a lambda expression {{c|E}} inhabit the lambda scope introduced by {{c|E}}.
+
+{{source|1=
+auto lambda = [x = 1, y]() // this lambda expression introduces a lambda scope,
+{                          // it is the target scope of capture “x”
+    /* ... */
+};                         // the lambda scope ends before the semicolon
+}}
+}}
+
+===Namespace scope===
+Every {{rlp|namespace|namespace definition}} for a namespace {{tt|N}} introduces a ''namespace scope'' {{tt|S}} that includes the {{spar|declarations}} for every namespace definition for {{tt|N}}.
+
+For each non-friend redeclaration or specialization whose target scope is {{tt|S}} or is contained by {{tt|S}}, the following portions are also included in scope {{tt|S}}:
+* For a {{rlp|class}} (template) redeclaration or class template specialization, the portion after its {{spar|class-head-name}}.
+* For a {{rlp|enum|enumeration}} redeclaration, the portion after its {{spar|enum-head-name}}.
+* For any other redeclaration or specialization, the portion after the {{spar|unqualified-id}} or {{spar|qualified-id}} of the {{rlp|declarations#Declarators|declarator}}.
+
+The [[#General|global scope]] is the namespace scope of the {{rlp|namespace|global namespace}}.
+
+{{source|
+namespace V   // the namespace definition of “V”
+{             // introduces a namespace scope “S”
+    // the first part of scope “S” begins here
+    void f();
+    // the first part of scope “S” ends here
+}
+
+void V::f()   // the portion after “f” is also a part of scope “S”
+{
+    void h(); // declares V::h
+}             // the second part of scope “S” ends here
+}}
+
+===Class scope===
+Each declaration of a class or class template {{tt|C}} introduces a ''class scope'' {{tt|S}} that includes the {{spar|member-specification}} of the {{rlp|class|class definition}} of {{tt|C}}.
+
+For each non-friend redeclaration or specialization whose target scope is {{tt|S}} or is contained by {{tt|S}}, the following portions are also included in scope {{tt|S}}:
+* For a {{rlp|class}} (template) redeclaration or class template specialization, the portion after its {{spar|class-head-name}}.
+* For a {{rlp|enum|enumeration}} redeclaration, the portion after its {{spar|enum-head-name}}.
+* For any other redeclaration or specialization, the portion after the {{spar|unqualified-id}} or {{spar|qualified-id}} of the {{rlp|declarations#Declarators|declarator}}.
+
+{{source|
+class C       // the class definition of “C”
+{             // introduces a class scope “S”
+    // the first part of scope “S” begins here
+    void f();
+    // the first part of scope “S” ends here
+}
+
+void C::f()   // the portion after “f” is also a part of scope “S”
+{
+    /* ... */
+}             // the second part of scope “S” ends here
+}}
+
+===Enumeration scope===
+Each declaration of an enumeration {{tt|E}} introduces an ''enumeration scope'' that includes the {{spar|enumerator-list}} of the{{rev inl|since=c++11| non-opaque}} {{rlp|enum|enumeration declaration}} of {{tt|E}} (if present).
+
+{{source|
+enum class E // the enumeration declaration of “E”
+{            // introduces an enumeration scope “S”
+    // scope “S” begins here
+    e1, e2, e3
+    // scope “S” ends here
+}
+}}
+
+===Template parameter scope===
+Each {{rlpsd|template parameters#Template template parameter}} introduces a ''template parameter scope'' that includes the entire template parameter list{{rev inl|since=c++20| and the {{rlp|constraints#Requires clauses|{{c/core|require}} clauses}}}} of that template template parameter.
+
+Each template declaration {{tt|D}} introduces a ''template parameter scope'' {{tt|S}} that extends from the beginning of the template parameter list of {{tt|D}} to the end of {{tt|D}}. Any declaration outside the template parameter list that would inhabit {{tt|S}} instead inhabits the same scope as {{tt|D}}.
+
+{{source|
+// the class template declaration of “X”
+// introduces a template parameter scope “S1”
+template
+&lt;
+    // scope “S1” begins here
+    template // the template template parameter “T”
+             // introduces another template parameter scope “S2”
+    &lt;
+        typename T1
+        typename T2
+    &gt; requires std::convertible_from&lt;T1, T2&gt; // scope “S2” ends here
+    class T,
+    typename U
+&gt;
+class X; // scope “S1” ends before the semicolon
+}}
+
+===Point of declaration===
+In general&lt;!--except in class member lookup--&gt;, a name is visible after the ''locus'' of its first declaration, which is located as follows.
+
+The locus of a name declared in a simple declaration is immediately after that name's {{rlp|declarations#Declarators|declarator}} and before its initializer, if any.
+
+{{source|1=
+int x = 32; // outer x is in scope
+
+{
+    int x = x; // inner x is in scope before the initializer (= x)
+               // this does not initialize inner x with the value of outer x (32),
+               // this initializes inner x with its own (indeterminate) value
+}
+
+std::function&lt;int(int)&gt; f = [&amp;](int n){ return n &gt; 1 ? n * f(n - 1) : n; };
+// the name of the function f is in scope in the lambda and can
+// be correctly captured by reference, giving a recursive function
+}}
+
+{{source|1=
+const int x = 2; // outer x is in scope
+
+{
+    int x[x] = {}; // inner x is in scope before the initializer (= {}),
+                   // but after the declarator (x[x])
+                   // in the declarator, outer x is still in scope
+                   // this declares an array of 2 int
+}
+}}
+
+The locus of a class or class template declaration is immediately after the identifier that names the class (or the {{rlps|templates#template-id}} that names the template specialization) in its {{rlp|class|class-head}}. The class or class template name is already in scope in the list of base classes.
+
+{{source|1=
+struct S: std::enable_shared_from_this&lt;S&gt; {}; // S is in scope at the colon
+}}
+
+The locus of {{rlp|enum|enum specifier}}{{rev inl|since=c++11| or opaque enum declaration}} is immediately after the identifier that names the enumeration.
+
+{{source|1=
+enum E : int // E is in scope at the colon
+{
+    A = sizeof(E)
+};
+}}
+
+The locus of a {{rlp|type alias|type alias or alias template}} declaration is immediately after the type-id to which the alias refers.
+
+{{source|1=
+using T = int; // outer T is in scope at the semicolon
+
+{
+    using T = T*; // inner T is in scope at the semicolon,
+                  // outer T is still in scope before the semicolon
+                  // same as T = int*
+}
+}}
+
+The locus for a declarator in a {{rlp|using declaration}} that does not name a constructor is immediately after the declarator.
+
+{{source|1=
+template&lt;int N&gt;
+class Base
+{
+protected:
+    static const int next = N + 1;
+    static const int value = N;
+};
+
+struct Derived: Base&lt;0&gt;, Base&lt;1&gt;, Base&lt;2&gt;
+{
+    using Base&lt;0&gt;::next,     // next is in scope at the comma
+          Base&lt;next&gt;::value; // Derived::value is 1
+};
+}}
+
+The locus of an enumerator is immediately after its definition (not before the initializer as it is for variables).
+
+{{source|1=
+const int x = 12;
+
+{
+    enum
+    {
+        x = x + 1, // enumerator x is in scope at the comma,
+                   // outer x is in scope before the comma,
+                   // enumerator x is initialized to 13
+        y = x + 1  // y is initialized to 14
+    };
+}
+}}
+
+The locus for an {{rlp|injected-class-name}} is immediately following the opening brace of its class (or class template) definition.
+
+{{source|1=
+template&lt;typename T&gt;
+struct Array
+//  : std::enable_shared_from_this&lt;Array&gt; // error: the injected class name is not in scope
+    : std::enable_shared_from_this&lt; Array&lt;T&gt; &gt; // OK: the template-name Array is in scope
+{ // the injected class name Array is now in scope as if a public member name
+    Array* p; // pointer to Array&lt;T&gt;
+};
+}}
+
+{{rrev|since=c++11|
+The locus of the implicit declaration for a function-local predefined variable {{c|__func__}} is immediately before the function body of a function definition.
+}}
+
+
+{{rrev|since=c++17|
+The locus of a {{rlp|structured binding|structured binding declaration}} is immediately after the {{spar|identifier-list}}, but structured binding initializers are prohibited from referring to any of the names being declared.
+}}
+
+
+{{rrev|since=c++11|
+The locus of the variable{{rev inl|since=c++17| or the structured bindings}} declared in the {{spar|range-declaration}} of a {{rlp|range-for|range-{{c/core|for}} loop}} is immediately after the {{spar|range-expression}}.
+
+{{source|
+std::vector&lt;int&gt; x;
+
+for (auto x : x) // vector x is in scope before the closing parenthesis,
+                 // auto x is in scope at the closing parenthesis
+{
+    // the auto x is in scope
+}
+}}
+}}
+
+The locus of a {{rlp|template parameters|template parameter}} is immediately after its complete template parameter (including the optional default argument).
+
+{{source|1=
+typedef unsigned char T;
+
+template&lt;
+    class T = T, // template parameter T is in scope at the comma,
+                 // typedef name of unsigned char is in scope before the comma
+    T // template parameter T is in scope
+    N = 0
+&gt;
+struct A
+{
+};
+}}
+
+{{rrev|since=c++20|
+The locus of a {{rlp|constraints|concept definition}} is immediately after the concept name, but concept definitions are prohibited from referring to the concept name being declared.
+}}
+
+The locus of a named {{rlp|namespace|namespace definition}} is immediately after the namespace name.
+
+{{todo|remainder of [basic.scope.pdecl]}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2793|std=C++98|before=an {{c/core|extern}} declaration in a block scope could&lt;br&gt;conflict with another declaration in the parent scope|after=prohibited}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=6.4|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.4|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.3|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.3|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.3|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.3|title=Declarative regions and scopes|id=basic.scope}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/scope|Scope|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,124 @@
+{{cpp/ranges/title|uninitialized_value_construct_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|Call signature}}
+{{dcla|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-iterator I &gt;
+    requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+I uninitialized_value_construct_n( I first,
+                                   std::iter_difference_t&lt;I&gt; count );
+}}
+{{dcl end}}
+
+Constructs objects of type {{c/core|std::iter_value_t&lt;I&gt;}} in the uninitialized memory area {{counted range|first|count}} by [[cpp/language/value initialization|value-initialization]], as if by
+{{c multi|
+return ranges::uninitialized_value_construct(std::counted_iterator(first, count),|
+                                             std::default_sentinel).base();
+}}
+
+If an exception is thrown during the initialization, the objects already constructed are destroyed in an unspecified order.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of elements to initialize}}
+{{par|count|the number of elements to construct}}
+{{par end}}
+
+===Return value===
+As described above.
+
+===Complexity===
+Linear in {{c|count}}.
+
+===Exceptions===
+Any exception thrown on construction of the elements in the destination range.
+
+===Notes===
+An implementation may improve the efficiency of the {{tt|ranges::uninitialized_value_construct_n}}, e.g. by using {{lc|ranges::fill_n}}, if the value type of the range is a {{named req|CopyAssignable}} {{named req|TrivialType}}.
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} for [[cpp/memory#Uninitialized memory algorithms|specialized memory algorithms]]}}
+
+===Possible implementation===
+{{eq fun|1=
+struct uninitialized_value_construct_n_fn
+{
+    template&lt;no-throw-forward-iterator I&gt;
+        requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+    constexpr I operator()(I first, std::iter_difference_t&lt;I&gt; count) const
+    {
+        auto iter = std::counted_iterator(first, count);
+        return ranges::uninitialized_value_construct(iter, std::default_sentinel).base();
+    }
+};
+
+inline constexpr uninitialized_value_construct_n_fn uninitialized_value_construct_n{};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    struct S { std::string m{"█▓▒░ █▓▒░ █▓▒░ "}; };
+    
+    constexpr int n{4};
+    alignas(alignof(S)) char out[n * sizeof(S)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;S*&gt;(out)};
+        auto last = std::ranges::uninitialized_value_construct_n(first, n);
+        
+        auto count{1};
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; count++ &lt;&lt; ' ' &lt;&lt; it-&gt;m &lt;&lt; '\n';
+        
+        std::ranges::destroy(first, last);
+    }
+    catch (...)
+    {
+        std::cout &lt;&lt; "Exception!\n";
+    }
+    
+    // For scalar types, uninitialized_value_construct_n
+    // zero-initializes the given uninitialized memory area.
+    int v[]{1, 2, 3, 4, 5, 6, 7, 8};
+    std::cout &lt;&lt; ' ';
+    for (const int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; "\n ";
+    std::ranges::uninitialized_value_construct_n(std::begin(v), std::size(v));
+    for (const int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1 █▓▒░ █▓▒░ █▓▒░ 
+2 █▓▒░ █▓▒░ █▓▒░ 
+3 █▓▒░ █▓▒░ █▓▒░ 
+4 █▓▒░ █▓▒░ █▓▒░
+1 2 3 4 5 6 7 8
+0 0 0 0 0 0 0 0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=this algorithm might create objects on a {{c/core|const}} storage|after=kept disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_default_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_default_construct_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_value_construct_n}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

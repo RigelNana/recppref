@@ -1,0 +1,110 @@
+{{cpp/io/basic_streambuf/title|overflow}}
+{{cpp/io/basic_streambuf/navbar}}
+{{ddcl|1=
+protected:
+virtual int_type overflow( int_type ch = Traits::eof() );
+}}
+
+Ensures that there is space at the [[cpp/io/basic_streambuf|put area]] for at least one character by saving some initial subsequence of characters starting at {{lc|pbase()}} to the output sequence and updating the pointers to the put area (if needed). If {{c|ch}} is not {{c|Traits::eof()}} (i.e. {{c|1=Traits::eq_int_type(ch, Traits::eof()) != true}}), it is either put to the put area or directly saved to the output sequence.
+
+The function may update {{tt|pptr}}, {{tt|epptr}} and {{tt|pbase}} pointers to define the location to write more data. On failure, the function ensures that either {{c|pptr() {{==}} nullptr}} or {{c|pptr() {{==}} epptr}}.
+
+The base class version of the function does nothing. The derived classes may override this function to allow updates to the put area in the case of exhaustion.
+
+===Parameters===
+{{par begin}}
+{{par|ch|the character to store in the put area}}
+{{par end}}
+
+===Return value===
+Returns unspecified value not equal to {{c|Traits::eof()}} on success, {{c|Traits::eof()}} on failure.
+
+The base class version of the function returns {{c|Traits::eof()}}.
+
+===Note===
+The {{lc|sputc()}} and {{lc|sputn()}} call this function in case of an overflow ({{c|1=pptr() == nullptr}} or {{c|1=pptr() &gt;= epptr()}}).
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+
+// Buffer for std::ostream implemented by std::array
+template&lt;std::size_t size, class CharT = char&gt;
+struct ArrayedStreamBuffer : std::basic_streambuf&lt;CharT&gt;
+{
+    using Base = std::basic_streambuf&lt;CharT&gt;;
+    using char_type = typename Base::char_type;
+    using int_type = typename Base::int_type;
+
+    ArrayedStreamBuffer()
+    {
+        // put area pointers to work with 'buffer'
+        Base::setp(buffer.data(), buffer.data() + size);
+    }
+
+    int_type overflow(int_type ch) 
+    {
+        std::cout &lt;&lt; "overflow\n";
+        return Base::overflow(ch);
+    }
+
+    void print_buffer()
+    {
+        for (char_type i : buffer)
+        {
+            if (i == 0)
+                std::cout &lt;&lt; "\\0";
+            else
+                std::cout &lt;&lt; i;
+            std::cout &lt;&lt; ' ';
+        }
+        std::cout &lt;&lt; '\n';
+    }
+
+private:
+    std::array&lt;char_type, size&gt; buffer{}; // value-initialize buffer
+};
+
+int main()
+{
+    ArrayedStreamBuffer&lt;10&gt; streambuf;
+    std::ostream stream(&amp;streambuf);
+
+    stream &lt;&lt; "hello";
+    streambuf.print_buffer();
+    if (stream.good())
+        std::cout &lt;&lt; "stream is good\n";
+
+    stream &lt;&lt; "world";
+    streambuf.print_buffer();
+    if (stream.good())
+        std::cout &lt;&lt; "stream is good\n";
+
+    stream &lt;&lt; "!";
+    streambuf.print_buffer();
+    if (!stream.good())
+        std::cout &lt;&lt; "stream is not good\n";
+}
+|output=
+h e l l o \0 \0 \0 \0 \0
+stream is good
+h e l l o w o r l d 
+stream is good
+overflow
+h e l l o w o r l d 
+stream is not good
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc uflow}}
+{{dsc inc|cpp/io/basic_streambuf/dsc underflow}}
+{{dsc inc|cpp/io/basic_filebuf/dsc overflow}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc overflow}}
+{{dsc inc|cpp/io/strstreambuf/dsc overflow}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

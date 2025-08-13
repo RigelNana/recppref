@@ -1,0 +1,168 @@
+{{title|cv {{small|({{tt|const}} and {{tt|volatile}})}} type qualifiers}}
+{{cpp/language/declarations/navbar}}
+
+Appear in any type specifier, including {{spar|decl-specifier-seq}} of  {{rlp|declarations|declaration grammar}}, to specify constness or volatility of the object being declared or of the type being named.
+* {{c/core|const}} - defines that the type is ''constant''.
+* {{c/core|volatile}} - defines that the type is ''volatile''.
+
+===Explanation===
+Any (possibly {{rlp|type#Incomplete type|incomplete}}) type other than {{rlp|functions|function type}} or {{rlp|reference|reference type}} is a type in a group of the following four distinct but related types:
+* A ''cv-unqualified'' version.
+* A ''const-qualified'' version.
+* A ''volatile-qualified'' version.
+* A ''const-volatile-qualified'' version.
+
+These four types in the same group have the same {{rlp|object#Object representation and value representation|representation}} and {{rlp|object#Alignment|alignment}} requirements.
+
+{{rlp|array|Array types}} are considered to have the same cv-qualification as their element types.
+
+====const and volatile objects====
+When an object is first created, the cv-qualifiers used (which could be part of {{spar|decl-specifier-seq}} or part of a {{spar|declarator}} in a {{rlp|declarations|declaration}}, or part of {{spar|type-id}} in a {{rlp|new|new-expression}}) determine the constness or volatility of the object, as follows:
+
+* A ''const object'' is
+:* an object whose type is const-qualified, or
+:* a non-[[#mutable|mutable]] subobject of a const object. 
+: Such object cannot be modified: attempt to do so directly is a compile-time error, and attempt to do so indirectly (e.g., by modifying the const object through a reference or pointer to non-const type) results in undefined behavior.
+
+* A ''volatile object'' is
+:* an object whose type is volatile-qualified,
+:* a subobject of a volatile object, or
+:* a [[#mutable|mutable]] subobject of a const-volatile object.
+: Every access (read or write operation, member function call, etc.) made through a glvalue expression of volatile-qualified type&lt;!--note; until p0612r0/NB comment CH2 on C++17, C++ standard said 'object', rather than 'expression', but this made it impossible to use volatile as intended--&gt; is treated as a visible side-effect for the {{rlp|as if|purposes of optimization}} (that is, within a single thread of execution, volatile accesses cannot be optimized out or reordered with another visible side effect that is {{rlp|eval order|sequenced-before}} or sequenced-after the volatile access. This makes volatile objects suitable for communication with a [[cpp/utility/program/signal|signal handler]], but not with another thread of execution, see {{lc|std::memory_order}}). Any attempt to access a volatile object through a {{rlp|value category#glvalue|glvalue}} of non-volatile type (e.g. through a reference or pointer to non-volatile type) results in undefined behavior.
+
+* A ''const volatile object'' is
+:* an object whose type is const-volatile-qualified,
+:* a non-[[#mutable|mutable]] subobject of a const volatile object,
+:* a const subobject of a volatile object, or
+:* a non-[[#mutable|mutable]] volatile subobject of a const object.
+: Behaves as both a const object and as a volatile object.
+
+Each cv-qualifier ({{c/core|const}} and {{c/core|volatile}}) can appear at most once in any cv-qualifier sequence. For example, {{c/core|const const}} and {{c/core|volatile const volatile}} are not valid cv-qualifier sequences.
+
+{{anchor|mutable}}
+==={{tt|mutable}} specifier===
+* {{c/core|mutable}} - permits modification of the class member declared mutable even if the containing object is declared const (i.e., the class member is mutable).
+
+May appear in the declaration of a non-static {{rlp|data members|class members}} of non-reference non-const type:
+{{source|
+class X
+{
+    mutable const int* p; // OK
+    mutable int* const q; // ill-formed
+    mutable int&amp;       r; // ill-formed
+};
+}}
+
+{{c/core|mutable}} is used to specify that the member does not affect the externally visible state of the class (as often used for mutexes, memo caches, lazy evaluation, and access instrumentation).
+
+{{source|1=
+class ThreadsafeCounter
+{
+    mutable std::mutex m; // The "M&amp;M rule": mutable and mutex go together
+    int data = 0;
+public:
+    int get() const
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        return data;
+    }
+    
+    void inc()
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        ++data;
+    }
+};
+}}
+
+===Conversions===
+There is partial ordering of cv-qualifiers by the order of increasing restrictions. The type can be said ''more'' or ''less'' cv-qualified than:
+* ''unqualified'' &lt; {{c/core|const}}
+* ''unqualified'' &lt; {{c/core|volatile}}
+* ''unqualified'' &lt; {{c/core|const volatile}}
+* {{c/core|const}} &lt; {{c/core|const volatile}}
+* {{c/core|volatile}} &lt; {{c/core|const volatile}}
+
+References and pointers to cv-qualified types can be implicitly converted to references and pointers to more cv-qualified types, see {{rlp|implicit cast#Qualification conversions|qualification conversions}} for details.
+
+To convert a reference or a pointer to a cv-qualified type to a reference or pointer to a less cv-qualified type, {{rlpt|const_cast}} must be used.
+
+===Notes===
+The {{c/core|const}} qualifier used on a declaration of a non-local non-volatile {{rev inl|since=c++14|non-{{rlp|variable template|template}}}}{{rev inl|since=c++17|non-{{rlp|inline}}}} variable that is not declared {{c/core|extern}} gives it {{rlp|storage duration#Linkage|internal linkage}}. This is different from C where const file scope variables have external linkage.
+
+The C++ language grammar treats {{c/core|mutable}} as a {{rlp|storage duration|storage-class-specifier}}, rather than a type qualifier, but it does not affect storage class or linkage.
+
+{{rrev|since=c++20|
+Some uses of volatile are deprecated:
+* lvalue of volatile type as operand of built-in {{rlp|operator incdec|increment/decrement}} operators;
+* lvalue of volatile type as left operand of built-in {{rlp|operator assignment|direct assignment}}&lt;!-- P2327R1, CWG2654 --&gt;, unless the direct assignment expression appears in an {{rlp|expressions#Unevaluated expressions|unevaluated context}} or is a {{rlp|expressions#Discarded-value expressions|discarded-value expression}};
+* volatile object type as function parameter type or return type;
+* volatile qualifier in {{rlp|structured binding}} declaration.
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/const}}, 
+{{ltt|cpp/keyword/volatile}},
+{{ltt|cpp/keyword/mutable}}
+
+===Example===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+
+int main()
+{
+    int n1 = 0;          // non-const object
+    const int n2 = 0;    // const object
+    int const n3 = 0;    // const object (same as n2)
+    volatile int n4 = 0; // volatile object
+    
+    const struct
+    {
+        int n1;
+        mutable int n2;
+    } x = {0, 0};        // const object with mutable member
+    
+    n1 = 1;   // OK: modifiable object
+//  n2 = 2;   // error: non-modifiable object
+    n4 = 3;   // OK: treated as a side-effect
+//  x.n1 = 4; // error: member of a const object is const
+    x.n2 = 4; // OK: mutable member of a const object isn't const
+    
+    const int&amp; r1 = n1; // reference to const bound to non-const object
+//  r1 = 2; // error: attempt to modify through reference to const
+    const_cast&lt;int&amp;&gt;(r1) = 2; // OK: modifies non-const object n1
+    
+    const int&amp; r2 = n2; // reference to const bound to const object
+//  r2 = 2; // error: attempt to modify through reference to const
+//  const_cast&lt;int&amp;&gt;(r2) = 2; // undefined behavior: attempt to modify const object n2
+    
+    [](...){}(n3, n4, x, r2); // see also: [[maybe_unused]]
+    
+    std::system("g++ -O3 -Wa,-adhln ./main.cpp"); // may issue asm on POSIX systems
+}
+|p=true
+|output=
+# typical machine code produced on an x86_64 platform
+# (only the code that contributes to observable side-effects is emitted)
+main:
+    movl    $0, -4(%rsp) # volatile int n4 = 0;
+    movl    $3, -4(%rsp) # n4 = 3;
+    xorl    %eax, %eax   # return 0 (implicit)
+    ret
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1428|std=C++98|before=the definition of 'const object' was based on declaration|after=based on object type}}
+{{dr list item|wg=cwg|dr=1528|std=C++98|before=there was no requirement on the number of occurrences&lt;br&gt;of each cv-qualifier in the same cv-qualifier sequence|after=at most once for&lt;br&gt;each cv-qualifier}}
+{{dr list item|wg=cwg|dr=1799|std=C++98|before={{c/core|mutable}} could be applied to data members not declared&lt;br&gt;{{c/core|const}}, but the members' types may still be const-qualified|after=cannot apply {{c/core|mutable}} to data&lt;br&gt;members of const-qualified types}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/const|{{c/core|const}} qualifier|nomono=true}}
+{{dsc see c|c/language/volatile|{{c/core|volatile}} qualifier|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

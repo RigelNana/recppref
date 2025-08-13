@@ -1,0 +1,169 @@
+{{cpp/ranges/title|ref_view}}
+{{cpp/ranges/navbar}}
+
+{{ddcl|header=ranges|since=c++20|1=
+template&lt; ranges::range R &gt;
+    requires std::is_object_v&lt;R&gt;
+class ref_view
+    : public ranges::view_interface&lt;ref_view&lt;R&gt;&gt;
+}}
+
+{{tt|ref_view}} is a {{lconcept|view}} of the elements of some other {{lconcept|range}}. It wraps a reference to that {{tt|range}}.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|r_|private=yes|A pointer of type {{tt|R*}} to the underlying range.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|{{PAGENAME}}#ctor|constructs a {{tt|ref_view}} that references to the given range}}
+{{dsc mem fun|title=base|{{PAGENAME}}#base|returns the references to the referenced range}}
+{{dsc mem fun|title=begin|{{PAGENAME}}#begin|returns the beginning iterator of the referenced range}}
+{{dsc mem fun|title=end|{{PAGENAME}}#end|returns the sentinel of the referenced range}}
+{{dsc mem fun|title=empty|{{PAGENAME}}#empty|checks whether the referenced range is empty}}
+{{dsc mem fun|title=size|{{PAGENAME}}#size|returns the size of the referenced {{lconcept|sized_range}}}}
+{{dsc mem fun|title=data|{{PAGENAME}}#data|returns the pointer to the beginning of the referenced {{lconcept|contiguous_range}}}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|empty=yes|size=yes|data=yes}}
+{{dsc end}}
+
+{{anchor|ctor}}
+{{member|{{small|std::ranges::ref_view::}}ref_view|2=
+{{ddcl|since=c++20|
+template&lt; /*different-from*/&lt;ref_view&gt; T &gt;
+    requires std::convertible_to&lt;T, R&amp;&gt; &amp;&amp; requires { _FUN(std::declval&lt;T&gt;()); }
+constexpr ref_view( T&amp;&amp; t );
+}}
+
+Initializes {{tti|r_}} with {{c|std::addressof(static_cast&lt;R&amp;&gt;(std::forward&lt;T&gt;(t)))}}.
+
+{{c|/*different-from*/&lt;T, U&gt;}} is satisfied if and only if {{c|std::remove_cvref_t&lt;T&gt;}} and {{c|std::remove_cvref_t&lt;U&gt;}} are not the same type, and overloads of {{tti|_FUN}} are declared as {{c|1=void _FUN(R&amp;); void _FUN(R&amp;&amp;) = delete;}}.
+
+===Parameters===
+{{par begin}}
+{{par|t|range to reference}}
+{{par end}}
+}}
+
+{{anchor|base}}
+{{member|{{small|std::ranges::ref_view::}}base|
+{{ddcl|since=c++20|
+constexpr R&amp; base() const;
+}}
+
+Equivalent to {{c|return *r_;}}.
+}}
+
+{{anchor|begin}}
+{{member|{{small|std::ranges::ref_view::}}begin|
+{{ddcl|since=c++20|
+constexpr ranges::iterator_t&lt;R&gt; begin() const;
+}}
+
+Equivalent to {{c|return ranges::begin(*r_);}}.
+}}
+
+{{anchor|end}}
+{{member|{{small|std::ranges::ref_view::}}end|
+{{ddcl|since=c++20|
+constexpr ranges::sentinel_t&lt;R&gt; end() const;
+}}
+
+Equivalent to {{c|return ranges::end(*r_);}}.
+}}
+
+{{anchor|empty}}
+{{member|{{small|std::ranges::ref_view::}}empty|
+{{ddcl|since=c++20|
+constexpr bool empty() const
+    requires requires { ranges::empty(*r_); };
+}}
+
+Equivalent to {{c|return ranges::empty(*r_);}}.
+}}
+
+{{anchor|size}}
+{{member|{{small|std::ranges::ref_view::}}size|
+{{ddcl|since=c++20|
+constexpr auto size() const
+    requires ranges::sized_range&lt;R&gt;;
+}}
+
+Equivalent to {{c|return ranges::size(*r_);}}.
+}}
+
+{{anchor|data}}
+{{member|{{small|std::ranges::ref_view::}}data|
+{{ddcl|since=c++20|
+constexpr auto data() const
+    requires ranges::contiguous_range&lt;R&gt;;
+}}
+
+Equivalent to {{c|return ranges::data(*r_);}}.
+}}
+
+===Deduction guides===
+{{ddcl|since=c++20|
+template&lt; class R &gt;
+ref_view( R&amp; ) -&gt; ref_view&lt;R&gt;;
+}}
+
+===Helper templates===
+{{ddcl|since=c++20|1=
+template&lt; class T &gt;
+constexpr bool enable_borrowed_range&lt;ranges::ref_view&lt;T&gt;&gt; = true;
+}}
+This specialization of {{rlpt|borrowed_range|std::ranges::enable_borrowed_range}} makes {{tt|ref_view}} satisfy {{lconcept|borrowed_range}}.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    const std::string s{"cosmos"};
+
+    const std::ranges::take_view tv{s, 3};
+    const std::ranges::ref_view rv{tv};
+
+    std::cout
+        &lt;&lt; std::boolalpha
+        &lt;&lt; "call empty() : " &lt;&lt; rv.empty() &lt;&lt; '\n'
+        &lt;&lt; "call size()  : " &lt;&lt; rv.size() &lt;&lt; '\n'
+        &lt;&lt; "call begin() : " &lt;&lt; *rv.begin() &lt;&lt; '\n'
+        &lt;&lt; "call end()   : " &lt;&lt; *(rv.end() - 1) &lt;&lt; '\n'
+        &lt;&lt; "call data()  : " &lt;&lt; rv.data() &lt;&lt; '\n'
+        &lt;&lt; "call base()  : " &lt;&lt; rv.base().size() &lt;&lt; '\n' // ~&gt; tv.size()
+        &lt;&lt; "range-for    : ";
+
+    for (const auto c : rv)
+        std::cout &lt;&lt; c;
+    std::cout &lt;&lt; '\n';
+}
+|output=
+call empty() : false
+call size()  : 3
+call begin() : c
+call end()   : s
+call data()  : cosmos
+call base()  : 3
+range-for    : cos
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2325R3|std=C++20|before=default constructor was provided as {{lconcept|view}}&lt;br&gt;must be {{lconcept|default_initializable}}|after=removed along with the requirement}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc reference_wrapper}}
+{{dsc inc|cpp/ranges/dsc owning_view}}
+{{dsc inc|cpp/ranges/dsc all_view}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

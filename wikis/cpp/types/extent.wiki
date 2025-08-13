@@ -1,0 +1,82 @@
+{{cpp/title|extent}}
+{{cpp/meta/navbar}}
+{{ddcl|header=type_traits|since=c++11|1=
+template&lt; class T, unsigned N = 0 &gt;
+struct extent;
+}}
+
+If {{tt|T}} is an array type, provides the member constant {{tt|value}} equal to the number of elements along the {{petty|{{tt|N}}{{sup|th}}}} dimension of the array, if {{tt|N}} is in {{range|0|std::rank&lt;T&gt;::value}}. For any other type, or if {{tt|T}} is an array of unknown bound along its first dimension and {{tt|N}} is {{c|0}}, {{tt|value}} is {{c|0}}.
+
+{{cpp/types/nospec|v}}
+
+===Helper variable template===
+{{ddcl|since=c++17|1=
+template&lt; class T, unsigned N = 0 &gt;
+constexpr std::size_t extent_v = extent&lt;T, N&gt;::value;
+}}
+
+{{cpp/types/integral_constant/inherit2|the number of elements along the {{tt|N}}th dimension of {{tt|T}}|std::size_t}}
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;class T, unsigned N = 0&gt;
+struct extent : std::integral_constant&lt;std::size_t, 0&gt; {};
+
+template&lt;class T&gt;
+struct extent&lt;T[], 0&gt; : std::integral_constant&lt;std::size_t, 0&gt; {};
+
+template&lt;class T, unsigned N&gt;
+struct extent&lt;T[], N&gt; : std::extent&lt;T, N - 1&gt; {};
+
+template&lt;class T, std::size_t I&gt;
+struct extent&lt;T[I], 0&gt; : std::integral_constant&lt;std::size_t, I&gt; {};
+
+template&lt;class T, std::size_t I, unsigned N&gt;
+struct extent&lt;T[I], N&gt; : std::extent&lt;T, N - 1&gt; {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;type_traits&gt;
+
+static_assert(
+    std::extent_v&lt;int[3]&gt; == 3 &amp;&amp; // default dimension is 0
+    std::extent_v&lt;int[3], 0&gt; == 3 &amp;&amp; // the same as above
+    std::extent_v&lt;int[3][4], 0&gt; == 3 &amp;&amp;
+    std::extent_v&lt;int[3][4], 1&gt; == 4 &amp;&amp;
+    std::extent_v&lt;int[3][4], 2&gt; == 0 &amp;&amp;
+    std::extent_v&lt;int[]&gt; == 0
+);
+
+int main()
+{
+    const auto ext = std::extent&lt;int['*']&gt;{};
+    static_assert(ext == 42); // with implicit conversion to std::size_t
+
+    const int ints[]{1, 2, 3, 4};
+    static_assert(std::extent_v&lt;decltype(ints)&gt; == 4); // array size
+
+    [[maybe_unused]] int ary[][3] = {&lt;!----&gt;{1, 2, 3}&lt;!----&gt;};
+
+    // ary[0] is of type reference to 'int[3]', so, the extent
+    // cannot be calculated correctly and it returns 0
+    static_assert(std::is_same_v&lt;decltype(ary[0]), int(&amp;)[3]&gt;);
+    static_assert(std::extent_v&lt;decltype(ary[0])&gt; == 0);
+
+    // removing reference gives correct extent value 3
+    static_assert(std::extent_v&lt;std::remove_cvref_t&lt;decltype(ary[0])&gt;&gt; == 3);
+}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_array}}
+{{dsc inc|cpp/types/dsc rank}}
+{{dsc inc|cpp/types/dsc remove_extent}}
+{{dsc inc|cpp/types/dsc remove_all_extents}}
+{{dsc inc|cpp/container/mdspan/dsc extents}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,81 @@
+{{cpp/experimental/title|conjunction}}
+{{cpp/experimental/lib extensions 2/navbar}}
+{{fmbox|class=noprint|style=font-size: 0.8em|text='''Merged into ISO C++''' The functionality described on this page was merged into the mainline ISO C++ standard as of 2/2016, see  {{ltt|cpp/types/conjunction|std::conjunction}} {{mark since c++17}}}}
+{{dcl begin}}
+{{dcl header|experimental/type_traits}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class... B &gt;
+struct conjunction;
+}}
+{{dcl end}}
+
+Forms the [https://en.wikipedia.org/wiki/Logical_conjunction logical conjunction] of the type traits {{tt|B...}}, effectively performing a logical AND on the sequence of traits.
+
+The specialization {{c|std::experimental::conjunction&lt;B1, ..., BN&gt;}} has a public and unambiguous base that is 
+* if {{c|1=sizeof...(B) == 0}}, {{c|std::true_type}}; otherwise
+* the first type {{tt|Bi}} in {{tt|B1, ..., BN}} for which {{c|1=bool(Bi::value) == false}}, or {{tt|BN}} if there is no such type.
+
+The member names of the base class, other than {{tt|conjunction}} and {{tt|operator{{=}}}}, are not hidden and are unambiguously available in {{tt|conjunction}}.
+
+Conjunction is short-circuiting: if there is a template type argument {{tt|Bi}} with {{c|1= bool(Bi::value) == false}}, then instantiating {{c|conjunction&lt;B1, ..., BN&gt;::value}} does not require the instantiation of {{c|Bj::value}} for {{c|j &gt; i}}.
+
+===Template parameters===
+{{par begin}}
+{{par|B...|every template argument {{tt|Bi}} for which {{c|Bi::value}} is instantiated must be usable as a base class and define member {{tt|value}} that is convertible to {{c|bool}}}}
+{{par end}}
+
+=== Helper variable template ===
+{{dcl begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class... B &gt;
+constexpr bool conjunction_v = conjunction&lt;B...&gt;::value;
+}}
+{{dcl end}}
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;class...&gt; struct conjunction : std::true_type {};
+template&lt;class B1&gt; struct conjunction&lt;B1&gt; : B1 {};
+template&lt;class B1, class... Bn&gt;
+struct conjunction&lt;B1, Bn...&gt; 
+    : std::conditional_t&lt;bool(B1::value), conjunction&lt;Bn...&gt;, B1&gt; {};
+}}
+
+===Notes===
+A specialization of {{tt|conjunction}} does not necessarily inherit from either {{c|std::true_type}} or {{c|std::false_type}}: it simply inherits from the first B whose ::value, converted to bool, is false, or from the very last B when all of them convert to true. For example, {{c|conjunction&lt;std::integral_constant&lt;int, 2&gt;, std::integral_constant&lt;int, 4&gt;&gt;::value}} is {{c|4}}.
+
+===Example===
+{{example|code=
+#include &lt;experimental/type_traits&gt;
+#include &lt;iostream&gt;
+
+// func is enabled if all Ts... have the same type
+template&lt;typename T, typename... Ts&gt;
+constexpr std::enable_if_t&lt;std::experimental::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;&gt;
+func(T, Ts...)
+{
+    std::cout &lt;&lt; "All types are the same.\n";
+}
+
+template&lt;typename T, typename... Ts&gt;
+constexpr std::enable_if_t&lt;!std::experimental::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;&gt;
+func(T, Ts...)
+{
+    std::cout &lt;&lt; "Types differ.\n";
+}
+
+int main()
+{
+    func(1, 2'7, 3'1);    
+    func(1, 2.7, '3');    
+}
+|output=
+All types are the same.
+Types differ.
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc conjunction}}
+{{dsc end}}

@@ -1,0 +1,259 @@
+{{title|Default comparisons {{mark since c++20}}}}
+{{cpp/language/expressions/navbar}}
+
+Comparison operator functions can be explicitly defaulted to request the compiler to generate the corresponding default comparison for a class.
+
+===Definition===
+A ''defaulted comparison operator function'' is a non-template comparison operator function (i.e. {{tt|1=&lt;=&gt;}}, {{tt|1===}}, {{tt|1=!=}}, {{tt|&lt;}}, {{tt|&gt;}}, {{tt|1=&lt;=}}, or {{tt|1=&gt;=}}) satisfying all following conditions:
+* It is a {{rlp|member functions|non-static member}} or {{rlp|friend}} of some class {{tt|C}}.
+* It is {{rlp|function#Function definition|defined as defaulted}} in {{tt|C}} or in a context where {{tt|C}} is {{rlp|type#Incomplete type|complete}}.
+* It has two parameters of type {{c/core|const C&amp;}} or two parameters of type {{tt|C}}, where the {{rlp|overload resolution#Additional rules for member function candidates|implicit object parameter}} (if any) is considered to be the first parameter.
+
+Such a comparison operator function is termed a ''defaulted comparison operator function for class {{tt|C}}''.
+
+{{source|1=
+struct X
+{
+    bool operator==(const X&amp;) const = default; // OK
+    bool operator==(const X&amp;) = default;       // Error: the implicit object
+                                               //        parameter type is X&amp;
+    bool operator==(this X, X) = default;      // OK
+};
+
+struct Y
+{
+    friend bool operator==(Y, Y) = default;        // OK
+    friend bool operator==(Y, const Y&amp;) = default; // Error: different parameter types
+};
+
+bool operator==(const Y&amp;, const Y&amp;) = default;     // Error: not a friend of Y
+}}
+
+Name lookups and access checks in the implicit definition of a comparison operator function are performed from a context equivalent to its function body. A definition of a comparison operator function as defaulted that appears in a class must be the first declaration of that function.
+
+===Default comparison order===
+Given a class {{tt|C}}, a subobject list is formed by the following subjects in order:
+* The direct base class subobjects of {{tt|C}}, in declaration order.
+* The non-static {{rlp|data members}} of {{tt|C}}, in declaration order.
+:* If any member subobject is of array type, it is expanded to the sequence of its elements, in the order of increasing subscript. The expansion is recursive: array elements of array types will be expanded again until there is no subobject of array type.
+
+For any object {{c|x}} of type {{tt|C}}, in the following descriptions:
+* Let {{c|n}} be the number of subobjects in the (expanded) subobject list for {{c|x}}.
+* Let {{c|x_i}} be the {{c|i}}th subobject in the (expanded) subobject list for {{c|x}}, where {{c|x_i}} is formed by a sequence of {{rlp|overload resolution#Ranking of implicit conversion sequences|derived-to-base conversions}}, {{rlp|operator member access#Built-in member access operators|class member access expressions}}, and {{rlp|operator member access#Built-in subscript operator|array subscript expressions}} applied to {{c|x}}.
+
+{{source|
+struct S {};
+
+struct T : S
+{
+    int arr[2][2];
+} t;
+
+// The subobject list for “t” consists of the following 5 subobjects in order:
+// (S)t → t[0][0] → t[0][1] → t[1][0] → t[1][1]
+}}
+
+===Three-way comparison===
+An {{c/core|1=operator&lt;=&gt;}} for a class type can be defined as defaulted with any return type.
+
+====Comparison category types====
+There are three comparison category types:
+* {{ltt std|cpp/utility/compare/strong_ordering}}
+* {{ltt std|cpp/utility/compare/weak_ordering}}
+* {{ltt std|cpp/utility/compare/partial_ordering}}
+
+{|class="wikitable" style="font-size:85%; text-align:center;"
+|-
+!Type
+!{{nbsp}}Equivalent values are..{{nbsp}}
+!{{nbsp}}Incomparable values are..{{nbsp}}
+|-
+|{{ltt std|cpp/utility/compare/strong_ordering}}
+|indistinguishable
+|not allowed
+|-
+|{{ltt std|cpp/utility/compare/weak_ordering}}
+|distinguishable
+|not allowed
+|-
+|{{nbsp}}{{ltt std|cpp/utility/compare/partial_ordering}}{{nbsp}}
+|distinguishable
+|allowed
+|}
+
+====Synthesized three-way comparison====
+The ''synthesized three-way comparison'' of type {{tt|T}} between glvalues {{c|a}} and {{c|b}} of the same type is defined as follows:
+* If the overload resolution for {{c|1=a &lt;=&gt; b}} results in a usable candidate, and can be explicitly converted to {{tt|T}} using {{rlpt|static_cast}}, the synthesized comparison is {{c|1=static_cast&lt;T&gt;(a &lt;=&gt; b)}}.
+* Otherwise, if any of the following condition is satisfied, the synthesized comparison is not defined:
+:* The overload resolution for {{c|1=a &lt;=&gt; b}} finds at least one viable candidate.
+:* {{tt|T}} is not a comparison category type.
+:* The overload resolution for {{c|1=a == b}} does not result in a usable candidate.
+:* The overload resolution for {{c|a &lt; b}} does not result in a usable candidate.
+* Otherwise, if {{tt|T}} is {{ltt std|cpp/utility/compare/strong_ordering}}, the synthesized comparison is
+{{source|1=
+a == b ? std::strong_ordering::equal :
+a &lt; b  ? std::strong_ordering::less :
+         std::strong_ordering::greater
+}}
+* Otherwise, if {{tt|T}} is {{ltt std|cpp/utility/compare/weak_ordering}}, the synthesized comparison is
+{{source|1=
+a == b ? std::weak_ordering::equivalent :
+a &lt; b  ? std::weak_ordering::less :
+         std::weak_ordering::greater
+}}
+* Otherwise ({{tt|T}} is {{ltt std|cpp/utility/compare/partial_ordering}}), the synthesized comparison is
+{{source|1=
+a == b ? std::partial_ordering::equivalent :
+a &lt; b  ? std::partial_ordering::less :
+b &lt; a  ? std::partial_ordering::greater : 
+         std::partial_ordering::unordered
+}}
+
+====Placeholder return type====
+If the declared return type of a defaulted three-way comparison operator function ({{c/core|1=operator&lt;=&gt;}}) for a class type {{tt|C}} is {{c/core|auto}}, the return type is deduced from the return types of the three-way comparisons between the corresponding subobjects of an object {{c|x}} of type {{tt|C}}.
+
+For each subobject {{c|x_i}} in the [[#Default comparison order|(expanded) subobject list]] for {{c|x}}:
+# Perform overload resolution for {{c|1=x_i &lt;=&gt; x_i}}, if the overload resolution does not result in a usable candidate, the defaulted {{c/core|1=operator&lt;=&gt;}} is defined as deleted.
+# Denote the cv-unqualified version of the type of {{c|1=x_i &lt;=&gt; x_i}} as {{tt|R_i}}, if {{tt|R_i}} is not a comparison category type, the defaulted {{c/core|1=operator&lt;=&gt;}} is defined as deleted.
+
+If the defaulted {{c/core|1=operator&lt;=&gt;}} is not defined as deleted, its return type is deduced as {{c/core|std::common_comparison_category_t&lt;R_1, R_2, ..., R_n&gt;}}.
+
+====Non-placeholder return type====
+If the declared return type of the defaulted {{c/core|1=operator&lt;=&gt;}} is not {{c/core|auto}}, it cannot contain any {{rlp|auto|placeholder type}} (e.g. {{c/core|decltype(auto)}}).
+
+If there is a subobject {{c|x_i}} in the (expanded) subobject list for {{c|x}} such that the [[#Synthesized three-way comparison|synthesized three-way comparison]] of the declared return type between {{c|x_i}} and {{c|x_i}} is not defined, the defaulted {{c/core|1=operator&lt;=&gt;}} is defined as deleted.
+
+====Comparison result====
+Let {{c|x}} and {{c|y}} be the parameters of a defaulted {{c/core|1=operator&lt;=&gt;}}, denote each subobject in the (expanded) subobject list for {{c|x}} and {{c|y}} as {{c|x_i}} and {{c|y_i}} respectively. The default three-way comparison between {{c|x}} and {{c|y}} is performed by comparing corresponding subobjects {{c|x_i}} and {{c|y_i}} with increasing {{c|i}} order.
+
+Let {{tt|R}} be the (possibly-deduced) return type, the comparison result between {{c|x_i}} and {{c|y_i}} is the result of the synthesized three-way comparison of type {{tt|R}} between {{c|x_i}} and {{c|y_i}}.
+* During the default three-way comparison between {{c|x}} and {{c|y}}, if a subobject-wise comparison between {{c|x_i}} and {{c|y_i}} generates a result {{c|v_i}} such that contextually converting {{c|1=v_i != 0}} to {{c/core|bool}} yields {{c|true}}, the return value is a copy of {{c|v_i}} (the remaining subobjects will not be compared).
+* Otherwise, the return value is {{c|static_cast&lt;R&gt;(std::strong_ordering::equal)}}.
+
+{{example
+|code=
+#include &lt;compare&gt;
+#include &lt;iostream&gt;
+#include &lt;set&gt;
+
+struct Point
+{
+    int x;
+    int y;
+    auto operator&lt;=&gt;(const Point&amp;) const = default;
+    /* non-comparison functions */
+};
+
+int main()
+{
+    Point pt1{1, 1}, pt2{1, 2};
+    std::set&lt;Point&gt; s; // OK
+    s.insert(pt1);     // OK
+    
+    // two-way comparison operator functions are not required to be explicitly defined:
+    // operator== is implicitly declared (see below)
+    // the overload resolutions of other candidates will select rewritten candidates 
+    std::cout &lt;&lt; std::boolalpha
+        &lt;&lt; (pt1 == pt2) &lt;&lt; ' '  // false
+        &lt;&lt; (pt1 != pt2) &lt;&lt; ' '  // true
+        &lt;&lt; (pt1 &lt;  pt2) &lt;&lt; ' '  // true
+        &lt;&lt; (pt1 &lt;= pt2) &lt;&lt; ' '  // true
+        &lt;&lt; (pt1 &gt;  pt2) &lt;&lt; ' '  // false
+        &lt;&lt; (pt1 &gt;= pt2) &lt;&lt; ' '; // false
+}
+}}
+
+===Equality comparison===
+====Explicit declaration====
+An {{c/core|1=operator==}} for a class type can be defined as defaulted with return type {{c/core|bool}}.
+
+Given a class {{tt|C}} and an object {{c|x}} of type {{tt|C}}, if there is a subobject {{c|x_i}} in the (expanded) subobject list for {{c|x}} such that the overload resolution for {{c|1=x_i == x_i}} does not result in a usable candidate, the defaulted {{c/core|1=operator==}} is defined as deleted.
+
+Let {{c|x}} and {{c|y}} be the parameters of a defaulted {{c/core|1=operator==}}, denote each subobject in the (expanded) subobject list for {{c|x}} and {{c|y}} as {{c|x_i}} and {{c|y_i}} respectively. The default equality comparison between {{c|x}} and {{c|y}} is performed by comparing corresponding subobjects {{c|x_i}} and {{c|y_i}} with increasing {{c|i}} order.
+
+The comparison result between {{c|x_i}} and {{c|y_i}} is the result of {{c|1=x_i == y_i}}.
+* During the default equality comparison between {{c|x}} and {{c|y}}, if a subobject-wise comparison between {{c|x_i}} and {{c|y_i}} generates a result {{c|v_i}} such that contextually converting {{c|v_i}} to {{c/core|bool}} yields {{c|false}}, the return value is {{c|false}} (the remaining subobjects will not be compared).
+* Otherwise, the return value is {{c|true}}.
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct Point
+{
+    int x;
+    int y;
+    bool operator==(const Point&amp;) const = default;
+    /* non-comparison functions */
+};
+
+int main()
+{
+    Point pt1{3, 5}, pt2{2, 5};
+    std::cout &lt;&lt; std::boolalpha
+        &lt;&lt; (pt1 != pt2) &lt;&lt; '\n'  // true
+        &lt;&lt; (pt1 == pt1) &lt;&lt; '\n'; // true
+    
+    struct [[maybe_unused]] { int x{}, y{}; } p, q;
+    // if (p == q) {} // Error: operator== is not defined
+}
+}}
+
+====Implicit declaration====
+If a class {{tt|C}} does not explicitly declare any member or friend named {{c/core|1=operator==}}, an {{tt|==}} operator function is declared implicitly for each {{c/core|1=operator&lt;=&gt;}} defined as defaulted. Each implicity-declared {{c/core|1=operator==}} have the same access and {{rlpsd|function#Function definition}} and in the same {{rlpsd|scope#Class scope}} as the respective defaulted {{c/core|1=operator&lt;=&gt;}}, with the following changes:
+* The {{rlp|declarations#Declarators|declarator identifier}} is replaced with {{c/core|1=operator==}}.
+* The return type is replaced with {{c/core|bool}}.
+
+{{source|1=
+template&lt;typename T&gt;
+struct X
+{
+    friend constexpr std::partial_ordering operator&lt;=&gt;(X, X)
+        requires (sizeof(T) != 1) = default;
+    // implicitly declares: friend constexpr bool operator==(X, X)
+    //                          requires (sizeof(T) != 1) = default;
+    
+    [[nodiscard]] virtual std::strong_ordering operator&lt;=&gt;(const X&amp;) const = default;
+    // implicitly declares: [[nodiscard]] virtual bool
+    //                          operator==(const X&amp;) const = default;
+};
+}}
+
+===Secondary comparison===
+A secondary comparison operator function ({{tt|1=!=}}, {{tt|&lt;}}, {{tt|&gt;}}, {{tt|1=&lt;=}}, or {{tt|1=&gt;=}}) for a class type can be defined as defaulted with return type {{c/core|bool}}.
+
+Let {{tt|@}} be one of the five secondary comparison operators, for each defaulted {{c/core|operator@}} with parameters {{c|x}} and {{c|y}}, up to two overloads resolutions are performed (not considering the defaulted {{c/core|operator@}} as a candidate) to determine whether it is defined as deleted.
+* The first overload resolution is performed for {{c|x @ y}}. If the overload resolution does not result in a usable candidate, or the selected candidate is not a {{rlp|overload resolution#Call to an overloaded operator|rewritten candidate}}, the defaulted {{c/core|operator@}} is defined as deleted. There is no second overload resolution in these cases.
+* The second overload resolution is performed for the selected rewritten candidate of {{c|x @ y}}. If the overload resolution does not result in a usable candidate, the defaulted {{c/core|operator@}} is defined as deleted.
+
+If is {{c|x @ y}} cannot be implicitly converted to {{c/core|bool}}, the defaulted {{c/core|operator@}} is defined as deleted.
+
+If the defaulted {{c/core|operator@}} is not defined as deleted, it yields {{c|x @ y}}.
+
+{{source|1=
+struct HasNoRelational {};
+
+struct C
+{
+    friend HasNoRelational operator&lt;=&gt;(const C&amp;, const C&amp;);
+    bool operator&lt;(const C&amp;) const = default; // OK, function is defaulted
+};
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/default}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2539|std=C++20|before=the synthesized three-way comparison would choose&lt;br&gt;{{c/core|static_cast}} even if the explicit conversion is not available|after=does not choose&lt;br&gt;{{c/core|static_cast}} in this case}}
+{{dr list item|wg=cwg|dr=2546|std=C++20|before=the defaulted secondary {{c/core|operator@}} was not&lt;br&gt;defined as deleted if the overload resolution of&lt;br&gt;{{c|x @ y}} selects a non-usable rewritten candidate|after=defined as deleted&lt;br&gt;in this case}}
+{{dr list item|wg=cwg|dr=2547|std=C++20|before=it was unclear whether comparison operator&lt;br&gt;functions for non-classes can be defaulted|after=they cannot be defaulted}}
+{{dr list item|wg=cwg|dr=2568|std=C++20|before=the implicit definition of comparison operator&lt;br&gt;functions might violate member access rules|after=access checks are performed&lt;br&gt;from a context equivalent&lt;br&gt;to their function bodies}}
+{{dr list end}}
+
+===See also===
+* {{rlp|overload resolution#Call to an overloaded operator|overload resolution}} in a call to an overloaded operator
+* Built-in {{rlp|operator comparison#Three-way comparison|three-way comparison operator}}
+* {{rlp|operators#Comparison operators|Operator overloading}} for comparison operators
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,80 @@
+{{cpp/title|fseek}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+int fseek( std::FILE* stream, long offset, int origin );
+}}
+
+Sets the file position indicator for the file stream {{c|stream}}.
+
+If the {{c|stream}} is open in binary mode, the new position is exactly {{c|offset}} bytes measured from the beginning of the file if {{c|origin}} is {{lc|SEEK_SET}}, from the current file position if {{c|origin}} is {{lc|SEEK_CUR}}, and from the end of the file if {{c|origin}} is {{lc|SEEK_END}}. Binary streams are not required to support {{lc|SEEK_END}}, in particular if additional null bytes are output.
+
+If the {{c|stream}} is open in text mode, the only supported values for {{c|offset}} are zero (which works with any {{c|origin}}) and a value returned by an earlier call to {{lc|std::ftell}} on a stream associated with the same file (which only works with {{c|origin}} of {{lc|SEEK_SET}}).
+
+If the {{c|stream}} is wide-oriented, the restrictions of both text and binary streams apply (result of {{lc|std::ftell}} is allowed with {{lc|SEEK_SET}} and zero offset is allowed from {{lc|SEEK_SET}} and {{lc|SEEK_CUR}}, but not {{lc|SEEK_END}}).
+
+In addition to changing the file position indicator, {{tt|fseek}} undoes the effects of {{lc|std::ungetc}} and clears the end-of-file status, if applicable.
+
+If a read or write error occurs, the error indicator for the stream ({{lc|std::ferror}}) is set and the file position is unaffected.
+
+===Parameters===
+{{par begin}}
+{{par|stream|file stream to modify}}
+{{par|offset|number of characters to shift the position relative to origin}}
+{{par|origin|position to which {{c|offset}} is added. It can have one of the following values: {{lc|SEEK_SET}}, {{lc|SEEK_CUR}}, {{lc|SEEK_END}}}}
+{{par end}}
+
+===Return value===
+{{c|0}} upon success, nonzero value otherwise.
+
+===Notes===
+After seeking to a non-end position in a wide stream, the next call to any output function may render the remainder of the file undefined, e.g. by outputting a multibyte sequence of a different length.
+
+POSIX allows seeking beyond the existing end of file. If an output is performed after this seek, any read from the gap will return zero bytes. Where supported by the filesystem, this creates a ''sparse file''.
+
+POSIX also requires that {{tt|fseek}} first performs {{lc|std::fflush|fflush}} if there are any unwritten data (but whether the shift state is restored is implementation-defined). The standard C++ file streams guarantee both flushing and unshifting: {{lc|std::basic_filebuf::seekoff}}.
+
+POSIX specifies, that [https://pubs.opengroup.org/onlinepubs/9699919799/functions/fseek.html {{tt|fseek}}] should return {{c|-1}} on error, and set {{lc|errno}} to indicate the error.
+
+{{windows IO-extensions note}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstdio&gt;
+#include &lt;cstdint&gt;
+#include &lt;fstream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::ofstream("dummy.nfo") &lt;&lt; "8 bytes\n"; // create the file
+
+    std::FILE* fp = std::fopen("dummy.nfo", "rb");
+    assert(fp);
+
+    std::fseek(fp, 0, SEEK_END); // seek to end
+    const std::size_t filesize = std::ftell(fp);
+    std::vector&lt;std::uint8_t&gt; buffer(filesize);
+
+    std::fseek(fp, 0, SEEK_SET); // seek to start
+    std::fread(buffer.data(), sizeof(std::uint8_t), buffer.size(), fp);
+
+    std::fclose(fp);
+    std::printf("I've read %zi bytes\n", filesize);
+}
+|p=true
+|output=
+I've read 8 bytes
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc fsetpos}}
+{{dsc inc|cpp/io/c/dsc fgetpos}}
+{{dsc inc|cpp/io/c/dsc ftell}}
+{{dsc inc|cpp/io/c/dsc rewind}}
+{{dsc see c|c/io/fseek}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

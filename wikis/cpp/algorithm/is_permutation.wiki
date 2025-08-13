@@ -1,0 +1,139 @@
+{{cpp/title|is_permutation}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|since=c++11|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2 &gt;
+bool is_permutation( ForwardIt1 first1, ForwardIt1 last1,
+                     ForwardIt2 first2 );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2,
+          class BinaryPredicate &gt;
+bool is_permutation( ForwardIt1 first1, ForwardIt1 last1,
+                     ForwardIt2 first2, BinaryPredicate p );
+}}
+{{dcl|num=3|since=c++14|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2 &gt;
+bool is_permutation( ForwardIt1 first1, ForwardIt1 last1,
+                     ForwardIt2 first2, ForwardIt2 last2 );
+}}
+{{dcl|num=4|since=c++14|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2,
+          class BinaryPredicate &gt;
+bool is_permutation( ForwardIt1 first1, ForwardIt1 last1,
+                     ForwardIt2 first2, ForwardIt2 last2,
+                     BinaryPredicate p );
+}}
+{{dcl end}}
+
+Checks whether {{range|first1|last1}} is a {{enwiki|permutation}} of a range starting from {{c|first2}}:
+* For overloads {{v|1,2}}, the second range has {{c|std::distance(first1, last1)}} elements.
+* For overloads {{v|3,4}}, the second range is {{range|first2|last2}}.
+
+@1,3@ Elements are compared using {{c/core|1=operator==}}.
+
+@2,4@ Elements are compared using the given binary predicate {{c|p}}.
+
+If {{tt|ForwardIt1}} and {{tt|ForwardIt2}} have different [[cpp/iterator#Types and writability|value types]], the program is ill-formed.
+
+If the comparison function is not an {{enwiki|equivalence relation}}, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the range of elements to compare}}
+{{par|first2, last2|the second range to compare}}
+{{par pred2 eq|p|p1=InputIt1|p2=InputIt2}}
+{{par hreq}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the range {{range|first1|last1}} is a permutation of the range {{range|first2|last2}}, {{c|false}} otherwise.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first1, last1)}}:
+
+@1@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} comparisons using {{c/core|1=operator==}} if the two ranges are equal, otherwise {{mathjax-or|\(\scriptsize O(N^2)\)|O(N{{su|p=2}})}} comparisons in the worst case.
+
+@2@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} applications of the predicate {{c|p}} if the two ranges are equal, otherwise {{mathjax-or|\(\scriptsize O(N^2)\)|O(N{{su|p=2}})}} applications in the worst case.
+
+@3,4@ If {{tt|ForwardIt1}} and {{tt|ForwardIt2}} are both {{named req|RandomAccessIterator}}, and {{c|1=last1 - first1 != last2 - first2}} is {{c|true}}, no comparison will be made.
+@@ Otherwise:
+
+:@3@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} comparisons using {{c/core|1=operator==}} if the two ranges are equal, otherwise {{mathjax-or|\(\scriptsize O(N^2)\)|O(N{{su|p=2}})}} comparisons in the worst case.
+
+:@4@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} applications of the predicate {{c|p}} if the two ranges are equal, otherwise {{mathjax-or|\(\scriptsize O(N^2)\)|O(N{{su|p=2}})}} applications in the worst case.
+
+===Possible implementation===
+{{eq fun|1=
+template&lt;class ForwardIt1, class ForwardIt2&gt;
+bool is_permutation(ForwardIt1 first, ForwardIt1 last,
+                    ForwardIt2 d_first)
+{
+    // skip common prefix
+    std::tie(first, d_first) = std::mismatch(first, last, d_first);
+    
+    // iterate over the rest, counting how many times each element
+    // from [first, last) appears in [d_first, d_last)
+    if (first != last)
+    {
+        ForwardIt2 d_last = std::next(d_first, std::distance(first, last));
+        for (ForwardIt1 i = first; i != last; ++i)
+        {
+            if (i != std::find(first, i, *i))
+                continue; // this *i has been checked
+            
+            auto m = std::count(d_first, d_last, *i);
+            if (m == 0 {{!!}} std::count(i, last, *i) != m)
+                return false;
+        }
+    }
+    return true;
+}
+}}
+
+===Note===
+The {{tt|std::is_permutation}} can be used in ''testing'', namely to check the correctness of rearranging algorithms (e.g. sorting, shuffling, partitioning). If {{tt|x}} is an original range and {{tt|y}} is a ''permuted'' range then {{c|1=std::is_permutation(x, y) == true}} means that {{tt|y}} consist of ''"the same"'' elements, maybe staying at other positions.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+
+template&lt;typename Os, typename V&gt;
+Os&amp; operator&lt;&lt;(Os&amp; os, const V&amp; v)
+{
+    os &lt;&lt; "{ ";
+    for (const auto&amp; e : v)
+        os &lt;&lt; e &lt;&lt; ' ';
+    return os &lt;&lt; '}';
+}
+
+int main()
+{
+    static constexpr auto v1 = {1, 2, 3, 4, 5};
+    static constexpr auto v2 = {3, 5, 4, 1, 2};
+    static constexpr auto v3 = {3, 5, 4, 1, 1};
+    
+    std::cout &lt;&lt; v2 &lt;&lt; " is a permutation of " &lt;&lt; v1 &lt;&lt; ": " &lt;&lt; std::boolalpha
+              &lt;&lt; std::is_permutation(v1.begin(), v1.end(), v2.begin()) &lt;&lt; '\n'
+              &lt;&lt; v3 &lt;&lt; " is a permutation of " &lt;&lt; v1 &lt;&lt; ": "
+              &lt;&lt; std::is_permutation(v1.begin(), v1.end(), v3.begin()) &lt;&lt; '\n';
+}
+|output=
+{ 3 5 4 1 2 } is a permutation of { 1 2 3 4 5 }: true
+{ 3 5 4 1 1 } is a permutation of { 1 2 3 4 5 }: false
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/dsc prev_permutation}}
+{{dsc inc|cpp/concepts/dsc equivalence_relation}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_permutation}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,117 @@
+{{cpp/title|launder}}
+{{cpp/memory/new/navbar}}
+{{dcl begin}}
+{{dcl header|new}}
+{{dcl|since=c++17|
+template&lt; class T &gt;
+constexpr T* launder( T* p ) noexcept;
+}}
+{{dcl end}}
+
+Devirtualization fence with respect to {{c|p}}. Returns a pointer to an object at the same address that {{c|p}} represents, while the object can be a new base class subobject whose most derived class is different from that of the original {{c|*p}} object.
+
+Formally, given
+* the pointer {{c|p}} represents the address {{tt|A}} of a byte in memory
+* an object {{c|x}} is located at the address {{tt|A}}
+* {{c|x}} is within its [[cpp/language/lifetime|lifetime]]
+* the type of {{c|x}} is the same as {{tt|T}}, ignoring cv-qualifiers at every level
+* every byte that would be reachable through the result is reachable through p (bytes are reachable through a pointer that points to an object {{c|y}} if those bytes are within the storage of an object {{c|z}} that is [[cpp/language/static_cast#pointer-interconvertible|pointer-interconvertible]] with {{c|y}}, or within the immediately enclosing array of which {{c|z}} is an element).
+
+Then {{c|std::launder(p)}} returns a value of type {{tt|T*}} that points to the object {{c|x}}. Otherwise, the behavior is undefined.
+
+The program is ill-formed if {{tt|T}} is a function type or (possibly cv-qualified) {{c/core|void}}.
+
+{{tt|std::launder}} may be used in a [[cpp/language/constant expression|core constant expression]] if and only if the (converted) value of its argument may be used in place of the function invocation. In other words, {{tt|std::launder}} does not relax restrictions in constant evaluation.
+
+===Notes===
+{{tt|std::launder}} has no effect on its argument. Its return value must be used to access the object. Thus, it's always an error to discard the return value.
+
+Typical uses of {{tt|std::launder}} include:
+* Obtaining a pointer to an object created in the storage of an existing object of the same type, where pointers to the old object cannot be [[cpp/language/lifetime#Storage_reuse|reused]] (for instance, because either object is a base class subobject);
+* Obtaining a pointer to an object created by placement {{tt|new}} from a pointer to an object providing storage for that object.
+
+The ''reachability'' restriction ensures that {{tt|std::launder}} cannot be used to access bytes not accessible through the original pointer, thereby interfering with the compiler's escape analysis.
+
+{{source|1=
+int x[10];
+auto p = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x[0])); // OK
+
+int x2[2][10];
+auto p2 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x2[0][0]));
+// Undefined behavior: x2[1] would be reachable through the resulting pointer to x2[0]
+// but is not reachable from the source
+   
+struct X { int a[10]; } x3, x4[2]; // standard layout; assume no padding
+auto p3 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x3.a[0])); // OK
+auto p4 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x4[0].a[0]));
+// Undefined behavior: x4[1] would be reachable through the resulting pointer to x4[0].a
+// (which is pointer-interconvertible with x4[0]) but is not reachable from the source
+
+struct Y { int a[10]; double y; } x5;
+auto p5 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x5.a[0]));
+// Undefined behavior: x5.y would be reachable through the resulting pointer to x5.a
+// but is not reachable from the source
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;new&gt;
+
+struct Base
+{
+    virtual int transmogrify();
+};
+
+struct Derived : Base
+{
+    int transmogrify() override
+    {
+        new(this) Base;
+        return 2;
+    }
+};
+
+int Base::transmogrify()
+{
+    new(this) Derived;
+    return 1;
+}
+
+static_assert(sizeof(Derived) == sizeof(Base));
+
+int main()
+{
+    // Case 1: the new object failed to be transparently replaceable because
+    // it is a base subobject but the old object is a complete object.
+    Base base;
+    int n = base.transmogrify();
+    // int m = base.transmogrify(); // undefined behavior
+    int m = std::launder(&amp;base)-&gt;transmogrify(); // OK
+    assert(m + n == 3);
+    
+    // Case 2: access to a new object whose storage is provided
+    // by a byte array through a pointer to the array.
+    struct Y { int z; };
+    alignas(Y) std::byte s[sizeof(Y)];
+    Y* q = new(&amp;s) Y{2};
+    const int f = reinterpret_cast&lt;Y*&gt;(&amp;s)-&gt;z; // Class member access is undefined
+                                               // behavior: reinterpret_cast&lt;Y*&gt;(&amp;s)
+                                               // has value "pointer to s" and does
+                                               // not point to a Y object
+    const int g = q-&gt;z; // OK
+    const int h = std::launder(reinterpret_cast&lt;Y*&gt;(&amp;s))-&gt;z; // OK
+    
+    [](...){}(f, g, h); // evokes [[maybe_unused]] effect
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2859|std=C++17|before=definition of ''reachable'' did not consider pointer&lt;br&gt;arithmetic from pointer-interconvertible object|after=included}}
+{{dr list item|wg=lwg|dr=3495|std=C++17|before={{tt|std::launder}} might make pointer to an inactive&lt;br&gt;member dereferenceable in constant expression|after=forbidden}}
+{{dr list end}}
+
+{{langlinks|de|es|ja|ru|zh}}

@@ -1,0 +1,95 @@
+{{title|{{tt|constinit}} specifier {{mark since c++20}}}}
+{{cpp/language/declarations/navbar}}
+
+:* {{ttb|constinit}} - asserts that a variable has static initialization, i.e. {{rlp|zero initialization}} and {{rlp|constant initialization}}, otherwise the program is ill-formed.
+
+===Explanation===
+The {{c/core|constinit}} specifier declares a variable with static or thread {{rlp|storage duration}}.
+
+{{rrev|since=c++26|
+The {{c/core|constinit}} specifier can also be applied to {{rlp|structured binding}} declarations. In this case, {{c/core|constinit}} is also applied to the {{rlp|structured binding#Binding process|uniquely-named variable}} introduced by the declaration.
+}}
+
+If a variable is declared with {{c/core|constinit}}, its {{rlp|initialization|initializing declaration}} must be applied with {{c/core|constinit}}. If a variable declared with {{c/core|constinit}} has {{rlp|initialization#Dynamic initialization|dynamic initialization}} (even if it is {{rlp|initialization#Early dynamic initialization|performed as static initialization}}), the program is ill-formed.
+
+If no {{c/core|constinit}} declaration is reachable at the point of the initializing declaration, the program is ill-formed, no diagnostic required.
+
+{{c/core|constinit}} cannot be used together with {{c/core|constexpr}}. When the declared variable is a reference, {{c/core|constinit}} is equivalent to {{c/core|constexpr}}. When the declared variable is an object, {{c/core|constexpr}} mandates that the object must have static initialization and constant destruction and makes the object const-qualified, however, {{c/core|constinit}} does not mandate constant destruction and const-qualification. As a result, an object of a type which has constexpr constructors and no constexpr destructor (e.g. {{c/core|std::shared_ptr&lt;T&gt;}}) might be declared with {{c/core|constinit}} but not {{c/core|constexpr}}.
+
+{{source|1=
+const char* g() { return "dynamic initialization"; }
+constexpr const char* f(bool p) { return p ? "constant initializer" : g(); }
+
+constinit const char* c = f(true);     // OK
+// constinit const char* d = f(false); // error
+}}
+
+{{c/core|constinit}} can also be used in a non-initializing declaration to tell the compiler that a {{c/core|thread_local}} variable is already initialized, {{rlp|storage duration#Static local variables|reducing overhead}} that would otherwise be incurred by a hidden guard variable.
+
+{{source|1=
+extern thread_local constinit int x;
+int f() { return x; } // no check of a guard variable needed
+}}
+
+===Notes===
+{{feature test macro|std=C++20|value=201907L|__cpp_constinit|{{tt|constinit}}}}
+
+===Keywords===
+{{ltt|cpp/keyword/constinit}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+
+constexpr int square(int i)
+{
+    return i * i;
+}
+
+int twice(int i)
+{
+    return i + i;
+}
+
+constinit int sq = square(2);    // OK: initialization is done at compile time
+// constinit int x_x = twice(2); // Error: compile time initializer required
+
+int square_4_gen()
+{
+    static constinit int pow = square(4);
+    
+    // constinit int prev = pow; // Error: constinit can only be applied to a
+                                 // variable with static or thread storage duration
+    int prev = pow;
+    pow = pow * pow;
+    return prev;
+}
+
+int main()
+{
+    assert(sq == 4);
+    sq = twice(1); // Unlike constexpr this value can be changed later at runtime
+    assert(sq == 2);
+    
+    assert(square_4_gen() == 16);
+    assert(square_4_gen() == 256);
+    assert(square_4_gen() == 65536);
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2543|std=C++20|before=the behavior was unclear if the variable declared with {{c/core|constinit}}&lt;br&gt;is dynamically initialized as part of static initialization|after=the program is ill-&lt;br&gt;formed in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc consteval}}
+{{dsc inc|cpp/language/dsc constexpr}}
+{{dsc|{{rlp|constant expression}}|defines an {{rlp|expressions|expression}} that can be evaluated at compile time}}
+{{dsc|{{rlp|constant initialization}}|sets the initial values of the {{rlp|storage duration|static}} variables to a compile-time constant}}
+{{dsc|{{rlp|zero initialization}}|sets the initial value of an object to zero}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

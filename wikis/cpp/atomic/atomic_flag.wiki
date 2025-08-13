@@ -1,0 +1,111 @@
+{{cpp/title|atomic_flag}}
+{{cpp/atomic/atomic_flag/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|since=c++11|1=
+class atomic_flag;
+}}
+{{dcl end}}
+
+{{tt|std::atomic_flag}} is an atomic boolean type. Unlike all specializations of {{lc|std::atomic}}, it is guaranteed to be lock-free. Unlike {{c/core|std::atomic&lt;bool&gt;}}, {{tt|std::atomic_flag}} does not provide load or store operations.
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|cpp/atomic/atomic_flag/atomic_flag|constructs an atomic_flag}}
+{{dsc mem fun|cpp/atomic/atomic_flag/operator{{=}}|notes={{cmark deleted}}|the assignment operator (deleted)}}
+{{dsc inc|cpp/atomic/atomic_flag/dsc clear}}
+{{dsc inc|cpp/atomic/atomic_flag/dsc test_and_set}}
+{{dsc inc|cpp/atomic/atomic_flag/dsc test}}
+{{dsc inc|cpp/atomic/atomic/dsc wait|atomic_flag}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_one|atomic_flag}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_all|atomic_flag}}
+{{dsc end}}
+
+===Example===
+&lt;!-- Note that https://en.cppreference.com/w/cpp/atomic/memory_order#Release-Acquire_ordering refers to here for spinlock --&gt;
+{{example
+|A [[enwiki:Spinlock|spinlock]] mutex demo can be implemented in userspace using an {{lc|atomic_flag}}. Do note that spinlock mutexes are [https://www.realworldtech.com/forum/?threadid{{=}}189711&amp;curpostid{{=}}189723 extremely dubious] in practice.
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+class mutex
+{
+    std::atomic_flag m_{};
+
+  public:
+    void lock() noexcept
+    {
+        while (m_.test_and_set(std::memory_order_acquire))
+#if defined(__cpp_lib_atomic_wait) &amp;&amp; __cpp_lib_atomic_wait &gt;= 201907L
+            // Since C++20, locks can be acquired only after notification in the unlock,
+            // avoiding any unnecessary spinning.
+            // Note that even though wait guarantees it returns only after the value has
+            // changed, the lock is acquired after the next condition check.
+            m_.wait(true, std::memory_order_relaxed)
+#endif
+                ;
+    }
+    bool try_lock() noexcept
+    {
+        return !m_.test_and_set(std::memory_order_acquire);
+    }
+    void unlock() noexcept
+    {
+        m_.clear(std::memory_order_release);
+#if defined(__cpp_lib_atomic_wait) &amp;&amp; __cpp_lib_atomic_wait &gt;= 201907L
+        m_.notify_one();
+#endif
+    }
+};
+
+static mutex m;
+
+static int out{};
+
+void f(std::size_t n)
+{
+    for (std::size_t cnt{}; cnt &lt; 40; ++cnt)
+    {
+        std::lock_guard lock{m};
+        std::cout &lt;&lt; n &lt;&lt; ((++out % 40) == 0 ? '\n' : ' ');
+    }
+}
+
+int main()
+{
+    std::vector&lt;std::thread&gt; v;
+    for (std::size_t n{}; n &lt; 10; ++n)
+        v.emplace_back(f, n);
+    for (auto &amp;t : v)
+        t.join();
+}
+|p=true
+|output=
+0 1 1 2 0 1 3 2 3 2 0 1 2 3 2 3 0 1 3 2 0 1 2 3 2 3 0 3 2 3 2 3 2 3 1 2 3 0 1 3
+2 3 2 0 1 2 3 0 1 2 3 2 0 1 2 3 0 1 2 3 2 3 2 3 2 0 1 2 3 2 3 0 1 3 2 3 0 2 1 1
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 3 2 0 2 3 2 3 2 3 2 3 2 3 0 3
+2 3 0 3 0 3 2 3 0 3 2 3 2 3 0 2 3 0 3 2 0 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4
+5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5
+6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6
+7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7
+8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8
+9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_test_and_set}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_clear}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_wait}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_notify_one}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_notify_all}}
+{{dsc inc|cpp/atomic/dsc ATOMIC_FLAG_INIT}}
+{{dsc see c|c/atomic/atomic_flag}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,144 @@
+{{cpp/ranges/title|min}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr const T&amp;
+    min( const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; std::copyable T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr T
+    min( std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; ranges::input_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;,
+                                           ranges::range_value_t&lt;R&gt;*&gt;
+constexpr ranges::range_value_t&lt;R&gt;
+    min( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Returns the smaller of the given projected elements.
+
+@1@ Returns the smaller of {{c|a}} and {{c|b}}.
+@2@ Returns the first smallest element in the initializer list {{c|r}}.
+@3@ Returns the first smallest value in the range {{c|r}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|a, b|the values to compare}}
+{{par|r|the range of values to compare}}
+{{par|comp|comparison to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+@1@ The smaller of {{c|a}} and {{c|b}}, according to the projection. If they are equivalent, returns {{c|a}}.
+
+@2,3@ The smallest element in {{c|r}}, according to the projection. If several values are equivalent to the smallest, returns the leftmost one. If the range is empty (as determined by {{c|ranges::distance(r)}}), the behavior is undefined.
+
+===Complexity===
+@1@ Exactly one comparison.
+
+@2,3@ Exactly {{c|ranges::distance(r) - 1}} comparisons.
+
+===Possible implementation===
+{{eq fun
+|1=
+struct min_fn
+{
+    template&lt;class T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr
+    const T&amp; operator()(const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {}) const
+    {
+        return std::invoke(comp, std::invoke(proj, b), std::invoke(proj, a)) ? b : a;
+    }
+
+    template&lt;std::copyable T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr
+    T operator()(std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return *ranges::min_element(r, std::ref(comp), std::ref(proj));
+    }
+
+    template&lt;ranges::input_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                  std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;,
+                                               ranges::range_value_t&lt;R&gt;*&gt;
+    constexpr
+    ranges::range_value_t&lt;R&gt; operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        using V = ranges::range_value_t&lt;R&gt;;
+        if constexpr (ranges::forward_range&lt;R&gt;)
+            return
+                static_cast&lt;V&gt;(*ranges::min_element(r, std::ref(comp), std::ref(proj)));
+        else
+        {
+            auto i = ranges::begin(r);
+            auto s = ranges::end(r);
+            V m(*i);
+            while (++i != s)
+                if (std::invoke(comp, std::invoke(proj, *i), std::invoke(proj, m)))
+                    m = *i;
+            return m;
+        }
+    }
+};
+
+inline constexpr min_fn min;
+}}
+
+===Notes===
+{{cpp/algorithm/minmax_danger_note|ranges::min}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    namespace ranges = std::ranges;
+    using namespace std::string_view_literals;
+
+    std::cout &lt;&lt; "smaller of 1 and 9999: " &lt;&lt; ranges::min(1, 9999) &lt;&lt; '\n'
+              &lt;&lt; "smaller of 'a', and 'b': '" &lt;&lt; ranges::min('a', 'b') &lt;&lt; "'\n"
+              &lt;&lt; "shortest of \"foo\", \"bar\", and \"hello\": \""
+              &lt;&lt; ranges::min({"foo"sv, "bar"sv, "hello"sv}, {},
+                             &amp;std::string_view::size) &lt;&lt; "\"\n";
+}
+|output=
+smaller of 1 and 9999: 1
+smaller of 'a', and 'b': 'a'
+shortest of "foo", "bar", and "hello": "foo"
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc max}}
+{{dsc inc|cpp/algorithm/ranges/dsc minmax}}
+{{dsc inc|cpp/algorithm/ranges/dsc min_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc clamp}}
+{{dsc inc|cpp/algorithm/dsc min}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

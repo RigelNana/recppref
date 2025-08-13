@@ -1,0 +1,129 @@
+{{cpp/title|unwrap_reference|unwrap_ref_decay}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl header|functional}}
+{{dcl|num=1|since=c++20|
+template&lt; class T &gt;
+struct unwrap_reference;
+}}
+{{dcl|num=2|since=c++20|
+template&lt; class T &gt;
+struct unwrap_ref_decay;
+}}
+{{dcl end}}
+
+Unwraps any {{lc|std::reference_wrapper}}: changing {{c/core|std::reference_wrapper&lt;U&gt;}} to {{tt|U&amp;}}.
+
+@1@ If {{tt|T}} is a specialization of {{lc|std::reference_wrapper}}, unwraps it; otherwise, {{tt|T}} remains the same.
+
+@2@ If the decayed {{tt|T}} is a specialization of {{lc|std::reference_wrapper}}, unwraps it; otherwise, {{tt|T}} is decayed.
+
+{{cpp/types/nospec|any}}
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|type}}|
+{{v|1}} {{tt|U&amp;}} if {{tt|T}} is {{c/core|std::reference_wrapper&lt;U&gt;}}; {{tt|T}} otherwise&lt;br&gt;
+{{v|2}} {{tt|U&amp;}} if {{c/core|std::decay_t&lt;T&gt;}} is {{c/core|std::reference_wrapper&lt;U&gt;}}; {{c/core|std::decay_t&lt;T&gt;}} otherwise}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+template&lt;class T&gt;
+using unwrap_reference_t = unwrap_reference&lt;T&gt;::type;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt;class T&gt;
+using unwrap_ref_decay_t = unwrap_ref_decay&lt;T&gt;::type;
+}}
+{{dcl end}}
+
+===Possible implementation===
+{{eq fun|1=
+template&lt;class T&gt;
+struct unwrap_reference { using type = T; };
+template&lt;class U&gt;
+struct unwrap_reference&lt;std::reference_wrapper&lt;U&gt;&gt; { using type = U&amp;; };
+
+template&lt;class T&gt;
+struct unwrap_ref_decay : std::unwrap_reference&lt;std::decay_t&lt;T&gt;&gt; {};
+}}
+
+===Notes===
+{{tt|std::unwrap_ref_decay}} performs the same transformation as used by {{lc|std::make_pair}} and {{lc|std::make_tuple}}.
+
+{{feature test macro|__cpp_lib_unwrap_ref|{{tt|std::unwrap_ref_decay}} and {{tt|std::unwrap_reference}}|std=C++20|value=201811L}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int&gt;, int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;const int&gt;, const int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int&amp;&gt;, int&amp;&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int&amp;&amp;&gt;, int&amp;&amp;&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int*&gt;, int*&gt;);
+    
+    {
+        using T = std::reference_wrapper&lt;int&gt;;
+        using X = std::unwrap_reference_t&lt;T&gt;;
+        static_assert(std::is_same_v&lt;X, int&amp;&gt;);
+    }
+    {
+        using T = std::reference_wrapper&lt;int&amp;&gt;;
+        using X = std::unwrap_reference_t&lt;T&gt;;
+        static_assert(std::is_same_v&lt;X, int&amp;&gt;);
+    }
+    
+    static_assert(std::is_same_v&lt;std::unwrap_ref_decay_t&lt;int&gt;, int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_ref_decay_t&lt;const int&gt;, int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_ref_decay_t&lt;const int&amp;&gt;, int&gt;);
+    
+    {
+        using T = std::reference_wrapper&lt;int&amp;&amp;&gt;;
+        using X = std::unwrap_ref_decay_t&lt;T&gt;;
+        static_assert(std::is_same_v&lt;X, int&amp;&gt;);
+    }
+    
+    {
+        auto reset = []&lt;typename T&gt;(T&amp;&amp; z)
+        {
+        //  x = 0; // Error: does not work if T is reference_wrapper&lt;&gt;
+            // converts T&amp;&amp; into T&amp; for ordinary types
+            // converts T&amp;&amp; into U&amp; for reference_wrapper&lt;U&gt;
+            decltype(auto) r = std::unwrap_reference_t&lt;T&gt;(z);
+            std::cout &lt;&lt; "r: " &lt;&lt; r &lt;&lt; '\n';
+            r = 0; // OK, r has reference type
+        };
+        
+        int x = 1;
+        reset(x);
+        assert(x == 0);
+        
+        int y = 2;
+        reset(std::ref(y));
+        assert(y == 0);
+    }
+}
+|output=
+r: 1
+r: 2
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc reference_wrapper}}
+{{dsc inc|cpp/utility/pair/dsc make_pair}}
+{{dsc inc|cpp/utility/tuple/dsc make_tuple}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

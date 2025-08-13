@@ -1,0 +1,194 @@
+{{cpp/thread/jthread/title|jthread}}
+{{cpp/thread/jthread/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+jthread() noexcept;
+}}
+{{dcl|num=2|since=c++20|
+jthread( jthread&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=3|since=c++20|
+template&lt; class F, class... Args &gt; 
+explicit jthread( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++20|1=
+jthread( const jthread&amp; ) = delete;
+}}
+{{dcl end}}
+
+Constructs new {{tt|std::jthread}} object.
+
+@1@ Creates new {{tt|std::jthread}} object which does not represent a thread.
+
+@2@ Move constructor. Constructs the {{tt|std::jthread}} object to represent the thread of execution that was represented by {{c|other}}. After this call {{c|other}} no longer represents a thread of execution.
+
+@3@ Creates new {{tt|std::jthread}} object and associates it with a thread of execution. 
+The new thread of execution starts executing:
+{{rev begin}}
+{{rev|until=c++23|{{box|{{c/core|std::invoke(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)), get_stop_token(),}}&lt;br&gt;{{tt|{{nbsp|12}}}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}}
+}}
+{{rev|since=c++23|
+{{c multi|std::invoke(auto(std::forward&lt;F&gt;(f)), get_stop_token(),|            auto(std::forward&lt;Args&gt;(args))...)}}
+}}
+{{rev end}}
+if the expression above is well-formed, otherwise starts executing:
+{{rev begin}}
+{{rev|until=c++23|{{box|{{c/core|std::invoke(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{tt|{{nbsp|12}}}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}}.
+}}
+{{rev|since=c++23|
+{{c multi|std::invoke(auto(std::forward&lt;F&gt;(f)),|            auto(std::forward&lt;Args&gt;(args))...)}}.
+}}
+{{rev end}}
+
+@@ {{rev inl|until=c++23|The calls of {{lti|cpp/standard library/decay-copy}} are evaluated}}{{rev inl|since=c++23|The values produced by {{c/core|auto}} are [[cpp/language/implicit conversion#Temporary materialization|materialized]]}} in the current thread, so that any exceptions thrown during evaluation and copying/moving of the arguments are thrown in the current thread, without starting the new thread.
+
+@@ {{cpp/enable if|plural=yes|{{c/core|std::remove_cvref_t&lt;F&gt;}} is not the same type as {{tt|std::jthread}}}}.
+
+@@ If any of the following is {{c|false}}, the program is ill-formed:
+* {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}}
+* {{c|(std::is_constructible_v&lt;std::decay_t&lt;Args&gt;, Args&gt; &amp;&amp; ...)}}
+* {{c multi|std::is_invocable_v&lt;std::decay_t&lt;F&gt;, std::decay_t&lt;Args&gt;...&gt; {{!!}}|std::is_invocable_v&lt;std::decay_t&lt;F&gt;, std::stop_token, std::decay_t&lt;Args&gt;...&gt;}}
+
+@@ The completion of the invocation of the constructor [[cpp/atomic/memory_order|synchronizes with]] the beginning of the invocation of the copy of {{c|f}} on the new thread of execution.
+
+@4@ The copy constructor is deleted; threads are not copyable. No two {{tt|std::jthread}} objects may represent the same thread of execution.
+
+===Parameters===
+{{par begin}}
+{{par|other|another {{tt|std::jthread}} object to construct this {{tt|std::jthread}} object with}}
+{{par|f|{{named req|Callable}} object to execute in the new thread}}
+{{par|args|arguments to pass to the new function}}
+{{par end}}
+
+===Postconditions===
+@1@ {{rlpf|get_id}} equal to {{ltt|cpp/thread/thread/id|std::jthread::id()}} (i.e. {{rlpf|joinable}} returns {{c|false}}) and {{c|get_stop_source().stop_possible()}} is {{c|false}}.
+@2@ {{c|other.get_id()}} equal to {{ltt|cpp/thread/thread/id|std::jthread::id()}} and {{rlpf|get_id}} returns the value of {{c|other.get_id()}} prior to the start of construction.
+@3@ {{rlpf|get_id}} not equal to {{ltt|cpp/thread/thread/id|std::jthread::id()}} (i.e. {{rlpf|joinable}} returns {{c|true}}), and {{c|get_stop_source().stop_possible()}} is {{c|true}}.
+
+===Exceptions===
+@3@ {{lc|std::system_error}} if the thread could not be started. The exception may represent the error condition {{tt|std::errc::resource_unavailable_try_again}} or another implementation-specific error condition.
+
+===Notes===
+The arguments to the thread function are moved or copied by value. If a reference argument needs to be passed to the thread function, it has to be wrapped (e.g. with {{lc|std::ref}} or {{lc|std::cref}}).
+
+Any return value from the function is ignored. If the function throws an exception, {{lc|std::terminate}} is called. In order to pass return values or exceptions back to the calling thread, {{lc|std::promise}} or {{lc|std::async}} may be used.
+
+===Example===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;utility&gt;
+
+using namespace std::literals;
+
+void f1(int n)
+{
+    for (int i = 0; i &lt; 5; ++i)
+    {
+        std::cout &lt;&lt; "Thread 1 executing\n";
+        ++n;
+        std::this_thread::sleep_for(10ms);
+    }
+}
+ 
+void f2(int&amp; n)
+{
+    for (int i = 0; i &lt; 5; ++i)
+    {
+        std::cout &lt;&lt; "Thread 2 executing\n";
+        ++n;
+        std::this_thread::sleep_for(10ms);
+    }
+}
+ 
+class foo
+{
+public:
+    void bar()
+    {
+        for (int i = 0; i &lt; 5; ++i)
+        {
+            std::cout &lt;&lt; "Thread 3 executing\n";
+            ++n;
+            std::this_thread::sleep_for(10ms);
+        }
+    }
+    int n = 0;
+};
+
+class baz
+{
+public:
+    void operator()()
+    {
+        for (int i = 0; i &lt; 5; ++i)
+        {
+            std::cout &lt;&lt; "Thread 4 executing\n";
+            ++n;
+            std::this_thread::sleep_for(10ms);
+        }
+    }
+    int n = 0;
+};
+ 
+int main()
+{
+    int n = 0;
+    foo f;
+    baz b;
+    std::jthread t0; // t0 is not a thread
+    std::jthread t1(f1, n + 1); // pass by value
+    std::jthread t2a(f2, std::ref(n)); // pass by reference
+    std::jthread t2b(std::move(t2a)); // t2b is now running f2(). t2a is no longer a thread
+    std::jthread t3(&amp;foo::bar, &amp;f); // t3 runs foo::bar() on object f
+    std::jthread t4(b); // t4 runs baz::operator() on a copy of object b
+    t1.join();
+    t2b.join();
+    t3.join();
+    std::cout &lt;&lt; "Final value of n is " &lt;&lt; n &lt;&lt; '\n';
+    std::cout &lt;&lt; "Final value of f.n (foo::n) is " &lt;&lt; f.n &lt;&lt; '\n';
+    std::cout &lt;&lt; "Final value of b.n (baz::n) is " &lt;&lt; b.n &lt;&lt; '\n';
+    // t4 joins on destruction
+}
+|p=true
+|output=
+Thread 2 executing
+Thread 1 executing
+Thread 4 executing
+Thread 3 executing
+Thread 3 executing
+Thread 4 executing
+Thread 2 executing
+Thread 1 executing
+Thread 3 executing
+Thread 1 executing
+Thread 4 executing
+Thread 2 executing
+Thread 3 executing
+Thread 1 executing
+Thread 4 executing
+Thread 2 executing
+Thread 3 executing
+Thread 1 executing
+Thread 4 executing
+Thread 2 executing
+Final value of n is 5
+Final value of f.n (foo::n) is 5
+Final value of b.n (baz::n) is 0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3476|std=C++20|before=overload {{v|3}} directly required (the decayed types of)&lt;br&gt;{{tt|F}} and the argument types to be move constructible|after=removed these&lt;br&gt;requirements&lt;ref&gt;The move-constructibility is already indirectly required by {{lc|std::is_constructible_v}}.&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/thread/dsc constructor}}
+{{dsc see c|c/thread/thrd_create}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

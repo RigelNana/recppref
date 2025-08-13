@@ -1,0 +1,137 @@
+{{cpp/ranges/title|clamp}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|1=
+template&lt; class T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;std::projected&lt;const T*, Proj&gt;&gt; Comp =
+              ranges::less &gt;
+constexpr const T&amp;
+    clamp( const T&amp; v, const T&amp; lo, const T&amp; hi, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+If the value of {{c|v}} is within {{closed range|lo|hi}}, returns {{c|v}}; otherwise returns the nearest boundary.
+
+The behavior is undefined if {{c|lo}} is greater than {{c|hi}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|v|the value to clamp}}
+{{par|lo, hi|the boundaries to clamp {{c|v}} to}}
+{{par|comp|the comparison to apply to the projected elements}}
+{{par|proj|the projection to apply to {{c|v}}, {{c|lo}} and {{c|hi}}}}
+{{par end}}
+
+===Return value===
+Reference to {{c|lo}} if the projected value of {{c|v}} is less than the projected value of {{c|lo}}, reference to {{c|hi}} if the projected value of {{c|hi}} is less than the projected value of {{c|v}}, otherwise reference to {{c|v}}.
+
+===Complexity===
+At most two comparisons and three applications of the projection.
+
+===Possible implementation===
+{{eq fun
+|1=
+struct clamp_fn
+{
+    template&lt;class T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;std::projected&lt;const T*, Proj&gt;&gt;
+                 Comp = std::ranges::less&gt;
+    constexpr const T&amp; operator()(const T&amp; v, const T&amp; lo, const T&amp; hi,
+                                  Comp comp = {}, Proj proj = {}) const
+    {
+        auto&amp;&amp; pv = std::invoke(proj, v);
+
+        if (std::invoke(comp, std::forward&lt;decltype(pv)&gt;(pv), std::invoke(proj, lo)))
+            return lo;
+
+        if (std::invoke(comp, std::invoke(proj, hi), std::forward&lt;decltype(pv)&gt;(pv)))
+            return hi;
+
+        return v;
+    }
+};
+
+inline constexpr clamp_fn clamp;
+}}
+
+===Notes===
+{{include|cpp/algorithm/minmax_danger_note|ranges::clamp}}
+
+If {{c|v}} compares equivalent to either bound, returns a reference to {{c|v}}, not the bound.
+
+This function should not be used with both a projection the returns by value and comparator that takes arguments by value unless a move from the projection result type to the comparator parameter type is equivalent to a copy. If the comparison via {{lc|std::invoke}} would change the result of projection, the behavior is undefined due to [[cpp/concepts/invocable|the semantic requirements of {{tt|std::regular_invocable}}]] (subsumed by {{lc|std::indirect_strict_weak_order}}).
+
+The standard requires that the value category of the result of the projection be preserved, and {{c|proj}} can only be called on {{c|v}} once, which means that a projection result that is a prvalue has to be cached and moved from twice for the two calls to the comparator.
+* [https://github.com/gcc-mirror/gcc/blob/f3169941996c76ecbfae9c37709d2b57652be555/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L3196-L3218 libstdc++] does not conform to this and always passes the projection result as an lvalue.
+* [https://github.com/llvm/llvm-project/issues/64717 libc++] used to run the projection twice, which was corrected in Clang 18.
+* [https://github.com/microsoft/STL/issues/1893 MSVC STL] used to run the projection twice, which was corrected in VS 2022 17.2.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstdint&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+using namespace std::literals;
+namespace ranges = std::ranges;
+
+int main()
+{
+    std::cout &lt;&lt; "[raw] [" &lt;&lt; INT8_MIN &lt;&lt; ',' &lt;&lt; INT8_MAX &lt;&lt; "] "
+                 "[0" &lt;&lt; ',' &lt;&lt; UINT8_MAX &lt;&lt; "]\n";
+    for (int const v : {-129, -128, -1, 0, 42, 127, 128, 255, 256})
+        std::cout &lt;&lt; std::setw(4) &lt;&lt; v
+                  &lt;&lt; std::setw(11) &lt;&lt; ranges::clamp(v, INT8_MIN, INT8_MAX)
+                  &lt;&lt; std::setw(8) &lt;&lt; ranges::clamp(v, 0, UINT8_MAX) &lt;&lt; '\n';
+    std::cout &lt;&lt; std::string(23, '-') &lt;&lt; '\n';
+
+    // Projection function
+    const auto stoi = [](std::string s) { return std::stoi(s); };
+
+    // Same as above, but with strings
+    for (std::string const v : {"-129", "-128", "-1", "0", "42",
+                                "127", "128", "255", "256"})
+        std::cout &lt;&lt; std::setw(4) &lt;&lt; v
+                  &lt;&lt; std::setw(11) &lt;&lt; ranges::clamp(v, "-128"s, "127"s, {}, stoi)
+                  &lt;&lt; std::setw(8) &lt;&lt; ranges::clamp(v, "0"s, "255"s, {}, stoi)
+                  &lt;&lt; '\n';
+}
+|output=
+[raw] [-128,127] [0,255]
+-129       -128       0
+-128       -128       0
+  -1         -1       0
+   0          0       0
+  42         42      42
+ 127        127     127
+ 128        127     128
+ 255        127     255
+ 256        127     255
+-----------------------
+-129       -128       0
+-128       -128       0
+  -1         -1       0
+   0          0       0
+  42         42      42
+ 127        127     127
+ 128        127     128
+ 255        127     255
+ 256        127     255
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc min}}
+{{dsc inc|cpp/algorithm/ranges/dsc max}}
+{{dsc inc|cpp/utility/dsc in_range}}
+{{dsc inc|cpp/algorithm/dsc clamp}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

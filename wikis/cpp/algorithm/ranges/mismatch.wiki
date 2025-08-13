@@ -1,0 +1,145 @@
+{{cpp/ranges/title|mismatch|mismatch_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr mismatch_result&lt;I1, I2&gt;
+    mismatch( I1 first1, S1 last1, I2 first2, S2 last2,
+              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;
+             ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;, Pred, Proj1, Proj2&gt;
+constexpr mismatch_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                          ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+    mismatch( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+              Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I1, class I2 &gt;
+using mismatch_result = ranges::in_in_result&lt;I1, I2&gt;;
+}}
+{{dcl end}}
+
+Returns the first mismatching pair of projected elements from two ranges: one defined by {{range|first1|last1}} or {{c|r1}} and another defined by {{range|first2|last2}} or {{c|r2}}.
+
+@1@ Elements are compared using the given binary predicate {{c|p}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|an iterator-sentinel pair denoting the first range of the elements to compare}}
+{{par|r1|the first range of the elements to compare}}
+{{par|first2, last2|an iterator-sentinel pair denoting the second range of the elements to compare}}
+{{par|r2|the second range of the elements to compare}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj1|projection to apply to the first range of elements}}
+{{par|proj2|projection to apply to the second range of elements}}
+{{par end}}
+
+===Return value===
+{{tt|ranges::mismatch_result}} with iterators to the first two non-equal elements.
+
+If no mismatches are found when the comparison reaches {{c|last1}} or {{c|last2}}, whichever happens first, the object holds the end iterator and the corresponding iterator from the other range.
+
+===Complexity===
+At most {{c|std::min(last1 - first1, last2 - first2)}} applications of the predicate and corresponding projections.
+
+===Possible implementation===
+{{eq fun|1=
+struct mismatch_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr std::mismatch_result&lt;I1, I2&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                   Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        for (; first1 != last1 &amp;&amp; first2 != last2; ++first1, (void)++first2)
+            if (not std::invoke(pred, std::invoke(proj1, *first1),
+                                      std::invoke(proj2, *first2)))
+                break;
+
+        return {first1, first2};
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                        Pred, Proj1, Proj2&gt;
+    constexpr ranges::mismatch_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                      ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::ref(pred), std::ref(proj1), std::ref(proj2));
+    }
+};
+
+inline constexpr mismatch_fn mismatch;
+}}
+
+===Example===
+{{example
+|This program determines the longest substring that is simultaneously found at the very beginning and at the very end of the given string, in reverse order (possibly overlapping).
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+ 
+[[nodiscard]]
+constexpr std::string_view mirror_ends(const std::string_view in)
+{
+    const auto end = std::ranges::mismatch(in, in {{!}} std::views::reverse).in1;
+    return {in.cbegin(), end};
+}
+ 
+int main()
+{
+    std::cout &lt;&lt; mirror_ends("abXYZba") &lt;&lt; '\n'
+              &lt;&lt; mirror_ends("abca") &lt;&lt; '\n'
+              &lt;&lt; mirror_ends("ABBA") &lt;&lt; '\n'
+              &lt;&lt; mirror_ends("level") &lt;&lt; '\n';
+
+    using namespace std::literals::string_view_literals;
+
+    static_assert("123"sv == mirror_ends("123!@#321"));
+    static_assert("radar"sv == mirror_ends("radar"));
+}
+|output=
+ab
+a
+ABBA
+level
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc lexicographical_compare}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/dsc mismatch}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,157 @@
+{{cpp/title|tuple_element}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl header|array}}
+{{dcl header|utility}}
+{{dcl header|ranges|notes={{mark since c++20}}}}
+{{dcl header|complex|notes={{mark since c++26}}}}
+{{dcl|num=1|since=c++11|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element; // not defined
+}}
+{{dcl|num=2|since=c++11|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element&lt; I, const T &gt; {
+    using type = typename
+        std::add_const&lt;typename std::tuple_element&lt;I, T&gt;::type&gt;::type;
+};
+}}
+{{dcl|num=3|since=c++11|deprecated=c++20|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element&lt; I, volatile T &gt; {
+    using type = typename
+        std::add_volatile&lt;typename std::tuple_element&lt;I, T&gt;::type&gt;::type;
+};
+}}
+{{dcl|num=4|since=c++11|deprecated=c++20|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element&lt; I, const volatile T &gt; {
+    using type = typename
+        std::add_cv&lt;typename std::tuple_element&lt;I, T&gt;::type&gt;::type;
+};
+}}
+{{dcl end}}
+
+Provides compile-time indexed access to the types of the elements of a {{lt|cpp/utility/tuple/tuple-like}} type.
+
+@1@ The primary template is not defined. An explicit (full) or partial specialization is required to make a type tuple-like.
+
+@2-4@ Specializations for cv-qualified types simply add corresponding cv-qualifiers by default.
+
+{{rrev|since=c++17|
+{{tt|std::tuple_element}} interacts with the core language: it can provide {{lt|cpp/language/structured binding}} support in the tuple-like case.
+}}
+
+===Specializations===
+The standard library provides following specializations for standard library types:
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_element}}
+{{dsc inc|cpp/utility/pair/dsc tuple_element}}
+{{dsc inc|cpp/container/array/dsc tuple_element}}
+{{dsc inc|cpp/ranges/subrange/dsc tuple_element}}
+{{dsc inc|cpp/numeric/complex/dsc tuple_element}}
+{{dsc end}}
+
+Users may specialize {{tt|std::tuple_element}} for program-defined types to make them tuple-like.
+
+In normal cases where the {{tt|get}} functions returns reference members or reference to subobjects, only specializations for cv-unqualified types are needed to be customized.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|type|for a standard specialization, the type of {{tt|I}}{{sup|th}} element of the {{lt|cpp/utility/tuple/tuple-like}} type {{tt|T}}, where {{tt|I}} is in {{range|0|std::tuple_size&lt;T&gt;::value}}}}
+{{dsc end}}
+
+===Helper types===
+{{ddcl|header=tuple|since=c++14|1=
+template&lt; std::size_t I, class T &gt;
+using tuple_element_t = typename tuple_element&lt;I, T&gt;::type;
+}}
+
+===Notes===
+{{feature test macro|__cpp_lib_tuple_element_t|{{tt|std::tuple_element_t}}|value=201402L|std=C++14}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;tuple&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+template&lt;typename T1, typename T2, typename T3&gt;
+struct Triple
+{
+    T1 t1;
+    T2 t2;
+    T3 t3;
+};
+
+// A specialization of std::tuple_element for program-defined type Triple:
+template&lt;std::size_t I, typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;I, Triple&lt;T1, T2, T3&gt;&gt;
+    { static_assert(false, "Invalid index"); }; &lt;!-- CWG2518 --&gt;
+template&lt;typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;0, Triple&lt;T1, T2, T3&gt;&gt; { using type = T1; };
+template&lt;typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;1, Triple&lt;T1, T2, T3&gt;&gt; { using type = T2; };
+template&lt;typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;2, Triple&lt;T1, T2, T3&gt;&gt; { using type = T3; };
+
+
+template&lt;typename... Args&gt; struct TripleTypes
+{
+    static_assert(3 == sizeof...(Args), "Expected exactly 3 type names");
+    template&lt;std::size_t N&gt;
+    using type = typename std::tuple_element_t&lt;N, Triple&lt;Args...&gt;&gt;;
+};
+
+int main()
+{
+    TripleTypes&lt;char, int, float&gt;::type&lt;1&gt; i{42};
+    std::cout &lt;&lt; i &lt;&lt; '\n';
+
+    using Tri = Triple&lt;int, char, short&gt;; //&lt; Program-defined type
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Tri&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Tri&gt;, char&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;2, Tri&gt;, short&gt;);
+
+    using Tuple = std::tuple&lt;int, char, short&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Tuple&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Tuple&gt;, char&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;2, Tuple&gt;, short&gt;);
+
+    using Array3 = std::array&lt;int, 3&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Array3&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Array3&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;2, Array3&gt;, int&gt;);
+
+    using Pair = std::pair&lt;Tuple, Tri&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Pair&gt;, Tuple&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Pair&gt;, Tri&gt;);
+
+    using Sub = std::ranges::subrange&lt;int*, int*&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Sub&gt;, int*&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Sub&gt;, int*&gt;);
+}
+|output=
+42
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2212|std=C++11|before=specializations for cv types were not required in some headers, which led to ambiguity|after=required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc structured binding}}
+{{dsc inc|cpp/utility/dsc tuple_size}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_cat}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

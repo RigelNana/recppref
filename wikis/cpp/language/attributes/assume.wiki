@@ -1,0 +1,100 @@
+{{cpp/language/attributes/title|assume|notes={{mark since c++23}}}}
+{{cpp/language/attributes/navbar}}
+
+Specifies that the given expression is assumed to always evaluate to {{c|true}} at a given point in order to allow compiler optimizations based on the information given.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|
+{{ttb|&lt;nowiki&gt;[[&lt;/nowiki&gt;assume(}} {{spar|expression}} {{ttb|)&lt;nowiki&gt;]]&lt;/nowiki&gt;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|expression}}|any expression (except unparenthesized [[cpp/language/operator other#Built-in comma operator|comma expressions]])}}
+{{par end}}
+
+===Explanation===
+{{c/core|[[assume]]}} an only be applied to a [[cpp/language/statements#Expression statements|null statement]], as in {{c|[[assume(x &gt; 0)]];}}. This statement is called an ''assumption''.
+
+{{spar|expression}} is [[cpp/language/implicit conversion#Contextual conversions|contextually converted to {{c/core|bool}}]], but it is not evaluated (it is still [[cpp/language/expressions#Potentially-evaluated expressions|potentially evaluated]]).
+* If the converted {{spar|expression}} would evaluate to {{c|true}} at the point where the assumption appears, the assumption has no effect.
+* Otherwise, evaluation of the assumption has [[cpp/language/ub|runtime-undefined behavior]].
+
+===Notes===
+Since assumptions cause runtime-undefined behavior if they do not hold, they should be used sparingly.
+
+One correct way to use them is to follow assertions with assumptions:
+
+{{source
+|code=
+assert(x &gt; 0);     // trigger an assertion when NDEBUG is not defined and x &gt; 0 is false
+[[assume(x &gt; 0)]]; // provide optimization opportunities when NDEBUG is defined
+}}
+
+===Example===
+{{source
+|code=
+#include &lt;cmath&gt;
+
+void f(int&amp; x, int y)
+{
+    void g(int);
+    void h();
+    
+    [[assume(x &gt; 0)]]; // Compiler may assume x is positive
+    
+    g(x / 2); // More efficient code possibly generated
+    
+    x = 3;
+    int z = x;
+    
+    [[assume((h(), x == z))]]; // Compiler may assume x would have the same value after
+                               // calling h
+                               // The assumption does not cause a call to h
+    
+    h();
+    g(x); // Compiler may replace this with g(3);
+    
+    h();
+    g(x); // Compiler may NOT replace this with g(3);
+          // An assumption applies only at the point where it appears
+    
+    z = std::abs(y);
+    
+    [[assume((g(z), true))]]; // Compiler may assume g(z) will return
+    
+    g(z); // Due to above and below assumptions, compiler may replace this with g(10);
+    
+    [[assume(y == -10)]]; // Undefined behavior if y != -10 at this point
+    
+    [[assume((x - 1) * 3 == 12)]];
+    
+    g(x); // Compiler may replace this with g(5);
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2924|std=C++23|before=violating an assumption would result in undefined behavior|after=results in runtime-undefined behavior}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=9.12.3|title=Assumption attribute|id=dcl.attr.assume}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc unreachable}}
+{{dsc end}}
+
+===External links===
+{{elink begin}}
+{{elink|Clang language extensions doc: [https://clang.llvm.org/docs/LanguageExtensions.html#langext-builtin-assume {{tt|__builtin_assume}}].}}
+{{elink|Clang attribute reference doc: [https://clang.llvm.org/docs/AttributeReference.html#assume {{tt|assume}}].}}
+{{elink|MSVC doc: [https://learn.microsoft.com/en-us/cpp/intrinsics/assume {{tt|__assume}}] built-in.}}
+{{elink|GCC doc: [https://gcc.gnu.org/onlinedocs/gcc/Statement-Attributes.html#index-assume-statement-attribute {{tt|__attribute__((assume(...)))}}].}}
+{{elink end}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,176 @@
+{{cpp/ranges/title|is_permutation}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Proj1 = std::identity, class Proj2 = std::identity,
+          std::indirect_equivalence_relation&lt;std::projected&lt;I1, Proj1&gt;,
+                                             std::projected&lt;I2, Proj2&gt;&gt;
+                                                 Pred = ranges::equal_to &gt;
+constexpr bool
+    is_permutation( I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R1, ranges::forward_range R2,
+          class Proj1 = std::identity, class Proj2 = std::identity,
+          std::indirect_equivalence_relation&lt;
+              std::projected&lt;ranges::iterator_t&lt;R1&gt;, Proj1&gt;,
+              std::projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+                  Pred = ranges::equal_to &gt;
+constexpr bool
+    is_permutation( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ Returns {{c|true}} if there exists a {{enwiki|permutation}} of the elements in range {{range|first1|last1}} that makes the range ''equal'' to {{range|first2|last2}} (after application of corresponding projections {{c|Proj1}}, {{c|Proj2}}, and using the binary predicate {{c|Pred}} as a comparator). Otherwise returns {{c|false}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r1}} as the first source range and {{c|r2}} as the second source range, as if using {{c|ranges::begin(r1)}} as {{c|first1}}, {{c|ranges::end(r1)}} as {{c|last1}}, {{c|ranges::begin(r2)}} as {{c|first2}}, and {{c|ranges::end(r2)}} as {{c|last2}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the first range of the elements}}
+{{par|first2, last2|the second range of the elements}}
+{{par|r1|the first range of the elements}}
+{{par|r2|the second range of the elements}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj1|projection to apply to the elements in the first range}}
+{{par|proj2|projection to apply to the elements in the second range}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the range {{range|first1|last1}} is a permutation of the range {{range|first2|last2}}.
+
+===Complexity===
+At most {{mathjax-or|\(\scriptsize \mathcal{O}(N^2)\)|O(N&lt;sup&gt;2&lt;/sup&gt;)}} applications of the predicate and each projection, or exactly {{mathjax-or|\(\scriptsize N\)|N}} if the sequences are already equal, where {{mathjax-or|\(\scriptsize N\)|N}} is {{c|ranges::distance(first1, last1)}}.
+However if {{c|1=ranges::distance(first1, last1) != ranges::distance(first2, last2)}}, no applications of the predicate and projections are made.
+
+===Notes===
+The ''permutation'' relation is an {{enwiki|equivalence relation}}.
+
+The {{tt|ranges::is_permutation}} can be used in testing, e.g. to check the correctness of rearranging algorithms such as sorting, shuffling, partitioning. If {{tt|p}} is an original sequence and {{tt|q}} is a "mutated" sequence, then {{c|1=ranges::is_permutation(p, q) == true}} means that {{tt|q}} consist of "the same" elements (maybe permuted) as {{tt|p}}.
+
+===Possible implementation===
+{{eq fun|1=
+struct is_permutation_fn
+{
+    template&lt;std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Proj1 = std::identity, class Proj2 = std::identity,
+             std::indirect_equivalence_relation&lt;std::projected&lt;I1, Proj1&gt;,
+                                                std::projected&lt;I2, Proj2&gt;&gt;
+                                                    Pred = ranges::equal_to&gt;
+    constexpr bool operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        // skip common prefix
+        auto ret = std::ranges::mismatch(first1, last1, first2, last2,
+                                         std::ref(pred), std::ref(proj1), std::ref(proj2));
+        first1 = ret.in1, first2 = ret.in2;
+
+        // iterate over the rest, counting how many times each element
+        // from [first1, last1) appears in [first2, last2)
+        for (auto i {first1}; i != last1; ++i)
+        {
+            const auto i_proj {std::invoke(proj1, *i)};
+            auto i_cmp = [&amp;]&lt;typename T&gt;(T&amp;&amp; t)
+            { 
+                return std::invoke(pred, i_proj, std::forward&lt;T&gt;(t));
+            };
+
+            if (i != ranges::find_if(first1, i, i_cmp, proj1))
+                continue; // this *i has been checked
+
+            if (const auto m {ranges::count_if(first2, last2, i_cmp, proj2)};
+                m == 0 or m != ranges::count_if(i, last1, i_cmp, proj1))
+                return false;
+        }
+        return true;
+    }
+
+    template&lt;ranges::forward_range R1, ranges::forward_range R2,
+             class Proj1 = std::identity, class Proj2 = std::identity,
+             std::indirect_equivalence_relation&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R1&gt;, Proj1&gt;,
+                 std::projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+                     Pred = ranges::equal_to&gt;
+    constexpr bool operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                              Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(pred), std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr is_permutation_fn is_permutation {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+auto&amp; operator&lt;&lt;(auto&amp; os, std::ranges::forward_range auto const&amp; v)
+{
+    os &lt;&lt; "{ ";
+    for (const auto&amp; e : v)
+        os &lt;&lt; e &lt;&lt; ' ';
+    return os &lt;&lt; "}";
+}
+
+int main()
+{
+    static constexpr auto r1 = {1, 2, 3, 4, 5};
+    static constexpr auto r2 = {3, 5, 4, 1, 2};
+    static constexpr auto r3 = {3, 5, 4, 1, 1};
+
+    static_assert(
+        std::ranges::is_permutation(r1, r1) &amp;&amp;
+        std::ranges::is_permutation(r1, r2) &amp;&amp;
+        std::ranges::is_permutation(r2, r1) &amp;&amp;
+        std::ranges::is_permutation(r1.begin(), r1.end(), r2.begin(), r2.end()));
+
+    std::cout
+        &lt;&lt; std::boolalpha
+        &lt;&lt; "is_permutation(" &lt;&lt; r1 &lt;&lt; ", " &lt;&lt; r2 &lt;&lt; "): "
+        &lt;&lt; std::ranges::is_permutation(r1, r2) &lt;&lt; '\n'
+        &lt;&lt; "is_permutation(" &lt;&lt; r1 &lt;&lt; ", " &lt;&lt; r3 &lt;&lt; "): "
+        &lt;&lt; std::ranges::is_permutation(r1, r3) &lt;&lt; '\n'
+
+        &lt;&lt; "is_permutation with custom predicate and projections: "
+        &lt;&lt; std::ranges::is_permutation(
+            std::array {-14, -11, -13, -15, -12},  // 1st range
+            std::array {'F', 'E', 'C', 'B', 'D'},  // 2nd range
+            [](int x, int y) { return abs(x) == abs(y); }, // predicate
+            [](int x) { return x + 10; },          // projection for 1st range
+            [](char y) { return int(y - 'A'); })   // projection for 2nd range
+        &lt;&lt; '\n';
+}
+|output=
+is_permutation({ 1 2 3 4 5 }, { 3 5 4 1 2 }): true
+is_permutation({ 1 2 3 4 5 }, { 3 5 4 1 1 }): false
+is_permutation with custom predicate and projections: true
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/ranges/dsc prev_permutation}}
+{{dsc inc|cpp/algorithm/dsc is_permutation}}
+{{dsc inc|cpp/algorithm/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/dsc prev_permutation}}
+{{dsc inc|cpp/concepts/dsc equivalence_relation}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,355 @@
+{{title|Object}}
+{{cpp/language/basics/navbar}}
+
+C++ programs create, destroy, refer to, access, and manipulate ''objects''.
+
+An object, in C++, has
+* size (can be determined with {{rlpt|sizeof}});
+* alignment requirement (can be determined with {{rlpt|alignof}});
+* {{rlp|storage duration}} (automatic, static, dynamic, thread-local);
+* {{rlp|lifetime}} (bounded by storage duration or temporary);
+* {{rlp|type}};
+* value (which may be indeterminate, e.g. for {{rlp|default initialization|default-initialized}} non-class types);
+* optionally, a {{rlp|name}}.
+
+The following entities are not objects: value, reference, function, enumerator, type, non-static class member, template, class or function template specialization, namespace, parameter pack, and {{c|this}}.
+
+A ''variable'' is an object or a reference that is not a non-static data member, that is introduced by a {{rlp|declarations|declaration}}.
+
+===Object creation===
+Objects can be explicitly created by {{rlp|definition}}s, {{rlp|new|{{c/core|new}} expressions}}, {{rlp|throw|{{c/core|throw}} expressions}}, changing the active member of a {{rlp|union}} and evaluating expressions that require {{rlp|lifetime#Temporary object lifetime|temporary objects}}. The created object is uniquely defined in explicit object creation.
+
+Objects of {{rlpsd|type#Implicit-lifetime type}}s can also be implicitly created by
+* except during constant evaluation, operations that begin lifetime of an array of type {{c/core|unsigned char}}{{rev inl|since=c++17| or {{ltt std|cpp/types/byte}}}}, in which case such objects are created in the array,
+* call to following allocating functions, in which case such objects are created in the allocated storage:
+:* {{lc|operator new}} (except during constant evaluation)
+:* {{lc|operator new[]}} (except during constant evaluation)
+:* {{lc|std::malloc}}
+:* {{lc|std::calloc}}
+:* {{lc|std::realloc}}
+{{rrev|since=c++17|
+:* {{lc|std::aligned_alloc}}
+}}
+* call to following [[#Object representation and value representation|object representation]] copying functions, in which case such objects are created in the destination region of storage or the result:
+:* {{lc|std::memcpy}}
+:* {{lc|std::memmove}}
+{{rrev|since=c++20|
+:* {{ltt|cpp/numeric/bit_cast|std::bit_cast}}
+}}
+{{rrev|since=c++23|
+* call to following specific functions, in which case such objects are created in the specified region of storage:
+:* {{lc|std::start_lifetime_as}}
+:* {{lc|std::start_lifetime_as_array}}
+}}
+
+Zero or more objects may be created in the same region of storage, as long as doing so would give the program defined behavior. If such creation is impossible, e.g. due to conflicting operations, the behavior of the program is undefined. If multiple such sets of implicitly created objects would give the program defined behavior, it is unspecified which such set of objects is created. In other words, implicitly created objects are not required to be uniquely defined.
+
+After implicitly creating objects within a specified region of storage, some operations produce a pointer to a ''suitable created object''. The suitable created object has the same address as the region of storage. Likewise, the behavior is undefined if only if no such pointer value can give the program defined behavior, and it is unspecified which pointer value is produced if there are multiple values giving the program defined behavior.
+
+{{source|1=
+#include &lt;cstdlib&gt;
+
+struct X { int a, b; };
+
+X* MakeX()
+{
+    // One of possible defined behaviors:
+    // the call to std::malloc implicitly creates an object of type X
+    // and its subobjects a and b, and returns a pointer to that X object
+    X* p = static_cast&lt;X*&gt;(std::malloc(sizeof(X)));
+    p-&gt;a = 1;
+    p-&gt;b = 2;
+    return p;
+}
+}}
+
+Call to {{lc|std::allocator::allocate}} or implicitly defined copy/move special member functions of {{rlp|union}} types can also create objects.
+
+===Object representation and value representation===
+Some types and objects have ''object representations'' and ''value representations'', they are defined in the table below:
+{|class="wikitable" style="text-align: center;"
+!Entity
+!Object representation
+!Value representation
+|-
+|a complete object type {{tt|T}}
+|the sequence of {{c|N}} {{c/core|unsigned char}} objects taken up by a non-{{rlp|bit field|bit-field}} complete object of type {{tt|T}}, where {{c|N}} is {{c|sizeof(T)}}
+|the set of bits in the object representation of {{tt|T}} that participate in representing a value of type {{tt|T}}
+|-
+|a non-bit-field complete object {{c|obj}} of type {{tt|T}}
+|the bytes of {{c|obj}} corresponding to the object representation of {{tt|T}}
+|the bits of {{c|obj}} corresponding to the value representation of {{tt|T}}
+|-
+|a bit-field object {{c|bf}}
+|the sequence of {{c|N}} bits taken up by {{c|bf}}, where {{c|N}} is the width of the bit-field
+|the set of bits in the object representation of {{c|bf}} that participate in representing the value of {{c|bf}}
+|}
+
+Bits in the object representation of a type or object that are not part of the value representation are ''padding bits''.
+
+For {{named req|TriviallyCopyable}} types, value representation is a part of the object representation, which means that copying the bytes occupied by the object in the storage is sufficient to produce another object with the same value (except if the object is a potentially-overlapping subobject, or the value is a ''trap representation'' of its type and loading it into the CPU raises a hardware exception, such as SNaN ("signalling not-a-number") floating-point values or NaT ("not-a-thing") integers).
+
+Although most implementations do not allow trap representations, padding bits, or multiple representations for integer types, there are exceptions; for example a value of an integer type on Itanium [https://web.archive.org/web/20170830125905/https://blogs.msdn.microsoft.com/oldnewthing/20040119-00/?p=41003 may be a trap representation].
+
+The reverse is not necessarily true: two objects of a {{named req|TriviallyCopyable}} type with different object representations may represent the same value. For example, multiple floating-point bit patterns represent the same special value [[cpp/numeric/math/NAN|NaN]]. More commonly, padding bits may be introduced to satisfy {{rlp|object#Alignment|alignment requirements}}, {{rlp|bit field|bit-field}} sizes, etc.
+
+{{source|1=
+#include &lt;cassert&gt;
+
+struct S
+{
+    char c;  // 1 byte value
+             // 3 bytes of padding bits (assuming alignof(float) == 4)
+    float f; // 4 bytes value (assuming sizeof(float) == 4)
+    
+    bool operator==(const S&amp; arg) const // value-based equality
+    {
+        return c == arg.c &amp;&amp; f == arg.f;
+    }
+};
+
+void f()
+{
+    assert(sizeof(S) == 8);
+    S s1 = {'a', 3.14};
+    S s2 = s1;
+    reinterpret_cast&lt;unsigned char*&gt;(&amp;s1)[2] = 'b'; // modify some padding bits
+    assert(s1 == s2); // value did not change
+}
+}}
+
+For the objects of type {{c/core|char}}, {{c/core|signed char}}, and {{c/core|unsigned char}} (unless they are oversize {{rlp|bit field|bit-fields}}), every bit of the object representation is required to participate in the value representation and each possible bit pattern represents a distinct value (no padding bits, trap bits, or multiple representations allowed).
+
+===Subobjects===
+An object can have ''subobjects''. These include
+* member objects
+* base class subobjects
+* array elements
+An object that is not a subobject of another object is called ''complete object''.
+
+Complete objects, member objects, and array elements are also known as ''most derived objects'', to distinguish them from base class subobjects.
+
+{{anchor|Potentially constructed subobjects}}
+For a class,
+* its non-static {{rlp|data members}},
+* its non-virtual direct {{rlp|derived class|base classes}}, and,
+* if the class is not {{rlp|abstract class|abstract}}, its {{rlp|derived class#Virtual base classes|virtual base classes}}
+are called its ''potentially constructed subobjects''.
+
+===Size===
+A subobject is a ''potentially overlapping subobject'' if it is a base class subobject{{rev inl|since=c++20| or a non-static data member declared with the {{attr|no_unique_address}} attribute}}.
+
+An object {{c|obj}} can only possibly have zero size if all following conditions are satisfied:
+* {{c|obj}} is a potentially-overlapping subobject.
+* {{c|obj}} is of a class type without virtual member functions and virtual base classes.
+* {{c|obj}} does not have any subobject of nonzero size or unnamed {{rlp|bit field|bit-fields}} of nonzero length.
+
+For an object {{c|obj}} satisfying all the conditions above:
+* If {{c|obj}} is a base class subobject of a{{rev inl|since=c++11| {{rlpsd|data members#Standard-layout}}}} class type with no non-static data members, it has zero size.
+* Otherwise, it is implementation-defined under which circumstances where {{c|obj}} has zero size.
+
+See {{rlp|ebo|empty base optimization}} for more details.
+
+Any non-bit-field object with nonzero size must occupy one or more bytes of storage, including every byte that is occupied (in full or in part) by any of its subobjects. The storage occupied must be contiguous if the object is of trivially copyable{{rev inl|since=c++11| or standard-layout}} type.
+
+===Address===
+Unless an object is a bit-field or a subobject of zero size, the ''address'' of that object is the address of the first {{rlpsd|memory model#Byte}} it occupies.
+
+An object can contain other objects, in which case the contained objects are ''nested within'' the former object. An object {{c|a}} is nested within another object {{c|b}} if any of the following conditions is satisfied:
+* {{c|a}} is a subobject of {{c|b}}.
+* &lt;!-- P0137R1 --&gt;{{c|b}} {{rlp|lifetime#Providing storage|provides storage}} for {{c|a}}.
+* There exists an object {{c|c}} where {{c|a}} is nested within {{c|c}}, and {{c|c}} is nested within {{c|b}}.
+
+An object is a ''potentially non-unique object'' if it is one of the following objects:
+* A {{rlp|string literal}} object.
+{{rrev|since=c++11|
+* The {{rlp|list initialization#List-initializing std::initializer_list|backing array}} of an initializer list.
+}}
+* A subobject of a potentially non-unique object.
+
+For any two non-bit-field objects with overlapping {{rlp|lifetime}}s:
+* If any of the following conditions is satisfied, they may have the same address:
+:* One of them is nested within the other.
+:* Any of them is a subobject of zero size, and their types are not {{rlp|implicit conversion#Similar types|similar}}.
+:* They are both potentially non-unique objects.
+* Otherwise, they always have distinct addresses and occupy disjoint bytes of storage.
+
+{{source|1=
+// character literals are always unique
+static const char test1 = 'x';
+static const char test2 = 'x';
+const bool b = &amp;test1 != &amp;test2;      // always true
+
+// the character 'x' accessed from “r”, “s” and “il”
+// may have the same address (i.e., these objects may share storage)
+static const char (&amp;r) [] = "x";
+static const char *s = "x";
+static std::initializer_list&lt;char&gt; il = {'x'};
+const bool b2 = r != il.begin();      // unspecified result
+const bool b3 = r != s;               // unspecified result
+const bool b4 = il.begin() != &amp;test1; // always true
+const bool b5 = r != &amp;test1;          // always true
+}}
+
+===Polymorphic objects===
+Objects of a class type that declares or inherits at least one virtual function are polymorphic objects. Within each polymorphic object, the implementation stores additional information (in every existing implementation, it is one pointer unless optimized out), which is used by {{rlp|virtual|virtual function}} calls and by the RTTI features ({{rlpt|dynamic_cast}} and {{rlpt|typeid}}) to determine, at run time, the type with which the object was created, regardless of the expression it is used in.
+
+For non-polymorphic objects, the interpretation of the value is determined from the expression in which the object is used, and is decided at compile time.
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;typeinfo&gt;
+
+struct Base1
+{
+    // polymorphic type: declares a virtual member
+    virtual ~Base1() {}
+};
+
+struct Derived1 : Base1
+{
+     // polymorphic type: inherits a virtual member
+};
+
+struct Base2
+{
+     // non-polymorphic type
+};
+
+struct Derived2 : Base2
+{
+     // non-polymorphic type
+};
+
+int main()
+{
+    Derived1 obj1; // object1 created with type Derived1
+    Derived2 obj2; // object2 created with type Derived2
+    
+    Base1&amp; b1 = obj1; // b1 refers to the object obj1
+    Base2&amp; b2 = obj2; // b2 refers to the object obj2
+    
+    std::cout &lt;&lt; "Expression type of b1: " &lt;&lt; typeid(decltype(b1)).name() &lt;&lt; '\n'
+              &lt;&lt; "Expression type of b2: " &lt;&lt; typeid(decltype(b2)).name() &lt;&lt; '\n'
+              &lt;&lt; "Object type of b1: " &lt;&lt; typeid(b1).name() &lt;&lt; '\n'
+              &lt;&lt; "Object type of b2: " &lt;&lt; typeid(b2).name() &lt;&lt; '\n'
+              &lt;&lt; "Size of b1: " &lt;&lt; sizeof b1 &lt;&lt; '\n'
+              &lt;&lt; "Size of b2: " &lt;&lt; sizeof b2 &lt;&lt; '\n';
+}
+|p=true
+|output=
+Expression type of b1: Base1
+Expression type of b2: Base2
+Object type of b1: Derived1
+Object type of b2: Base2
+Size of b1: 8
+Size of b2: 1
+}}
+
+===Strict aliasing===
+Accessing an object using an expression of a type other than the type with which it was created is undefined behavior in many cases, see {{rlpt|reinterpret_cast#Type aliasing|reinterpret_cast}} for the list of exceptions and examples.
+
+===Alignment===
+Every {{rlp|type|object type}} has the property called ''alignment requirement'', which is a nonnegative integer value (of type {{lc|std::size_t}}, and always a power of two) representing the number of bytes between successive addresses at which objects of this type can be allocated.
+
+{{rrev|since=c++11|
+The alignment requirement of a type can be queried with {{rlpt|alignof}} or {{lc|std::alignment_of}}. The pointer alignment function {{lc|std::align}} can be used to obtain a suitably-aligned pointer within some buffer, and {{lc|std::aligned_storage}} can be used to obtain suitably-aligned storage.
+}}
+
+Each object type imposes its alignment requirement on every object of that type{{rev inl|since=c++11|; stricter alignment (with larger alignment requirement) can be requested using {{rlpt|alignas}}}}. Attempting to create an object in storage that does not meet the alignment requirements of the object's type is undefined behavior.
+
+In order to satisfy alignment requirements of all non-static members of a {{rlp|class}}, [[#Object representation and value representation|padding bits]] may be inserted after some of its members.
+
+{{example|code=
+#include &lt;iostream&gt;
+
+// objects of type S can be allocated at any address
+// because both S.a and S.b can be allocated at any address
+struct S
+{
+    char a; // size: 1, alignment: 1
+    char b; // size: 1, alignment: 1
+}; // size: 2, alignment: 1
+
+// objects of type X must be allocated at 4-byte boundaries
+// because X.n must be allocated at 4-byte boundaries
+// because int's alignment requirement is (usually) 4
+struct X
+{
+    int n;  // size: 4, alignment: 4
+    char c; // size: 1, alignment: 1
+    // three bytes of padding bits
+}; // size: 8, alignment: 4 
+
+int main()
+{
+    std::cout &lt;&lt; "alignof(S) = " &lt;&lt; alignof(S) &lt;&lt; '\n'
+              &lt;&lt; "sizeof(S)  = " &lt;&lt; sizeof(S) &lt;&lt; '\n'
+              &lt;&lt; "alignof(X) = " &lt;&lt; alignof(X) &lt;&lt; '\n'
+              &lt;&lt; "sizeof(X)  = " &lt;&lt; sizeof(X) &lt;&lt; '\n';
+}
+|p=true
+|output=
+alignof(S) = 1
+sizeof(S)  = 2
+alignof(X) = 4
+sizeof(X)  = 8
+}}
+
+The weakest alignment (the smallest alignment requirement) is the alignment of {{c/core|char}}, {{c/core|signed char}}, and {{c/core|unsigned char}}, which equals {{c|1}}&lt;!-- because there is no padding bit between chars in arrays of char --&gt;; the largest ''fundamental alignment'' of any type is implementation-defined{{rev inl|since=c++11| and equal to the alignment of {{lc|std::max_align_t}}}}.
+
+Fundamental alignments are supported for objects of all kinds of storage durations.
+
+{{rrev|since=c++11|
+If a type's alignment is made stricter (larger) than {{lc|std::max_align_t}} using {{rlpt|alignas}}, it is known as a type with ''extended alignment'' requirement. A type whose alignment is extended or a class type whose non-static data member has extended alignment is an ''over-aligned type''.
+
+{{named req|Allocator}} types are required to handle over-aligned types correctly.&lt;!-- P0593R6 --&gt;
+}}
+
+
+{{rrev|since=c++11|until=c++20|
+It is implementation-defined if {{rev inl|until=c++17|{{rlp|new|{{c/core|new}} expressions}} and}} {{lc|std::get_temporary_buffer}} support over-aligned types.
+}}
+
+===Notes===
+Objects in C++ have different meaning from objects in {{enwiki|Object-oriented programming|object-oriented programming (OOP)}}:
+{|class="wikitable" style="text-align: center;"
+!Objects in C++
+!Objects in OOP
+|-
+|can have any object type&lt;br&gt;(see {{lc|std::is_object}})
+|must have a class type
+|-
+|no concept of “instance”
+|have the concept of “instance” (and there are mechanisms like {{tt|instanceof}} to detect “instance-of” relationship)
+|-
+|no concept of “interface”
+|have the concept of “interface” (and there are mechanisms like {{tt|instanceof}} to detect whether an interface is implemented)
+|-
+|polymorphism needs to be explicitly enabled via virtual members
+|polymorphism is always enabled
+|}
+
+In the defect report {{wg21|P0593R6}}, implicit object creation was considered happening when creating a byte array or invocating an [[cpp/memory/new/operator new|allocation function]] (which is possibly user-defined and {{rlpt|constexpr}}) during constant evaluation. However, such allowance caused indeterminism in constant evaluation which was undesired and uninplementable in some aspects. As a result, {{wg21|P2747R2}} disallowed such implicit object creation in constant evaluation. We intentedly treat such change as a defect report although the whole paper is not.
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=633|std=C++98|before=variables could only be objects|after=they can also be references}}
+{{dr list item|wg=cwg|dr=734|std=C++98|before=it was unspecified whether variables defined&lt;br&gt;in the same scope that are guaranteed to have&lt;br&gt;the same value can have the same address|after=address is guaranteed to be&lt;br&gt;different if their lifetimes overlap,&lt;br&gt;regardless of their values}}
+{{dr list item|wg=cwg|dr=1189|std=C++98|before=two base class subobjects of the same&lt;br&gt;type could have the same address|after=they always have&lt;br&gt;distinct addresses}}
+{{dr list item|wg=cwg|dr=1861|std=C++98|before=for oversize bit-fields of narrow character&lt;br&gt;types, all bits of the object representation&lt;br&gt;still participated in the value representation|after=allows padding bits}}
+{{dr list item|wg=cwg|dr=2489|std=C++98|before={{c/core|char[]}} cannot provide storage, but objects&lt;br&gt;could be implicitly created within its storage|after=objects cannot be implicitly created&lt;br&gt;within the storage of {{c/core|char[]}}}}
+{{dr list item|wg=cwg|dr=2519|std=C++98|before=the definition of object representation did not address bit-fields|after=addresses bit-fields}}
+{{dr list item|wg=cwg|dr=2719|std=C++98|before=the behavior of creating an object&lt;br&gt;in misaligned storage was unclear|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=2753|std=C++11|before=it was unclear whether a backing array of an&lt;br&gt;initializer list can share storage with a string literal|after=they can share storage}}
+{{dr list item|wg=cwg|dr=2795|std=C++98|before=when determining whether two objects with overlapping&lt;br&gt;lifetimes can have the same address, if any of them is a&lt;br&gt;subobject of zero size, they could have similar distinct types|after=only allows non-similar types}}
+{{dr list item|paper=P0593R6|std=C++98|before=previous object model did not support many&lt;br&gt;useful idioms required by the standard library&lt;br&gt;and was not compatible with effective types in C|after=implicit object creation added}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/object|Object|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

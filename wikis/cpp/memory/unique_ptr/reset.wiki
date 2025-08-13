@@ -1,0 +1,98 @@
+{{cpp/memory/unique_ptr/title|reset}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcl h|members of the primary template, unique_ptr&lt;T&gt;}}
+{{dcla|num=1|constexpr=c++23|1=
+void reset( pointer ptr = pointer() ) noexcept;
+}}
+{{dcl h|members of the specialization unique_ptr&lt;T[]&gt;}}
+{{dcla|num=2|constexpr=c++23|1=
+template&lt; class U &gt; 
+void reset( U ptr ) noexcept;
+}}
+{{dcla|num=3|constexpr=c++23|1=
+void reset( std::nullptr_t = nullptr ) noexcept;
+}}
+{{dcl end}}
+
+Replaces the managed object.
+
+@1,2@ Equivalent to {{c multi
+|auto old_ptr {{=}} get();
+|/* assigns “ptr” to the stored pointer */
+|if (old_ptr)
+|    get_deleter()(old_ptr);
+}}.
+@@ If {{c|get_deleter()(old_ptr)}} throws an exception, the behavior is undefined.
+:@2@ {{cpp/enable if|{{tt|U}} is the same type as {{tt|pointer}}, or all following conditions are satisfied}}:
+* {{tt|pointer}} is the same type as {{tt|element_type*}}.
+* {{tt|U}} is a pointer type {{tt|V*}} such that {{tt|V(*)[]}} is convertible to {{tt|element_type(*)[]}}.
+
+@3@ Equivalent to {{c|reset(pointer())}}.
+
+===Parameters===
+{{par begin}}
+{{par|ptr|pointer to a new object to manage}}
+{{par end}}
+
+===Notes===
+To replace the managed object while supplying a new deleter as well, move assignment operator may be used.
+
+A test for self-reset, i.e. whether {{c|ptr}} points to an object already managed by {{c|*this}}, is not performed, except where provided as a compiler extension or as a debugging assert. Note that code such as {{c|p.reset(p.release())}} does not involve self-reset, only code like {{c|p.reset(p.get())}} does. 
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo // object to manage
+{
+    Foo() { std::cout &lt;&lt; "Foo...\n"; }
+    ~Foo() { std::cout &lt;&lt; "~Foo...\n"; }
+};
+
+struct D // deleter
+{
+    void operator() (Foo* p)
+    {
+        std::cout &lt;&lt; "Calling delete for Foo object... \n";
+        delete p;
+    }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "Creating new Foo...\n";
+    std::unique_ptr&lt;Foo, D&gt; up(new Foo(), D()); // up owns the Foo pointer (deleter D)
+    
+    std::cout &lt;&lt; "Replace owned Foo with a new Foo...\n";
+    up.reset(new Foo());  // calls deleter for the old one
+    
+    std::cout &lt;&lt; "Release and delete the owned Foo...\n";
+    up.reset(nullptr);      
+}
+|output=
+Creating new Foo...
+Foo...
+Replace owned Foo with a new Foo...
+Foo...
+Calling delete for Foo object...
+~Foo...
+Release and delete the owned Foo...
+Calling delete for Foo object...
+~Foo...
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before={{tt|1=unique_ptr&lt;T[]&gt;::reset}} rejected qualification conversions|after=accepts}}
+{{dr list item|wg=lwg|dr=2169|std=C++11|before=the overload {{tt|1=unique_ptr&lt;T[]&gt;::reset(pointer)}} existed|after=removed the overload}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc release}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

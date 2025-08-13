@@ -1,0 +1,136 @@
+{{cpp/ranges/view title|zip}}
+{{cpp/ranges/zip_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|
+template&lt; ranges::input_range... Views &gt;
+    requires (ranges::view&lt;Views&gt; &amp;&amp; ...) &amp;&amp; (sizeof...(Views) &gt; 0)
+class zip_view
+    : public ranges::view_interface&lt;zip_view&lt;Views...&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /*unspecified*/ zip = /*unspecified*/;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++23|
+template&lt; ranges::viewable_range... Rs &gt;
+    requires /* see below */
+constexpr ranges::view auto zip( Rs&amp;&amp;... rs );
+}}
+{{dcl end}}
+
+@1@ {{tt|zip_view}} is a range adaptor that takes one or more {{lconcept|view}}s, and produces a {{lconcept|view}} whose {{tti|i}}th element is a tuple-like value consisting of the {{tti|i}}{{sup|th}} elements of all views. The size of produced view is the minimum of sizes of all adapted views.
+
+@2@ {{tt|views::zip}} is a customization point object.&lt;br&gt;
+When calling with no argument, {{c|views::zip()}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|auto(views::empty&lt;std::tuple&lt;&gt;&gt;)}}.&lt;br&gt;
+Otherwise, {{c|views::zip(rs...)}} is ''expression-equivalent'' to {{c|ranges::zip_view&lt;views::all_t&lt;decltype((rs))&gt;...&gt;(rs...)}}.
+
+{{tt|zip_view}} always models {{lconcept|input_range}}, and models {{lconcept|forward_range}}, {{lconcept|bidirectional_range}}, {{lconcept|random_access_range}}, or {{lconcept|sized_range}} if all adapted {{lconcept|view}} types model the corresponding concept.
+
+{{tt|zip_view}} models {{lconcept|common_range}} if
+* {{c|sizeof...(Views)}} is equal to {{c|1}}, and the only adapted view type models {{lconcept|common_range}}, or
+* at least one adapted view type does not model {{lconcept|bidirectional_range}}, and every adapted view type models {{lconcept|common_range}}, or
+* every adapted view type models both {{lconcept|random_access_range}} and {{lconcept|sized_range}}.
+
+{{cpp/ranges/cpo|views|zip}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|spec={{c/core|std::tuple&lt;Views...&gt;}}|views_|id=views|all adapted view objects}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|zip_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|zip_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|zip_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|zip_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=yes|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/zip_view/iterator|the iterator type}}
+{{dsc expos mem tclass|cpp/ranges/zip_view/sentinel|the sentinel type used when {{tt|zip_view}} is not a {{lconcept|common_range}}}} 
+{{dsc end}}
+
+===Helper templates===
+{{ddcl|since=c++23|1=
+template&lt; class... Views &gt;
+constexpr bool enable_borrowed_range&lt;ranges::zip_view&lt;Views...&gt;&gt; =
+    (ranges::enable_borrowed_range&lt;Views&gt; &amp;&amp; ...);
+}}
+This specialization of {{ltt|cpp/ranges/borrowed_range|ranges::enable_borrowed_range}} makes {{ttt|zip_view}} satisfy {{lconcept|borrowed_range}} when each underlying view satisfies it.
+
+===Notes===
+{{feature test macro|__cpp_lib_ranges_zip|std=C++23|value=202110L|{{tt|ranges::zip_view}},&lt;br&gt;{{c/core|ranges::zip_transform_view}},&lt;br&gt;{{c/core|ranges::adjacent_view}},&lt;br&gt;{{c/core|ranges::adjacent_transform_view}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+#include &lt;vector&gt;
+
+void print(auto const rem, auto const&amp; range)
+{
+    for (std::cout &lt;&lt; rem; auto const&amp; elem : range)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    auto x = std::vector{1, 2, 3, 4};
+    auto y = std::list&lt;std::string&gt;{"α", "β", "γ", "δ", "ε"};
+    auto z = std::array{'A', 'B', 'C', 'D', 'E', 'F'};
+
+    print("Source views:", "");
+    print("x: ", x);
+    print("y: ", y);
+    print("z: ", z);
+
+    print("\nzip(x,y,z):", "");
+
+    for (std::tuple&lt;int&amp;, std::string&amp;, char&amp;&gt; elem : std::views::zip(x, y, z))
+    {
+        std::cout &lt;&lt; std::get&lt;0&gt;(elem) &lt;&lt; ' '
+                  &lt;&lt; std::get&lt;1&gt;(elem) &lt;&lt; ' '
+                  &lt;&lt; std::get&lt;2&gt;(elem) &lt;&lt; '\n';
+
+        std::get&lt;char&amp;&gt;(elem) += ('a' - 'A'); // modifies the element of z
+    }
+
+    print("\nAfter modification, z: ", z);
+}
+|output=
+Source views:
+x: 1 2 3 4
+y: α β γ δ ε
+z: A B C D E F
+
+zip(x,y,z):
+1 α A
+2 β B
+3 γ C
+4 δ D
+
+After modification, z: a b c d E F
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc zip_transform_view}}
+{{dsc inc|cpp/ranges/dsc elements_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

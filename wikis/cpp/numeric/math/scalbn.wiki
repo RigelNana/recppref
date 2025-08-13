@@ -1,0 +1,140 @@
+{{cpp/title|scalbn|scalbnf|scalbnl|scalbln|scalblnf|scalblnl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl h|{{c/core|int}} exponent}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+float       scalbn ( float num, int exp );
+double      scalbn ( double num, int exp );
+long double scalbn ( long double num, int exp );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            scalbn ( /* floating-point-type */ num, int exp );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+float       scalbnf( float num, int exp );
+}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+long double scalbnl( long double num, int exp );
+}}
+{{dcl h|{{c/core|long}} exponent}}
+{{dcl rev multi|num=4|since1=c++11|dcl1=
+float       scalbln ( float num, long exp );
+double      scalbln ( double num, long exp );
+long double scalbln ( long double num, long exp );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            scalbln ( /* floating-point-type */ num, long exp );
+}}
+{{dcl|num=5|since=c++11|notes={{mark constexpr since c++23}}|
+float       scalblnf( float num, long exp );
+}}
+{{dcl|num=6|since=c++11|notes={{mark constexpr since c++23}}|
+long double scalblnl( long double num, long exp );
+}}
+{{dcl h|[[#Notes|Additional overloads]]}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+double scalbn( Integer num, int exp );
+}}
+{{dcl|num=B|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+double scalbln( Integer num, long exp );
+}}
+{{dcl end}}
+
+@1-6@ Multiplies a floating point value {{c|num}} by {{lc|FLT_RADIX}} raised to power {{c|exp}}.{{rev inl|since=c++23| The library provides overloads of {{tt|std::scalbn}} and {{tt|std::scalbln}} for all cv-unqualified floating-point types as the type of the parameter {{c|num}}.}}
+@A,B@ Additional overloads are provided for all integer types, which are treated as {{c/core|double}}.
+
+===Parameters===
+{{par begin}}
+{{par|num|floating-point or integer value}}
+{{par|exp|integer value}}
+{{par end}}
+
+===Return value===
+If no errors occur, {{c|num}} multiplied by {{lc|FLT_RADIX}} to the power of {{c|exp}} ({{math|num&amp;times;FLT_RADIX{{su|p=exp}}}}) is returned.
+
+If a range error due to overflow occurs, {{lc|HUGE_VAL|±HUGE_VAL}}, {{tt|±HUGE_VALF}}, or {{tt|±HUGE_VALL}} is returned.
+
+If a range error due to underflow occurs, the correct result (after rounding) is returned.
+
+===Error handling===
+Errors are reported as specified in {{lc|math_errhandling}}.
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+* Unless a range error occurs, {{lc|FE_INEXACT}} is never raised (the result is exact).
+* Unless a range error occurs, [[cpp/numeric/fenv/FE_round|the current rounding mode]] is ignored.
+* If {{c|num}} is ±0, it is returned, unmodified.
+* If {{c|num}} is ±∞, it is returned, unmodified.
+* If {{c|exp}} is 0, then {{c|num}} is returned, unmodified.
+* If {{c|num}} is NaN, NaN is returned.
+
+===Notes===
+On binary systems (where {{lc|FLT_RADIX}} is {{c|2}}), {{tt|std::scalbn}} is equivalent to {{lc|std::ldexp}}.
+
+Although {{tt|std::scalbn}} and {{tt|std::scalbln}} are specified to perform the operation efficiently, on many implementations they are less efficient than multiplication or division by a power of two using arithmetic operators.
+
+The function name stands for "new scalb", where {{tt|scalb}} was an older non-standard function whose second argument had floating-point type.
+
+The {{tt|std::scalbln}} function is provided because the factor required to scale from the smallest positive floating-point value to the largest finite one may be greater than 32767, the standard-guaranteed {{lc|INT_MAX}}. In particular, for the 80-bit {{c/core|long double}}, the factor is 32828.
+
+The GNU implementation does not set {{tt|errno}} regardless of {{tt|math_errhandling}}.
+
+{{cpp/numeric/math/additional integer overload note|scalbn}}
+
+===Example===
+{{example
+|code=
+#include &lt;cerrno&gt;
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout &lt;&lt; "scalbn(7, -4) = " &lt;&lt; std::scalbn(7, -4) &lt;&lt; '\n'
+              &lt;&lt; "scalbn(1, -1074) = " &lt;&lt; std::scalbn(1, -1074)
+              &lt;&lt; " (minimum positive subnormal double)\n"
+              &lt;&lt; "scalbn(nextafter(1,0), 1024) = "
+              &lt;&lt; std::scalbn(std::nextafter(1,0), 1024)
+              &lt;&lt; " (largest finite double)\n";
+    
+    // special values
+    std::cout &lt;&lt; "scalbn(-0, 10) = " &lt;&lt; std::scalbn(-0.0, 10) &lt;&lt; '\n'
+              &lt;&lt; "scalbn(-Inf, -1) = " &lt;&lt; std::scalbn(-INFINITY, -1) &lt;&lt; '\n';
+    
+    // error handling
+    errno = 0;
+    std::feclearexcept(FE_ALL_EXCEPT);
+    
+    std::cout &lt;&lt; "scalbn(1, 1024) = " &lt;&lt; std::scalbn(1, 1024) &lt;&lt; '\n';
+    
+    if (errno == ERANGE)
+        std::cout &lt;&lt; "    errno == ERANGE: " &lt;&lt; std::strerror(errno) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_OVERFLOW))
+        std::cout &lt;&lt; "    FE_OVERFLOW raised\n";
+}
+|p=true
+|output=
+scalbn(7, -4) = 0.4375
+scalbn(1, -1074) = 4.94066e-324 (minimum positive subnormal double)
+scalbn(nextafter(1,0), 1024) = 1.79769e+308 (largest finite double)
+scalbn(-0, 10) = -0
+scalbn(-Inf, -1) = -inf
+scalbn(1, 1024) = inf
+    errno == ERANGE: Numerical result out of range
+    FE_OVERFLOW raised
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc frexp}}
+{{dsc inc|cpp/numeric/math/dsc ldexp}}
+{{dsc see c|c/numeric/math/scalbn}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

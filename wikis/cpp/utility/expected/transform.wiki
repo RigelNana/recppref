@@ -1,0 +1,115 @@
+{{cpp/utility/expected/title|transform}}
+{{cpp/utility/expected/navbar}}
+{{dcl begin}}
+{{dcl h|Primary template}}
+{{dcla|num=1|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;;
+}}
+{{dcla|num=2|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;;
+}}
+{{dcla|num=3|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;&amp;;
+}}
+{{dcla|num=4|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;&amp;;
+}}
+{{dcl h|{{c/core|void}} partial specialization}}
+{{dcla|num=5|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;;
+}}
+{{dcla|num=6|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;;
+}}
+{{dcla|num=7|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;&amp;;
+}}
+{{dcla|num=8|since=c++23|
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;&amp;;
+}}
+{{dcl end}}
+
+If {{c|*this}} represents an expected value, invokes {{c|f}} and returns a {{tt|std::expected}} object that contains an expected value, which is initialized with its result (or value-initialized if the result type is {{c/core|void}}). Otherwise, returns a {{tt|std::expected}} object that contains an unexpected value, which is initialized with the unexpected value of {{c|*this}}.
+@1-4@ {{c|f}} is invoked with the expected value {{rlpi|/#Data members|val}} of {{c|*this}} as the argument.
+@5-8@ {{c|f}} is invoked without any argument.
+
+Given type {{tt|U}} as:
+@1,2@ {{c/core|std::remove_cv_t&lt;std::invoke_result_t&lt;F, decltype((}}{{tti|val}}{{c/core|))&gt;&gt;}}
+@3,4@ {{c/core|std::remove_cv_t&lt;std::invoke_result_t&lt;F, decltype(std::move(}}{{tti|val}}{{c/core|))&gt;&gt;}}
+@5-8@ {{c/core|std::remove_cv_t&lt;std::invoke_result_t&lt;F&gt;&gt;}}
+
+If any of the following conditions is satisfied, the program is ill-formed:
+* {{tt|U}} is not a valid value type for {{tt|std::expected}}.
+* {{c|std::is_void_v&lt;U&gt;}} is {{c|false}}, and the following corresponding declaration is ill-formed:
+:@1,2@ {{box|{{c/core|U u(std::invoke(std::forward&lt;F&gt;(f),}}{{nbspt}}{{tti|val}}{{c/core|));}}}}
+:@3,4@ {{box|{{c/core|U u(std::invoke(std::forward&lt;F&gt;(f), std::move(}}{{tti|val}}{{c/core|)));}}}}
+:@5-8@ {{c|U u(std::invoke(std::forward&lt;F&gt;(f)));}}
+
+
+@1,2@ {{cpp/enable if|plural=yes|{{c|std::is_constructible_v&lt;E, decltype(error())&gt;}} is {{c|true}}}}.
+
+@3,4@ {{cpp/enable if|plural=yes|{{c|std::is_constructible_v&lt;E, decltype(std::move(error()))&gt;}} is {{c|true}}}}.
+
+@5,6@ {{cpp/enable if|plural=yes|{{c|std::is_constructible_v&lt;E, decltype(error())&gt;}} is {{c|true}}}}.
+
+@7,8@ {{cpp/enable if|plural=yes|{{c|std::is_constructible_v&lt;E, decltype(std::move(error()))&gt;}} is {{c|true}}}}.
+
+===Parameters===
+{{par begin}}
+{{par|f|a suitable function or {{named req|Callable}} object whose call signature returns a non-reference type}}
+{{par end}}
+
+===Return value===
+Given expression {{c|expr}} as:
+@1,2@ {{box|{{c/core|std::invoke(std::forward&lt;F&gt;(f),}}{{nbspt}}{{tti|val}}{{c/core|)}}}}
+@3,4@ {{box|{{c/core|std::invoke(std::forward&lt;F&gt;(f),std::move(}}{{tti|val}}{{c/core|))}}}}
+@5-8@ {{c|std::invoke(std::forward&lt;F&gt;(f))}}
+
+The return values are defined as follows:
+{|class="wikitable"
+!rowspan=2|{{nbsp}}Overload{{nbsp}}
+!colspan=2|Value of {{rlpf|operator bool|has_value}}
+|-
+!style="font-weight: normal;"|{{c|true}}
+!style="font-weight: normal;"|{{c|false}}
+|-
+|style="text-align: center;"|{{vl|1,2}}
+|rowspan=4|
+* If {{c|std::is_void_v&lt;U&gt;}} is {{c|false}}, returns {{box|{{c/core|std::expected&lt;U, E&gt;}}&lt;br&gt;{{nbspt|4}}{{c/core|(std::in_place, expr)}}}}.
+* Otherwise, returns {{c|std::expected&lt;U, E&gt;()}} (but still evaluates {{c|expr}}).
+|{{c|std::expected&lt;U, E&gt;(std::unexpect, error())}}
+|-
+|style="text-align: center;"|{{vl|3,4}}
+|{{box|{{c/core|std::expected&lt;U, E&gt;}}&lt;br&gt;{{nbspt|4}}{{c/core|(std::unexpect, std::move(error()))}}}}
+|-
+|style="text-align: center;"|{{vl|5,6}}
+|{{c|std::expected&lt;U, E&gt;(std::unexpect, error())}}
+|-
+|style="text-align: center;"|{{vl|7,8}}
+|{{box|{{c/core|std::expected&lt;U, E&gt;}}&lt;br&gt;{{nbspt|4}}{{c/core|(std::unexpect, std::move(error()))}}}}
+|}
+
+===Example===
+{{example}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3938|std=C++23|before=the expected value was obtained by {{c|value()}}&lt;ref&gt;{{rlpf|value}} requires {{tt|E}} to be copy constructible (see {{lwg|3843}}), where {{rlpt|operator*}} does not.&lt;/ref&gt;|after=changed to {{c|**this}}}}
+{{dr list item|wg=lwg|dr=3973|std=C++23|before=the expected value was obtained by {{c|**this}}&lt;ref&gt;{{c|**this}} can trigger [[cpp/language/adl|argument-dependent lookup]].&lt;/ref&gt;|after=changed to {{box|{{rlpi|/#Data members|val}}}}}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc transform_error}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,103 @@
+{{cpp/title|format_kind}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class R &gt;
+constexpr /* unspecified */ format_kind = /* unspecified */;
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; ranges::input_range R &gt;
+    requires std::same_as&lt;R, std::remove_cvref_t&lt;R&gt;&gt;
+constexpr range_format format_kind&lt;R&gt; = /* see description */;
+}}
+{{dcl end}}
+
+The variable template {{tt|format_kind}} selects an appropriate {{lc|std::range_format}} for a range {{tt|R}}.
+
+{{c|std::format_kind&lt;R&gt;}} is defined as follows:
+* If {{c|std::same_as&lt;std::remove_cvref_t&lt;ranges::range_reference_t&lt;R&gt;&gt;, R&gt;}} is {{c|true}}, {{c|std::format_kind&lt;R&gt;}} is {{c|std::range_format::disabled}}.
+* Otherwise, if {{tt|R::key_type}} is valid and denotes a type:
+** If {{tt|R::mapped_type}} is valid and denotes a type, let {{tt|U}} be {{c|std::remove_cvref_t&lt;ranges::range_reference_t&lt;R&gt;&gt;}}.
+:: If either {{tt|U}} is a specialization of {{lc|std::pair}} or {{tt|U}} is a specialization of {{lc|std::tuple}} and {{c|1=std::tuple_size_v&lt;U&gt; == 2}}, {{c|std::format_kind&lt;R&gt;}} is {{c|std::range_format::map}}.
+:* Otherwise, {{c|std::format_kind&lt;R&gt;}} is {{c|std::range_format::set}}.
+* Otherwise, {{c|std::format_kind&lt;R&gt;}} is {{c|std::range_format::sequence}}.
+
+A program that instantiates a primary template of the {{tt|format_kind}} variable template is ill-formed.
+
+Given a cv-unqualified {{lsd|cpp/language/type#Program-defined type}} {{tt|T}} that models {{lconcept|input_range}}, a program can specialize {{tt|format_kind}} for {{tt|T}}. Such specializations are usable in constant expressions, and have type {{c/core|const std::range_format}}.
+
+===Possible implementation===
+{{eq fun
+|1=
+namespace detail
+{
+    template&lt; typename &gt;
+    constexpr bool is_pair_or_tuple_2 = false;
+    
+    template&lt; typename T, typename U &gt;
+    constexpr bool is_pair_or_tuple_2&lt;std::pair&lt;T, U&gt;&gt; = true;
+    
+    template&lt; typename T, typename U &gt;
+    constexpr bool is_pair_or_tuple_2&lt;std::tuple&lt;T, U&gt;&gt; = true;
+    
+    template &lt; typename T &gt;
+        requires std::is_reference_v&lt;T&gt; {{!!}} std::is_const_v&lt;T&gt;
+    constexpr bool is_pair_or_tuple_2&lt;T&gt; =
+        is_pair_or_tuple_2&lt;std::remove_cvref_t&lt;T&gt;&gt;;
+}
+
+template&lt; class R &gt;
+constexpr range_format format_kind = []
+{
+    static_assert(false, "instantiating a primary template is not allowed");
+    return range_format::disabled;
+}();
+
+template&lt; ranges::input_range R &gt;
+    requires std::same_as&lt;R, std::remove_cvref_t&lt;R&gt;&gt;
+constexpr range_format format_kind&lt;R&gt; = []
+{
+    if constexpr (std::same_as&lt;std::remove_cvref_t&lt;std::ranges::range_reference_t&lt;R&gt;&gt;, R&gt;)
+        return range_format::disabled;
+    else if constexpr (requires { typename R::key_type; })
+    {
+        if constexpr (requires { typename R::mapped_type; } &amp;&amp;
+                      detail::is_pair_or_tuple_2&lt;std::ranges::range_reference_t&lt;R&gt;&gt;)
+            return range_format::map;
+        else
+            return range_format::set;
+    }
+    else
+        return range_format::sequence;
+}();
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;filesystem&gt;
+#include &lt;format&gt;
+#include &lt;map&gt;
+#include &lt;set&gt;
+#include &lt;vector&gt;
+
+struct A {};
+
+static_assert(std::format_kind&lt;std::vector&lt;int&gt;&gt; == std::range_format::sequence);
+static_assert(std::format_kind&lt;std::map&lt;int&gt;&gt; == std::range_format::map);
+static_assert(std::format_kind&lt;std::set&lt;int&gt;&gt; == std::range_format::set);
+static_assert(std::format_kind&lt;std::filesystem::path&gt; == std::range_format::disabled);
+// ill-formed:
+// static_assert(std::format_kind&lt;A&gt; == std::range_format::disabled);
+
+int main() {}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc range_format}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

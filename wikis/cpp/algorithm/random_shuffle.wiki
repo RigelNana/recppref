@@ -1,0 +1,148 @@
+{{cpp/title|random_shuffle|shuffle}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|until=c++17|deprecated=c++14|
+template&lt; class RandomIt &gt;
+void random_shuffle( RandomIt first, RandomIt last );
+}}
+{{dcl rev begin|num=2}}
+{{dcla|until=c++11|anchor=2|
+template&lt; class RandomIt, class RandomFunc &gt;
+void random_shuffle( RandomIt first, RandomIt last, RandomFunc&amp; r );
+}}
+{{dcl|since=c++11|until=c++17|deprecated=c++14|
+template&lt; class RandomIt, class RandomFunc &gt;
+void random_shuffle( RandomIt first, RandomIt last, RandomFunc&amp;&amp; r );
+}}
+{{dcl rev end}}
+{{dcla|num=3|since=c++11|
+template&lt; class RandomIt, class URBG &gt;
+void shuffle( RandomIt first, RandomIt last, URBG&amp;&amp; g );
+}}
+{{dcl end}}
+
+Reorders the elements in the given range {{range|first|last}} such that each possible permutation of those elements has equal probability of appearance.
+
+@1@ The source of randomness is implementation-defined, but the function {{lc|std::rand}} is often used.
+
+@2@ The source of randomness is the function object {{c|r}}.
+@@ If any of the following conditions is satisfied, the behavior is undefined:
+* The return type of {{c|r}} is not convertible to {{c/core|std::iterator_traits&lt;RandomIt&gt;::difference_type}}.
+* Given a positive value {{c|n}} of type {{c/core|std::iterator_traits&lt;RandomIt&gt;::difference_type}}, the result of {{c|r(n)}} is not a randomly chosen value in the interval {{range|0|n}}.
+
+@3@ The source of randomness is the object {{c|g}}.
+@@ Given the type {{tt|T}} as {{c/core|std::remove_reference_t&lt;URBG&gt;}}, if any of the following conditions is satisfied, the behavior is undefined:
+* {{tt|T}} is not a {{named req|UniformRandomBitGenerator}}.
+{{rrev|until=c++20|
+* {{tt|T::result_type}} is not convertible to {{c/core|std::iterator_traits&lt;RandomIt&gt;::difference_type}}.
+}}
+
+If {{rev inl|until=c++11|the type of {{c|*first}} is not {{named req|Swappable}}}}{{rev inl|since=c++11|{{tt|RandomIt}} is not {{named req|ValueSwappable}}}}, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to shuffle randomly}}
+{{par|r|function object returning a randomly chosen value}}
+{{par|g|generator object returning a randomly chosen value}}
+{{par hreq}}
+{{par req named|RandomIt|RandomAccessIterator}}
+{{par end}}
+
+===Complexity===
+Exactly {{c|std::distance(first, last) - 1}} swaps.
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L4551 libstdc++] and [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L3066 libc++].
+{{eq impl
+|title1=random_shuffle (1)|ver1=1|1=
+template&lt;class RandomIt&gt;
+void random_shuffle(RandomIt first, RandomIt last)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::difference_type diff_t;
+    
+    for (diff_t i = last - first - 1; i &gt; 0; --i)
+    {
+        using std::swap;
+        swap(first[i], first[std::rand() % (i + 1)]);
+        // rand() % (i + 1) is not actually correct, because the generated number is
+        // not uniformly distributed for most values of i. The correct code would be
+        // a variation of the C++11 std::uniform_int_distribution implementation.
+    }
+}
+|title2=random_shuffle (2)|ver2=2|2=
+template&lt;class RandomIt, class RandomFunc&gt;
+void random_shuffle(RandomIt first, RandomIt last, RandomFunc&amp;&amp; r)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::difference_type diff_t;
+    
+    for (diff_t i = last - first - 1; i &gt; 0; --i)
+    {
+        using std::swap;
+        swap(first[i], first[r(i + 1)]);
+    }
+}
+|title3=shuffle (3)|ver3=3|3=
+template&lt;class RandomIt, class URBG&gt;
+void shuffle(RandomIt first, RandomIt last, URBG&amp;&amp; g)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::difference_type diff_t;
+    typedef std::uniform_int_distribution&lt;diff_t&gt; distr_t;
+    typedef typename distr_t::param_type param_t;
+    
+    distr_t D;
+    for (diff_t i = last - first - 1; i &gt; 0; --i)
+    {
+        using std::swap;
+        swap(first[i], first[D(g, param_t(0, i))]);
+    }
+}
+}}
+
+===Notes===
+Note that the implementation is not dictated by the standard, so even if you use exactly the same {{tt|RandomFunc}} or {{tt|URBG}} (Uniform Random Number Generator) you may get different results with different standard library implementations.
+
+The reason for removing {{tt|std::random_shuffle}} in C++17 is that the iterator-only version usually depends on {{lc|std::rand}}, which is now also discussed for deprecation. ({{lc|std::rand}} should be replaced with the classes of the {{header|random}} header, as {{lc|std::rand}} is ''considered harmful''.) In addition, the iterator-only {{tt|std::random_shuffle}} version usually depends on a global state. The {{tt|std::shuffle}}'s shuffle algorithm is the preferred replacement, as it uses a {{tt|URBG}} as its 3rd parameter.
+
+===Example===
+{{example
+|Randomly shuffles the sequence {{closed range plain|1|10}} of integers:
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    
+    std::random_device rd;
+    std::mt19937 g(rd());
+    
+    std::shuffle(v.begin(), v.end(), g);
+    
+    std::copy(v.begin(), v.end(), std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+8 6 10 4 2 3 7 1 9 5
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=395|std=C++98|before=the source of randomness of overload {{v|1}} was not specified, and&lt;br&gt;{{lc|std::rand}} could not be the source due to the C library requirement|after=it is implementation-defined,&lt;br&gt;and using {{lc|std::rand}} is allowed}}
+{{dr list item|wg=lwg|dr=552|paper=N2423|std=C++98|before={{c|r}} was not required to be the source&lt;br&gt;of randomness of overload {{v|2}}&lt;ref&gt;Overload {{v|3}} has the same defect, but that part of the resolution is not applicable to C++98.&lt;/ref&gt;|after=required}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/dsc prev_permutation}}
+{{dsc inc|cpp/algorithm/ranges/dsc shuffle}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

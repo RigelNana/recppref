@@ -1,0 +1,98 @@
+{{cpp/experimental/parallel/title|transform_reduce}}
+{{cpp/experimental/parallelism/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/numeric}}
+{{dcl|num=1|since=parallelism|
+template&lt; class InputIt, class UnaryOp, class T, class BinaryOp &gt;
+T transform_reduce( InputIt first, InputIt last,
+                    UnaryOp unary_op, T init, BinaryOp binary_op );
+}}
+{{dcl|num=2|since=parallelism|
+template&lt; class ExecutionPolicy,
+          class InputIt, class UnaryOp, class T, class BinaryOp &gt;
+T transform_reduce( ExecutionPolicy&amp;&amp; policy,
+                    InputIt first, InputIt last,
+                    UnaryOp unary_op, T init, BinaryOp binary_op );
+}}
+{{dcl end}}
+
+Applies {{c|unary_op}} to each element in the range {{range|first|last}} and reduces the results (possibly permuted and aggregated in unspecified manner) along with the initial value {{c|init}} over {{c|binary_op}}.
+
+The behavior is non-deterministic if {{c|binary_op}} is not associative or not commutative.
+
+The behavior is undefined if {{c|unary_op}} or {{c|binary_op}} modifies any element or invalidates any iterator in {{range|first|last}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to apply the algorithm to}}
+{{par|init|the initial value of the generalized sum}}
+{{par|policy|the [[cpp/experimental/parallelism#Execution_policies|execution policy]]}}
+{{par|unary_op|unary {{named req|FunctionObject}} that will be applied to each element of the input range. The return type must be acceptable as input to {{c|binary_op}}}}
+{{par|binary_op|binary {{named req|FunctionObject}} that will be applied in unspecified order to the results of {{c|unary_op}}, the results of other {{c|binary_op}} and {{c|init}}}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===Return value===
+Generalized sum of {{c|init}} and {{c|unary_op(*first)}}, {{c|unary_op(*(first + 1))}}, ... {{c|unary_op(*(last - 1))}} over {{c|binary_op}},
+where generalized sum {{math|GSUM(op, a{{su|b=1}}, ..., a{{su|b=N}})}} is defined as follows: 
+* if {{math|N {{=}} 1}}, {{math|a{{su|b=1}}}},
+* if {{math|N &gt; 1}}, {{math|op(GSUM(op, b{{su|b=1}}, ..., b{{su|b=K}}), GSUM(op, b{{su|b=M}}, ..., b{{su|b=N}}))}} where
+:* {{math|b{{su|b=1}}, ..., b{{su|b=N}}}} may be any permutation of {{math|a1, ..., aN}} and
+:* {{math|1 &lt; K + 1 {{=}} M ≤ N}}
+
+in other words, the results of {{c|unary_op}} may be grouped and arranged in arbitrary order.
+
+===Complexity===
+{{math|O(last - first)}} applications each of {{c|unary_op}} and {{c|binary_op}}.
+
+===Exceptions===
+{{cpp/experimental/exceptions_reporting_behavior}}
+
+===Notes===
+{{c|unary_op}} is not applied to {{c|init}}.
+
+If the range is empty, {{c|init}} is returned, unmodified.
+
+{{cpp/experimental/execution_policy_note}}
+
+===Example===
+{{example|transform_reduce can be used to parallelize {{lc|std::inner_product}}:
+|code=
+#include &lt;boost/iterator/zip_iterator.hpp&gt;
+#include &lt;boost/tuple.hpp&gt;
+#include &lt;experimental/execution_policy&gt;
+#include &lt;experimental/numeric&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;double&gt; xvalues(10007, 1.0), yvalues(10007, 1.0);
+
+    double result = std::experimental::parallel::transform_reduce(
+        std::experimental::parallel::par,
+        boost::iterators::make_zip_iterator(
+            boost::make_tuple(std::begin(xvalues), std::begin(yvalues))),
+        boost::iterators::make_zip_iterator(
+            boost::make_tuple(std::end(xvalues), std::end(yvalues))),
+        [](auto r) { return boost::get&lt;0&gt;(r) * boost::get&lt;1&gt;(r); }
+        0.0,
+        std::plus&lt;&gt;()
+    );
+    std::cout &lt;&lt; result &lt;&lt; '\n';
+}
+|output=
+10007
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/experimental/parallelism/dsc reduce}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

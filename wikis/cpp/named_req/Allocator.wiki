@@ -1,0 +1,391 @@
+{{cpp/named req/title|Allocator}}
+{{cpp/named req/navbar}}
+
+Encapsulates strategies for access/addressing, allocation/deallocation and construction/destruction of objects.
+
+Every standard library component that may need to allocate or release storage, from {{lc|std::string}}, {{lc|std::vector}}, and every container{{rev inl|since=c++11|, except {{lc|std::array}}}}{{rev inl|since=c++26| and {{lc|std::inplace_vector}}}}, to {{lc|std::shared_ptr}}{{rev inl|until=c++17| and {{lc|std::function}}}}, does so through an {{named req|Allocator}}: an object of a class type that satisfies the following requirements.
+
+The implementation of many allocator requirements is optional because all {{named req|AllocatorAwareContainer}} access allocators indirectly through {{lc|std::allocator_traits}}, and {{lc|std::allocator_traits}} supplies the default implementation of those requirements.
+
+===Requirements===
+Given
+* {{tt|T}}, a {{rev inl|until=c++11|non-const, non-reference type}}{{rev inl|since=c++11|until=c++17|non-const object type}}{{rev inl|since=c++17|cv-unqualified object type}},
+* {{tt|A}}, an {{named req/core|Allocator}} type for type {{tt|T}},
+* {{c|a}}, an object of type {{tt|A}},
+* {{tt|B}}, the corresponding {{named req/core|Allocator}} type for some cv-unqualified object type {{tt|U}} (as obtained by rebinding {{tt|A}}),
+* {{c|b}}, an object of type {{tt|B}},
+* {{c|p}}, a value of type {{c/core|std::allocator_traits&lt;A&gt;::pointer}}, obtained by calling {{c|std::allocator_traits&lt;A&gt;::allocate()}},
+* {{c|cp}}, a value of type {{c/core|std::allocator_traits&lt;A&gt;::const_pointer}}, obtained by conversion from {{c|p}},
+* {{c|vp}}, a value of type {{c/core|std::allocator_traits&lt;A&gt;::void_pointer}}, obtained by conversion from {{c|p}},
+* {{c|cvp}}, a value of type {{c/core|std::allocator_traits&lt;A&gt;::const_void_pointer}}, obtained by conversion from {{c|cp}} or from {{c|vp}},
+* {{c|xp}}, a dereferenceable pointer to some cv-unqualified object type {{tt|X}},
+* {{c|r}}, an lvalue of type {{tt|T}} obtained by the expression {{c|*p}},
+* {{c|n}}, a value of type {{c/core|std::allocator_traits&lt;A&gt;::size_type}}.
+
+{|table class=wikitable
+|+Inner types
+|-
+!Type-id||Aliased type||Requirements
+|-
+|{{tt|A::pointer}} {{mark optional}}
+|''(unspecified)''&lt;ref&gt;See also [[#Fancy pointers|fancy pointers]] below.&lt;/ref&gt;
+|
+* Satisfies {{named req|NullablePointer}}, {{named req|RandomAccessIterator}}, and {{named req|ContiguousIterator}}. {{mark unreviewed dr|LWG|2794}}
+|-
+|{{tt|A::const_pointer}} {{mark optional}}
+|''(unspecified)''
+|
+* Satisfies {{named req|NullablePointer}}, {{named req|RandomAccessIterator}}, and {{named req|ContiguousIterator}}.
+* {{tt|A::pointer}} is convertible to {{tt|A::const_pointer}}.
+|-
+|{{tt|A::void_pointer}} {{mark optional}}
+|''(unspecified)''
+|
+* Satisfies {{named req|NullablePointer}}.
+* {{tt|A::pointer}} is convertible to {{tt|A::void_pointer}}.
+* {{tt|B::void_pointer}} and {{tt|A::void_pointer}} are the same type.
+|-
+|{{tt|A::const_void_pointer}} {{mark optional}}
+|''(unspecified)''
+|
+* Satisfies {{named req|NullablePointer}}.
+* {{tt|A::pointer}}, {{tt|A::const_pointer}}, and {{tt|A::void_pointer}} are convertible to {{tt|A::const_void_pointer}}.
+* {{tt|B::const_void_pointer}} and {{tt|A::const_void_pointer}} are the same type.
+|-
+|{{tt|A::value_type}}
+|{{tt|T}}
+|
+|-
+|{{tt|A::size_type}} {{mark optional}}
+|''(unspecified)''
+|
+* An unsigned integer type.
+* Can represent the size of the largest object {{tt|A}} can allocate.
+|-
+|{{tt|A::difference_type}} {{mark optional}}
+|''(unspecified)''
+|
+* A signed integer type.
+* Can represent the difference of any two pointers to the objects allocated by {{tt|A}}.
+|-
+|{{tt|A::template&amp;nbsp;rebind&amp;lt;U&gt;::other}}&lt;br&gt;{{mark optional}}&lt;ref&gt;{{tt|rebind}} is only optional (provided by {{lc|std::allocator_traits}}) if this allocator is a template of the form {{tt|SomeAllocator&lt;T, Args&gt;}}, where {{tt|Args}} is zero or more additional template type parameters.&lt;/ref&gt;
+|{{tt|B}}
+|
+* For any {{tt|U}}, {{tt|B::template rebind&lt;T&gt;::other}} is {{tt|A}}.
+|}
+
+{|table class=wikitable
+|+Operations on pointers
+|-
+!Expression||Return type||Requirements
+|-
+|{{c|*p}}
+|{{tt|T&amp;}}
+|
+|-
+|{{c|*cp}}
+|{{c/core|const T&amp;}}
+|{{c|*cp}} and {{c|*p}} identify the same object.
+|-
+|{{c|p-&gt;m}}
+|&lt;abbr title="The type of T::m."&gt;''(as is)''&lt;/abbr&gt;
+|Same as {{c|(*p).m}}, if {{c|(*p).m}} is well-defined.
+|-
+|{{c|cp-&gt;m}}
+|&lt;abbr title="The type of T::m."&gt;''(as is)''&lt;/abbr&gt;
+|Same as {{c|(*cp).m}}, if {{c|(*cp).m}} is well-defined.
+|-
+|{{c|static_cast&lt;A::pointer&gt;(vp)}}
+|&lt;abbr title="A::pointer"&gt;''(as is)''&lt;/abbr&gt;
+|{{c|1=static_cast&lt;A::pointer&gt;(vp) == p}}
+|-
+|{{c|static_cast&lt;A::const_pointer&gt;(cvp)}}
+|&lt;abbr title="A::const_pointer"&gt;''(as is)''&lt;/abbr&gt;
+|{{c|1=static_cast&lt;A::const_pointer&gt;(cvp) == cp}}
+|-
+|{{c|std::pointer_traits&lt;A::pointer&gt;::pointer_to(r)}}{{mark unreviewed dr|LWG|2260}}
+|&lt;abbr title="A::pointer"&gt;''(as is)''&lt;/abbr&gt;
+|
+|}
+
+{|table class=wikitable
+|+Storage and lifetime operations
+|-
+!Expression||Return type||Requirements
+|-
+|{{c|a.allocate(n)}}
+|rowspan=2|{{tt|A::pointer}}
+|Allocates storage suitable for an array object of type {{tt|T[n]}} and creates the array, but does not construct array elements. May throw exceptions. If {{c|1=n == 0}}, the return value is unspecified.
+|-
+|{{c|a.allocate(n, cvp)}} {{mark optional}}
+|Same as {{c|a.allocate(n)}}, but may use {{c|cvp}} ({{c|nullptr}} or a pointer obtained from {{c|a.allocate()}}) in unspecified manner to aid locality.
+|-
+|{{c|a.allocate_at_least(n)}} {{mark optional}} {{mark since c++23}}
+|{{c/core|std::allocation_result
+    &lt;A::pointer&gt;}}
+|Allocates storage suitable for an array object of type {{tt|T[cnt]}} and creates the array, but does not construct array elements, then returns {{c|{p, cnt}&lt;!----&gt;}}, where {{c|p}} points to the storage and {{c|cnt}} is not less than {{c|n}}. May throw exceptions.
+|-
+|{{c|a.deallocate(p, n)}}
+|''(not used)''
+|Deallocates storage pointed to {{c|p}}, which must be a value returned by a previous call to {{tt|allocate}} {{rev inl|since=c++23|or {{tt|allocate_at_least}}}} that has not been invalidated by an intervening call to {{tt|deallocate}}. {{c|n}} must match the value previously passed to {{tt|allocate}}{{rev inl|since=c++23|or be between the request and returned number of elements via {{tt|allocate_at_least}} (may be equal to either bound)}}. Does not throw exceptions.
+|-
+|{{c|a.max_size()}} {{mark optional}}
+|{{tt|A::size_type}}
+|The largest value that can be passed to {{c|A::allocate()}}.
+|-
+|{{c|a.construct(xp, args...)}} {{mark optional}}
+|''(not used)''
+|Constructs an object of type {{tt|X}} in previously-allocated storage at the address pointed to by {{c|xp}}, using {{c|args...}} as the constructor arguments.
+|-
+|{{c|a.destroy(xp)}} {{mark optional}}
+|''(not used)''
+|Destructs an object of type {{tt|X}} pointed to by {{c|xp}}, but does not deallocate any storage.
+|}
+
+{|table class=wikitable
+|+Relationship between instances
+|-
+!Expression||Return type||Requirements
+|-
+|{{c|1=a1 == a2}}
+|rowspan=2|{{c/core|bool}}
+|
+* {{c|true}} only if the storage allocated by the allocator {{c|a1}} can be deallocated through {{c|a2}}.
+* Establishes reflexive, symmetric, and transitive relationship.
+* Does not throw exceptions.
+|-
+|{{c|1=a1 != a2}}
+|
+* Same as {{c|1=!(a1 == a2)}}.
+|-
+!Declaration||Effect||Requirements
+|-
+|{{c|A a1(a)}}
+|rowspan=2|Copy-constructs {{c|a1}} such that {{c|1=a1 == a}}.&lt;br&gt;(Note: Every {{named req/core|Allocator}} also satisfies {{named req|CopyConstructible}}.)
+|rowspan=2|
+* Does not throw exceptions.
+|-
+|{{c|1=A a1 = a}}
+|-
+|{{c|A a(b)}}
+|Constructs {{c|a}} such that {{c|1=B(a) == b}} and {{c|1=A(b) == a}}.&lt;br&gt;(Note: This implies that all allocators related by {{tt|rebind}} maintain each other's resources, such as memory pools.)
+|
+* Does not throw exceptions.
+|-
+|{{c|A a1(std::move(a))}}
+|rowspan=2|Constructs {{c|a1}} such that it equals the prior value of {{c|a}}.
+|rowspan=2|
+* Does not throw exceptions.
+* The value of {{c|a}} is unchanged and {{c|1=a1 == a}}.
+|-
+|{{c|1=A a1 = std::move(a)}}
+|-
+|{{c|A a(std::move(b))}}
+|Constructs {{c|a}} such that it equals the prior value of {{c|A(b)}}.
+|
+* Does not throw exceptions.
+|-
+!Type-id||Aliased type||Requirements
+|-
+|{{tt|A::is_always_equal}}&lt;br&gt;{{mark optional}}&lt;!--LWG2108--&gt;
+|{{lc|std::true_type}} or {{lc|std::false_type}} or derived from such.
+|
+* {{c|true}} if any two allocators of type {{tt|A}} always compare equal.
+* (If not provided, {{lc|std::allocator_traits}} defaults this to {{c/core|std::is_empty&lt;A&gt;::type}}.)
+|}
+
+{|table class=wikitable
+|+Influence on container operations
+|-
+!Expression||Return type||Description
+|-
+|{{c|a.select_on_container_copy_construction()}}&lt;br&gt;{{mark optional}}
+|{{tt|A}}
+|
+* Provides an instance of {{tt|A}} to be used by the container that is copy-constructed from the one that uses {{c|a}} currently.
+* (Usually returns either a copy of {{c|a}} or a default-constructed {{tt|A}}.)
+|-
+!Type-id||Aliased type||Description
+|-
+|{{tt|A::propagate_on_container_copy_assignment}}&lt;br&gt;{{mark optional}}
+|rowspan=3|{{lc|std::true_type}} or {{lc|std::false_type}} or derived from such.
+|
+* {{lc|std::true_type}} or derived from it if the allocator of type {{tt|A}} needs to be copied when the container that uses it is copy-assigned.
+* If this member is {{lc|std::true_type}} or derived from it, then {{tt|A}} must satisfy {{named req|CopyAssignable}} and the copy operation must not throw exceptions.
+* Note that if the allocators of the source and the target containers do not compare equal, copy assignment has to deallocate the target's memory using the old allocator and then allocate it using the new allocator before copying the elements (and the allocator).
+|-
+|{{tt|A::propagate_on_container_move_assignment}}&lt;br&gt;{{mark optional}}
+|
+* {{lc|std::true_type}} or derived from it if the allocator of type {{tt|A}} needs to be moved when the container that uses it is move-assigned.
+* If this member is {{lc|std::true_type}} or derived from it, then {{tt|A}} must satisfy {{named req|MoveAssignable}} and the move operation must not throw exceptions.
+* If this member is not provided or derived from {{lc|std::false_type}} and the allocators of the source and the target containers do not compare equal, move assignment cannot take ownership of the source memory and must move-assign or move-construct the elements individually, resizing its own memory as needed.
+|-
+|{{tt|A::propagate_on_container_swap}}&lt;br&gt;{{mark optional}}
+|
+* {{lc|std::true_type}} or derived from it if the allocators of type {{tt|A}} need to be swapped when two containers that use them are swapped.
+* If this member is {{lc|std::true_type}} or derived from it, type {{tt|A}} must satisfy {{named req|Swappable}} and the swap operation must not throw exceptions.
+* If this member is not provided or derived from {{lc|std::false_type}} and the allocators of the two containers do not compare equal, the behavior of container swap is undefined.
+|}
+
+Notes:
+&lt;references/&gt;
+
+Given
+* {{c|x1}} and {{c|x2}}, objects of (possibly different) types {{tt|X::void_pointer}}, {{tt|X::const_void_pointer}}, {{tt|X::pointer}}, or {{tt|X::const_pointer}}
+
+:Then, {{c|x1}} and {{c|x2}} are ''equivalently-valued'' pointer values, if and only if both {{c|x1}} and {{c|x2}} can be explicitly converted to the two corresponding objects {{c|px1}} and {{c|px2}} of type {{tt|X::const_pointer}}, using a sequence of {{c/core|static_cast}}s using only these four types, and the expression {{c|1=px1 == px2}} evaluates to {{c|true}}.
+
+Given
+* {{c|w1}} and {{c|w2}}, objects of type {{tt|X::void_pointer}}
+
+:Then, for the expression {{c|1=w1 == w2}} and {{c|1=w1 != w2}} either or both objects may be replaced by an ''equivalently-valued'' object of type {{tt|X::const_void_pointer}} with no change in semantics.
+
+Given
+* {{c|p1}} and {{c|p2}}, objects of type {{tt|X::pointer}}
+
+:Then, for the expressions {{c|1=p1 == p2}}, {{c|1=p1 != p2}}, {{c|p1 &lt; p2}}, {{c|1=p1 &lt;= p2}}, {{c|1=p1 &gt;= p2}}, {{c|p1 &gt; p2}}, {{c|p1 - p2}} either or both objects may be replaced by an ''equivalently-valued'' object of type {{tt|X::const_pointer}} with no change in semantics.
+
+The above requirements make it possible to compare {{named req|Container}}'s {{tt|iterator}}s and {{tt|const_iterator}}s.
+
+{{rrev|since=c++17|
+====Allocator completeness requirements====
+An allocator type {{tt|X}} for type {{tt|T}} additionally satisfies the ''allocator completeness requirements'' if both of the following are true regardless of whether {{tt|T}} is a complete type:
+* {{tt|X}} is a complete type.
+* Except for {{tt|value_type}}, all the member types of {{c/core|std::allocator_traits&lt;X&gt;}} are complete types.
+}}
+
+===Stateful and stateless allocators===
+Every {{named req/core|Allocator}} type is either ''stateful'' or ''stateless''. Generally, a stateful allocator type can have unequal values which denote distinct memory resources, while a stateless allocator type denotes a single memory resource.
+
+{{rrev multi|until1=c++11|rev1=
+Although custom allocators are not required to be stateless, whether and how the use of stateful allocators in the standard library is implementation-defined. Use of unequal allocator values may result in implementation-defined runtime errors or undefined behavior if the implementation does not support such usage.
+|rev2=
+Custom allocators may contain state. Each container or another allocator-aware object stores an instance of the supplied allocator and controls allocator replacement through {{lc|std::allocator_traits}}.
+}}
+
+Instances of a stateless allocator type always compare equal. Stateless allocator types are typically implemented as empty classes and suitable for [[cpp/language/ebo|empty base class optimization]].
+
+{{rrev|since=c++11&lt;!-- N4258 &amp; LWG2108 --&gt;|
+The member type {{tt|is_always_equal}} of {{lc|std::allocator_traits}} is intendedly used for determining whether an allocator type is stateless.
+}}
+
+===Fancy pointers===
+When the member type {{tt|pointer}} is not a raw pointer type, it is commonly referred to as a  {{stddoc|P0773R0|"fancy pointer"}}. Such pointers were introduced to support segmented memory architectures and are used today to access objects allocated in address spaces that differ from the homogeneous virtual address space that is accessed by raw pointers. An example of a fancy pointer is the mapping address-independent pointer [https://www.boost.org/doc/libs/release/doc/html/interprocess/offset_ptr.html {{tt|boost::interprocess::offset_ptr}}], which makes it possible to allocate node-based data structures such as {{lc|std::set}} in shared memory and memory mapped files mapped in different addresses in every process. Fancy pointers can be used independently of the allocator that provided them{{rev inl|since=c++11|, through the class template {{lc|std::pointer_traits}}}}. {{rev inl|since=c++20|The function {{lc|std::to_address}} can be used to obtain a raw pointer from a fancy pointer.}}
+
+{{rrev|until=c++11|
+Use of fancy pointers and customized size/different type in the standard libary are conditionally supported. Implementations may require that member type {{tt|pointer}}, {{tt|const_pointer}}, {{tt|size_type}}, and {{tt|difference_type}} are {{tt|value_type*}}, {{c/core|const value_type*}}, {{lc|std::size_t}}, and {{lc|std::ptrdiff_t}}, respectively.
+}}
+
+{{rrev|since=c++26|1=
+===Concept===
+For the definition of the query object {{lc|std::get_allocator}}, the following exposition-only concept is defined.
+
+{{dcl begin}}
+{{dcl|1=
+template&lt;class Alloc&gt;
+concept /*simple-allocator*/ = requires(Alloc alloc, std::size_t n)
+{
+    { *alloc.allocate(n) } -&gt; std::same_as&lt;typename Alloc::value_type&amp;&gt;;
+    { alloc.deallocate(alloc.allocate(n), n) };  
+} &amp;&amp; std::copy_constructible&lt;Alloc&gt;
+  &amp;&amp; std::equality_comparable&lt;Alloc&gt;;
+}}
+{{dcl end}}
+
+The exposition-only concept {{c/core|/*simple-allocator*/}} defines the minimal usability constraints of the {{named req|Allocator}} requirement.
+}}
+
+===Standard library===
+The following standard library components satisfy the {{named req/core|Allocator}} requirements:
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator}}
+{{dsc inc|cpp/memory/dsc scoped_allocator_adaptor}}
+{{dsc inc|cpp/memory/dsc polymorphic_allocator}}
+{{dsc end}}
+
+===Examples===
+{{example|Demonstrates a C++11 allocator, except for {{attr|nodiscard}} added to match C++20 style.
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &lt;new&gt;
+#include &lt;vector&gt;
+
+template&lt;class T&gt;
+struct Mallocator
+{
+    typedef T value_type;
+    
+    Mallocator() = default;
+    
+    template&lt;class U&gt;
+    constexpr Mallocator(const Mallocator &lt;U&gt;&amp;) noexcept {}
+    
+    [[nodiscard]] T* allocate(std::size_t n)
+    {
+        if (n &gt; std::numeric_limits&lt;std::size_t&gt;::max() / sizeof(T))
+            throw std::bad_array_new_length();
+        
+        if (auto p = static_cast&lt;T*&gt;(std::malloc(n * sizeof(T))))
+        {
+            report(p, n);
+            return p;
+        }
+        
+        throw std::bad_alloc();
+    }
+    
+    void deallocate(T* p, std::size_t n) noexcept
+    {
+        report(p, n, 0);
+        std::free(p);
+    }
+private:
+    void report(T* p, std::size_t n, bool alloc = true) const
+    {
+        std::cout &lt;&lt; (alloc ? "Alloc: " : "Dealloc: ") &lt;&lt; sizeof(T) * n
+                  &lt;&lt; " bytes at " &lt;&lt; std::hex &lt;&lt; std::showbase
+                  &lt;&lt; reinterpret_cast&lt;void*&gt;(p) &lt;&lt; std::dec &lt;&lt; '\n';
+    }
+};
+
+template&lt;class T, class U&gt;
+bool operator==(const Mallocator &lt;T&gt;&amp;, const Mallocator &lt;U&gt;&amp;) { return true; }
+
+template&lt;class T, class U&gt;
+bool operator!=(const Mallocator &lt;T&gt;&amp;, const Mallocator &lt;U&gt;&amp;) { return false; }
+
+int main()
+{
+    std::vector&lt;int, Mallocator&lt;int&gt;&gt; v(8);
+    v.push_back(42);
+}
+|p=true
+|output=
+Alloc: 32 bytes at 0x2020c20
+Alloc: 64 bytes at 0x2023c60
+Dealloc: 32 bytes at 0x2020c20
+Dealloc: 64 bytes at 0x2023c60
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=179|std=C++98|before={{tt|pointer}} and {{tt|const_pointer}} were not&lt;br&gt;required to be comparable with each other|after=required}}
+{{dr list item|wg=lwg|dr=199|std=C++98|before=the return value of {{c|a.allocate(0)}} was unclear|after=it is unspecified}}
+{{dr list item|wg=lwg|dr=258|paper=N2436|std=C++98|before=the equality relationship between allocators were&lt;br&gt;not required to be reflexive, symmetric or transitive|after=required to be reflexive,&lt;br&gt;symmetric and transitive}}
+{{dr list item|wg=lwg|dr=274|std=C++98|before={{tt|T}} could be a const-qualified type or reference type,&lt;br&gt;making {{lc|std::allocator}} possibly ill-formed&lt;ref&gt;The member types {{tt|reference}} and {{tt|const_reference}} of {{lc|std::allocator}} are defined as {{tt|T&amp;}} and {{tt|const T&amp;}} respectively.
+* If {{tt|T}} is a reference type, {{tt|reference}} and {{tt|const_reference}} are ill-formed because reference to reference cannot be formed ([[cpp/language/reference#Reference collapsing|reference collapsing]] was introduced in C++11).
+* If {{tt|T}} is const-qualified, {{tt|reference}} and {{tt|const_reference}} are the same, and the overload set of {{ltf|cpp/memory/allocator/address}} is ill-formed.&lt;/ref&gt;|after=prohibited these types}}
+&lt;!--although LWG 402 is resolved, the resolution targets C++98 and the defective requirement was removed in C++11--&gt;
+{{dr list item|wg=lwg|dr=2016|std=C++11|before=the copy, move and swap operations of&lt;br&gt;allocator might be throwing when used|after=required to be non-throwing}}
+{{dr list item|wg=lwg|dr=2081|std=C++98&lt;br&gt;C++11|before=allocators were not required to support copy&lt;br&gt;assignment (C++98) and move assignment (C++11)|after=required}}
+{{dr list item|wg=lwg|std=C++11|dr=2108|before=there was no way to show an allocator is stateless|after={{tt|is_always_equal}} provided}}
+{{dr list item|wg=lwg|dr=2263|std=C++11|before=the resolution of {{lwg|179}} was accidently dropped in C++11&lt;br&gt;and not generalized to {{tt|void_pointer}} and {{tt|const_void_pointer}}|after=restored and generalized}}
+{{dr list item|wg=lwg|dr=2447|std=C++11|before={{tt|T}} could be a volatile-qualified object type|after=prohibited these types}}
+{{dr list item|wg=lwg|dr=2593|std=C++11|before=moving from an allocator might modify its value|after=modification forbidden}}
+{{dr list item|paper=P0593R6|std=C++98|before={{tt|allocate}} were not required to create an&lt;br&gt;array object in the storage it allocated|after=required}}
+{{dr list end}}
+&lt;references/&gt;
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

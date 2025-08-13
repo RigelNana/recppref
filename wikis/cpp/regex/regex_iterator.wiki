@@ -1,0 +1,117 @@
+{{cpp/title|regex_iterator}}
+{{cpp/regex/regex_iterator/navbar}}
+{{ddcl|header=regex|since=c++11|1=
+template&lt;
+    class BidirIt,
+    class CharT = typename std::iterator_traits&lt;BidirIt&gt;::value_type,
+    class Traits = std::regex_traits&lt;CharT&gt;
+&gt; class regex_iterator
+}}
+
+{{tt|std::regex_iterator}} is a read-only iterator that accesses the individual matches of a regular expression within the underlying character sequence. It meets the requirements of a {{named req|ForwardIterator}}, except that for dereferenceable values {{c|a}} and {{c|b}} with {{c|1=a == b}}, {{c|*a}} and {{c|*b}} will not be bound to the same object.
+
+On construction, and on every increment, it calls {{lc|std::regex_search}} and remembers the result (that is, saves a copy of the {{c/core|std::match_results&lt;BidirIt&gt;}} value). The first object may be read when the iterator is constructed or when the first dereferencing is done. Otherwise, dereferencing only returns a copy of the most recently obtained regex match.
+
+The default-constructed {{tt|std::regex_iterator}} is the end-of-sequence iterator. When a valid {{tt|std::regex_iterator}} is incremented after reaching the last match ({{lc|std::regex_search}} returns {{c|false}}), it becomes equal to the end-of-sequence iterator. Dereferencing or incrementing it further invokes undefined behavior.
+
+A typical implementation of {{tt|std::regex_iterator}} holds the begin and the end iterators for the underlying sequence (two instances of {{tt|BidirIt}}), a pointer to the regular expression ({{c/core|const regex_type*}}), the match flags ({{lc|std::regex_constants::match_flag_type}}), and the current match ({{c/core|std::match_results&lt;BidirIt&gt;}}).
+
+===Type requirements===
+{{par begin}}
+{{par req named|BidirIt|BidirectionalIterator}}
+{{par end}}
+
+===Specializations===
+Several specializations for common character sequence types are defined:
+
+{{dsc begin}}
+{{dsc header|regex}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{ttb|std::cregex_iterator}}|{{c/core|std::regex_iterator&lt;const char*&gt;}}}}
+{{dsc|{{ttb|std::wcregex_iterator}}|{{c/core|std::regex_iterator&lt;const wchar_t*&gt;}}}}
+{{dsc|{{ttb|std::sregex_iterator}}|{{c/core|std::regex_iterator&lt;std::string}}{{c/core|::const_iterator&gt;}}}}
+{{dsc|{{ttb|std::wsregex_iterator}}|{{c/core|std::regex_iterator&lt;std::wstring}}{{c/core|::const_iterator&gt;}}}}
+{{dsc end}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|value_type}}|{{c/core|std::match_results&lt;BidirIt&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|pointer}}|{{c/core|const value_type*}}}}
+{{dsc|{{tt|reference}}|{{c/core|const value_type&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::forward_iterator_tag}}}}
+{{dsc|{{tt|iterator_concept}} {{mark c++20}}|{{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|regex_type}}|{{c/core|std::basic_regex&lt;CharT, Traits&gt;}}}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc expos mem obj|begin|id=begin|spec={{tt|BidiIt}}|private=yes|the begin iterator}}
+{{dsc expos mem obj|end|id=end|spec={{tt|BidiIt}}|private=yes|the end iterator}}
+{{dsc expos mem obj|pregex|id=pregex|spec={{c/core|const regex_type*}}|private=yes|a pointer to a regular expression}}
+{{dsc expos mem obj|flags|id=flags|spec={{c/core|regex_constants::match_flag_type}}|private=yes|a flag}}
+{{dsc expos mem obj|match|id=match|spec={{c/core|match_results&lt;BidiIt&gt;}}|private=yes|the current match}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/regex/regex_iterator/dsc constructor}}
+{{dsc inc|cpp/regex/regex_iterator/dsc destructor}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator{{=}}}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator_cmp}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator*}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator_arith}}
+{{dsc end}}
+
+===Notes===
+It is the programmer's responsibility to ensure that the {{lc|std::basic_regex}} object passed to the iterator's constructor outlives the iterator. Because the iterator stores a pointer to the regex, incrementing the iterator after the regex was destroyed accesses a dangling pointer.
+
+If the part of the regular expression that matched is just an [[cpp/regex/ecmascript#Assertions|assertion]] ({{tt|^}}, {{tt|$}}, {{tt|\b}}, {{tt|\B}}), the match stored in the iterator is a zero-length match, that is, {{c|1=match[0].first == match[0].second}}.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;regex&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    const std::string s = "Quick brown fox.";
+    
+    std::regex words_regex("[^\\s]+");
+    auto words_begin = std::sregex_iterator(s.begin(), s.end(), words_regex);
+    auto words_end = std::sregex_iterator();
+    
+    std::cout &lt;&lt; "Found " &lt;&lt; std::distance(words_begin, words_end) &lt;&lt; " words:\n";
+    
+    for (std::sregex_iterator i = words_begin; i != words_end; ++i)
+    {
+        std::smatch match = *i;
+        std::string match_str = match.str();
+        std::cout &lt;&lt; match_str &lt;&lt; '\n';
+    }
+}
+|output=
+Found 3 words:
+Quick
+brown
+fox.
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3698|paper=P2770R0|std=C++20|before={{tt|regex_iterator}} was a {{lconcept|forward_iterator}}&lt;br&gt;while being a stashing iterator|after=made {{lconcept|input_iterator}}}}&lt;ref&gt;{{tt|iterator_category}} was unchanged by the resolution, because changing it to {{lc|std::input_iterator_tag}} might break too much existing code.&lt;/ref&gt;
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/regex/dsc match_results}}
+{{dsc inc|cpp/regex/dsc regex_search}}
+{{dsc begin}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

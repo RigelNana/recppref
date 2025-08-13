@@ -1,0 +1,151 @@
+{{cpp/ranges/title|{{small|views::}}istream|basic_istream_view|istream_view|wistream_view}}
+{{cpp/ranges/basic_istream_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::movable Val, class CharT,
+          class Traits = std::char_traits&lt;CharT&gt; &gt;
+    requires std::default_initializable&lt;Val&gt; &amp;&amp;
+             /*stream-extractable*/&lt;Val, CharT, Traits&gt;
+class basic_istream_view
+    : public ranges::view_interface&lt;basic_istream_view&lt;Val, CharT, Traits&gt;&gt;
+}}
+
+{{dcl h|Helper templates}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class Val &gt;
+using istream_view = ranges::basic_istream_view&lt;Val, char&gt;;
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class Val &gt;
+using wistream_view = ranges::basic_istream_view&lt;Val, wchar_t&gt;;
+}}
+
+{{dcl h|Customization point objects}}
+{{dcl|num=4|since=c++20|1=
+namespace views {
+    template&lt; class T &gt;
+    constexpr /* unspecified */ istream = /* unspecified */;
+}
+}}
+
+{{dcl h|Helper concepts}}
+{{dcla|num=5|expos=yes|1=
+template&lt; class Val, class CharT, class Traits &gt;
+concept /*stream-extractable*/ =
+    requires(std::basic_istream&lt;CharT, Traits&gt;&amp; is, Val&amp; t) {
+        is &gt;&gt; t;
+    };
+}}
+{{dcl end}}
+
+@1@ A range factory that generates a sequence of elements by repeatedly calling {{c|operator&gt;&gt;}}.
+
+@2,3@ Convenience alias templates for character types {{c/core|char}} and {{c/core|wchar_t}}.
+
+@4@ {{c|views::istream&lt;T&gt;(e)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|ranges::basic_istream_view&lt;T, typename U::char_type, typename U::traits_type&gt;(e)}} for any suitable subexpressions {{c|e}}, where {{tt|U}} is {{c/core|std::remove_reference_t&lt;decltype(e)&gt;}}.
+@@ The program is ill-formed if {{tt|U}} is not both publicly and unambiguously derived from {{c/core|std::basic_istream&lt;typename U::char_type, typename U::traits_type&gt;}}, which may result in a [[cpp/language/sfinae|substitution failure]].
+
+@5@ The exposition-only concept {{c|/*stream-extractable*/&lt;Val, CharT, Traits&gt;}} is satisfied when lvalue of type {{tt|Val}} can be extracted from lvalue of type {{c/core|std::basic_istream&lt;CharT, Traits&gt;}}.
+
+The iterator type of {{tt|basic_istream_view}} is move-only: it does not meet the {{named req|Iterator}} requirements, and thus does not work with pre-C++20 {{lt|cpp/algorithm}}s.
+
+{{cpp/ranges/cpo|views|istream|tmpl=yes}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|spec={{c/core|std::basic_istream&lt;CharT, Traits&gt;*}}|stream_|id=stream|a pointer to the input stream}}
+{{dsc expos mem obj|spec={{tt|Val}}|value_|id=value|the stored value}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem ctor|{{PAGENAME}}#ctor|constructs a {{tt|basic_istream_view}}}}
+{{dsc mem fun|{{PAGENAME}}#begin|title=begin|returns an iterator}}
+{{dsc mem fun|{{PAGENAME}}#end|title=end|returns {{lc|std::default_sentinel}}}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|data=invalid|empty=invalid|size=invalid|front=invalid|back=invalid|operator bool=invalid|operator[]=invalid}}
+
+{{rrev|until=c++23|
+Although {{ttt|basic_istream_view}} is derived from {{lc|ranges::view_interface|std::ranges::view_interface}}, it cannot use any of inherited member functions.
+}}
+
+{{anchor|ctor}}
+{{member|{{small|std::ranges::basic_istream_view::}}basic_istream_view|
+{{ddcl|since=c++20|1=
+constexpr explicit
+    basic_istream_view( std::basic_istream&lt;CharT, Traits&gt;&amp; stream );
+}}
+
+{{anchor|begin}}
+Initializes {{lsi|#stream_}} with {{c|std::addressof(stream)}}, and value-initializes {{lsi|#value_}}{{sep}}.
+}}
+
+{{member|{{small|std::ranges::basic_istream_view::}}begin|
+{{ddcl|since=c++20|
+constexpr auto begin();
+}}
+
+Equivalent to {{box|{{c/core|*}}{{lsi|#stream_}}{{nbspt}}{{c/core|&gt;&gt;}}{{nbspt}}{{lsi|#value_}}{{sep}}{{c/core|; return}}{{nbspt}}{{rli|iterator}}{{sep}}{{c/core|{*this};}}}}.
+}}
+
+{{anchor|end}}
+{{member|{{small|std::ranges::basic_istream_view::}}end|
+{{ddcl|since=c++20|
+constexpr std::default_sentinel_t end() const noexcept;
+}}
+
+Returns {{c|std::default_sentinel}}.
+}}
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem class|cpp/ranges/basic_istream_view/iterator|the iterator type of {{tt|basic_istream_view}}}}
+{{dsc end}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;ranges&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    auto words = std::istringstream{"today is yesterday’s tomorrow"};
+    for (const auto&amp; s : std::views::istream&lt;std::string&gt;(words))
+        std::cout &lt;&lt; std::quoted(s, '/') &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    auto floats = std::istringstream{"1.1  2.2\t3.3\v4.4\f55\n66\r7.7  8.8"};
+    std::ranges::copy
+    (
+        std::views::istream&lt;float&gt;(floats),
+        std::ostream_iterator&lt;float&gt;{std::cout, ", "}
+    );
+    std::cout &lt;&lt; '\n';
+}
+|output=
+/today/ /is/ /yesterday’s/ /tomorrow/
+1.1, 2.2, 3.3, 4.4, 55, 66, 7.7, 8.8,
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3568|std=C++20|before=P2325R3 accidentally made the stored value default-initialized|after=restored to value-initialization}}
+{{dr list item|paper=P2325R3|std=C++20|before=default constructor was provided as&lt;br&gt;{{lconcept|view}} must be {{lconcept|default_initializable}}|after=removed along with&lt;br&gt;the requirement}}
+{{dr list item|paper=P2432R1|std=C++20|before={{tt|ranges::istream_view}} was a function template&lt;br&gt;and did not follow the naming convention|after=made an alias template;&lt;br&gt;customization point objects added}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc istream_iterator}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

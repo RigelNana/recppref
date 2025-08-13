@@ -1,0 +1,195 @@
+{{cpp/ranges/title|set_difference|set_difference_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+constexpr set_difference_result&lt;I1, O&gt;
+    set_difference( I1 first1, S1 last1, I2 first2, S2 last2,
+                    O result, Comp comp = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                        O, Comp, Proj1, Proj2&gt;
+constexpr set_difference_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;, O&gt;
+    set_difference( R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using set_difference_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+Copies the elements from the sorted input range {{range|first1|last1}} which are not found in the sorted input range {{range|first2|last2}} to the output range beginning at {{c|result}}.
+
+The behavior is undefined if
+* the input ranges are not sorted with respect to {{c|comp}} and {{c|proj1}} or {{c|proj2}}, respectively, or
+* the resulting range overlaps with either of the input ranges.
+
+@1@ Elements are compared using the given binary comparison function {{c|comp}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r1}} as the first range and {{c|r2}} as the second range, as if using {{c|ranges::begin(r1)}} as {{c|first1}}, {{c|ranges::end(r1)}} as {{c|last1}}, {{c|ranges::begin(r2)}} as {{c|first2}}, and {{c|ranges::end(r2)}} as {{c|last2}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|iterator-sentinel pair denoting the first sorted input range}}
+{{par|first2, last2|iterator-sentinel pair denoting the second sorted input range}}
+{{par|r1|the first sorted input range}}
+{{par|r2|the second sorted input range}}
+{{par|result|the beginning of the output range}}
+{{par|comp|comparator to apply to the projected elements}}
+{{par|proj1|projection to apply to the elements in the first range}}
+{{par|proj2|projection to apply to the elements in the second range}}
+{{par end}}
+
+===Return value===
+{{c|{last1, result_last} }}, where {{c|result_last}} is the end of the constructed range.
+
+===Complexity===
+At most {{mathjax-or|\(\scriptsize 2\cdot(N_1+N_2)-1\)|2&amp;middot;(N{{su|b=1}}+N{{su|b=2}})-1}} comparisons and applications of each projection, where {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} and {{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} are {{c|ranges::distance(first1, last1)}} and {{c|ranges::distance(first2, last2)}}, respectively.
+
+===Possible implementation===
+{{eq fun|1=
+struct set_difference_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_difference_result&lt;I1, O&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                   O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        while (!(first1 == last1 or first2 == last2))
+        {
+            if (std::invoke(comp, std::invoke(proj1, *first1), std::invoke(proj2, *first2)))
+            {
+                *result = *first1;
+                ++first1;
+                ++result;
+            }
+            else if (std::invoke(comp, std::invoke(proj2, *first2),
+                                 std::invoke(proj1, *first1)))
+                ++first2;
+            else
+            {
+                ++first1;
+                ++first2;
+            }
+        }
+        return ranges::copy(std::move(first1), std::move(last1), std::move(result));
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                            O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_difference_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;, O&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(result), std::move(comp),
+                       std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr set_difference_fn set_difference {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+auto print = [](const auto&amp; v, std::string_view end = "")
+{
+    std::cout &lt;&lt; "{ ";
+    for (auto n{v.size()}; auto i : v)
+        std::cout &lt;&lt; i &lt;&lt; (--n ? ", " : " ");
+    std::cout &lt;&lt; "} " &lt;&lt; end;
+};
+
+struct Order // a struct with some very interesting data
+{
+    int order_id{};
+
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const Order&amp; ord)
+    {
+        return os &lt;&lt; '{' &lt;&lt; ord.order_id &lt;&lt; '}';
+    }
+};
+
+int main()
+{
+    const auto v1 = {1, 2, 5, 5, 5, 9};
+    const auto v2 = {2, 5, 7};
+    std::vector&lt;int&gt; diff{};
+
+    std::ranges::set_difference(v1, v2, std::back_inserter(diff));
+    print(v1, "∖ ");
+    print(v2, "= ");
+    print(diff, "\n\n");
+
+    // We want to know which orders "cut" between old and new states:
+    const std::vector&lt;Order&gt; old_orders{&lt;!----&gt;{1}, {2}, {5}, {9}&lt;!----&gt;};
+    const std::vector&lt;Order&gt; new_orders{&lt;!----&gt;{2}, {5}, {7}&lt;!----&gt;};
+    std::vector&lt;Order&gt; cut_orders(old_orders.size() + new_orders.size());
+
+    auto [old_orders_end, cut_orders_last] =
+        std::ranges::set_difference(old_orders, new_orders,
+                                    cut_orders.begin(), {},
+                                    &amp;Order::order_id, &amp;Order::order_id);
+    assert(old_orders_end == old_orders.end());
+
+    std::cout &lt;&lt; "old orders = ";
+    print(old_orders, "\n");
+    std::cout &lt;&lt; "new orders = ";
+    print(new_orders, "\n");
+    std::cout &lt;&lt; "cut orders = ";
+    print(cut_orders, "\n");
+    cut_orders.erase(cut_orders_last, end(cut_orders));
+    std::cout &lt;&lt; "cut orders = ";
+    print(cut_orders, "\n");
+}
+|output=
+{ 1, 2, 5, 5, 5, 9 } ∖ { 2, 5, 7 } = { 1, 5, 5, 9 } 
+
+old orders = { {1}, {2}, {5}, {9} } 
+new orders = { {2}, {5}, {7} } 
+cut orders = { {1}, {9}, {0}, {0}, {0}, {0}, {0} } 
+cut orders = { {1}, {9} }
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_union}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_intersection}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_symmetric_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc set_difference}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

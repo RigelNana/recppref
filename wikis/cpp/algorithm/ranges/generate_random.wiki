@@ -1,0 +1,111 @@
+{{cpp/ranges/title|generate_random}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|random}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++26|
+template&lt; class R, class G &gt;
+    requires ranges::output_range&lt;R, std::invoke_result_t&lt;G&amp;&gt;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    generate_random( R&amp;&amp; r, G&amp;&amp; g );
+}}
+{{dcl|num=2|since=c++26|
+template&lt; class G, std::output_iterator&lt;std::invoke_result_t&lt;G&amp;&gt;&gt; O,
+          std::sentinel_for&lt;O&gt; S &gt;
+    requires std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt;
+constexpr O
+    generate_random( O first, S last, G&amp;&amp; g );
+}}
+{{dcl|num=3|since=c++26|
+template&lt; class R, class G, class D &gt;
+    requires ranges::output_range&lt;R, std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt; &amp;&amp;
+             std::invocable&lt;D&amp;, G&amp;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt; &amp;&amp;
+             std::is_arithmetic_v&lt;std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    generate_random( R&amp;&amp; r, G&amp;&amp; g, D&amp;&amp; d );
+}}
+{{dcl|num=4|since=c++26|
+template&lt; class G, class D, std::output_iterator&lt;std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt; O,
+          std::sentinel_for&lt;O&gt; S &gt;
+    requires std::invocable&lt;D&amp;, G&amp;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt; &amp;&amp;
+             std::is_arithmetic_v&lt;std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt;
+constexpr O
+    generate_random( O first, S last, G&amp;&amp; g, D&amp;&amp; d );
+}}
+{{dcl end}}
+
+Attempts to generate random numbers with the {{tt|generate_random}} member function of the random number generator or the distribution, which is expected to be more efficient. Falls back to element-wise generation if no {{tt|generate_random}} member function is available.
+
+Let fallback operation be calling {{c|ranges::generate(std::forward&lt;R&gt;(r), std::ref(g))}} or {{c|ranges::generate(std::forward&lt;R&gt;(r), [&amp;d, &amp;g] { return std::invoke(d, g); })}} for {{v|1}} or {{v|3}} respectively.
+
+@1@ Calls {{c|g.generate_random(std::forward&lt;R&gt;(r))}} if this expression is well-formed.
+
+@@ Otherwise, let {{c|I}} be {{c|std::invoke_result_t&lt;G&amp;&gt;}}. If {{tt|R}} models {{lconcept|sized_range}}, fills {{c|r}} with {{c|ranges::size(r)}} values of {{c|I}} by performing an unspecified number of invocations of the form {{c|g()}} or {{c|g.generate_random(s)}}, if such an expression is well-formed for a value {{tt|N}} and an object {{c|s}} of type {{c|std::span&lt;I, N&gt;}}.
+
+@@ Otherwise, performs the fallback operation.
+
+@3@ Calls {{c|d.generate_random(std::forward&lt;R&gt;(r), g)}} if this expression is well-formed.
+
+@@ Otherwise, let {{c|I}} be {{c|std::invoke_result_t&lt;D&amp;, G&amp;&gt;}}. If {{tt|R}} models {{lconcept|sized_range}}, fills {{c|r}} with {{c|ranges::size(r)}} values of type {{c|I}} by performing an unspecified number of invocations of the form {{c|std::invoke(d, g)}} or {{c|d.generate_random(s, g)}}, if such an expression is well-formed for a value {{tt|N}} and an object {{c|s}} of type {{c|std::span&lt;I, N&gt;}}.
+
+@@ Otherwise, performs the fallback operation.
+
+@2,4@ Equivalent to {{v|1,3}} respectively, where {{c|r}} is obtained from {{c|ranges::subrange&lt;O, S&gt;(std::move(first), last)}}.
+
+If the effects of {{v|1}} or {{v|3}} are not equivalent to those of the corresponding fallback operation, the behavior is undefined.
+
+The value of {{tt|N}} can differ between invocations. Implementations may select smaller values for shorter ranges.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|iterator-sentinel pair that denotes the range to which random numbers are written}}
+{{par|r|range to which random numbers are written}}
+{{par|g|uniform random bit generator}}
+{{par|d|random number distribution object}}
+{{par end}}
+
+===Notes===
+At the time of the standardization of {{tt|std::ranges::generate_random}}, there is no random number generator or distribution in the standard library that provides a {{tt|generate_random}} member function.
+
+{{tt|std::ranges::generate_random}} can be more efficient when used with a user-defined random number generator that wraps an underlying vectorized API.
+
+{{feature test macro|__cpp_lib_ranges_generate_random|std=C++26|value=202403L|{{tt|std::ranges::generate_random}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+
+int main()
+{
+    std::default_random_engine eng;
+    std::default_random_engine::result_type rs[16]{};
+    std::ranges::generate_random(rs, eng);
+    
+    std::cout &lt;&lt; std::left;
+    for (int i{}; auto n : rs)
+        std::cout &lt;&lt; std::setw(11) &lt;&lt; n &lt;&lt; (++i % 4 ? ' ' : '\n');
+}
+|p=true
+|output=
+16807       282475249   1622650073  984943658 
+1144108930  470211272   101027544   1457850878
+1458777923  2007237709  823564440   1115438165
+1784484492  74243042    114807987   1137522503
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc generate}}
+{{dsc inc|cpp/numeric/random/dsc uniform_random_bit_generator}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

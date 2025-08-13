@@ -1,0 +1,145 @@
+{{cpp/ranges/view title|elements}}
+{{cpp/ranges/elements_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::input_range V, std::size_t N &gt;
+    requires ranges::view&lt;V&gt; &amp;&amp;
+             /*has-tuple-element*/&lt;ranges::range_value_t&lt;V&gt;, N&gt; &amp;&amp;
+             /*has-tuple-element*/&lt;std::remove_reference_t&lt;
+                                       ranges::range_reference_t&lt;V&gt;&gt;, N&gt; &amp;&amp;
+             /*returnable-element*/&lt;ranges::range_reference_t&lt;V&gt;, N&gt;
+class elements_view
+    : public ranges::view_interface&lt;elements_view&lt;V, N&gt;&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    template&lt; std::size_t N &gt;
+    constexpr /* unspecified */ elements = /* unspecified */;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R &gt;
+    requires /* see below */
+constexpr ranges::view auto elements&lt;N&gt;( R&amp;&amp; r );
+}}
+{{dcl h|Helper concepts}}
+{{dcl rev multi|num=3
+|notes1={{mark expos}}|dcl1=
+template&lt; class T, std::size_t N &gt;
+concept /*has-tuple-element*/ =
+    requires(T t) {
+        typename std::tuple_size&lt;T&gt;::type;
+        requires N &lt; std::tuple_size_v&lt;T&gt;;
+        typename std::tuple_element_t&lt;N, T&gt;;
+        { std::get&lt;N&gt;(t) } -&gt; std::convertible_to&lt;
+                                  const std::tuple_element_t&lt;N, T&gt;&amp;&gt;;
+    };
+|since2=c++23|notes2={{mark expos}}|dcl2=
+template&lt; class T, std::size_t N &gt;
+concept /*has-tuple-element*/ =
+    /*tuple-like*/&lt;T&gt; &amp;&amp; N &lt; std::tuple_size_v&lt;T&gt;
+}}
+{{dcl|num=4|notes={{mark expos}}|1=
+template&lt; class T, std::size_t N &gt;
+concept returnable-element =
+     std::is_reference_v&lt;T&gt; {{!!}} std::move_constructible&lt;
+                                       std::tuple_element_t&lt;N, T&gt;&gt;;
+}}
+{{dcl end}}
+
+@1@ Accepts a {{lconcept|view}} of tuple-like values, and issues a view with a value type of the {{tt|N}}{{sup|th}} element of the adapted view's value-type.
+
+@2@ Every specialization of {{tt|views::elements}} is a {{named req|RangeAdaptorObject}}. The expression {{c|views::elements&lt;M&gt;(e)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|elements_view&lt;views::all_t&lt;decltype((e))&gt;, M&gt;{e}&lt;!----&gt;}} for any suitable subexpression {{c|e}} and constant expression {{c|M}}.
+
+@3@ Ensures that the elements of the underlying view are tuple-like values{{rev inl|since=c++23|, see {{lti|cpp/utility/tuple/tuple-like}}}}.
+
+@4@ Ensures that dangling references cannot be returned.
+
+{{tt|elements_view}} models the concepts {{lconcept|random_access_range}}, {{lconcept|bidirectional_range}}, {{lconcept|forward_range}}, {{lconcept|input_range}}, {{lconcept|common_range}}, and {{lconcept|sized_range}} when the underlying view {{tt|V}} models respective concepts.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member name|Definition}}
+{{dsc expos mem obj|base_|private=yes|the underlying (adapted) view of type {{tt|V}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|elements_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|elements_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|elements_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|elements_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|elements_view|notes}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=yes|data=invalid}}
+{{dsc end}}
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/elements_view/iterator|the iterator type}}
+{{dsc expos mem tclass|cpp/ranges/elements_view/sentinel|the sentinel type}}
+{{dsc end}}
+
+===Helper templates===
+{{ddcl|since=c++20|1=
+template&lt;class T, std::size_t N&gt;
+constexpr bool enable_borrowed_range&lt;std::ranges::elements_view&lt;T, N&gt;&gt; =
+    ranges::enable_borrowed_range&lt;T&gt;;
+}}
+This specialization of {{c/core|ranges::enable_borrowed_range}} makes {{tt|elements_view}} satisfy {{lconcept|borrowed_range}} when the underlying view satisfies it.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    const std::vector&lt;std::tuple&lt;int, char, std::string&gt;&gt; vt
+    {
+        {1, 'A', "α"},
+        {2, 'B', "β"},
+        {3, 'C', "γ"},
+        {4, 'D', "δ"},
+        {5, 'E', "ε"},
+    };
+    
+    for (int const e : std::views::elements&lt;0&gt;(vt))
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (char const e : vt {{!}} std::views::elements&lt;1&gt;)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    for (std::string const&amp; e : std::views::elements&lt;2&gt;(vt))
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1 2 3 4 5
+A B C D E
+α β γ δ ε
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3494|std=C++20|before={{tt|elements_view}} was never a {{tt|borrowed_range}}|after=it is a {{tt|borrowed_range}}&lt;br&gt;if its underlying view is}}
+{{dr list item|wg=lwg|dr=3502|std=C++20|before=dangling reference could be obtained from {{tt|elements_view}}|after=such usage is forbidden}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc keys_view}}
+{{dsc inc|cpp/ranges/dsc values_view}}
+{{dsc inc|cpp/ranges/dsc zip_view}}
+{{dsc inc|cpp/ranges/dsc zip_transform_view}}
+{{dsc inc|cpp/numeric/valarray/dsc slice}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,166 @@
+{{title|Type alias, alias template {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+Type alias is a name that refers to a previously defined type (similar to {{rlpt|typedef}}).
+
+Alias template is a name that refers to a family of types.
+
+===Syntax===
+Alias declarations are {{rlp|declarations}} with the following syntax:
+
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|using}} {{spar|identifier}} {{spar optional|attr}} {{ttb|1==}} {{spar|type-id}} {{ttb|;}}
+}}
+{{sdsc|num=2|{{ttb|template}} {{ttb|&lt;}} {{spar|template-parameter-list}} {{ttb|&gt;}}
+{{ttb|using}} {{spar|identifier}} {{spar optional|attr}} {{ttb|1==}} {{spar|type-id}} {{ttb|;}}}}
+{{sdsc|num=3|notes={{mark since c++20}}|{{ttb|template}} {{ttb|&lt;}} {{spar|template-parameter-list}} {{ttb|&gt;}} {{ttb|requires}} {{spar|constraint}}
+{{ttb|using}} {{spar|identifier}} {{spar optional|attr}} {{ttb|1==}} {{spar|type-id}} {{ttb|;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|attr}}|optional sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|identifier}}|the name that is introduced by this declaration, which becomes either a type name {{v|1}} or a template name {{v|2}}}}
+{{par|{{spar|template-parameter-list}}|{{rlp|template parameters|template parameter list}}, as in {{rlp|templates|template declaration}}}}
+{{par|{{spar|constraint}}|a {{rlp|constraints|constraint expression}} which restricts the template parameters accepted by this alias template}}
+{{par|{{spar|type-id}}|abstract declarator or any other valid {{spar|type-id}} (which may introduce a new type, as noted in {{rlp|type#Type_naming|type-id}}). The {{spar|type-id}} cannot directly or indirectly refer to {{spar|identifier}}. Note that the {{rlp|scope#Point_of_declaration|point of declaration}} of the identifier is at the semicolon following {{spar|type-id}}.}} 
+{{par end}}
+
+===Explanation===
+@1@ A type alias declaration introduces a name which can be used as a synonym for the type denoted by {{spar|type-id}}. It does not introduce a new type and it cannot change the meaning of an existing type name. There is no difference between a type alias declaration and {{rlp|typedef}} declaration. This declaration may appear in block scope, class scope, or namespace scope.
+@2@ An alias template is a template which, when specialized, is equivalent to the result of substituting the template arguments of the alias template for the template parameters in the {{spar|type-id}}.
+{{source|1=
+template&lt;class T&gt;
+struct Alloc {};
+
+template&lt;class T&gt;
+using Vec = vector&lt;T, Alloc&lt;T&gt;&gt;; // type-id is vector&lt;T, Alloc&lt;T&gt;&gt;
+
+Vec&lt;int&gt; v; // Vec&lt;int&gt; is the same as vector&lt;int, Alloc&lt;int&gt;&gt;
+}}
+When the result of specializing an alias template is a dependent {{rlp|templates#template-id|template-id}}, subsequent substitutions apply to that template-id:
+{{source|1=
+template&lt;typename...&gt;
+using void_t = void;
+
+template&lt;typename T&gt;
+void_t&lt;typename T::foo&gt; f();
+
+f&lt;int&gt;(); // error, int does not have a nested type foo
+}}
+The type produced when specializing an alias template is not allowed to directly or indirectly make use of its own type:
+{{source|1=
+template&lt;class T&gt;
+struct A;
+
+template&lt;class T&gt;
+using B = typename A&lt;T&gt;::U; // type-id is A&lt;T&gt;::U
+
+template&lt;class T&gt;
+struct A { typedef B&lt;T&gt; U; };
+
+B&lt;short&gt; b; // error: B&lt;short&gt; uses its own type via A&lt;short&gt;::U
+}}
+Alias templates are never deduced by {{rlp|function_template#Template argument deduction|template argument deduction}} when deducing a template template parameter.
+It is not possible to {{rlp|partial specialization|partially}} or {{rlp|template specialization|explicitly specialize}} an alias template.
+
+Like any template declaration, an alias template can only be declared at class scope or namespace scope.
+
+{{rrev|since=c++20|
+The type of a {{rlp|lambda|lambda expression}} appearing in an alias template declaration is different between instantiations of that template, even when the lambda expression is not dependent.
+{{source|1=
+template&lt;class T&gt;
+using A = decltype([] {}); // A&lt;int&gt; and A&lt;char&gt; refer to different closure types
+}}
+}}
+
+===Notes===
+{{feature test macro|std=C++11|value=200704L|__cpp_alias_templates|Alias templates}}
+
+===Keywords===
+{{ltt|cpp/keyword/using}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;typeinfo&gt;
+
+// type alias, identical to
+// typedef std::ios_base::fmtflags flags;
+using flags = std::ios_base::fmtflags;
+// the name 'flags' now denotes a type:
+flags fl = std::ios_base::dec;
+
+// type alias, identical to
+// typedef void (*func)(int, int);
+using func = void (*) (int, int);
+
+// the name 'func' now denotes a pointer to function:
+void example(int, int) {}
+func f = example;
+
+// alias template
+template&lt;class T&gt;
+using ptr = T*;
+// the name 'ptr&lt;T&gt;' is now an alias for pointer to T
+ptr&lt;int&gt; x;
+
+// type alias used to hide a template parameter
+template&lt;class CharT&gt;
+using mystring = std::basic_string&lt;CharT, std::char_traits&lt;CharT&gt;&gt;;
+
+mystring&lt;char&gt; str;
+
+// type alias can introduce a member typedef name
+template&lt;typename T&gt;
+struct Container { using value_type = T; };
+
+// which can be used in generic programming
+template&lt;typename ContainerT&gt;
+void info(const ContainerT&amp; c)
+{
+    typename ContainerT::value_type T;
+    std::cout &lt;&lt; "ContainerT is `" &lt;&lt; typeid(decltype(c)).name() &lt;&lt; "`\n"
+                 "value_type is `" &lt;&lt; typeid(T).name() &lt;&lt; "`\n";
+}
+
+// type alias used to simplify the syntax of std::enable_if
+template&lt;typename T&gt;
+using Invoke = typename T::type;
+
+template&lt;typename Condition&gt;
+using EnableIf = Invoke&lt;std::enable_if&lt;Condition::value&gt;&gt;;
+
+template&lt;typename T, typename = EnableIf&lt;std::is_polymorphic&lt;T&gt;&gt;&gt;
+int fpoly_only(T) { return 1; }
+
+struct S { virtual ~S() {} };
+
+int main()
+{
+    Container&lt;int&gt; c;
+    info(c); // Container::value_type will be int in this function
+//  fpoly_only(c); // error: enable_if prohibits this
+    S s;
+    fpoly_only(s); // okay: enable_if allows this
+}
+|p=true
+|output=
+ContainerT is `struct Container&lt;int&gt;`
+value_type is `int`
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1558|std=C++11|before=whether unused arguments in an alias specialization&lt;br&gt;participate in substitution was not specified|after=substitution&lt;br&gt;is performed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc typedef}}
+{{dsc inc|cpp/language/dsc namespace alias}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

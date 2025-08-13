@@ -1,0 +1,101 @@
+{{cpp/io/basic_ostream/title|sentry}}
+{{cpp/io/basic_ostream/navbar}}
+{{dcl begin}}
+{{dcl|1=
+class sentry;
+}}
+{{dcl end}}
+
+An object of class {{tt|basic_ostream::sentry}} is constructed in local scope at the beginning of each member function of {{lc|std::basic_ostream}} that performs output (both formatted and unformatted). Its constructor prepares the output stream: checks if the stream is already in a failed state, flushes the tie()'d output streams, and performs other implementation-defined tasks if necessary. Implementation-defined cleanup, as well as flushing of the output stream if necessary, is performed in the destructor, so that it is guaranteed to happen if exceptions are thrown during output.
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_ostream/sentry/dsc constructor}}
+{{dsc mem dtor|cpp/io/basic_ostream/sentry|inlinemem=true|finalizes the stream object after formatted output or after exception, if necessary}}
+{{dsc mem fun|operator{{=}}|nolink=true|the assignment operator is deleted}}
+{{dsc inc|cpp/io/basic_ostream/sentry/dsc operator bool}}
+{{dsc end}}
+
+{{member|{{small|std::basic_ostream::sentry::}}sentry| 2=
+{{ddcl|1=
+explicit sentry( std::basic_ostream&lt;CharT, Traits&gt;&amp; os );
+}}
+
+Prepares the stream for formatted output.
+
+If {{c|os.good()}} is {{c|false}}, returns. Otherwise, if {{c|os.tie()}} is not a null pointer, calls {{c|os.tie()-&gt;flush()}} to synchronize the output sequence with external streams. During preparation, the constructor may call {{c|setstate(failbit)}} (which may throw {{lc|std::ios_base::failure}}).
+
+If after preparation is completed, {{c|1=os.good() == true}}, then any subsequent calls to {{c/core|operator bool}} will return {{c|true}}.
+
+===Parameters===
+{{par begin}}
+{{par|os|output stream to prepare}}
+{{par end}}
+
+===Exceptions===
+{{lc|std::ios_base::failure}} if the end of file condition occurs.
+}}
+
+
+{{member|{{small|std::basic_ostream::sentry::}}~sentry|2=
+{{ddcl|1=
+~sentry();
+}}
+If {{c|(os.flags() &amp; std::ios_base::unitbuf) &amp;&amp; !std::uncaught_exception() &amp;&amp; os.good())}} is {{c|true}}, calls {{c|os.rdbuf()-&gt;pubsync()}}. If that function returns {{c|-1}}, sets {{c|badbit}} in {{c|os.rdstate()}} without propagating an exception.
+}}
+
+
+{{member|{{small|std::basic_ostream::sentry::}}operator bool|2=
+{{ddcl|1=
+explicit operator bool() const;
+}}
+Checks whether the preparation of the output stream was successful.
+
+===Parameters===
+(none)
+
+===Return value===
+{{c|true}} if the preparation of the output stream was successful, {{c|false}} otherwise.
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+struct Foo
+{
+    char n[6];
+};
+
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, Foo&amp; f)
+{
+    std::ostream::sentry s(os);
+    if (s)
+        os.write(f.n, 5);
+    return os;
+}
+
+int main()
+{
+    Foo f = {"abcde"};
+    std::cout &lt;&lt; f &lt;&lt; '\n';
+}
+|output=
+abcde
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=397|std=C++98|before=the destructor might call {{c|os.flush()}}, which may throw exceptions|after=the exception is not propagated}}
+{{dr list item|wg=lwg|dr=442|std=C++98|before={{c/core|operator bool}} was not declared {{c/core|const}} (it is {{c/core|const}} in the [[cpp/header/ostream|synopsis]])|after=added {{c/core|const}}}}
+{{dr list item|wg=lwg|dr=835|std=C++98|before=if {{c|os}} sets {{tt|unitbuf}}, the destructor would call {{c|os.flush()}}, which&lt;br&gt;is an {{named req|UnformattedOutputFunction}} and creates another sentry object&lt;br&gt;(whose destructor then creates another sentry object and so on)|after=calls&lt;br&gt;{{c|os.rdbuf()-&gt;pubsync()}}&lt;br&gt;in this case instead}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_ostream/dsc operator ltlt}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

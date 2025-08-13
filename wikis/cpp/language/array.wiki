@@ -1,0 +1,243 @@
+{{title|Array declaration}}
+{{cpp/language/declarations/navbar}}
+
+Declares an object of array type.
+
+===Syntax===
+An array declaration is any simple declaration whose {{rlp|declarations|declarator}} has the form
+
+{{sdsc begin}}
+{{sdsc|1=
+{{spar|noptr-declarator}} {{ttb|[}}{{spar optional|expr}}{{ttb|]}} {{spar optional|attr}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|noptr-declarator}}|any valid {{spar|declarator}}, but if it begins with {{tt|*}}, {{tt|&amp;}}, or {{tt|&amp;&amp;}}, it has to be surrounded by parentheses (otherwise the whole declarator is treated as a {{rlp|pointer|pointer declarator}} or {{rlp|reference|reference declarator}}).}}
+{{par|{{spar|expr}}|{{rev inl|until=c++14|an {{rlp|constant expression|integral constant expression}}}}{{rev inl|since=c++14|a {{rlp|constant expression|converted constant expression}} of type {{lc|std::size_t}}}}, which evaluates to a value greater than zero}}
+{{par|{{spar|attr}}|{{mark since c++11}} list of {{rlp|attributes}}}}
+{{par end}}
+
+A declaration of the form {{c|T a[N];}}, declares {{c|a}} as an array {{rlp|object}} that consists of {{c|N}} contiguously allocated objects of type {{tt|T}}. The elements of an array are numbered {{c|0}}, …, {{c|N - 1}}, and may be accessed with the {{rlp|operator member access#Built-in subscript operator|subscript operator []}}, as in {{c|a[0]}}, …, {{c|a[N - 1]}}.
+
+Arrays can be constructed from any {{rlp|types|fundamental type}} (except {{c/core|void}}), {{rlp|pointer}}s, {{rlp|pointer|pointers to members}}, {{rlp|classes}}, {{rlp|enum|enumerations}}, or from other arrays of known bound (in which case the array is said to be multi-dimensional). In other words, only object types except for array types of unknown bound can be element types of array types. Array types of incomplete element type are also incomplete types.
+
+{{rrev|since=c++11|
+The {{rev inl|since=c++20|possibly {{rlp|constraints|constrained}}}} {{rlpt|auto}} specifier can be used as array element type in the declaration of a pointer or reference to array, which deduces the element type from the initializer{{rev inl|since=c++14| or the function argument}}, e.g. {{c|1=auto (*p)[42] = &amp;a;}} is valid if {{c|a}} is an lvalue of type {{c/core|int[42]}}.
+}}
+
+There are no arrays of references or arrays of functions.
+
+Applying {{rlp|cv|cv-qualifiers}} to an array type (through typedef or template type manipulation) applies the qualifiers to the element type, but any array type whose elements are of cv-qualified type is considered to have the same cv-qualification.
+
+{{source|1=
+// a and b have the same const-qualified type "array of 5 const char"
+
+typedef const char CC;
+CC a[5] = {};
+
+typedef char CA[5];
+const CA b = {};
+}}
+
+When used with {{rlp|new|new[]-expression}}, the size of an array may be zero; such an array has no elements:
+
+{{source|1=
+int* p = new int[0]; // accessing p[0] or *p is undefined
+delete[] p; // cleanup still required
+}}
+
+====Assignment====
+Objects of array type cannot be modified as a whole: even though they are {{rlp|value category#lvalue|lvalues}} (e.g. an address of array can be taken), they cannot appear on the left hand side of an assignment operator:
+
+{{source|1=
+int a[3] = {1, 2, 3}, b[3] = {4, 5, 6};
+int (*p)[3] = &amp;a; // okay: address of a can be taken
+a = b;            // error: a is an array
+
+struct { int c[3]; } s1, s2 = {3, 4, 5};
+s1 = s2; // okay: implicitly-defined copy assignment operator
+         // can assign data members of array type
+}}
+
+====Array-to-pointer decay====
+There is an {{rlp|implicit conversion}} from lvalues and rvalues of array type to rvalues of pointer type: it constructs a pointer to the first element of an array. This conversion is used whenever arrays appear in context where arrays are not expected, but pointers are:
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+
+void g(int (&amp;a)[3])
+{
+    std::cout &lt;&lt; a[0] &lt;&lt; '\n';
+}
+
+void f(int* p)
+{
+    std::cout &lt;&lt; *p &lt;&lt; '\n';
+}
+
+int main()
+{
+    int a[3] = {1, 2, 3};
+    int* p = a;
+
+    std::cout &lt;&lt; sizeof a &lt;&lt; '\n'  // prints size of array
+              &lt;&lt; sizeof p &lt;&lt; '\n'; // prints size of a pointer
+
+    // where arrays are acceptable, but pointers aren't, only arrays may be used
+    g(a); // okay: function takes an array by reference
+//  g(p); // error
+
+    for (int n : a)            // okay: arrays can be used in range-for loops
+        std::cout &lt;&lt; n &lt;&lt; ' '; // prints elements of the array
+//  for (int n : p)            // error
+//      std::cout &lt;&lt; n &lt;&lt; ' ';
+
+    std::iota(std::begin(a), std::end(a), 7); // okay: begin and end take arrays
+//  std::iota(std::begin(p), std::end(p), 7); // error
+
+    // where pointers are acceptable, but arrays aren't, both may be used:
+    f(a); // okay: function takes a pointer
+    f(p); // okay: function takes a pointer
+
+    std::cout &lt;&lt; *a &lt;&lt; '\n' // prints the first element
+              &lt;&lt; *p &lt;&lt; '\n' // same
+              &lt;&lt; *(a + 1) &lt;&lt; ' ' &lt;&lt; a[1] &lt;&lt; '\n'  // prints the second element
+              &lt;&lt; *(p + 1) &lt;&lt; ' ' &lt;&lt; p[1] &lt;&lt; '\n'; // same
+}
+}}
+
+====Multidimensional arrays====
+When the element type of an array is another array, it is said that the array is multidimensional:
+
+{{source|1=
+// array of 2 arrays of 3 int each
+int a[2][3] = {{1, 2, 3},  // can be viewed as a 2 × 3 matrix
+               {4, 5, 6}}; // with row-major layout
+}}
+
+Note that when array-to-pointer decay is applied, a multidimensional array is converted to a pointer to its first element (e.g., a pointer to its first row or to its first plane): array-to-pointer decay is applied only once.
+
+{{source|1=
+int a[2];            // array of 2 int
+int* p1 = a;         // a decays to a pointer to the first element of a
+
+int b[2][3];         // array of 2 arrays of 3 int
+// int** p2 = b;     // error: b does not decay to int**
+int (*p2)[3] = b;    // b decays to a pointer to the first 3-element row of b
+
+int c[2][3][4];      // array of 2 arrays of 3 arrays of 4 int
+// int*** p3 = c;    // error: c does not decay to int***
+int (*p3)[3][4] = c; // c decays to a pointer to the first 3 × 4-element plane of c
+}}
+
+====Arrays of unknown bound====
+If {{spar|expr}} is omitted in the declaration of an array, the type declared is "array of unknown bound of T", which is a kind of {{rlp|incomplete type}}, except when used in a declaration with an {{rlp|aggregate initialization|aggregate initializer}}:
+{{source|1=
+extern int x[];      // the type of x is "array of unknown bound of int"
+int a[] = {1, 2, 3}; // the type of a is "array of 3 int"
+}}
+
+Because array elements cannot be arrays of unknown bound, multidimensional arrays cannot have unknown bound in a dimension other than the first:
+{{source|1=
+extern int a[][2]; // okay: array of unknown bound of arrays of 2 int
+extern int b[2][]; // error: array has incomplete element type
+}}
+
+If there is a preceding declaration of the entity in the same scope in which the bound was specified, an omitted array bound is taken to be the same as in that earlier declaration, and similarly for the definition of a static data member of a class:
+{{source|1=
+extern int x[10];
+struct S
+{
+    static int y[10];
+};
+
+int x[];               // OK: bound is 10
+int S::y[];            // OK: bound is 10
+
+void f()
+{
+    extern int x[];
+    int i = sizeof(x); // error: incomplete object type
+}
+}}
+
+References and pointers to arrays of unknown bound can be formed, {{rev inl|until=c++20|but cannot}}{{rev inl|since=c++20|and can}} be initialized or assigned from arrays and pointers to arrays of known bound. Note that in the C programming language, pointers to arrays of unknown bound are compatible with pointers to arrays of known bound and are thus convertible and assignable in both directions.
+{{source|1=
+extern int a1[];
+
+int (&amp;r1)[] = a1;  // okay
+int (*p1)[] = &amp;a1; // okay
+int (*q)[2] = &amp;a1; // error (but okay in C)
+
+int a2[] = {1, 2, 3};
+int (&amp;r2)[] = a2;  // okay (since C++20)
+int (*p2)[] = &amp;a2; // okay (since C++20)
+}}
+
+Pointers to arrays of unknown bound cannot participate in {{rlp|operator arithmetic#Additive operators|pointer arithmetic}} and cannot be used on the left of the {{rlp|operator member access#Built-in subscript operator|subscript operator}}, but can be dereferenced.
+
+====Array rvalues====
+Although arrays cannot be returned from functions by value and cannot be targets of most cast expressions, array {{rlp|value category|prvalues}} may be formed by using a type alias to construct an array temporary using {{rlp|explicit cast|brace-initialized functional cast}}.
+{{rrev|since=c++17|
+Like class prvalues, array prvalues convert to xvalues by {{rlp|implicit conversion#Temporary materialization|temporary materialization}} when evaluated.
+}}
+
+Array {{rlp|value category|xvalues}} may be formed directly by accessing an array member of a class rvalue or by using {{lc|std::move}} or another cast or function call that returns an rvalue reference. 
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+void f(int (&amp;&amp;x)[2][3])
+{
+    std::cout &lt;&lt; sizeof x &lt;&lt; '\n';
+}
+
+struct X
+{
+    int i[2][3];
+} x;
+
+template&lt;typename T&gt;
+using identity = T;
+
+int main()
+{
+    std::cout &lt;&lt; sizeof X().i &lt;&lt; '\n';           // size of the array
+    f(X().i);                                    // okay: binds to xvalue
+//  f(x.i);                                      // error: cannot bind to lvalue
+
+    int a[2][3];
+    f(std::move(a));                             // okay: binds to xvalue
+
+    using arr_t = int[2][3];
+    f(arr_t{});                                  // okay: binds to prvalue
+    f(identity&lt;int[][3]&gt;{{1, 2, 3}, {4, 5, 6}}); // okay: binds to prvalue
+
+}
+|output=
+24
+24
+24
+24
+24
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=393|std=C++98|before=a pointer or reference to an array of unknown&lt;br&gt;bound could not be a function parameter|after=allowed}}
+{{dr list item|wg=cwg|dr=619|std=C++98|before=when omitted, the bound of an array could&lt;br&gt;not be inferred from a previous declaration|after=inference allowed}}
+{{dr list item|wg=cwg|dr=2099|std=C++98|before=the bound of an array static data member could&lt;br&gt;not be omitted even if an initializer is provided|after=omission allowed}}
+{{dr list item|wg=cwg|dr=2397|std=C++11|before={{c/core|auto}} could not be used as element type|after=allowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/array|Array declaration|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

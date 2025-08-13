@@ -1,0 +1,141 @@
+{{title|Source file inclusion}}
+{{cpp/preprocessor/navbar}}
+Includes other source file into current source file at the line immediately after the directive.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|#include &amp;lt;}} {{spar|h-char-sequence}} {{ttb|&amp;gt;}} {{spar|new-line}}}}
+{{sdsc|num=2|{{ttb|#include "}} {{spar|q-char-sequence}} {{ttb|"}} {{spar|new-line}}}}
+{{sdsc|num=3|{{ttb|#include}} {{spar|pp-tokens}} {{spar|new-line}}}}
+{{sdsc|num=4|notes={{mark since c++17}}|{{ttb|__has_include}} {{ttb|(}} {{ttb|"}} {{spar|q-char-sequence}} {{ttb|"}} {{ttb|)}}&lt;br&gt;{{ttb|__has_include}} {{ttb|(}} {{ttb|&amp;lt;}} {{spar|h-char-sequence}} {{ttb|&amp;gt;}} {{ttb|)}}}}
+{{sdsc|num=5|notes={{mark since c++17}}|{{ttb|__has_include}} {{ttb|(}} {{spar|string-literal}} {{ttb|)}}&lt;br&gt;{{ttb|__has_include}} {{ttb|(}} {{ttb|&amp;lt;}} {{spar|h-pp-tokens}} {{ttb|&amp;gt;}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+@1@ Searches for a header identified uniquely by {{spar|h-char-sequence}} and replaces the directive by the entire contents of the header.
+@2@ Searches for a source file identified by {{spar|q-char-sequence}} and replaces the directive by the entire contents of the source file. It may fallback to {{v|1}} and treat {{spar|q-char-sequence}} as a header identifier.
+@3@ If neither {{v|1}} nor {{v|2}} is matched, {{spar|pp-tokens}} will undergo macro replacement. The directive after replacement will be tried to match with {{v|1}} or {{v|2}} again.
+@4@ Checks whether a header or source file is available for inclusion.
+@5@ If {{v|4}} is not matched, {{spar|h-pp-tokens}} will undergo macro replacement. The directive after replacement will be tried to match with {{v|4}} again.
+
+{{par begin}}
+{{par|{{spar|new-line}}|The new-line character}}
+{{par|{{spar|h-char-sequence}}|A sequence of one or more {{spar|h-char}}s, where the appearance of any of the following is conditionally-supported with implementation-defined semantics:
+* the character {{c|'}}
+* the character {{c|"}}
+* the character {{c|\}}
+* the character sequence {{c|//}}
+* the character sequence {{c|/*}}}}
+{{par|{{spar|h-char}}|Any member of the {{rev inl|until=c++23|[[cpp/language/translation phases#Phase 5|source character set]]}}{{rev inl|since=c++23|[[cpp/language/charset#Translation character set|translation character set]]}} except new-line and {{c|&gt;}}}}
+{{par|{{spar|q-char-sequence}}|A sequence of one or more {{spar|q-char}}s, where the appearance of any of the following is conditionally-supported with implementation-defined semantics:
+* the character {{c|'}}
+* the character {{c|\}}
+* the character sequence {{c|//}}
+* the character sequence {{c|/*}}}}
+{{par|{{spar|q-char}}|Any member of the {{rev inl|until=c++23|[[cpp/language/translation phases#Phase 5|source character set]]}}{{rev inl|since=c++23|[[cpp/language/charset#Translation character set|translation character set]]}} except new-line and {{c|"}}}}
+{{par|{{spar|pp-tokens}}|A sequence of one or more [[cpp/language/translation phases#Phase 3|preprocessing tokens]]}}
+{{par|{{spar|string-literal}}|A [[cpp/language/string literal|string literal]]}}
+{{par|{{spar|h-pp-tokens}}|A sequence of one or more [[cpp/language/translation phases#Phase 3|preprocessing tokens]] except {{c|&gt;}}}}
+{{par end}}
+
+===Explanation===
+@1@ Searches a sequence of implementation-defined places for a header identified uniquely by {{spar|h-char-sequence}}, and causes the replacement of that directive by the entire contents of the header. How the places are specified or the header identified is implementation-defined.
+@2@ Causes the replacement of that directive by the entire contents of the source file identified by {{spar|q-char-sequence}}. The named source file is searched for in an implementation-defined
+manner. If this search is not supported, or if the search fails, the directive is reprocessed as if it reads syntax {{v|1}} with the identical contained sequence (including &gt; characters, if any) from the original directive.
+@3@ The preprocessing tokens after {{ttb|include}} in the directive are processed just as in normal text (i.e., each identifier currently defined as a macro name is replaced by its replacement list of preprocessing tokens). If the directive resulting after all replacements does not match one of the two previous forms, the behavior is undefined. The method by which a sequence of preprocessing tokens between a &lt; and a &gt; preprocessing token pair or a pair of " characters is combined into
+a single header name preprocessing token is implementation-defined.
+@4@ The header or source file identified by {{spar|h-char-sequence}} or {{spar|q-char-sequence}} is searched for as if that preprocessing token sequence were the {{spar|pp-tokens}} in syntax {{v|3}}, except that no further macro expansion is performed. If such a directive would not satisfy the
+syntactic requirements of an {{tt|#include}} directive, the program is ill-formed. The {{tt|__has_include}} expression evaluates to {{c|1}} if the search for the source file succeeds, and to {{c|0}} if the search fails.
+@5@ This form is considered only if syntax (4) does not match, in which case the preprocessing tokens are processed just as in normal text.
+
+{{rrev|since=c++20|
+If the header identified by the {{spar|header-name}} (i.e., {{ttb|&amp;lt;}} {{spar|h-char-sequence}} {{ttb|&amp;gt;}} or {{ttb|"}} {{spar|q-char-sequence}} {{ttb|"}}) denotes an importable header, it is implementation-defined whether the {{tt|#include}} preprocessing directive is instead replaced by an [[cpp/language/modules#Importing modules and headers|import directive]] of the form
+
+{{ttb|import}} {{spar|header-name}} {{ttb|;}} {{spar|new-line}}
+}}
+
+{{tt|__has_include}} can be expanded in the expression of {{ltt|cpp/preprocessor/conditional|#if}} and {{ltt|cpp/preprocessor/conditional|#elif}}. It is treated as a defined macro by {{ltt|cpp/preprocessor/conditional|#ifdef}}, {{ltt|cpp/preprocessor/conditional|#ifndef}}{{rev inl|since=c++23|, {{ltt|cpp/preprocessor/conditional|#elifdef}}, {{ltt|cpp/preprocessor/conditional|#elifndef}}}} and {{ltt|cpp/preprocessor/conditional|defined}} but cannot be used anywhere else.
+
+===Notes===
+Typical implementations search only standard include directories for syntax {{v|1}}. The standard C++ library and the standard C library are implicitly included in these standard include directories. The standard include directories usually can be controlled by the user through compiler options.
+
+The intent of syntax {{v|2}} is to search for the files that are not controlled by the implementation. Typical implementations first search the directory where the current file resides then falls back to {{v|1}}.
+
+When a file is included, it is processed by [[cpp/language/translation phases|translation phases]] 1-4, which may include, recursively, expansion of the nested {{tt|#include}} directives, up to an implementation-defined nesting limit. To avoid repeated inclusion of the same file and endless recursion when a file includes itself, perhaps transitively, ''header guards'' are commonly used: the entire header is wrapped in 
+{{source|1=
+#ifndef FOO_H_INCLUDED /* any name uniquely mapped to file name */
+#define FOO_H_INCLUDED
+// contents of the file are here
+#endif
+}}
+Many compilers also implement the non-standard {{ltt|cpp/preprocessor/impl|pragma}} {{c|#pragma once}} with similar effects: it disables processing of a file if the same file (where file identity is determined in OS-specific way) has already been included.
+
+A sequence of characters that resembles an escape sequence in {{spar|q-char-sequence}} or {{spar|h-char-sequence}} might result in an error, be interpreted as the character corresponding to the escape sequence, or have a completely different meaning, depending on the implementation. 
+
+A {{tt|__has_include}} result of {{c|1}} only means that a header or source file with the specified name exists. It does not mean that the header or source file, when included, would not cause an error or would contain anything useful. For example, on a C++ implementation that supports both C++14 and C++17 modes (and provides {{c|__has_include}} in its C++14 mode as a conforming extension), {{c|__has_include(&lt;optional&gt;)}} may be {{c|1}} in C++14 mode, but actually {{c|#include &lt;optional&gt;}} may cause an error.
+
+===Example===
+{{example|code=
+#if __has_include(&lt;optional&gt;)
+    #include &lt;optional&gt;
+    #define has_optional 1
+    template&lt;class T&gt;
+    using optional_t = std::optional&lt;T&gt;;
+#elif __has_include(&lt;experimental/optional&gt;)
+    #include &lt;experimental/optional&gt;
+    #define has_optional -1
+    template&lt;class T&gt;
+    using optional_t = std::experimental::optional&lt;T&gt;;
+#else
+    #define has_optional 0
+    template&lt;class V&gt;
+    class optional_t
+    {
+        V v{};
+        bool has{};
+
+    public:
+        optional_t() = default;
+        optional_t(V&amp;&amp; v) : v(v), has{true} {}
+        V value_or(V&amp;&amp; alt) const&amp;
+        {
+            return has ? v : alt;
+        }
+        // etc.
+    };
+#endif
+
+#include &lt;iostream&gt;
+
+int main()
+{
+    if (has_optional &gt; 0)
+        std::cout &lt;&lt; "&lt;optional&gt; is present\n";
+    else if (has_optional &lt; 0)
+        std::cout &lt;&lt; "&lt;experimental/optional&gt; is present\n";
+    else
+        std::cout &lt;&lt; "&lt;optional&gt; is not present\n";
+
+    optional_t&lt;int&gt; op;
+    std::cout &lt;&lt; "op = " &lt;&lt; op.value_or(-1) &lt;&lt; '\n';
+    op = 42;
+    std::cout &lt;&lt; "op = " &lt;&lt; op.value_or(-1) &lt;&lt; '\n';
+}
+|output=
+&lt;optional&gt; is present
+op = -1
+op = 42
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=787|std=C++98|before=the behavior is undefined if an escape sequence is&lt;br&gt;resembled in {{spar|q-char-sequence}} or {{spar|h-char-sequence}}|after=it is conditionally-supported}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc|[[cpp/header|A list of C++ Standard Library header files]]}}
+{{dsc see c|c/preprocessor/include|Source file inclusion|nomono=true}}
+{{dsc end}}
+
+{{langlinks|ar|de|es|fr|it|ja|pl|pt|ru|zh}}

@@ -1,0 +1,222 @@
+{{title|Initialization}}
+{{cpp/language/initialization/navbar}}
+''Initialization'' of a variable provides its initial value at the time of construction. 
+
+The initial value may be provided in the initializer section of a {{rlp|declarations|declarator}} or a {{rlp|new|new expression}}. It also takes place during function calls: function parameters and the function return values are also initialized.
+
+===Initializers===
+For each declarator, the ''initializer'' (if exists) may be one of the following:
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|1==}} {{spar|expression}}
+}}
+{{sdsc|num=2|notes=&lt;br&gt;&lt;br&gt;{{mark since c++20}}|1=
+{{ttb|1== {}&lt;!----&gt;}}&lt;br&gt;{{ttb|1== {}} {{spar|initializer-list}} {{ttb|}&lt;!----&gt;}}&lt;br&gt;{{ttb|1== {}} {{spar|designated-initializer-list}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=3|notes={{mark until c++11}}&lt;br&gt;{{mark since c++11}}|
+{{ttb|(}} {{spar|expression-list}} {{ttb|)}}&lt;br&gt;{{ttb|(}} {{spar|initializer-list}} {{ttb|)}}
+}}
+{{sdsc|num=4|notes={{mark since c++11}}&lt;br&gt;{{mark since c++11}}&lt;br&gt;{{mark since c++20}}|
+{{ttb|{}&lt;!----&gt;}}&lt;br&gt;{{ttb|{}} {{spar|initializer-list}} {{ttb|}&lt;!----&gt;}}&lt;br&gt;{{ttb|{}} {{spar|designated-initializer-list}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+@1@ Copy-initialization syntax.
+@2@ {{rev inl|until=c++11|Aggregate initialization syntax.}}{{rev inl|since=c++11|List-initialization syntax.}}
+@3@ Direct-initialization syntax.
+@4@ List-initialization syntax.
+
+{{par begin}}
+{{par|{{spar|expression}}|any expression (except unparenthesized {{rlp|operator other#Built-in comma operator|comma expressions}})}}
+{{par|{{spar|expression-list}}|a comma-separated list of expressions (except unparenthesized comma expressions)}}
+{{par|{{spar|initializer-list}}|a comma-separated list of initializer clauses (see below)}}
+{{par|{{spar|designated-initializer-list}}|a comma-separated list of {{rlp|aggregate initialization#Designated initializers|designated initializer clauses}}}}
+{{par end}}
+
+
+An ''initializer clause'' may be one of the following:
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|expression}}
+}}
+{{sdsc|num=2|
+{{ttb|{}&lt;!----&gt;}}
+}}
+{{sdsc|num=3|
+{{ttb|{}} {{spar|initializer-list}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=4|notes={{mark since c++20}}|
+{{ttb|{}} {{spar|designated-initializer-list}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+Syntaxes {{v|2-4}} are collectively called ''brace-enclosed initializer list''.
+
+====Initializer semantics====
+If no initializer is specified for an object, the object is {{rlp|default initialization|default-initialized}}. If no initializer is specified for a {{rlp|reference}}, the program is ill-formed.
+
+If the initializer specified for an object is {{c|()}} (cannot appear in declarators due to the syntax restriction), the object is {{rlp|value initialization|value-initialized}}. If the initializer specified for a reference is {{c|()}}, the program is ill-formed.
+
+The semantics of initializers are as follows:
+* If the entity being initialized is a reference, see {{rlp|reference initialization}}.
+* Otherwise, the entity being initialized is an object. Given the type of the object as {{tt|T}}:
+:* If the initializer is of syntax {{v|1}}, the object is {{rlp|copy initialization|copy-initialized}}.
+{{rev begin}}
+{{rev|until=c++11|
+:* If the initializer is of syntax {{v|2}}:
+::* If {{tt|T}} is an {{rlp|aggregate initialization#Definitions|aggregate}}, {{rlp|aggregate initialization}} applies.
+::* If {{tt|T}} is a [[cpp/named req/ScalarType|scalar type]], {{c|1=T x = { a };}} is equivalent to {{c|1=T x = a;}}.
+::* Otherwise, the program is ill-formed.
+}}
+{{rev|since=c++11|
+:* If the initializer is of syntax {{v|2}} or {{v|4}}, the object is {{rlp|list initialization|list-initialized}}.
+}}
+{{rev end}}
+:* If the initializer is of syntax {{v|3}}, the object is {{rlp|direct initialization|direct-initialized}}.
+
+{{source|1=
+#include &lt;string&gt;
+
+std::string s1;           // default-initialization
+std::string s2();         // NOT an initialization!
+                          // actually declares a function “s2”
+                          // with no parameter and returns std::string
+std::string s3 = "hello"; // copy-initialization
+std::string s4("hello");  // direct-initialization
+std::string s5{'a'};      // list-initialization (since C++11)
+
+char a[3] = {'a', 'b'}; // aggregate initialization
+                        // (part of list initialization since C++11)
+char&amp; c = a[0];         // reference initialization
+}}
+
+===Non-local variables===
+All non-local variables with static {{rlp|storage duration}} are initialized as part of program startup, before the execution of the {{rlp|main function}} begins (unless deferred, see below). All non-local variables with thread-local storage duration are initialized as part of thread launch, sequenced-before the execution of the thread function begins. For both of these classes of variables, initialization occurs in two distinct stages:
+
+====Static initialization====
+There are two forms of static initialization:
+@1@ If possible, {{rlp|constant initialization}} is applied.
+
+@2@ Otherwise, non-local static and thread-local variables are {{rlp|zero initialization|zero-initialized}}.
+
+In practice:
+* Constant initialization is usually applied at compile time. Pre-calculated object representations are stored as part of the program image. If the compiler doesn't do that, it must still guarantee that the initialization happens before any dynamic initialization.
+* Variables to be zero-initialized are placed in the {{tt|.bss}} segment of the program image, which occupies no space on disk and is zeroed out by the OS when loading the program.
+
+====Dynamic initialization====
+After all static initialization is completed, dynamic initialization of non-local variables occurs in the following situations:
+
+@1@ ''Unordered dynamic initialization'', which applies only to (static/thread-local) class template {{rlp|static|static data members}} {{rev inl|since=c++14|and {{rlp|variable template}}s}} that aren't {{rlp|template specialization|explicitly specialized}}. Initialization of such static variables is indeterminately sequenced with respect to all other dynamic initialization {{rev inl|since=c++17|except if the program starts a thread before a variable is initialized, in which case its initialization is unsequenced}}. Initialization of such thread-local variables is unsequenced with respect to all other dynamic initialization.
+
+{{rrev|since=c++17|
+@2@ ''Partially-ordered dynamic initialization'', which applies to all inline variables that are not an implicitly or explicitly instantiated specialization. If a partially-ordered V is defined before ordered or partially-ordered W in every translation unit, the initialization of V is sequenced before the initialization of W (or happens-before, if the program starts a thread).
+}}
+
+@3@ ''Ordered dynamic initialization'', which applies to all other non-local variables: within a single translation unit, initialization of these variables is always {{rlp|eval order|sequenced}} in exact order their definitions appear in the source code. Initialization of static variables in different translation units is indeterminately sequenced. Initialization of thread-local variables in different translation units is unsequenced.
+
+If the initialization of a non-local variable with static or thread storage duration exits via an exception, {{lc|std::terminate}} is called.
+
+====Early dynamic initialization====
+The compilers are allowed to initialize dynamically-initialized variables as part of static initialization (essentially, at compile time), if the following conditions are both true:
+@1@ the dynamic version of the initialization does not change the value of any other object of namespace scope prior to its initialization
+@2@ the static version of the initialization produces the same value in the initialized variable as would be produced by the dynamic initialization if all variables not required to be initialized statically were initialized dynamically.
+
+Because of the rule above, if initialization of some object {{tt|o1}} refers to a namespace-scope object {{tt|o2}}, which potentially requires dynamic initialization, but is defined later in the same translation unit, it is unspecified whether the value of {{tt|o2}} used will be the value of the fully initialized {{tt|o2}} (because the compiler promoted initialization of {{tt|o2}} to compile time) or will be the value of {{tt|o2}} merely zero-initialized. 
+{{source|1=
+inline double fd() { return 1.0; }
+
+extern double d1;
+
+double d2 = d1;   // unspecified:
+                  // dynamically initialized to 0.0 if d1 is dynamically initialized, or
+                  // dynamically initialized to 1.0 if d1 is statically initialized, or
+                  // statically initialized to 0.0 (because that would be its value
+                  // if both variables were dynamically initialized)
+
+double d1 = fd(); // may be initialized statically or dynamically to 1.0
+}}
+
+====Deferred dynamic initialization====
+It is implementation-defined whether dynamic initialization happens-before the first statement of the main function (for statics) or the initial function of the thread (for thread-locals), or deferred to happen after.
+
+If the initialization {{rev inl|since=c++17|of a non-inline variable}} is deferred to happen after the first statement of main/thread function, it happens before the first {{rlps|definition#ODR-use}} of any variable with static/thread storage duration defined in the same translation unit as the variable to be initialized. If no variable or function is ODR-used from a given translation unit, the non-local variables defined in that translation unit may never be initialized (this models the behavior of an on-demand dynamic library). However, as long as anything from a translation unit is ODR-used, all non-local variables whose initialization or destruction has side effects will be initialized even if they are not used in the program.
+
+{{rrev|since=c++17|
+If the initialization of an inline variable is deferred, it happens before the first {{rlps|definition#ODR-use}} of that specific variable.
+}}
+
+{{source|1=
+// ============
+// == File 1 ==
+
+#include "a.h"
+#include "b.h"
+
+B b;
+A::A() { b.Use(); }
+
+// ============
+// == File 2 ==
+
+#include "a.h"
+
+A a;
+
+// ============
+// == File 3 ==
+
+#include "a.h"
+#include "b.h"
+
+extern A a;
+extern B b;
+
+int main()
+{
+    a.Use();
+    b.Use();
+}
+
+// If a is initialized before main is entered, b may still be uninitialized
+// at the point where A::A() uses it (because dynamic initialization is
+// indeterminately sequenced across translation units)
+
+// If a is initialized at some point after the first statement of main (which odr-uses
+// a function defined in File 1, forcing its dynamic initialization to run),
+// then b will be initialized prior to its use in A::A
+}}
+
+===Static local variables===
+For initialization of local (that is, block scope) static and thread-local variables, see {{rlpsd|storage duration#Static block variables}}.
+
+Initializer is not allowed in a block-scope declaration of a variable with {{rlp|storage duration#Linkage|external or internal linkage}}. Such a declaration must appear with {{c/core|extern}} and cannot be a definition.
+
+===Class members===
+Non-static data members can be initialized with {{rlp|initializer list|member initializer list}} or with a {{rlp|data members#Member initialization|default member initializer}}.
+
+===Notes===
+The order of destruction of non-local variables is described in {{lc|std::exit}}.
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=270|std=C++98|before=the order of initializing static data members&lt;br&gt;of class templates was unspecified|after=specified as unordered except for&lt;br&gt;explicit specializations and definitions}}
+{{dr list item|wg=cwg|dr=441|std=C++98|before=non-local references with static storage duration were&lt;br&gt;not always initialized before dynamic initializations|after=considered as static initialization, always&lt;br&gt;initialized before dynamic initializations}}
+{{dr list item|wg=cwg|dr=1415|std=C++98|before=a block-scope {{c/core|extern}} variable&lt;br&gt;declaration could be a definition|after=prohibited (no initializer&lt;br&gt;allowed in such declarations)}}
+{{dr list item|wg=cwg|dr=2599|std=C++98|before=it was unclear whether evaluating function&lt;br&gt;arguments in the initializer is part of initialization|after=it is part of initialization}}
+{{dr list end}}
+
+===See also===
+* {{rlp|copy elision}}
+* {{rlp|converting constructor}}
+* {{rlp|copy constructor}}
+* {{rlp|default constructor}}
+* {{rlpt|explicit}}
+* {{rlp|move constructor}}
+* {{rlpt|new}}
+{{dsc begin}}
+{{dsc see c|c/language/initialization|Initialization|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

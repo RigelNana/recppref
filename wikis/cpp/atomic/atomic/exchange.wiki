@@ -1,0 +1,105 @@
+{{cpp/atomic/atomic/title|exchange}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|1=
+T exchange( T desired, std::memory_order order =
+                           std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=2|since=c++11|1=
+T exchange( T desired, std::memory_order order =
+                           std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl end}}
+
+Atomically replaces the underlying value with {{c|desired}} (a read-modify-write operation). Memory is affected according to the value of {{c|order}}.
+
+{{rrev|since=c++20|
+It is deprecated if {{c|std::atomic&lt;T&gt;::is_always_lock_free}} is {{c|false}} and overload {{v|2}} participates in overload resolution.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|desired|value to assign}}
+{{par|order|memory order constraints to enforce}}
+{{par end}}
+
+===Return value===
+The value of the atomic variable before the call.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;atomic&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    constexpr int thread_count{5};
+    constexpr int sum{5};
+    
+    std::atomic&lt;int&gt; atom{0};
+    std::atomic&lt;int&gt; counter{0};
+    
+    auto increment_to_sum = [&amp;](const int id)
+    {
+        for (int next = 0; next &lt; sum;)
+        {
+            // each thread is writing a value from its own knowledge
+            const int current = atom.exchange(next);
+            counter++;
+            // sync writing to prevent from interrupting by other threads
+            std::osyncstream(std::cout)
+                &lt;&lt; "Thread #" &lt;&lt; id &lt;&lt; " (id=" &lt;&lt; std::this_thread::get_id()
+                &lt;&lt; ") wrote " &lt;&lt; next &lt;&lt; " replacing the old value "
+                &lt;&lt; current &lt;&lt; ".\n";
+            next = std::max(current, next) + 1;
+        }
+    };
+    
+    std::vector&lt;std::thread&gt; v;
+    for (std::size_t i = 0; i &lt; thread_count; ++i)
+        v.emplace_back(increment_to_sum, i);
+    
+    for (auto&amp; tr : v)
+        tr.join();
+    
+    std::cout &lt;&lt; thread_count &lt;&lt; " threads take "
+              &lt;&lt; counter &lt;&lt; " times in total to "
+              &lt;&lt; "increment 0 to " &lt;&lt; sum &lt;&lt; ".\n";
+}
+|p=true
+|output=
+Thread #1 (id=139722332333824) wrote 0 replacing the old value 0.
+Thread #2 (id=139722323941120) wrote 0 replacing the old value 0.
+Thread #1 (id=139722332333824) wrote 1 replacing the old value 0.
+Thread #1 (id=139722332333824) wrote 2 replacing the old value 1.
+Thread #1 (id=139722332333824) wrote 3 replacing the old value 2.
+Thread #1 (id=139722332333824) wrote 4 replacing the old value 3.
+Thread #0 (id=139722340726528) wrote 0 replacing the old value 0.
+Thread #3 (id=139722315548416) wrote 0 replacing the old value 0.
+Thread #3 (id=139722315548416) wrote 1 replacing the old value 4.
+Thread #0 (id=139722340726528) wrote 1 replacing the old value 1.
+Thread #4 (id=139722307155712) wrote 0 replacing the old value 1.
+Thread #4 (id=139722307155712) wrote 2 replacing the old value 2.
+Thread #4 (id=139722307155712) wrote 3 replacing the old value 2.
+Thread #4 (id=139722307155712) wrote 4 replacing the old value 3.
+Thread #2 (id=139722323941120) wrote 1 replacing the old value 0.
+Thread #0 (id=139722340726528) wrote 2 replacing the old value 1.
+Thread #2 (id=139722323941120) wrote 2 replacing the old value 4.
+Thread #0 (id=139722340726528) wrote 3 replacing the old value 2.
+Thread #0 (id=139722340726528) wrote 4 replacing the old value 3.
+5 threads take 19 times in total to increment 0 to 5.
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_exchange}}
+{{dsc inc|cpp/utility/dsc exchange}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

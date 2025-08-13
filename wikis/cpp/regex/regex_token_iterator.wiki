@@ -1,0 +1,107 @@
+{{cpp/title|regex_token_iterator}}
+{{cpp/regex/regex_token_iterator/navbar}}
+{{ddcl|header=regex|since=c++11|1=
+template&lt;
+    class BidirIt,
+    class CharT = typename std::iterator_traits&lt;BidirIt&gt;::value_type,
+    class Traits = std::regex_traits&lt;CharT&gt;
+&gt; class regex_token_iterator
+}}
+
+{{tt|std::regex_token_iterator}} is a read-only {{named req|ForwardIterator}} that accesses the individual sub-matches of every match of a regular expression within the underlying character sequence. It can also be used to access the parts of the sequence that were not matched by the given regular expression (e.g. as a tokenizer).
+
+On construction, it constructs an {{lc|std::regex_iterator}} and on every increment it steps through the requested sub-matches from the current match_results, incrementing the underlying {{lc|std::regex_iterator}} when incrementing away from the last submatch.
+
+The default-constructed {{tt|std::regex_token_iterator}} is the end-of-sequence iterator. When a valid {{tt|std::regex_token_iterator}} is incremented after reaching the last submatch of the last match, it becomes equal to the end-of-sequence iterator. Dereferencing or incrementing it further invokes undefined behavior.
+
+Just before becoming the end-of-sequence iterator, a {{tt|std::regex_token_iterator}} may become a ''suffix iterator'', if the index {{c|-1}} (non-matched fragment) appears in the list of the requested submatch indices. Such iterator, if dereferenced, returns a match_results corresponding to the sequence of characters between the last match and the end of sequence.
+
+A typical implementation of {{tt|std::regex_token_iterator}} holds the underlying {{lc|std::regex_iterator}}, a container (e.g. {{c/core|std::vector&lt;int&gt;}}) of the requested submatch indices, the internal counter equal to the index of the submatch, a pointer to {{lc|std::sub_match}}, pointing at the current submatch of the current match, and a {{lc|std::match_results}} object containing the last non-matched character sequence (used in tokenizer mode).
+
+===Type requirements===
+{{par begin}}
+{{par req named|BidirIt|BidirectionalIterator}}
+{{par end}}
+
+===Specializations===
+Several specializations for common character sequence types are defined:
+{{dsc begin}}
+{{dsc header|regex}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{ttb|std::cregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;const char*&gt;}}}}
+{{dsc|{{ttb|std::wcregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;const wchar_t*&gt;}}}}
+{{dsc|{{ttb|std::sregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;std::string}}{{c/core|::const_iterator&gt;}}}}
+{{dsc|{{ttb|std::wsregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;std::wstring}}{{c/core|::const_iterator&gt;}}}}
+{{dsc end}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|value_type}}|{{c/core|std::sub_match&lt;BidirIt&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|pointer}}|{{c/core|const value_type*}}}}
+{{dsc|{{tt|reference}}|{{c/core|const value_type&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::forward_iterator_tag}}}}
+{{dsc|{{tt|iterator_concept}} {{mark c++20}}|{{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|regex_type}}|{{c/core|std::basic_regex&lt;CharT, Traits&gt;}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc constructor}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc destructor}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator{{=}}}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator cmp}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator*}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator arith}}
+{{dsc end}}
+
+===Notes===
+It is the programmer's responsibility to ensure that the {{lc|std::basic_regex}} object passed to the iterator's constructor outlives the iterator. Because the iterator stores a {{lc|std::regex_iterator}} which stores a pointer to the regex, incrementing the iterator after the regex was destroyed results in undefined behavior.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;regex&gt;
+
+int main()
+{
+    // Tokenization (non-matched fragments)
+    // Note that regex is matched only two times; when the third value is obtained
+    // the iterator is a suffix iterator.
+    const std::string text = "Quick brown fox.";
+    const std::regex ws_re("\\s+"); // whitespace
+    std::copy(std::sregex_token_iterator(text.begin(), text.end(), ws_re, -1),
+              std::sregex_token_iterator(),
+              std::ostream_iterator&lt;std::string&gt;(std::cout, "\n"));
+    
+    std::cout &lt;&lt; '\n';
+    
+    // Iterating the first submatches
+    const std::string html = R"(&lt;p&gt;&lt;a href="http://google.com"&gt;google&lt;/a&gt; )"
+                             R"(&lt; a HREF ="http://cppreference.com"&gt;cppreference&lt;/a&gt;\n&lt;/p&gt;)";
+    const std::regex url_re(R"!!(&lt;\s*A\s+[^&gt;]*href\s*=\s*"([^"]*)")!!", std::regex::icase);
+    std::copy(std::sregex_token_iterator(html.begin(), html.end(), url_re, 1),
+              std::sregex_token_iterator(),
+              std::ostream_iterator&lt;std::string&gt;(std::cout, "\n"));
+}
+|output=
+Quick
+brown
+fox.
+
+http://google.com
+http://cppreference.com
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3698|paper=P2770R0|std=C++20|before={{tt|regex_token_iterator}} was a {{lconcept|forward_iterator}}&lt;br&gt;while being a stashing iterator|after=made {{lconcept|input_iterator}}&lt;ref&gt;{{tt|iterator_category}} was unchanged by the resolution, because changing it to {{lc|std::input_iterator_tag}} might break too much existing code.&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

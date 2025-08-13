@@ -1,0 +1,252 @@
+{{title|{{tt|requires}} expression {{mark since c++20}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+Yields a prvalue expression of type {{c/core|bool}} that describes the constraints. 
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|requires}} {{ttb|{&lt;!----&gt;}} {{spar|requirement-seq}} {{ttb|}&lt;!----&gt;}}}}
+{{sdsc|num=2|{{ttb|requires}} {{ttb|(}} {{spar optional|parameter-list}} {{ttb|)}} {{ttb|{&lt;!----&gt;}} {{spar|requirement-seq}} {{ttb|}&lt;!----&gt;}}}}
+{{sdsc end}}
+{{par begin}}
+{{par|{{spar|parameter-list}}|a {{rlpsd|function#Parameter list}}}}
+{{par|{{spar|requirement-seq}}|sequence of ''requirements'', each requirement is one of the following:
+* [[#Simple requirements|simple requirement]]
+* [[#Type requirements|type requirement]]
+* [[#Compound requirements|compound requirement]]
+* [[#Nested requirements|nested requirement]]}}
+{{par end}}
+
+===Explanation===
+Requirements may refer to the template parameters that are in scope, to the parameters of {{spar|parameter-list}}, and to any other declarations that are visible from the enclosing context.
+
+The substitution of template arguments into a {{c/core|requires}} expression used in a declaration of a {{rlpsd|templates#Templated entity}} may result in the formation
+of invalid types or expressions in its requirements, or the violation of semantic constraints of those requirements. In such cases, the {{c/core|requires}} expression evaluates to {{c|false}} and does not cause the program to be ill-formed. The substitution and semantic constraint checking proceeds in lexical order and stops when a condition that determines the result of the {{c/core|requires}} expression is encountered. If substitution (if any) and semantic constraint checking succeed, the {{c/core|requires}} expression evaluates to {{c|true}}.
+
+If a substitution failure would occur in a {{c/core|requires}} expression for every possible template argument, the program is ill-formed, no diagnostic required:
+{{source|1=
+template&lt;class T&gt;
+concept C = requires
+{
+    new int[-(int)sizeof(T)]; // invalid for every T: ill-formed, no diagnostic required
+};
+}}
+
+If a {{c/core|requires}} expression contains invalid types or expressions in its requirements, and it does not appear within the declaration of a {{rlpsd|templates#Templated entity}}, then the program is ill-formed.
+
+===Local parameters===
+A {{c/core|requires}} expression can introduce local parameters using a {{rlpsd|function#Parameter list}}. These parameters have no linkage, storage, or lifetime; they are only used as notation for the purpose of defining requirements.
+
+The type of each parameter is determined by the same way as {{rlp|function#Function type|determining the actual type}} of function parameters:
+{{source|1=
+template&lt;typename T&gt;
+concept C = requires(T p[2])
+{
+    (decltype(p))nullptr; // OK, p has type T*
+};
+}}
+
+If any of the following conditions is satisfied, the program is ill-formed:
+* A local parameter has a {{rlp|default arguments|default argument}}.
+* The parameter list terminate with an ellipsis.
+{{source|1=
+template&lt;typename T&gt;
+concept C1 = requires(T t = 0)  // Error: t has a default argument
+{
+    t;
+};
+
+template&lt;typename T&gt;
+concept C2 = requires(T t, ...) // Error: terminates with an ellipsis
+{
+    t;
+};
+}}
+
+===Simple requirements===
+{{sdsc begin}}
+{{sdsc|
+{{spar|expression}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|expression}}|an expression which does not start with {{c/core|requires}}}}
+{{par end}}
+
+
+A simple requirement asserts that {{spar|expression}} is valid. {{spar|expression}} is an {{rlp|expressions#Potentially-evaluated expressions|unevaluated operand}}.
+
+{{source|1=
+template&lt;typename T&gt;
+concept Addable = requires (T a, T b)
+{
+    a + b; // "the expression “a + b” is a valid expression that will compile"
+};
+
+template&lt;class T, class U = T&gt;
+concept Swappable = requires(T&amp;&amp; t, U&amp;&amp; u)
+{
+    swap(std::forward&lt;T&gt;(t), std::forward&lt;U&gt;(u));
+    swap(std::forward&lt;U&gt;(u), std::forward&lt;T&gt;(t));
+};
+}}
+
+A requirement that starts with the keyword {{c/core|requires}} is always interpreted as a nested requirement. Thus a simple requirement cannot start with an unparenthesized {{c/core|requires}} expression.
+
+===Type requirements===
+{{sdsc begin}}
+{{sdsc|
+{{ttb|typename}} {{spar|identifier}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|identifier}}|a (possibly qualified) {{rlp|identifiers|identifier}} (including {{rlp|templates#Template identifiers|simple template identifier}})}}
+{{par end}}
+
+
+A type requirement asserts that the type named by {{spar|identifier}} is valid: this can be used to verify that a certain named nested type exists, or that a class/alias template specialization names a type. A type requirement naming a class template specialization does not require the type to be complete.
+
+{{source|1=
+template&lt;typename T&gt;
+using Ref = T&amp;;
+
+template&lt;typename T&gt;
+concept C = requires
+{
+    typename T::inner; // required nested member name
+    typename S&lt;T&gt;;     // required class template specialization
+    typename Ref&lt;T&gt;;   // required alias template substitution
+};
+
+template&lt;class T, class U&gt;
+using CommonType = std::common_type_t&lt;T, U&gt;;
+
+template&lt;class T, class U&gt;
+concept Common = requires (T&amp;&amp; t, U&amp;&amp; u)
+{
+    typename CommonType&lt;T, U&gt;; // CommonType&lt;T, U&gt; is valid and names a type
+    { CommonType&lt;T, U&gt;{std::forward&lt;T&gt;(t)} }; 
+    { CommonType&lt;T, U&gt;{std::forward&lt;U&gt;(u)} }; 
+};
+}}
+
+===Compound requirements===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|{&lt;!----&gt;}} {{spar|expression}} {{ttb|};}}
+}}
+{{sdsc|num=2|
+{{ttb|{&lt;!----&gt;}} {{spar|expression}} {{ttb|}&lt;!----&gt;}} {{ttb|noexcept}} {{ttb|;}}
+}}
+{{sdsc|num=3|
+{{ttb|{&lt;!----&gt;}} {{spar|expression}} {{ttb|} -&gt;}} {{spar|type-constraint}} {{ttb|;}}
+}}
+{{sdsc|num=4|
+{{ttb|{&lt;!----&gt;}} {{spar|expression}} {{ttb|}&lt;!----&gt;}} {{ttb|noexcept -&gt;}} {{spar|type-constraint}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|expression}}|an expression}}
+{{par|{{spar|type-constraint}}|a {{rlp|constraints#Constraints|constraint}}}}
+{{par end}}
+
+
+A compound requirement asserts properties of {{spar sep|expression}}. Substitution and semantic constraint checking proceeds in the following order:
+@1@ Template arguments (if any) are substituted into {{spar sep|expression}}.
+@2@ If {{ttb|noexcept}} is present, {{spar|expression}} must not be [[cpp/language/noexcept|potentially throwing]].
+@3@ If {{spar|type-constraint}} is present, then:
+:@a@ Template arguments are substituted into {{spar sep|type-constraint}}.
+:@b@ {{c/core|decltype((}}{{spar sep|expression}}{{c/core|))}} must satisfy the constraint imposed by {{spar sep|type-constraint}}. Otherwise, the enclosing {{c/core|requires}} expression is {{c|false}}.
+
+{{spar|expression}} is an {{rlp|expressions#Potentially-evaluated expressions|unevaluated operand}}.
+
+{{source|1=
+template&lt;typename T&gt;
+concept C2 = requires(T x)
+{
+    // the expression *x must be valid
+    // AND the type T::inner must be valid
+    // AND the result of *x must be convertible to T::inner
+    {*x} -&gt; std::convertible_to&lt;typename T::inner&gt;;
+    
+    // the expression x + 1 must be valid
+    // AND std::same_as&lt;decltype((x + 1)), int&gt; must be satisfied
+    // i.e., (x + 1) must be a prvalue of type int
+    {x + 1} -&gt; std::same_as&lt;int&gt;;
+    
+    // the expression x * 1 must be valid
+    // AND its result must be convertible to T
+    {x * 1} -&gt; std::convertible_to&lt;T&gt;;
+};
+}}
+
+===Nested requirements===
+{{sdsc begin}}
+{{sdsc|
+{{ttb|requires}} {{spar|constraint-expression}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|constraint-expression}}|an expression representing {{rlp|constraints}}}}
+{{par end}}
+
+
+A nested requirement can be used to specify additional constraints in terms of local parameters. {{spar|constraint-expression}} must be satisfied by the substituted template arguments, if any. Substitution of template arguments into a nested requirement causes substitution into {{spar|constraint-expression}} only to the extent needed to determine whether {{spar|constraint-expression}} is satisfied.
+
+{{source|1=
+template&lt;class T&gt;
+concept Semiregular = DefaultConstructible&lt;T&gt; &amp;&amp;
+    CopyConstructible&lt;T&gt; &amp;&amp; CopyAssignable&lt;T&gt; &amp;&amp; Destructible&lt;T&gt; &amp;&amp;
+requires(T a, std::size_t n)
+{  
+    requires Same&lt;T*, decltype(&amp;a)&gt;; // nested: "Same&lt;...&gt; evaluates to true"
+    { a.~T() } noexcept; // compound: "a.~T()" is a valid expression that doesn't throw
+    requires Same&lt;T*, decltype(new T)&gt;; // nested: "Same&lt;...&gt; evaluates to true"
+    requires Same&lt;T*, decltype(new T[n])&gt;; // nested
+    { delete new T }; // compound
+    { delete new T[n] }; // compound
+};
+}}
+
+===Note===
+The keyword {{c/core|requires}} is also used to introduce {{rlp|constraints#Requires clauses|{{c/core|requires}} clauses}}.
+
+{{source|1=
+template&lt;typename T&gt;
+concept Addable = requires (T x) { x + x; }; // requires expression
+
+template&lt;typename T&gt; requires Addable&lt;T&gt; // requires clause, not requires expression
+T add(T a, T b) { return a + b; }
+
+template&lt;typename T&gt;
+    requires requires (T x) { x + x; } // ad-hoc constraint, note keyword used twice
+T add(T a, T b) { return a + b; }
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/requires}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2560|std=C++20|before=it was unclear whether parameter types are adjusted in {{c/core|requires}} expressions|after=also adjusted}}
+{{dr list item|wg=cwg|dr=2911|std=C++20|before=all expressions appearing within {{c/core|requires}}&lt;br&gt;expressions were unevaluated operands|after=only some&lt;br&gt;expressions are}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.5.7|title=Requires expressions|id=expr.prim.req}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.5.7|title=Requires expressions|id=expr.prim.req}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc constraints}}
+{{dsc end}}
+
+{{langlinks|es|ru|zh}}

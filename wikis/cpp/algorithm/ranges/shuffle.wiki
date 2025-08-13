@@ -1,0 +1,114 @@
+{{cpp/ranges/title|shuffle}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S, class Gen &gt;
+requires std::permutable&lt;I&gt; &amp;&amp;
+         std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    I shuffle( I first, S last, Gen&amp;&amp; gen );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R, class Gen &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt; &amp;&amp;
+         std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+ranges::borrowed_iterator_t&lt;R&gt;
+    shuffle( R&amp;&amp; r, Gen&amp;&amp; gen );
+}}
+{{dcl end}}
+
+@1@ Reorders the elements in the given range {{range|first|last}} such that each possible permutation of those elements has equal probability of appearance.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to shuffle randomly}}
+{{par|r|the range of elements to shuffle randomly}}
+{{par|gen|the random number generator}}
+{{par end}}
+
+===Return value===
+An iterator equal to {{c|last}}.
+
+===Complexity===
+Exactly {{c|(last - first) - 1}} swaps.
+
+===Possible implementation===
+{{eq fun|1=
+struct shuffle_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S, class Gen&gt;
+    requires std::permutable&lt;I&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    I operator()(I first, S last, Gen&amp;&amp; gen) const
+    {
+        using diff_t = std::iter_difference_t&lt;I&gt;;
+        using distr_t = std::uniform_int_distribution&lt;diff_t&gt;;
+        using param_t = typename distr_t::param_type;
+        distr_t D;
+        const auto n {last - first};
+        for (diff_t i {1}; i &lt; n; ++i)
+            ranges::iter_swap(first + i, first + D(gen, param_t(0, i)));
+        return ranges::next(first, last);
+    }
+
+    template&lt;ranges::random_access_range R, class Gen&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    ranges::borrowed_iterator_t&lt;R&gt; operator()(R&amp;&amp; r, Gen&amp;&amp; gen) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::forward&lt;Gen&gt;(gen));
+    }
+};
+
+inline constexpr shuffle_fn shuffle {};
+}}
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+
+void print(const auto&amp; a)
+{
+    for (const auto e : a)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::array a {'A', 'B', 'C', 'D', 'E', 'F'};
+    print(a);
+
+    std::random_device rd;
+    std::mt19937 gen {rd()};
+
+    for (int i {}; i != 3; ++i)
+    {
+        std::ranges::shuffle(a, gen);
+        print(a);
+    }
+}
+|p=true
+|output=
+A B C D E F
+F E A C D B
+E C B F A D
+B A E C F D
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/ranges/dsc prev_permutation}}
+{{dsc inc|cpp/algorithm/dsc random_shuffle}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

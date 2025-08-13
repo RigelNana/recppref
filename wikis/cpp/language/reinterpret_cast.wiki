@@ -1,0 +1,227 @@
+{{title|{{tt|reinterpret_cast}} conversion}}
+{{cpp/language/expressions/navbar}}
+
+Converts between types by reinterpreting the underlying bit pattern.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|{{ttb|reinterpret_cast&lt;}} {{spar|target-type}} {{ttb|&gt;(}} {{spar|expression}} {{ttb|)}}}}
+{{sdsc end}}
+
+Returns a value of type {{spar|target-type}}.
+
+===Explanation===
+Unlike {{c/core|static_cast}}, but like {{c/core|const_cast}}, the {{c/core|reinterpret_cast}} expression does not compile to any CPU instructions (except when converting between integers and pointers, or between pointers on obscure architectures where pointer representation depends on its type). It is primarily a compile-time directive which instructs the compiler to treat {{spar|expression}} as if it had the type {{spar|target-type}}.
+
+Only the following conversions can be done with {{c/core|reinterpret_cast}}, except when such conversions would {{rlp|const_cast#Casting away constness|cast away constness}} (or volatility).
+
+@1@ An expression of integral, enumeration, pointer, or pointer-to-member type can be converted to its own type. The resulting value is the same as the value of {{spar|expression}}.
+@2@ A pointer can be converted to any integral type large enough to hold all values of its type (e.g. to {{lc|std::uintptr_t}}).
+@3@ A value of any integral or enumeration type can be converted to a pointer type. A pointer converted to an integer of sufficient size and back to the same pointer type is guaranteed to have its original value, otherwise the resulting pointer cannot be dereferenced safely (the round-trip conversion in the opposite direction is not guaranteed; the same pointer may have multiple integer representations) The null pointer constant {{lc|NULL}} or integer zero is not guaranteed to yield the null pointer value of the target type; {{rlpt|static_cast}} or {{rlp|implicit cast|implicit conversion}} should be used for this purpose.
+
+{{rrev|since=c++11|
+@4@ Any value of type {{lc|std::nullptr_t}}, including {{c|nullptr}} can be converted to any integral type as if it were {{c|(void*)0}}, but no value, not even {{c|nullptr}} can be converted to {{lc|std::nullptr_t}}: {{c/core|static_cast}} should be used for that purpose.
+}}
+@5@ Any object pointer type {{tt|T1*}} can be converted to another object pointer type {{tt|''cv'' T2*}}. This is exactly equivalent to {{box|{{c/core|static_cast&lt;}}''cv''{{c/core| T2*&gt;(static_cast&lt;}}''cv''{{c/core| void*&gt;(}}{{spar|expression}}{{c/core|))}}}} (which implies that if {{tt|T2}}'s alignment requirement is not stricter than {{tt|T1}}'s, the value of the pointer does not change and conversion of the resulting pointer back to its original type yields the original value). In any case, the resulting pointer may only be dereferenced safely if the dereferenced value is [[#Type accessibility|type-accessible]].{{mark unreviewed dr|cwg}}&lt;!--cwg1412--&gt;
+@6@ An {{rev inl|until=c++11|{{rlp|value category#lvalue|lvalue}}}}{{rev inl|since=c++11|{{rlp|value category#glvalue|glvalue}}}} expression of type {{tt|T1}} can be converted to reference to another type {{tt|T2}}. The result is that of {{c|*reinterpret_cast&lt;T2*&gt;(p)}}, where {{c|p}} is a pointer of type “pointer to {{tt|T1}}” to the object or function designated by {{spar|expression}}. No temporary is {{rev inl|since=c++17|materialized or}} created, no copy is made, no constructors or conversion functions are called. The resulting reference can only be accessed safely if it is [[#Type accessibility|type-accessible]].
+@7@ Any pointer to function can be converted to a pointer to a different function type. The result is unspecified, but converting such pointer back to pointer to the original function type yields the pointer to the original function. The resulting pointer can only be called safely if it function type is [[#Call compatibility|call-compatible]] with the original function type.
+@8@ On some implementations (in particular, on any POSIX compatible system as required by [https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlsym.html {{tt|dlsym}}]), a function pointer can be converted to {{c/core|void*}} or any other object pointer, or vice versa. If the implementation supports conversion in both directions, conversion to the original type yields the original value, otherwise the resulting pointer cannot be dereferenced or called safely.
+@9@ The null pointer value of any pointer type can be converted to any other pointer type, resulting in the null pointer value of that type. Note that the null pointer constant {{c|nullptr}} or any other value of type {{lc|std::nullptr_t}} cannot be converted to a pointer with {{c/core|reinterpret_cast}}: implicit conversion or {{c/core|static_cast}} should be used for this purpose.
+@10@ A pointer to member function can be converted to pointer to a different member function of a different type. Conversion back to the original type yields the original value, otherwise the resulting pointer cannot be used safely.
+@11@ A pointer to member object of some class {{tt|T1}} can be converted to a pointer to another member object of another class {{tt|T2}}. If {{tt|T2}}'s alignment is not stricter than {{tt|T1}}'s, conversion back to the original type {{tt|T1}} yields the original value, otherwise the resulting pointer cannot be used safely.
+
+{{cpp/language/cast return}}
+
+===Type aliasing===
+====Type accessibility====
+If a type {{tt|T_ref}} is {{rlp|implicit conversion#Similar types|similar}} to any of the following types, an object of {{rlpsd|type#Dynamic type}} {{tt|T_obj}} is ''type-accessible'' through a {{rev inl|until=c++11|lvalue}}{{rev inl|since=c++11|glvalue}} of type {{tt|T_ref}}:
+* {{c/core|char}}
+* {{c/core|unsigned char}}
+{{rrev|since=c++17|
+* {{lc|std::byte}}
+}}
+* {{tt|T_obj}}
+* the signed or unsigned type corresponding to {{tt|T_obj}}
+
+If a program attempts to read or modify the stored value of an object through a {{rev inl|until=c++11|lvalue}}{{rev inl|since=c++11|glvalue}} through which it is not type-accessible, the behavior is undefined.
+
+This rule enables type-based alias analysis, in which a compiler assumes that the value read through a glvalue of one type is not modified by a write to a glvalue of a different type (subject to the exceptions noted above).
+
+Note that many C++ compilers relax this rule, as a non-standard language extension, to allow wrong-type access through the inactive member of a {{rlp|union}} (such access is not undefined in C).
+
+====Call compatibility====
+If any of the following conditions is satisfied, a type {{tt|T_call}} is ''call-compatible'' with a function type {{tt|T_func}}:
+* {{tt|T_call}} is the same type as {{tt|T_func}}.
+{{rrev|since=c++17|
+* {{tt|T_func*}} can be converted to {{tt|T_call*}} via a {{rlp|implicit conversion#Function pointer conversions|function pointer conversion}}.
+}}
+
+If a function is called through an expression whose {{rlpsd|function#Function type}} is not call-compatible with the type of the called function’s definition, the behavior is undefined.
+
+===Notes===
+Assuming that alignment requirements are met, a {{c/core|reinterpret_cast}} does not change the {{rlp|pointer#Pointers|value of a pointer}} outside of a few limited cases dealing with {{rlp|static_cast#pointer-interconvertible|''pointer-interconvertible''}} objects:
+{{source|1=
+struct S1 { int a; } s1;
+struct S2 { int a; private: int b; } s2; // not standard-layout
+union U { int a; double b; } u = {0};
+int arr[2];
+
+int* p1 = reinterpret_cast&lt;int*&gt;(&amp;s1); // value of p1 is "pointer to s1.a" because
+                                       // s1.a and s1 are pointer-interconvertible
+
+int* p2 = reinterpret_cast&lt;int*&gt;(&amp;s2); // value of p2 is unchanged by reinterpret_cast
+                                       // and is "pointer to s2". 
+
+int* p3 = reinterpret_cast&lt;int*&gt;(&amp;u);  // value of p3 is "pointer to u.a":
+                                       // u.a and u are pointer-interconvertible
+
+double* p4 = reinterpret_cast&lt;double*&gt;(p3); // value of p4 is "pointer to u.b": u.a and
+                                            // u.b are pointer-interconvertible because
+                                            // both are pointer-interconvertible with u
+
+int* p5 = reinterpret_cast&lt;int*&gt;(&amp;arr); // value of p5 is unchanged by reinterpret_cast
+                                        // and is "pointer to arr"
+}}
+
+Performing a class member access that designates a non-static data member or a non-static member function on a glvalue that does not actually designate an object of the appropriate type - such as one obtained through a {{c/core|reinterpret_cast}} - results in undefined behavior:
+
+{{source|1=
+struct S { int x; };
+struct T { int x; int f(); };
+struct S1 : S {};    // standard-layout
+struct ST : S, T {}; // not standard-layout
+ 
+S s = {};
+auto p = reinterpret_cast&lt;T*&gt;(&amp;s); // value of p is "pointer to s"
+auto i = p-&gt;x; // class member access expression is undefined behavior;
+               // s is not a T object
+p-&gt;x = 1; // undefined behavior
+p-&gt;f();   // undefined behavior
+ 
+S1 s1 = {};
+auto p1 = reinterpret_cast&lt;S*&gt;(&amp;s1); // value of p1 is "pointer to the S subobject of s1"
+auto i = p1-&gt;x; // OK
+p1-&gt;x = 1;      // OK
+ 
+ST st = {};
+auto p2 = reinterpret_cast&lt;S*&gt;(&amp;st); // value of p2 is "pointer to st"
+auto i = p2-&gt;x; // undefined behavior
+p2-&gt;x = 1;      // undefined behavior
+}}
+
+Many compilers issue "strict aliasing" warnings in such cases, even though technically such constructs run afoul of something other than the paragraph commonly known as the "strict aliasing rule".
+
+The purpose of strict aliasing and related rules is to enable type-based alias analysis, which would be decimated if a program can validly create a situation where two pointers to unrelated types (e.g., an {{c/core|int*}} and a {{c/core|float*}}) could simultaneously exist and both can be used to load or store the same memory (see [https://web.archive.org/web/20201128194944/http://www.open-std.org/pipermail/ub/2016-February/000565.html this email on SG12 reflector]). Thus, any technique that is seemingly capable of creating such a situation necessarily invokes undefined behavior.
+
+When it is needed to interpret the bytes of an object as a value of a different type, {{lc|std::memcpy}} {{rev inl|since=c++20|or {{ltt|cpp/numeric/bit_cast|std::bit_cast}}}} can be used:
+
+{{source|1=
+double d = 0.1;
+std::int64_t n;
+static_assert(sizeof n == sizeof d);
+// n = *reinterpret_cast&lt;std::int64_t*&gt;(&amp;d); // Undefined behavior
+std::memcpy(&amp;n, &amp;d, sizeof d);               // OK
+n = std::bit_cast&lt;std::int64_t&gt;(d);          // also OK
+}}
+
+{{rrev|since=c++11|
+If the implementation provides {{lc|std::intptr_t}} and/or {{lc|std::uintptr_t}}, then a cast from a pointer to an object type or ''cv'' {{c/core|void}} to these types is always well-defined. However, this is not guaranteed for a function pointer.
+}}
+
+In C, aggregate copy and assignment access the aggregate object as a whole. But in C++ such actions are always performed through a member function call, which accesses the individual subobjects rather than the entire object (or, in the case of unions, copies the object representation, i.e., via {{c/core|unsigned char}}).
+
+===Keywords===
+{{ltt|cpp/keyword/reinterpret_cast}}
+
+===Example===
+{{example
+|Demonstrates some uses of {{c/core|reinterpret_cast}}:
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+int f() { return 42; }
+
+int main()
+{
+    int i = 7;
+    
+    // pointer to integer and back
+    std::uintptr_t v1 = reinterpret_cast&lt;std::uintptr_t&gt;(&amp;i); // static_cast is an error
+    std::cout &lt;&lt; "The value of &amp;i is " &lt;&lt; std::showbase &lt;&lt; std::hex &lt;&lt; v1 &lt;&lt; '\n';
+    int* p1 = reinterpret_cast&lt;int*&gt;(v1);
+    assert(p1 == &amp;i);
+    
+    // pointer to function to another and back
+    void(*fp1)() = reinterpret_cast&lt;void(*)()&gt;(f);
+    // fp1(); undefined behavior
+    int(*fp2)() = reinterpret_cast&lt;int(*)()&gt;(fp1);
+    std::cout &lt;&lt; std::dec &lt;&lt; fp2() &lt;&lt; '\n'; // safe
+    
+    // type aliasing through pointer
+    char* p2 = reinterpret_cast&lt;char*&gt;(&amp;i);
+    std::cout &lt;&lt; (p2[0] == '\x7' ? "This system is little-endian\n"
+                                 : "This system is big-endian\n");
+    
+    // type aliasing through reference
+    reinterpret_cast&lt;unsigned int&amp;&gt;(i) = 42;
+    std::cout &lt;&lt; i &lt;&lt; '\n';
+    
+    [[maybe_unused]] const int &amp;const_iref = i;
+    // int &amp;iref = reinterpret_cast&lt;int&amp;&gt;(
+    //     const_iref); // compiler error - can't get rid of const
+    // Must use const_cast instead: int &amp;iref = const_cast&lt;int&amp;&gt;(const_iref);
+}
+|p=true
+|output=
+The value of &amp;i is 0x7fff352c3580
+42
+This system is little-endian
+42
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=195|std=C++98|before=conversion between function pointers&lt;br&gt;and object pointers not allowed|after=made conditionally-supported}}
+{{dr list item|wg=cwg|dr=658|std=C++98|before=the result of pointer conversions was unspecified&lt;br&gt;(except for conversions back to the original type)|after=specification provided for pointers&lt;br&gt;whose pointed-to types satisfy&lt;br&gt;the alignment requirements}}
+{{dr list item|wg=cwg|dr=799|std=C++98|before=it was unclear which identity conversion&lt;br&gt;can be done by {{c/core|reinterpret_cast}}|after=made clear}}
+{{dr list item|wg=cwg|dr=1268|std=C++11|before={{c/core|reinterpret_cast}} could only cast&lt;br&gt;lvalues to reference types|after=xvalues also allowed}}
+{{dr list item|wg=cwg|dr=2780|std=C++98|before={{c/core|reinterpret_cast}} could not cast&lt;br&gt;function lvalues to other reference types|after=allowed}}
+{{dr list item|wg=cwg|dr=2939|std=C++17|before={{c/core|reinterpret_cast}} could cast&lt;br&gt;prvalues to rvalue reference types|after=not allowed}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.6.1.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.9|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc const_cast}}
+{{dsc inc|cpp/language/dsc static_cast}}
+{{dsc inc|cpp/language/dsc dynamic_cast}}
+{{dsc inc|cpp/language/dsc explicit_cast}}
+{{dsc inc|cpp/language/dsc implicit_cast}}
+{{dsc inc|cpp/numeric/dsc bit_cast}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

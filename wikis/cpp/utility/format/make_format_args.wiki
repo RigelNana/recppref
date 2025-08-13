@@ -1,0 +1,118 @@
+{{cpp/title|make_format_args|make_wformat_args}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class Context = std::format_context, class... Args &gt;
+/*format-arg-store*/&lt;Context, Args...&gt;
+    make_format_args( Args&amp;... args );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class... Args &gt;
+/*format-arg-store*/&lt;std::wformat_context, Args...&gt;
+    make_wformat_args( Args&amp;... args );
+}}
+{{dcl end}}
+
+Returns an object that stores an array of formatting arguments and can be implicitly converted to {{lc|std::basic_format_args|std::basic_format_args&lt;Context&gt;}}.
+
+The behavior is undefined if {{c|typename Context::template formatter_type&lt;std::remove_const_t&lt;Ti&gt;&gt;}} does not meet the {{named req|BasicFormatter}} requirements for any {{tt|Ti}} in {{tt|Args}}.
+
+The program is ill-formed if for any type {{tt|Ti}} in {{tt|Args}}, {{tt|Ti}} does not satisfy {{lti|cpp/utility/format/formattable|__formattable_with}}{{c/core|&lt;Context&gt;}}.
+
+@2@ Equivalent to {{c|return std::make_format_args&lt;std::wformat_context&gt;(args...);}}.
+
+===Parameters===
+{{par begin}}
+{{par|args...|values to be used as formatting arguments}}
+{{par end}}
+
+===Returns===
+An object that holds the formatting arguments.
+
+For each argument {{tt|t}} of type {{tt|T}}, let {{tt|TD}} be {{c|std::remove_const_t&lt;std::remove_reference_t&lt;T&gt;&gt;}}. The corresponding {{lc|std::basic_format_arg}} in the result is determined as below:
+* if {{tt|TD}} is {{c/core|bool}} or {{tt|Context::char_type}}, the {{lc|std::basic_format_arg}} stores {{c|t}};
+* otherwise, if {{tt|TD}} is {{c/core|char}} and {{tt|Context::char_type}} is {{c/core|wchar_t}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;wchar_t&gt;(static_cast&lt;unsigned char&gt;(t))}};
+* otherwise, if {{tt|TD}} is a signed integer type whose size is not greater than {{c/core|int}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;int&gt;(t)}};
+* otherwise, if {{tt|TD}} is a unsigned integer type whose size is not greater than {{c/core|unsigned int}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;unsigned int&gt;(t)}};
+* otherwise, if {{tt|TD}} is a signed integer type whose size is not greater than {{c/core|long long}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;long long&gt;(t)}};
+* otherwise, if {{tt|TD}} is a unsigned integer type whose size is not greater than {{c/core|unsigned long long}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;unsigned long long&gt;(t)}};
+* otherwise, if {{tt|TD}} is {{c/core|float}}, {{c/core|double}}, or {{c/core|long double}}, the {{lc|std::basic_format_arg}} stores {{c|t}};
+* otherwise, if {{tt|TD}} is a {{lc|std::basic_string_view}} or {{lc|std::basic_string}} specialization and {{tt|TD::char_type}} is {{tt|Context::char_type}}, the {{lc|std::basic_format_arg}} stores {{c|std::basic_string_view&lt;Context::char_type&gt;(t.data(), t.size())}};
+* otherwise, if {{c|std::decay_t&lt;TD&gt;}} is {{c|Context::char_type*}} or {{c|const Context::char_type*}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;const Context::char_type*&gt;(t)}};
+* otherwise, if {{c|std::is_void_v&lt;std::remove_pointer_t&lt;TD&gt;&gt;}} is {{c|true}} or {{c|std::is_null_pointer_v&lt;TD&gt;}} is {{c|true}}, the {{lc|std::basic_format_arg}} stores {{c|static_cast&lt;const void*&gt;(t)}};
+* otherwise, the {{lc|std::basic_format_arg}} stores a {{c|std::basic_format_arg&lt;Context&gt;::handle}}  to {{tt|t}}, along with extra data needed for {{rlpt|basic_format_arg/handle|handle::format()}}.
+
+===Notes===
+A formatting argument has reference semantics for user-defined types and does not extend the lifetime of {{c|args}}. It is the programmer's responsibility to ensure that {{c|args}} outlive the return value. Usually, the result is only used as argument to formatting function.
+
+{{ftm begin}}
+{{ftm|__cpp_lib_format_uchar|Formatting of code units as unsigned integers|std=C++20|dr=yes|value=202311L}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;format&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+void raw_write_to_log(std::string_view users_fmt, std::format_args&amp;&amp; args)
+{
+    static int n{};
+    std::clog &lt;&lt; std::format("{:04} : ", n++) &lt;&lt; std::vformat(users_fmt, args) &lt;&lt; '\n';
+}
+
+template&lt;typename... Args&gt;
+constexpr void log(Args&amp;&amp;... args)
+{
+    // Generate formatting string "{} "...
+    std::array&lt;char, sizeof...(Args) * 3 + 1&gt; braces{};
+    constexpr const char c[4] = "{} ";
+    for (auto i{0uz}; i != braces.size() - 1; ++i)
+        braces[i] = c[i % 3];
+    braces.back() = '\0';
+
+    raw_write_to_log(std::string_view{braces.data()}, std::make_format_args(args...));
+}
+
+template&lt;typename T&gt;
+const T&amp; unmove(T&amp;&amp; x)
+{
+    return x;
+}
+
+int main()
+{
+    log("Number", "of", "arguments", "is", "arbitrary.");
+    log("Any type that meets the BasicFormatter requirements", "can be printed.");
+    log("For example:", 1, 2.0, '3', "*42*");
+
+    raw_write_to_log("{:02} │ {} │ {} │ {}",
+                     std::make_format_args(unmove(1), unmove(2.0), unmove('3'), "4"));
+}
+|output=
+0000 : Number of arguments is arbitrary.
+0001 : Any type that meets the BasicFormatter requirements can be printed.
+0002 : For example: 1 2.0 3 *42*
+0003 : 01 │ 2.0 │ 3 │ 4
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2418R2|std=C++20|before=objects that are neither const-usable nor copyable&lt;br&gt;(such as generator-like objects) are not formattable|after=allow formatting these objects}}
+{{dr list item|paper=P2905R2|std=C++20|before={{tt|make_format_args}} accepted rvalue arguments by forwarding references|after=only takes lvalue references}}
+{{dr list item|paper=P2909R4|std=C++20|before={{c/core|char}} or {{c/core|wchar_t}} might be formatted as&lt;br&gt;out-of-range unsigned integer values|after=code units are converted to the corresponding&lt;br&gt;unsigned type before such formatting}}
+{{dr list item|wg=lwg|dr=3631|std=c++20|before=cv-qualified arguments were incorrectly handled after P2418R2|after=handling corrected}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc basic_format_args}}
+{{dsc inc|cpp/utility/format/dsc vformat}}
+{{dsc inc|cpp/utility/format/dsc vformat_to}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

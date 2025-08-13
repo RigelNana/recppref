@@ -1,0 +1,194 @@
+{{title|Node handle {{mark c++17}}}}
+{{cpp/container/navbar}}
+
+{{dcl begin}}
+{{dcla|anchor=no|since=c++17|expos=yes|
+template&lt;/* unspecified */&gt;
+class /*node-handle*/;
+}} 
+{{dcl end}}
+
+Associative containers {{lc|std::set}}, {{lc|std::map}}, {{lc|std::multiset}}, {{lc|std::multimap}}, {{lc|std::unordered_set}}, {{lc|std::unordered_map}}, {{lc|std::unordered_multiset}}, {{lc|std::unordered_multimap}} are node-based data structures, and their nodes can be extracted as an object of unspecified type known as ''node handle''.
+
+Node handle is a move-only type that owns and provides access to the element (the {{tt|value_type}}) stored in the node, and provides non-const access to the key part of the element (the {{tt|key_type}}) and the mapped part of the element (the {{tt|mapped_type}}). If the node handle destructs while holding the node, the node is properly destructed using the appropriate allocator for the container. The node handle contains a copy of the container’s allocator. This is necessary so that the node handle can outlive the container.
+
+The exact type of node handle (shown here as {{c/core|/*node-handle*/}}) is unspecified, but each container exposes its node handle type as the member {{tt|node_type}}.
+
+Node handles can be used to transfer ownership of an element between two associative containers with the same key, value, and allocator type (ignoring comparison or hash/equality), without invoking any copy/move operations on the container element (this kind of operation is known as "splicing"). Transfer between unique and non-unique containers is also permitted: a node handle from a {{lc|std::map}} can be inserted into an {{lc|std::multimap}}, but not into {{lc|std::unordered_map}} or {{lc|std::set}}.
+
+A node handle may be empty, in which case it holds no element and no allocator. The default-constructed and moved-from node handle is empty. In addition, an empty node handle can be produced by a failed call to container member function {{tt|extract}}.
+
+Pointers and references to an element that are obtained while it is owned by a node handle are invalidated if the element is successfully inserted into a container.
+
+For all map containers ({{lc|std::map}}, {{lc|std::multimap}}, {{lc|std::unordered_map}}, and {{lc|std::unordered_multimap}}) whose {{tt|key_type}} is {{tt|K}} and {{tt|mapped_type}} is {{tt|T}}, the behavior of operations involving node handles is undefined if a user-defined specialization of {{lc|std::pair}} exists for {{c/core|std::pair&lt;K, T&gt;}} or {{c/core|std::pair&lt;const K, T&gt;}}.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc inc|cpp/container/dsc key_type|node_handle}}
+{{dsc inc|cpp/container/dsc mapped_type|node_handle}}
+{{dsc inc|cpp/container/dsc value_type|node_handle}}
+{{dsc inc|cpp/container/dsc allocator_type|node_handle}}
+{{dsc expos mem type|container_node_type|private=yes|a container node, the type is unspecified}}
+{{dsc expos mem type|ator_traits|id=ator_traits|private=yes|allocator traits of type {{c/core|std::allocator_traits&lt;allocator_type&gt;}}}}
+{{dsc end}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|ptr_|id=ptr|maybe=yes|spec={{cc multi
+|typename ator_traits::template
+|    rebind_traits&lt;container_node_type&gt;::pointer}}|TODO}}
+{{dsc expos mem obj|alloc_|id=alloc|maybe=yes|spec={{c/core|std::optional&lt;allocator_type&gt;}}|TODO}}
+{{dsc end}}
+
+===Member functions===
+{{member|constructors|2=
+{{dcl begin}}
+{{dcl|num=1|
+constexpr /*node-handle*/() noexcept;
+}}
+{{dcl|num=2|
+/*node-handle*/(/*node-handle*/&amp;&amp; nh) noexcept;
+}}
+{{dcl end}}
+@1@ The default constructor initializes the node handle to the empty state.
+@2@ The move constructor takes ownership of the container element from {{c|nh}}, move-constructs the member allocator, and leaves {{c|nh}} in the empty state.
+
+===Parameters===
+{{par begin}}
+{{par|nh|a node handle with the same type (not necessarily the same container)}}
+{{par end}}
+
+===Notes===
+Node handles are move-only, the copy constructor is not defined.
+}}
+
+{{member|operator{{=}}|2=
+{{ddcl|1=
+/*node-handle*/&amp; operator=(/*node-handle*/&amp;&amp; nh);
+}}
+* If the node handle is not empty, 
+:* destroys the {{tt|value_type}} subobject in the container element object managed by this node handle by calling {{tt|ator_traits::destroy}};
+:* deallocates the container element by calling {{c/core|ator_traits::rebind_traits&lt;/*container-node-type*/&gt;::deallocate}};
+* Acquires ownership of the container element from {{c|nh}};
+* If node handle was empty (and so did not contain an allocator) or if {{c/core|ator_traits::propagate_on_container_move_assignment}} is {{c|true}}, move-assigns the allocator from {{c|nh}};
+* sets {{c|nh}} to the empty state.
+
+The behavior is undefined if the node is not empty and {{c/core|ator_traits::propagate_on_container_move_assignment}} is {{c|false}} and the allocators do not compare equal.
+
+===Parameters===
+{{par begin}}
+{{par|nh| node handle with the same type (not necessarily the same container)}}
+{{par end}}
+
+===Return===
+{{c|*this}}
+
+===Exceptions===
+Throws nothing.
+
+===Notes===
+Node handles are move-only, the copy assignment is not defined.
+}}
+
+{{member|destructor|2=
+{{ddcl|
+~/*node-handle*/();
+}}
+
+* If the node handle is not empty, 
+:* destroys the {{tt|value_type}} subobject in the container element object managed by this node handle by calling {{c/core|ator_traits::destroy}};
+:* deallocates the container element by calling {{c/core|ator_traits::rebind_traits&lt;/*container-node-type*/&gt;::deallocate}}.
+}}
+
+{{member|empty|2=
+{{ddcl|
+bool empty() const noexcept;
+}}
+
+Returns {{c|true}} if the node handle is empty, {{c|false}} otherwise.
+}}
+
+{{member|operator bool|2=
+{{ddcl|
+explicit operator bool() const noexcept;
+}}
+
+Converts to {{c|false}} if the node handle is empty, {{c|true}} otherwise.
+}}
+
+{{member|get_allocator|2=
+{{ddcl|
+allocator_type get_allocator() const;
+}}
+
+Returns a copy of the stored allocator (which is a copy of the allocator of the source container). The behavior is undefined if the node handle is empty.
+
+===Exceptions===
+Throws nothing.
+}}
+
+{{member|value|2=
+{{ddcl|notes={{mark|set containers only}}|
+value_type&amp; value() const;
+}}
+
+Returns a reference to the {{tt|value_type}} subobject in the container element object managed by this node handle. The behavior is undefined if the node handle is empty.
+
+===Exceptions===
+Throws nothing.
+}}
+
+{{member|key|2=
+{{ddcl|notes={{mark|map containers only}}|
+key_type&amp; key() const;
+}}
+
+Returns a non-const reference to the {{tt|key_type}} member of the {{tt|value_type}} subobject in the container element object managed by this node handle. The behavior is undefined if the node handle is empty.
+
+===Exceptions===
+Throws nothing.
+
+===Notes===
+This function makes it possible to modify the key of a node extracted from a map, and then re-insert it into the map, without ever copying or moving the element.
+}}
+
+{{member|mapped|2=
+{{ddcl|notes={{mark|map containers only}}|
+mapped_type&amp; mapped() const;
+}}
+
+Returns a reference to the {{tt|mapped_type}} member of the {{tt|value_type}} subobject in the container element object managed by this node handle. The behavior is undefined if the node handle is empty.
+
+===Exceptions===
+Throws nothing.
+}}
+
+{{member|swap|2=
+{{ddcl|
+void swap(/*node-handle*/&amp; nh) noexcept(/* see below */);
+}}
+
+* swaps ownership of container nodes;
+* if one node is empty or if both nodes are non-empty and {{c/core|ator_traits::propagate_on_container_swap}} is {{c|true}}, swaps the allocators as well.
+
+The behavior is undefined if both nodes are not empty and {{c/core|ator_traits::propagate_on_container_swap}} is {{c|false}} and the allocators do not compare equal.
+
+===Exceptions===
+{{noexcept|ator_traits::propagate_on_container_swap::value {{!!}}
+         ator_traits::is_always_equal::value}}
+}}
+
+===Non-member functions===
+{{member|swap|2=
+{{ddcl|
+friend void swap(/*node-handle*/&amp; x, /*node-handle*/&amp; y) noexcept(noexcept(x.swap(y)));
+}}
+
+Effectively executes {{c|x.swap(y)}}.
+
+{{cpp/hidden friend|{{tti|node-handle}}}}
+}}
+
+{{langlinks|es|ja|zh}}

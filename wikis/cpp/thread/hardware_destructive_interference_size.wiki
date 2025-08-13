@@ -1,0 +1,217 @@
+{{cpp/title|hardware_destructive_interference_size|hardware_constructive_interference_size}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|new}}
+{{dcl|since=c++17|num=1|1=
+inline constexpr std::size_t
+    hardware_destructive_interference_size = /*implementation-defined*/;
+}}
+{{dcl|since=c++17|num=2|1=
+inline constexpr std::size_t
+    hardware_constructive_interference_size = /*implementation-defined*/;
+}}
+{{dcl end}}
+
+@1@ Minimum offset between two objects to avoid false sharing. Guaranteed to be at least {{c|alignof(std::max_align_t)}}
+{{source|1=
+struct keep_apart
+{
+    alignas(std::hardware_destructive_interference_size) std::atomic&lt;int&gt; cat;
+    alignas(std::hardware_destructive_interference_size) std::atomic&lt;int&gt; dog;
+};
+}}
+
+@2@ Maximum size of contiguous memory to promote true sharing. Guaranteed to be at least {{c|alignof(std::max_align_t)}}
+{{source|1=
+struct together
+{
+    std::atomic&lt;int&gt; dog;
+    int puppy;
+};
+
+struct kennel
+{
+    // Other data members...
+
+    alignas(sizeof(together)) together pack;
+
+    // Other data members...
+};
+
+static_assert(sizeof(together) &lt;= std::hardware_constructive_interference_size);
+}}
+
+===Notes===
+These constants provide a portable way to access the L1 data cache line size.
+{{feature test macro|__cpp_lib_hardware_interference_size|std=C++17|value=201703L|
+{{c/core|constexpr std::hardware_constructive_interference_size}} and&lt;br&gt;
+{{c/core|constexpr std::hardware_destructive_interference_size}}}}
+
+===Example===
+{{example
+|The program uses two threads that atomically write to the data members of the given global objects. The first object fits in one cache line, which results in "hardware interference". The second object keeps its data members on separate cache lines, so possible "cache synchronization" after thread writes is avoided.
+|code=
+#include &lt;atomic&gt;
+#include &lt;chrono&gt;
+#include &lt;cstddef&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;new&gt;
+#include &lt;thread&gt;
+
+#ifdef __cpp_lib_hardware_interference_size
+    using std::hardware_constructive_interference_size;
+    using std::hardware_destructive_interference_size;
+#else
+    // 64 bytes on x86-64 │ L1_CACHE_BYTES │ L1_CACHE_SHIFT │ __cacheline_aligned │ ...
+    constexpr std::size_t hardware_constructive_interference_size = 64;
+    constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif
+
+std::mutex cout_mutex;
+
+constexpr int max_write_iterations{10'000'000}; // the benchmark time tuning
+
+struct alignas(hardware_constructive_interference_size)
+OneCacheLiner // occupies one cache line
+{
+    std::atomic_uint64_t x{};
+    std::atomic_uint64_t y{};
+}
+oneCacheLiner;
+
+struct TwoCacheLiner // occupies two cache lines
+{
+    alignas(hardware_destructive_interference_size) std::atomic_uint64_t x{};
+    alignas(hardware_destructive_interference_size) std::atomic_uint64_t y{};
+}
+twoCacheLiner;
+
+inline auto now() noexcept { return std::chrono::high_resolution_clock::now(); }
+
+template&lt;bool xy&gt;
+void oneCacheLinerThread()
+{
+    const auto start{now()};
+
+    for (uint64_t count{}; count != max_write_iterations; ++count)
+        if constexpr (xy)
+            oneCacheLiner.x.fetch_add(1, std::memory_order_relaxed);
+        else
+            oneCacheLiner.y.fetch_add(1, std::memory_order_relaxed);
+
+    const std::chrono::duration&lt;double, std::milli&gt; elapsed{now() - start};
+    std::lock_guard lk{cout_mutex};
+    std::cout &lt;&lt; "oneCacheLinerThread() spent " &lt;&lt; elapsed.count() &lt;&lt; " ms\n";
+    if constexpr (xy)
+        oneCacheLiner.x = elapsed.count();
+    else
+        oneCacheLiner.y = elapsed.count();
+}
+
+template&lt;bool xy&gt;
+void twoCacheLinerThread()
+{
+    const auto start{now()};
+
+    for (uint64_t count{}; count != max_write_iterations; ++count)
+        if constexpr (xy)
+            twoCacheLiner.x.fetch_add(1, std::memory_order_relaxed);
+        else
+            twoCacheLiner.y.fetch_add(1, std::memory_order_relaxed);
+
+    const std::chrono::duration&lt;double, std::milli&gt; elapsed{now() - start};
+    std::lock_guard lk{cout_mutex};
+    std::cout &lt;&lt; "twoCacheLinerThread() spent " &lt;&lt; elapsed.count() &lt;&lt; " ms\n";
+    if constexpr (xy)
+        twoCacheLiner.x = elapsed.count();
+    else
+        twoCacheLiner.y = elapsed.count();
+}
+
+int main()
+{
+    std::cout &lt;&lt; "__cpp_lib_hardware_interference_size "
+#   ifdef __cpp_lib_hardware_interference_size
+        "= " &lt;&lt; __cpp_lib_hardware_interference_size &lt;&lt; '\n';
+#   else
+        "is not defined, use " &lt;&lt; hardware_destructive_interference_size
+                               &lt;&lt; " as fallback\n";
+#   endif
+
+    std::cout &lt;&lt; "hardware_destructive_interference_size == "
+              &lt;&lt; hardware_destructive_interference_size &lt;&lt; '\n'
+              &lt;&lt; "hardware_constructive_interference_size == "
+              &lt;&lt; hardware_constructive_interference_size &lt;&lt; "\n\n"
+              &lt;&lt; std::fixed &lt;&lt; std::setprecision(2)
+              &lt;&lt; "sizeof( OneCacheLiner ) == " &lt;&lt; sizeof(OneCacheLiner) &lt;&lt; '\n'
+              &lt;&lt; "sizeof( TwoCacheLiner ) == " &lt;&lt; sizeof(TwoCacheLiner) &lt;&lt; "\n\n";
+
+    constexpr int max_runs{4};
+
+    int oneCacheLiner_average{0};
+    for (auto i{0}; i != max_runs; ++i)
+    {
+        std::thread th1{oneCacheLinerThread&lt;0&gt;};
+        std::thread th2{oneCacheLinerThread&lt;1&gt;};
+        th1.join();
+        th2.join();
+        oneCacheLiner_average += oneCacheLiner.x + oneCacheLiner.y;
+    }
+    std::cout &lt;&lt; "Average T1 time: "
+              &lt;&lt; (oneCacheLiner_average / max_runs / 2) &lt;&lt; " ms\n\n";
+
+    int twoCacheLiner_average{0};
+    for (auto i{0}; i != max_runs; ++i)
+    {
+        std::thread th1{twoCacheLinerThread&lt;0&gt;};
+        std::thread th2{twoCacheLinerThread&lt;1&gt;};
+        th1.join();
+        th2.join();
+        twoCacheLiner_average += twoCacheLiner.x + twoCacheLiner.y;
+    }
+    std::cout &lt;&lt; "Average T2 time: "
+              &lt;&lt; (twoCacheLiner_average / max_runs / 2) &lt;&lt; " ms\n\n"
+              &lt;&lt; "Ratio T1/T2:~ "
+              &lt;&lt; 1.0 * oneCacheLiner_average / twoCacheLiner_average &lt;&lt; '\n';
+}
+|p=true
+|output=
+__cpp_lib_hardware_interference_size = 201703
+hardware_destructive_interference_size == 64
+hardware_constructive_interference_size == 64
+
+sizeof( OneCacheLiner ) == 64
+sizeof( TwoCacheLiner ) == 128
+
+oneCacheLinerThread() spent 517.83 ms
+oneCacheLinerThread() spent 533.43 ms
+oneCacheLinerThread() spent 527.36 ms
+oneCacheLinerThread() spent 555.69 ms
+oneCacheLinerThread() spent 574.74 ms
+oneCacheLinerThread() spent 591.66 ms
+oneCacheLinerThread() spent 555.63 ms
+oneCacheLinerThread() spent 555.76 ms
+Average T1 time: 550 ms
+
+twoCacheLinerThread() spent 89.79 ms
+twoCacheLinerThread() spent 89.94 ms
+twoCacheLinerThread() spent 89.46 ms
+twoCacheLinerThread() spent 90.28 ms
+twoCacheLinerThread() spent 89.73 ms
+twoCacheLinerThread() spent 91.11 ms
+twoCacheLinerThread() spent 89.17 ms
+twoCacheLinerThread() spent 90.09 ms
+Average T2 time: 89 ms
+
+Ratio T1/T2:~ 6.16
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/thread/dsc hardware_concurrency|thread}}
+{{dsc inc|cpp/thread/thread/dsc hardware_concurrency|jthread}}
+{{dsc end}}
+
+{{langlinks|ar|de|es|fr|it|ja|ko|pt|ru|zh}}

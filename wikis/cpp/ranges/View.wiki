@@ -1,0 +1,76 @@
+{{cpp/ranges/title|view|enable_view|view_base}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt;class T&gt;
+concept view = ranges::range&lt;T&gt; &amp;&amp; std::movable&lt;T&gt; &amp;&amp; ranges::enable_view&lt;T&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt;class T&gt;
+constexpr bool enable_view =
+    std::derived_from&lt;T, view_base&gt; {{!!}} /*is-derived-from-view-interface*/&lt;T&gt;;
+}}
+{{dcl|num=3|since=c++20|
+struct view_base { };
+}}
+{{dcl end}}
+
+@1@ The {{tt|view}} concept specifies the requirements of a {{lconcept|range}} type that has suitable semantic properties for use in constructing range adaptor pipelines.
+
+@2@ The {{tt|enable_view}} variable template is used to indicate whether a {{lconcept|range}} is a {{tt|view}}. {{c|/*is-derived-from-view-interface*/&lt;T&gt;}} is {{c|true}} if and only if {{tt|T}} has exactly one public base class {{c|ranges::view_interface&lt;U&gt;}} for some type {{tt|U}}, and {{tt|T}} has no base classes of type {{c|ranges::view_interface&lt;V&gt;}} for any other type {{tt|V}}.
+&lt;br&gt;Users may specialize {{tt|enable_view}} to {{c|true}} for cv-unqualified program-defined types which model {{tt|view}}, and {{c|false}} for types which do not. Such specializations must be [[cpp/language/constant expression#Usable in constant expressions|usable in constant expressions]] and have type {{c/core|const bool}}.
+
+@3@ Deriving from {{tt|view_base}} enables {{lconcept|range}} types to model {{tt|view}}.
+
+===Semantic requirements===
+@1@ {{tt|T}} models {{tt|view}} only if:
+* move construction of {{tt|T}} has constant time complexity, and
+* if {{mathjax-or|\(\scriptsize N\)|N}} copies and/or moves are made from a {{tt|T}} object holding {{mathjax-or|\(\scriptsize M\)|M}} elements, then these {{mathjax-or|\(\scriptsize N\)|N}} objects have {{mathjax-or|\(\scriptsize \mathcal{O}{(N+M)}\)|𝓞(N+M)}} destruction (which implies that a moved-from {{tt|view}} object has {{mathjax-or|\(\scriptsize \mathcal{O}{(1)}\)|𝓞(1)}} destruction), and
+* either {{c|std::copy_constructible&lt;T&gt;}} is {{c|false}}, or copy construction of {{tt|T}} has constant time complexity, and
+* either {{c|std::copyable&lt;T&gt;}} is {{c|false}}, or copy assignment of {{tt|T}} has no more time complexity than destruction followed by copy construction.
+
+===Specializations===
+Specializations of {{tt|enable_view}} for all specializations of the following standard templates are defined as {{c|true}}:
+* {{ltt|cpp/string/basic_string_view|std::basic_string_view}}
+* {{ltt|cpp/container/span|std::span}}
+{{rrev|since=c++26|1=
+* {{ltt|cpp/utility/optional|std::optional}}
+}}
+
+===Notes===
+Examples of {{tt|view}} types are:
+* A {{lconcept|range}} type that wraps a pair of iterators, e.g., {{c|std::ranges::subrange&lt;I&gt;}}.
+* A {{lconcept|range}} type that holds its elements by {{lc|std::shared_ptr}} and shares ownership with all its copies.
+* A {{lconcept|range}} type that generates its elements on demand, e.g., {{lc|std::ranges::iota_view}}.
+
+A copyable container such as {{c|std::vector&lt;std::string&gt;}} generally does not meet the semantic requirements of {{tt|view}} since copying the container copies all of the elements, which cannot be done in constant time.
+
+While views were originally described as cheaply copyable and non-owning ranges, a type is not required to be copyable or non-owning for it to model {{tt|view}}. However, it must still be cheap to copy (if it is copyable), move, assign, and destroy, so that {{lsd|cpp/ranges#Range adaptors}} will not have unexpected complexity.
+
+By default, a type modeling {{lconcept|movable}} and {{lconcept|range}} is considered a view if it is publicly and unambiguously derived from {{tt|view_base}}, or exactly one specialization of {{lc|std::ranges::view_interface}}.
+
+===Example===
+A minimum view.
+
+{{source|1=
+#include &lt;ranges&gt;
+
+struct ArchetypalView : std::ranges::view_interface&lt;ArchetypalView&gt;
+{
+    int* begin();
+    int* end();
+};
+
+static_assert(std::ranges::view&lt;ArchetypalView&gt;);
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|paper=P2325R3|std=C++20|before={{tt|view}} required {{lconcept|default_initializable}}|after=does not require}}
+{{dr list item|wg=lwg|dr=3549|std=C++20|before={{tt|enable_view}} did not detect inheritance from {{tt|view_interface}}|after=detects}}
+{{dr list item|paper=P2415R2|std=C++20|before=the restriction on the time complexity of destruction was too strict|after=relaxed}}
+{{dr list end}}
+
+{{langlinks|de|es|ja|ru|zh}}

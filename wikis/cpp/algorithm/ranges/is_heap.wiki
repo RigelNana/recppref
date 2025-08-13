@@ -1,0 +1,172 @@
+{{cpp/ranges/title|is_heap}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr bool is_heap( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;std::projected
+                   &lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr bool is_heap( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Checks whether the specified range represents a [[cpp/algorithm#Heap operations|heap]] with respect to {{c|comp}} and {{c|proj}}.
+
+@1@ The specified range is {{range|first|last}}.
+
+@2@ The specified range is {{c|r}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the iterator and sentinel designating the range of elements to examine}}
+{{par|r|the range of elements to examine}}
+{{par|comp|comparator to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+@1@ {{c|1=ranges::is_heap_until(first, last, comp, proj) == last}}
+@2@ {{c|1=ranges::is_heap_until(r, comp, proj) == ranges::end(r)}}
+
+===Complexity===
+{{mathjax-or|\(\scriptsize O(N) \)|O(N)}} applications of {{c|comp}} and {{c|proj}}, where {{mathjax-or|\(\scriptsize N \)|N}} is:
+@1@ {{c|ranges::distance(first, last)}}
+@2@ {{c|ranges::distance(r)}}
+
+===Possible implementation===
+{{eq fun|1=
+struct is_heap_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Proj = std::identity,
+             std::indirect_strict_weak_order
+                 &lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr bool operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        return (last == ranges::is_heap_until(first, last,
+                                              std::move(comp), std::move(proj)));
+    }
+    
+    template&lt;ranges::random_access_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order
+                 &lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr bool operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr is_heap_fn is_heap{};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;bit&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+void out(const auto&amp; what, int n = 1)
+{
+    while (n-- &gt; 0)
+        std::cout &lt;&lt; what;
+}
+
+void draw_heap(const auto&amp; v)
+{
+    auto bails = [](int n, int w)
+    {
+        auto b = [](int w) { out("┌"), out("─", w), out("┴"), out("─", w), out("┐"); };
+        n /= 2;
+        if (!n)
+            return;
+        for (out(' ', w); n-- &gt; 0;)
+            b(w), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto data = [](int n, int w, auto&amp; first, auto last)
+    {
+        for (out(' ', w); n-- &gt; 0 &amp;&amp; first != last; ++first)
+            out(*first), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto tier = [&amp;](int t, int m, auto&amp; first, auto last)
+    {
+        const int n{1 &lt;&lt; t};
+        const int w{(1 &lt;&lt; (m - t - 1)) - 1};
+        bails(n, w), data(n, w, first, last);
+    };
+    
+    const int m{static_cast&lt;int&gt;(std::ceil(std::log2(1 + v.size())))};
+    auto first{v.cbegin()};
+    for (int i{}; i != m; ++i)
+        tier(i, m, first, v.cend());
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5, 8, 9, 7, 9, 3, 2, 3, 8};
+    
+    out("initially, v:\n");
+    for (auto i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    out('\n');
+    
+    if (!std::ranges::is_heap(v))
+    {
+        out("making heap...\n");
+        std::ranges::make_heap(v);
+    }
+    
+    out("after make_heap, v:\n");
+    for (auto t{1U}; auto i : v)
+        std::cout &lt;&lt; i &lt;&lt; (std::has_single_bit(++t) ? " │ " : " ");
+    
+    out("\n" "corresponding binary tree is:\n");
+    draw_heap(v);
+}
+|output=&lt;nowiki/&gt;
+initially, v:
+3 1 4 1 5 9 2 6 5 3 5 8 9 7 9 3 2 3 8
+making heap...
+after make_heap, v:
+9 │ 8 9 │ 6 5 8 9 │ 3 5 3 5 3 4 7 2 │ 1 2 3 1
+corresponding binary tree is:
+               9
+       ┌───────┴───────┐
+       8               9
+   ┌───┴───┐       ┌───┴───┐
+   6       5       8       9
+ ┌─┴─┐   ┌─┴─┐   ┌─┴─┐   ┌─┴─┐
+ 3   5   3   5   3   4   7   2
+┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐
+1 2 3 1
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_heap_until}}
+{{dsc inc|cpp/algorithm/ranges/dsc make_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc push_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc pop_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort_heap}}
+{{dsc inc|cpp/algorithm/dsc is_heap}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

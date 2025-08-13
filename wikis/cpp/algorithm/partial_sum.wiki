@@ -1,0 +1,189 @@
+{{cpp/title|partial_sum}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt &gt;
+OutputIt partial_sum( InputIt first, InputIt last,
+                      OutputIt d_first );
+}}
+{{dcla|num=2|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class BinaryOp &gt;
+OutputIt partial_sum( InputIt first, InputIt last,
+                      OutputIt d_first, BinaryOp op );
+}}
+{{dcl end}}
+
+@1@ If {{range|first|last}} is empty, does nothing.
+@@ Otherwise, performs the following operations in order:
+# Creates an accumulator {{c|acc}}, whose type is the [[cpp/iterator#Types and writability|value type]] of {{tt|InputIt}}, and initializes it with {{c|*first}}.
+# Assigns {{c|acc}} to {{c|*d_first}}.
+# For each integer {{c|i}} in {{range|1|std::distance(first, last)}}, performs the following operations in order:
+::@a@ Computes {{rev inl|until=c++20|{{c|acc + *iter}}}}{{rev inl|since=c++20|{{c|std::move(acc) + *iter}}}}, where {{c|iter}} is the next {{c|i}}{{su|b=th}} iterator of {{c|first}}.
+::@b@ Assigns the result to {{c|acc}}.
+::@c@ Assigns {{c|acc}}&lt;ref&gt;The actual value to be assigned is the result of the assignment in the previous step. We assume the assignment result is {{c|acc}} here.&lt;/ref&gt; to {{c|*dest}}, where {{c|dest}} is the next {{c|i}}{{su|b=th}} iterator of {{c|d_first}}.
+
+@2@ Same as {{v|1}}, but computes {{rev inl|until=c++20|{{c|op(acc, *iter)}}}}{{rev inl|since=c++20|{{c|op(std::move(acc), *iter)}}}} instead.
+
+Given {{c|binary_op}} as the actual binary operation:
+
+* If any of the following conditions is satisfied, the program is ill-formed:
+:* The value type of {{tt|InputIt}} is not constructible from {{c|*first}}.
+:* {{c|acc}} is not [[cpp/iterator#Types and writability|writable]] to {{c|d_first}}.
+:* The result of {{rev inl|until=c++20|{{c|binary_op(acc, *iter)}}}}{{rev inl|since=c++20|{{c|binary_op(std::move(acc), *iter)}}}} is not implicitly convertible to the value type of {{tt|InputIt}}.
+
+* Given {{c|d_last}} as the iterator to be [[#Return value|returned]], if any of the following conditions is satisfied, the behavior is undefined:
+:* {{c|binary_op}} modifies any element of {{range|first|last}} or {{range|d_first|d_last}}.
+:* {{c|binary_op}} invalidates any iterator or subrange in {{closed range|first|last}} or {{closed range|d_first|d_last}}.
+
+
+&lt;references/&gt;
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to sum}}
+{{par|d_first|the beginning of the destination range; may be equal to {{c|first}}}}
+{{par op2|op|t1=std::iterator_traits&lt;InputIt&gt;::value_type|p2=InputIt|rp=InputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par end}}
+
+===Return value===
+Iterator to the element past the last element written, or {{c|d_first}} if {{range|first|last}} is empty.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+@1@ Exactly {{mathjax-or|\(\scriptsize N-1\)|N-1}} applications of {{c/core|operator+}}.
+@2@ Exactly {{mathjax-or|\(\scriptsize N-1\)|N-1}} applications of the binary function {{c|op}}.
+ 
+===Possible implementation===
+{{eq impl
+|title1=partial_sum (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt&gt;
+constexpr // since C++20
+OutputIt partial_sum(InputIt first, InputIt last, OutputIt d_first)
+{
+    if (first == last)
+        return d_first;
+    
+    typename std::iterator_traits&lt;InputIt&gt;::value_type sum = *first;
+    *d_first = sum;
+    
+    while (++first != last)
+    {
+        sum = std::move(sum) + *first; // std::move since C++20
+        *++d_first = sum;
+    }
+    
+    return ++d_first;
+    
+    // or, since C++14:
+    // return std::partial_sum(first, last, d_first, std::plus&lt;&gt;());
+}
+|title2=partial_sum (2)|ver2=2|2=
+template&lt;class InputIt, class OutputIt, class BinaryOp&gt;
+constexpr // since C++20
+OutputIt partial_sum(InputIt first, InputIt last, 
+                     OutputIt d_first, BinaryOp op)
+{
+    if (first == last)
+        return d_first;
+    
+    typename std::iterator_traits&lt;InputIt&gt;::value_type acc = *first;
+    *d_first = acc;
+    
+    while (++first != last)
+    {
+        acc = op(std::move(acc), *first); // std::move since C++20
+        *++d_first = acc;
+    }
+    
+    return ++d_first;
+}
+}}
+
+===Notes===
+{{c|acc}} was introduced because of the resolution of {{lwg|539}}. The reason of using {{c|acc}} rather than directly summing up the results (i.e. {{c|1=*(d_first + 2) = (*first + *(first + 1)) + *(first + 2);}}) is because the semantic of the latter is confusing if the following types mismatch:
+* the value type of {{tt|InputIt}}
+* the writable type(s) of {{tt|OutputIt}}
+* the types of the parameters of {{c/core|operator+}} or {{c|op}}
+* the return type of {{c/core|operator+}} or {{c|op}}
+
+{{c|acc}} serves as the intermediate object to store and provide the values for each step of the computation:
+* its type is the value type of {{tt|InputIt}}
+* it is written to {{c|d_first}}
+* its value is passed to {{c/core|operator+}} or {{c|op}}
+* it stores the return value of {{c/core|operator+}} or {{c|op}}
+
+{{source|1=
+enum not_int { x = 1, y = 2 };
+
+char i_array[4] = {100, 100, 100, 100};
+not_int e_array[4] = {x, x, y, y};
+int  o_array[4];
+
+// OK: uses operator+(char, char) and assigns char values to int array
+std::partial_sum(i_array, i_array + 4, o_array);
+
+// Error: cannot assign not_int values to int array
+std::partial_sum(e_array, e_array + 4, o_array);
+
+// OK: performs conversions when needed
+// 1. creates “acc” of type char (the value type)
+// 2. the char arguments are used for long multiplication (char -&gt; long)
+// 3. the long product is assigned to “acc” (long -&gt; char)
+// 4. “acc” is assigned to an element of “o_array” (char -&gt; int)
+// 5. go back to step 2 to process the remaining elements in the input range
+std::partial_sum(i_array, i_array + 4, o_array, std::multiplies&lt;long&gt;{});
+}}
+
+===Example===
+{{example
+|
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v(10, 2); // v = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+    
+    std::cout &lt;&lt; "The first " &lt;&lt; v.size() &lt;&lt; " even numbers are: ";
+    // write the result to the cout stream
+    std::partial_sum(v.cbegin(), v.cend(), 
+                     std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+    
+    // write the result back to the vector v
+    std::partial_sum(v.cbegin(), v.cend(),
+                     v.begin(), std::multiplies&lt;int&gt;());
+    
+    std::cout &lt;&lt; "The first " &lt;&lt; v.size() &lt;&lt; " powers of 2 are: ";
+    for (int n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+The first 10 even numbers are: 2 4 6 8 10 12 14 16 18 20 
+The first 10 powers of 2 are: 2 4 8 16 32 64 128 256 512 1024 
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op}} could not have side effects|after=it cannot modify the ranges involved}}
+{{dr list item|wg=lwg|dr=539|std=C++98|before=the type requirements needed for the result&lt;br&gt;evaluations and assignments to be valid were missing|after=added}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_difference}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc inclusive_scan}}
+{{dsc inc|cpp/algorithm/dsc exclusive_scan}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

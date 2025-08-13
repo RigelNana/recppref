@@ -1,0 +1,467 @@
+{{title|Member access operators}}
+{{cpp/language/expressions/navbar}}
+Accesses a member of its operand.
+
+{|class="wikitable" style="font-size:90%;"
+|-
+!rowspan="2"|{{nbsp|2}}Operator{{nbsp}}name{{nbsp|2}}
+!rowspan="2"|{{nbsp|10}}Syntax{{nbsp|10}}
+!rowspan="2"|{{rlp|operators|Over{{br}}load{{br}}able}}
+!colspan="2"|Prototype examples (for {{c/core|class T}})
+|-
+!Inside class definition
+!Outside class definition
+|-
+|rowspan=2|subscript
+|{{c|a[b]}}
+|rowspan=2 {{yes}}
+|{{c|R&amp; T::operator[](S b);}}
+|rowspan=2 {{n/a}}
+|-
+|{{c|a[...]}} {{mark since c++23}}
+|{{c|R&amp; T::operator[](...);}}
+|-
+|indirection
+|{{c|*a}}
+|{{yes}}
+|{{c|1=R&amp; T::operator*();}}
+|{{c|1=R&amp; operator*(T a);}}
+|-
+|address-of
+|{{c|&amp;a}}
+|{{yes}}
+|{{c|R* T::operator&amp;();}}
+|{{c|R* operator&amp;(T a);}}
+|-
+|member of object
+|{{c|a.b}}
+|{{no}}
+|{{n/a}}
+|{{n/a}}
+|-
+|member of pointer
+|{{c|1=a-&gt;b}}
+|{{yes}}
+|{{c|R* T::operator-&gt;();}}
+|{{n/a}}
+|-
+|pointer to member of object
+|{{c|a.*b}}
+|{{no}}
+|{{n/a}}
+|{{n/a}}
+|-
+|pointer to member of pointer
+|{{c|1=a-&gt;*b}}
+|{{yes}}
+|{{c|R&amp; T::operator-&gt;*(S b);}}
+|{{c|R&amp; operator-&gt;*(T a, S b);}}
+|-
+|colspan="5"|
+:'''Notes'''&lt;br&gt;
+* As with most user-defined overloads, return types should match return types provided by the built-in operators so that {{rlp|operators|the user-defined operators}} can be used in the same manner as the built-ins. However, in a user-defined operator overload, any type can be used as return type (including {{c/core|void}}). One exception is {{c/core|operator-&gt;}}, which must return a pointer or another class with overloaded {{c/core|operator-&gt;}} to be realistically usable.
+|}
+
+===Explanation===
+Built-in ''subscript'' operator provides access to an object pointed-to by the {{rlp|pointer}} or {{rlp|array}} operand.
+
+Built-in ''indirection'' operator provides access to an object or function pointed-to by the pointer operand.
+
+Built-in ''address-of'' operator creates a pointer pointing to the object or function operand.
+
+''Member of object'' and ''pointer to member of object'' operators provide access to a data member or member function of the object operand.
+
+Built-in ''member of pointer'' and ''pointer to member of pointer'' operators provide access to a data member or member function of the class pointed-to by the pointer operand.
+
+====Built-in subscript operator====
+The subscript operator expressions have the form 
+
+{{sdsc begin}}
+{{sdsc|num=1|{{spar sep|expr1}}{{ttb|[}}{{spar sep|expr2}}{{ttb|]}}}}
+{{sdsc|num=2|{{spar sep|expr1}}{{ttb|[{}}{{spar sep|expr}}{{tt|, ...}}{{ttb|}]}}|notes={{mark since c++11}}}}
+{{sdsc|num=3|{{spar sep|expr1}}{{ttb|[}}{{spar sep|expr2}}{{tt|,}} {{spar sep|expr}}{{tt|, ...}}{{ttb|]}}|notes={{mark since c++23}}}} 
+{{sdsc end}}
+@1@ For the built-in operator, one of the expressions (either {{spar|expr1}} or {{spar|expr2}}) must be a glvalue of type “array of {{tt|T}}” or a prvalue of type “pointer to {{tt|T}}”, while the other expression ({{spar|expr2}} or {{spar|expr1}}, respectively) must be a prvalue of unscoped enumeration or integral type. The result of this expression has the type {{tt|T}}. {{rev inl|since=c++23|{{spar|expr2}} cannot be an unparenthesized {{rlp|operator other#Built-in comma operator|comma expression}}.}}
+@2@ The form with brace-enclosed list inside the square brackets is only used to call an overloaded {{c/core|operator[]}}.
+@3@ The form with comma-separated expression list inside the square brackets is only used to call an overloaded {{c/core|operator[]}}.
+
+The built-in subscript expression {{c|E1[E2]}} is exactly identical to the expression {{c|*(E1 + E2)}} except for its value category (see below) {{rev inl|since=c++17| and {{rlp|eval order|evaluation order}}}}: the pointer operand (which may be a result of array-to-pointer conversion, and which must point to an element of some array or one past the end) is adjusted to point to another element of the same array, following the rules of {{rlp|operator arithmetic|pointer arithmetic}}, and is then dereferenced.
+
+When applied to an array, the subscript expression is an {{rlp|value category|lvalue}}{{rev inl|since=c++11| if the array is an lvalue, and an {{rlp|value category|xvalue}} if it isn't}}. 
+
+When applied to a pointer, the subscript expression is always an lvalue.
+
+The type {{tt|T}} is not allowed to be an {{rlp|incomplete type}}, even if the size or internal structure of {{tt|T}} is never used, as in {{c|&amp;x[0]}}.
+
+{{rrev multi
+|since1=c++20|rev1=
+Using an unparenthesized {{rlp|operator other#Built-in comma operator|comma expression}} as second (right) argument of a subscript operator is deprecated.
+
+For example, {{c|a[b, c]}} is deprecated and {{c|a[(b, c)]}} is not.
+|since2=c++23|rev2=
+An unparenthesized {{rlp|operator other#Built-in comma operator|comma expression}} cannot be second (right) argument of a subscript operator. For example, {{c|a[b, c]}} is either ill-formed or equivalent to {{c|a.operator[](b, c)}}.
+
+Parentheses are needed to for using a comma expression as the subscript, e.g., {{c|a[(b, c)]}}.
+}}
+
+In {{rlp|overload resolution#Call to an overloaded operator|overload resolution against user-defined operators}}, for every object type {{tt|T}} (possibly cv-qualified), the following function signature participates in overload resolution:
+{{dcl begin}}
+{{dcl|T&amp; operator[](T*, std::ptrdiff_t);}}
+{{dcl|T&amp; operator[](std::ptrdiff_t, T*);}}
+{{dcl end}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    int a[4] = {1, 2, 3, 4};
+    int* p = &amp;a[2];
+    std::cout &lt;&lt; p[1] &lt;&lt; p[-1] &lt;&lt; 1[p] &lt;&lt; (-1)[p] &lt;&lt; '\n';
+    
+    std::map&lt;std::pair&lt;int, int&gt;, std::string&gt; m;
+    m[{1, 2}] = "abc"; // uses the [{...}] version
+}
+|output=
+4242
+}}
+
+====Built-in indirection operator====
+The indirection operator expressions have the form 
+
+{{sdsc begin}}
+{{sdsc|{{ttb|*}}{{spar|expr}}}} 
+{{sdsc end}}
+
+The operand of the built-in indirection operator must be pointer to object or a pointer to function, and the result is the lvalue referring to the object or function to which {{spar|expr}} points. If {{spar|expr}} does not actually points to an object or function, the behavior is undefined (except for the case specified by {{rlpt|typeid}}).
+
+A pointer to (possibly {{rlp|cv}}-qualified) {{c/core|void}} cannot be dereferenced. Pointers to other incomplete types can be dereferenced, but the resulting lvalue can only be used in contexts that allow an lvalue of incomplete type, e.g. when initializing a reference. 
+
+In {{rlp|overload resolution#Call to an overloaded operator|overload resolution against user-defined operators}}, for every type {{tt|T}} that is either object type (possibly cv-qualified) or function type (not const- or ref-qualified), the following function signature participates in overload resolution:
+{{dcl begin}}
+{{dcl|T&amp; operator*(T*);}}
+{{dcl end}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+int f() { return 42; }
+
+int main()
+{
+    int n = 1;
+    int* pn = &amp;n;
+    
+    int&amp; r = *pn; // lvalue can be bound to a reference
+    int m = *pn;  // indirection + lvalue-to-rvalue conversion
+    
+    int (*fp)() = &amp;f;
+    int (&amp;fr)() = *fp; // function lvalue can be bound to a reference
+    
+    [](...){}(r, m, fr); // removes possible "unused variable" warnings
+}
+}}
+
+====Built-in address-of operator====
+The address-of operator expressions have the form 
+
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|&amp;}}{{spar|expr}}}} 
+{{sdsc|num=2|{{ttb|&amp;}}{{spar sep|class}}{{ttb|::}}{{spar|member}}}} 
+{{sdsc end}}
+@1@ If the operand is an lvalue expression of some object or function type {{tt|T}}, {{tt|operator&amp;}} creates and returns a prvalue of type {{tt|T*}}, with the same cv qualification, that is pointing to the object or function designated by the operand. If the operand has incomplete type, the pointer can be formed, but if that incomplete type happens to be a class that defines its own {{c/core|operator&amp;}}, it is unspecified whether the built-in or the overload is used. For the operands of type with user-defined {{c/core|operator&amp;}}, {{lc|std::addressof}} may be used to obtain the true pointer.
+Note that, unlike C99 and later C versions, there's no special case for the unary {{c/core|operator&amp;}} applied to the result of the unary {{c/core|operator*}}.
+@@ If the operand is the name of an overloaded function, the address may be taken only if the overload can be resolved due to context. See {{rlp|overloaded address|Address of an overloaded function}} for details.
+{{rrev|since=c++23|
+If {{spar|expr}} names an {{rlp|member functions|explicit object member function}}, {{spar|expr}} must be a {{rlp|identifiers#Qualified identifiers|qualified identifier}}. Applying {{tt|&amp;}} to an unqualified identifier naming an explicit object member function is ill-formed.
+}}
+@2@ If the operand is a qualified name of a non-static or {{rlp|union#Union-like classes|variant}} member{{rev inl|since=c++23| other than an {{rlp|member functions|explicit object member function}}}}, e.g. {{c|&amp;C::member}}, the result is a prvalue {{rlp|pointer#Pointers to member functions|pointer to member function}} or {{rlp|pointer#Pointers to data members|pointer to data member}} of type {{tt|T}} in class {{tt|C}}. Note that neither {{c|&amp;member}} nor {{c|C::member}} nor even {{c|&amp;(C::member)}} may be used to initialize a pointer to member.
+
+In {{rlp|overload resolution#Call to an overloaded operator|overload resolution against user-defined operators}}, this operator does not introduce any additional function signatures: built-in address-of operator does not apply if there exists an overloaded {{c/core|operator&amp;}} that is a {{rlp|overload resolution#Viable functions|viable function}}.
+
+{{example
+|code=
+void f(int) {}
+void f(double) {}
+
+struct A { int i; };
+struct B { void f(); };
+
+int main()
+{
+    int n = 1;
+    int* pn = &amp;n;    // pointer
+    int* pn2 = &amp;*pn; // pn2 == pn
+    
+    int A::* mp = &amp;A::i;      // pointer to data member
+    void (B::*mpf)() = &amp;B::f; // pointer to member function
+    
+    void (*pf)(int) = &amp;f; // overload resolution due to initialization context
+//  auto pf2 = &amp;f; // error: ambiguous overloaded function type
+    auto pf2 = static_cast&lt;void (*)(int)&gt;(&amp;f); // overload resolution due to cast
+}
+}}
+
+====Built-in member access operators====
+The member access operator expressions have the form 
+
+{{sdsc begin}}
+{{sdsc|num=1|{{spar sep|expr}}{{ttb|.template}}{{mark optional}} {{spar|id-expr}}}} 
+{{sdsc|num=2|{{spar sep|expr}}{{ttb|-&gt;template}}{{mark optional}} {{spar|id-expr}}}} 
+{{sdsc|num=3|{{spar sep|expr}}{{ttb|.}}{{spar|pseudo-destructor}}}} 
+{{sdsc|num=4|{{spar sep|expr}}{{ttb|-&gt;}}{{spar|pseudo-destructor}}}} 
+{{sdsc end}}
+
+@1@ The {{spar|expr}} must be an expression of {{rlp|incomplete type|complete}} class type {{tt|T}}.
+@@ If {{spar|id-expr}} names a {{rlp|static|static member}} or {{rlp|enum|enumerator}}, {{spar|expr}} is a {{rlp|expressions#Discarded-value expressions|discarded-value expression}}.
+
+@2@ The {{spar|expr}} must be an expression of pointer to complete class type {{tt|T*}}.
+
+@3,4@ The {{spar|expr}} must be an expression of scalar type (see below).
+
+{{spar|id-expr}} is a name of (formally, an {{rlp|identifiers#In expressions|identifier expression}} that names) a data member or member function of {{tt|T}} or of an unambiguous and accessible base class {{tt|B}} of {{tt|T}} (e.g. {{c|E1.E2}} or {{c|E1-&gt;E2}}), optionally {{rlp|identifiers#Qualified identifiers|qualified}} (e.g. {{c|E1.B::E2}} or {{c|E1-&gt;B::E2}}), optionally using {{rlp|dependent name#template disambiguator|{{c/core|template}} disambiguator}} (e.g. {{c|E1.template E2}} or {{c|E1-&gt;template E2}}).
+
+If a user-defined {{c/core|operator-&gt;}} is called, {{c/core|operator-&gt;}} is called again on the resulting value, recursively, until an {{c/core|operator-&gt;}} is reached that returns a plain pointer. After that, built-in semantics are applied to that pointer.
+
+The expression {{c|E1-&gt;E2}} is exactly equivalent to {{c|(*E1).E2}} for built-in types; that is why the following rules address only {{c|E1.E2}}.
+
+In the expression {{c|E1.E2}}:
+@1@ If {{c|E2}} is a {{rlp|static|static data member}}:
+* If {{c|E2}} is of reference type {{tt|T&amp;}} {{rev inl|since=c++11|or {{tt|T&amp;&amp;}}}}, the result is an lvalue of type {{tt|T}} designating the object or function to which the reference is bound.
+* Otherwise, given the type of {{c|E2}} as {{tt|T}}, the result is an lvalue of type {{tt|T}} designating that static data member.
+@@ Essentially, {{c|E1}} is evaluated and discarded in both cases.
+@2@ If {{c|E2}} is a {{rlp|data members|non-static data member}}:
+* If {{c|E2}} is of reference type {{tt|T&amp;}} {{rev inl|since=c++11|or {{tt|T&amp;&amp;}}}}, the result is an lvalue of type {{tt|T}} designating the object or function to which the corresponding reference member of {{c|E1}} is bound.
+* Otherwise, if {{c|E1}} is an lvalue, the result is an lvalue designating that non-static data member of {{c|E1}}.
+* Otherwise (if {{c|E1}} is an {{rev inl|until=c++17|rvalue}}{{rev inl|since=c++17|xvalue (which may be {{rlp|implicit conversion#Temporary materialization|materialized}} from prvalue)}}), the result is an {{rev inl|until=c++11|rvalue}}{{rev inl|since=c++11|xvalue}} designating that non-static data member of {{c|E1}}.
+@@ If {{c|E2}} is not a {{rlp|cv#mutable specifier|mutable}} member, the {{rlp|cv|cv-qualification}} of the result is the union of the cv-qualifications of {{c|E1}} and {{c|E2}}, otherwise (if {{c|E2}} is a mutable member), it is the union of the volatile-qualifications of {{c|E1}} and {{c|E2}}.
+@3@ If {{c|E2}} is an overload set (of one or more {{rlp|static|static member functions}} and {{rlp|member functions|non-static member functions}}), {{c|E1.E2}} must be the (possibly-parenthesized) left-hand operand of a {{rlp|operator other#Built-in function call operator|member function call operator}}, and {{rlp|overload resolution#Call to a named function|function overload resolution}} is used to select the function to which {{c|E2}} refers, after that:
+* If {{c|E2}} is a {{rlp|static|static member function}}, the result is an lvalue designating that static member function. Essentially, {{c|E1}} is evaluated and discarded in this case.
+* Otherwise ({{c|E2}} is a {{rlp|member functions|non-static member function}}), the result is a prvalue designating that non-static member function of {{c|E1}}.
+@4@ If {{c|E2}} is a member enumerator, given the type of {{c|E2}} as {{tt|T}}, the result is {{rev inl|until=c++11|an rvalue}}{{rev inl|since=c++11|a prvalue}} of type {{tt|T}} whose value is the value of the enumerator.
+@5@ If {{c|E2}} is a {{rlp|nested classes|nested type}}, the program is ill-formed.
+@6@ If {{c|E1}} has a {{named req|ScalarType}} and {{c|E2}} is a {{ttb|~}} followed by the {{rlp|type#Type naming|type name}} or {{rlp|decltype|decltype specifier}} designating the same type (minus cv-qualifications), optionally {{rlp|identifiers#Qualified identifiers|qualified}}, the result is a special kind of prvalue that can only be used as the left-hand operand of a function call operator, and for no other purpose
+@@ The resulting function call expression is called ''pseudo destructor call''. It takes no arguments, returns {{c/core|void}}, evaluates {{c|E1}}, and ends the lifetime of its result object&lt;!-- P0593R6 --&gt;. This is the only case where the left-hand operand of {{c/core|operator.}} has non-class type. Allowing pseudo destructor call makes it possible to write code without having to know if a destructor exists for a given type.
+
+{{c/core|operator.}} cannot be overloaded, and for {{c/core|operator-&gt;}}, in {{rlp|overload resolution#Call to an overloaded operator|overload resolution against user-defined operators}}, the built-in operator does not introduce any additional function signatures: built-in {{c/core|operator-&gt;}} does not apply if there exists an overloaded {{c/core|operator-&gt;}} that is a {{rlp|overload resolution#Viable functions|viable function}}.
+
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct P
+{
+    template&lt;typename T&gt;
+    static T* ptr() { return new T; }
+};
+
+template&lt;typename T&gt;
+struct A
+{
+    A(int n): n(n) {}
+    
+    int n;
+    static int sn;
+    
+    int f() { return 10 + n; }
+    static int sf() { return 4; }
+    
+    class B {};
+    enum E {RED = 1, BLUE = 2};
+    
+    void g()
+    {
+        typedef int U;
+        
+        // keyword template needed for a dependent template member
+        int* p = T().template ptr&lt;U&gt;();
+        p-&gt;~U(); // U is int, calls int's pseudo destructor
+        delete p;
+    }
+};
+
+template&lt;&gt;
+int A&lt;P&gt;::sn = 2;
+
+struct UPtrWrapper
+{
+    std::unique_ptr&lt;std::string&gt; uPtr;
+    std::unique_ptr&lt;std::string&gt;&amp; operator-&gt;() { return uPtr; }
+};
+
+int main()
+{
+    A&lt;P&gt; a(1);
+    std::cout &lt;&lt; a.n &lt;&lt; ' '
+              &lt;&lt; a.sn &lt;&lt; ' '   // A::sn also works
+              &lt;&lt; a.f() &lt;&lt; ' ' 
+              &lt;&lt; a.sf() &lt;&lt; ' ' // A::sf() also works
+//            &lt;&lt; &amp;a.f &lt;&lt; ' '   // error: ill-formed if a.f is not the
+                               // left-hand operand of operator()
+//            &lt;&lt; a.B &lt;&lt; ' '    // error: nested type not allowed
+              &lt;&lt; a.RED &lt;&lt; ' '; // enumerator
+    
+    UPtrWrapper uPtrWrap{std::make_unique&lt;std::string&gt;("wrapped")};
+    assert(uPtrWrap-&gt;data() == uPtrWrap.operator-&gt;().operator-&gt;()-&gt;data());
+}
+|output=
+1 2 11 4 1
+}}
+
+If {{c|E2}} is a non-static member and the result of {{c|E1}} is an object whose type is not {{rlp|implicit conversion#Similar types|similar}} to the type of {{c|E1}}, the behavior is undefined:
+{{source|
+struct A { int i; };
+struct B { int j; };
+struct D : A, B {};
+
+void f()
+{
+    D d;
+    static_cast&lt;B&amp;&gt;(d).j;      // OK, object expression designates the B subobject of d
+    reinterpret_cast&lt;B&amp;&gt;(d).j; // undefined behavior
+}
+}}
+
+====Built-in pointer-to-member access operators====
+The member access operator expressions through pointers to members have the form 
+
+{{sdsc begin}}
+{{sdsc|num=1|{{spar sep|lhs}}{{ttb|.*}}{{spar|rhs}}}} 
+{{sdsc|num=2|{{spar sep|lhs}}{{ttb|-&gt;*}}{{spar|rhs}}}} 
+{{sdsc end}}
+@1@ {{spar|lhs}} must be an expression of class type {{tt|T}}.
+@2@ {{spar|lhs}} must be an expression of type pointer to class type {{tt|T*}}.
+
+{{spar|rhs}} must be an rvalue of type pointer to member ({{rlp|pointer#Pointers to data members|data}} or {{rlp|pointer#Pointers to member functions|function}}) of {{tt|T}} or pointer to member of an unambiguous and accessible base class {{tt|B}} of {{tt|T}}.
+
+The expression {{c|E1-&gt;*E2}} is exactly equivalent to {{c|(*E1).*E2}} for built-in types; that is why the following rules address only {{c|E1.*E2}}.
+
+In the expression {{c|E1.*E2}}:
+@1@ if {{c|E2}} is a pointer to data member,
+* if {{c|E1}} is an lvalue, the result is an lvalue designating that data member,
+* otherwise (if {{c|E1}} is an {{rev inl|until=c++17|rvalue}}{{rev inl|since=c++17|xvalue (which may be {{rlp|implicit conversion#Temporary materialization|materialized}} from prvalue)}}), the result is an {{rev inl|until=c++11|rvalue}}{{rev inl|since=c++11|xvalue}} designating that data member;
+@2@ if {{c|E2}} is a pointer to member function, the result is a special kind of prvalue designating that member function that can only be used as the left-hand operand of a member function call operator, and for no other purpose;
+@3@ cv-qualification rules are the same as for member of object operator, with one additional rule: a pointer to member that refers to a mutable member cannot be used to modify that member in a const object;
+@4@ if {{c|E2}} is a null pointer-to-member value, the behavior is undefined;
+@5@ if the result {{c|E1}} is an object such that its type is not {{rlp|implicit conversion#Similar types|similar}} to the type of {{c|E1}}, or its {{rlp|object#Subobjects|most derived object}} does not contain the member to which {{c|E2}} refers, the behavior is undefined;
+@6@ if {{c|E1}} is an rvalue and {{c|E2}} points to a member function with ref-qualifier {{ttb|&amp;}}, the program is ill-formed {{rev inl|since=c++20|unless the member function has the cv-qualifier {{c/core|const}} but not {{c/core|volatile}}}};
+
+{{rrev|since=c++11|
+@7@ if {{c|E1}} is an lvalue and {{c|E2}} points to a member function with ref-qualifier {{ttb|&amp;&amp;}}, the program is ill-formed.
+}}
+
+In {{rlp|overload resolution#Call to an overloaded operator|overload resolution against user-defined operators}}, for every combination of types {{tt|D}}, {{tt|B}}, {{tt|R}}, where class type {{tt|B}} is either the same class as {{tt|D}} or an unambiguous and accessible base class of {{tt|D}}, and {{tt|R}} is either an object or function type, the following function signature participates in overload resolution:
+{{dcl begin}}
+{{dcl|R&amp; operator-&gt;*(D*, R B::*);}}
+{{dcl end}}
+where both operands may be cv-qualified, in which case the return type's cv-qualification is the union of the cv-qualification of the operands.
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    S(int n) : mi(n) {}
+    mutable int mi;
+    int f(int n) { return mi + n; }
+};
+
+struct D : public S
+{
+    D(int n) : S(n) {}
+};
+
+int main()
+{
+    int S::* pmi = &amp;S::mi;
+    int (S::* pf)(int) = &amp;S::f;
+    
+    const S s(7);
+//  s.*pmi = 10; // error: cannot modify through mutable
+    std::cout &lt;&lt; s.*pmi &lt;&lt; '\n';
+    
+    D d(7); // base pointers work with derived object
+    D* pd = &amp;d;
+    std::cout &lt;&lt; (d.*pf)(7) &lt;&lt; ' '
+              &lt;&lt; (pd-&gt;*pf)(8) &lt;&lt; '\n';
+}
+|output=
+7
+14 15
+}}
+
+===Standard library===
+Subscript operator is overloaded by many standard container classes:
+{{dsc begin}}
+{{dsc inc|cpp/utility/bitset/dsc operator at}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator at}}
+{{dsc inc|cpp/string/basic_string/dsc operator at}}
+{{dsc inc|cpp/container/dsc operator at|array}}
+{{dsc inc|cpp/container/dsc operator at|deque}}
+{{dsc inc|cpp/container/dsc operator at|vector}}
+{{dsc inc|cpp/container/dsc operator at|map}}
+{{dsc inc|cpp/container/dsc operator at|unordered_map}}
+{{dsc inc|cpp/iterator/reverse_iterator/dsc operator at}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator at|move_iterator}}
+{{dsc inc|cpp/numeric/valarray/dsc operator at}}
+{{dsc inc|cpp/regex/match_results/dsc operator at}}
+{{dsc end}}
+
+The indirection and member operators are overloaded by many iterators and smart pointer classes:
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator*}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator*}}
+{{dsc inc|cpp/memory/auto_ptr/dsc operator*}}
+{{dsc inc|cpp/memory/raw_storage_iterator/dsc operator*}}
+{{dsc inc|cpp/iterator/reverse_iterator/dsc operator*}}
+{{dsc inc|cpp/iterator/inserter/dsc operator*|back_insert_iterator}}
+{{dsc inc|cpp/iterator/inserter/dsc operator*|front_insert_iterator}}
+{{dsc inc|cpp/iterator/inserter/dsc operator*|insert_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator*|move_iterator}}
+{{dsc inc|cpp/iterator/istream_iterator/dsc operator*}}
+{{dsc inc|cpp/iterator/ostream_iterator/dsc operator*}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc operator*}}
+{{dsc inc|cpp/iterator/ostreambuf_iterator/dsc operator*}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator*}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator*}}
+{{dsc end}}
+
+No standard library classes overload {{c/core|operator&amp;}}. The best known example of overloaded {{c/core|operator&amp;}} is the Microsoft COM class [https://msdn.microsoft.com/en-us/library/31k6d0k7(v=vs.100).aspx {{tt|CComPtr}}], although it can also appear in EDSLs such as [https://www.boost.org/doc/libs/release/libs/spirit/doc/html/spirit/qi/reference/operator/and_predicate.html boost.spirit].
+
+No standard library classes overload {{c/core|operator-&gt;*}}. It was suggested that it could be part of [https://www.aristeia.com/Papers/DDJ_Oct_1999.pdf smart pointer interface], and in fact is used in that capacity by actors in [https://www.boost.org/doc/libs/release/libs/phoenix/doc/html/phoenix/modules/operator.html#phoenix.modules.operator.member_pointer_operator boost.phoenix], but is more common in EDSLs such as [https://github.com/schlangster/cpp.react/blob/master/include/react/Signal.h#L557 cpp.react].
+
+===Notes===
+{{feature test macro|std=C++23|value=202110L|__cpp_multidimensional_subscript|[[cpp/language/operators#Array subscript operator|Multidimensional subscript operator]]}}
+
+===Defect reports===
+{{dr list begin}}
+&lt;!-- CWG 1038 is also resolved by the resolution of CWG 2725 --&gt;
+{{dr list item|wg=cwg|dr=1213|std=C++11|before=subscripting an array rvalue resulted in  lvalue|after=reclassified as xvalue}}
+{{dr list item|wg=cwg|dr=1458|std=C++98|before=applying {{tt|&amp;}} to an lvalue of incomplete class type which&lt;br&gt;declares {{c|operator&amp;}} resulted in undefined behavior|after=it is unspecified&lt;br&gt;which {{c|&amp;}} is used}}
+{{dr list item|wg=cwg|dr=1642|std=C++98|before=the {{spar sep|rhs}} in built-in pointer-to-member access operators could be an lvalue|after=can only be an rvalue}}
+{{dr list item|wg=cwg|dr=1800|std=C++98|before=when applying {{tt|&amp;}} to a non-static data member of a&lt;br&gt;member anonymous union, it was unclear whether&lt;br&gt;the anonymous union take a part in the result type|after=the anonymous union&lt;br&gt;is not included in&lt;br&gt;the result type}}
+{{dr list item|wg=cwg|dr=2614|std=C++98|before=the result of {{c|E1.E2}} was unclear if {{c|E2}} is a reference member or enumerator|after=made clear}}
+{{dr list item|wg=cwg|dr=2725|std=C++98|before=if {{c|E2}} is a static member function, {{c|E1.E2}} is well-formed&lt;br&gt;even if it is not the left hand opreand of {{c/core|operator()}}|after={{c|E1.E2}} is ill-formed&lt;br&gt;in this case}}
+{{dr list item|wg=cwg|dr=2748|std=C++98|before=the behavior of {{c|E1-&gt;E2}} was unclear if {{c|E1}} is a&lt;br&gt;null pointer and {{c|E2}} refers to a static member|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=2813|std=C++98|before={{c|E1}} was not a discarded-value expression if&lt;br&gt;{{c|E1.E2}} names a static member or enumeration|after=it is}}
+{{dr list item|wg=cwg|dr=2823|std=C++98|before=the behavior of {{c|*expr}} was unclear if {{c|expr}}&lt;br&gt;does not point to an object or function|after=made clear}}
+{{dr list end}}
+
+===See also===
+{{rlp|operator precedence|Operator precedence}}
+
+{{rlp|operators|Operator overloading}}
+
+{{cpp/language/operators}}
+{{dsc begin}}
+{{dsc see c|c/language/operator member access|Member access operators|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

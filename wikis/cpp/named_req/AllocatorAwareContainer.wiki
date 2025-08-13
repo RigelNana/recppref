@@ -1,0 +1,160 @@
+{{cpp/named req/title|AllocatorAwareContainer|notes={{mark since c++11}}}}
+{{cpp/named req/navbar}}
+
+An {{named req|AllocatorAwareContainer}} is a {{named req|Container}} that holds an instance of an {{named req|Allocator}} and uses that instance in all its member functions to allocate and deallocate memory and to construct and destroy objects in that memory (such objects may be container elements, nodes, or, for unordered containers, bucket arrays){{rev inl|since=c++23|, except that {{lc|std::basic_string}} specializations do not use the allocators for construction/destruction of their elements}}.
+
+The following rules apply to container construction:
+* Copy constructors of {{named req/core|AllocatorAwareContainer}}s obtain their instances of the allocator by calling {{c|std::allocator_traits&lt;allocator_type&gt;::select_on_container_copy_construction}} on the allocator of the container being copied.
+* Move constructors obtain their instances of allocators by move-constructing from the allocator belonging to the old container.
+* All other constructors take a {{c/core|const allocator_type&amp;}} parameter.
+
+{{anchor|Replacing allocator}}
+The only way to replace an allocator is copy-assignment, move-assignment, and swap:
+* Copy-assignment will replace the allocator only if {{c|std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_copy_assignment::value}} is {{c|true}}.
+* Move-assignment will replace the allocator only if {{c|std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_move_assignment::value}} is {{c|true}}.
+* Swap will replace the allocator only if {{c|std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value}} is {{c|true}}. Specifically, it will exchange the allocator instances through an unqualified call to the non-member function swap, see {{named req|Swappable}}.
+
+Note: The behavior of swapping two containers with unequal allocators if {{tt|propagate_on_container_swap}} is {{c|false}} is undefined.
+
+* The accessor {{tt|get_allocator()}} obtains a copy of the allocator that was used to construct the container or installed by the most recent allocator replacement operation.
+
+===Requirements===
+A type satisfies {{named req/core|AllocatorAwareContainer}} if it satisfies {{named req|Container}} and, given the following types and values, the semantic and complexity requirements in the tables below are satisfied:
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|X}}|an {{named req/core|AllocatorAwareContainer}} type}}
+{{dsc|{{tt|T}}|the {{tt|value_type}} of {{tt|X}}}}
+{{dsc|{{tt|A}}|the allocator type used by {{tt|X}}}}
+{{dsc hitem|Value|Definition}}
+{{dsc|{{c|a}}, {{c|b}}|non-const lvalues of type {{tt|X}}}}
+{{dsc|{{c|c}}|an lvalue of type {{c/core|const X}}}}
+{{dsc|{{c|t}}|an lvalue or a const rvalue of type {{tt|X}}}}
+{{dsc|{{c|rv}}|a non-const rvalue of type {{tt|X}}}}
+{{dsc|{{c|m}}|a value of type {{tt|A}}}}
+{{dsc end}}
+
+====Types====
+{|class=wikitable
+!Name
+!{{nbsp}}Type{{nbsp}}
+!Requirement
+|-
+|{{c/core|typename X::allocator_type}}{{nbsp}}
+|{{tt|A}}
+|{{tt|X::allocator_type::value_type}} and {{tt|X::value_type}} are the same.
+|}
+
+====Statements====
+{|class=wikitable
+!Statement
+!colspan=2|Semantics
+!Complexity
+|-
+|rowspan=2|{{c|X u;}}&lt;br&gt;{{c|1=X u = X();}}
+|Precondition
+|{{tt|A}} is {{named req|DefaultConstructible}}.
+|rowspan=2|Constant
+|-
+|Postcondition{{nbsp}}
+|{{c|u.empty()}} and {{c|1=u.get_allocator() == A()}} are both {{c|true}}.
+|-
+|{{c|X u(m);}}
+|Postcondition
+|{{c|u.empty()}} and {{c|1=u.get_allocator() == m}} are both {{c|true}}.
+|Constant
+|-
+|rowspan=2|{{c|X u(t, m);}}
+|Precondition
+|{{tt|T}} is {{named req|CopyInsertable}} into {{tt|X}}.
+|rowspan=2|Linear
+|-
+|Postcondition
+|{{c|1=u == t}} and {{c|1=u.get_allocator() == m}} are both {{c|true}}.
+|-
+|{{c|X u(rv);}}
+|Postcondition
+|
+* {{c|u}} has the same elements as {{c|rv}} had before this construction.
+* The value of {{c|u.get_allocator()}} is the same as the value of {{c|rv.get_allocator()}} before this construction.
+|Constant
+|-
+|rowspan=2|{{c|X u(rv, m);}}
+|Precondition
+|{{tt|T}} is {{named req|MoveInsertable}} into {{tt|X}}.
+|rowspan=2|
+* Constant if {{c|1=m == rv.get_allocator()}} is {{c|true}}.
+* Otherwise linear.
+|-
+|Postcondition
+|
+* {{c|u}} has the same elements, or copies of the elements, that {{c|rv}} had before this construction.
+* {{c|1=u.get_allocator() == m}} is {{c|true}}.
+|}
+
+====Expressions====
+{|class=wikitable
+!Expression
+!{{nbsp}}Type{{nbsp}}
+!colspan=2|Semantics
+!{{nbsp}}Complexity{{nbsp}}
+|-
+|{{c|c.get_allocator()}}
+|{{tt|A}}
+|colspan=2|No direct semantic requirement.
+|Constant
+|-
+|rowspan=2|{{c|1=a = t}}
+|rowspan=2|{{tt|X&amp;}}
+|Precondition
+|{{tt|T}} is {{named req|CopyInsertable}} into {{tt|X}} and {{named req|CopyAssignable}}.
+|rowspan=2|Linear
+|-
+|Postcondition{{nbsp}}
+|{{c|1=a == t}} is {{c|true}}.
+|-
+|rowspan=3|{{c|1=a = rv}}
+|rowspan=3|{{tt|X&amp;}}
+|Precondition
+|If the allocator will '''not''' be replaced by move-assignment (see [[#Replacing allocator|above]]), then {{tt|T}} is {{named req|MoveInsertable}} into {{tt|X}} and {{named req|MoveAssignable}}.
+|rowspan=3|Linear
+|-
+|Effect
+|All existing elements of {{c|a}} are either move assigned to or destroyed.
+|-
+|Postcondition
+|If {{c|a}} and {{c|rv}} do not refer the same object, {{c|a}} is equal to the value that {{c|rv}} had before the assignment.
+|-
+|{{c|a.swap(b)}}
+|{{c/core|void}}
+|Effect
+|Exchanges the contents of {{c|a}} and {{c|b}}.
+|Constant
+|}
+
+===Notes===
+{{named req/core|AllocatorAwareContainer}}s always call {{c|std::allocator_traits&lt;A&gt;::construct(m, p, args)}} to construct an object of type {{tt|T}} at {{c|p}} using {{c|args}}, with {{c|1=m == get_allocator()}}. {{rev inl|until=c++20|The default {{tt|construct}} in {{lc|std::allocator}} calls {{c|::new((void*)p) T(args)}}}}{{rev inl|since=c++20|{{lc|std::allocator}} has no {{tt|construct}} member and {{c|std::construct_at(p, args)}} is called when constructing elements}}, but specialized allocators may choose a different definition.
+
+===Standard library===
+All standard library string types and containers (except {{lc|std::array}} and {{c/core|std::inplace_vector}}) are {{named req/core|AllocatorAwareContainer}}s:
+{{dsc begin}}
+{{dsc inc|cpp/string/dsc basic_string}}
+{{dsc inc|cpp/container/dsc deque}}
+{{dsc inc|cpp/container/dsc forward_list}}
+{{dsc inc|cpp/container/dsc list}}
+{{dsc inc|cpp/container/dsc vector}}
+{{dsc inc|cpp/container/dsc map}}
+{{dsc inc|cpp/container/dsc multimap}}
+{{dsc inc|cpp/container/dsc set}}
+{{dsc inc|cpp/container/dsc multiset}}
+{{dsc inc|cpp/container/dsc unordered_map}}
+{{dsc inc|cpp/container/dsc unordered_multimap}}
+{{dsc inc|cpp/container/dsc unordered_set}}
+{{dsc inc|cpp/container/dsc unordered_multiset}}
+{{dsc end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2839|std=C++11|before=self move assignment of standard containers was not allowed|after=allowed but the result is unspecified}}
+{{dr list end}}
+
+{{langlinks|de|es|ja|ru|zh}}

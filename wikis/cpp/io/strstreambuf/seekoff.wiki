@@ -1,0 +1,100 @@
+{{cpp/io/strstreambuf/title|seekoff}}
+{{cpp/io/strstreambuf/navbar}}
+{{ddcl|deprecated=c++98|removed=c++26|1=
+protected:
+virtual pos_type seekoff( off_type off,
+                          ios_base::seekdir way,
+                          ios_base::openmode which = ios_base::in {{!}} ios_base::out );}}
+
+Repositions {{lc|std::basic_streambuf::gptr}} and/or {{lc|std::basic_streambuf::pptr}}, if possible, to the position that corresponds to exactly {{c|off}} characters from beginning, end, or current position of the get and/or put area of the buffer.
+
+* If {{c|which}} includes {{c|ios_base::in}} and this buffer is open for reading, then repositions the read pointer {{lc|std::basic_streambuf::gptr}} inside the get area as described below.
+* If {{c|which}} includes {{c|ios_base::out}} and this buffer is open for writing, then repositions the write pointer {{lc|std::basic_streambuf::pptr}} inside the put area as described below.
+* If {{c|which}} includes both {{c|ios_base::in}} and {{tt|ios_base::out}} and the buffer is open for both reading and writing, and {{c|way}} is either {{c|ios_base::beg}} or {{c|ios_base::end}}, then repositions both read and write pointers as described below.
+* Otherwise, this function fails.
+
+If the pointer (either {{tt|gptr}} or {{tt|pptr}} or both) is repositioned, it is done as follows:
+@1@ If the pointer to be repositioned is a null pointer and the new offset {{c|newoff}} would be non-zero, this function fails.
+@2@ The new pointer offset {{c|newoff}} of type {{tt|off_type}} is determined
+:@a@ if {{c|1=way == ios_base::beg}}, then {{c|newoff}} is zero
+:@b@ if {{c|1=way == ios_base::cur}}, then {{c|newoff}} is the current position of the pointer ({{c|gptr() - eback()}} or {{c|pptr() - pbase()}})
+:@c@ if {{c|1=way == ios_base::end}}, then {{c|newoff}} is the length of the entire initialized part of the buffer (if overallocation is used, the high watermark pointer minus the beginning pointer)
+@3@ If {{c|newoff + off}} is negative or out of bounds of the initialized part of the buffer, the function fails
+@4@ Otherwise, the pointer is assigned as if by {{c|1=gptr() = eback() + newoff + off}} or {{c|1=pptr() = pbase() + newoff + off}}
+
+===Parameters===
+{{par begin}}
+{{par|off|relative position to set the next pointer(s) to}}
+{{par|way|defines base position to apply the relative offset to. It can be one of the following constants:
+{{cpp/io/ios_base/seekdir consts}}}}
+{{par|which|defines whether the input sequences, the output sequence, or both are affected. It can be one or a combination of the following constants:
+{{cpp/io/ios_base/openmode streambuf consts}}}}
+{{par end}}
+
+===Return value===
+{{c|pos_type(newoff)}} on success, {{c|pos_type(off_type(-1))}} on failure and if pos_type cannot represent the resulting stream position.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;strstream&gt;
+
+int main()
+{
+    char a[] = "123";
+    std::strstream ss(a, sizeof a); // in/out
+    std::cout &lt;&lt; "put pos = " &lt;&lt; ss.tellp()
+              &lt;&lt; " get pos = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // absolute positioning both pointers
+    ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::beg); // move both forward
+    std::cout &lt;&lt; "put pos = " &lt;&lt; ss.tellp()
+              &lt;&lt; " get pos = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // try to move both pointers 1 forward from current position
+    if (-1 == ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::cur))
+        std::cout &lt;&lt; "moving both pointers from current position failed\n";
+    std::cout &lt;&lt; "put pos = " &lt;&lt; ss.tellp()
+              &lt;&lt; " get pos = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // move the write pointer 1 forward, but not the read pointer
+    // can also be called as ss.seekp(1, std::ios_base::cur);
+    ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::cur, std::ios_base::out);
+    std::cout &lt;&lt; "put pos = " &lt;&lt; ss.tellp()
+              &lt;&lt; " get pos = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    ss &lt;&lt; 'a'; // write at put position
+    std::cout &lt;&lt; "Wrote 'a' at put position, the buffer is now: '";
+    std::cout.write(a, sizeof a);
+    std::cout &lt;&lt; "'\n";
+    
+    char ch;
+    ss &gt;&gt; ch;
+    std::cout &lt;&lt; "reading at get position gives '" &lt;&lt; ch &lt;&lt; "'\n";
+}
+|output=
+put pos = 0 get pos = 0
+put pos = 1 get pos = 1
+moving both pointers from current position failed
+put pos = 1 get pos = 1
+put pos = 2 get pos = 1
+Wrote 'a' at put position, the buffer is now: '12a'
+reading at get position gives '2'
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=55|std=C++98|before={{tt|seekoff}} returned an undefined&lt;br&gt;invalid stream position on failure|after={{c|pos_type(off_type(-1))}}&lt;br&gt;is returned on failure}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/strstreambuf/dsc seekpos}}
+{{dsc inc|cpp/io/basic_streambuf/dsc seekoff}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc seekoff}}
+{{dsc inc|cpp/io/basic_filebuf/dsc seekoff}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

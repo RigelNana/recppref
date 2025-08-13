@@ -1,0 +1,196 @@
+{{cpp/title|bind}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|functional}}
+{{dcla|num=1|since=c++11|constexpr=c++20|1=
+template&lt; class F, class... Args &gt;
+/* unspecified */ bind( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcla|num=2|since=c++11|constexpr=c++20|1=
+template&lt; class R, class F, class... Args &gt;
+/* unspecified */ bind( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+The function template {{tt|std::bind}} generates a forwarding call wrapper for {{c|f}}. Calling this wrapper is equivalent to invoking {{c|f}} with some of its arguments [[#Bound arguments|bound]] to {{c|args}}.
+
+If {{c|std::is_constructible&lt;std::decay&lt;F&gt;::type, F&gt;::value}} is {{c|false}}, or {{c|std::is_constructible&lt;std::decay&lt;Arg_i&gt;::type, Arg_i&gt;::value}} is {{c|false}} for any type {{tt|Arg_i}} in {{tt|Args}}, the program is ill-formed.
+
+If {{c/core|std::decay&lt;Ti&gt;::type}} or any type in {{tt|Args}} is not {{named req|MoveConstructible}} or {{named req|Destructible}}, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|f|{{named req|Callable}} object (function object, pointer to function, reference to function, pointer to member function, or pointer to data member) that will be bound to some arguments}}
+{{par|args|list of arguments to bind, with the unbound arguments replaced by the {{rlp|placeholders}} {{c|_1}}, {{c|_2}}, {{c|_3}}... of namespace {{tt|std::placeholders}}}}
+{{par end}}
+
+===Return value===
+A function object {{c|g}} of unspecified type {{tt|T}}, for which {{c|std::is_bind_expression&lt;T&gt;::value}} is {{c|true}}. It has the following members:
+
+{{member|{{small|std::bind}} ''return type''|2=
+
+====Member objects====
+The return type of {{tt|std::bind}} holds a member object of type {{c/core|std::decay&lt;F&gt;::type}} constructed from {{c|std::forward&lt;F&gt;(f)}}, and one object per each of {{c|args...}}, of type {{c/core|std::decay&lt;Arg_i&gt;::type}}, similarly constructed from {{c|std::forward&lt;Arg_i&gt;(arg_i)}}.
+
+====Constructors====
+The return type of {{tt|std::bind}} is {{named req|CopyConstructible}} if all of its member objects (specified above) are CopyConstructible, and is {{named req|MoveConstructible}} otherwise. The type defines the following members:
+
+{{rrev|until=c++20|
+====Member type {{tt|result_type}}====
+@1@ {{mark deprecated c++17}} If {{tt|F}} is a pointer to function or a pointer to member function, {{tt|result_type}} is the return type of {{tt|F}}. If {{tt|F}} is a class type with nested typedef {{tt|result_type}}, then {{tt|result_type}} is {{tt|F::result_type}}. Otherwise no {{tt|result_type}} is defined.
+
+@2@ {{mark deprecated c++17}} {{tt|result_type}} is exactly {{tt|R}}.
+}}
+
+====Member function {{tt|operator()}}====
+When {{c|g}} is invoked in a function call expression {{c|g(u1, u2, ... uM)}}, an invocation of the stored object takes place, as if by
+
+@1@ {{box|{{rlpi|/|INVOKE}}{{c/core|(fd, std::forward&lt;V1&gt;(v1), std::forward&lt;V2&gt;(v2), ..., std::forward&lt;VN&gt;(vN))}}}}, or
+@2@ {{box|{{rlpi|/|INVOKE&lt;R&gt;}}{{c/core|(fd, std::forward&lt;V1&gt;(v1), std::forward&lt;V2&gt;(v2), ..., std::forward&lt;VN&gt;(vN))}}}},
+
+where {{c|fd}} is a value of type {{c|std::decay&lt;F&gt;::type}}, the values and types of the bound arguments {{c|v1}}{{tt|, }}{{c|v2}}{{tt|, ..., }}{{c|vN}} are determined as specified [[#Bound arguments|below]].
+
+If some of the arguments that are supplied in the call to {{c|g()}} are not matched by any placeholders stored in {{c|g}}, the unused arguments are evaluated and discarded.
+
+An invocation of {{c/core|operator()}} is [[cpp/language/noexcept|non-throwing]] {{rev inl|since=c++20|or is a [[cpp/language/constant expression|constant subexpression]]}} if and only if so is the underlying {{tti|INVOKE}} operation. {{c/core|operator()}} participates in overload resolution only if the {{tti|INVOKE}} operation is well-formed when treated as an unevaluated operand.
+
+If {{c|g}} is [[cpp/language/cv|volatile]]-qualified, the program is ill-formed.
+
+If {{box|{{rlpi|/|INVOKE}}{{c/core|(fd, w1, w2, ..., wN)}}}} can never be a valid expression for any possible values {{c|w1}}{{tt|, }}{{c|w2}}{{tt|, ..., }}{{c|wN}}, the behavior is undefined.
+}}
+
+===Bound arguments===
+For each stored argument {{c|arg_i}}, the corresponding bound argument {{c|v_i}} in the {{rlpi|/|INVOKE}} or {{rlpi|/|INVOKE&lt;R&gt;}} operation is determined as follows:
+
+====Case 1: reference wrappers====
+If {{c|arg_i}} is of type {{c/core|std::reference_wrapper&lt;T&gt;}} (for example, {{lc|std::ref}} or {{lc|std::cref}} was used in the initial call to {{tt|std::bind}}), then {{c|v_i}} is {{c|arg_i.get()}} and its type {{tt|V_i}} is {{tt|T&amp;}}: the stored argument is passed by reference into the invoked function object.
+
+====Case 2: bind expressions====
+If {{c|arg_i}} is of type {{tt|T}} for which {{c|std::is_bind_expression&lt;T&gt;::value}} is {{c|true}} (for example, another {{tt|std::bind}} expression was passed directly into the initial call to {{tt|std::bind}}), then {{tt|std::bind}} performs function composition: instead of passing the function object that the bind subexpression would return, the subexpression is invoked eagerly, and its return value is passed to the outer invokable object. If the bind subexpression has any placeholder arguments, they are shared with the outer bind (picked out of {{c|u1}}{{tt|, }}{{c|u2}}{{tt|, ...}}). Specifically, {{c|v_i}} is {{c|arg_i(std::forward&lt;Uj&gt;(uj)...)}} and its type {{tt|V_i}} is {{rev inl|until=c++17|{{c/core|std::result_of&lt;T}} ''cv''{{sep}}{{c/core|&amp;(Uj&amp;&amp;...)&gt;::type&amp;&amp;}}}}{{rev inl|since=c++17|{{c/core|std::invoke_result_t&lt;T}} ''cv''{{sep}}{{c/core|&amp;, Uj&amp;&amp;...&gt;&amp;&amp;}}}} (cv-qualification is the same as that of {{c|g}}).
+
+====Case 3: placeholders====
+If {{c|arg_i}} is of type {{tt|T}}, for which {{c|std::is_placeholder&lt;T&gt;::value}} is not {{c|0}} (meaning, a placeholder such as {{tt|std::placeholders::_1, _2, _3, ...}} was used as the argument to the initial call to {{tt|std::bind}}), then the argument indicated by the placeholder ({{c|u1}} for {{c|_1}}, {{c|u2}} for {{c|_2}}, etc) is passed to the invokable object: {{c|v_i}} is {{c|std::forward&lt;Uj&gt;(uj)}} and its type {{tt|V_i}} is {{tt|Uj&amp;&amp;}}.
+
+====Case 4: ordinary arguments====
+Otherwise, {{c|arg_i}} is passed to the invokable object as lvalue argument: {{c|v_i}} is simply {{c|arg_i}} and its type {{tt|V_i}} is {{tt|T}} ''cv''{{sep}}{{tt|&amp;}}, where ''cv'' is the same cv-qualification as that of {{c|g}}.
+
+===Exceptions===
+Only throws if construction of {{c/core|std::decay&lt;F&gt;::type}} from {{c|std::forward&lt;F&gt;(f)}} throws, or any of the constructors for {{c/core|std::decay&lt;Arg_i&gt;::type}} from the corresponding {{c|std::forward&lt;Arg_i&gt;(arg_i)}} throws where {{tt|Arg_i}} is the ith type and {{c|arg_i}} is the ith argument in {{tt|Args... args}}.
+
+===Notes===
+As described in {{named req|Callable}}, when invoking a pointer to non-static member function or pointer to non-static data member, the first argument has to be a reference or pointer (including, possibly, smart pointer such as {{lc|std::shared_ptr}} and {{lc|std::unique_ptr}}) to an object whose member will be accessed.
+
+The arguments to bind are copied or moved, and are never passed by reference unless wrapped in {{lc|std::ref}} or {{lc|std::cref}}.
+
+Duplicate placeholders in the same bind expression (multiple {{c|_1}}'s for example) are allowed, but the results are only well defined if the corresponding argument ({{c|u1}}) is an lvalue or non-movable rvalue.
+
+===Example===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;random&gt;
+
+void f(int n1, int n2, int n3, const int&amp; n4, int n5)
+{
+    std::cout &lt;&lt; n1 &lt;&lt; ' ' &lt;&lt; n2 &lt;&lt; ' ' &lt;&lt; n3 &lt;&lt; ' ' &lt;&lt; n4 &lt;&lt; ' ' &lt;&lt; n5 &lt;&lt; '\n';
+}
+
+int g(int n1)
+{
+    return n1;
+}
+
+struct Foo
+{
+    void print_sum(int n1, int n2)
+    {
+        std::cout &lt;&lt; n1 + n2 &lt;&lt; '\n';
+    }
+    
+    int data = 10;
+};
+
+int main()
+{
+    using namespace std::placeholders;  // for _1, _2, _3...
+    
+    std::cout &lt;&lt; "1) argument reordering and pass-by-reference: ";
+    int n = 7;
+    // (_1 and _2 are from std::placeholders, and represent future
+    // arguments that will be passed to f1)
+    auto f1 = std::bind(f, _2, 42, _1, std::cref(n), n);
+    n = 10;
+    f1(1, 2, 1001); // 1 is bound by _1, 2 is bound by _2, 1001 is unused
+                    // makes a call to f(2, 42, 1, n, 7)
+    
+    std::cout &lt;&lt; "2) achieving the same effect using a lambda: ";
+    n = 7;
+    auto lambda = [&amp;ncref = n, n](auto a, auto b, auto /*unused*/)
+    {
+        f(b, 42, a, ncref, n);
+    };
+    n = 10;
+    lambda(1, 2, 1001); // same as a call to f1(1, 2, 1001)
+    
+    std::cout &lt;&lt; "3) nested bind subexpressions share the placeholders: ";
+    auto f2 = std::bind(f, _3, std::bind(g, _3), _3, 4, 5);
+    f2(10, 11, 12); // makes a call to f(12, g(12), 12, 4, 5);
+    
+    std::cout &lt;&lt; "4) bind a RNG with a distribution: ";
+    std::default_random_engine e;
+    std::uniform_int_distribution&lt;&gt; d(0, 10);
+    auto rnd = std::bind(d, e); // a copy of e is stored in rnd
+    for (int n = 0; n &lt; 10; ++n)
+        std::cout &lt;&lt; rnd() &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "5) bind to a pointer to member function: ";
+    Foo foo;
+    auto f3 = std::bind(&amp;Foo::print_sum, &amp;foo, 95, _1);
+    f3(5);
+    
+    std::cout &lt;&lt; "6) bind to a mem_fn that is a pointer to member function: ";
+    auto ptr_to_print_sum = std::mem_fn(&amp;Foo::print_sum);
+    auto f4 = std::bind(ptr_to_print_sum, &amp;foo, 95, _1);
+    f4(5);
+    
+    std::cout &lt;&lt; "7) bind to a pointer to data member: ";
+    auto f5 = std::bind(&amp;Foo::data, _1);
+    std::cout &lt;&lt; f5(foo) &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "8) bind to a mem_fn that is a pointer to data member: ";
+    auto ptr_to_data = std::mem_fn(&amp;Foo::data);
+    auto f6 = std::bind(ptr_to_data, _1);
+    std::cout &lt;&lt; f6(foo) &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "9) use smart pointers to call members of the referenced objects: ";
+    std::cout &lt;&lt; f6(std::make_shared&lt;Foo&gt;(foo)) &lt;&lt; ' '
+              &lt;&lt; f6(std::make_unique&lt;Foo&gt;(foo)) &lt;&lt; '\n';
+}
+|output=
+1) argument reordering and pass-by-reference: 2 42 1 10 7
+2) achieving the same effect using a lambda: 2 42 1 10 7
+3) nested bind subexpressions share the placeholders: 12 12 12 4 5
+4) bind a RNG with a distribution: 0 1 8 5 5 2 0 7 7 10 
+5) bind to a pointer to member function: 100
+6) bind to a mem_fn that is a pointer to member function: 100
+7) bind to a pointer to data member: 10
+8) bind to a mem_fn that is a pointer to data member: 10
+9) use smart pointers to call members of the referenced objects: 10 10
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2021|std=C++11|before=1. the bounded arguments&lt;br&gt;{{nbsp|4}}were not forwarded to {{c|fd}}&lt;br&gt;2. in case 2, the type of {{tt|V_i}} was&lt;br&gt;{{nbsp|4}}{{c/core|std::result_of&lt;T}} ''cv''{{sep}}{{c/core|(Uj...)&gt;::type}}|after=1. forwarded&lt;br&gt;2. changed to&lt;br&gt;{{nbsp|4}}{{c/core|std::result_of&lt;T}} ''cv''{{sep}}{{c/core|&amp;(Uj&amp;&amp;...)&gt;::type&amp;&amp;}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc bind_front}}
+{{dsc inc|cpp/utility/functional/dsc placeholders}}
+{{dsc inc|cpp/utility/functional/dsc mem_fn}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

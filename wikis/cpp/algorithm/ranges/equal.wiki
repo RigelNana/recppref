@@ -1,0 +1,153 @@
+{{cpp/ranges/title|equal}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr bool
+    equal( I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = {},
+           Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                    Pred, Proj1, Proj2&gt;
+constexpr bool
+    equal( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ Returns {{c|true}} if the projected values of the range {{range|first1|last1}} are equal to the projected values of the range {{range|first2|last2}}, and {{c|false}} otherwise.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+Two ranges are considered equal if they have the same number of elements and every pair of corresponding projected elements satisfies {{c|pred}}. That is, {{c|std::invoke(pred, std::invoke(proj1, *first1), std::invoke(proj2, *first2))}} returns {{c|true}} for all pairs of corresponding elements in both ranges.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|an iterator-sentinel pair denoting the first range of the elements to compare}}
+{{par|r1|the first range of the elements to compare}}
+{{par|first2, last2|an iterator-sentinel pair denoting the second range of the elements to compare}}
+{{par|r2|the second range of the elements to compare}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj1|projection to apply to the first range of elements}}
+{{par|proj2|projection to apply to the second range of elements}}
+{{par end}}
+
+===Return value===
+If the length of the range {{range|first1|last1}} does not equal the length of the range {{range|first2|last2}}, returns {{c|false}}.
+
+If the elements in the two ranges are equal after projection, returns {{c|true}}.
+
+Otherwise returns {{c|false}}.
+
+===Notes===
+{{tt|ranges::equal}} should not be used to compare the ranges formed by the iterators from {{lc|std::unordered_set}}, {{lc|std::unordered_multiset}}, {{lc|std::unordered_map}}, or {{lc|std::unordered_multimap}} because the order in which the elements are stored in those containers may be different even if the two containers store the same elements. 
+
+When comparing entire containers or string views for equality, {{c/core|1=operator==}} for the corresponding type are usually preferred.
+
+{{tt|ranges::equal}} is not guaranteed to be short-circuit. E.g. if the first pair elements of both ranges do not compare equal, the rest of elements may also be compared. Non-short-circuit comparison may happen when the ranges are compared with {{lc|std::memcmp}} or implementation-specific vectorized algorithms.
+
+===Complexity===
+At most {{c|min(last1 - first1, last2 - first2)}} applications of the predicate and corresponding projections.
+
+However, if {{c|S1}} and {{c|S2}} both model {{lc|std::sized_sentinel_for}} their respective iterators, and {{c|last1 - first1 !{{=}} last2 - first2}} then no applications of the predicate are made (size mismatch is detected without looking at any elements).
+
+===Possible implementation===
+{{eq fun
+|1=
+struct equal_fn
+{
+  template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+           std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+           class Pred = ranges::equal_to,
+           class Proj1 = std::identity, class Proj2 = std::identity&gt;
+  requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+  constexpr bool
+      operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                 Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+  {
+      if constexpr (std::sized_sentinel_for&lt;S1, I1&gt; and std::sized_sentinel_for&lt;S2, I2&gt;)
+          if (std::ranges::distance(first1, last1) != std::ranges::distance(first2, last2))
+              return false;
+
+      for (; first1 != last1; ++first1, (void)++first2)
+          if (!std::invoke(pred, std::invoke(proj1, *first1), std::invoke(proj2, *first2)))
+              return false;
+      return true;
+  }
+
+  template&lt;ranges::input_range R1, ranges::input_range R2,
+           class Pred = ranges::equal_to,
+           class Proj1 = std::identity, class Proj2 = std::identity&gt;
+  requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                      Pred, Proj1, Proj2&gt;
+  constexpr bool
+      operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+  {
+      return (*this)(ranges::begin(r1), ranges::end(r1),
+                     ranges::begin(r2), ranges::end(r2),
+                     std::ref(pred), std::ref(proj1), std::ref(proj2));
+  }
+};
+
+inline constexpr equal_fn equal;
+}}
+
+===Example===
+{{example
+|The following code uses {{lc|ranges::equal}} to test if a string is a palindrome.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+constexpr bool is_palindrome(const std::string_view s)
+{
+    namespace views = std::views;
+    auto forward = s {{!}} views::take(s.size() / 2);
+    auto backward = s {{!}} views::reverse {{!}} views::take(s.size() / 2);
+    return std::ranges::equal(forward, backward);
+}
+
+void test(const std::string_view s)
+{
+    std::cout &lt;&lt; std::quoted(s) &lt;&lt; " is "
+              &lt;&lt; (is_palindrome(s) ? "" : "not ")
+              &lt;&lt; "a palindrome\n";
+}
+
+int main()
+{
+    test("radar");
+    test("hello");
+    static_assert(is_palindrome("ABBA") and not is_palindrome("AC/DC"));
+}
+|output=
+"radar" is a palindrome
+"hello" is not a palindrome
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc lexicographical_compare}}
+{{dsc inc|cpp/algorithm/ranges/dsc mismatch}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal_range}}
+{{dsc inc|cpp/utility/functional/dsc equal_to}}
+{{dsc inc|cpp/algorithm/dsc equal}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

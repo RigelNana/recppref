@@ -1,0 +1,128 @@
+{{cpp/title|condition_variable}}
+{{cpp/thread/condition_variable/navbar}}
+{{ddcl|header=condition_variable|since=c++11|1=
+class condition_variable;
+}}
+
+{{tt|std::condition_variable}} is a synchronization primitive used with a {{lc|std::mutex}} to block one or more threads until another thread both modifies a shared variable (the ''condition'') and notifies the {{tt|std::condition_variable}}.
+
+The thread that intends to modify the shared variable must:
+# Acquire a {{lc|std::mutex}} (typically via {{lc|std::lock_guard}}).
+# Modify the shared variable while the lock is owned.
+# Call {{lc|notify_one}} or {{lc|notify_all}} on the {{tt|std::condition_variable}} (can be done after releasing the lock).
+Even if the shared variable is atomic, it must be modified while owning the mutex to [https://stackoverflow.com/questions/38147825/ correctly] publish the modification to the waiting thread.
+
+Any thread that intends to wait on a {{tt|std::condition_variable}} must:
+# Acquire a {{c/core|std::unique_lock&lt;std::mutex&gt;}} on the mutex used to protect the shared variable.
+# Do one of the following:
+:# Check the condition, in case it was already updated and notified.
+:# Call {{lc|wait}}, {{lc|wait_for}}, or {{lc|wait_until}} on the {{tt|std::condition_variable}} (atomically releases the mutex and suspends thread execution until the condition variable is notified, a timeout expires, or a {{enwiki|Spurious wakeup|spurious wakeup}} occurs, then atomically acquires the mutex before returning).
+:# Check the condition and resume waiting if not satisfied.
+:: or:
+:# Use the predicated overload of {{lc|wait}}, {{lc|wait_for}}, and {{lc|wait_until}}, which performs the same three steps.
+
+{{tt|std::condition_variable}} works only with {{c/core|std::unique_lock&lt;std::mutex&gt;}}, which allows for maximal efficiency on some platforms. {{lc|std::condition_variable_any}} provides a condition variable that works with any {{named req|BasicLockable}} object, such as {{lc|std::shared_lock}}.
+
+Condition variables permit concurrent invocation of the {{lc|wait}}, {{lc|wait_for}}, {{lc|wait_until}}, {{lc|notify_one}} and {{lc|notify_all}} member functions.
+
+The class {{tt|std::condition_variable}} is a {{named req|StandardLayoutType}}. It is not {{named req|CopyConstructible}}, {{named req|MoveConstructible}}, {{named req|CopyAssignable}}, or {{named req|MoveAssignable}}.
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|native_handle_type}}|implementation-defined}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc constructor|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc destructor|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc operator{{=}}|condition_variable}}
+
+{{dsc h2|Notification}}
+{{dsc inc|cpp/thread/condition_variable/dsc notify_one|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc notify_all|condition_variable}}
+
+{{dsc h2|Waiting}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_until|condition_variable}}
+
+{{dsc h2|Native handle}}
+{{dsc inc|cpp/thread/condition_variable/dsc native handle|condition_variable}}
+{{dsc end}}
+
+===Example===
+{{example
+|{{tt|std::condition_variable}} is used in combination with a {{lc|std::mutex}} to facilitate inter-thread communication.
+|code=
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::mutex m;
+std::condition_variable cv;
+std::string data;
+bool ready = false;
+bool processed = false;
+
+void worker_thread()
+{
+    // wait until main() sends data
+    std::unique_lock lk(m);
+    cv.wait(lk, []{ return ready; });
+    
+    // after the wait, we own the lock
+    std::cout &lt;&lt; "Worker thread is processing data\n";
+    data += " after processing";
+    
+    // send data back to main()
+    processed = true;
+    std::cout &lt;&lt; "Worker thread signals data processing completed\n";
+    
+    // manual unlocking is done before notifying, to avoid waking up
+    // the waiting thread only to block again (see notify_one for details)
+    lk.unlock();
+    cv.notify_one();
+}
+
+int main()
+{
+    std::thread worker(worker_thread);
+    
+    data = "Example data";
+    // send data to the worker thread
+    {
+        std::lock_guard lk(m);
+        ready = true;
+        std::cout &lt;&lt; "main() signals data ready for processing\n";
+    }
+    cv.notify_one();
+    
+    // wait for the worker
+    {
+        std::unique_lock lk(m);
+        cv.wait(lk, []{ return processed; });
+    }
+    std::cout &lt;&lt; "Back in main(), data = " &lt;&lt; data &lt;&lt; '\n';
+    
+    worker.join();
+}
+|output=
+main() signals data ready for processing
+Worker thread is processing data
+Worker thread signals data processing completed
+Back in main(), data = Example data after processing
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc condition_variable_any}}
+{{dsc inc|cpp/thread/dsc mutex}}
+{{dsc inc|cpp/thread/dsc lock_guard}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

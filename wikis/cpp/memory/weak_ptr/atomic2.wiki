@@ -1,0 +1,174 @@
+{{cpp/title|atomic{{small|&lt;std::weak_ptr&gt;}}}}
+{{cpp/memory/weak_ptr/navbar}}
+{{ddcl|header=memory|since=c++20|
+template&lt; class T &gt; struct std::atomic&lt;std::weak_ptr&lt;T&gt;&gt;;
+}}
+
+The partial template specialization of {{lc|std::atomic}} for {{c|std::weak_ptr&lt;T&gt;}} allows users to manipulate weak_ptr objects atomically.
+
+If multiple threads of execution access the same {{lc|std::weak_ptr}} object without synchronization and any of those accesses uses a non-const member function of {{lc|weak_ptr}} then a data race will occur unless all such access is performed through an instance of {{c|std::atomic&lt;std::weak_ptr&gt;}}. 
+
+Associated {{tt|use_count}} increments are guaranteed to be part of the atomic operation. Associated {{tt|use_count}} decrements are sequenced after the atomic operation, but are not required to be part of it, except for the {{tt|use_count}} change when overriding {{tt|expected}} in a failed CAS. Any associated deletion and deallocation are sequenced after the atomic update step and are not part of the atomic operation.
+
+Note that the control block used by {{lc|std::weak_ptr}} and {{lc|std::shared_ptr}} is thread-safe: different non-atomic {{lc|std::weak_ptr}} objects can be accessed using mutable operations, such as {{c|1=operator=}} or {{tt|reset}}, simultaneously by multiple threads, even when these instances are copies or otherwise share the same control block internally.
+
+The type {{tt|T}} may be an incomplete type.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|value_type}}|{{c|std::weak_ptr&lt;T&gt;}}}}
+{{dsc end}}
+
+===Member functions===
+All non-specialized {{lc|std::atomic}} functions are also provided by this specialization, and no additional member functions.
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}atomic|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+constexpr atomic() noexcept = default;
+}}
+{{dcl|num=2|
+atomic(std::weak_ptr&lt;T&gt; desired) noexcept;
+}}
+{{dcl|num=3|1=
+atomic(const atomic&amp;) = delete;
+}}
+{{dcl end}}
+@1@ Initializes the underlying {{tt|weak_ptr&lt;T&gt;}} to default-constructed value.
+@2@ Initializes the underlying {{tt|weak_ptr&lt;T&gt;}} to a copy of {{tt|desired}}. As with any {{lc|std::atomic}} type, initialization is not an atomic operation.
+@3@ Atomic types are not copy/move constructible.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}operator{{=}}|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+void operator=(const atomic&amp;) = delete;
+}}
+{{dcl|num=2|1=
+void operator=(std::weak_ptr&lt;T&gt; desired) noexcept;
+}}
+{{dcl end}}
+@1@ Atomic types are not copy/move assignable.
+@2@ Value assignment, equivalent to {{c|store(desired)}}.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}is_lock_free|2=
+{{ddcl|
+bool is_lock_free() const noexcept;
+}}
+Returns true if the atomic operations on all objects of this type are lock-free, false otherwise.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}store|2=
+{{ddcl|1=
+void store(std::weak_ptr&lt;T&gt; desired,
+           std::memory_order order = std::memory_order_seq_cst) noexcept;
+}}
+Atomically replaces the value of {{c|*this}} with the value of {{tt|desired}} as if by {{c|p.swap(desired)}} where {{c|p}} is the underlying {{c|std::weak_ptr&lt;T&gt;}}. Memory is ordered according to {{tt|order}}. The behavior is undefined if {{tt|order}} is {{lc|std::memory_order_consume}}, {{lc|std::memory_order_acquire}}, or {{lc|std::memory_order_acq_rel}}.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}load|2=
+{{ddcl|1=
+std::weak_ptr&lt;T&gt; load(std::memory_order order = std::memory_order_seq_cst) const noexcept;
+}}
+Atomically returns a copy of the underlying {{c|std::weak_ptr&lt;T&gt;}}. Memory is ordered according to {{tt|order}}. The behavior is undefined if {{tt|order}} is {{lc|std::memory_order_release}} or {{lc|std::memory_order_acq_rel}}.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}operator std::weak_ptr&lt;T&gt;|2=
+{{ddcl|
+operator std::weak_ptr&lt;T&gt;() const noexcept;
+}}
+Equivalent to {{c|return load();}}.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}exchange|2=
+{{ddcl|1=
+std::weak_ptr&lt;T&gt; exchange(std::weak_ptr&lt;T&gt; desired,
+                          std::memory_order order = std::memory_order_seq_cst) noexcept;
+
+}}
+Atomically replaces the underlying {{c|std::weak_ptr&lt;T&gt;}} with {{tt|desired}} as if by {{c|p.swap(desired)}} where {{c|p}} is the underlying {{c|std::weak_ptr&lt;T&gt;}}, and returns a copy of the value that {{c|p}} had immediately before the swap. Memory is ordered according to {{tt|order}}. This is an atomic read-modify-write operation.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}compare_exchange_weak, compare_exchange_strong|2=
+{{dcl begin}}
+{{dcl|num=1|
+bool compare_exchange_strong(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                             std::memory_order success, std::memory_order failure) noexcept;
+}}
+{{dcl|num=2|
+bool compare_exchange_weak(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                           std::memory_order success, std::memory_order failure) noexcept;
+}}
+{{dcl|num=3|1=
+bool compare_exchange_strong(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                             std::memory_order order = std::memory_order_seq_cst) noexcept;
+}}
+{{dcl|num=4|1=
+bool compare_exchange_weak(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                           std::memory_order order = std::memory_order_seq_cst) noexcept;
+}}
+{{dcl end}}
+@1@ If the underlying {{c|std::weak_ptr&lt;T&gt;}} stores the same pointer value as {{tt|expected}} and shares ownership with it, or if both underlying and {{tt|expected}} are empty, assigns from {{tt|desired}} to the underlying {{c|std::weak_ptr&lt;T&gt;}}, returns {{c|true}}, and orders memory according to {{tt|success}}, otherwise assigns from the underlying {{c|std::weak_ptr&lt;T&gt;}} to {{tt|expected}}, returns {{c|false}}, and orders memory according to {{tt|failure}}. The behavior is undefined if {{tt|failure}} is {{lc|std::memory_order_release}} or {{lc|std::memory_order_acq_rel}}. On success, the operation is an atomic read-modify-write operation on {{c|*this}} and {{tt|expected}} is not accessed after the atomic update. On failure, the operation is an atomic load operation on {{c|*this}} and {{tt|expected}} is updated with the existing value read from the atomic object. This update to {{tt|expected}}'s use_count is part of this atomic operation, although the write itself (and any subsequent deallocation/destruction) is not required to be.
+@2@ Same as {{v|1}}, but may also fail spuriously.
+@3@ Equivalent to: {{c|return compare_exchange_strong(expected, desired, order, fail_order);}}, where {{tt|fail_order}} is the same as {{tt|order}} except that {{lc|std::memory_order_acq_rel}} is replaced by {{lc|std::memory_order_acquire}} and {{lc|std::memory_order_release}} is replaced by {{lc|std::memory_order_relaxed}}.
+@4@ Equivalent to: {{c|return compare_exchange_weak(expected, desired, order, fail_order);}}, where {{tt|fail_order}} is the same as {{tt|order}} except that {{lc|std::memory_order_acq_rel}} is replaced by {{lc|std::memory_order_acquire}} and {{lc|std::memory_order_release}} is replaced by {{lc|std::memory_order_relaxed}}.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}wait|2=
+{{ddcl|1=
+void wait(std::weak_ptr&lt;T&gt; old
+          std::memory_order order = std::memory_order_seq_cst) const noexcept;
+}}
+
+Performs an atomic waiting operation.
+
+Compares {{c|load(order)}} with {{tt|old}} and if they are equivalent then blocks until {{c|*this}} is notified by {{tt|notify_one()}} or {{tt|notify_all()}}. This is repeated until {{c|load(order)}} changes. This function is guaranteed to return only if value has changed, even if underlying implementation unblocks spuriously.
+
+Memory is ordered according to {{tt|order}}. The behavior is undefined if {{tt|order}} is {{lc|std::memory_order_release}} or {{lc|std::memory_order_acq_rel}}.
+
+Notes: two {{lc|std::weak_ptr}}s are equivalent if they store the same pointer and either share ownership or are both empty.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}notify_one|2=
+{{ddcl|1=
+void notify_one() noexcept;
+}}
+
+Performs an atomic notifying operation.
+
+If there is a thread blocked in atomic waiting operations (i.e. {{tt|wait()}}) on {{c|*this}}, then unblocks at least one such thread; otherwise does nothing.
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}notify_all|2=
+{{ddcl|1=
+void notify_all() noexcept;
+}}
+
+Performs an atomic notifying operation.
+
+Unblocks all threads blocked in atomic waiting operations (i.e. {{tt|wait()}}) on {{c|*this}}, if there are any; otherwise does nothing.
+}}
+
+===Member constants===
+The only standard {{lc|std::atomic}} member constant {{tt|is_always_lock_free}} is also provided by this specialization.
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}is_always_lock_free|2=
+{{ddcl|1=
+static constexpr bool is_always_lock_free = /*implementation-defined*/;
+}}
+}}
+
+===Example===
+{{example
+|code=
+|output=
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

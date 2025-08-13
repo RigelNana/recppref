@@ -1,0 +1,130 @@
+{{cpp/title|apply}}
+{{cpp/utility/navbar}}
+
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl rev multi
+|since1=c++17|dcl1=
+template&lt; class F, class Tuple &gt;
+constexpr decltype(auto) apply( F&amp;&amp; f, Tuple&amp;&amp; t );
+|since2=c++23|dcl2=
+template&lt; class F, tuple-like Tuple &gt;
+constexpr decltype(auto) apply( F&amp;&amp; f, Tuple&amp;&amp; t ) noexcept(/* see below */);
+}}
+{{dcl end}}
+
+Invoke the {{named req|Callable}} object {{c|f}} with the elements of {{c|t}} as arguments.
+
+Given the exposition-only function {{tti|apply-impl}} defined as follows:
+
+{{box|
+{{c/core|template&lt;class F,class Tuple, std::size_t... I&gt;}}&lt;br&gt;
+{{c/core|constexpr decltype(auto)}}&lt;br&gt;
+{{nbspt|4}}{{tti|apply-impl}}{{c/core|(F&amp;&amp; f, Tuple&amp;&amp; t, std::index_sequence&lt;I...&gt;) // exposition only}}&lt;br&gt;
+{{tt|{}}&lt;br&gt;
+{{nbspt|4}}{{c/core|return}}{{nbspt}}{{lti|cpp/utility/functional|INVOKE}}{{c/core|(std::forward&lt;F&gt;(f), std::get&lt;I&gt;(std::forward&lt;Tuple&gt;(t))...);}}&lt;br&gt;
+{{tt|}&lt;!----&gt;}}
+}}
+
+The effect is equivalent to:
+
+{{box|
+{{c/core|return}}{{nbspt}}{{tti|apply-impl}}{{c/core|(std::forward&lt;F&gt;(f), std::forward&lt;Tuple&gt;(t),}}&lt;br&gt;
+{{nbspt|18}}{{c/core|std::make_index_sequence&lt;}}&lt;br&gt;
+{{nbspt|22}}{{c/core|std::tuple_size_v&lt;std::decay_t&lt;Tuple&gt;&gt;&gt;{});}}
+}}.
+
+===Parameters===
+{{par begin}}
+{{par|f|{{named req|Callable}} object to be invoked}}
+{{par|t|tuple whose elements to be used as arguments to {{c|f}}}}
+{{par end}}
+
+===Return value===
+The value returned by {{c|f}}.
+
+===Exceptions===
+{{rrev multi|since2=c++23
+|rev1=(none)
+|rev2=
+{{noexcept|
+    noexcept(std::invoke(std::forward&lt;F&gt;(f),
+                         std::get&lt;Is&gt;(std::forward&lt;Tuple&gt;(t))...))
+}}
+
+where {{tt|Is...}} denotes the [[cpp/language/pack|pack]]:
+* {{c|0, 1, ..., std::tuple_size_v&lt;std::remove_reference_t&lt;Tuple&gt;&gt; - 1}}.
+}}
+
+===Notes===
+{{rev begin}}
+{{rev|until=c++23|
+{{tt|Tuple}} need not be {{lc|std::tuple}}, and instead may be anything that supports {{ltt std|cpp/utility/tuple/get}} and {{ltt std|cpp/utility/tuple_size}}; in particular, {{lc|std::array}} and {{lc|std::pair}} may be used.
+}}
+{{rev|since=c++23|
+{{tt|Tuple}} is constrained to be tuple-like, i.e. each type therein is required to be a specialization of {{lc|std::tuple}} or another type (such as {{lc|std::array}} and {{lc|std::pair}}) that models {{lti|cpp/utility/tuple/tuple-like}}.
+}}
+{{rev end}}
+
+{{feature test macro|__cpp_lib_apply|std=C++17|value=201603L|{{tt|std::apply}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+#include &lt;utility&gt;
+
+int add(int first, int second) { return first + second; }
+
+template&lt;typename T&gt;
+T add_generic(T first, T second) { return first + second; }
+
+auto add_lambda = [](auto first, auto second) { return first + second; };
+
+template&lt;typename... Ts&gt;
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::tuple&lt;Ts...&gt; const&amp; theTuple)
+{
+    std::apply
+    (
+        [&amp;os](Ts const&amp;... tupleArgs)
+        {
+            os &lt;&lt; '[';
+            std::size_t n{0};
+            ((os &lt;&lt; tupleArgs &lt;&lt; (++n != sizeof...(Ts) ? ", " : "")), ...);
+            os &lt;&lt; ']';
+        }, theTuple
+    );
+    return os;
+}
+
+int main()
+{
+    // OK
+    std::cout &lt;&lt; std::apply(add, std::pair(1, 2)) &lt;&lt; '\n';
+    
+    // Error: can't deduce the function type
+    // std::cout &lt;&lt; std::apply(add_generic, std::make_pair(2.0f, 3.0f)) &lt;&lt; '\n'; 
+    
+    // OK
+    std::cout &lt;&lt; std::apply(add_lambda, std::pair(2.0f, 3.0f)) &lt;&lt; '\n'; 
+    
+    // advanced example
+    std::tuple myTuple{25, "Hello", 9.31f, 'c'};
+    std::cout &lt;&lt; myTuple &lt;&lt; '\n';
+}
+|output=
+3
+5
+[25, Hello, 9.31, c]
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc make_tuple}}
+{{dsc inc|cpp/utility/tuple/dsc forward_as_tuple}}
+{{dsc inc|cpp/utility/dsc make_from_tuple}}
+{{dsc inc|cpp/utility/functional/dsc invoke}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

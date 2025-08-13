@@ -1,0 +1,205 @@
+{{title|Replacing text macros}}
+{{cpp/preprocessor/navbar}}
+The preprocessor supports text macro replacement. Function-like text macro replacement is also supported.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|#define}} {{spar optional|identifier replacement-list}}}}
+{{sdsc|num=2|{{ttb|#define}} {{spar sep|identifier}}{{ttb|(}}{{spar sep|parameters}}{{ttb|)}} {{spar optional|replacement-list}}}}
+{{sdsc|num=3|{{ttb|#define}} {{spar sep|identifier}}{{ttb|(}}{{spar sep|parameters}}{{ttb|, ...)}} {{spar optional|replacement-list}}|notes = {{mark since c++11}}}}
+{{sdsc|num=4|{{ttb|#define}} {{spar sep|identifier}}{{ttb|(...)}} {{spar optional|replacement-list}}|notes = {{mark since c++11}}}}
+{{sdsc|num=5|{{ttb|#undef}} {{spar|identifier}}}}
+{{sdsc end}}
+
+===Explanation===
+{{anchor|define directives}}
+===={{c/core|#define}} directives====
+The {{c/core|#define}} directives define the {{spar|identifier}} as macro, that is instruct the compiler to replace most successive occurrences of {{spar|identifier}} with {{spar|replacement-list}}, which will be additionally processed. Exceptions arise from the rules of {{rlp|replace#Scanning and Replacement|scanning and replacement}}. If the identifier is already defined as any type of macro, the program is ill-formed unless the definitions are identical.
+
+=====Object-like macros=====
+Object-like macros replace every occurrence of defined {{spar|identifier}} with {{spar|replacement-list}}. Version (1) of the {{c/core|#define}} directive behaves exactly like that.
+
+=====Function-like macros=====
+Function-like macros replace each occurrence of defined {{spar|identifier}} with {{spar|replacement-list}}, additionally taking a number of arguments, which then replace corresponding occurrences of any of the {{spar|parameters}} in the {{spar|replacement-list}}.
+
+The syntax of a function-like macro invocation is similar to the syntax of a function call: each instance of the macro name followed by a {{c|(}} as the next preprocessing token introduces the sequence of tokens that is replaced by the {{spar|replacement-list}}. The sequence is terminated by the matching {{c|)}} token, skipping intervening matched pairs of left and right parentheses.
+
+For version (2), the number of arguments must be the same as the number of parameters in macro definition. For versions (3,4), the number of arguments must not be less than the number of parameters ({{rev inl|since=c++20|not}} counting {{ttb|...}}). Otherwise the program is ill-formed. If the identifier is not in functional-notation, i.e. does not have parentheses after itself, it is not replaced at all.
+
+Version (2) of the {{c/core|#define}} directive defines a simple function-like macro.
+
+Version (3) of the {{c/core|#define}} directive defines a function-like macro with variable number of arguments. The additional arguments (called ''variable arguments'') can be accessed using {{tt|__VA_ARGS__}} identifier, which is then replaced with arguments, supplied with the identifier to be replaced.
+
+Version (4) of the {{c/core|#define}} directive defines a function-like macro with variable number of arguments, but no regular arguments. The arguments (called ''variable arguments'') can be accessed only with {{tt|__VA_ARGS__}} identifier, which is then replaced with arguments, supplied with the identifier to be replaced.
+
+{{rrev|since=c++20|
+For versions (3,4), {{spar|replacement-list}} may contain the token sequence {{ttb|__VA_OPT__(}}{{spar sep|content}}{{ttb|)}}, which is replaced by {{spar|content}} if {{tt|__VA_ARGS__}} is non-empty, and expands to nothing otherwise.
+
+{{source|1=
+#define F(...) f(0 __VA_OPT__(,) __VA_ARGS__)
+F(a, b, c) // replaced by f(0, a, b, c)
+F()        // replaced by f(0)
+
+#define G(X, ...) f(0, X __VA_OPT__(,) __VA_ARGS__)
+G(a, b, c) // replaced by f(0, a, b, c)
+G(a, )     // replaced by f(0, a)
+G(a)       // replaced by f(0, a)
+
+#define SDEF(sname, ...) S sname __VA_OPT__(= { __VA_ARGS__ })
+SDEF(foo);       // replaced by S foo;
+SDEF(bar, 1, 2); // replaced by S bar = { 1, 2 };
+}}
+}}
+
+Note: if an argument of a function-like macro includes commas that are not protected by matched pairs of left and right parentheses (most commonly found in template argument lists, as in {{c|assert(std::is_same_v&lt;int, int&gt;);}} or {{c|BOOST_FOREACH(std::pair&lt;int, int&gt; p, m)}}), the comma is interpreted as macro argument separator, causing a compilation failure due to argument count mismatch.
+
+=====Scanning and Replacement=====
+* Scanning keeps track of macros they replaced. If scan finds text matching such macro, it marks it "to be ignored" (all scans will ignore it). This prevents recursion.
+* If scanning found function-like macro, arguments are scanned before put inside {{spar|replacement-list}}. Except {{c/core|#}} and {{c/core|##}} operators take argument without scan.
+* After macro was replaced, result text is scanned.
+
+Note, it is possible to define pseudo recursive macro:  
+{{example|code=
+#define EMPTY
+#define SCAN(x)     x
+#define EXAMPLE_()  EXAMPLE
+#define EXAMPLE(n)  EXAMPLE_ EMPTY()(n-1) (n)
+EXAMPLE(5)
+SCAN(EXAMPLE(5))
+|output=
+EXAMPLE_ ()(5 -1) (5)
+EXAMPLE_ ()(5 -1 -1) (5 -1) (5)
+}}
+
+====Reserved macro names====
+A translation unit that [[cpp/standard library#Including headers|includes a standard library header]] may not {{c/core|#define}} or {{c/core|#undef}} names declared in any [[cpp/header|standard library header]].
+
+A translation unit that uses any part of the standard library is not allowed to {{c/core|#define}} or {{c/core|#undef}} names lexically identical to:
+* [[cpp/keyword|keywords]]
+{{rrev|since=c++11|
+* [[cpp/keyword|identifiers with special meaning]]
+* [[cpp/language/attributes#Standard attributes|any standard attribute token]]{{rev inl|since=c++20|, except that {{ltt|cpp/language/attributes/likely}} and {{ltt|cpp/language/attributes/likely|unlikely}} may be defined as function-like macros}}
+}}
+
+Otherwise, the behavior is undefined.
+
+{{anchor|hash operators}}
+===={{c/core|#}} and {{c/core|##}} operators====
+In function-like macros, a {{c/core|#}} operator before an identifier in the {{spar|replacement-list}} runs the identifier through parameter replacement and encloses the result in quotes, effectively creating a string literal. In addition, the preprocessor adds backslashes to escape the quotes surrounding embedded string literals, if any, and doubles the backslashes within the string as necessary. All leading and trailing whitespace is removed, and any sequence of whitespace in the middle of the text (but not inside embedded string literals) is collapsed to a single space. This operation is called "stringification". If the result of stringification is not a valid string literal, the behavior is undefined.
+
+{{rrev|since=c++11|
+When {{c/core|#}} appears before {{tt|__VA_ARGS__}}, the entire expanded {{tt|__VA_ARGS__}} is enclosed in quotes:
+{{source|1=
+#define showlist(...) puts(#__VA_ARGS__)
+showlist();            // expands to puts("")
+showlist(1, "x", int); // expands to puts("1, \"x\", int")
+}}
+}}
+
+A {{c/core|##}} operator between any two successive identifiers in the {{spar|replacement-list}} runs parameter replacement on the two identifiers (which are not macro-expanded first) and then concatenates the result. This operation is called "concatenation" or "token pasting". Only tokens that form a valid token together may be pasted: identifiers that form a longer identifier, digits that form a number, or operators {{tt|+}} and {{tt|1==}} that form a {{tt|1=+=}}. A comment cannot be created by pasting {{tt|/}} and {{tt|*}} because comments are removed from text before macro substitution is considered. If the result of concatenation is not a valid token, the behavior is undefined.
+
+Note: some compilers offer an extension that allows {{c/core|##}} to appear after a comma and before {{tt|__VA_ARGS__}}, in which case the {{c/core|##}} does nothing when the variable arguments are present, but removes the comma when the variable arguments are not present: this makes it possible to define macros such as {{c|fprintf (stderr, format, ##__VA_ARGS__)}}. {{rev inl|since=c++20|This can also be achieved in a standard manner using {{tt|__VA_OPT__}}, such as {{c|fprintf (stderr, format __VA_OPT__(, ) __VA_ARGS__)}}.}}
+
+===={{c/core|#undef}} directive====
+The {{c/core|#undef}} directive undefines the {{spar|identifier}}, that is cancels previous definition of the {{spar|identifier}} by {{c/core|#define}} directive. If the identifier does not have associated macro, the directive is ignored.
+
+===Predefined macros===
+The following macro names are predefined in every translation unit:
+{{dsc begin}}
+{{dsc macro const|__cplusplus|nolink=true|denotes the version of C++ standard that is being used, expands to value 
+* {{c|199711L}}{{mark until c++11}}, 
+* {{c|201103L}}{{mark c++11}},
+* {{c|201402L}}{{mark c++14}},
+* {{c|201703L}}{{mark c++17}},
+* {{c|202002L}}{{mark c++20}}, or
+* {{c|202302L}}{{mark c++23}}}}
+{{dsc macro const|__STDC_HOSTED__|nolink=true|expands to the integer constant {{c|1}} if the implementation is hosted (runs under an OS), {{c|0}} if freestanding (runs without an OS)|notes={{mark c++11}}}}
+{{dsc macro const|__FILE__|nolink=true|expands to the name of the current file, as a character string literal, can be changed by the {{rlpt|line|#line}} directive}}
+{{dsc macro const|__LINE__|nolink=true|expands to the line number of the current [[cpp/language/translation phases#Phase 2|physical source line]], an integer constant, can be changed by the {{rlpt|line|#line}} directive}}
+{{dsc macro const|__DATE__|nolink=true|expands to the date of translation, a character string literal of the form {{c|"Mmm dd yyyy"}}. The first character of {{c|"dd"}} is a space if the day of the month is less than 10. The name of the month is as if generated by {{c|std::asctime()}}}}
+{{dsc macro const|__TIME__|nolink=true|expands to the time of translation, a character string literal of the form {{c|"hh:mm:ss"}} }}
+{{dsc macro const|__STDCPP_DEFAULT_NEW_ALIGNMENT__|nolink=true|expands to an {{lc|std::size_t}} literal whose value is the alignment guaranteed by a call to alignment-unaware [[cpp/memory/new/operator new|operator new]] (larger alignments will be passed to alignment-aware overload, such as {{c|operator new(std::size_t, std::align_val_t)}})|notes={{mark c++17}}}}
+{{dsc macro const|__STDCPP_­BFLOAT16_­T__&lt;br&gt;__STDCPP_­FLOAT16_­T__&lt;br&gt;__STDCPP_FLOAT32_T__&lt;br&gt;__STDCPP_FLOAT64_T__&lt;br&gt;__STDCPP_FLOAT128_T__|nolink=true|expands to {{c|1}} if and only if the implementation supports corresponding [[cpp/types/floating-point|extended floating-point type]]|notes={{mark c++23}}}}
+{{dsc end}}
+
+The following additional macro names may be predefined by the implementations:
+{{dsc begin}}
+{{dsc macro const|__STDC__|nolink=true|implementation-defined value, if present, typically used to indicate C conformance}}
+{{dsc macro const|__STDC_VERSION__|nolink=true|implementation-defined value, if present|notes={{mark c++11}}}}
+{{dsc macro const|__STDC_ISO_10646__|nolink=true|{{rrev multi|since2=c++23|rev1=expands to an integer constant of the form {{c|yyyymmL}}, if {{c/core|wchar_t}} uses Unicode, the date indicates the latest revision of Unicode supported|rev2=implementation-defined value, if present}}|notes={{mark c++11}}}}
+{{dsc macro const|__STDC_MB_MIGHT_NEQ_WC__|nolink=true|expands to {{c|1}} if {{c|1='x' == L'x'}} might be false for a member of the basic character set, such as on EBCDIC-based systems that use Unicode for {{c/core|wchar_t}}|notes={{mark c++11}}&lt;!-- per CWG 630 --&gt;}}
+{{dsc macro const|__STDCPP_THREADS__|nolink=true|expands to {{c|1}} if the program can have more than one thread of execution|notes={{mark c++11}}}}
+{{dsc break}}
+{{dsc macro const|__STDCPP_STRICT_POINTER_SAFETY__|nolink=true|notes={{mark c++11}}{{mark until c++23|removed=yes}}|expands to {{c|1}} if the implementation has strict {{lc|std::pointer_safety}}}}
+{{dsc end}}
+
+The values of these macros (except for {{tt|__FILE__}} and {{tt|__LINE__}}) remain constant throughout the translation unit. Attempts to redefine or undefine these macros result in undefined behavior.
+
+{{rrev|since=c++20|
+====Language feature-testing macros====
+The standard defines a set of preprocessor macros corresponding to C++ language features introduced in C++11 or later. They are intended as a simple and portable way to detect the presence of said features.
+
+See [[cpp/feature test|Feature testing]] for details.
+}}
+
+
+{{rrev|since=c++11|
+===Notes===
+The [[cpp/language/function#func|function-local predefined variable {{c|__func__}}]] is not a predefined macro, but it is usually used together with {{c|__FILE__}} and {{c|__LINE__}}, e.g. by {{lc|assert}}.
+}}
+
+===Example===
+{{example|code=
+#include &lt;iostream&gt;
+
+// Make function factory and use it
+#define FUNCTION(name, a) int fun_##name() { return a; }
+
+FUNCTION(abcd, 12)
+FUNCTION(fff, 2)
+FUNCTION(qqq, 23)
+
+#undef FUNCTION
+#define FUNCTION 34
+#define OUTPUT(a) std::cout &lt;&lt; "output: " #a &lt;&lt; '\n'
+
+// Using a macro in the definition of a later macro
+#define WORD "Hello "
+#define OUTER(...) WORD #__VA_ARGS__
+
+int main()
+{
+    std::cout &lt;&lt; "abcd: " &lt;&lt; fun_abcd() &lt;&lt; '\n';
+    std::cout &lt;&lt; "fff: " &lt;&lt; fun_fff() &lt;&lt; '\n';
+    std::cout &lt;&lt; "qqq: " &lt;&lt; fun_qqq() &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; FUNCTION &lt;&lt; '\n';
+    OUTPUT(million); //note the lack of quotes
+    
+    std::cout &lt;&lt; OUTER(World) &lt;&lt; '\n';
+    std::cout &lt;&lt; OUTER(WORD World) &lt;&lt; '\n';
+}
+|output=
+abcd: 12
+fff: 2
+qqq: 23
+34
+output: million
+Hello World
+Hello WORD World
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2908|std=C++98|before=it was unclear whether {{tt|__LINE__}} expands to the current&lt;br&gt;physical line number or the current logical line number|after=expands to the current&lt;br&gt;physical line number}}
+{{dr list item|wg=lwg|dr=294|std=C++98|before=a translation unit that includes a standard library header could contain&lt;br&gt;macros that define names declared in other standard library headers|after=prohibited}}
+{{dr list item|paper=P2621R2|std=C++23|before=universal character names were not allowed&lt;br&gt;to be formed by token concatenation|after=allowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see cpp|cpp/symbol index/macro|Macro Symbol Index|nomono=true}}
+{{dsc see c|c/preprocessor/replace|Replacing text macros|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,153 @@
+{{cpp/title|generator}}
+{{cpp/coroutine/generator/navbar}}
+{{dcl begin}}
+{{dcl header|generator}}
+{{dcl|num=1|since=c++23|1=
+template&lt;
+    class Ref,
+    class V = void,
+    class Allocator = void &gt;
+class generator
+    : public ranges::view_interface&lt;generator&lt;Ref, V, Allocator&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace pmr {
+    template&lt; class Ref, class V = void &gt;
+    using generator =
+        std::generator&lt;Ref, V, std::pmr::polymorphic_allocator&lt;&gt;&gt;;
+}
+}}
+{{dcl end}}
+
+@1@ The class template {{tt|std::generator}} presents a {{lconcept|view}} of the elements yielded by the evaluation of a {{lt|cpp/language/coroutines|coroutine}}.
+
+@2@ Convenience alias template for the {{tt|generator}} using the {{lt|cpp/memory/polymorphic allocator}}.
+
+A {{tt|std::generator}} generates a sequence of elements by repeatedly resuming the coroutine from which it was returned.
+Each time a {{c/core|co_yield}} statement is evaluated, the coroutine produces one element of the sequence.
+When the {{c/core|co_yield}} statement is of the form {{c|co_yield ranges::elements_of(rng)}}, each element of the {{lconcept|range}} {{c|rng}} is successively produced as an element of the sequence.
+
+{{tt|std::generator}} models {{lconcept|view}} and {{lconcept|input_range}}.
+
+The behavior of a program that adds a specialization for {{tt|std::generator}} is undefined.
+
+===Template parameters===
+{{par begin}}
+{{par|Ref|the reference type ({{lc|ranges::range_reference_t}}) of the generator. If {{tt|V}} is {{c/core|void}}, both the reference type and the value type are inferred from {{tt|Ref}}}}
+{{par|V|the value type ({{lc|ranges::range_value_t}}) of the generator, or {{c/core|void}}}}
+{{par|Allocator|an allocator type or {{c/core|void}}}}
+{{par end}}
+
+If {{tt|Allocator}} is not {{c/core|void}}, then the behavior is undefined if {{tt|Allocator}} does not meet the {{named req|Allocator}} requirements.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem type|value|private=yes|{{c/core|std::conditional_t&lt;std::is_void_v&lt;V&gt;, std::remove_cvref_t&lt;{{void}}Ref&gt;, V&gt;;}}}}
+{{dsc expos mem type|reference|private=yes|{{c/core|std::conditional_t&lt;std::is_void_v&lt;V&gt;, Ref&amp;&amp;, Ref&gt;;}}}}
+{{dsc|{{anchor|yielded}}{{tt|yielded}}|{{box/core|{{c/core|std::conditional_t&lt;std::is_reference_v&lt;}}{{tti|reference}}{{sep}}{{c/core|&gt;,}}{{nbspt|1}}{{tti|reference}}{{c/core|, const}}{{nbspt|1}}{{tti|reference}}{{sep}}{{c/core|&amp;&gt;}}}}}}
+{{dsc end}}
+
+{{par begin}}
+{{par hreq}}
+{{par req|{{c/core|std::allocator_traits&lt;Allocator&gt;::pointer}} is a pointer type.}}
+{{par req|{{tti|value}} is a cv-unqualified object type.}}
+{{par req|{{tti|reference}} is either a reference type, or a cv-unqualified object type that models {{lconcept|copy_constructible}}.}}
+{{par req|Let {{tti|RRef}} denote {{box/core|{{c/core|std::remove_reference_t&lt;}}{{tti|reference}}{{sep}}{{c/core|&gt;&amp;&amp;}}}}, if {{tti|reference}} is a reference type, and {{tti|reference}} otherwise.
+* {{box/core|{{c/core|std::common_reference_with&lt;}}{{tti|reference}}{{sep}}{{c/core|&amp;&amp;,}}{{nbspt|1}}{{tti|value}}{{sep}}{{c/core|&amp;&gt;}}}} is modeled.
+* {{box/core|{{c/core|std::common_reference_with&lt;}}{{tti|reference}}{{sep}}{{c/core|&amp;&amp;,}}{{nbspt|1}}{{tti|RRef}}{{sep}}{{c/core|&amp;&amp;&gt;}}}} is modeled.
+* {{box/core|{{c/core|std::common_reference_with&lt;}}{{tti|RRef}}{{sep}}{{c/core|&amp;&amp;, const}}{{nbspt|1}}{{tti|value}}{{sep}}{{c/core|&amp;&gt;}}}} is modeled.
+}}
+{{par end}}
+
+The program is ill-formed if any of these type requirements is not satisfied.
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Definition}}
+{{dsc expos mem obj|active_|id=active|private=yes|
+Internally, each active instance of {{tt|std::generator}} is associated with a stack (handled as if by object of type {{c/core|std::unique_ptr&lt;std::stack&lt;std::coroutine_handle&lt;&gt;&gt;&gt;}}).
+* When {{rlt|begin}} is called, a new stack is created and the generator is added to the stack.
+* When {{c|co_yield ranges::elements_of(rng)}} is evaluated in a generator body, {{c|rng}} is converted to a generator and added to the stack that contains the enclosing generator.
+* When a generator iterator is {{rl|iterator#increment|incremented}}, the coroutine at the top of the associated stack is resumed.
+* When a generator finishes (i.e. when {{l2tt|cpp/coroutine/generator/promise_type/final_suspend}} is called), it is removed from the stack.}}
+{{dsc expos mem obj|coroutine_|id=coroutine|private=yes|a handle of type {{c/core|std::coroutine_handle&lt;promise_type&gt;}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/coroutine/generator/dsc constructor}}
+{{dsc inc|cpp/coroutine/generator/dsc destructor}}
+{{dsc inc|cpp/coroutine/generator/dsc operator{{=}}}}
+{{dsc inc|cpp/coroutine/generator/dsc begin}}
+{{dsc inc|cpp/coroutine/generator/dsc end}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|front=invalid|back=invalid|data=invalid|size=invalid|operator[]=invalid}}
+{{dsc end}}
+
+===Nested classes===
+{{dsc begin}}
+{{dsc mem class|cpp/coroutine/generator/promise_type|the promise type}}
+{{dsc expos mem class|cpp/coroutine/generator/iterator|the iterator type}}
+{{dsc end}}
+
+===Notes===
+{{feature test macro|value=202207L|std=C++23|__cpp_lib_generator|{{ttt|std::generator}} &amp;ndash; synchronous {{rlp|/|coroutine}} generator for {{lt|cpp/ranges}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;generator&gt;
+#include &lt;iostream&gt;
+
+template&lt;typename T&gt;
+struct Tree
+{
+    T value;
+    Tree *left{}, *right{};
+
+    std::generator&lt;const T&amp;&gt; traverse_inorder() const
+    {
+        if (left)
+            co_yield std::ranges::elements_of(left-&gt;traverse_inorder());
+
+        co_yield value;
+
+        if (right)
+            co_yield std::ranges::elements_of(right-&gt;traverse_inorder());
+    }
+};
+
+int main()
+{
+    Tree&lt;char&gt; tree[]
+    {
+                                    {'D', tree + 1, tree + 2},
+        //                            │
+        //            ┌───────────────┴────────────────┐
+        //            │                                │
+                    {'B', tree + 3, tree + 4},       {'F', tree + 5, tree + 6},
+        //            │                                │
+        //  ┌─────────┴─────────────┐      ┌───────────┴─────────────┐
+        //  │                       │      │                         │
+          {'A'},                  {'C'}, {'E'},                    {'G'}
+    };
+
+    for (char x : tree-&gt;traverse_inorder())
+        std::cout &lt;&lt; x &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+A B C D E F G
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Range generators|id=coro.generator|section=26.8}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/coroutine/dsc noop_coroutine}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

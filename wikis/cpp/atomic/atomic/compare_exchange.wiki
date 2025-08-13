@@ -1,0 +1,202 @@
+{{cpp/atomic/atomic/title|compare_exchange_weak|compare_exchange_strong}}
+{{cpp/atomic/atomic/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order success, 
+                            std::memory_order failure ) noexcept;
+}}
+{{dcl|num=2|since=c++11|
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order success, 
+                            std::memory_order failure ) volatile noexcept;
+}}
+{{dcl|num=3|since=c++11|1=
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order order =
+                                std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=4|since=c++11|1=
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order order =
+                                std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl|num=5|since=c++11|
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order success, 
+                              std::memory_order failure ) noexcept;
+}}
+{{dcl|num=6|since=c++11|
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order success, 
+                              std::memory_order failure ) volatile noexcept;
+}}
+{{dcl|num=7|since=c++11|1=
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order order = 
+                                  std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=8|since=c++11|1=
+bool compare_exchange_strong
+    ( T&amp; expected, T desired,
+      std::memory_order order = std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl end}}
+
+Atomically compares the {{rev inl|until=c++20|[[cpp/language/object|object representation]]}}{{rev inl|since=c++20|[[cpp/language/object|value representation]]}} of {{c|*this}} with that of {{c|expected}}. If those are bitwise-equal, replaces the former with {{c|desired}} (performs read-modify-write operation). Otherwise, loads the actual value stored in {{c|*this}} into {{c|expected}} (performs load operation).
+
+{|class="wikitable" style="text-align: center;"
+!rowspan=2|{{nbsp}}Overloads{{nbsp}}
+!colspan=2|Memory model for
+|-
+!{{nbsp}}read&amp;#8209;modify&amp;#8209;write{{nbsp}}operation{{nbsp}}
+!load operation
+|-
+|{{v|1,2,5,6}}
+|{{c|success}}
+|{{c|failure}}
+|-
+|{{v|3,4,7,8}}
+|{{c|order}}
+|
+* {{c|std::memory_order_acquire}} if&lt;br&gt;{{c|order}} is {{c|std::memory_order_acq_rel}}
+* {{c|std::memory_order_relaxed}} if&lt;br&gt;{{c|order}} is {{c|std::memory_order_release}}
+* otherwise {{c|order}}
+|}
+
+If {{c|failure}}{{rev inl|until=c++17| is stronger than {{c|success}} or}} is one of {{c|std::memory_order_release}} and {{c|std::memory_order_acq_rel}}, the behavior is undefined.
+
+{{rrev|since=c++20|
+It is deprecated if {{c|std::atomic&lt;T&gt;::is_always_lock_free}} is {{c|false}} and any {{c/core|volatile}} overload participates in overload resolution.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|expected|reference to the value expected to be found in the atomic object}}
+{{par|desired|the value to store in the atomic object if it is as expected}}
+{{par|success|the memory synchronization ordering for the read-modify-write operation if the comparison succeeds}}
+{{par|failure|the memory synchronization ordering for the load operation if the comparison fails}}
+{{par|order|the memory synchronization ordering for both operations}}
+{{par end}}
+
+===Return value===
+{{c|true}} if the underlying atomic value was successfully changed, {{c|false}} otherwise.
+
+===Notes===
+The comparison and copying are bitwise (similar to {{lc|std::memcmp}} and {{lc|std::memcpy}}); no constructor, assignment operator, or comparison operator are used.
+
+{{tt|compare_exchange_weak}} is allowed to fail spuriously, that is, acts as if {{c|1=*this != expected}} even if they are equal. When a compare-and-exchange is in a loop, {{tt|compare_exchange_weak}} will yield better performance on some platforms.
+
+When {{tt|compare_exchange_weak}} would require a loop and {{tt|compare_exchange_strong}} would not, {{tt|compare_exchange_strong}} is preferable unless the object representation of {{tt|T}} may include {{rev inl|until=c++20|padding bits,}} trap bits, or offers multiple object representations for the same value (e.g. floating-point NaN). In those cases, {{tt|compare_exchange_weak}} typically works because it quickly converges on some stable object representation.
+
+For a union with bits that participate in the value representations of some members but not the others, compare-and-exchange might always fail because such padding bits have indeterminate values when they do not participate in the value representation of the active member.
+
+{{rrev|since=c++20|1=
+Padding bits that never participate in an object's value representation are ignored.
+}}
+
+===Example===
+{{example
+|Compare-and-exchange operations are often used as basic building blocks of {{enwiki|Non-blocking algorithm|lock-free}} data structures.
+|code=
+#include &lt;atomic&gt;
+
+template&lt;typename T&gt;
+struct node
+{
+    T data;
+    node* next;
+    node(const T&amp; data) : data(data), next(nullptr) {}
+};
+
+template&lt;typename T&gt;
+class stack
+{
+    std::atomic&lt;node&lt;T&gt;*&gt; head;
+public:
+    void push(const T&amp; data)
+    {
+        node&lt;T&gt;* new_node = new node&lt;T&gt;(data);
+        
+        // put the current value of head into new_node-&gt;next
+        new_node-&gt;next = head.load(std::memory_order_relaxed);
+        
+        // now make new_node the new head, but if the head
+        // is no longer what's stored in new_node-&gt;next
+        // (some other thread must have inserted a node just now)
+        // then put that new head into new_node-&gt;next and try again
+        while (!head.compare_exchange_weak(new_node-&gt;next, new_node,
+                                           std::memory_order_release,
+                                           std::memory_order_relaxed))
+            ; // the body of the loop is empty
+
+// Note: the above use is not thread-safe in at least 
+// GCC prior to 4.8.3 (bug 60272), clang prior to 2014-05-05 (bug 18899)
+// MSVC prior to 2014-03-17 (bug 819819). The following is a workaround:
+//      node&lt;T&gt;* old_head = head.load(std::memory_order_relaxed);
+//      do
+//      {
+//          new_node-&gt;next = old_head;
+//      }
+//      while (!head.compare_exchange_weak(old_head, new_node,
+//                                         std::memory_order_release,
+//                                         std::memory_order_relaxed));
+    }
+};
+
+int main()
+{
+    stack&lt;int&gt; s;
+    s.push(1);
+    s.push(2);
+    s.push(3);
+}
+}}
+
+{{example
+|Demonstrates how {{tt|std::compare_exchange_strong}} either changes the value of the atomic variable or the variable used for comparison.{{todo|more practical use of the strong CAS would be nice, such as where Concurrency in Action uses it}}
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+
+std::atomic&lt;int&gt; ai;
+
+int tst_val = 4;
+int new_val = 5;
+bool exchanged = false;
+
+void valsout()
+{
+    std::cout &lt;&lt; "ai = " &lt;&lt; ai
+	      &lt;&lt; "  tst_val = " &lt;&lt; tst_val
+	      &lt;&lt; "  new_val = " &lt;&lt; new_val
+	      &lt;&lt; "  exchanged = " &lt;&lt; std::boolalpha &lt;&lt; exchanged
+	      &lt;&lt; '\n';
+}
+
+int main()
+{
+    ai = 3;
+    valsout();
+    
+    // tst_val != ai   ==&gt;  tst_val is modified
+    exchanged = ai.compare_exchange_strong(tst_val, new_val);
+    valsout();
+    
+    // tst_val == ai   ==&gt;  ai is modified
+    exchanged = ai.compare_exchange_strong(tst_val, new_val);
+    valsout();
+}
+|output=
+ai = 3  tst_val = 4  new_val = 5  exchanged = false
+ai = 3  tst_val = 3  new_val = 5  exchanged = false
+ai = 5  tst_val = 3  new_val = 5  exchanged = true
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_compare_exchange}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

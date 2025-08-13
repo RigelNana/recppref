@@ -1,0 +1,121 @@
+{{cpp/io/basic_stringbuf/title|underflow }}
+{{cpp/io/basic_stringbuf/navbar}}
+{{ddcl|
+protected:
+virtual int_type underflow()
+}}
+
+Reads the next character from the get area of the buffer.
+
+Specifically:
+
+@1@ If the input sequence has a read position available ({{c|egptr() &gt; gptr()}}), returns {{c|Traits::to_int_type(*gptr())}}
+
+@2@ Otherwise, if {{c|pptr() &gt; egptr()}} (some characters were inserted into the stream since the last time {{lc|overflow()}} changed {{lc|egptr()}}) then extends the end of the get area to include the most recently inserted characters, by changing {{lc|egptr()}} to equal {{lc|pptr()}}, and then returns {{c|Traits::to_int_type(*gptr())}}
+
+@3@ Otherwise, returns {{c|Traits::eof()}}.
+
+Any character in the buffer which has been initialized, regardless of whether it originated from the string passed in the constructor or was appended by {{lc|overflow()}}, is considered to be part of the input sequence.
+
+===Parameters===
+(none)
+
+===Return value===
+{{c|Traits::to_int_type(*gptr())}} (the next character to read in the get area) in case of success, or {{c|Traits::eof()}} in case of failure.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+struct mybuf : std::stringbuf
+{
+    mybuf(const std::string&amp; new_str,
+          std::ios_base::openmode which = std::ios_base::in {{!}} std::ios_base::out)
+        : std::stringbuf(new_str, which) {}
+
+    int_type overflow(int_type c)
+    {
+        std::cout &lt;&lt; "Before overflow():  get area size is " &lt;&lt; egptr() - eback()
+                  &lt;&lt; ", the put area size is " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        int_type rc = std::stringbuf::overflow(c);
+        std::cout &lt;&lt; "After overflow():   get area size is " &lt;&lt; egptr() - eback()
+                  &lt;&lt; ", put area size is " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        return rc;
+    }
+
+    int_type underflow()
+    {
+        std::cout &lt;&lt; "Before underflow(): get area size is " &lt;&lt; egptr() - eback()
+                  &lt;&lt; ", put area size is " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        int_type ch = std::stringbuf::underflow();
+        std::cout &lt;&lt; "After underflow():  get area size is " &lt;&lt; egptr() - eback()
+                  &lt;&lt; ", put area size is " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+
+        if (ch == EOF)
+            std::cout &lt;&lt; "underflow() returns EOF\n";
+        else
+            std::cout &lt;&lt; "underflow() returns '" &lt;&lt; char(ch) &lt;&lt; "'\n";
+        return ch;
+    }
+};
+
+int main()
+{
+    mybuf sbuf("123"); // read-write stream
+    std::iostream stream(&amp;sbuf);
+    int n;
+    stream &gt;&gt; n; // calls sgetc() four times
+                 // three calls return the characters '1', '2', '3'
+                 // the fourth call, gptr() == egptr() and underflow() is called
+                 // underflow returns EOF
+    std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; '\n';
+    stream.clear(); // clear the eofbit
+
+    stream &lt;&lt; "123456"; // sputc() is called 6 times
+                        // first three calls store "123" in the existing buffer
+                        // 4th call finds that pptr() == epptr() and calls overflow()
+                        // overflow() grows the buffer and sets egptr() to 4
+                        // 5th and 6th calls store '5' and '6', advancing pptr()
+
+    stream &gt;&gt; n; // calls sgetc() 4 times
+                 // 1st call returns the '4' that was made available by overflow()
+                 // on the 2nd call, egptr() == egptr() and underflow() is called
+                 // underflow advances egptr() to equal pptr() (which is 6)
+                 // 3rd sgetc() returns '6'
+                 // 4th sgetc() finds gptr() == egptr(), calls underflow()
+                 // underflow() returns EOF
+
+    std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; '\n';
+}
+|p=true
+|output=
+Before underflow(): get area size is 3, put area size is 15
+After underflow():  get area size is 3, put area size is 15
+underflow() returns EOF
+n = 123
+Before underflow(): get area size is 3, put area size is 15
+After underflow():  get area size is 6, put area size is 15
+underflow() returns '4'
+Before underflow(): get area size is 6, put area size is 15
+After underflow():  get area size is 6, put area size is 15
+underflow() returns EOF
+n = 456
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=432|std=C++98|before=it was unclear whether characters appended by {{lc|overflow()}}&lt;br&gt;are considered to be part of the input sequence|after=made clear}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc underflow}}
+{{dsc inc|cpp/io/basic_filebuf/dsc underflow}}
+{{dsc inc|cpp/io/strstreambuf/dsc underflow}}
+{{dsc inc|cpp/io/basic_streambuf/dsc sgetc}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

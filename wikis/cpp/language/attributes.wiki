@@ -1,0 +1,129 @@
+{{title|Attribute specifier sequence {{mark since c++11}}}}
+{{cpp/language/attributes/navbar}}
+
+Introduces implementation-defined attributes for types, objects, code, etc.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|notes={{mark since c++11}}|1=
+{{ttb|[&lt;!----&gt;[}} {{spar|attribute-list}} {{ttb|]&lt;!----&gt;]}}
+}}
+{{sdsc|notes={{mark since c++17}}|1=
+{{ttb|[&lt;!----&gt;[}} {{ttb|using}} {{spar|attribute-namespace}} {{ttb|:}} {{spar|attribute-list}} {{ttb|]&lt;!----&gt;]}}
+}}
+{{sdsc end}}
+where {{spar|attribute-list}} is a comma-separated sequence of zero or more {{spar sep|attribute}}s (possibly ending with an ellipsis {{ttb|...}} indicating a {{rlp|parameter pack|pack expansion}}) 
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|identifier}}}}
+{{sdsc|num=2|{{spar|attribute-namespace}} {{ttb|::}} {{spar|identifier}}}}
+{{sdsc|num=3|{{spar|identifier}} {{ttb|(}} {{spar optional|argument-list}} {{ttb|)}}}}
+{{sdsc|num=4|{{spar|attribute-namespace}} {{ttb|::}} {{spar|identifier}} {{ttb|(}} {{spar optional|argument-list}} {{ttb|)}}}}
+{{sdsc end}}
+where {{spar|attribute-namespace}} is an {{spar|identifier}} and {{spar|argument-list}} is a sequence of tokens where parentheses, brackets and braces are balanced ({{spar|balanced-token-seq}}).
+@1@ Simple attribute, such as {{c|[[noreturn]]}}.
+@2@ Attribute with a namespace, such as {{c|[[gnu::unused]]}}.
+@3@ Attribute with arguments, such as {{c|[[deprecated("because")]]}}.
+@4@ Attribute with both a namespace and an argument list.
+
+{{rrev|since=c++17|
+If {{tt|using namespace:}} appears in the beginning of an attribute list, no other attributes in the attribute list can specify a namespace: the namespace specified in a using applies to them all:
+{{source|1=
+[[using CC: opt(1), debug]] // same as [[CC::opt(1), CC::debug]]
+[[using CC: CC::opt(1)]] // error: cannot combine using and scoped attribute
+}}
+}}
+
+===Explanation===
+Attributes provide the unified standard syntax for implementation-defined language extensions, such as the GNU and IBM language extensions {{tt|__attribute__((...))}}, Microsoft extension {{tt|__declspec()}}, etc.
+
+An attribute can be used almost everywhere in the C++ program, and can be applied to almost everything: to types, to variables, to functions, to names, to code blocks, to entire translation units, although each particular attribute is only valid where it is permitted by the implementation: {{attr/core|expect_true}} could be an attribute that can only be used with an {{c/core|if}}, and not with a class declaration. {{attr/core|omp::parallel()}} could be an attribute that applies to a code block or to a {{c/core|for}} loop, but not to the type {{c/core|int}}, etc (note these two attributes are fictional examples, see below for the standard and some non-standard attributes).
+
+In declarations, attributes may appear both before the whole declaration and directly after the name of the entity that is declared, in which case they are combined. In most other situations, attributes apply to the directly preceding entity.
+
+The {{rlp|alignas|{{c/core|alignas}} specifier}} is a part of the attribute specifier sequence, although it has different syntax. It may appear where the {{tt|[&lt;nowiki/&gt;[...]]}} attributes appear and may mix with them (provided it is used where {{c/core|alignas}} is permitted).
+
+Two consecutive left square bracket tokens ({{tt|[&lt;!----&gt;[}}) may only appear when introducing an attribute-specifier or inside an attribute argument.
+
+{{source|1=
+void f()
+{
+    int y[3];
+    y[&lt;!----&gt;[] { return 0; }()] = 1;  // error
+    int i [[cats::meow([[]])]]; // OK
+}
+}}
+
+Besides the standard attributes listed below, implementations may support arbitrary non-standard attributes with implementation-defined behavior. {{rev inl|since=c++17|All attributes unknown to an implementation are ignored without causing an error.}}
+
+{{rrev|since=c++20|
+An attribute without {{spar|attribute-namespace}} and an {{spar|attribute-namespace}} whose name is either {{tt|std}} or {{tt|std}} followed by one or more digits is reserved for future standardization. That is, every non-standard attribute is in the {{spar|attribute-namespace}} provided by the implementation, e.g. {{attr/core|gnu::may_alias}}, {{attr/core|clang::trivial_abi}}, and {{attr/core|msvc::noop_dtor}}.
+}}
+
+===Standard attributes===
+The following attributes are defined by the C++ standard.
+
+Standard attributes cannot be syntactically ignored: they cannot contain syntax errors, must be applied to the correct target, and entities in the arguments must be {{rlps|definition#ODR-use}}.
+
+Standard attributes cannot be semantically ignored either: the behavior with all instances of a particular standard attribute removed would have been a conforming behavior for the original program with the attribute present.
+
+{{dsc begin}}
+{{dsc inc|cpp/language/attributes/dsc noreturn}}
+{{dsc inc|cpp/language/attributes/dsc carries_dependency}}
+{{dsc inc|cpp/language/attributes/dsc deprecated}}
+{{dsc inc|cpp/language/attributes/dsc fallthrough}}
+{{dsc inc|cpp/language/attributes/dsc maybe_unused}}
+{{dsc inc|cpp/language/attributes/dsc nodiscard}}
+{{dsc inc|cpp/language/attributes/dsc likely}}
+{{dsc inc|cpp/language/attributes/dsc no_unique_address}}
+{{dsc inc|cpp/language/attributes/dsc assume}}
+{{dsc inc|cpp/language/attributes/dsc indeterminate}}
+{{dsc inc|cpp/language/attributes/dsc optimize_for_synchronized}}
+{{dsc end}}
+
+===Notes===
+The presence of each individual attribute on a given platform can be checked with [[cpp/feature_test#Attributes|{{tt|__has_cpp_attribute}}]] preprocessor macro.
+{{ftm begin|core=yes|sort=yes}}
+{{ftm|std=C++11|value=200809L|__cpp_attributes|Attributes}}
+{{ftm|std=C++17|value=201411L|__cpp_namespace_attributes|Attributes for {{rlp|namespace}}s}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+[[gnu::always_inline]] [[gnu::hot]] [[gnu::const]] [[nodiscard]]
+inline int f(); // declare f with four attributes
+
+[[gnu::always_inline, gnu::const, gnu::hot, nodiscard]]
+int f(); // same as above, but uses a single attr specifier that contains four attributes
+
+// C++17:
+[[using gnu : const, always_inline, hot]] [[nodiscard]]
+int f[[gnu::always_inline]](); // an attribute may appear in multiple specifiers
+
+int f() { return 0; }
+
+int main() {}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2079|std=C++11|before={{tt|[&lt;!-- --&gt;[}} could not appear inside an attribute argument|after=allowed}}
+{{dr list item|wg=cwg|dr=2538|std=C++11|before=it was unclear whether standard attributes can be syntactically ignored|after=prohibited}}
+{{dr list item|wg=cwg|dr=2695|std=C++11|before=it was unclear whether standard attributes can be semantically ignored|after=prohibited}}
+{{dr list item|paper=P2156R1|std=C++11|before=every standard attribute was required to appear at most once in an {{spar|attribute-list}}|after=not required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc|[[cpp/feature test#Attributes|{{ttb|__has_cpp_attribute}}]] - checks for the presence of an attribute}}
+{{dsc see c|c/language/attributes|Attributes specifier sequence|nomono=true}}
+{{dsc end}}
+
+===External links===
+{{elink begin}}
+{{elink|1=[https://gcc.gnu.org/onlinedocs/gcc/Attribute-Syntax.html#Attribute-Syntax Attributes in GCC]. These attributes can be used as {{attr/core|gnu::...}}, [https://stackoverflow.com/questions/54639524/which-gnu-attributes-have-c11-syntax#comment96071307_54639524 See SO].}}
+{{elink|1=[https://clang.llvm.org/docs/AttributeReference.html Attributes in Clang].}}
+{{elink|1=[https://learn.microsoft.com/en-us/cpp/cpp/attributes#microsoft-specific-attributes Attributes in MSVC].}}
+{{elink end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

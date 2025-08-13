@@ -1,0 +1,253 @@
+{{title|Handling exceptions}}
+{{cpp/language/expressions/exceptions/navbar}}
+An {{rlp|exceptions|exception}} can be handled by a handler.
+
+===Handler===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|catch}} {{ttb|(}} {{spar optional|attr}} {{spar|type-specifier-seq}} {{spar|declarator}} {{ttb|)}} {{spar|compound-statement}}
+}}
+{{sdsc|num=2|
+{{ttb|catch}} {{ttb|(}} {{spar optional|attr}} {{spar|type-specifier-seq}} {{spar optional|abstract-declarator}} {{ttb|)}} {{spar|compound-statement}}
+}}
+{{sdsc|num=3|
+{{ttb|catch}} {{ttb|(}} {{ttb|...}} {{ttb|)}} {{spar|compound-statement}}
+}}
+{{sdsc end}}
+
+@1@ A handler with a named parameter.
+
+@2@ A handler with an unnamed parameter.
+
+@3@ A handler matching all kinds of exceptions.
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} any number of {{rlp|attributes}}, applies to the parameter}}
+{{par|{{spar|type-specifier-seq}}|part of a formal parameter declaration, same as in a function {{rlpsd|function#Parameter list}}}}
+{{par|{{spar|declarator}}|part of a parameter declaration, same as in a function {{rlpsd|function#Parameter list}}}}
+{{par|{{spar|abstract-declarator}}|part of an unnamed parameter declaration, same as in function {{rlpsd|function#Parameter list}}}}
+{{par|{{spar|compound-statement}}|a {{rlp|statements#Compound statements|compound statement}}}}
+{{par end}}
+
+
+The parameter declaration in a handler describes the type(s) of exceptions that can cause that handler to be entered.
+
+If the parameter is declared to have one of the following types, the program is ill-formed:
+* an {{rlpsd|type#Incomplete type}}
+* an {{rlp|abstract class|abstract class type}}
+{{rrev|since=c++11|
+* an {{rlpsd|reference#Rvalue reference}} type
+}}
+* a pointer to an incomplete type other than (possibly cv-qualified) {{c/core|void}}
+* an lvalue reference to an incomplete type
+
+If the parameter is declared to have type “array of {{tt|T}}” or function type {{tt|T}}, the type is adjusted to “pointer to {{tt|T}}”.
+
+A handler with parameter type {{tt|T}} can be abbreviated as “a handler of type {{tt|T}}”.
+
+===Matching exceptions===
+Each {{c/core|try}} block associates with a number of handlers, these handlers form a handler sequence. When an exception is thrown from a {{c/core|try}} block, the handlers in the sequence are tried in order of appearance to match the exception.
+
+A handler is a match for an {{rlpsd|throw#Exception object}} of type {{tt|E}} if any of the following conditions is satisfied:
+* The handler is of type “possibly cv-qualified {{tt|T}}” or “lvalue reference to possibly cv-qualified {{tt|T}}”, and any of the following conditions is satisfied:
+:* {{tt|E}} and {{tt|T}} are the same type (ignoring the top-level cv-qualifiers).
+:* {{tt|T}} is an unambiguous public base class of {{tt|E}}.
+* The handler is of type “possibly cv-qualified {{tt|T}}” or {{c/core|const T&amp;}} where {{tt|T}} is a pointer or pointer-to-member type, and any of the following conditions is satisfied:
+:* {{tt|E}} is a pointer or pointer-to-member type that can be converted to {{tt|T}} by at least one of the following conversions:
+::* A {{rlp|implicit conversion#Pointer conversions|standard pointer conversion}} not involving conversions to pointers to private or protected or ambiguous classes.
+{{rrev|since=c++17|
+::* A {{rlp|implicit conversion#Function pointer conversions|function pointer conversion}}.
+}}
+::* A {{rlp|implicit conversion#Qualification conversions|qualification conversion}}.
+{{rrev|since=c++11|
+:* {{tt|E}} is {{lc|std::nullptr_t}}.
+}}
+
+The {{c|catch (...)}} handler matches exceptions of any type. If present, it can only be the last handler in a handler sequence. This handler may be used to ensure that no uncaught exceptions can possibly escape from a function that offers {{rlp|exceptions|nothrow exception guarantee}}.
+
+{{source|
+try
+{
+    f();
+}
+catch (const std::overflow_error&amp; e)
+{} // this executes if f() throws std::overflow_error (same type rule)
+catch (const std::runtime_error&amp; e)
+{} // this executes if f() throws std::underflow_error (base class rule)
+catch (const std::exception&amp; e)
+{} // this executes if f() throws std::logic_error (base class rule)
+catch (...)
+{} // this executes if f() throws std::string or int or any other unrelated type
+}}
+
+If no match is found among the handlers for a {{c/core|try}} block, the search for a matching handler continues in a dynamically surrounding {{c/core|try}} block{{rev inl|since=c++11| of the same thread}}.
+
+If no matching handler is found, {{lc|std::terminate}} is invoked; whether or not the stack is {{rlp|throw#Stack unwinding|unwound}} before this invocation of {{lc|std::terminate}} is implementation-defined.
+
+===Handling exceptions===
+When an exception is thrown, control is transferred to the nearest handler with a matching type; “nearest” means the handler for which the compound statement or the member initializer list (if present) following the {{c/core|try}} keyword was most recently entered by the thread of control and not yet exited.
+
+====Initializing the handler parameter====
+The parameter declared in the parameter list (if any), of type “possibly cv-qualified {{tt|T}}” or “lvalue reference to possibly cv-qualified {{tt|T}}”, is initialized from the {{rlpsd|throw#Exception object}}, of type {{tt|E}}, as follows:
+* If {{tt|T}} is a base class of {{tt|E}}, the parameter is {{rlp|copy initialization|copy-initialized}} from an lvalue of type {{tt|T}} designating the corresponding base class subobject of the exception object.
+* Otherwise, the parameter is copy-initialized from an lvalue of type {{tt|E}} designating the exception object.
+
+The lifetime of the parameter ends when the handler exits, after the destruction of any objects with automatic {{rlp|storage duration}} initialized within the handler.
+
+When the parameter is declared as an object, any changes to that object will not affect the exception object.
+
+When the parameter is declared as a reference to an object, any changes to the referenced object are changes to the exception object and will have effect should that object be rethrown.
+
+====Activating the handler====
+A handler is considered ''active'' when initialization is complete for the parameter (if any) of the handler.
+
+Also, an implicit handler is considered active when {{lc|std::terminate}} is entered due to a throw.
+
+A handler is no longer considered active when the handler exits.
+
+The exception with the most recently activated handler that is still active is called the ''currently handled exception''. Such an exception can be {{rlp|throw#throw expressions|rethrown}}.
+
+===Control flow===
+The {{spar|compound-statement}} of a handler is a {{rlp|statements#Control-flow-limited statements|control-flow-limited statement}}:
+{{source|
+void f()
+{
+    goto label;     // error
+    try
+    {
+        goto label; // error
+    }
+    catch (...)
+    {
+        goto label: // OK
+        label: ;
+    }
+}
+}}
+
+===Notes===
+{{rlps|throw#Stack unwinding}} occurs while control is transferring to a handler. When a handler becomes active, stack unwinding is already completed.
+
+The exception thrown by the {{c/core|throw}} expression {{c|throw 0}} does not match a handler of pointer or pointer-to-member type.
+{{rrev|since=c++11|
+* {{c|throw nullptr}} can be used instead to throw a null pointer that matches such handlers.
+}}
+
+{{rlps|throw#Exception object}}s can never have array or function types, therefore a handler of reference to array or function type is never a match for any exception object.
+
+It is possible to write handlers that can never be executed, for example by placing a handler for a final derived class after a handler for a corresponding unambiguous public base class:
+{{source|
+try
+{
+    f();
+}
+catch (const std::exception&amp; e)
+{} // will be executed if f() throws std::runtime_error
+catch (const std::runtime_error&amp; e)
+{} // dead code!
+}}
+
+Many implementations overly extend the resolution of {{cwg|388}} to handlers of reference to non-const pointer types:
+{{source|1=
+int i;
+try
+{
+    try
+    {
+        throw static_cast&lt;float*&gt;(nullptr);
+    }
+    catch (void*&amp; pv)
+    {
+        pv = &amp;i;
+        throw;
+    }
+}
+catch (const float* pf)
+{
+    assert(pf == nullptr); // should pass, but fails on MSVC and Clang
+}
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/catch}}
+
+===Example===
+{{example
+|The following example demonstrates several usage cases of the handlers:
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    try
+    {
+        std::cout &lt;&lt; "Throwing an integer exception...\n";
+        throw 42;
+    }
+    catch (int i)
+    {
+        std::cout &lt;&lt; " the integer exception was caught, with value: " &lt;&lt; i &lt;&lt; '\n';
+    }
+    
+    try
+    {
+        std::cout &lt;&lt; "Creating a vector of size 5... \n";
+        std::vector&lt;int&gt; v(5);
+        std::cout &lt;&lt; "Accessing the 11th element of the vector...\n";
+        std::cout &lt;&lt; v.at(10); // vector::at() throws std::out_of_range
+    }
+    catch (const std::exception&amp; e) // caught by reference to base
+    {
+        std::cout &lt;&lt; " a standard exception was caught, with message: '"
+                  &lt;&lt; e.what() &lt;&lt; "'\n";
+    }
+}
+|p=true
+|output=
+Throwing an integer exception...
+ the integer exception was caught, with value: 42
+Creating a vector of size 5...
+Accessing the 11th element of the vector...
+ a standard exception was caught, with message: 'out_of_range'
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=98|std=C++98|before=a {{c/core|switch}} statement can transfer control into a handler|after=prohibited}}
+{{dr list item|wg=cwg|dr=210|std=C++98|before={{c/core|throw}} expressions were matched against the handlers|after=exception objects are&lt;br&gt;matched against the handlers}}
+{{dr list item|wg=cwg|dr=388|std=C++98|before=an exception of pointer or pointer to member type could&lt;br&gt;not be matched by a const reference to a different type|after=made matchable&lt;br&gt;when convertible}}
+{{dr list item|wg=cwg|dr=1166|std=C++98|before=the behavior was unspecified when a handler whose&lt;br&gt;type is a reference to an abstract class type is matched|after=abstract class types are&lt;br&gt;not allowed for handlers}}
+{{dr list item|wg=cwg|dr=1769|std=C++98|before=when the type of the handler is a base of the type of&lt;br&gt;the exception object, a converting constructor might&lt;br&gt;be used for the initialization of the handler parameter|after=the parameter is copy-initialized&lt;br&gt;from the corresponding base class&lt;br&gt;subobject of the exception object}}
+{{dr list item|wg=cwg|dr=2093|std=C++98|before=an exception object of pointer to object type could not match a&lt;br&gt;handler of pointer to object type through qualification conversion|after=allowed}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=14.4|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=14.4|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=18.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+
+===See also===
+* {{rlp|try|{{c/core|try}} block}}
+* {{rlp|throw|Throwing exceptions}}
+* {{ls|cpp/error#Exception handling}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

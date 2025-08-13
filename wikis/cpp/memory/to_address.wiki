@@ -1,0 +1,97 @@
+{{cpp/title|to_address}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class Ptr &gt;
+constexpr auto to_address( const Ptr&amp; p ) noexcept;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T &gt;
+constexpr T* to_address( T* p ) noexcept;
+}}
+{{dcl end}}
+
+Obtain the address represented by {{c|p}} without forming a reference to the object pointed to by {{c|p}}.
+
+@1@ [[cpp/named_req/Allocator#Fancy pointers|Fancy pointer]] overload: If the expression {{c|std::pointer_traits&lt;Ptr&gt;::to_address(p)}} is well-formed, returns the result of that expression. Otherwise, returns {{c|std::to_address(p.operator-&gt;())}}.
+@2@ Raw pointer overload: If {{tt|T}} is a function type, the program is ill-formed. Otherwise, returns {{c|p}} unmodified.
+
+===Parameters===
+{{par begin}}
+{{par|p|fancy or raw pointer}}
+{{par end}}
+
+===Return value===
+Raw pointer that represents the same address as {{c|p}} does.
+
+===Possible implementation===
+{{eq fun|1=
+template&lt;class T&gt;
+constexpr T* to_address(T* p) noexcept
+{
+    static_assert(!std::is_function_v&lt;T&gt;);
+    return p;
+}
+
+template&lt;class T&gt;
+constexpr auto to_address(const T&amp; p) noexcept
+{
+    if constexpr (requires{ std::pointer_traits&lt;T&gt;::to_address(p); })
+        return std::pointer_traits&lt;T&gt;::to_address(p);
+    else
+        return std::to_address(p.operator-&gt;());
+}
+}}
+
+===Notes===
+{{tt|std::to_address}} can be used even when {{c|p}} does not reference storage that has an object constructed in it, in which case {{c|std::addressof(*p)}} cannot be used because there is no valid object for the parameter of {{c|std::addressof}}&lt;!--or the return value of fancy_pointer::operator* --&gt; to bind to.
+
+The fancy pointer overload of {{tt|std::to_address}} inspects the {{c|std::pointer_traits&lt;Ptr&gt;}} specialization. If instantiating that specialization is itself ill-formed (typically because {{tt|element_type}} cannot be defined), that results in a hard error outside the immediate context and renders the program ill-formed.
+
+{{tt|std::to_address}} may additionally be used on iterators that satisfy {{lc|std::contiguous_iterator}}.
+
+{{feature test macro|__cpp_lib_to_address|Utility to convert a pointer to a raw pointer ({{tt|std::to_address}})|value=201711L|std=C++20}}
+
+===Example===
+{{example|code=
+#include &lt;memory&gt;
+
+template&lt;class A&gt;
+auto allocator_new(A&amp; a)
+{
+    auto p = a.allocate(1);
+    try
+    {
+        std::allocator_traits&lt;A&gt;::construct(a, std::to_address(p));
+    }
+    catch (...)
+    {
+        a.deallocate(p, 1);
+        throw;
+    }
+    return p;
+}
+
+template&lt;class A&gt;
+void allocator_delete(A&amp; a, typename std::allocator_traits&lt;A&gt;::pointer p)
+{
+    std::allocator_traits&lt;A&gt;::destroy(a, std::to_address(p));
+    a.deallocate(p, 1);
+}
+
+int main()
+{
+    std::allocator&lt;int&gt; a;
+    auto p = allocator_new(a);
+    allocator_delete(a, p);
+}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc pointer_traits}}
+{{dsc inc|cpp/memory/pointer_traits/dsc to_address}}
+{{dsc end}}
+
+{{langlinks|ar|de|es|fr|it|ja|pl|pt|ru|zh}}

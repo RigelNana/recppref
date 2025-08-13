@@ -1,0 +1,156 @@
+{{cpp/ranges/view title|chunk}}
+{{cpp/ranges/chunk_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcla|num=1|since=c++23|1=
+template&lt; ranges::view V &gt;
+    requires ranges::input_range&lt;V&gt;
+class chunk_view
+    : public ranges::view_interface&lt;chunk_view&lt;V&gt;&gt;
+}}
+{{dcla|num=2|since=c++23|1=
+template&lt; ranges::view V &gt;
+    requires ranges::forward_range&lt;V&gt;
+class chunk_view&lt;V&gt;
+    : public ranges::view_interface&lt;chunk_view&lt;V&gt;&gt;
+}}
+{{dcl|num=3|since=c++23|1=
+namespace views {
+    inline constexpr /* unspecified */ chunk = /* unspecified */;
+}
+}}
+{{dcl h|Call signature}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R &gt;
+constexpr ranges::view auto chunk( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl|since=c++23|1=
+template&lt; class DifferenceType &gt;
+constexpr /*range adaptor closure*/ chunk( DifferenceType&amp;&amp; n );
+}}
+{{dcl h|Helper templates}}
+{{dcla|anchor=div-ceil|num=4|notes={{mark expos}}|1=
+template&lt; class I &gt; &lt;!-- TODO: maybe share this __div_ceil with stride_view --&gt;
+constexpr I /*div-ceil*/( I num, I denom );
+}}
+{{dcl end}}
+
+{{tt|chunk_view}} takes a {{lconcept|view}} and a number {{c|n}} and produces a range of views (the ''chunks'') of the original view, such that each ''chunk'', except maybe the last one, has the size {{tt|n}}. These ''chunks'' are non-overlapping, successive sub-ranges of the elements of the original view, in order.
+
+Let {{tti|s}} be the size of the original view. If {{tti|s}} is not the multiple of {{c|n}}, the size of the ''last'' produced view is exactly {{c|s % n}} (the remainder). Otherwise, the size of each ''chunk'', including the last one, is {{c|n}}.
+
+The size of produced view is {{c|/*div-ceil*/(s)}}.
+
+If the {{c|n}} is not greater than {{c|0}} the behavior is undefined.
+
+@1@ An implementation that supports the underlying view {{tt|V}} that models only {{lconcept|input_range}}.
+
+@2@ A partial specialization that supports the underlying view {{tt|V}} that models {{lconcept|forward_range}} or stronger. Models {{lconcept|common_range}} if the underlying view {{tt|V}} is {{lconcept|forward_range}}, {{lconcept|common_range}}, and either {{lconcept|sized_range}} or non {{lconcept|bidirectional_range}}.
+
+@3@ The name {{c|views::chunk}} denotes a {{named req|RangeAdaptorObject}}. Given subexpressions {{c|e}} and {{c|n}}, the expression {{c|views::chunk(e, n)}} is [[cpp/language/expressions#Expression-equivalence|expression-equivalent]] to {{c|chunk_view(e, n)}}.
+
+@4@ Computes the smallest integer value that is not less than the quotient of dividing {{c|num}} by {{c|denom}}. Equivalent to:
+{{source|1=
+I r = num / denom;
+if (num % denom)
+    ++r;
+return r;
+}}
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member object|Definition}}
+{{dsc expos mem obj|base_|private=yes|The underlying {{lconcept|view}} of type {{tt|V}}.}}
+{{dsc expos mem obj|n_|private=yes|The "chunk size" of type {{c|ranges::range_difference_t&lt;V&gt;}}.}}
+{{dsc break}}
+{{dsc h2|If {{tt|V}} models exactly {{lconcept|input_range}} {{vl|1}}}}
+{{dsc expos mem obj|remainder_|private=yes|maybe=yes|The number of elements left in the current chunk, of type {{c|ranges::range_difference_t&lt;V&gt;}}.}}
+{{dsc expos mem obj|current_|private=yes|maybe=yes|An [[cpp/ranges#Non-propagating cache|''optional-like'']] object of type {{c/core|/*non-propagating-cache*/&lt;ranges::iterator_t&lt;V&gt;&gt;}} that caches current underlying iterator.}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|chunk_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|Deduction guides}}===
+
+===Nested classes===
+{{dsc begin}}
+{{dsc expos mem class|cpp/ranges/chunk_view/outer_iterator|notes={{mark c++23}}|the output ("chunk-wise") iterator type when {{tt|V}} models {{lconcept|input_range}} {{vl|1}}}}
+{{dsc expos mem class|cpp/ranges/chunk_view/inner_iterator|notes={{mark c++23}}|the inner ("element-wise") iterator type when {{tt|V}} models {{lconcept|input_range}} {{vl|1}}}}
+{{dsc expos mem tclass|cpp/ranges/chunk_view/iterator|notes={{mark c++23}}|the iterator type when {{tt|V}} models {{lconcept|forward_range}} {{vl|2}}}}
+{{dsc end}}
+
+===Helper templates===
+{{ddcl|since=c++23|1=
+template&lt; class V &gt;
+constexpr bool ranges::enable_borrowed_range&lt;chunk_view&lt;V&gt;&gt; =
+    ranges::forward_range&lt;V&gt; &amp;&amp; ranges::enable_borrowed_range&lt;V&gt;;
+}}
+This specialization of {{ltt|cpp/ranges/borrowed_range|ranges::enable_borrowed_range}} makes {{tt|chunk_view}} satisfy {{lconcept|borrowed_range}} when the underlying view {{tt|V}} satisfies both, the {{lconcept|forward_range}} and the {{lconcept|borrowed_range}}.
+
+===Notes===
+If {{tt|V}} models {{lconcept|input_range}} {{vl|1}}, {{tt|chunk_view}}'s iterator has a dedicated type: {{rli|outer_iterator/value_type|outer_iterator::value_type}} that is itself an input view.
+
+If {{tt|V}} models {{lconcept|forward_range}} or stronger {{vl|2}}, {{tt|chunk_view}} defers to {{lc|views::take}} for its {{tt|value_type}}.
+
+If {{tt|V}} models {{lconcept|bidirectional_range}} or stronger ranges {{vl|2}}, the need to calculate size the last chunk correctly (from the end {{rl|iterator}}) requires the underlying range type {{tt|V}} to be {{lconcept|sized_range}}.
+
+{{feature test macro|__cpp_lib_ranges_chunk|std=C++23|value=202202L|{{tt|std::ranges::chunk_view}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+auto print_subrange = [](std::ranges::viewable_range auto&amp;&amp; r)
+{
+    std::cout &lt;&lt; '[';
+    for (int pos{}; auto elem : r)
+        std::cout &lt;&lt; (pos++ ? " " : "") &lt;&lt; elem;
+    std::cout &lt;&lt; "] ";
+};
+
+int main()
+{
+    const auto v = {1, 2, 3, 4, 5, 6};
+
+    for (const unsigned width : std::views::iota(1U, 2U + v.size()))
+    {
+        auto const chunks = v {{!}} std::views::chunk(width);
+        std::cout &lt;&lt; "chunk(" &lt;&lt; width &lt;&lt; "): ";
+        std::ranges::for_each(chunks, print_subrange);
+        std::cout &lt;&lt; '\n';
+    }
+}
+|output=
+chunk(1): [1] [2] [3] [4] [5] [6]
+chunk(2): [1 2] [3 4] [5 6]
+chunk(3): [1 2 3] [4 5 6]
+chunk(4): [1 2 3 4] [5 6]
+chunk(5): [1 2 3 4 5] [6]
+chunk(6): [1 2 3 4 5 6]
+chunk(7): [1 2 3 4 5 6]
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Chunk view|id=range.chunk|section=26.7.28}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc chunk_by_view}}
+{{dsc inc|cpp/ranges/dsc adjacent_view}}
+{{dsc inc|cpp/ranges/dsc slide_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

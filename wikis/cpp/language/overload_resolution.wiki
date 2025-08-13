@@ -1,0 +1,745 @@
+{{title|Overload resolution}}
+{{cpp/language/functions/navbar}}
+
+In order to compile a function call, the compiler must first perform {{rlp|lookup|name lookup}}, which, for functions, may involve {{rlp|adl|argument-dependent lookup}}, and for function templates may be followed by {{rlp|template argument deduction}}.
+
+If the name refers to more than one entity, it is said to be ''overloaded'', and the compiler must determine which overload to call. In simple terms, the overload whose parameters match the arguments most closely is the one that is called.
+
+In detail, overload resolution proceeds through the following steps:
+# Building the set of [[#Candidate functions|candidate functions]].
+# Trimming the set to only [[#Viable functions|viable functions]].
+# Analyzing the set to determine the single [[#Best viable function|best viable function]] (this may involve [[#Ranking of implicit conversion sequences|ranking of implicit conversion sequences]]).
+
+{{source|
+void f(long);
+void f(float);
+
+f(0L); // calls f(long)
+f(0);  // error: ambiguous overload
+}}
+
+Besides function calls, overloaded function names may appear in several additional contexts, where different rules apply: see {{rlp|overloaded address|Address of an overloaded function}}.
+
+If a function cannot be selected by overload resolution, it cannot be used (e.g. it is a {{rlpsd|templates#Templated entity}} with a failed {{rlp|constraints|constraint}}).
+
+===Candidate functions===
+Before overload resolution begins, the functions selected by name lookup and template argument deduction are combined to form the set of ''candidate functions''. The exact details depend on the context in which overload resolution will take place.
+
+====Call to a named function====
+If {{c|E}} in a {{rlp|operator other#Built-in function call operator|function call expression}} {{c|E(args)}} names a set of overloaded functions and/or function templates (but not callable objects), the following rules are followed:
+* If the expression {{c|E}} has the form {{c|PA-&gt;B}} or {{c|A.B}} (where {{c|A}} has class type ''cv'' {{tt|T}}), then {{c|B}} is {{rlp|lookup|looked up}} as a member function of {{tt|T}}. The function declarations found by that lookup are the candidate functions. The argument list for the purpose of overload resolution has the implied object argument of type ''cv'' {{tt|T}}.
+* If the expression {{c|E}} is a {{rlp|expressions#Primary expressions|primary expression}}, the name is {{rlp|lookup|looked up}} following normal rules for function calls (which may involve {{rlp|adl|ADL}}). The function declarations found by this lookup are (due to the way lookup works) either:
+:* all non-member functions (in which case the argument list for the purpose of overload resolution is exactly the argument list used in the function call expression)
+:* all member functions of some class {{tt|T}}, in which case, if {{c|this}} is in scope and is a pointer to {{tt|T}} or to a derived class of {{tt|T}}, {{c|*this}} is used as the implied object argument. Otherwise (if {{c|this}} is not in scope or does not point to {{tt|T}}), a fake object of type {{tt|T}} is used as the implied object argument, and if overload resolution subsequently selects a non-static member function, the program is ill-formed.
+
+====Call to a class object====
+If {{c|E}} in a {{rlp|operator other#Built-in function call operator|function call expression}} {{c|E(args)}} has class type ''cv'' {{tt|T}}, then
+* The function-call operators of {{tt|T}} are obtained by ordinary {{rlp|lookup}} of the name {{c/core|operator()}} in the context of the expression {{c|(E).operator()}}, and every declaration found is added to the set of candidate functions. 
+* For each non-{{rlpt|explicit}} {{rlp|cast operator|user-defined conversion function}} in {{tt|T}} or in a base of {{tt|T}} (unless hidden), whose cv-qualifiers are the same or greater than {{tt|T}}'s cv-qualifiers, and where the conversion function converts to:
+:* pointer-to-function
+:* reference-to-pointer-to-function
+:* reference-to-function
+:then a ''surrogate call function'' with a unique name whose first parameter is the result of the conversion, the remaining parameters are the parameter list accepted by the result of the conversion, and the return type is the return type of the result of the conversion, is added to the set of candidate functions. If this surrogate function is selected by the subsequent overload resolution, then the user-defined conversion function will be called and then the result of the conversion will be called.
+
+In any case, the argument list for the purpose of overload resolution is the argument list of the function call expression preceded by the implied object argument {{c|E}} (when matching against the surrogate function, the user-defined conversion will automatically convert the implied object argument to the first argument of the surrogate function).
+{{source|1=
+int f1(int);
+int f2(float);
+
+struct A
+{
+    using fp1 = int(*)(int);
+    operator fp1() { return f1; } // conversion function to pointer to function
+    using fp2 = int(*)(float);
+    operator fp2() { return f2; } // conversion function to pointer to function
+} a;
+
+int i = a(1); // calls f1 via pointer returned from conversion function
+}}
+
+====Call to an overloaded operator====
+If at least one of the arguments to an operator in an expression has a class type or an enumeration type, both {{rlp|expressions#Operators|builtin operators}} and {{rlp|operators|user-defined operator overloads}} participate in overload resolution, with the set of candidate functions selected as follows:
+
+For a unary operator {{ttb|@}} whose argument has type {{tt|T1}} (after removing cv-qualifications), or binary operator {{ttb|@}} whose left operand has type {{tt|T1}} and right operand of type {{tt|T2}} (after removing cv-qualifications), the following sets of candidate functions are prepared:
+@1@ ''member candidates'': if {{tt|T1}} is a complete class or a class currently being defined, the set of member candidates is the result of {{rlp|lookup|qualified name lookup}} of {{tt|T1::operator@}}. In all other cases, the set of member candidates is empty. 
+@2@ ''non-member candidates'': For the operators where {{rlp|operators|operator overloading}} permits non-member forms, all declarations found by {{rlp|lookup|unqualified name lookup}} of {{tt|operator@}} in the context of the expression (which may involve {{rlp|adl|ADL}}), except that member function declarations are ignored and do not prevent the lookup from continuing into the next enclosing scope. If both operands of a binary operator or the only operand of a unary operator has enumeration type, the only functions from the lookup set that become non-member candidates are the ones whose parameter has that enumeration type (or reference to that enumeration type)
+@3@ ''built-in candidates'': For {{c/core|operator,}}, the unary {{c/core|operator&amp;}}, and {{c/core|operator-&gt;}}, the set of built-in candidates is empty. For other operators built-in candidates are the ones listed in {{rlp|expressions#Operators|built-in operator pages}} as long as all operands can be implicitly converted to their parameters. If any built-in candidate has the same parameter list as a non-member candidate{{rev inl|since=c++20| or rewritten non-member candidate}} that is not a function template specialization, it is not added to the list of built-in candidates. When the built-in assignment operators are considered, the conversions from their first parameters are restricted: only the {{rlp|implicit conversion|standard conversion sequences}} are considered.
+
+{{rrev|since=c++20|1=
+@4@ ''rewritten candidates'':
+* For the four relational operator expressions {{c|x &lt; y}}, {{c|1=x &lt;= y}}, {{c|x &gt; y}}, and {{c|1=x &gt;= y}}, all member, non-member, and built-in {{c|1=operator&lt;=&gt;}}s found are added to the set.
+* For the four relational operator expressions {{c|x &lt; y}}, {{c|1=x &lt;= y}}, {{c|x &gt; y}}, and {{c|1=x &gt;= y}} as well as the three-way comparison expression {{c|1=x &lt;=&gt; y}}, a synthesized candidate with the order of the two parameters reversed is added for each member, non-member, and built-in {{c/core|1=operator&lt;=&gt;}}s found.
+* For {{c|1=x != y}}, all member, non-member, and built-in {{c/core|1=operator==}}s found are added to the set, unless there is a matching {{c/core|1=operator!=}}.
+* For equality operator expressions {{c|1=x == y}} and {{c|1=x != y}},  a synthesized candidate with the order of the two parameters reversed is added for each member, non-member, and built-in {{c/core|1=operator==}}s found, unless there is a matching {{c/core|1=operator!=}}.
+
+@@ In all cases, rewritten candidates are not considered in the context of the rewritten expression. For all other operators, the rewritten candidate set is empty.
+}}
+
+The set of candidate functions to be submitted for overload resolution is a union of the sets above. The argument list for the purpose of overload resolution consists of the operands of the operator except for {{tt|operator-&gt;}}, where the second operand is not an argument for the function call (see {{rlp|operator member access#Built-in member access operators|member access operator}}). 
+{{source|
+struct A
+{
+    operator int();              // user-defined conversion
+};
+A operator+(const A&amp;, const A&amp;); // non-member user-defined operator
+
+void m()
+{
+    A a, b;
+    a + b; // member-candidates: none
+           // non-member candidates: operator+(a, b)
+           // built-in candidates: int(a) + int(b)
+           // overload resolution chooses operator+(a, b)
+}
+}}
+
+If the overload resolution selects a built-in candidate, the {{rlp|implicit conversion|user-defined conversion sequence}} from an operand of class type is not allowed to have a second standard conversion sequence: the user-defined conversion function must give the expected operand type directly:
+{{source|1=
+struct Y { operator int*(); }; // Y is convertible to int*
+int *a = Y() + 100.0;          // error: no operator+ between pointer and double
+}}
+
+For {{c/core|operator,}}, the unary {{c/core|operator&amp;}}, and {{c/core|operator-&gt;}}, if there are no viable functions (see below) in the set of candidate functions, then the operator is reinterpreted as a built-in.
+
+{{rrev|since=c++20|
+If a rewritten {{c/core|1=operator&lt;=&gt;}} candidate is selected by overload resolution for an operator {{tt|@}}, {{c|x @ y}} is interpreted as the rewritten expression: {{c|1=0 @ (y &lt;=&gt; x)}} if the selected candidate is a synthesized candidate with reversed order of parameters, or {{c|1=(x &lt;=&gt; y) @ 0}} otherwise, using the selected rewritten {{c/core|1=operator&lt;=&gt;}} candidate.
+
+If a rewritten {{c/core|1=operator==}} candidate is selected by overload resolution for an operator {{tt|@}} (which is either {{tt|1===}} or {{tt|1=!=}}), its return type must be (possibly cv-qualified) {{c/core|bool}}, and {{c|x @ y}} is interpreted as the rewritten expression: {{c|1=y == x}} or {{c|1=!(y == x)}} if the selected candidate is a synthesized candidate with reversed order of parameters, or {{c|1=!(x == y)}} otherwise, using the selected rewritten {{c/core|1=operator==}} candidate.
+
+Overload resolution in this case has a final tiebreaker preferring non-rewritten candidates to rewritten candidates, and preferring non-synthesized rewritten candidates to synthesized rewritten candidates.
+
+This lookup with the reversed arguments order makes it possible to write just {{c/core|1=operator&lt;=&gt;(std::string, const char*)}} and {{c/core|1=operator==(std::string, const char*)}} to generate all comparisons between {{lc|std::string}} and {{c/core|const char*}}, both ways. See {{rlp|default comparisons}} for more detail.
+}}
+
+====Initialization by constructor====
+When an object of class type is {{rlp|direct initialization|direct-initialized}} or {{rlp|default initialization|default-initialized}}{{rev inl|since=c++11| (including default-initialization in the context of {{rlp|list initialization|copy-list-initialization}})}}, the candidate functions are all constructors of the class being initialized. The argument list is the expression list of the initializer.
+
+Otherwise, the candidate functions are all {{rlp|converting constructor}}s of the class being initialized. The argument list is the expression of the initializer.
+
+{{rrev|since=c++11|
+For default-initialization in the context of copy-list-initialization, if an {{rlpt|explicit}} constructor is chosen, the initialization is ill-formed.
+}}
+
+====Copy-initialization by conversion====
+If {{rlp|copy initialization|copy-initialization}} of an object of class type requires that a user-defined conversion is called to convert the initializer expression of type ''cv'' {{tt|S}} to the type ''cv'' {{tt|T}} of the object being initialized, the following functions are candidate functions:
+* all {{rlp|converting constructor}}s of {{tt|T}}
+* the non-{{rlpt|explicit}} conversion functions from {{tt|S}} and its base classes (unless hidden) to {{tt|T}} or class derived from {{tt|T}} or a reference to such. If this copy-initialization is part of the direct-initialization sequence of ''cv'' {{tt|T}} (initializing a reference to be bound to the first parameter of a constructor that takes a reference to ''cv'' {{tt|T}}), then explicit conversion functions are also considered.
+
+Either way, the argument list for the purpose of overload resolution consists of a single argument which is the initializer expression, which will be compared against the first argument of the constructor or against the implicit object argument of the conversion function.
+
+====Non-class initialization by conversion====
+When initialization of an object of non-class type ''cv1'' {{tt|T}} requires a {{rlp|cast operator|user-defined conversion function}} to convert from an initializer expression of class type ''cv'' {{tt|S}}, the following functions are candidates:
+* the non-explicit user-defined conversion functions of {{tt|S}} and its base classes (unless hidden) that produce type {{tt|T}} or a type convertible to {{tt|T}} by a {{rlp|implicit conversion|standard conversion sequence}}, or a reference to such type. cv-qualifiers on the returned type are ignored for the purpose of selecting candidate functions.
+* if this is {{rlp|direct initialization|direct-initialization}}, the explicit user-defined conversion functions of {{tt|S}} and its base classes (unless hidden) that produce type {{tt|T}} or a type convertible to {{tt|T}} by a {{rlpsd|implicit conversion#Qualification conversion}}, or a reference to such type, are also considered.
+
+Either way, the argument list for the purpose of overload resolution consists of a single argument which is the initializer expression, which will be compared against the implicit object argument of the conversion function.
+
+====Reference initialization by conversion====
+During {{rlp|reference initialization}}, where the reference to ''cv1'' {{tt|T}} is bound to the lvalue or rvalue result of a conversion from the initializer expression from the class type ''cv2'' {{tt|S}}, the following functions are selected for the candidate set:
+* The non-explicit user-defined conversion functions of {{tt|S}} and its base classes (unless hidden) to the type
+:* (when converting to an lvalue) lvalue reference to ''cv2'' {{tt|T2}}
+:* (when converting to an rvalue or an lvalue of function type) ''cv2'' {{tt|T2}} or rvalue reference to ''cv2'' {{tt|T2}}
+: where ''cv2'' {{tt|T2}} is {{rlp|reference initialization#Definitions|reference-compatible}} with ''cv1'' {{tt|T}}.
+* For direct initialization, the explicit user-defined conversion functions are also considered if {{tt|T2}} is the same type as {{tt|T}} or can be converted to type {{tt|T}} with a qualification conversion.
+
+Either way, the argument list for the purpose of overload resolution consists of a single argument which is the initializer expression, which will be compared against the implicit object argument of the conversion function.
+
+====List-initialization====
+When an object of non-aggregate class type {{tt|T}} is {{rlp|list initialization|list-initialized}}, two-phase overload resolution takes place.
+* at phase 1, the candidate functions are all initializer-list constructors of {{tt|T}} and the argument list for the purpose of overload resolution consists of a single initializer list argument
+* if overload resolution fails at phase 1, phase 2 is entered, where the candidate functions are all constructors of {{tt|T}} and the argument list for the purpose of overload resolution consists of the individual elements of the initializer list. 
+
+If the initializer list is empty and {{tt|T}} has a default constructor, phase 1 is skipped.
+
+In copy-list-initialization, if phase 2 selects an explicit constructor, the initialization is ill-formed (as opposed to all over copy-initializations where explicit constructors are not even considered).
+
+====Additional rules for function template candidates====
+If name lookup found a function template, {{rlp|template argument deduction}} and checking of any explicit template arguments are performed to find the template argument values (if any) that can be used in this case:
+* If both succeeds, the template arguments are used to synthesize declarations of the corresponding function template specializations, which are added to the candidate set, and such specializations are treated just like non-template functions except where specified otherwise in the tie-breaker rules below.
+* If argument deduction fails or the synthesized function template specialization would be ill-formed, no such function is added to the candidate set (see {{rlp|sfinae|SFINAE}}).
+
+If a name refers to one or more function templates and also to a set of overloaded non-template functions, those functions and the specializations generated from the templates are all candidates.
+
+See {{rlpsd|function template#Function template overloading}} for further detail.
+
+{{rrev|since=c++20|
+If a constructor template or conversion function template has a {{rlp|explicit|conditional explicit specifier}} which happens to be {{rlp|dependent name#Value-dependent expressions|value-dependent}}, after deduction, if the context requires a candidate that is not explicit and the generated specialization is explicit, it is removed from the candidate set.
+}}
+
+====Additional rules for constructor candidates====
+{{rrev|since=c++11|
+Defaulted {{rlp|move constructor}}s and {{rlp|move assignment|move assignment operators}} that are defined as deleted are excluded in the set of candidate functions.
+
+A constructor {{rlp|using declaration#Inheriting constructors|inherited}} from class type {{tt|C}} that has a first parameter of type “reference to {{tt|P}}” (including such a constructor instantiated from a template) is excluded from the set of candidate functions when constructing an object of type {{tt|D}} if all following conditions are satisfied:
+* The argument list has exactly one argument.
+* {{tt|C}} is {{rlp|reference initialization#Definitions|reference-related}} to {{tt|P}}.
+* {{tt|P}} is reference-related to {{tt|D}}.
+}}
+
+====Additional rules for member function candidates====
+If any candidate function is a {{rlp|member functions|member function}} (static or non-static){{rev inl|since=c++23| that does not have an {{rlp|member functions#Explicit object parameter|explicit object parameter}}}}, but not a constructor, it is treated as if it has an extra parameter (''implicit object parameter'') which represents the object for which they are called and appears before the first of the actual parameters.
+
+Similarly, the object on which a member function is being called is prepended to the argument list as the ''implied object argument''.
+
+For member functions of class {{tt|X}}, the type of the implicit object parameter is affected by cv-qualifications and ref-qualifications of the member function as described in {{rlp|member functions}}.
+
+The user-defined conversion functions are considered to be members of the ''implied object argument'' for the purpose of determining the type of the ''implicit object parameter''.
+
+The member functions introduced by a using-declaration into a derived class are considered to be members of the derived class for the purpose of defining the type of the ''implicit
+object parameter''.
+
+{{rrev|until=c++23|For the static member functions, the ''implicit object parameter'' is considered to match any object: its type is not examined and no conversion sequence is attempted for it.}}
+
+For the rest of overload resolution, the ''implied object argument'' is indistinguishable from other arguments, but the following special rules apply to the ''implicit object parameter'':
+&lt;!-- removed by p0135r1 in C++17, with a note that this was always redundant, but harmless until p0135r1 made a().b() materialize a temporary out of a()
+@1@ the argument for the implicit object parameter cannot be held in a temporary object
+--&gt;
+@1@ user-defined conversions cannot be applied to the implicit object parameter
+
+@2@ rvalues can be bound to non-const implicit object parameter {{rev inl|since=c++11|(unless this is for a ref-qualified member function)}} and do not affect the ranking of the implicit conversions.
+{{source|
+struct B { void f(int); };
+struct A { operator B&amp;(); };
+
+A a;
+a.B::f(1); // Error: user-defined conversions cannot be applied
+           // to the implicit object parameter
+static_cast&lt;B&amp;&gt;(a).f(1); // OK
+}}
+
+===Viable functions===
+Given the set of candidate functions, constructed as described above, the next step of overload resolution is examining arguments and parameters to reduce the set to the set of ''viable functions''
+
+To be included in the set of viable functions, the candidate function must satisfy the following:
+@1@ If there are {{tt|M}} arguments, the candidate function that has exactly {{tt|M}} parameters is viable
+@2@ If the candidate function has less than {{tt|M}} parameters, but has an {{rlp|variadic arguments|ellipsis parameter}}, it is viable.
+@3@ If the candidate function has more than {{tt|M}} parameters and the {{tt|M+1}}'st parameter and all parameters that follow have default arguments, it is viable. For the rest of overload resolution, the parameter list is truncated at {{tt|M}}.
+
+{{rrev|since=c++20|
+@4@ If the function has an associated {{rlp|constraints|constraint}}, it must be satisfied
+}}
+@5@ For every argument there must be at least one implicit conversion sequence that converts it to the corresponding parameter.
+@6@ If any parameter has reference type, reference binding is accounted for at this step: if an rvalue argument corresponds to non-const lvalue reference parameter or an lvalue argument corresponds to rvalue reference parameter, the function is not viable.
+
+User-defined conversions (both converting constructors and user-defined conversion functions) are prohibited from taking part in implicit conversion sequence where it would make it possible to apply more than one user-defined conversion. Specifically, they are not considered if the target of the conversion is the first parameter of a constructor or the implicit object parameter of a user-defined conversion function, and that constructor/user-defined conversion is a candidate for
+* [[#Copy-initialization by conversion|copy-initialization of a class by user-defined conversion]],
+* [[#Non-class initialization by conversion|initialization of a non-class type by a conversion function]],
+* [[#Reference initialization by conversion|initialization by conversion function for direct reference binding]],
+* [[#Initialization by constructor|initialization by constructor]] during the second (direct-initialization) step of class {{rlp|copy initialization|copy-initialization}},
+{{rrev|since=c++11|
+* initialization by list-initialization where the initializer list has exactly one element that is itself an initializer list, and the target is the first parameter of a constructor of class {{tt|X}}, and the conversion is to {{tt|X}} or reference to (possibly cv-qualified) {{tt|X}}:
+{{source|1=
+struct A { A(int); };
+struct B { B(A); };
+
+B b{&lt;!----&gt;{0}&lt;!----&gt;}; // list-initialization of B
+
+// candidates: B(const B&amp;), B(B&amp;&amp;), B(A)
+// {0} -&gt; B&amp;&amp; not viable: would have to call B(A)
+// {0} -&gt; const B&amp;: not viable: would have to bind to rvalue, would have to call B(A)
+// {0} -&gt; A viable. Calls A(int): user-defined conversion to A is not banned
+}}
+}}
+
+===Best viable function===
+For each pair of viable function {{tt|F1}} and {{tt|F2}}, the implicit conversion sequences from the {{tt|i}}-th argument to {{tt|i}}-th parameter are ranked to determine which one is better (except the first argument, the ''implicit object argument'' for static member functions has no effect on the ranking)
+
+{{tt|F1}} is determined to be a better function than {{tt|F2}} if implicit conversions for all arguments of {{tt|F1}} are ''not worse'' than the implicit conversions for all arguments of F2, and
+
+@1@ there is at least one argument of {{tt|F1}} whose implicit conversion is ''better'' than the corresponding implicit conversion for that argument of {{tt|F2}}, or, if not that,
+
+@2@ (only in context of non-class initialization by conversion), the standard conversion sequence from the result of {{tt|F1}} to the type being initialized is ''better'' than the standard conversion sequence from the result of {{tt|F2}}, or, if not that,
+
+{{rrev|since=c++11|
+@3@ (only in context of initialization by conversion function for direct reference binding of a reference to function type), the result of {{tt|F1}} is the same kind of reference (lvalue or rvalue) as the reference being initialized, and the result of {{tt|F2}} is not, or, if not that,
+}}
+
+@4@ {{tt|F1}} is a non-template function while {{tt|F2}} is a template specialization, or, if not that,
+
+@5@ {{tt|F1}} and {{tt|F2}} are both template specializations and {{tt|F1}} is more specialized according to the {{rlp|function template#Function template overloading|partial ordering rules for template specializations}}, or, if not that,
+
+{{rrev|since=c++20|
+@6@ {{tt|F1}} and {{tt|F2}} are non-template functions and {{tt|F1}} is {{rlp|constraints#Partial ordering of constraints|more partial-ordering-constrained}} than {{tt|F2}}:
+{{source|1=
+template&lt;typename T = int&gt;
+struct S
+{
+    constexpr void f(); // #1
+    constexpr void f(this S&amp;) requires true; // #2
+};
+
+void test()
+{
+    S&lt;&gt; s;
+    s.f(); // calls #2
+}
+}}
+
+@@ , or, if not that,
+}}
+
+
+{{rrev|since=c++11|
+@7@ {{tt|F1}} is a constructor for a class {{tt|D}}, {{tt|F2}} is a constructor for a base class {{tt|B}} of {{tt|D}}, and for all arguments the corresponding parameters of {{tt|F1}} and {{tt|F2}} have the same type:
+{{source|1=
+struct A
+{
+    A(int = 0);
+};
+
+struct B: A
+{
+    using A::A;
+    
+    B();
+};
+
+B b; // OK, B::B()
+}}
+
+@@ , or, if not that,
+}}
+
+
+{{rrev|since=c++20|
+@8@ {{tt|F2}} is a rewritten candidate and {{tt|F1}} is not, or, if not that,
+
+@9@ {{tt|F1}} and {{tt|F2}} are both rewritten candidates, and {{tt|F2}} is a synthesized rewritten candidate with reversed order of parameters and {{tt|F1}} is not, or, if not that,
+}}
+
+
+{{rrev|since=c++17|
+@10@ {{tt|F1}} is generated from a {{rlp|deduction guide|user-defined deduction guide}} and {{tt|F2}} is not, or, if not that,
+
+@11@ {{tt|F1}} is the {{rlp|deduction guide|copy deduction candidate}} and {{tt|F2}} is not, or, if not that,
+
+@12@ {{tt|F1}} is generated from a non-template constructor and {{tt|F2}} is generated from a constructor template:
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    using value_type = T;
+    A(value_type);  // #1
+    A(const A&amp;);    // #2
+    A(T, T, int);   // #3
+    
+    template&lt;class U&gt;
+    A(int, T, U);   // #4
+};                  // #5 is A(A), the copy deduction candidate
+
+A x(1, 2, 3); // uses #3, generated from a non-template constructor
+
+template&lt;class T&gt;
+A(T) -&gt; A&lt;T&gt;;       // #6, less specialized than #5
+
+A a (42); // uses #6 to deduce A&lt;int&gt; and #1 to initialize
+A b = a;  // uses #5 to deduce A&lt;int&gt; and #2 to initialize
+
+template&lt;class T&gt;
+A(A&lt;T&gt;) -&gt; A&lt;A&lt;T&gt;&gt;; // #7, as specialized as #5
+A b2 = a; // uses #7 to deduce A&lt;A&lt;int&gt;&gt; and #1 to initialize
+}}
+}}
+
+These pair-wise comparisons are applied to all viable functions. If exactly one viable function is better than all others, overload resolution succeeds and this function is called. Otherwise, compilation fails.
+
+{{source|1=
+void Fcn(const int*, short); // overload #1
+void Fcn(int*, int);         // overload #2
+
+int i;
+short s = 0;
+
+void f() 
+{
+    Fcn(&amp;i, 1L);  // 1st argument: &amp;i -&gt; int* is better than &amp;i -&gt; const int*
+                  // 2nd argument: 1L -&gt; short and 1L -&gt; int are equivalent
+                  // calls Fcn(int*, int)
+    
+    Fcn(&amp;i, 'c'); // 1st argument: &amp;i -&gt; int* is better than &amp;i -&gt; const int*
+                  // 2nd argument: 'c' -&gt; int is better than 'c' -&gt; short
+                  // calls Fcn(int*, int)
+    
+    Fcn(&amp;i, s);   // 1st argument: &amp;i -&gt; int* is better than &amp;i -&gt; const int*
+                  // 2nd argument: s -&gt; short is better than s -&gt; int
+                  // no winner, compilation error
+}
+}}
+
+If the best viable function resolves to a function for which multiple declarations were found, and if any two of these declarations inhabit different scopes and specify a default argument that made the function viable, the program is ill-formed.
+
+{{source|1=
+namespace A
+{
+    extern "C" void f(int = 5);
+}
+
+namespace B
+{
+    extern "C" void f(int = 5);
+}
+
+using A::f;
+using B::f;
+
+void use()
+{
+    f(3); // OK, default argument was not used for viability
+    f();  // error: found default argument twice
+}
+}}
+
+===Ranking of implicit conversion sequences===
+The argument-parameter implicit conversion sequences considered by overload resolution correspond to {{rlp|implicit conversion}}s used in {{rlp|copy initialization}} (for non-reference parameters), except that when considering conversion to the implicit object parameter or to the left-hand side of assignment operator, conversions that create temporary objects are not considered. {{rev inl|since=c++23|When the parameter is the implicit object parameter of a static member function, the implicit conversion sequence is a standard conversion sequence that is neither better nor worse than any other standard conversion sequence.}}
+
+Each {{rlp|implicit conversion|type of standard conversion sequence}} is assigned one of three ranks:
+@1@ '''Exact match''': no conversion required, lvalue-to-rvalue conversion, qualification conversion, {{rev inl|since=c++17|function pointer conversion,}} user-defined conversion of class type to the same class
+@2@ '''Promotion''': integral promotion, floating-point promotion
+@3@ '''Conversion''': integral conversion, floating-point conversion, floating-integral conversion, pointer conversion, pointer-to-member conversion, boolean conversion, user-defined conversion of a derived class to its base
+
+The rank of the standard conversion sequence is the worst of the ranks of the standard conversions it holds (there may be up to {{rlp|implicit conversion|three conversions}})
+
+Binding of a reference parameter directly to the argument expression is either identity or a derived-to-base conversion:
+{{source|1=
+struct Base {};
+struct Derived : Base {} d;
+
+int f(Base&amp;);    // overload #1
+int f(Derived&amp;); // overload #2
+
+int i = f(d); // d -&gt; Derived&amp; has rank Exact Match
+              // d -&gt; Base&amp; has rank Conversion
+              // calls f(Derived&amp;)
+}}
+Since ranking of conversion sequences operates with types and value categories only, a {{rlp|bit field}} can bind to a reference argument for the purpose of ranking, but if that function gets selected, it will be ill-formed.
+
+@1@ A standard conversion sequence is always ''better'' than a user-defined conversion sequence or an ellipsis conversion sequence.
+
+@2@ A user-defined conversion sequence is always ''better'' than an {{rlp|variadic arguments|ellipsis conversion}} sequence.
+
+@3@ A standard conversion sequence {{tt|S1}} is ''better'' than a standard conversion sequence {{tt|S2}} if
+:@a@ {{tt|S1}} is a proper subsequence of {{tt|S2}}, excluding lvalue transformations; the identity conversion sequence is considered a subsequence of any non-identity conversion, or, if not that,
+:@b@ the rank of {{tt|S1}} is better than the rank of {{tt|S2}}, or, if not that,
+:@c@ both {{tt|S1}} and {{tt|S2}} are binding to a reference parameter to something other than the implicit object parameter of a ref-qualified member function, and {{tt|S1}} binds an rvalue reference to an rvalue while {{tt|S2}} binds an lvalue reference to an rvalue:
+{{source|1=
+int i;
+int f1();
+
+int g(const int&amp;);  // overload #1
+int g(const int&amp;&amp;); // overload #2
+
+int j = g(i);    // lvalue int -&gt; const int&amp; is the only valid conversion
+int k = g(f1()); // rvalue int -&gt; const int&amp;&amp; better than rvalue int -&gt; const int&amp;
+}}
+:@@ or, if not that,
+:@d@ both {{tt|S1}} and {{tt|S2}} are binding to a reference parameter and {{tt|S1}} binds an lvalue reference to function while {{tt|S2}} binds an rvalue reference to function:
+{{source|1=
+int f(void(&amp;)());  // overload #1
+int f(void(&amp;&amp;)()); // overload #2
+
+void g();
+int i1 = f(g); // calls #1
+}}
+:@@ or, if not that,
+:@e@ {{tt|S1}} and {{tt|S2}} only differ in qualification conversion, and
+{{rrev multi|until1=c++20|rev1=the cv-qualification of the result of {{tt|S1}} is a proper subset of the cv-qualification of the result of {{tt|S2}}{{rev inl|until=c++11|, and {{tt|S1}} is not the {{rlp|string literal#Notes|deprecated string literal array-to-pointer conversion}}}}.|rev2=the result of {{tt|S1}} can be converted to the result of {{tt|S2}} by a qualification conversion.}}
+{{source|1=
+int f(const int*);
+int f(int*);
+
+int i;
+int j = f(&amp;i); // &amp;i -&gt; int* is better than &amp;i -&gt; const int*, calls f(int*)
+}}
+:@@ or, if not that,
+:@f@ both {{tt|S1}} and {{tt|S2}} are binding to a reference parameters only different in top-level cv-qualification, and {{tt|S1}}'s type is ''less'' cv-qualified than {{tt|S2}}'s:
+{{source|1=
+int f(const int &amp;); // overload #1
+int f(int &amp;);       // overload #2 (both references)
+
+int g(const int &amp;); // overload #1
+int g(int);         // overload #2
+
+int i;
+int j = f(i); // lvalue i -&gt; int&amp; is better than lvalue int -&gt; const int&amp;
+              // calls f(int&amp;)
+int k = g(i); // lvalue i -&gt; const int&amp; ranks Exact Match
+              // lvalue i -&gt; rvalue int ranks Exact Match
+              // ambiguous overload: compilation error
+}}
+:@@ or, if not that,
+:@g@ {{tt|S1}} and {{tt|S2}} bind the same reference type “reference to {{tt|T}}” and have source types {{tt|V1}} and {{tt|V2}}, respectively, where the standard conversion sequence from {{tt|V1*}} to {{tt|T*}} is better than the standard conversion sequence from {{tt|V2*}} to {{tt|T*}}:
+{{source|1=
+struct Z {};
+
+struct A
+{
+    operator Z&amp;();
+    operator const Z&amp;();  // overload #1
+};
+
+struct B
+{
+    operator Z();
+    operator const Z&amp;&amp;(); // overload #2
+};
+
+const Z&amp; r1 = A();        // OK, uses #1
+const Z&amp;&amp; r2 = B();       // OK, uses #2
+}}
+
+@4@ A user-defined conversion sequence {{tt|U1}} is ''better'' than a user-defined conversion sequence {{tt|U2}} if they call the same constructor/user-defined conversion function or initialize the same class with aggregate-initialization, and in either case the second standard conversion sequence in {{tt|U1}} is better than the second standard conversion sequence in {{tt|U2}}
+{{source|1=
+struct A
+{
+    operator short(); // user-defined conversion function
+} a;
+
+int f(int);   // overload #1
+int f(float); // overload #2
+
+int i = f(a); // A -&gt; short, followed by short -&gt; int (rank Promotion)
+              // A -&gt; short, followed by short -&gt; float (rank Conversion)
+              // calls f(int)
+}}
+
+@5@ A list-initialization sequence {{tt|L1}} is ''better'' than list-initialization sequence {{tt|L2}} if {{tt|L1}} initializes an {{lc|std::initializer_list}} parameter, while {{tt|L2}} does not.
+{{source|1=
+void f1(int);                                 // #1
+void f1(std::initializer_list&lt;long&gt;);         // #2
+void g1() { f1({42}); }                       // chooses #2
+
+void f2(std::pair&lt;const char*, const char*&gt;); // #3
+void f2(std::initializer_list&lt;std::string&gt;);  // #4
+void g2() { f2({"foo", "bar"}); }             // chooses #4
+}}
+
+{{rrev multi
+|since1=c++11|rev1=
+@6@ A list-initialization sequence {{tt|L1}} is ''better'' than list-initialization sequence {{tt|L2}} if the corresponding parameters are references to arrays, and L1 converts to type "array of N1 T," L2 converts to type "array of N2 T", and N1 is smaller than N2.
+|since2=c++20|rev2=
+@6@ A list-initialization sequence {{tt|L1}} is ''better'' than list-initialization sequence {{tt|L2}} if the corresponding parameters are references to arrays, and L1 and L2 convert to arrays of same element type, and either
+* the number of elements N1 initialized by L1 is less than the number of elements N2 initialized by L2, or
+* N1 is equal to N2 and L2 converts to an array of unknown bound and L1 does not.
+{{source|1=
+void f(int    (&amp;&amp;)[] ); // overload #1
+void f(double (&amp;&amp;)[] ); // overload #2
+void f(int    (&amp;&amp;)[2]); // overload #3
+
+f({1});        // #1: Better than #2 due to conversion, better than #3 due to bounds
+f({1.0});      // #2: double -&gt; double is better than double -&gt; int
+f({1.0, 2.0}); // #2: double -&gt; double is better than double -&gt; int
+f({1, 2});     // #3: -&gt; int[2] is better than -&gt; int[], 
+               //     and int -&gt; int is better than int -&gt; double
+}}
+}}
+
+If two conversion sequences are indistinguishable because they have the same rank, the following additional rules apply:
+
+@1@ Conversion that does not involve pointer to {{c/core|bool}} or pointer-to-member to {{c/core|bool}} is better than the one that does. &lt;!-- No nullptr_t, see CWG 1781 --&gt;
+
+{{rrev|since=c++11|
+@2@ Conversion that promotes an {{rlp|enum|enumeration}} whose underlying type is fixed to its underlying type is better than one that promotes to the promoted underlying type, if the two types are different.
+{{source|1=
+enum num : char { one = '0' };
+std::cout &lt;&lt; num::one; // '0', not 48
+}}
+}}
+
+
+{{rrev|since=c++23|
+@3@ A conversion in either direction between floating-point type {{tt|FP1}} and floating-point type {{tt|FP2}} is better than a conversion in the same direction between {{tt|FP1}} and arithmetic type {{tt|T3}} if
+* the {{rlpsd|usual arithmetic conversions#Floating-point conversion rank}} of {{tt|FP1}} is equal to the rank of {{tt|FP2}}, and
+** {{tt|T3}} is not a floating-point type, or
+** {{tt|T3}} is a floating-point type whose rank is not equal to the rank of {{tt|FP1}}, or
+** the {{rlpsd|usual arithmetic conversions#Floating-point conversion subrank}} of {{tt|FP2}} is greater than the subrank of {{tt|T3}}.
+{{source|1=
+int f(std::float32_t);
+int f(std::float64_t);
+int f(long long);
+
+float x;
+std::float16_t y;
+
+int i = f(x); // calls f(std::float32_t) on implementations where
+              // float and std::float32_t have equal conversion ranks
+int j = f(y); // error: ambiguous, no equal conversion rank
+}}
+}}
+
+@4@ Conversion that converts pointer-to-derived to pointer-to-base is better than the conversion of pointer-to-derived to pointer-to-{{c/core|void}}, and conversion of pointer-to-base to {{c/core|void}} is better than pointer-to-derived to {{c/core|void}}.
+
+@5@ If {{tt|Mid}} is derived (directly or indirectly) from {{tt|Base}}, and {{tt|Derived}} is derived (directly or indirectly) from {{tt|Mid}}
+:@a@ {{tt|Derived*}} to {{tt|Mid*}} is better than {{tt|Derived*}} to {{tt|Base*}}
+:@b@ {{tt|Derived}} to {{tt|Mid&amp;}} or {{tt|Mid&amp;&amp;}} is better than {{tt|Derived}} to {{tt|Base&amp;}} or {{tt|Base&amp;&amp;}}
+:@c@ {{tt|Base::*}} to {{tt|Mid::*}} is better than {{tt|Base::*}} to {{tt|Derived::*}}
+:@d@ {{tt|Derived}} to {{tt|Mid}} is better than {{tt|Derived}} to {{tt|Base}}
+:@e@ {{tt|Mid*}} to {{tt|Base*}} is better than {{tt|Derived*}} to {{tt|Base*}}
+:@f@ {{tt|Mid}} to {{tt|Base&amp;}} or {{tt|Base&amp;&amp;}} is better than {{tt|Derived}} to {{tt|Base&amp;}} or {{tt|Base&amp;&amp;}}
+:@g@ {{tt|Mid::*}} to {{tt|Derived::*}} is better than {{tt|Base::*}} to {{tt|Derived::*}}
+:@h@ {{tt|Mid}} to {{tt|Base}} is better than {{tt|Derived}} to {{tt|Base}}
+
+Ambiguous conversion sequences are ranked as user-defined conversion sequences because multiple conversion sequences for an argument can exist only if they involve different user-defined conversions:
+{{source|1=
+class B;
+
+class A { A (B&amp;);};         // converting constructor
+class B { operator A (); }; // user-defined conversion function
+class C { C (B&amp;); };        // converting constructor
+
+void f(A) {} // overload #1
+void f(C) {} // overload #2
+
+B b;
+f(b); // B -&gt; A via ctor or B -&gt; A via function (ambiguous conversion)
+      // b -&gt; C via ctor (user-defined conversion)
+      // the conversions for overload #1 and for overload #2
+      // are indistinguishable; compilation fails 
+}}
+
+===Implicit conversion sequence in list-initialization===
+In {{rlp|list initialization}}, the argument is a {{spar|braced-init-list}}, which isn't an expression, so the implicit conversion sequence into the parameter type for the purpose of overload resolution is decided by the following special rules:
+* If the parameter type is some aggregate {{tt|X}} and the initializer list consists of exactly one element of same or derived class (possibly cv-qualified), the implicit conversion sequence is the one required to convert the element to the parameter type.
+* Otherwise, if the parameter type is a reference to character array and the initializer list has a single element that is an appropriately-typed string literal, the implicit conversion sequence is the identity conversion.
+* Otherwise, if the parameter type is {{c/core|std::initializer_list&lt;X&gt;}}, and there is a non-narrowing implicit conversion from every element of the initializer list to {{tt|X}}, the implicit conversion sequence for the purpose of overload resolution is the worst conversion necessary. If the braced-init-list is empty, the conversion sequence is the identity conversion.
+{{source|1=
+struct A
+{
+    A(std::initializer_list&lt;double&gt;);          // #1
+    A(std::initializer_list&lt;complex&lt;double&gt;&gt;); // #2
+    A(std::initializer_list&lt;std::string&gt;);     // #3
+};
+A a{1.0, 2.0};     // selects #1 (rvalue double -&gt; double: identity conv)
+
+void g(A);
+g({"foo", "bar"}); // selects #3 (lvalue const char[4] -&gt; std::string: user-def conv)
+}}
+* Otherwise, if the parameter type is "array of N T" (this only happens for references to arrays), the initializer list must have N or less elements, and the worst implicit conversion necessary to convert every element of the list (or the empty pair of braces {{tt|{}&lt;!----&gt;}} if the list is shorter than N) to {{tt|T}} is the one used.
+{{rrev|since=c++20|
+* Otherwise, if the parameter type is "array of unknown bound of T" (this only happens for references to arrays), the worst implicit conversion necessary to convert every element of the list to {{tt|T}} is the one used.
+}}
+{{source|1=
+typedef int IA[3];
+
+void h(const IA&amp;);
+void g(int (&amp;&amp;)[]);
+
+h({1, 2, 3}); // int-&gt;int identity conversion
+g({1, 2, 3}); // same as above since C++20
+}}
+* Otherwise, if the parameter type is a non-aggregate class type {{tt|X}}, overload resolution picks the constructor C of X to initialize from the argument initializer list
+:* If C is not an initializer-list constructor and the initializer list has a single element of possibly cv-qualified X, the implicit conversion sequence has Exact Match rank. If the initializer list has a single element of possibly cv-qualified type derived from X, the implicit conversion sequence has Conversion rank. (note the difference from aggregates: aggregates initialize directly from single-element init lists before considering {{rlp|aggregate initialization}}, non-aggregates consider initializer_list constructors before any other constructors)
+:* otherwise, the implicit conversion sequence is a user-defined conversion sequence with the second standard conversion sequence an identity conversion.
+
+If multiple constructors are viable but none is better than the others, the implicit conversion sequence is the ambiguous conversion sequence.
+{{source|1=
+struct A { A(std::initializer_list&lt;int&gt;); };
+void f(A);
+
+struct B { B(int, double); };
+void g(B);
+
+g({'a', 'b'});    // calls g(B(int, double)), user-defined conversion
+// g({1.0, 1,0}); // error: double-&gt;int is narrowing, not allowed in list-init
+
+void f(B);
+// f({'a', 'b'}); // f(A) and f(B) both user-defined conversions
+}}
+* Otherwise, if the parameter type is an aggregate which can be initialized from the initializer list according by {{rlp|aggregate initialization}}, the implicit conversion sequence is a user-defined conversion sequence with the second standard conversion sequence an identity conversion.
+{{source|1=
+struct A { int m1; double m2; };
+
+void f(A);
+f({'a', 'b'}); // calls f(A(int, double)), user-defined conversion
+}}
+* Otherwise, if the parameter is a reference, reference initialization rules apply
+{{source|1=
+struct A { int m1; double m2; };
+
+void f(const A&amp;);
+f({'a', 'b'}); // temporary created, f(A(int, double)) called. User-defined conversion
+}}
+* Otherwise, if the parameter type is not a class and the initializer list has one element, the implicit conversion sequence is the one required to convert the element to the parameter type
+* Otherwise, if the parameter type is not a class type and if the initializer list has no elements, the implicit conversion sequence is the identity conversion.
+
+{{rrev|since=c++20|
+If the argument is a designated initializer list and the parameter is not a reference, a conversion is only possible if the parameter has an aggregate type that can be initialized from that initializer list according to the rules for {{rlp|aggregate initialization}}, in which case the implicit conversion sequence is a user-defined conversion sequence whose second standard conversion sequence is an identity conversion.
+
+If, after overload resolution, the order of declaration of the aggregate's members does not match for the selected overload, the initialization of the parameter will be ill-formed.
+{{source|1=
+struct A { int x, y; };
+struct B { int y, x; };
+
+void f(A a, int); // #1
+void f(B b, ...); // #2
+void g(A a);      // #3
+void g(B b);      // #4
+
+void h() 
+{
+    f({.x = 1, .y = 2}, 0); // OK; calls #1
+    f({.y = 2, .x = 1}, 0); // error: selects #1, initialization of a fails
+                            // due to non-matching member order
+    g({.x = 1, .y = 2});    // error: ambiguous between #3 and #4
+}
+}}
+
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1|std=C++98|before=the behavior was unspecified when the same&lt;br&gt;function with possibly different default&lt;br&gt;arguments (from different scopes) is selected|after=the program is ill-&lt;br&gt;formed in this case}}
+{{dr list item|wg=cwg|dr=83|std=C++98|before=the conversion sequence from a string literal&lt;br&gt;to {{c/core|char*}} was better than that to {{c/core|const char*}}&lt;br&gt;even though the former is deprecated|after=the rank of the deprecated&lt;br&gt;conversion is lowered (it&lt;br&gt;was removed in C++11)}}
+{{dr list item|wg=cwg|dr=162|std=C++98|before=it was invalid if the overload set named by {{tt|F}} contains&lt;br&gt;a non-static member function in the case of {{tt|&amp;F(args)}}|after=only invalid if overload&lt;br&gt;resolution selects a non-static&lt;br&gt;member function in this case}}
+{{dr list item|wg=cwg|dr=233|std=C++98|before=references and pointers were handled insonsistently in&lt;br&gt;overloading resolution with user defined conversions|after=they are handled&lt;br&gt;consistently}}
+{{dr list item|wg=cwg|dr=280|std=C++98|before=surrogate call functions were not added to&lt;br&gt;the set of candidate functions for conversion&lt;br&gt;functions declared in inaccessible base classes|after=removed the accessibility&lt;br&gt;constraint, the program is&lt;br&gt;ill-formed if a surrogate call&lt;br&gt;function is selected and the&lt;br&gt;corresponding conversion&lt;br&gt;function cannot be called}}
+{{dr list item|wg=cwg|dr=415|std=C++98|before=when a function template is selected as a&lt;br&gt;candidate, its specializations were instantiated&lt;br&gt;using template argument deduction|after=no instantiation will occur&lt;br&gt;in this case, their declarations&lt;br&gt;will be synthesized}}
+{{dr list item|wg=cwg|dr=495|std=C++98|before=when the implicit conversions for arguments are equally&lt;br&gt;good, a non-template conversion function was always&lt;br&gt;better than a conversion function template, even if the&lt;br&gt;latter may have a better standard conversion sequence|after=standard conversion&lt;br&gt;sequences are compared&lt;br&gt;before specialization levels}}
+{{dr list item|wg=cwg|dr=1307|std=C++11|before=overload resolution based on size of arrays was not specified|after=a shorter array is&lt;br&gt;better when possible}}
+{{dr list item|wg=cwg|dr=1328|std=C++11|before=the determination of the candidate functions when&lt;br&gt;binding a reference to a conversion result was not clear|after=made clear}}
+{{dr list item|wg=cwg|dr=1374|std=C++98|before=qualification conversion was checked before reference&lt;br&gt;binding when comparing standard conversion sequences|after=reversed}}
+{{dr list item|wg=cwg|dr=1385|std=C++11|before=a non-explicit user-defined conversion function declared with&lt;br&gt;a ref-qualifier did not have a corresponding surrogate function|after=it has a corresponding&lt;br&gt;surrogate function}}
+{{dr list item|wg=cwg|dr=1467|std=C++11|before=same-type list-initialization of&lt;br&gt;aggregates and arrays was omitted|after=initialization defined}}
+{{dr list item|wg=cwg|dr=1601|std=C++11|before=conversion from enum to its underlying type&lt;br&gt;did not prefer the fixed underlying type|after=fixed type is preferred&lt;br&gt;to what it promotes to}}
+{{dr list item|wg=cwg|dr=1608|std=C++98|before=the set of member candidates of a unary operator {{tt|@}}&lt;br&gt;whose argument has type {{tt|T1}} was empty if&lt;br&gt;{{tt|T1}} is a class currently being defined|after=the set is the result of&lt;br&gt;qualified name lookup of&lt;br&gt;{{tt|T1::operator@}} in this case}}
+{{dr list item|wg=cwg|dr=1687|std=C++98|before=when a built-in candidate is selected by overload resolution,&lt;br&gt;the operands would undergo conversion without restriction|after=only convert class type operands,&lt;br&gt;and disabled the second&lt;br&gt;standard conversion sequence}}
+{{dr list item|wg=cwg|dr=2052|std=C++98|before=ill-formed synthesized function template specializations could&lt;br&gt;be added to the candidate set, making the program ill-formed|after=they are not added&lt;br&gt;to the candidate set}}
+{{dr list item|wg=cwg|dr=2076|std=C++11|before=user-defined conversion is applied to the single initializer&lt;br&gt;in a nested initializer list during list-initialization&lt;br&gt;due to the resolution of {{cwg|1467}}|after=not applied}}
+{{dr list item|wg=cwg|dr=2137|std=C++11|before=initializer list constructors lost to copy&lt;br&gt;constructors when list-initializing {{tt|X}} from {{c|{X}&lt;!----&gt;}}|after=non-aggregates consider&lt;br&gt;initializer lists first}}
+{{dr list item|wg=cwg|dr=2273|std=C++11|before=there was no tiebreaker between&lt;br&gt;inherited and non-inherited constructors|after=non-inherited constructor wins}}
+{{dr list item|wg=cwg|dr=2673|std=C++20|before=built-in candidates with the same parameter&lt;br&gt;list as a rewritten non-member candidate&lt;br&gt;were added to the list of built-in candidates|after=not added}}
+{{dr list item|wg=cwg|dr=2712|std=C++98|before=when a built-in assignment operator is considered,&lt;br&gt;the first parameter could not bound to a&lt;br&gt;temporary, which is already impossible&lt;ref&gt;The type of the of the first parameter of a built-in assignment operator is “lvalue reference to possibly volatile-qualified {{tt|T}}”. References of this type cannot bould to a temporary.&lt;/ref&gt;|after=removed the&lt;br&gt;redundant requirement}}
+{{dr list item|wg=cwg|dr=2713|std=C++20|before=the conversion restriction regarding designated initializer&lt;br&gt;lists was applied even if the parameter is a reference|after=not restricted in this case}}
+{{dr list item|wg=cwg|dr=2789|std=C++23|before=the explicit object paramaeter was included&lt;br&gt;when comparing parameter-type-lists|after=excluded}}
+{{dr list item|wg=cwg|dr=2856|std=C++11|before=the overload resolution for default-initialization in the context&lt;br&gt;of copy-list-initialization only considered converting constructor|after=considers all constructors}}
+{{dr list item|wg=cwg|dr=2919|std=C++98|before=the candidate set of reference initialization by conversion&lt;br&gt;depended on the target type of the initialization|after=depends on the target&lt;br&gt;type of the conversion}}
+{{dr list item|paper=P2468R2|std=C++20|before=rewritten candidates based on {{c/core|1=operator==}} are added&lt;br&gt;for {{c|1=a != b}} even if a matching {{c/core|1=operator!=}} exists|after=not added}}
+{{dr list end}}
+&lt;references/&gt;
+
+===References===
+{{ref std c++23}}
+{{ref std|section=12.2|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=12.4|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=16.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=13.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=13.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=13.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+
+===See also===
+* {{rlp|lookup|Name lookup}} 
+* {{rlp|adl|Argument-dependent lookup}} 
+* {{rlp|template argument deduction|Template argument deduction}}
+* {{rlp|sfinae|SFINAE}}
+
+{{langlinks|de|es|ja|ru|zh}}

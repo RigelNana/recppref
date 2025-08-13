@@ -1,0 +1,121 @@
+{{title|Main function}}
+{{cpp/language/basics/navbar}}
+
+A program shall contain a global function named {{c|main}}, which is the designated start of the program in hosted environment. It shall have one of the following forms:
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{c/core|int}}{{ttb| main() {}} {{spar|body}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=2|1=
+{{c/core|int}}{{ttb| main(}}{{c/core|int}} {{spar|argc}}{{ttb|,}} {{c/core|char*}} {{spar|argv}}{{tt|[]}}{{ttb|) {}} {{spar|body}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=3|1=
+{{c/core|int}}{{ttb| main(}}{{c/core|/* implementation-defined */}}{{ttb|) {}} {{spar|body}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+@1@ A {{tt|main}} function running independently of environment-provided arguments.
+
+@2@ A {{tt|main}} function accepting environment-provided arguments.
+@@ The names of {{spar|argc}} and {{spar|argv}} are arbitrary, as well as the representation of the types of the parameters: {{c/core|int main(int ac, char** av)}} is equally valid.
+
+@3@ A {{tt|main}} function of implement-defined type, returning {{c/core|int}}.
+@@ The C++ standard recommends implementation-defined {{tt|main}} functions to place the extra (optional) parameters after {{spar|argv}}.
+
+{{par begin}}
+{{par|{{spar|argc}}|Non-negative value representing the number of arguments passed to the program from the environment in which the program is run.}}
+{{par|{{spar|argv}}|Pointer to the first element of an array of {{c|argc + 1}} pointers, of which the last one is null and the previous ones, if any, point to [[cpp/string/multibyte|null-terminated multibyte strings]] that represent the arguments passed to the program from the execution environment. If {{c|argv[0]}} is not a null pointer (or, equivalently, if {{c|argc &gt; 0}}), it points to a string that represents the name used to invoke the program, or to an empty string.}}
+{{par|{{spar|body}}|The body of the {{tt|main}} function.}}
+{{par end}}
+
+===Explanation===
+The {{tt|main}} function is called at program startup after {{rlp|initialization}} of the non-local objects with static {{rlp|storage duration}}. It is the designated entry point to a program that is executed in ''hosted'' environment (that is, with an operating system). The entry points to ''freestanding'' programs (boot loaders, OS kernels, etc) are implementation-defined.
+
+The parameters of the two-parameter form of the {{tt|main}} function allow arbitrary multibyte character strings to be passed from the execution environment (these are typically known as ''command line arguments''), the pointers {{c|argv[1]}} .. {{c|argv[argc - 1]}} point at the first characters in each of these strings. {{c|argv[0]}} (if non-null) is the pointer to the initial character of a null-terminated multibyte string that represents the name used to invoke the program itself (or an empty string {{c|""}} if this is not supported by the execution environment). The strings are modifiable, although these modifications do not propagate back to the execution environment: they can be used, for example, with {{lc|std::strtok}}. The size of the array pointed to by {{c|argv}} is at least {{c|argc + 1}}, and the last element, {{c|argv[argc]}}, is guaranteed to be a null pointer.
+
+The {{tt|main}} function has the following several special properties:
+@1@ The body of the {{tt|main}} function does not need to contain the {{rlp|return|{{c/core|return}} statement}}: if control reaches the end of {{tt|main}} without encountering a return statement, the effect is that of executing {{c|return 0;}}.
+@2@ Execution of the return (or the implicit return upon reaching the end of {{tt|main}}) is equivalent to first leaving the function normally (which destroys the objects with automatic storage duration) and then calling {{lc|std::exit}} with the same argument as the argument of the {{rlp|return}} ({{lc|std::exit}} then destroys static objects and terminates the program).
+
+The {{tt|main}} function has several restrictions (violation of which renders the program ill-formed):
+@1@ It cannot be {{rlp|definition#Naming a function|named}} anywhere in the program
+:@a@ in particular, it cannot be called recursively
+:@b@ its address cannot be taken
+:@c@ it cannot be used in a {{rlpt|typeid}} expression {{rev inl|since=c++11|or a {{rlpt|decltype}}-specifier}}
+@2@ It cannot be predefined and cannot be overloaded: effectively, the name {{tt|main}} in the global namespace is reserved for functions (although it can be used to name classes, namespaces, enumerations, and any entity in a non-global namespace, except that an entity named {{tt|main}} cannot be declared with C {{rlp|language linkage}} in any namespace.
+@3@ It cannot be {{rev inl|since=c++11|defined as deleted or}} declared with any language linkage{{rev inl|since=c++11|, {{rlpt|constexpr}}}}{{rev inl|since=c++20|, {{rlpt|consteval}}}}, {{rlpt|inline}}, or {{rlpt|static}}.
+
+{{rrev|since=c++14|
+@4@ The return type of the {{tt|main}} function cannot be deduced ({{c/core|auto main() {...}&lt;!----&gt;}} is not allowed).
+}}
+
+{{rrev|since=c++20|
+@5@ The {{tt|main}} function cannot be a {{rlp|coroutines|coroutine}}.
+}}
+
+{{rrev|since=c++20|
+@6@ The {{tt|main}} function cannot attach to a named {{rlp|modules|module}}.
+}}
+
+===Notes===
+If the {{tt|main}} function is defined with a {{rlp|try#Function try block|function {{c/core|try}} block}}, the exceptions thrown by the destructors of static objects (which are destroyed by the implied {{lc|std::exit}}) are not {{rlp|catch|caught}} by it.
+
+The manner in which the arguments given at the OS command line are converted into the multibyte character arrays referenced by {{c|argv}} may involve implementation-defined processing:
+* [https://docs.microsoft.com/en-us/cpp/cpp/main-function-command-line-args Parsing C++ Command-Line Arguments] MSDN
+* [https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_01 Shell Introduction] POSIX
+
+A very common implementation-defined form of {{c/core|main()}} has a third argument (in addition to {{tt|argc}} and {{tt|argv}}), of type {{c/core|char**}}, pointing at [https://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html an array of pointers to the execution environment variables].
+
+===Example===
+{{example
+|Demonstrates how to inform a program about where to find its input and where to write its results.&lt;br&gt;
+A possible invocation: {{c|1=./convert table_in.dat table_out.dat}}
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main(int argc, char *argv[])
+{
+    std::cout &lt;&lt; "argc == " &lt;&lt; argc &lt;&lt; '\n';
+    
+    for (int ndx{}; ndx != argc; ++ndx)
+        std::cout &lt;&lt; "argv[" &lt;&lt; ndx &lt;&lt; "] == " &lt;&lt; std::quoted(argv[ndx]) &lt;&lt; '\n';
+    std::cout &lt;&lt; "argv[" &lt;&lt; argc &lt;&lt; "] == "
+              &lt;&lt; static_cast&lt;void*&gt;(argv[argc]) &lt;&lt; '\n';
+    
+    /* ... */
+    
+    return argc == 3 ? EXIT_SUCCESS : EXIT_FAILURE; // optional return value
+}
+|p=true
+|output=
+argc == 3
+argv[0] == "./convert"
+argv[1] == "table_in.dat"
+argv[2] == "table_out.dat"
+argv[3] == 0
+}}
+
+===References===
+{{cot}}
+{{ref std c++23}}
+{{ref std|section=6.9.3.1|title=main function|id=basic.start.main}}
+{{ref std end}}
+{{cob}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1003|std=C++98|before=supported parameter names of {{tt|main}} were overly restricted|after=all valid parameter&lt;br&gt;names are supported}}
+{{dr list item|wg=cwg|dr=1886|std=C++98|before=the {{tt|main}} function could be declared with a language linkage|after=prohibited}}
+{{dr list item|wg=cwg|dr=2479|std=C++20|before=the {{tt|main}} function could be declared {{c/core|consteval}}|after=prohibited}}
+{{dr list item|wg=cwg|dr=2811|std=C++98|before=whether the {{tt|main}} function is used after {{wg21|N3214}} was unclear|after=it is considered used when named}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/main function|{{tt|main}} function|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

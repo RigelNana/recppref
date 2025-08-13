@@ -1,0 +1,170 @@
+{{title|SIMD library}}
+{{cpp/experimental/simd/navbar}}
+
+{{fmbox|class=noprint|style=font-size: 0.8em|text='''Merged into ISO C++''' The functionality described on this page was merged into the mainline ISO C++ standard as of 11/2024; see [[cpp/numeric/simd|the data-parallel types (SIMD)]] {{mark since c++26}}}}
+
+The SIMD library provides portable types for explicitly stating data-parallelism and structuring data for more efficient SIMD access.
+
+An object of type {{ltt|cpp/experimental/simd/simd|simd&lt;T&gt;}} behaves analogue to objects of type {{tt|T}}. But while {{tt|T}} stores and manipulates one value, {{tt|simd&lt;T&gt;}} stores and manipulates multiple values (called ''width'' but identified as {{c|size}} for consistency with the rest of the standard library; cf. {{ltt|cpp/experimental/simd/simd_size}}).
+
+Every operator and operation on {{tt|simd&lt;T&gt;}} acts ''element-wise'' (except for ''horizontal'' operations, which are clearly marked as such). This simple rule expresses data-parallelism and will be used by the compiler to generate SIMD instructions and/or independent execution streams.
+
+The width of the types {{tt|simd&lt;T&gt;}} and {{ltt|cpp/experimental/simd/simd|native_simd&lt;T&gt;}} is determined by the implementation at compile-time. In contrast, the width of the type {{ltt|cpp/experimental/simd/simd|fixed_size_simd&lt;T, N&gt;}} is fixed by the developer to a certain size.
+
+A recommended pattern for using a mix of different SIMD types with high efficiency uses {{ltt|cpp/experimental/simd/simd|native_simd}} and {{ltt|cpp/experimental/simd/rebind_simd}}:
+{{source|1=
+#include &lt;experimental/simd&gt;
+namespace stdx = std::experimental;
+
+using floatv  = stdx::native_simd&lt;float&gt;;
+using doublev = stdx::rebind_simd_t&lt;double, floatv&gt;;
+using intv    = stdx::rebind_simd_t&lt;int, floatv&gt;;
+}}
+This ensures that the set of types all have the same width and thus can be interconverted. A conversion with mismatching width is not defined because it would either drop values or have to invent values. For resizing operations, the SIMD library provides the {{ltt|cpp/experimental/simd/split}} and {{ltt|cpp/experimental/simd/concat}} functions.
+
+{{dsc begin}}
+{{dsc header|experimental/simd}}
+{{dsc end}}
+
+===Main classes===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/dsc simd}}
+{{dsc inc|cpp/experimental/simd/dsc simd_mask}}
+{{dsc end}}
+
+===ABI tags===
+{{dsc begin}}
+{{dsc namespace|std::experimental::simd_abi}}
+{{dsc inc|cpp/experimental/simd/dsc scalar}}
+{{dsc inc|cpp/experimental/simd/dsc fixed_size}}
+{{dsc inc|cpp/experimental/simd/dsc compatible}}
+{{dsc inc|cpp/experimental/simd/dsc native}}
+{{dsc inc|cpp/experimental/simd/dsc max_fixed_size}}
+{{dsc inc|cpp/experimental/simd/dsc deduce}}
+{{dsc end}}
+
+===Alignment tags===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/element aligned}}
+{{dsc inc|cpp/experimental/simd/vector_aligned}}
+{{dsc inc|cpp/experimental/simd/overaligned}}
+{{dsc end}}
+
+===Where expression===
+{{dsc begin}}
+{{dsc tclass|cpp/experimental/simd/const_where_expression|selected elements with non-mutating operations|notes={{mark since parallelism_ts_2}}}}
+{{dsc tclass|cpp/experimental/simd/where_expression|selected elements with mutating operations|notes={{mark since parallelism_ts_2}}}}
+{{dsc tfun|cpp/experimental/simd/where|produces const_where_expression and where_expression|notes={{mark since parallelism_ts_2}}}}
+{{dsc end}}
+
+===Casts===
+{{dsc begin}}
+{{dsc tfun|cpp/experimental/simd/simd_cast|element-wise static_cast|notes={{mark since parallelism_ts_2}}|title=simd_cast&lt;br&gt;static_simd_cast}}
+{{dsc tfun|cpp/experimental/simd/abi_cast|element-wise ABI cast|notes={{mark since parallelism_ts_2}}|title=to_fixed_size&lt;br&gt;to_compatible&lt;br&gt;to_native}}
+{{dsc tfun|cpp/experimental/simd/split|splits single simd object to multiple ones|notes={{mark since parallelism_ts_2}}|title=split&lt;br&gt;split_by}}
+{{dsc tfun|cpp/experimental/simd/concat|concatenates multiple simd objects to a single one|notes={{mark since parallelism_ts_2}}}}
+{{dsc end}}
+
+===Algorithms===
+{{dsc begin}}
+{{dsc tfun|cpp/experimental/simd/min|element-wise min operation|notes={{mark since parallelism_ts_2}}}}
+{{dsc tfun|cpp/experimental/simd/max|element-wise max operation|notes={{mark since parallelism_ts_2}}}}
+{{dsc tfun|cpp/experimental/simd/minmax|element-wise minmax operation|notes={{mark since parallelism_ts_2}}}}
+{{dsc tfun|cpp/experimental/simd/clamp|element-wise clamp operation|notes={{mark since parallelism_ts_2}}}}
+{{dsc end}}
+
+===Reduction===
+{{dsc begin}}
+{{dsc tfun|cpp/experimental/simd/reduce|reduces the vector to a single element|notes={{mark since parallelism_ts_2}}|title=reduce&lt;br&gt;hmin&lt;br&gt;hmax}}
+{{dsc end}}
+
+===Mask reduction===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/dsc all_of}}
+{{dsc inc|cpp/experimental/simd/dsc popcount}}
+{{dsc inc|cpp/experimental/simd/dsc find_first_set}}
+{{dsc end}}
+
+===Traits===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/dsc is_simd}}
+{{dsc inc|cpp/experimental/simd/dsc is_abi_tag}}
+{{dsc inc|cpp/experimental/simd/dsc is_simd_flag_type}}
+{{dsc inc|cpp/experimental/simd/dsc simd_size}}
+{{dsc inc|cpp/experimental/simd/dsc memory_alignment}}
+{{dsc inc|cpp/experimental/simd/dsc rebind_simd}}
+{{dsc end}}
+
+===Math functions===
+All functions in {{header|cmath}}, except for the special math functions, are overloaded for {{tt|simd}}.
+
+===Example===
+{{example
+|code=
+#include &lt;experimental/simd&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+namespace stdx = std::experimental;
+
+void println(std::string_view name, auto const&amp; a)
+{
+    std::cout &lt;&lt; name &lt;&lt; ": ";
+    for (std::size_t i{}; i != std::size(a); ++i)
+        std::cout &lt;&lt; a[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+template&lt;class A&gt;
+stdx::simd&lt;int, A&gt; my_abs(stdx::simd&lt;int, A&gt; x)
+{
+    where(x &lt; 0, x) = -x;
+    return x;
+}
+
+int main()
+{
+    const stdx::native_simd&lt;int&gt; a = 1;
+    println("a", a);
+
+    const stdx::native_simd&lt;int&gt; b([](int i) { return i - 2; });
+    println("b", b);
+
+    const auto c = a + b;
+    println("c", c);
+
+    const auto d = my_abs(c);
+    println("d", d);
+
+    const auto e = d * d;
+    println("e", e);
+
+    const auto inner_product = stdx::reduce(e);
+    std::cout &lt;&lt; "inner product: " &lt;&lt; inner_product &lt;&lt; '\n';
+
+    const stdx::fixed_size_simd&lt;long double, 16&gt; x([](int i) { return i; });
+    println("x", x);
+    println("cos²(x) + sin²(x)", stdx::pow(stdx::cos(x), 2) + stdx::pow(stdx::sin(x), 2));
+}
+|output=
+a: 1 1 1 1 
+b: -2 -1 0 1 
+c: -1 0 1 2 
+d: 1 0 1 2 
+e: 1 0 1 4 
+inner product: 6
+x: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 
+cos²(x) + sin²(x): 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/dsc valarray}}
+{{dsc end}}
+
+===External links===
+{{elink begin}}
+{{elink|1=[https://github.com/VcDevel/std-simd The implementation of ISO/IEC TS 19570:2018 Section 9 "Data-Parallel Types"] — github.com}}
+{{elink|1=TS implementation reach for [https://gcc.gnu.org/git/?p=gcc.git;a=blob;f=libstdc%2B%2B-v3/include/experimental/simd;hb=HEAD GCC/libstdc++] ({{tt|std::experimental::simd}} is shipping with GCC-11) — gcc.gnu.org}}
+{{elink end}}
+
+{{langlinks|ja|zh}}

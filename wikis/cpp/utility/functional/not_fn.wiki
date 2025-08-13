@@ -1,0 +1,299 @@
+{{cpp/title|not_fn}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|functional}}
+{{dcla|num=1|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class F &gt;
+/* unspecified */ not_fn( F&amp;&amp; f );
+}}
+{{dcla|num=2|since=c++26|
+template&lt; auto ConstFn &gt;
+constexpr /* unspecified */ not_fn() noexcept;
+}}
+{{dcl end}}
+
+@1@ Creates a forwarding call wrapper that returns the negation of the callable object it holds.
+@2@ Creates a forwarding call wrapper that returns the negation of the statically determined callable target. The program is ill-formed if {{tt|ConstFn}} is a null pointer or null pointer-to-member.
+
+===Parameters===
+{{par begin}}
+{{par|f|the object from which the {{named req|Callable}} object held by the wrapper is constructed}}
+{{par hreq}}
+{{par req named|{{c/core|std::decay_t&lt;F&gt;}}|MoveConstructible|Callable}}
+{{par req|{{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}} is required to be {{c|true}}.}}
+{{par end}}
+
+===Return value===
+@1@ A function object of unspecified type {{tt|T}}. It has the following members.
+{{member|{{small|std::not_fn}} ''return type''|2=
+====Member objects====
+The return type of {{tt|std::not_fn}} holds a member object of type {{c/core|std::decay_t&lt;F&gt;}}.
+
+====Constructors====
+{{dcl begin}}
+{{dcl|num=1|since=c++17|notes={{mark constexpr since c++20}}&lt;br&gt;{{mark expos}}|1=
+explicit T( F&amp;&amp; f );
+}}
+{{dcl|num=2|since=c++17|1=
+T( T&amp;&amp; f ) = default;
+T( const T&amp; f ) = default;
+}}
+{{dcl end}}
+@1@ The constructor direct-non-list-initializes the member object (of type {{c/core|std::decay_t&lt;F&gt;}}) from {{c|std::forward&lt;F&gt;(f)}}. Throws any exception thrown by the constructor selected.
+@2@ Because {{c/core|std::decay_t&lt;F&gt;}} is required to be {{named req|MoveConstructible}}, the returned call wrapper is always {{named req|MoveConstructible}}, and is {{named req|CopyConstructible}} if {{c/core|std::decay_t&lt;F&gt;}} is {{named req|CopyConstructible}}.
+{{rrev multi|rev1=
+The explicitly defaulted definitions make the return type not assignable.
+|since2=c++20|rev2=
+It is unspecified whether these constructors are explicitly defaulted and whether the return type is assignable.
+}}
+
+====Member function {{c/core|operator()}}====
+{{dcl begin}}
+{{dcl rev multi|num=1|since1=c++17|dcl1=
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) &amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt;&amp;, Args...&gt;&gt;());
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) const&amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt; const&amp;, Args...&gt;&gt;());
+|since2=c++20|dcl2=
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) &amp;
+    noexcept(/* see below */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt;&amp;&gt;(), std::declval&lt;Args&gt;()...));
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) const&amp;
+    noexcept(/* see below */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt; const&amp;&gt;(), std::declval&lt;Args&gt;()...));
+}}
+{{dcl rev multi|num=2|since1=c++17|dcl1=
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) &amp;&amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt;, Args...&gt;&gt;());
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) const&amp;&amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt; const, Args...&gt;&gt;());
+|since2=c++20|dcl2=
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) &amp;&amp;
+    noexcept(/* see below */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt;&gt;(), std::declval&lt;Args&gt;()...));
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) const&amp;&amp;
+    noexcept(/* see below */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt; const&gt;(), std::declval&lt;Args&gt;()...));
+}}
+{{dcl end}}
+
+Let {{c|fd}} be the member object of type {{c/core|std::decay_t&lt;F&gt;}}.
+{{rrev multi
+|since1=c++17|rev1=
+@1@ Equivalent to {{c|return !std::invoke(fd, std::forward&lt;Args&gt;(args)...);}}
+@2@ Equivalent to {{c|return !std::invoke(std::move(fd), std::forward&lt;Args&gt;(args)...);}}
+
+While invoking the result, if the substitution into the return type of the originally selected {{c/core|operator()}} overload fails, [[cpp/language/sfinae|another overload may be selected]].
+|since2=c++20|rev2=
+@1@ [[cpp/language/expressions#Expression-equivalence|Expression-equivalent]] to {{c|!std::invoke(fd, std::forward&lt;Args&gt;(args)...)}}
+@2@ [[cpp/language/expressions#Expression-equivalence|Expression-equivalent]] to {{c|!std::invoke(std::move(fd), std::forward&lt;Args&gt;(args)...)}}
+
+While invoking the result, if the substitution into the return type of the originally selected {{c/core|operator()}} overload fails, the invocation is ill-formed, which can also be a [[cpp/language/sfinae|substitution failure]].
+}}
+}}
+@2@ A value of the following type.
+{{member|{{small|std::not_fn}} ''stateless return type''|2=
+The return type is a {{named req|CopyConstructible}} stateless class. It is unspecified whether the return type is assignable.
+
+====Member function {{c/core|operator()}}====
+{{ddcl|since=c++26|
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) const
+    noexcept(/* see below */)
+-&gt; decltype(!std::invoke(ConstFn, std::declval&lt;Args&gt;()...));
+}}
+
+[[cpp/language/expressions#Expression-equivalence|Expression-equivalent]] to {{c|!std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...)}}.
+}}
+
+===Exceptions===
+@1@ Throws no exceptions, unless the construction of {{c|fd}} throws.
+
+===Possible implementation===
+{{eq impl
+|title1=(1) not_fn|ver1=1|1=
+namespace detail
+{
+    template&lt;class V, class F, class... Args&gt;
+    constexpr bool negate_invocable_impl = false;
+    template&lt;class F, class... Args&gt;
+    constexpr bool negate_invocable_impl&lt;std::void_t&lt;decltype(
+        !std::invoke(std::declval&lt;F&gt;(), std::declval&lt;Args&gt;()...))&gt;, F, Args...&gt; = true;
+
+    template&lt;class F, class... Args&gt;
+    constexpr bool negate_invocable_v = negate_invocable_impl&lt;void, F, Args...&gt;;
+
+    template&lt;class F&gt;
+    struct not_fn_t
+    {
+        F f;
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;F&amp;, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) &amp;
+            noexcept(noexcept(!std::invoke(f, std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(f, std::forward&lt;Args&gt;(args)...);
+        }
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;const F&amp;, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) const&amp;
+            noexcept(noexcept(!std::invoke(f, std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(f, std::forward&lt;Args&gt;(args)...);
+        }
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;F, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) &amp;&amp;
+            noexcept(noexcept(!std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...);
+        }
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;const F, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) const&amp;&amp;
+            noexcept(noexcept(!std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...);
+        }
+
+        // Deleted overloads are needed since C++20
+        // for preventing a non-equivalent but well-formed overload to be selected.
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;F&amp;, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) &amp; = delete;
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;const F&amp;, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) const&amp; = delete;
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;F, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) &amp;&amp; = delete;
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;const F, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) const&amp;&amp; = delete;
+    };
+}
+
+template&lt;class F&gt;
+constexpr detail::not_fn_t&lt;std::decay_t&lt;F&gt;&gt; not_fn(F&amp;&amp; f)
+{
+    return {std::forward&lt;F&gt;(f)};
+}
+|title2=(2) not_fn|ver2=2|2=
+namespace detail
+{
+    template&lt;auto ConstFn&gt;
+    struct stateless_not_fn
+    {
+        template&lt;class... Args&gt;
+        constexpr auto operator()(Args&amp;&amp;... args) const
+            noexcept(noexcept(!std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...)))
+            -&gt; decltype(!std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...))
+        {
+            return !std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...);
+        }
+    };
+}
+
+template&lt;auto ConstFn&gt;
+constexpr detail::stateless_not_fn&lt;ConstFn&gt; not_fn() noexcept
+{
+    if constexpr (std::is_pointer_v&lt;decltype(ConstFn)&gt; {{!!}}
+                  std::is_member_pointer_v&lt;decltype(ConstFn)&gt;)
+        static_assert(ConstFn != nullptr);
+
+    return {};
+}
+}}
+
+===Notes===
+{{tt|std::not_fn}} is intended to replace the C++03-era negators {{lc|std::not1}} and {{lc|std::not2}}.
+
+{{ftm begin}}
+{{ftm|__cpp_lib_not_fn|std=C++17|value=201603L|rowspan="2"|{{tt|std::not_fn()}}, {{vl|1}}}}
+{{ftm|-|std=C++26|value=202306L|Allow passing callable objects as non-type template arguments to {{tt|std::not_fn}}, {{vl|2}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+
+bool is_same(int a, int b) noexcept
+{
+    return a == b;
+}
+
+struct S
+{
+    int val;
+    bool is_same(int arg) const noexcept { return val == arg; }
+};
+
+int main()
+{
+    // Using with a free function:
+    auto is_differ = std::not_fn(is_same);
+    assert(is_differ(8, 8) == false); // equivalent to: !is_same(8, 8) == false
+    assert(is_differ(6, 9) == true); // equivalent to: !is_same(8, 0) == true
+
+    // Using with a member function:
+    auto member_differ = std::not_fn(&amp;S::is_same);
+    assert(member_differ(S{3}, 3) == false); //: S tmp{6}; !tmp.is_same(6) == false
+
+    // Noexcept-specification is preserved:
+    static_assert(noexcept(is_differ) == noexcept(is_same));
+    static_assert(noexcept(member_differ) == noexcept(&amp;S::is_same));
+
+    // Using with a function object:
+    auto same = [](int a, int b) { return a == b; };
+    auto differ = std::not_fn(same);
+    assert(differ(1, 2) == true); //: !same(1, 2) == true
+    assert(differ(2, 2) == false); //: !same(2, 2) == false
+
+#if __cpp_lib_not_fn &gt;= 202306L
+    auto is_differ_cpp26 = std::not_fn&lt;is_same&gt;();
+    assert(is_differ_cpp26(8, 8) == false);
+    assert(is_differ_cpp26(6, 9) == true);
+
+    auto member_differ_cpp26 = std::not_fn&lt;&amp;S::is_same&gt;();
+    assert(member_differ_cpp26(S{3}, 3) == false);
+
+    auto differ_cpp26 = std::not_fn&lt;same&gt;();
+    static_assert(differ_cpp26(1, 2) == true);
+    static_assert(differ_cpp26(2, 2) == false);
+#endif
+}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc not1}}
+{{dsc inc|cpp/utility/functional/dsc not2}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

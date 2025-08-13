@@ -1,0 +1,378 @@
+{{cpp/header/experimental/title|experimental/execution}}
+{{cpp/header/experimental/navbar}}
+
+This header is part of [[cpp/experimental/execution|execution]] library, based on {{stddoc|p2300R7}}.
+
+{{dsc begin}}
+{{dsc h1|Includes}}
+{{todo}}
+&lt;!--examples:
+{{dsc inc|cpp/header/dsc exp executor|{{mark_since_networking_ts}}}}
+{{dsc inc|cpp/header/dsc exp io_context|{{mark_since_networking_ts}}}}
+--&gt;
+{{dsc end}}
+
+===Synopsis===
+{{source|1=
+namespace std {
+  // helper concepts
+  template&lt;class T&gt;
+    concept /*movable-value*/ = /*see-below*/; // exposition only
+
+  template&lt;class From, class To&gt;
+    concept /*decays-to*/ = same_as&lt;decay_t&lt;From&gt;, To&gt;; // exposition only
+
+  template&lt;class T&gt;
+    concept /*class-type*/ = /*decays-to*/&lt;T, T&gt; &amp;&amp; is_class_v&lt;T&gt;;  // exposition only
+
+  // queryable objects
+  template&lt;class T&gt;
+    concept queryable = destructible;
+
+  // queries
+  namespace queries { // exposition only
+    struct forwarding_query_t;
+    struct get_allocator_t;
+    struct get_stop_token_t;
+  }
+  using queries::forwarding_query_t;
+  using queries::get_allocator_t;
+  using queries::get_stop_token_t;
+  inline constexpr forwarding_query_t forwarding_query{};
+  inline constexpr get_allocator_t get_allocator{};
+  inline constexpr get_stop_token_t get_stop_token{};
+
+  template&lt;class T&gt;
+    using stop_token_of_t =
+      remove_cvref_t&lt;decltype(get_stop_token(declval&lt;T&gt;()))&gt;;
+
+  template&lt;class T&gt;
+    concept /*forwarding-query*/ = // exposition only
+      forwarding_query(T{});
+
+  namespace /*exec-envs*/ { // exposition only
+    struct empty_env {};
+    struct get_env_t;
+  }
+  using /*exec-envs*/::empty_env;
+  using /*exec-envs*/::get_env_t;
+  inline constexpr get_env_t get_env {};
+
+  template&lt;class T&gt;
+    using env_of_t = decltype(get_env(declval&lt;T&gt;()));
+}
+
+namespace std::execution {
+  // queries
+  enum class forward_progress_guarantee;
+  namespace queries { // exposition only
+    struct get_scheduler_t;
+    struct get_delegatee_scheduler_t;
+    struct get_forward_progress_guarantee_t;
+    template&lt;class CPO&gt;
+      struct get_completion_scheduler_t;
+  }
+  using queries::get_scheduler_t;
+  using queries::get_delegatee_scheduler_t;
+  using queries::get_forward_progress_guarantee_t;
+  using queries::get_completion_scheduler_t;
+  inline constexpr get_scheduler_t get_scheduler{};
+  inline constexpr get_delegatee_scheduler_t get_delegatee_scheduler{};
+  inline constexpr get_forward_progress_guarantee_t get_forward_progress_guarantee{};
+  template&lt;class CPO&gt;
+    inline constexpr get_completion_scheduler_t&lt;CPO&gt; get_completion_scheduler{};
+
+  // schedulers
+  template&lt;class S&gt;
+    concept scheduler = /*see-below*/;
+
+  // receivers
+  template&lt;class R&gt;
+    inline constexpr bool enable_receiver = /*see-below*/;
+
+  template&lt;class R&gt;
+    concept receiver = /*see-below*/;
+
+  template&lt;class R, class Completions&gt;
+    concept receiver_of = /*see-below*/;
+
+  namespace receivers { // exposition only
+    struct set_value_t;
+    struct set_error_t;
+    struct set_stopped_t;
+  }
+  using receivers::set_value_t;
+  using receivers::set_error_t;
+  using receivers::set_stopped_t;
+  inline constexpr set_value_t set_value{};
+  inline constexpr set_error_t set_error{};
+  inline constexpr set_stopped_t set_stopped{};
+
+  // operation states
+  template&lt;class O&gt;
+    concept operation_state = /*see-below*/;
+
+  namespace /*op-state*/ { // exposition only
+    struct start_t;
+  }
+  using /*op-state*/::start_t;
+  inline constexpr start_t start{};
+
+  // senders
+  template&lt;class S&gt;
+    inline constexpr bool enable_sender = /* see description */;
+
+  template&lt;class S&gt;
+    concept sender = /*see-below*/;
+
+  template&lt;class S, class E = empty_env&gt;
+    concept sender_in = /*see-below*/;
+
+  template&lt;class S, class R&gt;
+    concept sender_to = /*see-below*/;
+
+  template &lt;class S, class Sig, class E = empty_env&gt;
+    concept sender_of = /* see description */;
+
+  template&lt;class... Ts&gt;
+    struct /*type-list*/; // exposition only
+
+  template&lt;class S, class E = empty_env&gt;
+    using /*single-sender-value-type*/ = /* see description */; // exposition only
+
+  template&lt;class S, class E = empty_env&gt;
+    concept /*single-sender*/ = /* see description */; // exposition only
+
+  // completion signatures
+  namespace /*completion-signatures*/ { // exposition only
+    struct get_completion_signatures_t;
+  }
+  using /*completion-signatures*/::get_completion_signatures_t;
+  inline constexpr get_completion_signatures_t get_completion_signatures {};
+
+  template&lt;class S, class E = empty_env&gt;
+      requires sender_in&lt;S, E&gt;
+    using completion_signatures_of_t = /*call-result-t*/&lt;get_completion_signatures_t, S, E&gt;;
+
+  template&lt;class... Ts&gt;
+    using /*decayed-tuple*/ = tuple&lt;decay_t&lt;Ts&gt;...&gt;; // exposition only
+
+  template&lt;class... Ts&gt;
+    using /*variant-or-empty*/ = /* see description */; // exposition only
+
+  template&lt;class S,
+           class E = empty_env,
+           template&lt;class...&gt; class Tuple = /*decayed-tuple*/,
+           template&lt;class...&gt; class Variant = /*variant-or-empty*/&gt;
+      requires sender_in&lt;S, E&gt;
+    using value_types_of_t = /* see description */;
+
+  template&lt;class S,
+           class Env = empty_env,
+           template&lt;class...&gt; class Variant = /*variant-or-empty*/&gt;
+      requires sender_in&lt;S, E&gt;
+    using error_types_of_t = /* see description */;
+
+  template&lt;class S, class E = empty_env&gt;
+      requires sender_in&lt;S, E&gt;
+    inline constexpr bool sends_stopped = /* see description */;
+
+  // the connect sender algorithm
+  namespace /*senders-connect*/ { // exposition only
+    struct connect_t;
+  }
+  using /*senders-connect*/::connect_t;
+  inline constexpr connect_t connect{};
+
+  template&lt;class S, class R&gt;
+    using connect_result_t = decltype(connect(declval&lt;S&gt;(), declval&lt;R&gt;()));
+
+  // sender factories
+  namespace /*senders-factories*/ { // exposition only
+    struct schedule_t;
+    struct transfer_just_t;
+  }
+  inline constexpr /* unspecified */ just{};
+  inline constexpr /* unspecified */ just_error{};
+  inline constexpr /* unspecified */ just_stopped{};
+  using /*senders-factories*/::schedule_t;
+  using /*senders-factories*/::transfer_just_t;
+  inline constexpr schedule_t schedule{};
+  inline constexpr transfer_just_t transfer_just{};
+  inline constexpr /* unspecified */ read{};
+
+  template&lt;scheduler S&gt;
+    using schedule_result_t = decltype(schedule(declval&lt;S&gt;()));
+
+  // sender adaptors
+  namespace /*sender-adaptor-closure*/ { // exposition only
+    template&lt;/*class-type*/ D&gt;
+      struct sender_adaptor_closure { };
+  }
+  using /*sender-adaptor-closure*/::sender_adaptor_closure;
+
+  namespace /*sender-adaptors*/ { // exposition only
+    struct on_t;
+    struct transfer_t;
+    struct schedule_from_t;
+    struct then_t;
+    struct upon_error_t;
+    struct upon_stopped_t;
+    struct let_value_t;
+    struct let_error_t;
+    struct let_stopped_t;
+    struct bulk_t;
+    struct split_t;
+    struct when_all_t;
+    struct when_all_with_variant_t;
+    struct transfer_when_all_t;
+    struct transfer_when_all_with_variant_t;
+    struct into_variant_t;
+    struct stopped_as_optional_t;
+    struct stopped_as_error_t;
+    struct ensure_started_t;
+  }
+  using /*sender-adaptors*/::on_t;
+  using /*sender-adaptors*/::transfer_t;
+  using /*sender-adaptors*/::schedule_from_t;
+  using /*sender-adaptors*/::then_t;
+  using /*sender-adaptors*/::upon_error_t;
+  using /*sender-adaptors*/::upon_stopped_t;
+  using /*sender-adaptors*/::let_value_t;
+  using /*sender-adaptors*/::let_error_t;
+  using /*sender-adaptors*/::let_stopped_t;
+  using /*sender-adaptors*/::bulk_t;
+  using /*sender-adaptors*/::split_t;
+  using /*sender-adaptors*/::when_all_t;
+  using /*sender-adaptors*/::when_all_with_variant_t;
+  using /*sender-adaptors*/::transfer_when_all_t;
+  using /*sender-adaptors*/::transfer_when_all_with_variant_t;
+  using /*sender-adaptors*/::into_variant_t;
+  using /*sender-adaptors*/::stopped_as_optional_t;
+  using /*sender-adaptors*/::stopped_as_error_t;
+  using /*sender-adaptors*/::ensure_started_t;
+
+  inline constexpr on_t on{};
+  inline constexpr transfer_t transfer{};
+  inline constexpr schedule_from_t schedule_from{};
+
+  inline constexpr then_t then{};
+  inline constexpr upon_error_t upon_error{};
+  inline constexpr upon_stopped_t upon_stopped{};
+
+  inline constexpr let_value_t let_value{};
+  inline constexpr let_error_t let_error{};
+  inline constexpr let_stopped_t let_stopped{};
+
+  inline constexpr bulk_t bulk{};
+
+  inline constexpr split_t split{};
+  inline constexpr when_all_t when_all{};
+  inline constexpr when_all_with_variant_t when_all_with_variant{};
+  inline constexpr transfer_when_all_t transfer_when_all{};
+  inline constexpr transfer_when_all_with_variant_t
+    transfer_when_all_with_variant{};
+
+  inline constexpr into_variant_t into_variant{};
+
+  inline constexpr stopped_as_optional_t stopped_as_optional;
+
+  inline constexpr stopped_as_error_t stopped_as_error;
+
+  inline constexpr ensure_started_t ensure_started{};
+
+  // sender consumers
+  namespace /*sender-consumers*/ { // exposition only
+    struct start_detached_t;
+  }
+  using /*sender-consumers*/::start_detached_t;
+  inline constexpr start_detached_t start_detached{};
+
+  // sender and receiver utilities
+  // [exec.utils.rcvr.adptr]
+  template&lt;
+      /*class-type*/ Derived,
+      receiver Base = /* unspecified */&gt; // arguments are not associated entities
+    class receiver_adaptor;
+
+  template&lt;class Fn&gt;
+    concept /*completion-signature*/ = // exposition only
+      /* see description */;
+
+  // [exec.utils.cmplsigs]
+  template&lt;/*completion-signature*/... Fns&gt;
+    struct completion_signatures {};
+
+  template&lt;class... Args&gt; // exposition only
+    using /*default-set-value*/ =
+      completion_signatures&lt;set_value_t(Args...)&gt;;
+
+  template&lt;class Err&gt; // exposition only
+    using /*default-set-error*/ =
+      completion_signatures&lt;set_error_t(Err)&gt;;
+
+  template&lt;class Sigs&gt; // exposition only
+    concept /*valid-completion-signatures*/ = /* see description */;
+
+  // [exec.utils.mkcmplsigs]
+  template&lt;
+    sender Sndr,
+    class Env = empty_env,
+    /*valid-completion-signatures*/ AddlSigs = completion_signatures&lt;&gt;,
+    template&lt;class...&gt; class SetValue = /* see description */,
+    template&lt;class&gt; class SetError = /* see description */,
+    /*valid-completion-signatures*/ SetStopped = completion_signatures&lt;set_stopped_t()&gt;&gt;
+      requires sender_in&lt;Sndr, Env&gt;
+  using make_completion_signatures = completion_signatures&lt;/* see description */&gt;;
+
+  // execution resources
+  class run_loop;
+}
+
+namespace std::this_thread {
+  // queries
+  namespace queries { // exposition only
+    struct execute_may_block_caller_t;
+  }
+  using queries::execute_may_block_caller_t;
+  inline constexpr execute_may_block_caller_t execute_may_block_caller{};
+
+  namespace /*this-thread*/ { // exposition only
+    struct /*sync-wait-env*/; // exposition only
+    template&lt;class S&gt;
+        requires sender_in&lt;S, /*sync-wait-env*/&gt;
+      using /*sync-wait-type*/ = /*see-below*/; // exposition only
+    template&lt;class S&gt;
+      using /*sync-wait-with-variant-type*/ = /*see-below*/; // exposition only
+
+    struct sync_wait_t;
+    struct sync_wait_with_variant_t;
+  }
+  using /*this-thread*/::sync_wait_t;
+  using /*this-thread*/::sync_wait_with_variant_t;
+  inline constexpr sync_wait_t sync_wait{};
+  inline constexpr sync_wait_with_variant_t sync_wait_with_variant{};
+}
+
+namespace std::execution {
+  // one-way execution
+  namespace execute { // exposition only
+    struct execute_t;
+  }
+  using execute::execute_t;
+  inline constexpr execute_t execute{};
+
+  // [exec.as.awaitable]
+  namespace /*coro-utils*/ { // exposition only
+    struct as_awaitable_t;
+  }
+  using /*coro-utils*/::as_awaitable_t;
+  inline constexpr as_awaitable_t as_awaitable;
+
+  // [exec.with.awaitable.senders]
+  template&lt;/*class-type*/ Promise&gt;
+    struct with_awaitable_senders;
+}
+}}
+
+{{langlinks|de|es|fr|ja|ru|zh}}

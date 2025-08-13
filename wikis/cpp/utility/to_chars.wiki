@@ -1,0 +1,129 @@
+{{cpp/title|to_chars}}
+{{cpp/text/navbar}}
+{{dcl begin}}
+{{dcl header|charconv}}
+{{dcla|num=1|since=c++17|notes={{mark constexpr since c++23}}|1=
+std::to_chars_result
+    to_chars( char* first, char* last,
+              /* integer-type */ value, int base = 10 );
+}}
+{{dcl|num=2|since=c++17|1=
+std::to_chars_result
+    to_chars( char*, char*, bool, int = 10 ) = delete;
+}}
+{{dcl|num=3|since=c++17|
+std::to_chars_result
+    to_chars( char* first, char* last, /* floating-point-type */ value );
+}}
+{{dcl|num=4|since=c++17|
+std::to_chars_result
+    to_chars( char* first, char* last, /* floating-point-type */ value,
+              std::chars_format fmt );
+}}
+{{dcl|num=5|since=c++17|
+std::to_chars_result
+    to_chars( char* first, char* last, /* floating-point-type */ value,
+              std::chars_format fmt, int precision );
+}}
+{{dcl end}}
+
+Converts {{c|value}} into a character string by successively filling the range {{range|first|last}}, where {{range|first|last}} is required to be a [[cpp/iterator#Ranges|valid range]].
+
+@1@ Integer formatters: {{c|value}} is converted to a string of digits in the given {{c|base}} (with no redundant leading zeroes). Digits in the range {{tt|10..35}} (inclusive) are represented as lowercase characters {{tt|a..z}}. If value is less than zero, the representation starts with a minus sign. The library provides overloads for all{{rev inl|since=c++23| cv-unqualified}} signed and unsigned integer types and for the type {{c/core|char}} as the type of the parameter {{c|value}}.
+
+@2@ Overload for {{c/core|bool}} is deleted. {{tt|std::to_chars}} rejects argument of type {{c/core|bool}} because the result would be {{c|"0"}}/{{c|"1"}} but not {{c|"false"}}/{{c|"true"}} if it is permitted.
+
+@3@ {{c|value}} is converted to a string as if by {{lc|std::printf}} in the default ("C") locale. The conversion specifier is {{c|f}} or {{c|e}} (resolving in favor of {{c|f}} in case of a tie), chosen according to the requirement for a shortest representation: the string representation consists of the smallest number of characters such that there is at least one digit before the radix point (if present) and parsing the representation using the corresponding {{ltt std|cpp/utility/from_chars}} function recovers value exactly. If there are several such representations, one with the smallest difference to {{c|value}} is chosen, resolving any remaining ties using rounding according to {{lc|std::round_to_nearest}}. The library provides overloads for all cv-unqualified {{rev inl|until=c++23|standard}} floating-point types as the type of the parameter {{c|value}}.
+
+@4@ Same as {{v|3}}, but the conversion specified for the as-if printf is {{c|f}} if {{c|fmt}} is {{ltt|cpp/utility/chars_format|std::chars_format::fixed}}, {{c|e}} if {{c|fmt}} is {{ltt|cpp/utility/chars_format|std::chars_format::scientific}}, {{c|a}} (but without leading "0x" in the result) if {{c|fmt}} is {{ltt|cpp/utility/chars_format|std::chars_format::hex}}, and {{c|g}} if {{c|fmt}} is {{ltt|cpp/utility/chars_format|chars_format::general}}. The library provides overloads for all cv-unqualified {{rev inl|until=c++23|standard}} floating-point types as the type of the parameter {{c|value}}.
+
+@5@ Same as {{v|4}}, except the precision is specified by the parameter {{c|precision}} rather than by the shortest representation requirement. The library provides overloads for all cv-unqualified {{rev inl|until=c++23|standard}} floating-point types as the type of the parameter {{c|value}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|character range to write to}}
+{{par|value|the value to convert to its string representation}}
+{{par|base|integer base to use: a value between 2 and 36 (inclusive).}}
+{{par|fmt|floating-point formatting to use, a bitmask of type {{ltt std|cpp/utility/chars_format}}}}
+{{par|precision|floating-point precision to use}}
+{{par end}}
+
+===Return value===
+On success, returns a value of type {{ltt std|cpp/utility/to_chars_result}} such that {{tt|ec}} equals value-initialized {{lc|std::errc}} and {{tt|ptr}} is the one-past-the-end pointer of the characters written. Note that the string is ''not'' NUL-terminated.
+
+On error, returns a value of type {{ltt std|cpp/utility/to_chars_result}} holding {{lc|std::errc::value_too_large}} in {{tt|ec}}, a copy of the value {{c|last}} in {{tt|ptr}}, and leaves the contents of the range {{range|first|last}} in unspecified state.
+
+===Exceptions===
+Throws nothing.
+
+===Notes===
+Unlike other formatting functions in C++ and C libraries, {{tt|std::to_chars}} is locale-independent, non-allocating, and non-throwing. Only a small subset of formatting policies used by other libraries (such as {{lc|std::sprintf}}) is provided. This is intended to allow the fastest possible implementation that is useful in common high-throughput contexts such as text-based interchange ({{enwiki|JSON}} or {{enwiki|XML}}).
+
+The guarantee that {{ltt std|cpp/utility/from_chars}} can recover every floating-point value formatted by {{tt|std::to_chars}} exactly is only provided if both functions are from the same implementation.
+
+It is required to explicitly cast a {{c/core|bool}} value to another integer type if it is wanted to format the value as {{c|"0"}}/{{c|"1"}}.
+
+{{ftm begin|std=yes|comment=1}}
+{{ftm|std=C++17|value=201611L|__cpp_lib_to_chars|rowspan="2"|Elementary string conversions ({{tt|std::to_chars}}, {{ltt std|cpp/utility/from_chars}})}}
+{{ftm|std=C++26|value=202306L|-|Testing for success or failure of {{header|charconv}} functions}}
+{{ftm|std=C++23|value=202207L|__cpp_lib_constexpr_charconv|Add {{co|constexpr}} modifiers to {{tt|std::to_chars}} and {{ltt std|cpp/utility/from_chars}} overloads {{vl|1}} for integral types}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;charconv&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+#include &lt;system_error&gt;
+
+void show_to_chars(auto... format_args)
+{
+    const size_t buf_size = 10;
+    char buf[buf_size]{};
+    std::to_chars_result result = std::to_chars(buf, buf + buf_size, format_args...);
+
+    if (result.ec != std::errc())
+        std::cout &lt;&lt; std::make_error_code(result.ec).message() &lt;&lt; '\n';
+    else
+    {
+        std::string_view str(buf, result.ptr - buf);
+        std::cout &lt;&lt; std::quoted(str) &lt;&lt; '\n';
+    }
+}
+
+int main()
+{
+    show_to_chars(42);
+    show_to_chars(+3.14159F);
+    show_to_chars(-3.14159, std::chars_format::fixed);
+    show_to_chars(-3.14159, std::chars_format::scientific, 3);
+    show_to_chars(3.1415926535, std::chars_format::fixed, 10);
+}
+|p=true
+|output=
+"42"
+"3.14159"
+"-3.14159"
+"-3.142e+00"
+Value too large for defined data type
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2955|std=C++17|before=this function was in {{header|utility}} and used {{lc|std::error_code}}|after=moved to {{header|charconv}} and uses {{lc|std::errc}}}}
+{{dr list item|wg=lwg|dr=3266|std=C++17|before={{c/core|bool}} argument was accepted and promoted to {{c/core|int}}|after=rejected by a deleted overload}}
+{{dr list item|wg=lwg|dr=3373|std=C++17|before={{tt|std::to_chars_result}} might have additional members|after=additional members are disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc to_chars_result}}
+{{dsc inc|cpp/utility/dsc from_chars}}
+{{dsc inc|cpp/string/basic_string/dsc to_string}}
+{{dsc inc|cpp/io/c/dsc fprintf}}
+{{dsc inc|cpp/io/basic_ostream/dsc operator_ltlt}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

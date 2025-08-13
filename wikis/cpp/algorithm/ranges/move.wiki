@@ -1,0 +1,123 @@
+{{cpp/ranges/title|move|move_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O &gt;
+requires std::indirectly_movable&lt;I, O&gt;
+constexpr move_result&lt;I, O&gt;
+    move( I first, S last, O result );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O &gt;
+requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr move_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    move( R&amp;&amp; r, O result );
+}}
+{{dcl h|Helper types}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I, class O &gt;
+using move_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ Moves the elements in the range, defined by {{range|first|last}}, to another range beginning at {{c|result}}.
+The behavior is undefined if {{c|result}} is within the range {{range|first|last}}. In such a case, {{lc|ranges::move_backward}} may be used instead.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}}, and {{c|ranges::end(r)}} as {{c|last}}.
+
+The elements in the ''moved-from'' range will still contain valid values of the appropriate type, but not necessarily the same values as before the move.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of elements to move}}
+{{par|last|the end of the range of elements to move}}
+{{par|r|the range of the elements to move}}
+{{par|result|the beginning of the destination range}}
+{{par end}}
+
+===Return value===
+{{c|1= {last, result + N} }}, where
+@1@ {{c|1=N = ranges::distance(first, last)}}.
+@2@ {{c|1=N = ranges::distance(r)}}.
+
+===Complexity===
+Exactly {{c|N}} move assignments.
+
+===Notes===
+When moving overlapping ranges, {{lc|ranges::move}} is appropriate when moving to the left (beginning of the destination range is outside the source range) while {{lc|ranges::move_backward}} is appropriate when moving to the right (end of the destination range is outside the source range).
+
+===Possible implementation===
+{{eq fun|1=
+struct move_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O&gt;
+    requires std::indirectly_movable&lt;I, O&gt;
+    constexpr ranges::move_result&lt;I, O&gt;
+        operator()(I first, S last, O result) const
+    {
+        for (; first != last; ++first, ++result)
+            *result = ranges::iter_move(first);
+        return {std::move(first), std::move(result)};
+    }
+    template&lt;ranges::input_range R, std::weakly_incrementable O&gt;
+    requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::move_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, O result) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr move_fn move {};
+}}
+
+===Example===
+{{example|The following code moves thread objects (which themselves are ''non copyable'') from one container to another.
+|code=
+#include &lt;algorithm&gt;
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;list&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+using namespace std::literals::chrono_literals;
+
+void f(std::chrono::milliseconds n)
+{
+    std::this_thread::sleep_for(n);
+    std::cout &lt;&lt; "thread with n=" &lt;&lt; n.count() &lt;&lt; "ms ended" &lt;&lt; std::endl;
+}
+
+int main()
+{
+    std::vector&lt;std::jthread&gt; v;
+    v.emplace_back(f, 400ms);
+    v.emplace_back(f, 600ms);
+    v.emplace_back(f, 800ms);
+
+    std::list&lt;std::jthread&gt; l;
+
+    // std::ranges::copy() would not compile, because std::jthread is non-copyable
+    std::ranges::move(v, std::back_inserter(l));
+}
+|output=
+thread with n=400ms ended
+thread with n=600ms ended
+thread with n=800ms ended
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

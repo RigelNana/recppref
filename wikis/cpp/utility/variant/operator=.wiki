@@ -1,0 +1,154 @@
+{{cpp/utility/variant/title|operator{{=}}}}
+{{cpp/utility/variant/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|1=
+constexpr variant&amp; operator=( const variant&amp; rhs );
+}}
+{{dcl|num=2|since=c++17|1=
+constexpr variant&amp; operator=( variant&amp;&amp; rhs ) noexcept(/* see below */);
+}}
+{{dcla|num=3|since=c++17|constexpr=c++20|1=
+template&lt; class T &gt;
+variant&amp; operator=( T&amp;&amp; t ) noexcept(/* see below */);
+}}
+{{dcl end}}
+
+Assigns a new value to an existing {{tt|variant}} object.
+
+@1@ Copy-assignment:
+* If both {{c|*this}} and {{c|rhs}} are valueless by exception, does nothing.
+* Otherwise, if {{c|rhs}} is valueless, but {{c|*this}} is not, destroys the value contained in {{c|*this}} and makes it valueless.
+* Otherwise, if {{c|rhs}} holds the same alternative as {{c|*this}}, assigns the value contained in {{c|rhs}} to the value contained in {{c|*this}}. If an exception is thrown, {{c|*this}} does not become valueless: the value depends on the exception safety guarantee of the alternative's copy assignment.
+* Otherwise, if the alternative held by {{c|rhs}} is either nothrow copy constructible or ''not'' nothrow move constructible (as determined by {{lc|std::is_nothrow_copy_constructible}} and {{lc|std::is_nothrow_move_constructible}}, respectively), equivalent to {{c|this-&gt;emplace&lt;rhs.index()&gt;(*std::get_if&lt;rhs.index()&gt;(std::addressof(rhs)))}}. {{c|*this}} may become {{rlpt|valueless_by_exception}} if an exception is thrown on the copy-construction inside {{rlpt|emplace}}.
+* Otherwise, equivalent to {{c|1=this-&gt;operator=(variant(rhs))}}.
+@@ This overload is defined as deleted unless {{c|std::is_copy_constructible_v&lt;T_i&gt;}} and {{c|std::is_copy_assignable_v&lt;T_i&gt;}} are both {{c|true}} for all {{tt|T_i}} in {{tt|Types...}}. This overload is trivial if {{c|std::is_trivially_copy_constructible_v&lt;T_i&gt;}},{{c|std::is_trivially_copy_assignable_v&lt;T_i&gt;}} and {{c|std::is_trivially_destructible_v&lt;T_i&gt;}} are all {{c|true}} for all {{tt|T_i}} in {{tt|Types...}}.
+@2@ Move-assignment:
+* If both {{c|*this}} and {{c|rhs}} are valueless by exception, does nothing.
+* Otherwise, if {{c|rhs}} is valueless, but {{c|*this}} is not, destroys the value contained in {{c|*this}} and makes it valueless.
+* Otherwise, if {{c|rhs}} holds the same alternative as {{c|*this}}, assigns {{c|std::move(*std::get_if&lt;j&gt;(std::addressof(rhs)))}} to the value contained in {{c|*this}}, with {{tt|j}} being {{tt|index()}}. If an exception is thrown, {{c|*this}} does not become valueless: the value depends on the exception safety guarantee of the alternative's move assignment.
+* Otherwise (if {{c|rhs}} and {{c|*this}} hold different alternatives), equivalent to {{c|this-&gt;emplace&lt;rhs.index()&gt;(std::move(*std::get_if&lt;rhs.index()&gt;(std::addressof(rhs))))}}. If an exception is thrown by {{tt|T_i}}'s move constructor, {{c|*this}} becomes {{rlpt|valueless_by_exception}}.
+@@ {{cpp/enable_if|{{c|std::is_move_constructible_v&lt;T_i&gt;}} and {{c|std::is_move_assignable_v&lt;T_i&gt;}} are both {{c|true}} for all {{tt|T_i}} in {{tt|Types...}}}}. This overload is trivial if {{c|std::is_trivially_move_constructible_v&lt;T_i&gt;}}, {{c|std::is_trivially_move_assignable_v&lt;T_i&gt;}}, and {{c|std::is_trivially_destructible_v&lt;T_i&gt;}} are all {{c|true}} for all {{tt|T_i}} in {{tt|Types...}}.
+@3@ Converting assignment.
+* Determines the alternative type {{tt|T_j}} that would be selected by overload resolution for the expression {{c|F(std::forward&lt;T&gt;(t))}} if there was an overload of imaginary function {{c|F(T_i)}} for every {{tt|T_i}} from {{tt|Types...}} in scope at the same time, except that:
+:* An overload {{c|F(T_i)}} is only considered if the declaration {{c|1=T_i x[] = { std::forward&lt;T&gt;(t) };}} is valid for some invented variable {{tt|x}};
+* If {{c|*this}} already holds a {{tt|T_j}}, assigns {{c|std::forward&lt;T&gt;(t)}} to the value contained in {{c|*this}}. If an exception is thrown, {{c|*this}} does not become valueless: the value depends on the exception safety guarantee of the assignment called.
+* Otherwise, if {{c|std::is_nothrow_constructible_v&lt;T_j, T&gt; {{!!}} !std::is_nothrow_move_constructible_v&lt;T_j&gt;}} is {{c|true}}, equivalent to {{c|this-&gt;emplace&lt;j&gt;(std::forward&lt;T&gt;(t))}}. {{c|*this}} may become {{rlpt|valueless_by_exception}} if an exception is thrown on the initialization inside {{rlpt|emplace}}.
+* Otherwise, equivalent to {{c|this-&gt;emplace&lt;j&gt;(T_j(std::forward&lt;T&gt;(t)))}}.
+{{cpp/enable_if|{{rev inl|until=c++20|{{c|std::decay_t&lt;T&gt;}}}}{{rev inl|since=c++20|{{c|std::remove_cvref_t&lt;T&gt;}}}} is not the same type as {{rlpt|/|variant}} and {{c|std::is_assignable_v&lt;T_j&amp;, T&gt;}} is {{c|true}} and {{c|std::is_constructible_v&lt;T_j, T&gt;}} is {{c|true}} and the expression {{c|F(std::forward&lt;T&gt;(t))}} (with F being the above-mentioned set of imaginary functions) is well formed}}.
+{{source|1=
+std::variant&lt;std::string&gt; v1;
+v1 = "abc"; // OK
+std::variant&lt;std::string, std::string&gt; v2;
+v2 = "abc"; // Error
+std::variant &lt;std::string, bool&gt; v3;
+v3 = "abc"; // OK, chooses string; bool is not a candidate
+std::variant&lt;float, long, double&gt; v4; // holds float
+v4 = 0; // OK, holds long; float and double are not candidates
+}}
+
+===Parameters===
+{{par begin}}
+{{par|rhs|another {{tt|variant}}}}
+{{par|t|a value convertible to one of the variant's alternatives}}
+{{par end}}
+
+===Return value===
+{{c|*this}}
+
+===Exceptions===
+@1@ May throw any exception thrown by assignment and copy/move initialization of any alternative.
+@2@ {{noexcept|((std::is_nothrow_move_constructible_v&lt;Types&gt; &amp;&amp;
+           std::is_nothrow_move_assignable_v&lt;Types&gt;) &amp;&amp; ...)}}
+@3@ {{noexcept|std::is_nothrow_assignable_v&lt;T_j&amp;, T&gt; &amp;&amp;
+         std::is_nothrow_constructible_v&lt;T_j, T&gt;}}
+
+===Notes===
+{{ftm begin}}
+{{ftm|std=C++20|dr=yes|value=202106L|__cpp_lib_variant|Fully {{c/core|constexpr}} {{tt|std::variant}} {{vl|3}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;variant&gt;
+ 
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::variant&lt;int, std::string&gt; const&amp; va)
+{
+    os &lt;&lt; ": { ";
+ 
+    std::visit([&amp;](auto&amp;&amp; arg)
+    {
+        using T = std::decay_t&lt;decltype(arg)&gt;;
+        if constexpr (std::is_same_v&lt;T, int&gt;)
+            os &lt;&lt; arg;
+        else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+            os &lt;&lt; std::quoted(arg);
+    }, va);
+ 
+    return os &lt;&lt; " };\n";
+}
+ 
+int main()
+{
+    std::variant&lt;int, std::string&gt; a{2017}, b{"CppCon"};
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "b" &lt;&lt; b &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(1) operator=( const variant&amp; rhs )\n";
+    a = b;
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "b" &lt;&lt; b &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(2) operator=( variant&amp;&amp; rhs )\n";
+    a = std::move(b);
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "b" &lt;&lt; b &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(3) operator=( T&amp;&amp; t ), where T is int\n";
+    a = 2019;
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(3) operator=( T&amp;&amp; t ), where T is std::string\n";
+    std::string s{"CppNow"};
+    std::cout &lt;&lt; "s: " &lt;&lt; std::quoted(s) &lt;&lt; '\n';
+    a = std::move(s);
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "s: " &lt;&lt; std::quoted(s) &lt;&lt; '\n';
+}
+|p=true&lt;!--state of std::string after std::move is unspecified--&gt;
+|output=
+a: { 2017 };
+b: { "CppCon" };
+
+(1) operator=( const variant&amp; rhs )
+a: { "CppCon" };
+b: { "CppCon" };
+
+(2) operator=( variant&amp;&amp; rhs )
+a: { "CppCon" };
+b: { "" };
+
+(3) operator=( T&amp;&amp; t ), where T is int
+a: { 2019 };
+
+(3) operator=( T&amp;&amp; t ), where T is std::string
+s: "CppNow"
+a: { "CppNow" };
+s: ""
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++17|dr=3024|before=copy assignment operator doesn't participate in overload resolution&lt;br&gt;if any member type is not copyable|after=defined as deleted instead}}
+{{dr list item|wg=lwg|dr=3585|std=c++17|before=converting assignment was sometimes unexpectedly ill-formed&lt;br&gt;because there was no available move assignment|after=made well-formed}}
+{{dr list item|paper=P0602R4|std=C++17|before=copy/move assignment may not be trivial&lt;br&gt;even if underlying operations are trivial|after=required to propagate triviality}}
+{{dr list item|paper=P0608R3|std=C++17|before=converting assignment blindly assembles an overload set,&lt;br&gt;leading to unintended conversions|after=narrowing and boolean conversions&lt;br&gt;not considered}}
+{{dr list item|paper=P2231R1|std=C++20|before=converting assignment {{vl|3}} was not {{c/core|constexpr}}&lt;br&gt;while the required operations can be {{c/core|constexpr}} in C++20|after=made {{c/core|constexpr}}}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc emplace}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

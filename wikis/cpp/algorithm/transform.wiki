@@ -1,0 +1,185 @@
+{{cpp/title|transform}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class UnaryOp &gt;
+OutputIt transform( InputIt first1, InputIt last1,
+                    OutputIt d_first, UnaryOp unary_op );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class UnaryOp &gt;
+ForwardIt2 transform( ExecutionPolicy&amp;&amp; policy,
+                      ForwardIt1 first1, ForwardIt1 last1,
+                      ForwardIt2 d_first, UnaryOp unary_op );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2,
+          class OutputIt, class BinaryOp &gt;
+OutputIt transform( InputIt1 first1, InputIt1 last1, InputIt2 first2,
+                    OutputIt d_first, BinaryOp binary_op );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2,
+          class ForwardIt3, class BinaryOp &gt;
+ForwardIt3 transform( ExecutionPolicy&amp;&amp; policy,
+                      ForwardIt1 first1, ForwardIt1 last1,
+                      ForwardIt2 first2,
+                      ForwardIt3 d_first, BinaryOp binary_op );
+}}
+{{dcl end}}
+
+{{tt|std::transform}} applies the given function to the elements of the given input range(s), and stores the result in an output range starting from {{c|d_first}}.
+
+@1@ The unary operation {{c|unary_op}} is applied to the elements of {{range|first1|last1}}.
+@@ If {{c|unary_op}} invalidates an iterator or modifies an element in any of the following ranges, the behavior is undefined:
+* {{closed range|first1|last1}}.
+* The range of {{c|std::distance(first1, last1) + 1}} elements starting from {{c|d_first}}.
+
+@3@ The binary operation {{c|binary_op}} is applied to pairs of elements from two ranges: {{range|first1|last1}} and another range of {{c|std::distance(first1, last1)}} elements starting from {{c|first2}}.
+@@ If {{c|binary_op}} invalidates an iterator or modifies an element in any of the following ranges, the behavior is undefined:
+* {{closed range|first1|last1}}.
+* The range of {{c|std::distance(first1, last1) + 1}} elements starting from {{c|first2}}.
+* The range of {{c|std::distance(first1, last1) + 1}} elements starting from {{c|d_first}}.
+
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the first range of elements to transform}}
+{{par|first2|the beginning of the second range of elements to transform}}
+{{par|d_first|the beginning of the destination range, may be equal to {{c|first1}} or {{c|first2}}}}
+{{par exec pol}}
+{{par op1|unary_op|rp=OutputIt|p1=InputIt}}
+{{par op2|binary_op|rp=OutputIt|p1=InputIt1|p2=InputIt2}}
+{{par hreq}}
+{{par req named|InputIt, InputIt1, InputIt2|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2, ForwardIt3|ForwardIterator}}
+{{par end}}
+
+===Return value===
+Output iterator to the element that follows the last element transformed.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first1, last1)}}:
+@1,2@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} applications of {{c|unary_op}}.
+@3,4@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} applications of {{c|binary_op}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+{{eq impl
+|title1=transform (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt, class UnaryOp&gt;
+constexpr //&lt; since C++20
+OutputIt transform(InputIt first1, InputIt last1,
+                   OutputIt d_first, UnaryOp unary_op)
+{
+    for (; first1 != last1; ++d_first, ++first1)
+        *d_first = unary_op(*first1);
+
+    return d_first;
+}
+|title2=transform (3)|ver2=3|2=
+template&lt;class InputIt1, class InputIt2, 
+         class OutputIt, class BinaryOp&gt;
+constexpr //&lt; since C++20
+OutputIt transform(InputIt1 first1, InputIt1 last1, InputIt2 first2,
+                   OutputIt d_first, BinaryOp binary_op)
+{
+    for (; first1 != last1; ++d_first, ++first1, ++first2)
+        *d_first = binary_op(*first1, *first2);
+
+    return d_first;
+}
+}}
+
+===Notes===
+{{tt|std::transform}} does not guarantee in-order application of {{c|unary_op}} or {{c|binary_op}}. To apply a function to a sequence in-order or to apply a function that modifies the elements of a sequence, use {{lc|std::for_each}}.
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cctype&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+void print_ordinals(const std::vector&lt;unsigned&gt;&amp; ordinals)
+{
+    std::cout &lt;&lt; "ordinals: ";
+    for (unsigned ord : ordinals)
+        std::cout &lt;&lt; std::setw(3) &lt;&lt; ord &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+char to_uppercase(unsigned char c)
+{
+    return std::toupper(c);
+}
+
+void to_uppercase_inplace(char&amp; c)
+{
+    c = to_uppercase(c);
+}
+
+void unary_transform_example(std::string&amp; hello, std::string world)
+{
+    // Transform string to uppercase in-place
+
+    std::transform(hello.cbegin(), hello.cend(), hello.begin(), to_uppercase);
+    std::cout &lt;&lt; "hello = " &lt;&lt; std::quoted(hello) &lt;&lt; '\n';
+    
+    // for_each version (see Notes above)
+    std::for_each(world.begin(), world.end(), to_uppercase_inplace);
+    std::cout &lt;&lt; "world = " &lt;&lt; std::quoted(world) &lt;&lt; '\n';
+}
+
+void binary_transform_example(std::vector&lt;unsigned&gt; ordinals)
+{
+    // Transform numbers to doubled values
+
+    print_ordinals(ordinals);
+    
+    std::transform(ordinals.cbegin(), ordinals.cend(), ordinals.cbegin(),
+                   ordinals.begin(), std::plus&lt;&gt;{});
+
+    print_ordinals(ordinals);
+}
+
+int main()
+{
+    std::string hello("hello");
+    unary_transform_example(hello, "world");
+    
+    std::vector&lt;unsigned&gt; ordinals;
+    std::copy(hello.cbegin(), hello.cend(), std::back_inserter(ordinals));
+    binary_transform_example(std::move(ordinals));
+}
+|output=
+hello = "HELLO"
+world = "WORLD"
+ordinals:  72  69  76  76  79 
+ordinals: 144 138 152 152 158
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|unary_op}} and {{c|binary_op}} could not have side effects|after=they cannot modify the ranges involved}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc for_each}}
+{{dsc inc|cpp/algorithm/ranges/dsc transform}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

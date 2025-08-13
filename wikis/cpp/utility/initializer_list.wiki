@@ -1,0 +1,138 @@
+{{cpp/title|initializer_list}}
+{{cpp/utility/initializer_list/navbar}}
+{{petty|(not to be confused with [[cpp/language/initializer list|member initializer list]])}}
+{{ddcl|header=initializer_list|since=c++11|
+template&lt; class T &gt;
+class initializer_list;
+}}
+
+An object of type {{tt|std::initializer_list&lt;T&gt;}} is a lightweight proxy object that provides access to an array of objects of type {{c/core|const T}} (that may be allocated in read-only memory).
+
+A {{tt|std::initializer_list}} object is automatically constructed when:
+* a [[cpp/language/initialization|brace-enclosed initializer list]] is used to [[cpp/language/list initialization|list-initialize]] an object, where the corresponding constructor accepts an {{tt|std::initializer_list}} parameter,
+* a brace-enclosed initializer list is used as the right operand of [[cpp/language/operator assignment#Builtin direct assignment|assignment]] or as a [[cpp/language/overload resolution#Implicit conversion sequence in list-initialization|function call argument]], and the corresponding assignment operator/function accepts an {{tt|std::initializer_list}} parameter,
+* a brace-enclosed initializer list is bound to {{ltt|cpp/language/auto}}, including in a [[cpp/language/range-for|ranged for loop]].
+
+{{tt|std::initializer_list}} may be implemented as a pair of pointers or pointer and length. Copying a {{tt|std::initializer_list}} does not copy the [[cpp/language/list initialization#List-initializing std::initializer_list|backing array]] of the corresponding initializer list.
+
+The program is ill-formed if an explicit or partial specialization of {{tt|std::initializer_list}} is declared.
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|reference}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|const_reference}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|size_type}}|{{lc|std::size_t}}}}
+{{dsc|{{tt|iterator}}|{{c/core|const T*}}}}
+{{dsc|{{tt|const_iterator}}|{{c/core|const T*}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/initializer_list/dsc constructor}}
+{{dsc h2|Capacity}}
+{{dsc inc|cpp/utility/initializer_list/dsc size}}
+{{dsc h2|Iterators}}
+{{dsc inc|cpp/utility/initializer_list/dsc begin}}
+{{dsc inc|cpp/utility/initializer_list/dsc end}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/utility/initializer_list/dsc begin2}}
+{{dsc inc|cpp/utility/initializer_list/dsc end2}}
+{{dsc h2|Free function templates overloaded for {{tt|std::initializer_list}}}}
+{{dsc inc|cpp/iterator/dsc rbegin}}
+{{dsc inc|cpp/iterator/dsc rend}}
+{{dsc inc|cpp/iterator/dsc empty}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+===Notes===
+{{feature test macro|std=C++11|value=200806L|__cpp_initializer_lists|[[cpp/language/list initialization|List-initialization]] and {{tt|std::initializer_list}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+template&lt;class T&gt;
+struct S
+{
+    std::vector&lt;T&gt; v;
+    
+    S(std::initializer_list&lt;T&gt; l) : v(l)
+    {
+         std::cout &lt;&lt; "constructed with a " &lt;&lt; l.size() &lt;&lt; "-element list\n";
+    }
+    
+    void append(std::initializer_list&lt;T&gt; l)
+    {
+        v.insert(v.end(), l.begin(), l.end());
+    }
+    
+    std::pair&lt;const T*, std::size_t&gt; c_arr() const
+    {
+        return {&amp;v[0], v.size()}; // copy list-initialization in return statement
+                                  // this is NOT a use of std::initializer_list
+    }
+};
+
+template&lt;typename T&gt;
+void templated_fn(T) {}
+
+int main()
+{
+    S&lt;int&gt; s = {1, 2, 3, 4, 5}; // copy list-initialization
+    s.append({6, 7, 8});        // list-initialization in function call
+    
+    std::cout &lt;&lt; "The vector now has " &lt;&lt; s.c_arr().second &lt;&lt; " ints:\n";    
+    for (auto n : s.v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "Range-for over brace-init-list: \n";
+    for (int x : {-1, -2, -3}) // the rule for auto makes this ranged-for work
+        std::cout &lt;&lt; x &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    auto al = {10, 11, 12}; // special rule for auto
+    std::cout &lt;&lt; "The list bound to auto has size() = " &lt;&lt; al.size() &lt;&lt; '\n';
+    auto la = al; // a shallow-copy of top-level proxy object
+    assert(la.begin() == al.begin()); // guaranteed: backing array is the same
+
+    std::initializer_list&lt;int&gt; il{-3, -2, -1};
+    assert(il.begin()[2] == -1); // note the replacement for absent operator[]
+    il = al; // shallow-copy
+    assert(il.begin() == al.begin()); // guaranteed
+    
+//  templated_fn({1, 2, 3}); // compiler error! "{1, 2, 3}" is not an expression,
+                             // it has no type, and so T cannot be deduced
+    templated_fn&lt;std::initializer_list&lt;int&gt;&gt;({1, 2, 3}); // OK
+    templated_fn&lt;std::vector&lt;int&gt;&gt;({1, 2, 3});           // also OK
+}
+|output=
+constructed with a 5-element list
+The vector now has 8 ints:
+1 2 3 4 5 6 7 8
+Range-for over brace-init-list:
+-1 -2 -3
+The list bound to auto has size() = 3
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2129|std=C++11|before={{tt|std::initializer_list}} could have explicit&lt;br&gt;specializations or partial specializations|after=the program is&lt;br&gt;ill-formed in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc span}}
+{{dsc inc|cpp/string/dsc basic_string_view}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

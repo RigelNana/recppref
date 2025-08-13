@@ -1,0 +1,157 @@
+{{cpp/title|integer_sequence}}
+{{cpp/meta/navbar}}
+{{ddcl|since=c++14|header=utility|feature=__cpp_lib_integer_sequence|1=
+template&lt; class T, T... Ints &gt;
+class integer_sequence;
+}}
+
+The class template {{tt|std::integer_sequence}} represents a compile-time sequence of integers. When used as an argument to a [[cpp/language/function template|function template]], the [[cpp/language/parameter pack|parameter pack]] {{tt|Ints}} can be deduced and used in pack expansion.
+
+===Template parameters===
+{{par begin}}
+{{par|T|an integer type to use for the elements of the sequence}}
+{{par|...Ints|a non-type parameter pack representing the sequence}}
+{{par end}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc mem sfun|cpp/utility/integer_sequence|inlinemem=true|title=size|returns the number of elements in {{tt|Ints}}}}
+{{dsc end}}
+
+{{member|{{small|std::integer_sequence::}}size|2=
+{{ddcl|1=
+static constexpr std::size_t size() noexcept;
+}}
+
+Returns the number of elements in {{tt|Ints}}. Equivalent to {{c|sizeof...(Ints)}}.
+
+===Parameters===
+(none)
+
+===Return value===
+The number of elements in {{tt|Ints}}.
+}}
+
+===Helper templates===
+A helper alias template {{tt|std::index_sequence}} is defined for the common case where {{tt|T}} is {{lc|std::size_t}}:
+
+{{ddcl|1=
+template&lt; std::size_t... Ints &gt;
+using index_sequence = std::integer_sequence&lt;std::size_t, Ints...&gt;;
+}}
+
+Helper alias templates {{tt|std::make_integer_sequence}} and {{tt|std::make_index_sequence}} are defined to simplify creation of {{tt|std::integer_sequence}} and {{tt|std::index_sequence}} types, respectively, with {{c|0}}, {{c|1}}, {{c|2}}, {{tt|...}}, {{c|N - 1}} as {{tt|Ints}}:
+
+{{dcl begin}}
+{{dcl|1=
+template&lt; class T, T N &gt;
+using make_integer_sequence = std::integer_sequence&lt;T, /* a sequence 0, 1, 2, ..., N-1 */&gt;;
+}}
+{{dcl|1=
+template&lt; std::size_t N &gt;
+using make_index_sequence = std::make_integer_sequence&lt;std::size_t, N&gt;;
+}}
+{{dcl end}}
+
+The program is ill-formed if {{tt|N}} is negative. If {{tt|N}} is zero, the indicated type is {{tt|integer_sequence&lt;T&gt;}}.
+
+A helper alias template {{tt|std::index_sequence_for}} is defined to convert any type parameter pack into an index sequence of the same length:
+
+{{dcl begin}}
+{{dcl|1=
+template&lt; class... T &gt;
+using index_sequence_for = std::make_index_sequence&lt;sizeof...(T)&gt;;
+}}
+{{dcl end}}
+
+===Notes===
+{{feature test macro|__cpp_lib_integer_sequence|Compile-time integer sequences|value=201304L|std=C++14}}
+
+===Example===
+{{example
+|See also {{lc|std::apply}} possible implementation for another example.
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+#include &lt;utility&gt;
+
+namespace details {
+template &lt;typename Array, std::size_t... I&gt;
+constexpr auto array_to_tuple_impl(const Array&amp; a, std::index_sequence&lt;I...&gt;)
+{
+    return std::make_tuple(a[I]...);
+}
+
+template &lt;class Ch, class Tr, class Tuple, std::size_t... Is&gt;
+void print_tuple_impl(std::basic_ostream&lt;Ch, Tr&gt;&amp; os,
+                      const Tuple&amp; t,
+                      std::index_sequence&lt;Is...&gt;)
+{
+    ((os &lt;&lt; (Is ? ", " : "") &lt;&lt; std::get&lt;Is&gt;(t)), ...);
+}
+}
+
+template &lt;typename T, T... ints&gt;
+void print_sequence(int id, std::integer_sequence&lt;T, ints...&gt; int_seq)
+{
+    std::cout &lt;&lt; id &lt;&lt; ") The sequence of size " &lt;&lt; int_seq.size() &lt;&lt; ": ";
+    ((std::cout &lt;&lt; ints &lt;&lt; ' '), ...);
+    std::cout &lt;&lt; '\n';
+}
+
+template &lt;typename T, std::size_t N, typename Indx = std::make_index_sequence&lt;N&gt;&gt;
+constexpr auto array_to_tuple(const std::array&lt;T, N&gt;&amp; a)
+{
+    return details::array_to_tuple_impl(a, Indx{});
+}
+
+template &lt;class Ch, class Tr, class... Args&gt;
+auto&amp; operator&lt;&lt;(std::basic_ostream&lt;Ch, Tr&gt;&amp; os, const std::tuple&lt;Args...&gt;&amp; t)
+{
+    os &lt;&lt; '(';
+    details::print_tuple_impl(os, t, std::index_sequence_for&lt;Args...&gt;{});
+    return os &lt;&lt; ')';
+}
+
+int main()
+{
+    print_sequence(1, std::integer_sequence&lt;unsigned, 9, 2, 5, 1, 9, 1, 6&gt;{});
+    print_sequence(2, std::make_integer_sequence&lt;int, 12&gt;{});
+    print_sequence(3, std::make_index_sequence&lt;10&gt;{});
+    print_sequence(4, std::index_sequence_for&lt;std::ios, float, signed&gt;{});
+
+    constexpr std::array&lt;int, 4&gt; array{1, 2, 3, 4};
+
+    auto tuple1 = array_to_tuple(array);
+    static_assert(std::is_same_v&lt;decltype(tuple1),
+                                 std::tuple&lt;int, int, int, int&gt;&gt;, "");
+    std::cout &lt;&lt; "5) tuple1: " &lt;&lt; tuple1 &lt;&lt; '\n';
+    
+    constexpr auto tuple2 = array_to_tuple&lt;int, 4,
+        std::integer_sequence&lt;std::size_t, 1, 0, 3, 2&gt;&gt;(array);
+    std::cout &lt;&lt; "6) tuple2: " &lt;&lt; tuple2 &lt;&lt; '\n';
+}
+|output=
+1) The sequence of size 7: 9 2 5 1 9 1 6 
+2) The sequence of size 12: 0 1 2 3 4 5 6 7 8 9 10 11 
+3) The sequence of size 10: 0 1 2 3 4 5 6 7 8 9 
+4) The sequence of size 3: 0 1 2 
+5) tuple1: (1, 2, 3, 4)
+6) tuple2: (2, 1, 4, 3)
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/container/array/dsc to_array}}
+{{dsc inc|cpp/types/dsc integral_constant}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

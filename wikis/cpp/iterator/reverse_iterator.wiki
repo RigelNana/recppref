@@ -1,0 +1,165 @@
+{{cpp/title|reverse_iterator}}
+{{cpp/iterator/reverse_iterator/navbar}}
+{{ddcl|header=iterator|
+template&lt; class Iter &gt;
+class reverse_iterator;
+}}
+
+{{tt|std::reverse_iterator}} is an iterator adaptor that reverses the direction of a given iterator, which must be at least a {{named req|BidirectionalIterator}}{{rev inl|since=c++20| or model {{lconcept|bidirectional_iterator}}}}. In other words, when provided with a bidirectional iterator, {{tt|std::reverse_iterator}} produces a new iterator that moves from the end to the beginning of the sequence defined by the underlying bidirectional iterator.
+
+For a reverse iterator {{c|r}} constructed from an iterator {{c|i}}, the relationship {{c|1=&amp;*r == &amp;*(i - 1)}} is always {{c|true}} (as long as {{c|r}} is {{rlp|/#Dereferenceability and validity|dereferenceable}}); thus a reverse iterator constructed from a one-past-the-end iterator dereferences to the last element in a sequence.
+
+This is the iterator returned by member functions {{tt|rbegin()}} and {{tt|rend()}} of the [[cpp/container|standard library containers]].
+
+{{image|range-rbegin-rend.svg}}
+
+===Nested types===
+{{rrev multi|until1=c++20|rev1=
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_category}}|{{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}&lt;ref name="iterator"&gt;The definition is provided by the base {{lc|std::iterator}} specialization until C++17.&lt;/ref&gt;}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::value_type}}&lt;ref name="iterator" /&gt;}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::difference_type}}}}
+{{dsc|{{tt|pointer}}|{{c/core|std::iterator_traits&lt;Iter&gt;::pointer}}}}
+{{dsc|{{tt|reference}}|{{c/core|std::iterator_traits&lt;Iter&gt;::reference}}}}
+{{dsc end}}
+|rev2=
+{{dsc begin}}
+{{dsc hitem|Type|Definition}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_concept}}|
+* {{lc|std::random_access_iterator_tag}} if {{tt|Iter}} models {{lc|std::random_access_iterator}}
+* {{lc|std::bidirectional_iterator_tag}} otherwise}}
+{{dsc|{{tt|iterator_category}}|
+* {{lc|std::random_access_iterator_tag}} if {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} models {{c/core|std::derived_from&lt;std::random_access_iterator_tag&gt;}}
+* {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} otherwise}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iter_value_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iter_difference_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|pointer}}|{{c/core|std::iterator_traits&lt;Iter&gt;::pointer}}}}
+{{dsc|{{tt|reference}}|{{c/core|std::iter_reference_t&lt;Iter&gt;}}}}
+{{dsc end}}
+}}
+&lt;references/&gt;
+
+===Data members===
+{{dsc begin}}
+{{dsc hitem|Member|Description}}
+{{dsc|{{anchor|current}}{{dsc small|{{tt|Iter}}}} {{tt|current}}|the underlying iterator&lt;br&gt;{{mark prot mem obj}}}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc constructor|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator{{=}}|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc base|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator*|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator_at|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator_arith|reverse_iterator}}
+{{dsc end}}
+
+===Non-member functions===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator_cmp|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator+|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator-|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_move|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_swap|reverse_iterator}}
+{{dsc inc|cpp/iterator/dsc make_reverse_iterator}}
+{{dsc end}}
+
+===Helper templates===
+{{ddcl|since=c++20|1=
+template&lt; class Iterator1, class Iterator2 &gt;
+    requires (!std::sized_sentinel_for&lt;Iterator1, Iterator2&gt;)
+inline constexpr bool disable_sized_sentinel_for
+    &lt;std::reverse_iterator&lt;Iterator1&gt;, std::reverse_iterator&lt;Iterator2&gt;&gt; = true;
+}}
+
+This partial specialization of {{tt|std::disable_sized_sentinel_for}} prevents specializations of {{tt|reverse_iterator}} from satisfying {{lconcept|sized_sentinel_for}} if their underlying iterators do not satisfy the concept.
+
+===Possible implementation===
+Below is a partial implementation focusing on the way the inner iterator is stored, calling {{lc|std::prev}} only when the content is fetched via {{c/core|operator*}}.
+{{eq fun|1=
+template&lt;class It&gt;
+class reverse_iterator
+{
+protected:
+    It current = It();
+public:
+    reverse_iterator() = default;
+    constexpr explicit reverse_iterator(It itr) : current(itr) {}
+    template&lt;class U&gt;
+        requires (!std::is_same_v&lt;U, It&gt; &amp;&amp; std::convertible_to&lt;const U&amp;, It&gt;)
+    constexpr explicit reverse_iterator(const U&amp; other) : current(other.base()) {}
+    
+    constexpr decltype(auto) operator*() const
+    {
+        return *std::prev(current); // &lt;== returns the content of prev
+    }
+    
+    constexpr reverse_iterator&amp; operator++() { --current; return *this; }
+    constexpr reverse_iterator operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+    
+    constexpr reverse_iterator&amp; operator--() { ++current; return *this; }
+    constexpr reverse_iterator operator--(int) { auto tmp = *this; --(*this); return tmp; }
+    
+    constexpr It base() const { return current; }
+    
+    // Other member functions, friend functions, and member typedefs are not shown here.
+};
+}}
+
+===Notes===
+{{tt|std::reverse_iterator}} does not work with iterators whose dereference returns a reference to a member of {{c|*this}} (so-called “stashing iterators”). An example of a stashing iterator is [https://github.com/microsoft/STL/blob/ac129e595f762f11551663f1c7fa5f51444a8c6c/stl/inc/filesystem#L1387-L1585 MSVC STL's] {{ltt|cpp/filesystem/path#Member types|std::filesystem::path::iterator}}.
+
+===Example===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+
+template&lt;typename T, std::size_t SIZE&gt;
+class Stack
+{
+    T arr[SIZE];
+    std::size_t pos = 0;
+public:
+    T pop()
+    {
+        return arr[--pos];
+    }
+    
+    Stack&amp; push(const T&amp; t)
+    {
+        arr[pos++] = t;
+        return *this;
+    }
+    
+    // we wish that looping on Stack would be in LIFO order
+    // thus we use std::reverse_iterator as an adaptor to existing iterators
+    // (which are in this case the simple pointers: [arr, arr + pos)
+    auto begin() { return std::reverse_iterator(arr + pos); }
+    auto end() { return std::reverse_iterator(arr); }
+};
+
+int main()
+{
+    Stack&lt;int, 8&gt; s;
+    s.push(5).push(15).push(25).push(35);
+    for (int val : s)
+        std::cout &lt;&lt; val &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+35 25 15 5
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc make_reverse_iterator}}
+{{dsc inc|cpp/iterator/dsc iterator}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

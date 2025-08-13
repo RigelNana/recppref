@@ -1,0 +1,121 @@
+{{cpp/title|tuple_size}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|array}}
+{{dcl header|tuple}}
+{{dcl header|utility}}
+{{dcl header|ranges|notes={{mark since c++20}}}}
+{{dcl header|complex|notes={{mark since c++26}}}}
+{{dcl|num=1|since=c++11|1=
+template&lt; class T &gt;
+struct tuple_size; // not defined
+}}
+{{dcl|num=2|since=c++11|1=
+template&lt; class T &gt;
+struct tuple_size&lt; const T &gt;
+    : std::integral_constant&lt;std::size_t, std::tuple_size&lt;T&gt;::value&gt; {};
+}}
+{{dcl|num=3|since=c++11|deprecated=c++20|1=
+template&lt; class T &gt;
+struct tuple_size&lt; volatile T &gt;
+    : std::integral_constant&lt;std::size_t, std::tuple_size&lt;T&gt;::value&gt; {};
+}}
+{{dcl|num=4|since=c++11|deprecated=c++20|1=
+template&lt; class T &gt;
+struct tuple_size&lt; const volatile T &gt;
+    : std::integral_constant&lt;std::size_t, std::tuple_size&lt;T&gt;::value&gt; {};
+}}
+{{dcl end}}
+
+Provides access to the number of elements in a {{lt|cpp/utility/tuple/tuple-like}} type as a compile-time constant expression.
+
+@1@ The primary template is not defined. An explicit (full) or partial specialization is required to make a type tuple-like.
+
+@2-4@ Specializations for a cv-qualified types reuse the {{c|value}} from the corresponding cv-unqualified versions by default.
+
+{{rrev|since=c++17|
+{{tt|std::tuple_size}} interacts with the core language: it can provide {{lt|cpp/language/structured binding}} support in the tuple-like case.
+
+{{v|2-4}} are SFINAE-friendly: if {{c|std::tuple_size&lt;T&gt;::value}} is
+ill-formed when treated as an unevaluated operand, they do not provide the member {{c|value}}. Access checking is performed as if in a context unrelated to {{tt|tuple_size}} and {{tt|T}}. Only the validity of the immediate context of the expression is considered. This allows
+{{source|1=
+#include &lt;utility&gt;
+
+struct X { int a, b; };
+const auto [x, y] = X(); // structured binding declaration first attempts
+                         // tuple_size&lt;const X&gt; which attempts to use tuple_size&lt;X&gt;::value,
+                         // then soft error encountered, binds to public data members
+}}
+}}
+
+===Specializations===
+The standard library provides following specializations for standard library types:
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_size}}
+{{dsc inc|cpp/utility/pair/dsc tuple_size}}
+{{dsc inc|cpp/container/array/dsc tuple_size}}
+{{dsc inc|cpp/ranges/subrange/dsc tuple_size}}
+{{dsc inc|cpp/numeric/complex/dsc tuple_size}}
+{{dsc end}}
+
+All specializations of {{tt|std::tuple_size}} satisfy {{named req|UnaryTypeTrait}} with ''base characteristic'' {{c|std::integral_constant&lt;std::size_t, N&gt;}} for some {{tt|N}}.
+
+Users may specialize {{tt|std::tuple_size}} for program-defined types to make them tuple-like. Program-defined specializations must meet the requirements above.
+
+Usually only specialization for cv-unqualified types are needed to be customized.
+
+===Helper variable template===
+{{ddcl|header=tuple|since=c++17|1=
+template&lt; class T &gt;
+constexpr std::size_t tuple_size_v = tuple_size&lt;T&gt;::value;
+}}
+
+{{cpp/types/integral_constant/inherit2|for a standard specialization, the number of elements in the tuple-like type {{tt|T}}|std::size_t}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;ranges&gt;
+#include &lt;tuple&gt;
+#include &lt;utility&gt;
+
+template&lt;class T, std::size_t Size&gt; struct Arr { T data[Size]; };
+
+// Program-defined specialization of std::tuple_size:
+template&lt;class T, std::size_t Size&gt; struct std::tuple_size&lt;Arr&lt;T, Size&gt;&gt;
+    : public integral_constant&lt;std::size_t, Size&gt; {};
+
+int main()
+{
+    using tuple1 = std::tuple&lt;int, char, double&gt;;
+    static_assert(3 == std::tuple_size_v&lt;tuple1&gt;); // uses using template (C++17)
+
+    using array3x4 = std::array&lt;std::array&lt;int, 3&gt;, 4&gt;;
+    static_assert(4 == std::tuple_size&lt;array3x4&gt;{}); // uses operator std::size_t
+
+    using pair = std::pair&lt;tuple1, array3x4&gt;;
+    static_assert(2 == std::tuple_size&lt;pair&gt;()); // uses operator()
+
+    using sub = std::ranges::subrange&lt;char*, char*&gt;;
+    static_assert(2 == std::tuple_size&lt;sub&gt;::value);
+
+    using Arr5 = Arr&lt;int, 5&gt;;
+    static_assert(5 == std::tuple_size_v&lt;Arr5&gt;);
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2212|std=C++11|before=specializations for cv types were not required in some headers, which led to ambiguity|after=required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc structured binding}}
+{{dsc inc|cpp/utility/dsc tuple_element}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_cat}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

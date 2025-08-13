@@ -1,0 +1,135 @@
+{{cpp/title|ilogb|ilogbf|ilogbl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+int ilogb ( float num );
+int ilogb ( double num );
+int ilogb ( long double num );
+|since2=c++23|dcl2=
+constexpr int ilogb( /* floating-point-type */ num );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+int ilogbf( float num );
+}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+int ilogbl( long double num );
+}}
+{{dcl|num=4|since=c++11|
+#define FP_ILOGB0   /* implementation-defined */
+}}
+{{dcl|num=5|since=c++11|
+#define FP_ILOGBNAN /* implementation-defined */
+}}
+{{dcl h|[[#Notes|Additional overloads]]}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+int ilogb ( Integer num );
+}}
+{{dcl end}}
+
+@1-3@ Extracts the value of the unbiased exponent from the floating-point argument {{c|num}}, and returns it as a signed integer value.{{rev inl|since=c++23| The library provides overloads of {{tt|std::ilogb}} for all cv-unqualified floating-point types as the type of the parameter {{c|num}}.}}
+@4@ Expands to integer constant expression whose value is either {{c|INT_MIN}} or {{c|-INT_MAX}}.
+@5@ Expands to integer constant expression whose value is either {{c|INT_MIN}} or {{c|+INT_MAX}}.
+@A@ Additional overloads are provided for all integer types, which are treated as {{c/core|double}}.
+
+Formally, the unbiased exponent is the integral part of {{math|log{{su|b=r}}{{!}}num{{!}}}} as a signed integral value, for non-zero {{c|num}}, where {{c|r}} is {{c|std::numeric_limits&lt;T&gt;::radix}} and {{tt|T}} is the floating-point type of {{c|num}}.
+
+===Parameters===
+{{par begin}}
+{{par|num|floating-point or integer value}}
+{{par end}}
+
+===Return value===
+If no errors occur, the unbiased exponent of {{c|num}} is returned as a signed int value.
+
+If {{c|num}} is zero, {{lc|FP_ILOGB0}} is returned.
+
+If {{c|num}} is infinite, {{lc|INT_MAX}} is returned.
+
+If {{c|num}} is a NaN, {{lc|FP_ILOGBNAN}} is returned.
+
+If the correct result is greater than {{lc|INT_MAX}} or smaller than {{lc|INT_MIN}}, the return value is unspecified.
+
+===Error handling===
+Errors are reported as specified in {{lc|math_errhandling}}.
+
+A domain error or range error may occur if {{c|num}} is zero, infinite, or NaN.
+
+If the correct result is greater than {{lc|INT_MAX}} or smaller than {{lc|INT_MIN}}, a domain error or a range error may occur.&lt;!--this is DR 410 against C11, which makes the wording match lrint and lround--&gt;
+
+If the implementation supports IEEE floating-point arithmetic (IEC 60559),
+* If the correct result is greater than {{lc|INT_MAX}} or smaller than {{lc|INT_MIN}}, {{lc|FE_INVALID}} is raised.
+* If {{c|num}} is ±0, ±∞, or NaN, {{lc|FE_INVALID}} is raised.
+* In all other cases, the result is exact ({{lc|FE_INEXACT}} is never raised) and [[cpp/numeric/fenv/FE_round|the current rounding mode]] is ignored.
+
+===Notes===
+If {{c|num}} is not zero, infinite, or NaN, the value returned is exactly equivalent to {{c|static_cast&lt;int&gt;(std::logb(num))}}.
+
+[https://pubs.opengroup.org/onlinepubs/9699919799/functions/ilogb.html POSIX requires] that a domain error occurs if {{c|num}} is zero, infinite, NaN, or if the correct result is outside of the range of {{c/core|int}}.
+
+POSIX also requires that, on XSI-conformant systems, the value returned when the correct result is greater than {{lc|INT_MAX}} is {{lc|INT_MAX}} and the value returned when the correct result is less than {{lc|INT_MIN}} is {{lc|INT_MIN}}.
+
+The correct result can be represented as {{c/core|int}} on all known implementations. For overflow to occur, {{lc|INT_MAX}} must be less than {{c|LDBL_MAX_EXP * std::log2(FLT_RADIX)}} or {{lc|INT_MIN}} must be greater than {{c|LDBL_MIN_EXP - LDBL_MANT_DIG) * std::log2(FLT_RADIX)}}.
+
+The value of the exponent returned by {{tt|std::ilogb}} is always 1 less than the exponent retuned by {{lc|std::frexp}} because of the different normalization requirements: for the exponent {{c|e}} returned by {{tt|std::ilogb}}, {{math|{{!}}num*r{{su|p=-e}}{{!}}}} is between {{c|1}} and {{c|r}} (typically between {{c|1}} and {{c|2}}), but for the exponent {{c|e}} returned by {{lc|std::frexp}}, {{math|{{!}}num*2{{su|p=-e}}{{!}}}} is between {{c|0.5}} and {{c|1}}.
+
+{{cpp/numeric/math/additional integer overload note|ilogb}}
+
+===Example===
+{{example
+|Compares different floating-point decomposition functions:
+|code=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    double f = 123.45;
+    std::cout &lt;&lt; "Given the number " &lt;&lt; f &lt;&lt; " or " &lt;&lt; std::hexfloat
+              &lt;&lt; f &lt;&lt; std::defaultfloat &lt;&lt; " in hex,\n";
+    
+    double f3;
+    double f2 = std::modf(f, &amp;f3);
+    std::cout &lt;&lt; "modf() makes " &lt;&lt; f3 &lt;&lt; " + " &lt;&lt; f2 &lt;&lt; '\n';
+    
+    int i;
+    f2 = std::frexp(f, &amp;i);
+    std::cout &lt;&lt; "frexp() makes " &lt;&lt; f2 &lt;&lt; " * 2^" &lt;&lt; i &lt;&lt; '\n';
+    
+    i = std::ilogb(f);
+    std::cout &lt;&lt; "logb()/ilogb() make " &lt;&lt; f / std::scalbn(1.0, i) &lt;&lt; " * "
+              &lt;&lt; std::numeric_limits&lt;double&gt;::radix
+              &lt;&lt; "^" &lt;&lt; std::ilogb(f) &lt;&lt; '\n';
+    
+    // error handling
+    std::feclearexcept(FE_ALL_EXCEPT);
+    
+    std::cout &lt;&lt; "ilogb(0) = " &lt;&lt; std::ilogb(0) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    FE_INVALID raised\n";
+}
+|p=true
+|output=
+Given the number 123.45 or 0x1.edccccccccccdp+6 in hex,
+modf() makes 123 + 0.45
+frexp() makes 0.964453 * 2^7
+logb()/ilogb() make 1.92891 * 2^6
+ilogb(0) = -2147483648
+    FE_INVALID raised
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc frexp}}
+{{dsc inc|cpp/numeric/math/dsc logb}}
+{{dsc inc|cpp/numeric/math/dsc scalbn}}
+{{dsc see c|c/numeric/math/ilogb}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

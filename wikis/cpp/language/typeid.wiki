@@ -1,0 +1,150 @@
+{{title|{{tt|typeid}} operator}}
+{{cpp/language/expressions/navbar}}
+
+Queries information of a type.
+
+Used where the {{rlp|type#Dynamic type|dynamic type}} of a {{rlp|object#Polymorphic objects|polymorphic object}} must be known and for static type identification.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|typeid (}} {{spar|type}} {{ttb|)}}}}
+{{sdsc|num=2|{{ttb|typeid (}} {{spar|expression}} {{ttb|)}}}}
+{{sdsc end}}
+
+The {{c/core|typeid}} expression is an {{rlp|value category|lvalue expression}} which refers to an object with {{rlp|static|static storage duration}}, of const-qualified version of the polymorphic type {{lc|std::type_info}} or some type derived from it.
+
+If the standard library definition of {{lc|std::type_info}} is not visible when using {{c/core|typeid}}, the program is ill-formed.
+
+===Explanation===
+If {{spar|type}} or the type of {{spar|expression}} is a class type or a reference to a class type, then that class type cannot be an {{rlp|incomplete type}}.
+
+@1@ Refers to a {{lc|std::type_info}} object representing {{spar|type}}. If {{spar|type}} is a reference type, the result refers to a {{lc|std::type_info}} object representing the cv-unqualified version of the referenced type.
+@2@ Examines {{spar sep|expression}}:
+* If {{spar|expression}} is {{rev inl|until=c++11|an {{rlp|value category#lvalue|lvalue}}}}{{rev inl|since=c++11|a {{rlp|value category#glvalue|glvalue}}}} expression that identifies an {{rlp|object#Polymorphic objects|object of a polymorphic type}} (that is, a class that declares or inherits at least one {{rlp|virtual|virtual function}}), the {{c/core|typeid}} expression evaluates the expression and then refers to the {{lc|std::type_info}} object that represents the dynamic type of the expression.
+:* If {{spar|expression}} is an {{rlp|operator member access#Built-in indirection operator|indirection expression}} and its operand evaluates to a {{rlp|pointer#Null pointers|null pointer value}}, an exception of a type matching handlers of type {{lc|std::bad_typeid}} is thrown&lt;ref&gt;In other contexts, evaluating such an {{spar|expression}} results in undefined behavior.&lt;/ref&gt;.
+* Otherwise, {{c/core|typeid}} does {{rlp|expressions#Potentially-evaluated expressions|not evaluate the expression}}, and the {{lc|std::type_info}} object it identifies represents the static type of the expression. Lvalue-to-rvalue, array-to-pointer, or function-to-pointer conversions are not performed.
+{{rrev|since=c++17|
+:*{{rlps|implicit conversion#Temporary materialization}}, however, is (formally) performed for prvalue arguments: the argument must be destructible in the context in which the {{c/core|typeid}} expression appears.
+}}
+
+If {{spar|type}} or the type of {{spar|expression}} is cv-qualified, the result of the {{c/core|typeid}} refers to a {{lc|std::type_info}} object representing the cv-unqualified type (that is, {{c|1=typeid(const T) == typeid(T)}}).
+
+If {{c/core|typeid}} is used on an object under construction or destruction (in a destructor or in a constructor, including constructor's {{rlp|initializer list}} or {{rlp|data members#Member initialization|default member initializers}}), then the {{lc|std::type_info}} object referred to by this {{c/core|typeid}} represents the class that is being constructed or destroyed even if it is not the most-derived class.
+
+&lt;references/&gt;
+
+===Notes===
+When applied to an expression of polymorphic type, evaluation of a typeid expression may involve runtime overhead (a virtual table lookup), otherwise typeid expression is resolved at compile time.
+
+It is unspecified whether the destructor for the object referred to by {{c/core|typeid}} is executed at the end of the program.
+
+There is no guarantee that the same {{lc|std::type_info}} object will be referred to by all evaluations of the typeid expression on the same type, although they would compare equal, {{lc|std::type_info::hash_code}} of those {{tt|type_info}} objects would be identical, as would be their {{lc|std::type_index}}.
+{{source|1=
+const std::type_info&amp; ti1 = typeid(A);
+const std::type_info&amp; ti2 = typeid(A);
+
+assert(&amp;ti1 == &amp;ti2); // not guaranteed
+assert(ti1 == ti2); // guaranteed
+assert(ti1.hash_code() == ti2.hash_code()); // guaranteed
+assert(std::type_index(ti1) == std::type_index(ti2)); // guaranteed
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/typeid}}
+
+===Example===
+{{example|The example showing output using one of the implementations where {{lc|type_info::name}} returns full type names; filter through c++filt -t if using gcc or similar.
+|p=true
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;typeinfo&gt;
+
+struct Base {}; // non-polymorphic
+struct Derived : Base {};
+
+struct Base2 { virtual void foo() {} }; // polymorphic
+struct Derived2 : Base2 {};
+
+int main()
+{
+    int myint = 50;
+    std::string mystr = "string";
+    double *mydoubleptr = nullptr;
+    
+    std::cout &lt;&lt; "myint has type: " &lt;&lt; typeid(myint).name() &lt;&lt; '\n'
+              &lt;&lt; "mystr has type: " &lt;&lt; typeid(mystr).name() &lt;&lt; '\n'
+              &lt;&lt; "mydoubleptr has type: " &lt;&lt; typeid(mydoubleptr).name() &lt;&lt; '\n';
+    
+    // std::cout &lt;&lt; myint is a glvalue expression of polymorphic type; it is evaluated
+    const std::type_info&amp; r1 = typeid(std::cout &lt;&lt; myint); // side-effect: prints 50
+    std::cout &lt;&lt; '\n' &lt;&lt; "std::cout&lt;&lt;myint has type : " &lt;&lt; r1.name() &lt;&lt; '\n';
+    
+    // std::printf() is not a glvalue expression of polymorphic type; NOT evaluated
+    const std::type_info&amp; r2 = typeid(std::printf("%d\n", myint));
+    std::cout &lt;&lt; "printf(\"%d\\n\",myint) has type : " &lt;&lt; r2.name() &lt;&lt; '\n';
+    
+    // Non-polymorphic lvalue is a static type
+    Derived d1;
+    Base&amp; b1 = d1;
+    std::cout &lt;&lt; "reference to non-polymorphic base: " &lt;&lt; typeid(b1).name() &lt;&lt; '\n';
+    
+    Derived2 d2;
+    Base2&amp; b2 = d2;
+    std::cout &lt;&lt; "reference to polymorphic base: " &lt;&lt; typeid(b2).name() &lt;&lt; '\n';
+    
+    try
+    {
+        // dereferencing a null pointer: okay for a non-polymorphic expression
+        std::cout &lt;&lt; "mydoubleptr points to " &lt;&lt; typeid(*mydoubleptr).name() &lt;&lt; '\n'; 
+        // dereferencing a null pointer: not okay for a polymorphic lvalue
+        Derived2* bad_ptr = nullptr;
+        std::cout &lt;&lt; "bad_ptr points to... ";
+        std::cout &lt;&lt; typeid(*bad_ptr).name() &lt;&lt; '\n';
+    }
+    catch (const std::bad_typeid&amp; e)
+    {
+        std::cout &lt;&lt; " caught " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+|output=
+======== output from Clang ========
+myint has type: i
+mystr has type: NSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEE
+mydoubleptr has type: Pd
+50
+std::cout&lt;&lt;myint has type : NSt3__113basic_ostreamIcNS_11char_traitsIcEEEE
+printf("%d\n",myint) has type : i
+reference to non-polymorphic base: 4Base
+reference to polymorphic base: 8Derived2
+mydoubleptr points to d
+bad_ptr points to...  caught std::bad_typeid
+
+======== output from MSVC ========
+myint has type: int
+mystr has type: class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,⮠
+class std::allocator&lt;char&gt; &gt;
+mydoubleptr has type: double * __ptr64
+50
+std::cout&lt;&lt;myint has type : class std::basic_ostream&lt;char,struct std::char_traits&lt;char&gt; &gt;
+printf("%d\n",myint) has type : int
+reference to non-polymorphic base: struct Base
+reference to polymorphic base: struct Derived2
+mydoubleptr points to double
+bad_ptr points to...  caught Attempted a typeid of nullptr pointer!
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=492|std=C++98|before=when {{c/core|typeid}} is applied to a reference to cv-qualified&lt;br&gt;type, the result represented the referenced type|after=the result represents the&lt;br&gt;cv-unqualified referenced type}}
+{{dr list item|wg=cwg|dr=1416|std=C++98|before=the wording regarding top-level&lt;br&gt;cv-qualification might be misinterpreted|after=improved the wording}}
+{{dr list item|wg=cwg|dr=1431|std=C++98|before={{c/core|typeid}} was only allowed to throw {{lc|std::bad_typeid}}|after=allowed to throw&lt;br&gt;matchable derived classes}}
+{{dr list item|wg=cwg|dr=1954|std=C++98|before=it was unclear whether null pointer dereference&lt;br&gt;can be checked in subexpressions of {{spar|expression}}|after=only checked at top level}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc type_info}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

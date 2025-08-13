@@ -1,0 +1,497 @@
+{{title|Value categories}}
+{{cpp/language/expressions/navbar}}
+
+Each C++ {{rlp|expressions|expression}} (an operator with its operands, a literal, a variable name, etc.) is characterized by two independent properties: a ''{{rlp|type}}'' and a ''value category''. Each expression has some non-reference type, and each expression belongs to exactly one of the three primary value categories: [[#prvalue|''prvalue'']], [[#xvalue|''xvalue'']], and [[#lvalue|''lvalue'']].
+
+* a {{ls|#glvalue}} (“generalized” lvalue) is an expression whose evaluation determines the identity of an object or function;
+* a {{ls|#prvalue}} (“pure” rvalue) is an expression whose evaluation
+:* computes the value of an operand of a built-in operator (such prvalue has no ''result object''), or
+:* initializes an object (such prvalue is said to have a ''result object'').
+:: The result object may be a variable, an object created by {{rlp|new|new-expression}}, a temporary created by {{rlpsd|implicit conversion#Temporary materialization}}, or a member thereof. Note that non-{{c/core|void}} {{rlp|expressions#Discarded-value expressions|discarded}} expressions have a result object (the materialized temporary). Also, every class and array prvalue has a result object except when it is the operand of {{rlpt|decltype}};
+* an {{ls|#xvalue}} (an “eXpiring” value) is a glvalue that denotes an object whose resources can be reused;
+* an {{ls|#lvalue}} is a glvalue that is not an xvalue;
+{{cot}}
+So-called, historically, because lvalues could appear on the left-hand side of an assignment expression. In general, it's not always the case:
+{{source|1=
+void foo();
+
+void baz()
+{
+    int a; // Expression `a` is lvalue
+    a = 4; // OK, could appear on the left-hand side of an assignment expression
+
+    int &amp;b{a}; // Expression `b` is lvalue
+    b = 5; // OK, could appear on the left-hand side of an assignment expression
+
+    const int &amp;c{a}; // Expression `c` is lvalue
+    c = 6;           // ill-formed, assignment of read-only reference
+
+    // Expression `foo` is lvalue
+    // address may be taken by built-in address-of operator
+    void (*p)() = &amp;foo;
+
+    foo = baz; // ill-formed, assignment of function
+}
+}}
+{{cob}}
+
+* an {{ls|#rvalue}} is a prvalue or an xvalue;
+{{cot}}
+So-called, historically, because rvalues could appear on the right-hand side of an assignment expression. In general, it's not always the case:
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    S() : m{42} {}
+    S(int a) : m{a} {}
+    int m;
+};
+
+int main()
+{
+    S s;
+
+    // Expression `S{}` is prvalue
+    // May appear on the right-hand side of an assignment expression
+    s = S{};
+
+    std::cout &lt;&lt; s.m &lt;&lt; '\n';
+
+    // Expression `S{}` is prvalue
+    // Can be used on the left-hand side too
+    std::cout &lt;&lt; (S{} = S{7}).m &lt;&lt; '\n';
+}
+|output=
+42
+7
+}}
+{{cob}}
+
+Note: this taxonomy went through significant changes with past C++ standard revisions, see {{ls|#History}} below for details.
+
+{{cot}}
+Despite their names, these terms classify expressions, not values.
+
+{{example
+|code=
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+template &lt;class T&gt; struct is_prvalue : std::true_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_lvalue : std::false_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&gt; : std::true_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_xvalue : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&amp;&gt; : std::true_type {};
+
+int main()
+{
+    int a{42};
+    int&amp; b{a};
+    int&amp;&amp; r{std::move(a)};
+
+    // Expression `42` is prvalue
+    static_assert(is_prvalue&lt;decltype((42))&gt;::value);
+
+    // Expression `a` is lvalue
+    static_assert(is_lvalue&lt;decltype((a))&gt;::value);
+
+    // Expression `b` is lvalue
+    static_assert(is_lvalue&lt;decltype((b))&gt;::value);
+
+    // Expression `std::move(a)` is xvalue
+    static_assert(is_xvalue&lt;decltype((std::move(a)))&gt;::value);
+
+    // Type of variable `r` is rvalue reference
+    static_assert(std::is_rvalue_reference&lt;decltype(r)&gt;::value);
+
+    // Type of variable `b` is lvalue reference
+    static_assert(std::is_lvalue_reference&lt;decltype(b)&gt;::value);
+
+    // Expression `r` is lvalue
+    static_assert(is_lvalue&lt;decltype((r))&gt;::value);
+}
+}}
+{{cob}}
+
+===Primary categories===
+====lvalue====
+The following expressions are ''lvalue expressions'':
+* the name of a variable, a function{{rev inl|since=c++20|, a {{rlp|template parameters#Non-type template parameter|template parameter object}}}}, or a data member, regardless of type, such as {{c|std::cin}} or {{c|std::endl}}. Even if the variable's type is rvalue reference, the expression consisting of its name is an lvalue expression (but see {{ls|#Move-eligible expressions}});
+
+{{cot}}
+{{source|1=
+void foo() {}
+
+void baz()
+{
+    // `foo` is lvalue
+    // address may be taken by built-in address-of operator
+    void (*p)() = &amp;foo;
+}
+}}
+
+{{source|1=
+struct foo {};
+
+template &lt;foo a&gt;
+void baz()
+{
+    const foo* obj = &amp;a;  // `a` is an lvalue, template parameter object
+}
+}}
+{{cob}}
+
+* a function call or an overloaded operator expression, whose return type is lvalue reference, such as {{c|std::getline(std::cin, str)}}, {{c|std::cout &lt;&lt; 1}}, {{c|1=str1 = str2}}, or {{c|++it}};
+
+{{cot}}
+{{source|1=
+int&amp; a_ref()
+{
+    static int a{3};
+    return a;
+}
+
+void foo()
+{
+    a_ref() = 5;  // `a_ref()` is lvalue, function call whose return type is lvalue reference
+}
+}}
+{{cob}}
+
+* {{c|1=a = b}}, {{c|1=a += b}}, {{c|1=a %= b}}, and all other built-in {{rlp|operator assignment|assignment and compound assignment}} expressions;
+* {{c|++a}} and {{c|--a}}, the built-in {{rlp|operator incdec#Built-in prefix operators|pre-increment and pre-decrement}} expressions;
+* {{c|*p}}, the built-in {{rlp|operator member access#Built-in indirection operator|indirection}} expression;
+* {{c|a[n]}} and {{c|p[n]}}, the built-in {{rlp|operator member access#Built-in subscript operator|subscript}} expressions{{rev inl|since=c++11|, where one operand in {{c|a[n]}} is an array lvalue}};
+* {{c|a.m}}, the {{rlp|operator member access#Built-in member access operators|member of object}} expression, except where {{tt|m}} is a member enumerator or a non-static member function, or where {{c|a}} is an rvalue and {{tt|m}} is a non-static data member of object type;
+
+{{cot}}
+{{source|1=
+struct foo
+{
+    enum bar
+    {
+        m // member enumerator
+    };
+};
+
+void baz()
+{
+    foo a;
+    a.m = 42; // ill-formed, lvalue required as left operand of assignment
+}
+}}
+
+{{source|1=
+struct foo
+{
+    void m() {} // non-static member function
+};
+
+void baz()
+{
+    foo a;
+
+    // `a.m` is a prvalue, hence the address cannot be taken by built-in
+    // address-of operator
+    void (foo::*p1)() = &amp;a.m; // ill-formed
+
+    void (foo::*p2)() = &amp;foo::m; // OK: pointer to member function
+}
+}}
+
+{{source|1=
+struct foo
+{
+    static void m() {} // static member function
+};
+
+void baz()
+{
+    foo a;
+    void (*p1)() = &amp;a.m;     // `a.m` is an lvalue
+    void (*p2)() = &amp;foo::m;  // the same
+}
+}}
+{{cob}}
+
+* {{c|p-&gt;m}}, the built-in {{rlp|operator member access#Built-in member access operators|member of pointer}} expression, except where {{tt|m}} is a member enumerator or a non-static member function;
+* {{c|a.*mp}}, the {{rlp|operator member access#Built-in pointer-to-member access operators|pointer to member of object}} expression, where {{c|a}} is an lvalue and {{tt|mp}} is a pointer to data member;
+* {{c|p-&gt;*mp}}, the built-in {{rlp|operator member access#Built-in pointer-to-member access operators|pointer to member of pointer}} expression, where {{tt|mp}} is a pointer to data member;
+* {{c|a, b}}, the built-in {{rlp|operator other#Built-in comma operator|comma}} expression, where {{c|b}} is an lvalue;
+* {{c|a ? b : c}}, the {{rlp|operator other#Conditional operator|ternary conditional}} expression for certain {{c|b}} and {{c|c}} (e.g., when both are lvalues of the same type, but see {{rlp|operator other#Conditional operator|definition}} for detail);
+* a {{rlp|string literal}}, such as {{c|"Hello, world!"}};
+* a cast expression to lvalue reference type, such as {{c|static_cast&lt;int&amp;&gt;(x)}} or {{c|static_cast&lt;void(&amp;)(int)&gt;(x)}};
+* a non-type {{rlp|template parameters|template parameter}} of an lvalue reference type;
+
+{{source|1=
+template &lt;int&amp; v&gt;
+void set()
+{
+    v = 5; // template parameter is lvalue
+}
+
+int a{3}; // static variable, fixed address is known at compile-time
+
+void foo()
+{
+    set&lt;a&gt;();
+}
+}}
+
+{{rrev|since=c++11|
+* a function call or an overloaded operator expression, whose return type is rvalue reference to function;
+* a cast expression to rvalue reference to function type, such as {{c|static_cast&lt;void(&amp;&amp;)(int)&gt;(x)}}.
+}}
+
+Properties:
+* Same as {{ls|#glvalue}} (below).
+* Address of an lvalue may be taken by built-in address-of operator: {{c|&amp;++i}}&lt;ref&gt;Assuming {{c|i}} has built-in type or the pre-increment operator is {{rlp|operators|overloaded}} to return by lvalue reference.&lt;/ref&gt; and {{c|&amp;std::endl}} are valid expressions.
+* A modifiable lvalue may be used as the left-hand operand of the built-in assignment and compound assignment operators.
+* An lvalue may be used to {{rlp|reference initialization|initialize an lvalue reference}}; this associates a new name with the object identified by the expression.
+
+====prvalue====
+The following expressions are ''prvalue expressions'':
+* a {{rlp|expressions#Literals|literal}} (except for {{rlp|string literal}}), such as {{c|42}}, {{c|true}} or {{c|nullptr}};
+* a function call or an overloaded operator expression, whose return type is non-reference, such as {{c|str.substr(1, 2)}}, {{c|str1 + str2}}, or {{c|it++}};
+* {{c|a++}} and {{c|a--}}, the built-in  {{rlp|operator incdec#Built-in postfix operators|post-increment and post-decrement}} expressions;
+* {{c|a + b}}, {{c|a % b}}, {{c|a &amp; b}}, {{c|a &lt;&lt; b}}, and all other built-in {{rlp|operator arithmetic|arithmetic}} expressions;
+* {{c|a &amp;&amp; b}}, {{c|a {{!!}} b}}, {{c|!a}}, the built-in {{rlp|operator logical|logical}} expressions;
+* {{c|a &lt; b}}, {{c|1=a == b}}, {{c|1=a &gt;= b}}, and all other built-in {{rlp|operator comparison|comparison}} expressions;
+* {{c|&amp;a}}, the built-in {{rlp|operator member access#Built-in address-of operator|address-of}} expression;
+* {{c|a.m}}, the {{rlp|operator member access#Built-in member access operators|member of object}} expression, where {{tt|m}} is a member enumerator or a non-static member function&lt;ref name=pmfc&gt;Special rvalue category, see {{lsd|#Pending member function call}}.&lt;/ref&gt;;
+* {{c|p-&gt;m}}, the built-in {{rlp|operator member access#Built-in member access operators|member of pointer}} expression, where {{tt|m}} is a member enumerator or a non-static member function&lt;ref name=pmfc/&gt;;
+* {{c|a.*mp}}, the {{rlp|operator member access#Built-in pointer-to-member access operators|pointer to member of object}} expression, where {{tt|mp}} is a pointer to member function&lt;ref name=pmfc/&gt;;
+* {{c|p-&gt;*mp}}, the built-in {{rlp|operator member access#Built-in pointer-to-member access operators|pointer to member of pointer}} expression, where {{tt|mp}} is a pointer to member function&lt;ref name=pmfc/&gt;;
+* {{c|a, b}}, the built-in {{rlp|operator other#Built-in comma operator|comma}} expression, where {{c|b}} is an prvalue;
+* {{c|a ? b : c}}, the {{rlp|operator other#Conditional operator|ternary conditional}} expression for certain {{c|b}} and {{c|c}} (see {{rlp|operator other#Conditional operator|definition}} for detail);
+* a cast expression to non-reference type, such as {{c|static_cast&lt;double&gt;(x)}}, {{c|std::string{}&lt;!----&gt;}}, or {{c|(int)42}};
+* the {{rlpt|this}} pointer;
+* an {{rlp|enum|enumerator}};
+* a non-type {{rlp|template parameters|template parameter}} of a scalar type;
+
+{{source|1=
+template &lt;int v&gt;
+void foo()
+{
+    // not an lvalue, `v` is a template parameter of scalar type int
+    const int* a = &amp;v; // ill-formed
+
+    v = 3; // ill-formed: lvalue required as left operand of assignment
+}
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+* a {{rlp|lambda|lambda expression}}, such as {{c|[](int x){ return x * x; }&lt;!----&gt;}};
+}}
+{{rev|since=c++20|
+* a {{rlp|constraints|requires-expression}}, such as {{c|requires (T i) { typename T::type; }&lt;!----&gt;}};
+* a specialization of a {{rlp|constraints|concept}}, such as {{c|std::equality_comparable&lt;int&gt;}}.
+}}
+{{rev end}}
+
+Properties:
+* Same as {{ls|#rvalue}} (below).
+* A prvalue cannot be {{rlp|object#Polymorphic objects|polymorphic}}: the {{rlpsd|type#Dynamic type}} of the object it denotes is always the type of the expression.
+* A non-class non-array prvalue cannot be {{rlp|cv|cv-qualified}}{{rev inl|since=c++17|, unless it is {{rlp|implicit conversion#Temporary materialization|materialized}} in order to be {{rlp|reference initialization|bound to a reference}} to a cv-qualified type&lt;!--CWG 2481--&gt;}}. (Note: a function call or cast expression may result in a prvalue of non-class cv-qualified type, but the cv-qualifier is generally immediately stripped out.)
+* A prvalue cannot have {{rlpsd|type#Incomplete type}} (except for type {{c/core|void}}, see below, or when used in {{rlpt|decltype}} specifier).
+* A prvalue cannot have {{rlp|abstract class|abstract class type}} or an array thereof.
+
+====xvalue====
+The following expressions are ''xvalue expressions'':
+* {{c|a.m}}, the {{rlp|operator member access#Built-in member access operators|member of object}} expression, where {{c|a}} is an rvalue&lt;!--as of C++17 (p0135r1) if the left operand is a prvalue, a temporary will be materialized and it will be converted to an xvalue per [expr]/9+.--&gt; and {{tt|m}} is a non-static data member of an object type;
+* {{c|a.*mp}}, the {{rlp|operator member access#Built-in pointer-to-member access operators|pointer to member of object}} expression, where {{c|a}} is an rvalue and {{tt|mp}} is a pointer to data member&lt;!--as of C++17 (p0135r1) if the left operand is a prvalue, a temporary will be materialized and it will be converted to an xvalue per [expr]/9+.--&gt;;
+* {{c|a, b}}, the built-in {{rlp|operator other#Built-in comma operator|comma}} expression, where {{c|b}} is an xvalue;
+* {{c|a ? b : c}}, the {{rlp|operator other#Conditional operator|ternary conditional}} expression for certain {{c|b}} and {{c|c}} (see {{rlp|operator other#Conditional operator|definition}} for detail);
+{{rev begin}}
+{{rev|since=c++11|
+* a function call or an overloaded operator expression, whose return type is rvalue reference to object, such as {{c|std::move(x)}};
+* {{c|a[n]}}, the built-in {{rlp|operator member access#Built-in subscript operator|subscript}} expression, where one operand is an array rvalue&lt;!--as of C++17 (p0135r1) a temporary will be materialized for array prvalue and converted to xvalue--&gt;;
+* a cast expression to rvalue reference to object type, such as {{c|static_cast&lt;char&amp;&amp;&gt;(x)}};
+}}
+{{rev|since=c++17|
+* any expression that designates a temporary object, after {{rlpsd|implicit conversion#Temporary materialization}};
+}}
+{{rev|since=c++23|
+* a [[#Move-eligible expressions|move-eligible expression]].
+}}
+{{rev end}}
+
+Properties:
+* Same as rvalue (below).
+* Same as glvalue (below).
+
+In particular, like all rvalues, xvalues bind to rvalue references, and like all glvalues, xvalues may be {{rlp|object#Polymorphic objects|polymorphic}}, and non-class xvalues may be {{rlp|cv|cv-qualified}}.
+
+{{cot}}
+{{example
+|code=
+#include &lt;type_traits&gt;
+
+template &lt;class T&gt; struct is_prvalue : std::true_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_lvalue : std::false_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&gt; : std::true_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_xvalue : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&amp;&gt; : std::true_type {};
+
+// Example from C++23 standard: 7.2.1 Value category [basic.lval]
+struct A
+{
+    int m;
+};
+
+A&amp;&amp; operator+(A, A);
+A&amp;&amp; f();
+
+int main()
+{
+    A a;
+    A&amp;&amp; ar = static_cast&lt;A&amp;&amp;&gt;(a);
+
+    // Function call with return type rvalue reference is xvalue
+    static_assert(is_xvalue&lt;decltype( (f()) )&gt;::value);
+
+    // Member of object expression, object is xvalue, `m` is a non-static data member
+    static_assert(is_xvalue&lt;decltype( (f().m) )&gt;::value);
+
+    // A cast expression to rvalue reference
+    static_assert(is_xvalue&lt;decltype( (static_cast&lt;A&amp;&amp;&gt;(a)) )&gt;::value);
+
+    // Operator expression, whose return type is rvalue reference to object
+    static_assert(is_xvalue&lt;decltype( (a + a) )&gt;::value);
+
+    // Expression `ar` is lvalue, `&amp;ar` is valid
+    static_assert(is_lvalue&lt;decltype( (ar) )&gt;::value);
+    [[maybe_unused]] A* ap = &amp;ar;
+}
+}}
+{{cob}}
+
+===Mixed categories===
+====glvalue====
+A ''glvalue expression'' is either lvalue or xvalue. 
+
+Properties:
+* A glvalue may be implicitly converted to a prvalue with lvalue-to-rvalue, array-to-pointer, or function-to-pointer {{rlp|implicit conversion}}.
+* A glvalue may be {{rlp|object#Polymorphic objects|polymorphic}}: the {{rlpsd|type#Dynamic type}} of the object it identifies is not necessarily the static type of the expression.
+* A glvalue can have {{rlpsd|type#Incomplete type}}, where permitted by the expression.
+
+====rvalue====
+An ''rvalue expression'' is either prvalue or xvalue.
+
+Properties:
+* Address of an rvalue cannot be taken by built-in address-of operator: {{c|&amp;int()}}, {{c|&amp;i++}}&lt;ref&gt;Assuming {{c|i}} has built-in type or the post-increment operator is not {{rlp|operators|overloaded}} to return by lvalue reference.&lt;/ref&gt;, {{c|&amp;42}}, and {{c|&amp;std::move(x)}} are invalid.
+* An rvalue can't be used as the left-hand operand of the built-in assignment or compound assignment operators.
+* An rvalue may be used to {{rlp|reference initialization|initialize a const lvalue reference}}, in which case the lifetime of the temporary object identified by the rvalue is {{rlp|reference initialization#Lifetime of a temporary|extended}} until the scope of the reference ends.
+{{rrev|since=c++11|
+* An rvalue may be used to {{rlp|reference initialization|initialize an rvalue reference}}, in which case the lifetime of the temporary object identified by the rvalue is {{rlp|reference initialization#Lifetime of a temporary|extended}} until the scope of the reference ends.
+* When used as a function argument and when {{rlp|overload resolution|two overloads}} of the function are available, one taking rvalue reference parameter and the other taking lvalue reference to const parameter, an rvalue binds to the rvalue reference overload (thus, if both copy and move constructors are available, an rvalue argument invokes the {{rlp|move constructor}}, and likewise with copy and move assignment operators).
+}}
+
+===Special categories===
+====Pending member function call====
+The expressions {{c|a.mf}} and {{c|p-&gt;mf}}, where {{tt|mf}} is a {{rlp|member functions|non-static member function}}, and the expressions {{c|a.*pmf}} and {{c|p-&gt;*pmf}}, where {{tt|pmf}} is a {{rlp|pointer#Pointers to member functions|pointer to member function}}, are classified as prvalue expressions, but they cannot be used to initialize references, as function arguments, or for any purpose at all, except as the left-hand argument of the function call operator, e.g. {{c|(p-&gt;*pmf)(args)}}.
+
+====Void expressions====
+Function call expressions returning {{c/core|void}}, cast expressions to {{c/core|void}}, and {{rlp|throw|throw-expressions}} are classified as prvalue expressions, but they cannot be used to initialize references or as function arguments. They can be used in discarded-value contexts (e.g. on a line of its own, as the left-hand operand of the comma operator, etc.) and in the {{c/core|return}} statement in a function returning {{c/core|void}}. In addition, throw-expressions may be used as the second and the third operands of the {{rlp|operator other|conditional operator ?:}}.
+{{rrev|since=c++17|
+Void expressions have no ''result object''.
+}}
+
+====Bit-fields====
+An expression that designates a {{rlp|bit field|bit-field}} (e.g. {{c|a.m}}, where {{c|a}} is an lvalue of type {{c/core|struct A { int m: 3; }&lt;!----&gt;}}) is a glvalue expression: it may be used as the left-hand operand of the assignment operator, but its address cannot be taken and a non-const lvalue reference cannot be bound to it. A const lvalue reference or rvalue reference can be initialized from a bit-field glvalue, but a temporary copy of the bit-field will be made: it won't bind to the bit-field directly.
+
+{{rrev|since=c++11|
+====Move-eligible expressions====
+Although an expression consisting of the name of any variable is an lvalue expression, such expression may be move-eligible if it appears as the operand of
+* a {{rlpt|return}} statement
+* a {{rlpt|coroutines|co_return}} statement {{mark since c++20}}
+* a {{rlpt|throw}} expression {{mark since c++17}}
+
+If an expression is move-eligible, it is treated {{rev inl|until=c++23|either as an rvalue or as an lvalue}}{{rev inl|since=c++23|as an rvalue}} for the purpose of {{rlp|overload resolution}}  (thus it may select the {{rlp|move constructor}}). See {{rlps|return#Automatic move from local variables and parameters}} for details.
+}}
+
+===History===
+====CPL====
+The programming language [[enwiki:CPL (programming language)|CPL]] was first to introduce value categories for expressions: all CPL expressions can be evaluated in "right-hand mode", but only certain kinds of expression are meaningful in "left-hand mode". When evaluated in right-hand mode, an expression is regarded as being a rule for the computation of a value (the right-hand value, or ''rvalue''). When evaluated in left-hand mode an expression effectively gives an address (the left-hand value, or ''lvalue''). "Left" and "Right" here stood for "left of assignment" and "right of assignment".
+
+====C====
+The C programming language followed a similar taxonomy, except that the role of assignment was no longer significant: C expressions are categorized between "lvalue expressions" and others (functions and non-object values), where "lvalue" means an expression that identifies an object, a "locator value"&lt;ref&gt;"A difference of opinion within the C community centered around the meaning of lvalue, one group considering an lvalue to be any kind of object locator, another group holding that an lvalue is meaningful on the left side of an assigning operator. The C89 Committee adopted the definition of lvalue as an object locator." -- ANSI C Rationale, 6.3.2.1/10.&lt;/ref&gt;.
+
+====C++98====
+Pre-2011 C++ followed the C model, but restored the name "rvalue" to non-lvalue expressions, made functions into lvalues, and added the rule that references can bind to lvalues, but only references to const can bind to rvalues. Several non-lvalue C expressions became lvalue expressions in C++.
+
+====C++11====
+With the introduction of move semantics in C++11, value categories were redefined to characterize two independent properties of expressions&lt;ref&gt;[https://www.stroustrup.com/terminology.pdf "New" Value Terminology] by Bjarne Stroustrup, 2010.&lt;/ref&gt;:
+* ''has identity'': it's possible to determine whether the expression refers to the same entity as another expression, such as by comparing addresses of the objects or the functions they identify (obtained directly or indirectly);
+* ''can be moved from'': {{rlp|move constructor}}, {{rlp|move assignment|move assignment operator}}, or another function overload that implements move semantics can bind to the expression.
+
+In C++11, expressions that:
+* have identity and cannot be moved from are called ''lvalue'' expressions;
+* have identity and can be moved from are called ''xvalue'' expressions;
+* do not have identity and can be moved from are called ''prvalue'' ("pure rvalue") expressions;
+* do not have identity and cannot be moved from are not used&lt;ref&gt;const prvalues (only allowed for class types) and const xvalues do not bind to {{tt|T&amp;&amp;}} overloads, but they bind to the {{c/core|const T&amp;&amp;}} overloads, which are also classified as "move constructor" and "move assignment operator" by the standard, satisfying the definition of "can be moved from" for the purpose of this classification. However, such overloads cannot modify their arguments and are not used in practice; in their absence const prvalues and const xvalues bind to {{c/core|const T&amp;}} overloads.&lt;/ref&gt;.
+
+The expressions that have identity are called "glvalue expressions" (glvalue stands for "generalized lvalue"). Both lvalues and xvalues are glvalue expressions.
+
+The expressions that can be moved from are called "rvalue expressions". Both prvalues and xvalues are rvalue expressions.
+
+====C++17====
+In C++17, {{rlp|copy elision}} was made mandatory in some situations, and that required separation of prvalue expressions from the temporary objects initialized by them, resulting in the system we have today. Note that, in contrast with the C++11 scheme, prvalues are no longer moved from.
+
+===Footnotes===
+&lt;references/&gt;
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.2.1|title=Value category|id=basic.lval}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.2.1|title=Value category|id=basic.lval}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=616|std=C++11|before=member access and member access through&lt;br&gt;pointer to member of an rvalue resulted in prvalue|after=reclassified as xvalue}}
+{{dr list item|wg=cwg|dr=1059|std=C++11|before=array prvalues could not be cv-qualified|after=allowed}}
+{{dr list item|wg=cwg|dr=1213|std=C++11|before=subscripting an array rvalue resulted in  lvalue|after=reclassified as xvalue}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/value category|value categories|nomono=true}}
+{{dsc end}}
+
+===External links===
+{{elink begin}}
+{{elink|[https://www.scs.stanford.edu/~dm/blog/decltype.html C++ value categories and decltype demystified] &amp;mdash; David Mazières, 2021}}
+{{elink|[https://stackoverflow.com/a/16638081 Empirically determine value category of expression] &amp;mdash; StackOverflow}}
+{{elink begin}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

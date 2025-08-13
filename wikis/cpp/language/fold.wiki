@@ -1,0 +1,158 @@
+{{title|Fold expressions {{mark since c++17}}}}
+{{cpp/language/expressions/templates/navbar}}
+Reduces ({{enwiki|Fold (higher-order function)|folds}}) a {{rlp|pack}} over a binary operator.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|(}} {{spar|pack op}} {{ttb|... )}}}}
+{{sdsc|num=2|{{ttb|( ...}} {{spar|op pack}} {{ttb|)}}}}
+{{sdsc|num=3|{{ttb|(}} {{spar|pack op}} {{ttb|...}} {{spar|op init}} {{ttb|)}}}}
+{{sdsc|num=4|{{ttb|(}} {{spar|init op}} {{ttb|...}} {{spar|op pack}} {{ttb|)}}}}
+{{sdsc end}}
+@1@ Unary right fold.
+@2@ Unary left fold.
+@3@ Binary right fold.
+@4@ Binary left fold.
+
+{{par begin}}
+{{par|{{spar|op}}|any of the following 32 ''binary'' operators: {{c|+}} {{c|-}} {{c|*}} {{c|/}} {{c|%}} {{c|^}} {{c|&amp;}} {{c|{{!}}}} {{c|1==}} {{c|&lt;}} {{c|&gt;}} {{c|&lt;&lt;}} {{c|&gt;&gt;}} {{c|1=+=}} {{c|1=-=}} {{c|1=*=}} {{c|1=/=}} {{c|1=%=}} {{c|1=^=}} {{c|1=&amp;=}} {{c|1={{!}}=}} {{c|1=&lt;&lt;=}} {{c|1=&gt;&gt;=}} {{c|1===}} {{c|1=!=}} {{c|1=&lt;=}} {{c|1=&gt;=}} {{c|&amp;&amp;}} {{c|{{!!}}}} {{c|,}} {{c|.*}} {{c|-&gt;*}}. In a binary fold, both {{spar|op}}s must be the same.}}
+{{par|{{spar|pack}}|an expression that contains an unexpanded {{rlp|pack}} and does not contain an operator with {{rlp|operator precedence|precedence}} lower than cast at the top level (formally, a {{spar|cast-expression}})}}
+{{par|{{spar|init}}|an expression that does not contain an unexpanded {{rlp|pack}} and does not contain an operator with {{rlp|operator precedence|precedence}} lower than cast  at the top level (formally, a {{spar|cast-expression}})}}
+{{par end}}
+
+Note that the opening and closing parentheses are a required part of the fold expression.
+
+===Explanation===
+The instantiation of a ''fold expression'' expands the expression {{c|e}} as follows:
+&lt;!--the ellipsis of the fold expressions is teletyped because it is a part of the formal syntax, and the ellipsis of the expansion result is plain because it is a shorthand of the full notation--&gt;
+@1@ Unary right fold &lt;span class="t-c"&gt;{{tt|(E}} {{spar|op}} {{tt|...)}}&lt;/span&gt; becomes &lt;span class="t-c"&gt;{{tt|(E{{sub|1}}}} {{spar|op}} {{tt|(}}... {{spar|op}} {{tt|(E{{sub|N-1}}}} {{spar|op}} {{tt|E{{sub|N}})))}}&lt;/span&gt;
+@2@ Unary left fold &lt;span class="t-c"&gt;{{tt|(...}} {{spar|op}} {{tt|E)}}&lt;/span&gt; becomes &lt;span class="t-c"&gt;{{tt|(((E{{sub|1}}}} {{spar|op}} {{tt|E{{sub|2}})}} {{spar|op}} ...{{tt|)}} {{spar|op}} {{tt|E{{sub|N}})}}&lt;/span&gt;
+@3@ Binary right fold &lt;span class="t-c"&gt;{{tt|(E}} {{spar|op}} {{tt|...}} {{spar|op}} {{tt|I)}}&lt;/span&gt; becomes &lt;span class="t-c"&gt;{{tt|(E{{sub|1}}}} {{spar|op}} {{tt|(}}... {{spar|op}} {{tt|(E{{sub|N−1}}}} {{spar|op}} {{tt|(E{{sub|N}}}} {{spar|op}} {{tt|I))))}}&lt;/span&gt;
+@4@ Binary left fold &lt;span class="t-c"&gt;{{tt|(I}} {{spar|op}} {{tt|...}} {{spar|op}} {{tt|E)}}&lt;/span&gt; becomes &lt;span class="t-c"&gt;{{tt|((((I}} {{spar|op}} {{tt|E{{sub|1}})}} {{spar|op}} {{tt|E{{sub|2}})}} {{spar|op}} ...{{tt|)}} {{spar|op}} {{tt|E{{sub|N}})}}&lt;/span&gt;
+
+(where {{tt|N}} is the number of elements in the pack expansion)
+
+For example, 
+{{source|1=
+template&lt;typename... Args&gt;
+bool all(Args... args) { return (... &amp;&amp; args); }
+
+bool b = all(true, true, true, false);
+// within all(), the unary left fold expands as
+//  return ((true &amp;&amp; true) &amp;&amp; true) &amp;&amp; false;
+// b is false
+}}
+
+When a unary fold is used with a pack expansion of length zero, only the following operators are allowed:
+@1@ Logical AND ({{c|&amp;&amp;}}). The value for the empty pack is {{c|true}}.
+@2@ Logical OR ({{c|{{!!}}}}). The value for the empty pack is {{c|false}}.
+@3@ The comma operator ({{c|,}}). The value for the empty pack is {{c|void()}}.
+
+===Notes===
+If the expression used as {{spar|init}} or as {{spar|pack}} has an operator with {{rlp|operator precedence|precedence}} below cast at the top level, it must be parenthesized:
+{{source|1=
+template&lt;typename... Args&gt;
+int sum(Args&amp;&amp;... args)
+{
+//  return (args + ... + 1 * 2);   // Error: operator with precedence below cast
+    return (args + ... + (1 * 2)); // OK
+}
+}}
+
+{{feature test macro|std=C++17|value=201603L|__cpp_fold_expressions|[[#top|Fold expressions]]}}
+
+===Example===
+{{example
+|code=
+#include &lt;climits&gt;
+#include &lt;concepts&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+// Basic usage, folding variadic arguments over operator&lt;&lt; 
+template&lt;typename... Args&gt;
+void printer(Args&amp;&amp;... args)
+{
+    (std::cout &lt;&lt; ... &lt;&lt; args) &lt;&lt; '\n';
+}
+
+// Folding an expression that uses the pack directly over operator,
+template&lt;typename... Ts&gt;
+void print_limits()
+{
+    ((std::cout &lt;&lt; +std::numeric_limits&lt;Ts&gt;::max() &lt;&lt; ' '), ...) &lt;&lt; '\n';
+}
+
+// Both a fold over operator&amp;&amp; using the pack
+// and over operator, using the variadic arguments
+template&lt;typename T, typename... Args&gt;
+void push_back_vec(std::vector&lt;T&gt;&amp; v, Args&amp;&amp;... args)
+{
+    static_assert((std::is_constructible_v&lt;T, Args&amp;&amp;&gt; &amp;&amp; ...));
+    (v.push_back(std::forward&lt;Args&gt;(args)), ...);
+}
+
+// Using an integer sequence to execute an expression
+// N times by folding a lambda over operator,
+template&lt;class T, std::size_t... dummy_pack&gt;
+constexpr T bswap_impl(T i, std::index_sequence&lt;dummy_pack...&gt;)
+{
+    T low_byte_mask = static_cast&lt;unsigned char&gt;(-1);
+    T ret{};
+    ([&amp;]
+    {
+        (void)dummy_pack;
+        ret &lt;&lt;= CHAR_BIT;
+        ret {{!}}= i &amp; low_byte_mask;
+        i &gt;&gt;= CHAR_BIT;
+    }(), ...);
+    return ret;
+}
+ 
+constexpr auto bswap(std::unsigned_integral auto i)
+{
+    return bswap_impl(i, std::make_index_sequence&lt;sizeof(i)&gt;{});
+}
+ 
+int main()
+{
+    printer(1, 2, 3, "abc");
+    print_limits&lt;uint8_t, uint16_t, uint32_t&gt;();
+ 
+    std::vector&lt;int&gt; v;
+    push_back_vec(v, 6, 2, 45, 12);
+    push_back_vec(v, 1, 2, 9);
+    for (int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    static_assert(bswap&lt;std::uint16_t&gt;(0x1234u) == 0x3412u);
+    static_assert(bswap&lt;std::uint64_t&gt;(0x0123456789abcdefull) == 0xefcdab8967452301ULL);
+}
+|output=
+123abc
+255 65535 4294967295 
+6 2 45 12 1 2 9
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.5.6|title=Fold expressions|id=expr.prim.fold}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.5.6|title=Fold expressions|id=expr.prim.fold}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.1.6|title=Fold expressions|id=expr.prim.fold}}
+{{ref std end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2611|std=C++17|before=the expansion results of fold expressions were not enclosed with parentheses|after=enclosed with parentheses}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

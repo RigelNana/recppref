@@ -1,0 +1,85 @@
+{{cpp/memory/allocator/title|deallocate}}
+{{cpp/memory/allocator/navbar}}
+{{ddcl|notes={{mark constexpr since c++20}}|
+void deallocate( T* p, std::size_t n );
+}}
+
+Deallocates the storage referenced by the pointer {{c|p}}, which must be a pointer obtained by an earlier call to {{lc|allocate()}}{{rev inl|since=c++23| or {{rlpt|allocate_at_least|allocate_at_least()}}}}.
+
+The argument {{c|n}} must be equal to the first argument of the call to {{lc|allocate()}} that originally produced {{c|p}}{{rev inl|since=c++23|, or in the range {{closed range|m|count}} if {{c|p}} is obtained from a call to {{c|allocate_at_least(m)}} which returned {{c|{p, count}&lt;!----&gt;}}}}; otherwise, the behavior is undefined.
+
+Calls {{c|::operator delete(void*)}} {{rev inl|since=c++17|or {{c|::operator delete(void*, std::align_val_t)}}}}, but it is unspecified when and how it is called.
+{{rrev|since=c++20|
+In evaluation of a constant expression, this function must deallocate storage allocated within the evaluation of the same expression.
+}}
+
+===Parameters===
+{{par begin}}
+{{par|p|pointer obtained from {{lc|allocate()}}{{rev inl|since=c++23| or {{rlpt|allocate_at_least|allocate_at_least()}}}}}}
+{{par|n|number of objects earlier passed to {{lc|allocate()}}{{rev inl|since=c++23|, or a number between requested and actually allocated number of objects via {{rlpt|allocate_at_least|allocate_at_least()}} (may be equal to either bound)}}}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+class S
+{
+    inline static int n{1};
+    int m{};
+    void pre() const { std::cout &lt;&lt; "#" &lt;&lt; m &lt;&lt; std::string(m, ' '); }
+public:
+    S(int x) : m{n++} { pre(); std::cout &lt;&lt; "S::S(" &lt;&lt; x &lt;&lt; ");\n"; }
+    ~S() { pre(); std::cout &lt;&lt; "S::~S();\n"; }
+    void id() const { pre(); std::cout &lt;&lt; "S::id();\n"; }
+};
+
+int main()
+{
+    constexpr std::size_t n{4};
+    std::allocator&lt;S&gt; allocator;
+    try
+    {
+        S* s = allocator.allocate(n); // may throw
+        for (std::size_t i{}; i != n; ++i)
+        {
+        //  allocator.construct(&amp;s[i], i + 42); // removed in C++20
+            std::construct_at(&amp;s[i], i + 42);   // since C++20
+        }
+        std::for_each_n(s, n, [](const auto&amp; e) { e.id(); });
+        std::destroy_n(s, n);
+        allocator.deallocate(s, n);
+    }
+    catch (std::bad_array_new_length const&amp; ex) { std::cout &lt;&lt; ex.what() &lt;&lt; '\n'; }
+    catch (std::bad_alloc const&amp; ex) { std::cout &lt;&lt; ex.what() &lt;&lt; '\n'; }
+}
+|output=
+#1 S::S(42);
+#2  S::S(43);
+#3   S::S(44);
+#4    S::S(45);
+#1 S::id();
+#2  S::id();
+#3   S::id();
+#4    S::id();
+#1 S::~S();
+#2  S::~S();
+#3   S::~S();
+#4    S::~S();
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc allocate}}
+{{dsc inc|cpp/memory/allocator/dsc allocate_at_least}}
+{{dsc inc|cpp/memory/allocator_traits/dsc deallocate}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

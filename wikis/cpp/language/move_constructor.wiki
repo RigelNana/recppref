@@ -1,0 +1,228 @@
+{{title|Move constructors}}
+{{cpp/language/classes/navbar}}
+
+A move constructor is a {{rlp|constructor}} which can be called with an argument of the same class type and copies the content of the argument, possibly mutating the argument.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar sep|class-name}}{{ttb|(}}{{spar sep|parameter-list}}{{ttb|);}}}}
+{{sdsc|num=2|{{spar sep|class-name}}{{ttb|(}}{{spar sep|parameter-list}}{{ttb|)}} {{spar|function-body}}}}
+{{sdsc|num=3|{{spar sep|class-name}}{{ttb|(}}{{spar sep|single-parameter-list}}{{ttb|1=) = default;}}}}
+{{sdsc|num=4|{{spar sep|class-name}}{{ttb|(}}{{spar sep|parameter-list}}{{ttb|1=) = delete;}}}}
+{{sdsc|num=5|{{spar sep|class-name}}{{ttb|::}}{{spar sep|class-name}}{{ttb|(}}{{spar sep|parameter-list}}{{ttb|)}} {{spar|function-body}}}}
+{{sdsc|num=6|{{spar sep|class-name}}{{ttb|::}}{{spar sep|class-name}}{{ttb|(}}{{spar sep|single-parameter-list}}{{ttb|1=) = default;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|class-name}}|the class whose move constructor is being declared}}
+{{par|{{spar|parameter-list}}|a non-empty {{rlpsd|function#Parameter list}} satisfying all following conditions:
+* given the class type as {{tt|T}}, the first parameter is of type {{c/core|T&amp;&amp;}}, {{c/core|const T&amp;&amp;}}, {{c/core|volatile T&amp;&amp;}} or {{c/core|const volatile T&amp;&amp;}}, and
+* either there are no other parameters, or all other parameters have {{rlp|default arguments}}}}
+{{par|{{spar|single-parameter-list}}|a {{rlpsd|function#Parameter list}} of only one parameter, which is of type {{c/core|T&amp;&amp;}}, {{c/core|const T&amp;&amp;}}, {{c/core|volatile T&amp;&amp;}} or {{c/core|const volatile T&amp;&amp;}} and does not have a default argument}}
+{{par|{{spar|function-body}}|the {{rlp|constructor|function body}} of the move constructor}}
+{{par end}}
+
+===Explanation===
+@1@ Declaration of a move constructor inside of class definition.
+@2-4@ Definition of a move constructor inside of class definition.
+:@3@ The move constructor is explicitly-defaulted.
+:@4@ The move constructor is deleted.
+@5,6@ Definition of a move constructor outside of class definition (the class must contain a declaration {{v|1}}).
+:@6@ The move constructor is explicitly-defaulted.
+
+{{source|1=
+struct X
+{
+    X(X&amp;&amp; other); // move constructor
+//  X(X other);   // Error: incorrect parameter type
+};
+
+union Y
+{
+    Y(Y&amp;&amp; other, int num = 1); // move constructor with multiple parameters
+//  Y(Y&amp;&amp; other, int num);     // Error: `num` has no default argument
+};
+}}
+
+The move constructor is typically called when an object is {{rlp|initialization|initialized}} (by {{rlp|direct initialization|direct-initialization}} or {{rlp|copy initialization|copy-initialization}}) from {{rev inl|until=c++17|{{rlps|value category#rvalue}} (xvalue or prvalue)}}{{rev inl|since=c++17|xvalue}} of the same type, including 
+* initialization: {{c|1=T a = std::move(b);}} or {{c|1=T a(std::move(b));}}, where {{c|b}} is of type {{tt|T}};
+* function argument passing: {{c|f(std::move(a));}}, where {{c|a}} is of type {{tt|T}} and {{c|f}} is {{c|void f(T t)}};
+* function return: {{c|return a;}} inside a function such as {{c|T f()}}, where {{c|a}} is of type {{tt|T}} which has a move constructor.
+
+When the initializer is a prvalue, the move constructor call is {{rev inl|until=c++17|often optimized out}}{{rev inl|since=c++17|never made}}, see {{rlp|copy elision}}.
+
+Move constructors typically transfer the resources held by the argument (e.g. pointers to dynamically-allocated objects, file descriptors, TCP sockets, thread handles, etc.) rather than make copies of them, and leave the argument in some valid but otherwise indeterminate state. Since move constructor doesn’t change the lifetime of the argument, the destructor will typically be called on the argument at a later point. For example, moving from a {{lc|std::string}} or from a {{lc|std::vector}} may result in the argument being left empty. For some types, such as {{lc|std::unique_ptr}}, the moved-from state is fully specified.
+
+===Implicitly-declared move constructor===
+If no user-defined move constructors are provided for a class type, and all of the following is true:
+* there are no user-declared {{rlp|copy constructor}}s;
+* there are no user-declared {{rlp|copy assignment|copy assignment operator}}s;
+* there are no user-declared {{rlp|move assignment|move assignment operator}}s;
+* there is no user-declared {{rlp|destructor}}.
+
+Then the compiler will declare a move constructor as a non-{{rlp|explicit}} {{c/core|inline public}} member of its class with the signature {{c|T::T(T&amp;&amp;)}}. 
+
+A class can have multiple move constructors, e.g. both {{c|T::T(const T&amp;&amp;)}} and {{c|T::T(T&amp;&amp;)}}. If some user-defined move constructors are present, the user may still force the generation of the implicitly declared move constructor with the keyword {{c/core|default}}.
+
+The implicitly-declared (or defaulted on its first declaration) move constructor has an exception specification as described in {{rev inl|until=c++17|{{rlp|except spec|dynamic exception specification}}}}{{rev inl|since=c++17|{{rlp|noexcept spec|noexcept specification}}}}.
+
+===Implicitly-defined move constructor===
+If the implicitly-declared move constructor is neither deleted nor trivial, it is defined (that is, a function body is generated and compiled) by the compiler if {{rlps|definition#ODR-use}} &lt;!-- P0859R0 --&gt;or {{rlp|constant expression#Functions and variables needed for constant evaluation|needed for constant evaluation}}. For union types, the implicitly-defined move constructor copies the object representation (as by {{lc|std::memmove}}). For non-union class types, the move constructor performs full member-wise move of the object's direct base subobjects and member subobjects, in their initialization order, using direct initialization with an {{rlps|value category#xvalue}} argument. For each non-static data member of a reference type, the move constructor binds the reference to the same object or function to which the source reference is bound.
+
+If this satisfies the requirements of a {{rev inl|until=c++23|{{rlp|constexpr#constexpr constructor|{{tt|constexpr}} constructor}}}}{{rev inl|since=c++23|{{rlp|constexpr#constexpr function|{{tt|constexpr}} function}}}}, the generated move constructor is {{c/core|constexpr}}.
+
+===Deleted move constructor===
+The implicitly-declared or explicitly-defaulted move constructor for class {{tt|T}} is defined as deleted if {{tt|T}} has a {{rlpsd|object#Potentially constructed subobject}} of class type {{tt|M}} (or possibly multi-dimensional array thereof) such that
+* {{tt|M}} has a destructor that is deleted or inaccessible from the copy constructor, or
+* the overload resolution as applied to find {{tt|M}}'s move constructor
+:* does not result in a usable candidate, or
+:* in the case of the subobject being a {{rlp|union#Union-like classes|variant member}}, selects a non-trivial function.
+
+Such a constructor is ignored by {{rlp|overload resolution}} (otherwise it would prevent copy-initialization from rvalue).
+
+===Trivial move constructor===
+The move constructor for class {{tt|T}} is trivial if all of the following is true:
+* it is not user-provided (meaning, it is implicitly-defined or defaulted);
+* {{tt|T}} has no virtual member functions;
+* {{tt|T}} has no virtual base classes;
+* the move constructor selected for every direct base of {{tt|T}} is trivial;
+* the move constructor selected for every non-static class type (or array of class type) member of {{tt|T}} is trivial.
+
+A trivial move constructor is a constructor that performs the same action as the trivial copy constructor, that is, makes a copy of the object representation as if by {{lc|std::memmove}}. All data types compatible with the C language are trivially movable.
+
+===Eligible move constructor===
+{{cpp/language/eligible special member function|move constructor}}
+
+Triviality of eligible move constructors determines whether the class is an {{rlp|lifetime#Implicit-lifetime types|implicit-lifetime type}}, and whether the class is a [[cpp/named req/TriviallyCopyable|trivially copyable type]].
+
+===Notes===
+To make the {{rlp|exceptions#Exception safety|strong exception guarantee}} possible, user-defined move constructors should not throw exceptions. For example, {{lc|std::vector}} relies on {{lc|std::move_if_noexcept}} to choose between move and copy when the elements need to be relocated.
+
+If both copy and move constructors are provided and no other constructors are viable, overload resolution selects the move constructor if the argument is an {{rlps|value category#rvalue}} of the same type (an {{rlps|value category#xvalue}} such as the result of {{lc|std::move}}{{rev inl|until=c++17| or a {{rlps|value category#prvalue}} such as a nameless temporary}}), and selects the copy constructor if the argument is an {{rlps|value category#lvalue}} (named object or a function/operator returning lvalue reference). If only the copy constructor is provided, all argument categories select it (as long as it takes a reference to const, since rvalues can bind to const references), which makes copying the fallback for moving, when moving is unavailable.
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    std::string s;
+    int k;
+    
+    A() : s("test"), k(-1) {}
+    A(const A&amp; o) : s(o.s), k(o.k) { std::cout &lt;&lt; "move failed!\n"; }
+    A(A&amp;&amp; o) noexcept :
+        s(std::move(o.s)),       // explicit move of a member of class type
+        k(std::exchange(o.k, 0)) // explicit move of a member of non-class type
+    {}
+};
+
+A f(A a)
+{
+    return a;
+}
+
+struct B : A
+{
+    std::string s2;
+    int n;
+    // implicit move constructor B::(B&amp;&amp;)
+    // calls A's move constructor
+    // calls s2's move constructor
+    // and makes a bitwise copy of n
+};
+
+struct C : B
+{
+    ~C() {} // destructor prevents implicit move constructor C::(C&amp;&amp;)
+};
+
+struct D : B
+{
+    D() {}
+    ~D() {}           // destructor would prevent implicit move constructor D::(D&amp;&amp;)
+    D(D&amp;&amp;) = default; // forces a move constructor anyway
+};
+
+int main()
+{
+    std::cout &lt;&lt; "Trying to move A\n";
+    A a1 = f(A()); // return by value move-constructs the target
+                   // from the function parameter
+    
+    std::cout &lt;&lt; "Before move, a1.s = " &lt;&lt; std::quoted(a1.s)
+        &lt;&lt; " a1.k = " &lt;&lt; a1.k &lt;&lt; '\n';
+    
+    A a2 = std::move(a1); // move-constructs from xvalue
+    std::cout &lt;&lt; "After move, a1.s = " &lt;&lt; std::quoted(a1.s)
+        &lt;&lt; " a1.k = " &lt;&lt; a1.k &lt;&lt; '\n';
+
+    
+    std::cout &lt;&lt; "\nTrying to move B\n";
+    B b1;
+    
+    std::cout &lt;&lt; "Before move, b1.s = " &lt;&lt; std::quoted(b1.s) &lt;&lt; "\n";
+    
+    B b2 = std::move(b1); // calls implicit move constructor
+    std::cout &lt;&lt; "After move, b1.s = " &lt;&lt; std::quoted(b1.s) &lt;&lt; "\n";
+
+    
+    std::cout &lt;&lt; "\nTrying to move C\n";
+    C c1;
+    C c2 = std::move(c1); // calls copy constructor
+
+    std::cout &lt;&lt; "\nTrying to move D\n";
+    D d1;
+    D d2 = std::move(d1);
+}
+|output=
+Trying to move A
+Before move, a1.s = "test" a1.k = -1
+After move, a1.s = "" a1.k = 0
+
+Trying to move B
+Before move, b1.s = "test"
+After move, b1.s = ""
+
+Trying to move C
+move failed!
+
+Trying to move D
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1353|std=C++11|before=the conditions where defaulted move constructors are&lt;br&gt;defined as deleted did not consider multi-dimensional array types|after=consider these types}}
+{{dr list item|wg=cwg|dr=1402|std=C++11|before=a defaulted move constructor that would call&lt;br&gt;a non-trivial copy constructor was defined as&lt;br&gt;deleted; a defaulted move constructor that is&lt;br&gt;deleted still participated in overload resolution|after=allows call to such copy&lt;br&gt;constructor; made ignored&lt;br&gt;in overload resolution}}
+{{dr list item|wg=cwg|dr=1491|std=C++11|before=a defaulted move constructor of a class with a non-static data&lt;br&gt;member of rvalue reference type was defined as deleted|after=not deleted in this case}}
+{{dr list item|wg=cwg|dr=2094|std=C++11|before=a volatile subobject made a defaulted&lt;br&gt;move constructor non-trivial ({{cwg|496}})|after=triviality not affected}}
+{{dr list item|wg=cwg|dr=2595|std=C++20|before=a move constructor was not eligible if there is&lt;br&gt;another move constructor which is more constrained&lt;br&gt;but does not satisfy its associated constraints|after=it can be eligible in this case}}
+{{dr list end}}
+
+===See also===
+* {{rlp|converting constructor}}
+* {{rlp|copy assignment}}
+* {{rlp|copy constructor}}
+* {{rlp|copy elision}}
+* {{rlp|default constructor}}
+* {{rlp|destructor}}
+* {{rlpt|explicit}}
+* {{rlp|initialization}}
+** {{rlp|aggregate initialization}}
+** {{rlp|constant initialization}}
+** {{rlp|copy initialization}}
+** {{rlp|default initialization}}
+** {{rlp|direct initialization}}
+** {{rlp|initializer list}}
+** {{rlp|list initialization}}
+** {{rlp|reference initialization}}
+** {{rlp|value initialization}}
+** {{rlp|zero initialization}}
+* {{rlp|move assignment}}
+* {{rlpt|new}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

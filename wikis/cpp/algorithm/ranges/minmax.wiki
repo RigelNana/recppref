@@ -1,0 +1,165 @@
+{{cpp/ranges/title|minmax|minmax_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; class T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::minmax_result&lt;const T&amp;&gt;
+    minmax( const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; std::copyable T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::minmax_result&lt;T&gt;
+    minmax( std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=3|1=
+template&lt; ranges::input_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;, ranges::range_value_t&lt;R&gt;*&gt;
+constexpr ranges::minmax_result&lt;ranges::range_value_t&lt;R&gt;&gt;
+    minmax( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl h|Helper types}}
+{{dcl|since=c++20|num=4|1=
+template&lt; class T &gt;
+using minmax_result = ranges::min_max_result&lt;T&gt;;
+}}
+{{dcl end}}
+
+Returns the smallest and the greatest of the given projected values.
+
+@1@ Returns references to the smaller and the greater of {{c|a}} and {{c|b}}.
+@2@ Returns the smallest and the greatest of the values in the initializer list {{c|r}}.
+@3@ Returns the smallest and the greatest of the values in the range {{c|r}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|a, b|the values to compare}}
+{{par|r|a non-empty range of values to compare}}
+{{par|comp|comparison to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+@1@ {{c|{b, a} }} if, according to their respective projected value, {{c|b}} is smaller than {{c|a}}; otherwise it returns {{c|{a, b} }}.
+
+@2,3@ {{c|{s, l} }}, where {{tt|s}} and {{tt|l}} are respectively the smallest and largest values in {{c|r}}, according to their projected value. If several values are equivalent to the smallest and largest, returns the leftmost smallest value, and the rightmost largest value. If the range is empty (as determined by {{c|ranges::distance(r)}}), the behavior is undefined.
+
+===Complexity===
+@1@ Exactly one comparison and two applications of the projection.
+
+@2,3@ At most {{c|3 / 2 * ranges::distance(r)}} comparisons and twice as many applications of the projection.
+
+===Possible implementation===
+{{eq fun
+|1=
+struct minmax_fn
+{
+    template&lt;class T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::minmax_result&lt;const T&amp;&gt;
+         operator()(const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {}) const
+    {
+        if (std::invoke(comp, std::invoke(proj, b), std::invoke(proj, a)))
+            return {b, a};
+      
+        return {a, b};
+    }
+
+    template&lt;std::copyable T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::minmax_result&lt;T&gt;
+        operator()(std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {}) const
+    {
+        auto result = ranges::minmax_element(r, std::ref(comp), std::ref(proj));
+        return {*result.min, *result.max};
+    }
+
+    template&lt;ranges::input_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;,
+                                               ranges::range_value_t&lt;R&gt;*&gt;
+    constexpr ranges::minmax_result&lt;ranges::range_value_t&lt;R&gt;&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        auto result = ranges::minmax_element(r, std::ref(comp), std::ref(proj));
+        return {std::move(*result.min), std::move(*result.max)};
+    }
+};
+
+inline constexpr minmax_fn minmax;
+}}
+
+===Notes===
+For overload {{v|1}}, if one of the parameters is a temporary, the reference returned becomes a dangling reference at the end of the full expression that contains the call to {{tt|minmax}}:
+{{source|1=
+int n = 1;
+auto p = std::ranges::minmax(n, n + 1);
+int m = p.min; // ok
+int x = p.max; // undefined behavior
+ 
+// Note that structured bindings have the same issue
+auto [mm, xx] = std::ranges::minmax(n, n + 1);
+xx; // undefined behavior
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+
+int main()
+{
+    namespace ranges = std::ranges;
+
+    constexpr std::array v{3, 1, 4, 1, 5, 9, 2, 6, 5};
+
+    std::random_device rd;
+    std::mt19937_64 generator(rd());
+    std::uniform_int_distribution&lt;&gt; distribution(0, ranges::distance(v)); // [0..9]
+
+    // auto bounds = ranges::minmax(distribution(generator), distribution(generator));
+    // UB: dangling references: bounds.min and bounds.max have the type `const int&amp;`.
+
+    const int x1 = distribution(generator);
+    const int x2 = distribution(generator);
+    auto bounds = ranges::minmax(x1, x2); // OK: got references to lvalues x1 and x2
+
+    std::cout &lt;&lt; "v[" &lt;&lt; bounds.min &lt;&lt; ":" &lt;&lt; bounds.max &lt;&lt; "]: ";
+    for (int i = bounds.min; i &lt; bounds.max; ++i)
+        std::cout &lt;&lt; v[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto [min, max] = ranges::minmax(v);
+    std::cout &lt;&lt; "smallest: " &lt;&lt; min &lt;&lt; ", " &lt;&lt; "largest: " &lt;&lt; max &lt;&lt; '\n';
+}
+|p=true
+|output=
+v[3:9]: 1 5 9 2 6 5 
+smallest: 1, largest: 9
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc min}}
+{{dsc inc|cpp/algorithm/ranges/dsc max}}
+{{dsc inc|cpp/algorithm/ranges/dsc minmax_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc clamp}}
+{{dsc inc|cpp/algorithm/dsc minmax}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

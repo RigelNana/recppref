@@ -1,0 +1,107 @@
+{{cpp/named req/title|LiteralType|notes={{mark since c++11}}}}
+{{cpp/named req/navbar}}
+
+Specifies that a type is a ''literal type''. Literal types are the types of [[cpp/language/constexpr#constexpr variable|{{tt|constexpr}} variables]] and they can be constructed, manipulated, and returned from [[cpp/language/constexpr#constexpr function|{{tt|constexpr}} functions]].
+
+{{cpp/named req/core cat note}}
+
+===Requirements===
+A literal type is any of the following:
+{{rev begin}}
+{{rev|since=c++14|
+* possibly cv-qualified {{c/core|void}} (so that {{c/core|constexpr}} functions can return void);
+}}
+{{rev end}}
+* [[cpp/named req/ScalarType|scalar type]];
+* [[cpp/language/reference|reference type]];
+* an [[cpp/language/array|array]] of literal type;
+* possibly cv-qualified class type that has all of the following properties:
+:* has a {{rev inl|until=c++20|trivial}}{{rev inl|since=c++20|{{c/core|constexpr}}}} [[cpp/language/destructor|destructor]],
+:* all of its non-static non-variant data members and base classes are of non-volatile literal types, and
+:* is one of
+{{rev begin}}
+{{rev|since=c++17|
+::* a [[cpp/language/lambda|lambda type]],
+}}
+{{rev end}}
+::* an [[cpp/language/aggregate initialization#Definitions|aggregate]] union type that
+:::* has no [[cpp/language/union#Union-like classes|variant members]], or
+:::* has at least one variant member of non-volatile literal type,
+::* a non-union [[cpp/language/aggregate initialization#Definitions|aggregate]] type, and each of its [[cpp/language/union#Anonymous unions|anonymous union]] members
+:::* has no [[cpp/language/union#Union-like classes|variant members]], or
+:::* has at least one variant member of non-volatile literal type,
+::* a type with at least one {{c/core|constexpr}} (possibly template) constructor that is not a copy or move constructor.
+
+===Notes===
+A type can be literal even if all of its constexpr constructors are deleted, inaccessible, or cannot participate in overload resolution.
+
+{{source|1=
+struct A { constexpr A(int) = delete; char c; }; // A is a literal type
+constexpr A v = std::bit_cast&lt;A&gt;('0'); // OK in C++20
+                                       // v has literal type and thus can be constexpr
+}}
+
+===Example===
+{{example
+|Literal type that extends string literals:
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+class conststr // conststr is a literal type
+{
+    const char* p;
+    std::size_t sz;
+public:
+    template&lt;std::size_t N&gt;
+    constexpr conststr(const char(&amp;a)[N]) : p(a), sz(N - 1) {}
+
+    constexpr char operator[](std::size_t n) const
+    {
+        return n &lt; sz ? p[n] : throw std::out_of_range("");
+    }
+
+    constexpr std::size_t size() const { return sz; }
+};
+
+constexpr std::size_t count_lower(conststr s)
+{
+    std::size_t c{};
+    for (std::size_t n{}; n != s.size(); ++n)
+        if ('a' &lt;= s[n] &amp;&amp; s[n] &lt;= 'z')
+            ++c;
+    return c;
+}
+
+// An output function that requires a compile-time constant N, for testing
+template&lt;int N&gt;
+struct constN
+{
+    constN() { std::cout &lt;&lt; N &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "The number of lowercase letters in \"Hello, world!\" is ";
+    constN&lt;count_lower("Hello, world!")&gt;(); // the string literal is implicitly
+                                            // converted to conststr
+}
+|output=
+The number of lowercase letters in "Hello, world!" is 9
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1453|std=C++11|before=a literal class could have volatile data members|after=not allowed}}
+{{dr list item|wg=cwg|dr=1951|std=C++11&lt;br&gt;C++14|before=it was unclear whether cv-qualified {{c/core|void}} (C++14)&lt;br&gt;and class types (C++11) are literal types|after=they are}}
+{{dr list item|wg=cwg|dr=2096|std=C++11|before=for a union type to be literal, all its non-&lt;br&gt;static data members must be literal|after=only one non-static data&lt;br&gt;member needs to be}}
+{{dr list item|wg=cwg|dr=2598|std=C++11|before=for a union type to be literal, it must have&lt;br&gt;at least one non-static data member|after=it can have no non-&lt;br&gt;static data member}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_literal_type}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

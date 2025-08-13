@@ -1,0 +1,134 @@
+{{cpp/title|to_array}}
+{{cpp/container/array/navbar}}
+
+{{dcl begin}}
+{{dcl header|array}}
+{{dcla|num=1|since=c++20|
+template&lt; class T, std::size_t N &gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array( T (&amp;a)[N] );
+}}
+{{dcla|num=2|since=c++20|
+template&lt; class T, std::size_t N &gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array( T (&amp;&amp;a)[N] );
+}}
+{{dcl end}}
+
+Creates a {{lc|std::array}} from the one dimensional built-in array {{tt|a}}. Copying or moving multidimensional built-in array is not supported.
+
+@1@ For every {{tt|i}} in {{tt|0, ..., N - 1}}, copy-initializes result's correspond element with {{c|a[i]}}. This overload is ill-formed when {{c|std::is_constructible_v&lt;T, T&amp;&gt;}} is {{c|false}}.
+@2@ For every {{tt|i}} in {{tt|0, ..., N - 1}}, move-initializes result's correspond element with {{c|std::move(a[i])}}. This overload is ill-formed when {{c|std::is_move_constructible_v&lt;T&gt;}} is {{c|false}}.
+
+Both overloads are ill-formed when {{c|std::is_array_v&lt;T&gt;}} is {{c|true}}.
+
+===Parameters===
+{{par begin}}
+{{par|a|the built-in array to be converted the {{lc|std::array}}}}
+{{par hreq}}
+{{par req named|T|CopyConstructible|overload=1}}
+{{par req named|T|MoveConstructible|overload=2}}
+{{par end}}
+
+===Return value===
+@1@ {{c|std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;{ a[0], ..., a[N - 1] } }}
+@2@ {{c|std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;{ std::move(a[0]), ..., std::move(a[N - 1]) } }}
+
+===Notes===
+There are some occasions where [[cpp/language/class template argument deduction|class template argument deduction]] of {{lc|std::array}} cannot be used while {{tt|to_array}} is available:
+* {{tt|to_array}} can be used when the element type of the {{tt|std::array}} is manually specified and the length is deduced, which is preferable when implicit conversion is wanted.
+* {{tt|to_array}} can copy a string literal, while class template argument deduction constructs a {{tt|std::array}} of a single pointer to its first character.
+
+{{source|1=
+std::to_array&lt;long&gt;({3, 4}); // OK: implicit conversion
+// std::array&lt;long&gt;{3, 4};   // error: too few template arguments
+std::to_array("foo");        // creates std::array&lt;char, 4&gt;{'f', 'o', 'o', '\0'}
+std::array{"foo"};           // creates std::array&lt;const char*, 1&gt;{"foo"}
+}}
+
+{{feature test macro|__cpp_lib_to_array|std=C++20|value=201907L|{{tt|std::to_array}}}}
+
+===Possible implementation===
+{{eq impl
+|title1=to_array (1)|ver1=1|1=
+namespace detail
+{
+    template&lt;class T, std::size_t N, std::size_t... I&gt;
+    constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;
+        to_array_impl(T (&amp;a)[N], std::index_sequence&lt;I...&gt;)
+    {
+        return {&lt;!----&gt;{a[I]...}&lt;!----&gt;};
+    }
+}
+
+template&lt;class T, std::size_t N&gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array(T (&amp;a)[N])
+{
+    return detail::to_array_impl(a, std::make_index_sequence&lt;N&gt;{});
+}
+|title2=to_array (2)|ver2=2|2=
+namespace detail
+{
+    template&lt;class T, std::size_t N, std::size_t... I&gt;
+    constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;
+        to_array_impl(T (&amp;&amp;a)[N], std::index_sequence&lt;I...&gt;)
+    {
+        return {&lt;!----&gt;{std::move(a[I])...}&lt;!----&gt;};
+    }
+}
+
+template&lt;class T, std::size_t N&gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array(T (&amp;&amp;a)[N])
+{
+    return detail::to_array_impl(std::move(a), std::make_index_sequence&lt;N&gt;{});
+}
+}}
+
+===Example===
+{{example|code=
+#include &lt;array&gt;
+#include &lt;memory&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+// creates a constexpr array of string_view's    
+constexpr auto w1n = std::to_array&lt;std::string_view&gt;({
+    "Mary", "Patricia", "Linda", "Barbara", "Elizabeth", "Jennifer"
+});
+static_assert(std::is_same_v&lt;decltype(w1n), const std::array&lt;std::string_view, 6&gt;&gt;);
+static_assert(w1n.size() == 6 and w1n[5] == "Jennifer");
+
+int main()
+{
+    // copies a string literal
+    auto a1 = std::to_array("foo");
+    static_assert(a1.size() == 4);
+
+    // deduces both element type and length
+    auto a2 = std::to_array({0, 2, 1, 3});
+    static_assert(std::is_same_v&lt;decltype(a2), std::array&lt;int, 4&gt;&gt;);
+
+    // deduces length with element type specified
+    // implicit conversion happens
+    auto a3 = std::to_array&lt;long&gt;({0, 1, 3});
+    static_assert(std::is_same_v&lt;decltype(a3), std::array&lt;long, 3&gt;&gt;);
+
+    auto a4 = std::to_array&lt;std::pair&lt;int, float&gt;&gt;(
+        {&lt;!----&gt;{3, 0.0f}, {4, 0.1f}, {4, 0.1e23f}&lt;!----&gt;});
+    static_assert(a4.size() == 3);
+
+    // creates a non-copyable std::array
+    auto a5 = std::to_array({std::make_unique&lt;int&gt;(3)});
+    static_assert(a5.size() == 1);
+
+    // error: copying multidimensional arrays is not supported
+    // char s[2][6] = {"nice", "thing"};
+    // auto a6 = std::to_array(s);
+}
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/dsc make_array}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

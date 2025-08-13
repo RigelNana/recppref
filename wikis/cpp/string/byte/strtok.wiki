@@ -1,0 +1,108 @@
+{{cpp/title|strtok}}
+{{cpp/string/byte/navbar}}
+{{dcl begin}}
+{{dcl header|cstring}}
+{{dcl|1=
+char* strtok( char* str, const char* delim );
+}}
+{{dcl end}}
+
+Finds the next token in a null-terminated byte string pointed to by {{c|str}}. The separator characters are identified by null-terminated byte string pointed to by {{c|delim}}.
+
+This function is designed to be called multiple times to obtain successive tokens from the same string.
+
+* If {{c|str}} is not a null pointer, the call is treated as the first call to {{tt|strtok}} for this particular string. The function searches for the first character which is ''not'' contained in {{c|delim}}.
+:* If no such character was found, there are no tokens in {{c|str}} at all, and the function returns a null pointer. 
+:* If such character was found, it is the ''beginning of the token''. The function then searches from that point on for the first character that ''is'' contained in {{c|delim}}. 
+::* If no such character was found, {{c|str}} has only one token, and the future calls to {{tt|strtok}} will return a null pointer.
+::* If such character was found, it is ''replaced'' by the null character {{c|'\0'}} and the pointer to the following character is stored in a static location for subsequent invocations.
+:* The function then returns the pointer to the beginning of the token.
+* If {{c|str}} is a null pointer, the call is treated as a subsequent call to {{tt|strtok}}: the function continues from where it left in previous invocation. The behavior is the same as if the previously stored pointer is passed as {{c|str}}.
+
+===Parameters===
+{{par begin}}
+{{par|str|pointer to the null-terminated byte string to tokenize}}
+{{par|delim|pointer to the null-terminated byte string identifying delimiters}}
+{{par end}}
+
+===Return value===
+Pointer to the beginning of the next token or a {{c|nullptr}} if there are no more tokens.
+
+===Notes===
+This function is destructive: it writes the {{c|'\0'}} characters in the elements of the string {{c|str}}. In particular, a [[cpp/language/string_literal|string literal]] cannot be used as the first argument of {{tt|std::strtok}}.
+
+Each call to this function modifies a static variable: is not thread safe.
+
+Unlike most other tokenizers, the delimiters in {{tt|std::strtok}} can be different for each subsequent token, and can even depend on the contents of the previous tokens.
+
+===Possible implementation===
+{{eq fun|1=
+char* strtok(char* str, const char* delim)
+{
+    static char* buffer;
+
+    if (str != nullptr)
+        buffer = str;
+
+    buffer += std::strspn(buffer, delim);
+
+    if (*buffer == '\0')
+        return nullptr;
+
+    char* const tokenBegin = buffer;
+
+    buffer += std::strcspn(buffer, delim);
+
+    if (*buffer != '\0')
+        *buffer++ = '\0';
+
+    return tokenBegin;
+}
+}}
+
+Actual C++ library implementations of this function delegate to the C library, where it may be implemented directly (as in [https://github.com/bminor/musl/blob/master/src/string/strtok.c MUSL libc]), or in terms of its reentrant version (as in [https://github.com/bminor/glibc/blob/master/string/strtok.c GNU libc]).
+
+===Example===
+{{example
+|code=
+#include &lt;cstring&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main() 
+{
+    char input[] = "one + two * (three - four)!";
+    const char* delimiters = "! +- (*)";
+    char* token = std::strtok(input, delimiters);
+    while (token)
+    {
+        std::cout &lt;&lt; std::quoted(token) &lt;&lt; ' ';
+        token = std::strtok(nullptr, delimiters);
+    }
+
+    std::cout &lt;&lt; "\nContents of the input string now:\n\"";
+    for (std::size_t n = 0; n &lt; sizeof input; ++n)
+    {
+        if (const char c = input[n]; c != '\0')
+            std::cout &lt;&lt; c;
+        else
+            std::cout &lt;&lt; "\\0";
+    }
+    std::cout &lt;&lt; "\"\n";
+}
+|output=
+"one" "two" "three" "four" 
+Contents of the input string now:
+"one\0+ two\0* (three\0- four\0!\0"
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/string/byte/dsc strpbrk}}
+{{dsc inc|cpp/string/byte/dsc strcspn}}
+{{dsc inc|cpp/string/byte/dsc strspn}}
+{{dsc inc|cpp/ranges/dsc split_view}}
+{{dsc see c|c/string/byte/strtok}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,197 @@
+{{cpp/ranges/title|fold_left_with_iter|fold_left_with_iter_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=1|since=c++23|until=c++26|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, class T,
+          /* indirectly-binary-left-foldable */&lt;T, I&gt; F &gt;
+constexpr /* see description */
+    fold_left_with_iter( I first, S last, T init, F f );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          class T = std::iter_value_t&lt;I&gt;,
+          /* indirectly-binary-left-foldable */&lt;T, I&gt; F &gt;
+constexpr /* see description */
+    fold_left_with_iter( I first, S last, T init, F f );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++23|until=c++26|1=
+template&lt; ranges::input_range R, class T,
+          /* indirectly-binary-left-foldable */
+              &lt;T, ranges::iterator_t&lt;R&gt;&gt; F &gt;
+constexpr /* see description */
+    fold_left_with_iter( R&amp;&amp; r, T init, F f );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::input_range R, class T = ranges::range_value_t&lt;R&gt;,
+          /* indirectly-binary-left-foldable */
+              &lt;T, ranges::iterator_t&lt;R&gt;&gt; F &gt;
+constexpr /* see description */
+    fold_left_with_iter( R&amp;&amp; r, T init, F f );
+}}
+{{dcl rev end}}
+{{dcl h|Helper concepts}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class F, class T, class I &gt;
+concept /* indirectly-binary-left-foldable */ = /* see description */;
+}}
+{{dcl h|Helper class template}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class I, class T &gt;
+using fold_left_with_iter_result = ranges::in_value_result&lt;I, T&gt;;
+}}
+{{dcl end}}
+
+Left-{{enwiki|Fold (higher-order function)|folds}} the elements of given range, that is, returns the result of evaluation of the chain expression:&lt;br&gt;{{tt|f(f(f(f(init, x{{sub|1}}), x{{sub|2}}), ...), x{{sub|n}})}}, where {{tt|x{{sub|1}}}}, {{tt|x{{sub|2}}}}, ..., {{tt|x{{sub|n}}}} are elements of the range.
+
+Informally, {{tt|ranges::fold_left_with_iter}} behaves like {{lc|std::accumulate}}'s overload that accepts a binary predicate.
+
+The behavior is undefined if {{range|first|last}} is not a valid range.
+
+@1@ The range is {{range|first|last}}.
+
+@2@ Same as {{v|1}}, except that uses {{c|r}} as the range, as if by using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{ranges_fold_algos_helper_concepts}}
+@4@ The return type alias. See "{{ls|#Return value}}" section for details.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to fold}}
+{{par|r|the range of elements to fold}}
+{{par|init|the initial value of the fold}}
+{{par|f|the binary function object}}
+{{par end}}
+
+===Return value===
+Let {{c|U}} be {{c|std::decay_t&lt;std::invoke_result_t&lt;F&amp;, T, std::iter_reference_t&lt;I&gt;&gt;&gt;}}.
+
+@1@ An object of type {{c|ranges::fold_left_with_iter_result&lt;I, U&gt;}}.
+* The member {{c|ranges::in_value_result::in}} holds an iterator to the end of the range.
+* The member {{c|ranges::in_value_result::value}} holds the result of the left-{{enwiki|Fold (higher-order function)|fold}} of given range over {{c|f}}.
+If the range is empty, the return value is obtained via the expression equivalent to {{c|return {std::move(first), U(std::move(init))};}}.
+
+@2@ Same as {{v|1}} except that the return type is {{c|ranges::fold_left_with_iter_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, U&gt;}}.
+
+===Possible implementations===
+{{eq fun|1=
+class fold_left_with_iter_fn
+{
+    template&lt;class O, class I, class S, class T, class F&gt;
+    constexpr auto impl(I&amp;&amp; first, S&amp;&amp; last, T&amp;&amp; init, F f) const
+    {
+        using U = std::decay_t&lt;std::invoke_result_t&lt;F&amp;, T, std::iter_reference_t&lt;I&gt;&gt;&gt;;
+        using Ret = ranges::fold_left_with_iter_result&lt;O, U&gt;;
+        if (first == last)
+            return Ret{std::move(first), U(std::move(init))};
+        U accum = std::invoke(f, std::move(init), *first);
+        for (++first; first != last; ++first)
+            accum = std::invoke(f, std::move(accum), *first);
+        return Ret{std::move(first), std::move(accum)};
+    }
+public:
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, class T = std::iter_value_t&lt;I&gt;,
+             /* indirectly-binary-left-foldable */&lt;T, I&gt; F&gt;
+    constexpr auto operator()(I first, S last, T init, F f) const
+    {
+        return impl&lt;I&gt;(std::move(first), std::move(last), std::move(init), std::ref(f));
+    }
+    
+    template&lt;ranges::input_range R, class T = ranges::range_value_t&lt;R&gt;,
+             /* indirectly-binary-left-foldable */&lt;T, ranges::iterator_t&lt;R&gt;&gt; F&gt;
+    constexpr auto operator()(R&amp;&amp; r, T init, F f) const
+    {
+        return impl&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;
+        (
+            ranges::begin(r), ranges::end(r), std::move(init), std::ref(f)
+        );
+    }
+};
+
+inline constexpr fold_left_with_iter_fn fold_left_with_iter;
+}}
+
+===Complexity===
+Exactly {{c|ranges::distance(first, last)}} applications of the function object {{c|f}}.
+
+===Notes===
+{{ranges_fold_algos_table}}
+
+{{ftm begin}}
+{{ftm|__cpp_lib_ranges_fold|std=C++23|value=202207L|{{tt|std::ranges}} [[cpp/algorithm/ranges#Constrained fold operations|fold algorithms]]}}
+{{ftm|__cpp_lib_algorithm_default_value_type|value=202403L|std=C++26|[[cpp/language/list initialization|List-initialization]] for algorithms {{vl|1,2}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;functional&gt;
+#include &lt;ranges&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    namespace ranges = std::ranges;
+
+    std::vector v{1, 2, 3, 4, 5, 6, 7, 8};
+    
+    auto sum = ranges::fold_left_with_iter(v.begin(), v.end(), 6, std::plus&lt;int&gt;());
+    assert(sum.value == 42);
+    assert(sum.in == v.end());
+    
+    auto mul = ranges::fold_left_with_iter(v, 0X69, std::multiplies&lt;int&gt;());
+    assert(mul.value == 4233600);
+    assert(mul.in == v.end());
+    
+    // Get the product of the std::pair::second of all pairs in the vector:
+    std::vector&lt;std::pair&lt;char, float&gt;&gt; data {&lt;!----&gt;{'A', 2.f}, {'B', 3.f}, {'C', 3.5f}&lt;!----&gt;};
+    auto sec = ranges::fold_left_with_iter
+    (
+        data {{!}} ranges::views::values, 2.0f, std::multiplies&lt;&gt;()
+    );
+    assert(sec.value == 42);
+    
+    // Use a program defined function object (lambda-expression):
+    auto lambda = [](int x, int y){ return x + 0B110 + y; };
+    auto val = ranges::fold_left_with_iter(v, -42, lambda);
+    assert(val.value == 42);
+    assert(val.in == v.end());
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{&lt;!----&gt;{1, 1}, {2, 0}, {3, 0}&lt;!----&gt;};
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto res = ranges::fold_left_with_iter(nums, {7, 0}, std::multiplies{});
+    #else
+        auto res = ranges::fold_left_with_iter(nums, CD{7, 0}, std::multiplies{});
+    #endif
+    assert((res.value == CD{42, 42}));
+}
+}}
+
+===References===
+{{ref std c++23}}
+{{ref std|title=Fold|id=alg.fold|section=27.6.18}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left_first}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_right}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_right_last}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left_first_with_iter}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc reduce}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

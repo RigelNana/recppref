@@ -1,0 +1,121 @@
+{{cpp/title|aligned_storage}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|deprecated=c++23|1=
+template&lt; std::size_t Len, std::size_t Align = /* default-alignment */ &gt;
+struct aligned_storage;
+}}
+{{dcl end}}
+
+Provides the nested type ''{{tt|type}}'', which satisfies {{named req|TrivialType}} and {{named req|StandardLayoutType}} and suitable for use as uninitialized storage for any object whose size is at most {{tt|Len}} and whose [[cpp/language/object#Alignment|alignment requirement]] is a divisor of {{tt|Align}}.
+
+The default value of {{tt|Align}} is the most stringent (the largest) alignment requirement for any object whose size is at most {{tt|Len}}. If the default value is not used, {{tt|Align}} must be the value of {{c|alignof(T)}} for some type {{tt|T}}, or the behavior is undefined.
+
+The behavior is undefined if {{c|1=Len == 0}}.
+
+It is implementation-defined whether any [[cpp/language/object#Alignment|extended alignment]] is supported.
+
+{{cpp/types/nospec}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|type}}|a [[cpp/named req/TrivialType|trivial]] and [[cpp/named req/StandardLayoutType|standard-layout]] type of at least size {{tt|Len}} with alignment requirement {{tt|Align}}}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|since=c++14|deprecated=c++23|1=
+template&lt; std::size_t Len, std::size_t Align = /* default-alignment */ &gt;
+using aligned_storage_t = typename aligned_storage&lt;Len, Align&gt;::type;
+}}
+{{dcl end}}
+
+===Notes===
+The type defined by {{tt|std::aligned_storage&lt;&gt;::type}} can be used to create uninitialized memory blocks suitable to hold the objects of given type, optionally aligned stricter than their natural alignment requirement, for example on a cache or page boundary.
+
+As with any other uninitialized storage, the objects are created using [[cpp/language/new|placement new]] and destroyed with explicit destructor calls.
+
+===Possible implementation===
+Except for default argument, aligned_storage is expressible in terms of alignas:
+{{eq fun
+|1=
+template&lt;std::size_t Len, std::size_t Align = /* default alignment not implemented */&gt;
+struct aligned_storage
+{
+    struct type
+    {
+        alignas(Align) unsigned char data[Len];
+    };
+};
+}}
+
+===Example===
+{{example
+|A primitive static vector class, demonstrating creation, access, and destruction of objects in aligned storage.
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;new&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+template&lt;class T, std::size_t N&gt;
+class static_vector
+{
+    // Properly aligned uninitialized storage for N T's
+    std::aligned_storage_t&lt;sizeof(T), alignof(T)&gt; data[N];
+    std::size_t m_size = 0;
+
+public:
+    // Create an object in aligned storage
+    template&lt;typename ...Args&gt; void emplace_back(Args&amp;&amp;... args)
+    {
+        if (m_size &gt;= N) // Possible error handling
+            throw std::bad_alloc{};
+
+        // Construct value in memory of aligned storage using inplace operator new
+        ::new(&amp;data[m_size]) T(std::forward&lt;Args&gt;(args)...);
+        ++m_size;
+    }
+
+    // Access an object in aligned storage
+    const T&amp; operator[](std::size_t pos) const
+    {
+        // Note: std::launder is needed after the change of object model in P0137R1
+        return *std::launder(reinterpret_cast&lt;const T*&gt;(&amp;data[pos]));
+    }
+
+    // Destroy objects from aligned storage
+    ~static_vector()
+    {
+        for (std::size_t pos = 0; pos &lt; m_size; ++pos)
+            // Note: std::launder is needed after the change of object model in P0137R1
+            std::destroy_at(std::launder(reinterpret_cast&lt;T*&gt;(&amp;data[pos])));
+    }
+};
+
+int main()
+{
+    static_vector&lt;std::string, 10&gt; v1;
+    v1.emplace_back(5, '*');
+    v1.emplace_back(10, '*');
+    std::cout &lt;&lt; v1[0] &lt;&lt; '\n' &lt;&lt; v1[1] &lt;&lt; '\n';
+}
+|output=
+*****
+**********
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignas}}
+{{dsc inc|cpp/types/dsc alignment_of}}
+{{dsc inc|cpp/memory/c/dsc aligned_alloc}}
+{{dsc inc|cpp/types/dsc aligned_union}}
+{{dsc inc|cpp/types/dsc max_align_t}}
+{{dsc inc|cpp/utility/dsc launder}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

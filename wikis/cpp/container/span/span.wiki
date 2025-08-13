@@ -1,0 +1,158 @@
+{{cpp/container/span/title|span}}
+{{cpp/container/span/navbar}}
+{{dcl begin}}
+{{dcl|since=c++20|num=1|1=
+constexpr span() noexcept;
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class It &gt;
+explicit(extent != std::dynamic_extent)
+constexpr span( It first, size_type count );
+}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class It, class End &gt;
+explicit(extent != std::dynamic_extent)
+constexpr span( It first, End last );
+}}
+{{dcl|since=c++20|num=4|1=
+template&lt; std::size_t N &gt;
+constexpr span( std::type_identity_t&lt;element_type&gt; (&amp;arr)[N] ) noexcept;
+}}
+{{dcl|since=c++20|num=5|1=
+template&lt; class U, std::size_t N &gt;
+constexpr span( std::array&lt;U, N&gt;&amp; arr ) noexcept;
+}}
+{{dcl|since=c++20|num=6|1=
+template&lt; class U, std::size_t N &gt;
+constexpr span( const std::array&lt;U, N&gt;&amp; arr ) noexcept;
+}}
+{{dcl|since=c++20|num=7|1=
+template&lt; class R &gt;
+explicit(extent != std::dynamic_extent)
+constexpr span( R&amp;&amp; range );
+}}
+{{dcla|since=c++26|num=8|1=
+explicit(extent != std::dynamic_extent)
+constexpr span( std::initializer_list&lt;value_type&gt; il ) noexcept;
+}}
+{{dcl|since=c++20|num=9|1=
+template&lt; class U, std::size_t N &gt;
+explicit(extent != std::dynamic_extent &amp;&amp; N == std::dynamic_extent)
+constexpr span( const std::span&lt;U, N&gt;&amp; source ) noexcept;
+}}
+{{dcl|since=c++20|num=10|1=
+constexpr span( const span&amp; other ) noexcept = default;
+}}
+{{dcl end}}
+
+Constructs a {{tt|span}}.
+@1@ Constructs an empty span whose {{c|1=data() == nullptr}} and {{c|1=size() == 0}}.
+* {{cpp/enable_if|{{c|1=extent == 0 {{!!}} extent == std::dynamic_extent}}}}.
+
+@2@ Constructs a span that is a view over the range {{range|first|first + count}}; the resulting span has {{c|1=data() == std::to_address(first)}} and {{c|1=size() == count}}.
+* The behavior is undefined if {{range|first|first + count}} is not a valid range, if {{tt|It}} does not actually model {{lconcept|contiguous_iterator}}, or if {{c|1=extent != std::dynamic_extent &amp;&amp; count != extent}}.
+* {{cpp/enable_if|
+:*{{tt|It}} satisfies {{lconcept|contiguous_iterator}},
+:*the conversion from {{c|std::iter_reference_t&lt;It&gt;}} to {{c|element_type}} is at most a qualification conversion}}.
+
+@3@ Constructs a span that is a view over the range {{range|first|last}}; the resulting span has {{c|1=data() == std::to_address(first)}} and {{c|1=size() == last-first}}.
+* The behavior is undefined if {{range|first|last}} is not a valid range, if {{tt|It}} does not actually model {{lconcept|contiguous_iterator}}, if {{tt|End}} does not actually model {{lconcept|sized_sentinel_for}} for {{tt|It}}, or if {{c|1=extent != std::dynamic_extent &amp;&amp; last-first != extent}}.
+* {{cpp/enable_if|
+:* {{tt|It}} satisfies {{lconcept|contiguous_iterator}},
+:* {{tt|End}} satisfies {{lconcept|sized_sentinel_for}} for {{tt|It}},
+:* the conversion from {{c|std::iter_reference_t&lt;It&gt;}} to {{c|element_type}} is at most a qualification conversion, and
+:* {{c|std::is_convertible_v&lt;End, std::size_t&gt;}} is {{c|false}}}}.
+
+@4-6@ Constructs a span that is a view over the array {{tt|arr}}; the resulting span has {{c|1=size() == N}} and {{c|1=data() == std::data(arr)}}.
+* {{cpp/enable_if|plural=yes|{{c|1=extent == std::dynamic_extent {{!!}} N == extent}} is {{c|true}} and the conversion from {{c|std::remove_pointer_t&lt;decltype(data(arr))&gt;}} to {{c|element_type}} is at most a qualification conversion}}.
+
+@7@ Constructs a span that is a view over the range {{c|range}}; the resulting span has {{c|1=size() == std::ranges::size(range)}} and {{c|1=data() == std::ranges::data(range)}}.
+* The behavior is undefined if {{tt|R}} does not actually model {{lconcept|contiguous_range}} and {{lconcept|sized_range}} or if {{tt|R}} does not model {{lconcept|borrowed_range}} while {{c|element_type}} is non-const or both {{c|1=extent != dynamic_extent}} and {{c|1=std::ranges::size(range) != extent}} are {{c|true}}.
+* {{cpp/enable if|
+:* {{tt|R}} satisfies {{lconcept|contiguous_range}} and {{lconcept|sized_range}},
+:* either {{tt|R}} satisfies {{lconcept|borrowed_range}} or {{c|std::is_const_v&lt;element_type&gt;}} is {{c|true}},
+:* {{c|std::remove_cvref_t&lt;R&gt;}} is not a specialization of {{tt|std::span}},
+:* {{c|std::remove_cvref_t&lt;R&gt;}} is not a specialization of {{lc|std::array}},
+:* {{c|std::is_array_v&lt;std::remove_cvref_t&lt;R&gt;&gt;}} is false, and
+:* the conversion from {{c|std::ranges::range_reference_t&lt;R&gt;}} to {{c|element_type}} is at most a qualification conversion}}.
+
+@8@ Constructs a span that is a view over the initializer list {{tt|il}}; the resulting span has {{c|1=size() == il.size()}} and {{c|1=data() == il.begin()}}.
+* The behavior is undefined if both {{c|1=extent != dynamic_extent}} and {{c|1=il.size() != extent}} are {{c|true}}.
+* This overload participates in overload resolution only if {{c|std::is_const_v&lt;element_type&gt;}} is {{c|true}}.
+
+@9@ Converting constructor from another span {{tt|source}}; the resulting span has {{c|1=size() == source.size()}} and {{c|1=data() == source.data()}}.
+* The behavior is undefined if both {{c|1=extent != dynamic_extent}} and {{c|1=source.size() != extent}} are {{c|true}}.
+* {{cpp/enable_if|at least one of {{c|1=extent == std::dynamic_extent}}, {{c|1=N == std::dynamic_extent}} and {{c|1=N == extent}} is {{c|true}} and the conversion from {{tt|U}} to {{c|element_type}} is at most a qualification conversion}}.
+
+@10@ Defaulted copy constructor copies the size and data pointer; the resulting span has {{c|1=size() == other.size()}} and {{c|1=data() == other.data()}}.
+
+===Parameters===
+{{par begin}}
+{{par|first|iterator to the first element of the sequence}}
+{{par|count|number of elements in the sequence}}
+{{par|last|iterator past the last element of the sequence or another sentinel}}
+{{par|arr|array to construct a view for}}
+{{par|range|range to construct a view for}}
+{{par|source|another span to convert from}}
+{{par|other|another span to copy from}}
+{{par end}}
+
+===Exceptions===
+@2@ Throws nothing.
+@3@ Throws what and when {{c|last - first}} throws.
+@7@ Throws what and when {{c|std::ranges::size(r)}} and {{c|std::ranges::data(r)}} throw.
+
+===Notes===
+{{ftm begin}}
+{{ftm|__cpp_lib_span_initializer_list|value=202311L|std=C++26|Constructing {{tt|std::span}} from a {{lc|std::initializer_list}}, {{vl|8}}}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;span&gt;
+#include &lt;vector&gt;
+
+void print_span(std::span&lt;const int&gt; s)
+{
+    for (int n : s)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    int c[]{1, 2, 3};
+    print_span(c); // constructs from array
+
+    std::array a{4, 5, 6};
+    print_span(a); // constructs from std::array
+
+    std::vector v{7, 8, 9};
+    print_span(v); // constructs from std::vector
+
+#if __cpp_lib_span_initializer_list
+    print_span({0, 1, 2}); // constructs from initializer_list
+#else
+    print_span({&lt;!----&gt;{0, 1, 2}&lt;!----&gt;}); // ditto, a workaround
+#endif
+}
+|output=
+1 2 3 
+4 5 6
+7 8 9
+0 1 2
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc data|span}}
+{{dsc inc|cpp/container/dsc size|span}}
+{{dsc inc|cpp/container/span/dsc operator{{=}}}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

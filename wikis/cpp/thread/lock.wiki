@@ -1,0 +1,132 @@
+{{cpp/title|lock}}
+{{cpp/thread/navbar}}
+{{ddcl|header=mutex|since=c++11|
+template&lt; class Lockable1, class Lockable2, class... LockableN &gt;
+void lock( Lockable1&amp; lock1, Lockable2&amp; lock2, LockableN&amp;... lockn );
+}}
+
+Locks the given {{named req|Lockable}} objects {{c|lock1}}, {{c|lock2}}, {{tt|...}}, {{c|lockn}} using a deadlock avoidance algorithm to avoid deadlock.
+
+The objects are locked by an unspecified series of calls to {{tt|lock}}, {{tt|try_lock}}, and {{tt|unlock}}. If a call to {{tt|lock}} or {{tt|unlock}} results in an exception, {{tt|unlock}} is called for any locked objects before rethrowing.
+
+===Parameters===
+{{par begin}}
+{{par|lock1, lock2, ... , lockn|the {{named req|Lockable}} objects to lock}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Notes===
+[https://www.boost.org/doc/libs/release/doc/html/thread/synchronization.html#thread.synchronization.lock_functions.lock_range Boost provides a version of this function] that takes a sequence of {{named req|Lockable}} objects defined by a pair of iterators.
+
+{{ltt|cpp/thread/scoped_lock|std::scoped_lock}} offers a [[cpp/language/raii|RAII]] wrapper for this function, and is generally preferred to a naked call to {{tt|std::lock}}.
+
+===Example===
+{{example
+|The following example uses {{tt|std::lock}} to lock pairs of mutexes without deadlock.
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+struct Employee
+{
+    Employee(std::string id) : id(id) {}
+    std::string id;
+    std::vector&lt;std::string&gt; lunch_partners;
+    std::mutex m;
+    std::string output() const
+    {
+        std::string ret = "Employee " + id + " has lunch partners: ";
+        for (auto n{lunch_partners.size()}; const auto&amp; partner : lunch_partners)
+            ret += partner + (--n ? ", " : "");
+        return ret;
+    }
+};
+
+void send_mail(Employee&amp;, Employee&amp;)
+{
+    // Simulate a time-consuming messaging operation
+    std::this_thread::sleep_for(std::chrono::milliseconds(696));
+}
+
+void assign_lunch_partner(Employee&amp; e1, Employee&amp; e2)
+{
+    static std::mutex io_mutex;
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+        std::cout &lt;&lt; e1.id &lt;&lt; " and " &lt;&lt; e2.id &lt;&lt; " are waiting for locks" &lt;&lt; std::endl;
+    }
+
+    // Use std::lock to acquire two locks without worrying about 
+    // other calls to assign_lunch_partner deadlocking us
+    {
+        std::lock(e1.m, e2.m);
+        std::lock_guard&lt;std::mutex&gt; lk1(e1.m, std::adopt_lock);
+        std::lock_guard&lt;std::mutex&gt; lk2(e2.m, std::adopt_lock);
+    // Equivalent code (if unique_locks are needed, e.g. for condition variables)
+    //  std::unique_lock&lt;std::mutex&gt; lk1(e1.m, std::defer_lock);
+    //  std::unique_lock&lt;std::mutex&gt; lk2(e2.m, std::defer_lock);
+    //  std::lock(lk1, lk2);
+    // Superior solution available in C++17
+    //  std::scoped_lock lk(e1.m, e2.m);
+        {
+            std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+            std::cout &lt;&lt; e1.id &lt;&lt; " and " &lt;&lt; e2.id &lt;&lt; " got locks" &lt;&lt; std::endl;
+        }
+        e1.lunch_partners.push_back(e2.id);
+        e2.lunch_partners.push_back(e1.id);
+    }
+    send_mail(e1, e2);
+    send_mail(e2, e1);
+}
+
+int main()
+{
+    Employee alice("Alice"), bob("Bob"), christina("Christina"), dave("Dave");
+
+    // Assign in parallel threads because mailing users about lunch assignments
+    // takes a long time
+    std::vector&lt;std::thread&gt; threads;
+    threads.emplace_back(assign_lunch_partner, std::ref(alice), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(alice));
+    threads.emplace_back(assign_lunch_partner, std::ref(dave), std::ref(bob));
+
+    for (auto&amp; thread : threads)
+        thread.join();
+
+    std::cout &lt;&lt; alice.output() &lt;&lt; '\n'
+              &lt;&lt; bob.output() &lt;&lt; '\n'
+              &lt;&lt; christina.output() &lt;&lt; '\n'
+              &lt;&lt; dave.output() &lt;&lt; '\n';
+}
+|p=true
+|output=
+Alice and Bob are waiting for locks
+Alice and Bob got locks
+Christina and Bob are waiting for locks
+Christina and Bob got locks
+Christina and Alice are waiting for locks
+Dave and Bob are waiting for locks
+Dave and Bob got locks
+Christina and Alice got locks
+Employee Alice has lunch partners: Bob, Christina 
+Employee Bob has lunch partners: Alice, Christina, Dave 
+Employee Christina has lunch partners: Bob, Alice 
+Employee Dave has lunch partners: Bob
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc try_lock}}
+{{dsc inc|cpp/thread/dsc scoped_lock}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

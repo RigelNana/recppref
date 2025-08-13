@@ -1,0 +1,120 @@
+{{cpp/ranges/title|nth_element}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;I, Comp, Proj&gt;
+constexpr I
+    nth_element( I first, I nth, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;iterator_t&lt;R&gt;, Comp, Proj&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    nth_element( R&amp;&amp; r, iterator_t&lt;R&gt; nth, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+Reorders the elements in {{range|first|last}} such that:
+* The element pointed at by {{c|nth}} is changed to whatever element would occur in that position if {{range|first|last}} were sorted with respect to {{c|comp}} and {{c|proj}}.
+* All of the elements before this new {{ttb|nth}} element are ''less than or equal to'' the elements after the new {{c|nth}} element. That is, for every iterator ''i'', ''j'' in the ranges {{range|first|nth}}, {{range|nth|last}} respectively, the expression {{c|std::invoke(comp, std::invoke(proj, *j), std::invoke(proj, *i))}} evaluates to {{c|false}}.
+* If {{c|1=nth == last}} then the function has no effect.
+
+@1@ Elements are compared using the given binary comparison function object {{c|comp}} and projection object {{c|proj}}.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to reorder}}
+{{par|r|the range of elements to reorder}}
+{{par|nth|the iterator defining the partition point}}
+{{par|comp|comparator used to compare the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+@1@ An iterator equal to {{c|last}}.
+@2@ Same as {{v|1}} if {{c|r}} is an lvalue or of a {{lconcept|borrowed_range}} type. Otherwise returns {{lc|std::ranges::dangling}}.
+
+===Complexity===
+Linear in {{c|ranges::distance(first, last)}} on average.
+
+===Notes===
+The algorithm used is typically [[enwiki::Introselect|introselect]] although other [[enwiki::Selection algorithm|selection algorithms]] with suitable average-case complexity are allowed.
+
+===Possible implementation===
+See also the implementation in [https://github.com/microsoft/STL/blob/e97bb2b50a12816ce68cc5147b7a3a21fb68bfa3/stl/inc/algorithm#L8896-L8969 msvc stl], [https://github.com/gcc-mirror/gcc/blob/a87819b8f1b890d36a3f05bd9de80be20e9525dd/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L2016-L2044 libstdc++], and libc++: [https://github.com/llvm/llvm-project/blob/ed2d3644abee9535eb07333beb1562a651001281/libcxx/include/__algorithm/ranges_nth_element.h (1)] / [https://github.com/llvm/llvm-project/blob/ed2d364/libcxx/include/__algorithm/nth_element.h (2)].
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+void print(std::string_view rem, std::ranges::input_range auto const&amp; a)
+{
+    for (std::cout &lt;&lt; rem; const auto e : a)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::array v{5, 6, 4, 3, 2, 6, 7, 9, 3};
+    print("Before nth_element: ", v);
+
+    std::ranges::nth_element(v, v.begin() + v.size() / 2);
+    print("After nth_element:  ", v);
+    std::cout &lt;&lt; "The median is: " &lt;&lt; v[v.size() / 2] &lt;&lt; '\n';
+
+    std::ranges::nth_element(v, v.begin() + 1, std::greater&lt;int&gt;());
+    print("After nth_element:  ", v);
+    std::cout &lt;&lt; "The second largest element is: " &lt;&lt; v[1] &lt;&lt; '\n';
+    std::cout &lt;&lt; "The largest element is: " &lt;&lt; v[0] &lt;&lt; "\n\n";
+
+    using namespace std::literals;
+    std::array names
+    {
+        "Diva"sv, "Cornelius"sv, "Munro"sv, "Rhod"sv,
+        "Zorg"sv, "Korben"sv, "Bender"sv, "Leeloo"sv,
+    };
+    print("Before nth_element: ", names);
+    auto fifth_element{std::ranges::next(names.begin(), 4)};
+    std::ranges::nth_element(names, fifth_element);
+    print("After nth_element:  ", names);
+    std::cout &lt;&lt; "The 5th element is: " &lt;&lt; *fifth_element &lt;&lt; '\n';
+}
+|output=
+Before nth_element: 5 6 4 3 2 6 7 9 3 
+After nth_element:  2 3 3 4 5 6 6 7 9 
+The median is: 5
+After nth_element:  9 7 6 6 5 4 3 3 2 
+The second largest element is: 7
+The largest element is: 9
+
+Before nth_element: Diva Cornelius Munro Rhod Zorg Korben Bender Leeloo 
+After nth_element:  Diva Cornelius Bender Korben Leeloo Rhod Munro Zorg 
+The 5th element is: Leeloo
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc max_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc min_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort}}
+{{dsc inc|cpp/algorithm/dsc nth_element}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

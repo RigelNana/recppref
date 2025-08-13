@@ -1,0 +1,566 @@
+{{title|Pointer declaration}}
+{{cpp/language/declarations/navbar}}
+
+Declares a variable of a pointer or pointer-to-member type.
+
+===Syntax===
+A pointer declaration is any simple declaration whose {{rlp|declarations|declarator}} has the form
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|*}} {{spar optional|attr}} {{spar optional|cv}} {{spar|declarator}}
+}}
+{{sdsc|num=2|
+{{spar|nested-name-specifier}} {{ttb|*}} {{spar optional|attr}} {{spar optional|cv}} {{spar|declarator}}
+}}
+{{sdsc end}}
+
+@1@ '''Pointer declarator''': the declaration {{c|S* D;}} declares {{c|D}} as a pointer to the type determined by the {{rlp|declarations#Specifiers|declaration specifier sequence}} {{tt|S}}.
+@2@ '''Pointer to member declarator''': the declaration {{c|S C::* D;}} declares {{c|D}} as a pointer to non-static member of {{tt|C}} of type determined by the declaration specifier sequence {{tt|S}}.
+
+{{par begin}}
+{{par|{{spar|nested-name-specifier}}|a {{rlp|identifiers#Qualified identifiers|sequence of names and scope resolution operators {{ttb|::}}}}}}
+{{par|{{spar|attr}}|{{mark since c++11}} a list of {{rlp|attributes}}}}
+{{par|{{spar|cv}}|const/volatile qualification which apply to the pointer that is being declared (not to the pointed-to type, whose qualifications are part of declaration specifier sequence)}}
+{{par|{{spar|declarator}}|any {{rlp|declarations|declarator}} other than a reference declarator (there are no pointers to references). It can be another pointer declarator (pointer to pointers are allowed)}}
+{{par end}}
+
+There are no pointers to {{rlp|reference}}s and there are no pointers to {{rlp|bit field|bit-fields}}. 
+Typically, mentions of "pointers" without elaboration do not include pointers to (non-static) members.
+
+===Pointers===
+Every value of pointer type is one of the following:
+* a ''pointer to an object or function'' (in which case the pointer is said to ''point to'' the object or function), or
+* a ''pointer past the end of an object'', or
+* the ''[[#Null pointers|null pointer value]]'' for that type, or
+* an ''[[#Invalid pointers|invalid pointer value]]''.
+
+A pointer that points to an object ''represents the address'' of the first byte in memory occupied by the object. A pointer past the end of an object ''represents the address'' of the first byte in memory after the end of the storage occupied by the object.
+
+Note that two pointers that represent the same address may nonetheless have different values.
+
+{{source|1=
+struct C
+{
+    int x, y;
+} c;
+
+int* px = &amp;c.x;   // value of px is "pointer to c.x"
+int* pxe= px + 1; // value of pxe is "pointer past the end of c.x"
+int* py = &amp;c.y;   // value of py is "pointer to c.y"
+
+assert(pxe == py); // == tests if two pointers represent the same address
+                   // may or may not fire
+
+*pxe = 1; // undefined behavior even if the assertion does not fire
+}}
+
+Indirection through an invalid pointer value and passing an invalid pointer value to a deallocation function have undefined behavior. Any other use of an invalid pointer value has implementation-defined behavior. Some implementations might define that copying an invalid pointer value causes a system-generated runtime fault.
+
+====Pointers to objects====
+A pointer to object can be initialized with the return value of the {{rlp|operator member access|address-of operator}} applied to any expression of object type, including another pointer type:
+
+{{source|1=
+int n;
+int* np = &amp;n;          // pointer to int
+int* const* npp = &amp;np; // non-const pointer to const pointer to non-const int
+
+int a[2];
+int (*ap)[2] = &amp;a;     // pointer to array of int
+
+struct S { int n; };
+
+S s = {1};
+int* sp = &amp;s.n;        // pointer to the int that is a member of s
+}}
+
+Pointers may appear as operands to the built-in indirection operator (unary {{c|operator*}}), which returns the {{rlp|value category#lvalue|lvalue expression}} identifying the pointed-to object:
+
+{{source|1=
+int n;
+int* p = &amp;n;     // pointer to n
+int&amp; r = *p;     // reference is bound to the lvalue expression that identifies n
+r = 7;           // stores the int 7 in n
+std::cout &lt;&lt; *p; // lvalue-to-rvalue implicit conversion reads the value from n
+}}
+
+Pointers to class objects may also appear as the left-hand operands of the member access operators {{rlpt|operator member access#Built-in member access operators|operator-&gt;}} and {{rlpt|operator member access#Built-in pointer-to-member access operators|operator-&gt;*}}.
+
+Because of the {{rlp|implicit cast|array-to-pointer}} implicit conversion, pointer to the first element of an array can be initialized with an expression of array type:
+
+{{source|1=
+int a[2];
+int* p1 = a; // pointer to the first element a[0] (an int) of the array a
+
+int b[6][3][8];
+int (*p2)[3][8] = b; // pointer to the first element b[0] of the array b,
+                     // which is an array of 3 arrays of 8 ints
+}}
+
+Because of the {{rlp|implicit cast|derived-to-base}} implicit conversion for pointers, pointer to a base class can be initialized with the address of a derived class:
+
+{{source|1=
+struct Base {};
+struct Derived : Base {};
+
+Derived d;
+Base* p = &amp;d;
+}}
+
+If {{tt|Derived}} is {{rlp|object#Polymorphic objects|polymorphic}}, such a pointer may be used to make {{rlp|virtual|virtual function calls}}.
+
+Certain {{rlp|operator arithmetic#Additive operators|addition, subtraction}}, {{rlp|operator incdec|increment, and decrement}} operators are defined for pointers to elements of arrays: such pointers satisfy the {{named req|RandomAccessIterator}} requirements and allow the C++ library [[cpp/algorithm|algorithms]] to work with raw arrays.
+
+{{rlp|operator comparison#Pointer comparison operators|Comparison operators}} are defined for pointers to objects in some situations: two pointers that represent the same address compare equal, two null pointer values compare equal, pointers to elements of the same array compare the same as the array indices of those elements, and pointers to non-static data members with the same {{rlp|access|member access}} compare in order of declaration of those members.
+
+Many implementations also provide {{enwiki|Total order#Strict total order|strict total ordering}} of pointers of random origin, e.g. if they are implemented as addresses within continuous virtual address space. Those implementations that do not (e.g. where not all bits of the pointer are part of a memory address and have to be ignored for comparison, or an additional calculation is required or otherwise pointer and integer is not a 1 to 1 relationship), provide a specialization of {{lc|std::less}} for pointers that has that guarantee. This makes it possible to use all pointers of random origin as keys in standard associative containers such as {{lc|std::set}} or {{lc|std::map}}.
+
+{{anchor|Pointers to void}}
+====Pointers to {{c/core|void}}====
+Pointer to object of any type can be {{rlp|implicit cast|implicitly converted}} to pointer to (possibly {{rlp|cv|cv-qualified}}) {{c/core|void}}; the pointer value is unchanged. The reverse conversion, which requires {{rlpt|static_cast}} or {{rlp|explicit cast}}, yields the original pointer value:
+
+{{source|1=
+int n = 1;
+int* p1 = &amp;n;
+void* pv = p1;
+int* p2 = static_cast&lt;int*&gt;(pv);
+std::cout &lt;&lt; *p2 &lt;&lt; '\n'; // prints 1
+}}
+
+If the original pointer is pointing to a base class subobject within an object of some polymorphic type, {{rlpt|dynamic_cast}} may be used to obtain a {{c/core|void*}} that is pointing at the complete object of the most derived type.
+
+Pointers to {{c/core|void}} have the same size, representation and alignment as pointers to {{c/core|char}}.
+
+Pointers to {{c/core|void}} are used to pass objects of unknown type, which is common in C interfaces: {{lc|std::malloc}} returns {{c/core|void*}}, {{lc|std::qsort}} expects a user-provided callback that accepts two {{c/core|const void*}} arguments. [https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_create.html {{tt|pthread_create}}] expects a user-provided callback that accepts and returns {{c/core|void*}}. In all cases, it is the caller's responsibility to cast the pointer to the correct type before use.
+
+====Pointers to functions====
+A pointer to function can be initialized with an address of a non-member function or a static member function. Because of the {{rlp|implicit cast|function-to-pointer}} implicit conversion, the address-of operator is optional:
+
+{{source|1=
+void f(int);
+void (*p1)(int) = &amp;f;
+void (*p2)(int) = f; // same as &amp;f
+}}
+
+Unlike functions or references to functions, pointers to functions are objects and thus can be stored in arrays, copied, assigned, etc.
+
+{{source|1=
+void (a[10])(int);  // Error: array of functions
+void (&amp;a[10])(int); // Error: array of references
+void (*a[10])(int); // OK: array of pointers to functions
+}}
+
+Note: declarations involving pointers to functions can often be simplified with type aliases:
+{{source|1=
+using F = void(int); // named type alias to simplify declarations
+F a[10];  // Error: array of functions
+F&amp; a[10]; // Error: array of references
+F* a[10]; // OK: array of pointers to functions
+}}
+
+A pointer to function can be used as the left-hand operand of the {{rlp|operator other|function call operator}}, this invokes the pointed-to function:
+
+{{source|1=
+int f(int n)
+{
+    std::cout &lt;&lt; n &lt;&lt; '\n';
+    return n * n;
+}
+
+int main()
+{
+    int (*p)(int) = f;
+    int x = p(7);
+}
+}}
+
+Dereferencing a function pointer yields the lvalue identifying the pointed-to function:
+
+{{source|1=
+int f();
+int (*p)() = f;  // pointer p is pointing to f
+int (&amp;r)() = *p; // the lvalue that identifies f is bound to a reference
+r();             // function f invoked through lvalue reference
+(*p)();          // function f invoked through the function lvalue
+p();             // function f invoked directly through the pointer
+}}
+
+A pointer to function may be initialized from an overload set which may include functions, function template specializations, and function templates, if only one overload matches the type of the pointer (see {{rlp|overloaded address|address of an overloaded function}} for more detail):
+
+{{source|1=
+template&lt;typename T&gt;
+T f(T n) { return n; }
+
+double f(double n) { return n; }
+
+int main()
+{
+    int (*p)(int) = f; // instantiates and selects f&lt;int&gt;
+}
+}}
+
+{{rlp|operator comparison#Pointer comparison operators|Equality comparison operators}} are defined for pointers to functions (they compare equal if pointing to the same function).
+
+===Pointers to members===
+====Pointers to data members====
+A pointer to non-static member object {{tt|m}} which is a member of class {{tt|C}} can be initialized with the expression {{c|&amp;C::m}} exactly. Expressions such as {{c|&amp;(C::m)}} or {{c|&amp;m}} inside {{tt|C}}'s member function do not form pointers to members.
+
+Such a pointer may be used as the right-hand operand of the {{rlp|operator member access|pointer-to-member access operators}} {{c|operator.*}} and {{c|operator-&gt;*}}:
+
+{{source|1=
+struct C { int m; };
+
+int main()
+{
+    int C::* p = &amp;C::m;          // pointer to data member m of class C
+    C c = {7};
+    std::cout &lt;&lt; c.*p &lt;&lt; '\n';   // prints 7
+    C* cp = &amp;c;
+    cp-&gt;m = 10;
+    std::cout &lt;&lt; cp-&gt;*p &lt;&lt; '\n'; // prints 10
+}
+}}
+
+Pointer to data member of an accessible unambiguous non-virtual base class can be {{rlp|implicit cast|implicitly converted}} to pointer to the same data member of a derived class:
+
+{{source|1=
+struct Base { int m; };
+struct Derived : Base {};
+
+int main()
+{
+    int Base::* bp = &amp;Base::m;
+    int Derived::* dp = bp;
+    Derived d;
+    d.m = 1;
+    std::cout &lt;&lt; d.*dp &lt;&lt; ' ' &lt;&lt; d.*bp &lt;&lt; '\n'; // prints 1 1
+}
+}}
+
+Conversion in the opposite direction, from a pointer to data member of a derived class to a pointer to data member of an unambiguous non-virtual base class, is allowed with {{rlpt|static_cast}} and {{rlp|explicit cast}}, even if the base class does not have that member (but the most-derived class does, when the pointer is used for access):
+
+{{source|1=
+struct Base {};
+struct Derived : Base { int m; };
+
+int main()
+{
+    int Derived::* dp = &amp;Derived::m;
+    int Base::* bp = static_cast&lt;int Base::*&gt;(dp);
+    
+    Derived d;
+    d.m = 7;
+    std::cout &lt;&lt; d.*bp &lt;&lt; '\n'; // okay: prints 7
+    
+    Base b;
+    std::cout &lt;&lt; b.*bp &lt;&lt; '\n'; // undefined behavior
+}
+}}
+
+The pointed-to type of a pointer-to-member may be a pointer-to-member itself: pointers to members can be multilevel, and can be cv-qualified differently at every level. Mixed multi-level combinations of pointers and pointers-to-members are also allowed:
+
+{{source|1=
+struct A
+{
+    int m;
+    // const pointer to non-const member
+    int A::* const p;
+};
+
+int main()
+{
+    // non-const pointer to data member which is a const pointer to non-const member
+    int A::* const A::* p1 = &amp;A::p;
+    
+    const A a = {1, &amp;A::m};
+    std::cout &lt;&lt; a.*(a.*p1) &lt;&lt; '\n'; // prints 1
+    
+    // regular non-const pointer to a const pointer-to-member
+    int A::* const* p2 = &amp;a.p;
+    std::cout &lt;&lt; a.**p2 &lt;&lt; '\n'; // prints 1
+}
+}}
+
+====Pointers to member functions====
+A pointer to non-static member function {{c|f}} which is a member of class {{tt|C}} can be initialized with the expression {{c|&amp;C::f}} exactly. Expressions such as {{c|&amp;(C::f)}} or {{c|&amp;f}} inside {{tt|C}}'s member function do not form pointers to member functions.
+
+Such a pointer may be used as the right-hand operand of the {{rlp|operator member access|pointer-to-member access operators}} {{c|operator.*}} and {{c|operator-&gt;*}}. The {{rlp|value category#Pending member function call|resulting expression}} can be used only as the left-hand operand of a function-call operator:
+
+{{source|1=
+struct C
+{
+    void f(int n) { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    void (C::* p)(int) = &amp;C::f; // pointer to member function f of class C
+    C c;
+    (c.*p)(1);                  // prints 1
+    C* cp = &amp;c;
+    (cp-&gt;*p)(2);                // prints 2
+}
+}}
+
+
+Pointer to member function of a base class can be {{rlp|implicit cast|implicitly converted}} to pointer to the same member function of a derived class:
+
+{{source|1=
+struct Base
+{
+    void f(int n) { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+struct Derived : Base {};
+
+int main()
+{
+    void (Base::* bp)(int) = &amp;Base::f;
+    void (Derived::* dp)(int) = bp;
+    Derived d;
+    (d.*dp)(1);
+    (d.*bp)(2);
+}
+}}
+
+Conversion in the opposite direction, from a pointer to member function of a derived class to a pointer to member function of an unambiguous non-virtual base class, is allowed with {{rlpt|static_cast}} and {{rlp|explicit cast}}, even if the base class does not have that member function (but the most-derived class does, when the pointer is used for access):
+
+{{source|1=
+struct Base {};
+struct Derived : Base
+{
+    void f(int n) { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    void (Derived::* dp)(int) = &amp;Derived::f;
+    void (Base::* bp)(int) = static_cast&lt;void (Base::*)(int)&gt;(dp);
+    
+    Derived d;
+    (d.*bp)(1); // okay: prints 1
+    
+    Base b;
+    (b.*bp)(2); // undefined behavior
+}
+}}
+
+Pointers to member functions may be used as callbacks or as function objects, often after applying {{lc|std::mem_fn}} or {{lc|std::bind}}:
+
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstddef&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::vector&lt;std::string&gt; v = {"a", "ab", "abc"};
+    std::vector&lt;std::size_t&gt; l;
+    transform(v.begin(), v.end(), std::back_inserter(l),
+              std::mem_fn(&amp;std::string::size));
+    for (std::size_t n : l)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1 2 3
+}}
+
+===Null pointers===
+Pointers of every type have a special value known as ''null pointer value'' of that type. A pointer whose value is null does not point to an object or a function (the behavior of dereferencing a null pointer is undefined), and compares equal to all pointers of the same type whose value is also ''null''.
+
+A ''null pointer constant'' can be used to initialize a pointer to null or to assign the null value to an existing pointer, it is one of the following values:
+* An integer literal with value zero.
+{{rrev|since=c++11|
+* A prvalue of type {{lc|std::nullptr_t}} (usually {{c|nullptr}}).
+}}
+The macro {{lc|NULL}} can also be used, it expands to an implementation-defined null pointer constant.
+
+{{rlp|zero initialization|Zero-initialization}} and {{rlp|value initialization|value-initialization}} also initialize pointers to their null values.
+
+Null pointers can be used to indicate the absence of an object (e.g. {{l2tf std|cpp/utility/functional/function/target}}), or as other error condition indicators (e.g. {{rlp|dynamic_cast}}). In general, a function that receives a pointer argument almost always needs to check if the value is null and handle that case differently (for example, the {{rlp|delete|delete expression}} does nothing when a null pointer is passed).
+
+===Invalid pointers===
+A pointer value {{c|p}} is ''valid in the context of'' an evaluation {{c|e}} if one of the following condition is satisfied:
+* {{c|p}} is a null pointer value.
+* {{c|p}} is a pointer to function.
+* {{c|p}} it is a pointer to or past the end of an object {{c|o}}, and {{c|e}} is in the duration of the region of storage for {{c|o}}.
+
+If a pointer value {{c|p}} is used in an evaluation {{c|e}}, and {{c|p}} is not valid in the context of {{c|e}}, then:
+* If {{c|e}} is an {{rlp|operator member access#Built-in indirection operator|indirection}} or an invocation of a [[cpp/memory/new/operator delete|deallocation function]], the behavior is undefined.
+* Otherwise, the behavior is implementation-defined.
+
+{{source|1=
+int* f()
+{
+    int obj;
+    int* local_ptr = new (&amp;obj) int;
+    
+    *local_ptr = 1; // OK, the evaluation “*local_ptr” is
+                    // in the storage duration of “obj”
+    
+    return local_ptr;
+}
+
+int* ptr = f();  // the storage duration of “obj” is expired,
+                 // therefore “ptr” is an invalid pointer in the following contexts
+
+int* copy = ptr; // implementation-defined behavior
+*ptr = 2;        // undefined behavior: indirection of an invalid pointer
+delete ptr;      // undefined behavior: deallocating storage from an invalid pointer
+}}
+
+===Constness===
+* If {{spar|cv}} appears before {{ttb|*}} in the pointer declaration, it is part of the declaration specifier sequence and applies to the pointed-to object.
+* If {{spar|cv}} appears after {{ttb|*}} in the pointer declaration, it is part of the {{rlp|declarations#Declarators|declarator}} and applies to the pointer that's being declared.
+{|class="wikitable"
+|-
+!Syntax||meaning
+|-
+|{{c/core|const T*}}||pointer to constant object
+|-
+|{{c/core|T const*}}||pointer to constant object
+|-
+|{{c/core|T* const}}||constant pointer to object
+|-
+|{{c/core|const T* const}}||constant pointer to constant object
+|-
+|{{c/core|T const* const}}||constant pointer to constant object
+|-
+|}
+
+{{source|1=
+// pc is a non-const pointer to const int
+// cpc is a const pointer to const int
+// ppc is a non-const pointer to non-const pointer to const int
+const int ci = 10, *pc = &amp;ci, *const cpc = pc, **ppc;
+// p is a non-const pointer to non-const int
+// cp is a const pointer to non-const int
+int i, *p, *const cp = &amp;i;
+
+i = ci;    // okay: value of const int copied into non-const int
+*cp = ci;  // okay: non-const int (pointed-to by const pointer) can be changed
+pc++;      // okay: non-const pointer (to const int) can be changed
+pc = cpc;  // okay: non-const pointer (to const int) can be changed
+pc = p;    // okay: non-const pointer (to const int) can be changed
+ppc = &amp;pc; // okay: address of pointer to const int is pointer to pointer to const int
+
+ci = 1;    // error: const int cannot be changed
+ci++;      // error: const int cannot be changed
+*pc = 2;   // error: pointed-to const int cannot be changed
+cp = &amp;ci;  // error: const pointer (to non-const int) cannot be changed
+cpc++;     // error: const pointer (to const int) cannot be changed
+p = pc;    // error: pointer to non-const int cannot point to const int
+ppc = &amp;p;  // error: pointer to pointer to const int cannot point to
+           // pointer to non-const int
+}}
+
+In general, implicit conversion from one multi-level pointer to another follows the rules described in {{rlpsd|implicit cast#Qualification conversions}}.
+
+===Composite pointer type===
+When an operand of a {{rlp|operator comparison|comparison operator}} or any of the second and third operands of a {{rlpsd|operator other#Conditional operator}} is a pointer or pointer-to-member, a composite pointer type is determined to be the common type of these operands.
+
+Given two operands {{c|p1}} and {{c|p2}} having types {{tt|T1}} and {{tt|T2}}, respectively, {{c|p1}} and {{c|p2}} can only have a composite pointer type if any of the following conditions are satisfied:
+{{rev begin}}
+{{rev|until=c++14|
+* {{c|p1}} and {{c|p2}} are both pointers.
+* One of {{c|p1}} and {{c|p2}} is a pointer and the other operand is a null pointer constant.
+{{rrev|since=c++11|
+* {{c|p1}} and {{c|p2}} are both null pointer constants, and at least one of {{tt|T1}} and {{tt|T2}} is a non-integral type.
+}}
+}}
+{{rev|since=c++14|
+* At least one of {{tt|T1}} and {{tt|T2}} is a pointer type, pointer-to-member type or {{lc|std::nullptr_t}}.
+}}
+{{rev end}}
+
+The ''composite pointer type'' {{tt|C}} of {{c|p1}} and {{c|p2}} is determined as follows:
+{{rev begin}}
+{{rev|until=c++11|
+* If {{c|p1}} is a [[#Null pointers|null pointer constant]], {{tt|C}} is {{tt|T2}}.
+* Otherwise, if {{c|p2}} is a null pointer constant, {{tt|C}} is {{tt|T1}}.
+}}
+{{rev|since=c++11|
+* If {{c|p1}} and {{c|p2}} are both [[#Null pointers|null pointer constants]], {{tt|C}} is {{lc|std::nullptr_t}}.
+* Otherwise, if {{c|p1}} is a null pointer constant, {{tt|C}} is {{tt|T2}}.
+* Otherwise, if {{c|p2}} is a null pointer constant, {{tt|C}} is {{tt|T1}}.
+}}
+{{rev end}}
+* Otherwise, if all following conditions are satisfied:
+:* {{tt|T1}} or {{tt|T2}} is “pointer to ''cv1'' {{c/core|void}}”.
+:* The other type is “pointer to ''cv2'' {{tt|T}}”, where {{tt|T}} is an {{rlp|type|object type}} or {{c/core|void}}.
+: {{tt|C}} is “pointer to ''cv12'' {{c/core|void}}”, where ''cv12'' is the union of ''cv1'' and ''cv2''.
+{{rrev|since=c++17|
+* Otherwise, if all following conditions are satisfied:
+:* {{tt|T1}} or {{tt|T2}} is “pointer to function type {{tt|F1}}”.
+:* The other type is “pointer to noexcept function type {{tt|F2}}”.
+:* {{tt|F1}} and {{tt|F2}} are the same except noexcept.
+: {{tt|C}} is “pointer to {{tt|F1}}”.
+}}
+* Otherwise, if all following conditions are satisfied:
+:* {{tt|T1}} is “pointer to {{tt|C1}}”.
+:* {{tt|T2}} is “pointer to {{tt|C2}}”.
+:* One of {{tt|C1}} and {{tt|C2}} is {{rlp|reference initialization#Definitions|reference-related}} to the other.
+: {{tt|C}} is
+:* the {{rlp|implicit conversion#Combining cv-qualifications|qualification-combined type}} of {{tt|T1}} and {{tt|T2}}, if {{tt|C1}} is reference-related to {{tt|C2}}, or
+:* the qualification-combined type of {{tt|T2}} and {{tt|T1}}, if {{tt|C2}} is reference-related to {{tt|C1}}.
+{{rrev|since=c++17|
+* Otherwise, if all following conditions are satisfied:
+:* {{tt|T1}} or {{tt|T2}} is “pointer to member of {{tt|C1}} of function type {{tt|F1}}”.
+:* The other type is “pointer to member of {{tt|C2}} of noexcept function type {{tt|F2}}”.
+:* One of {{tt|C1}} and {{tt|C2}} is reference-related to the other.
+:* {{tt|F1}} and {{tt|F2}} are the same except noexcept.
+: {{tt|C}} is
+:* “pointer to member of {{tt|C2}} of type {{tt|F1}}”, if {{tt|C1}} is reference-related to {{tt|C2}}, or
+:* “pointer to member of {{tt|C1}} of type {{tt|F1}}”, if {{tt|C2}} is reference-related to {{tt|C1}}.
+}}
+* Otherwise, if all following conditions are satisfied:
+:* {{tt|T1}} is “pointer to member of {{tt|C1}} of non-function type {{tt|M1}}”.
+:* {{tt|T2}} is “pointer to member of {{tt|C2}} of non-function type {{tt|M2}}”
+:* {{tt|M1}} and {{tt|M2}} are the same except top-level cv-qualifications.
+:* One of {{tt|C1}} and {{tt|C2}} is reference-related to the other.
+: {{tt|C}} is
+:* the qualification-combined type of {{tt|T2}} and {{tt|T1}}, if {{tt|C1}} is reference-related to {{tt|C2}}, or
+:* the qualification-combined type of {{tt|T1}} and {{tt|T2}}, if {{tt|C2}} is reference-related to {{tt|C1}}.
+* Otherwise, if {{tt|T1}} and {{tt|T2}} are {{rlpsd|implicit conversion#Similar types}}, {{tt|C}} is the qualification-combined type of {{tt|T1}} and {{tt|T2}}.
+* Otherwise, {{c|p1}} and {{c|p2}} do not have a composite pointer type, a program that necessitates the determination of {{tt|C}} such a type is ill-formed.
+
+{{source|1=
+using p = void*;
+using q = const int*;
+// The determination of the composite pointer type of “p” and “q”
+// falls into the [“pointer to cv1 void” and “pointer to cv2 T”] case:
+// cv1 = empty, cv2 = const, cv12 = const
+// substitute “cv12 = const” into “pointer to cv12 void”:
+// the composite pointer type is “const void*”
+
+using pi = int**;
+using pci = const int**;
+// The determination of the composite pointer type of “pi” and “pci”
+// falls into the [pointers to similar types “C1” and “C2”] case:
+// C1 = int*, C2 = const int*
+// they are reference-related types (in both direction) because they are similar
+// the composite pointer type is the qualification-combined type
+// of “p1” and “pc1” (or that of “pci” and “pi”): “const void* const *”
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=73|std=C++98|before=a pointer to an object never compares equal&lt;br&gt;to a pointer to one past the end of an array|after=for non-null and non-function pointers,&lt;br&gt;compare the addresses they represent}}
+{{dr list item|wg=cwg|dr=903|std=C++98|before=any integral constant expression that&lt;br&gt;evaluates to 0 was a null pointer constant|after=limited to integer&lt;br&gt;literals with value 0}}
+{{dr list item|wg=cwg|dr=1438|std=C++98|before=the behavior of using an invalid pointer&lt;br&gt;value in any way was undefined|after=behaviors other than indirection and&lt;br&gt;passing to deallocation functions&lt;br&gt;are implementation-defined}}
+{{dr list item|wg=cwg|dr=1512|paper=N3624|std=C++98|before=the rule of composite pointer type was incomplete, and thus&lt;br&gt;did not allow comparison between {{c/core|int**}} and {{c/core|const int**}}|after=made complete}}
+{{dr list item|wg=cwg|dr=2206|std=C++98|before=a pointer to {{c/core|void}} and a pointer to&lt;br&gt;function had a composite pointer type|after=they do not have such a type}}
+{{dr list item|wg=cwg|dr=2381|std=C++17|before=function pointer conversions were not allowed&lt;br&gt;when determining the composite pointer type|after=allowed}}
+{{dr list item|wg=cwg|dr=2822|std=C++98|before=reaching the end of the duration of a region&lt;br&gt;of storage could invalidate pointer values|after=pointer validity is based&lt;br&gt;on the evaluation context}}
+{{dr list item|wg=cwg|dr=2933|std=C++98|before=pointers to functions were always invalid|after=they are always valid}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc see c|c/language/pointer|Pointer declaration|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

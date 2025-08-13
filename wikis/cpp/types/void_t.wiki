@@ -1,0 +1,117 @@
+{{cpp/title|void_t}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++17|
+template&lt; class... &gt;
+using void_t {{=}} void;
+}}
+{{dcl end}}
+
+Utility metafunction that maps a sequence of any types to the type {{c|void}}. This metafunction is a convenient way to leverage [[cpp/language/sfinae|SFINAE]] prior to C++20's [[cpp/language/constraints|concepts]], in particular for conditionally removing functions from the [[cpp/language/overload_resolution|candidate set]] based on whether an expression is valid in the [[cpp/language/expressions#Unevaluated_expressions|unevaluated context]] (such as operand to {{ltt|cpp/language/decltype}} expression), allowing to exist separate function overloads or specializations based on supported operations.
+
+===Notes===
+This metafunction is used in template metaprogramming to detect ill-formed types in SFINAE context:
+{{source|1=
+// primary template handles types that have no nested ::type member:
+template&lt;class, class = void&gt;
+struct has_type_member : std::false_type {};
+
+// specialization recognizes types that do have a nested ::type member:
+template&lt;class T&gt;
+struct has_type_member&lt;T, std::void_t&lt;typename T::type&gt;&gt; : std::true_type {};
+}}
+
+It can also be used to detect validity of an expression:
+{{source|1=
+// primary template handles types that do not support pre-increment:
+template&lt;class, class = void&gt;
+struct has_pre_increment_member : std::false_type {};
+
+// specialization recognizes types that do support pre-increment:
+template&lt;class T&gt;
+struct has_pre_increment_member&lt;T,
+           std::void_t&lt;decltype( ++std::declval&lt;T&amp;&gt;() )&gt;
+       &gt; : std::true_type {};
+}}
+
+Until the resolution of {{cwg|1558}} (a C++11 defect), unused parameters in [[cpp/language/type alias|alias templates]] were not guaranteed to ensure SFINAE and could be ignored, so earlier compilers require a more complex definition of {{tt|void_t}}, such as
+{{source|1=
+template&lt;typename... Ts&gt;
+struct make_void { typedef void type; };
+
+template&lt;typename... Ts&gt;
+using void_t = typename make_void&lt;Ts...&gt;::type;
+}}
+{{feature test macro|__cpp_lib_void_t|std=C++17|value=201411L|[[#Top|{{tt|std::void_t}}]]}}
+
+===Example===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+// Variable template that checks if a type has begin() and end() member functions
+template&lt;typename, typename = void&gt;
+constexpr bool is_iterable = false;
+
+template&lt;typename T&gt;
+constexpr bool is_iterable&lt;
+    T,
+    std::void_t&lt;decltype(std::declval&lt;T&gt;().begin()),
+                decltype(std::declval&lt;T&gt;().end())
+    &gt;
+&gt; = true;
+
+// An iterator trait those value_type is the value_type of the iterated container,
+// supports even back_insert_iterator (where value_type is void)
+
+template&lt;typename T, typename = void&gt;
+struct iterator_trait : std::iterator_traits&lt;T&gt; {};
+
+template&lt;typename T&gt;
+struct iterator_trait&lt;T, std::void_t&lt;typename T::container_type&gt;&gt;
+    : std::iterator_traits&lt;typename T::container_type::iterator&gt; {};
+
+class A {};
+
+#define SHOW(...) std::cout &lt;&lt; std::setw(34) &lt;&lt; #__VA_ARGS__ \
+                            &lt;&lt; " == " &lt;&lt; __VA_ARGS__ &lt;&lt; '\n'
+
+int main()
+{
+    std::cout &lt;&lt; std::boolalpha &lt;&lt; std::left;
+    SHOW(is_iterable&lt;std::vector&lt;double&gt;&gt;);
+    SHOW(is_iterable&lt;std::map&lt;int, double&gt;&gt;);
+    SHOW(is_iterable&lt;double&gt;);
+    SHOW(is_iterable&lt;A&gt;);
+
+    using container_t = std::vector&lt;int&gt;;
+    container_t v;
+
+    static_assert(std::is_same_v&lt;
+        container_t::value_type,
+        iterator_trait&lt;decltype(std::begin(v))&gt;::value_type
+    &gt;);
+
+    static_assert(std::is_same_v&lt;
+        container_t::value_type,
+        iterator_trait&lt;decltype(std::back_inserter(v))&gt;::value_type
+    &gt;);
+}
+|output=
+is_iterable&lt;std::vector&lt;double&gt;&gt;   == true
+is_iterable&lt;std::map&lt;int, double&gt;&gt; == true
+is_iterable&lt;double&gt;                == false
+is_iterable&lt;A&gt;                     == false
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc enable_if}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

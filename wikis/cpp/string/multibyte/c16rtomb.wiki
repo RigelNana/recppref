@@ -1,0 +1,82 @@
+{{cpp/title|c16rtomb}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cuchar|since=c++11|
+std::size_t c16rtomb( char* s, char16_t c16, std::mbstate_t* ps );
+}}
+
+Converts a single code point from variable-length 16-bit character representation (typically, UTF-16) to a narrow multibyte character representation.
+
+If {{c|s}} is not a null pointer and {{c|c16}} is the last 16-bit code unit in a valid variable-length encoding of a code point, the function determines the number of bytes necessary to store the multibyte character representation of that code point (including any shift sequences, and taking into account the current multibyte conversion state {{c|*ps}}), and stores the multibyte character representation in the character array whose first element is pointed to by {{c|s}}, updating {{c|*ps}} as necessary. At most {{lc|MB_CUR_MAX}} bytes can be written by this function.
+
+If {{c|s}} is a null pointer, the call is equivalent to {{c|std::c16rtomb(buf, u'\0', ps)}} for some internal buffer {{tt|buf}}.
+
+If {{c|c16}} is not the final code unit in a 16-bit representation of a wide character, it does not write to the array pointed to by {{c|s}}, only {{c|*ps}} is updated.
+
+If {{c|c16}} is the null wide character {{c|u'\0'}}, a null byte is stored, preceded by any shift sequence necessary to restore the initial shift state and the conversion state parameter {{c|*ps}} is updated to represent the initial shift state.
+
+The multibyte encoding used by this function is specified by the currently active C locale.
+
+===Parameters===
+{{par begin}}
+{{par|s|pointer to narrow character array where the multibyte character will be stored}}
+{{par|c16|the 16-bit character to convert}}
+{{par|ps|pointer to the conversion state object used when interpreting the multibyte string}}
+{{par end}}
+
+===Return value===
+On success, returns the number of bytes (including any shift sequences) written to the character array whose first element is pointed to by {{c|s}}. This value may be {{c|0}}, e.g. when processing the first {{c/core|char16_t}} in a surrogate pair.
+
+On failure (if {{c|c16}} is not a valid 16-bit character), returns {{c|-1}}, stores {{lc|EILSEQ}} in {{lc|errno}}, and leaves {{c|*ps}} in unspecified state.
+
+===Notes===
+The C++ standard defers to the C standard for the semantics of this function. In C11 as published, unlike {{lc|std::mbrtoc16}}, which converts variable-width multibyte (such as UTF-8) to variable-width 16-bit (such as UTF-16) encoding, this function can only convert single-unit 16-bit encoding, meaning it cannot convert UTF-16 to UTF-8 despite that being the original intent of this function. This was corrected by the post-C11 defect report {{stddoc|n2059.htm#dr_488|DR488|lang=c}}.
+
+===Example===
+{{example|The example assumes that the fix for the {{stddoc|n2059.htm#dr_488|defect report 488|lang=c}} is applied.
+|code=
+#include &lt;climits&gt;
+#include &lt;clocale&gt;
+#include &lt;cuchar&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    std::u16string_view strv = u"zß水🍌"; // or z\u00df\u6c34\U0001F34C
+    std::cout &lt;&lt; "Processing " &lt;&lt; strv.size() &lt;&lt; " UTF-16 code units: [ ";
+    for (char16_t c : strv)
+        std::cout &lt;&lt; std::showbase &lt;&lt; std::hex &lt;&lt; static_cast&lt;int&gt;(c) &lt;&lt; ' ';
+    std::cout &lt;&lt; "]\n";
+
+    std::mbstate_t state{};
+    char out[MB_LEN_MAX]{};
+    for (char16_t c : strv)
+    {
+        std::size_t rc = std::c16rtomb(out, c, &amp;state);
+        std::cout &lt;&lt; static_cast&lt;int&gt;(c) &lt;&lt; " converted to [ ";
+        if (rc != (std::size_t) - 1)
+            for (unsigned char c8 : std::string_view{out, rc})
+                std::cout &lt;&lt; +c8 &lt;&lt; ' ';
+        std::cout &lt;&lt; "]\n";
+    }
+}
+|output=
+Processing 5 UTF-16 code units: [ 0x7a 0xdf 0x6c34 0xd83c 0xdf4c ]
+0x7a converted to [ 0x7a ]
+0xdf converted to [ 0xc3 0x9f ]
+0x6c34 converted to [ 0xe6 0xb0 0xb4 ]
+0xd83c converted to [ ]
+0xdf4c converted to [ 0xf0 0x9f 0x8d 0x8c ]
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbrtoc16}}
+{{dsc inc|cpp/string/multibyte/dsc c8rtomb}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out|mem=std::codecvt&lt;char16_t, char, std::mbstate_t&gt;}}
+{{dsc see c|c/string/multibyte/c16rtomb}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

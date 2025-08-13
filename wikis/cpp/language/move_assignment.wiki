@@ -1,0 +1,266 @@
+{{title|Move assignment operator}}
+{{cpp/language/classes/navbar}}
+
+A move assignment operator is a non-template {{rlp|member functions|non-static member function}} with the name {{c/core|1=operator=}} that can be called with an argument of the same class type and copies the content of the argument, possibly mutating the argument.
+
+===Syntax===
+For the formal move assignment operator syntax, see {{rlp|function|function declaration}}. The syntax list below only demonstrates a subset of all valid move assignment operator syntaxes.
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|return-type}} {{ttb|1=operator=(}}{{spar sep|parameter-list}}{{ttb|);}}}}
+{{sdsc|num=2|{{spar|return-type}} {{ttb|1=operator=(}}{{spar sep|parameter-list}}{{ttb|)}} {{spar|function-body}}}}
+{{sdsc|num=3|{{spar|return-type}} {{ttb|1=operator=(}}{{spar sep|parameter-list-no-default}}{{ttb|1=) = default;}}}}
+{{sdsc|num=4|{{spar|return-type}} {{ttb|1=operator=(}}{{spar sep|parameter-list}}{{ttb|1=) = delete;}}}}
+{{sdsc|num=5|{{spar|return-type}} {{spar sep|class-name}}{{ttb|::}}{{ttb|1=operator=(}}{{spar sep|parameter-list}}{{ttb|)}} {{spar|function-body}}}}
+{{sdsc|num=6|{{spar|return-type}} {{spar sep|class-name}}{{ttb|::}}{{ttb|1=operator=(}}{{spar sep|parameter-list-no-default}}{{ttb|1=) = default;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|class-name}}|the class whose move assignment operator is being declared, the class type is given as {{tt|T}} in the descriptions below}}
+{{par|{{spar|parameter-list}}|a {{rlp|function#Parameter list|parameter list}} of only one parameter, which is of type {{tt|T&amp;&amp;}}, {{c/core|const T&amp;&amp;}}, {{c/core|volatile T&amp;&amp;}} or {{c/core|const volatile T&amp;&amp;}}}}
+{{par|{{spar|parameter-list-no-default}}|a {{rlp|function#Parameter list|parameter list}} of only one parameter, which is of type {{tt|T&amp;&amp;}}, {{c/core|const T&amp;&amp;}}, {{c/core|volatile T&amp;&amp;}} or {{c/core|const volatile T&amp;&amp;}} and does not have a default argument}}
+{{par|{{spar|function-body}}|the {{rlp|constructor|function body}} of the move assignment operator}}
+{{par|{{spar|return-type}}|any type, but {{tt|T&amp;}} is favored in order to be consistent with scala types}}
+{{par end}}
+
+===Explanation===
+@1@ Declaration of a move assignment operator inside of class definition.
+@2-4@ Definition of a move assignment operator inside of class definition.
+:@3@ The move assignment operator is explicitly-defaulted.
+:@4@ The move assignment operator is deleted.
+@5,6@ Definition of a move assignment operator outside of class definition (the class must contain a declaration {{v|1}}).
+:@6@ The move assignment operator is explicitly-defaulted.
+
+{{source|1=
+struct X
+{
+    X&amp; operator=(X&amp;&amp; other);    // move assignment operator
+//  X operator=(const X other); // Error: incorrect parameter type
+};
+
+union Y
+{
+    // move assignment operators can have syntaxes not listed above,
+    // as long as they follow the general function declaration syntax
+    // and do not viloate the restrictions listed above
+    auto operator=(Y&amp;&amp; other) -&gt; Y&amp;;       // OK: trailing return type
+    Y&amp; operator=(this Y&amp;&amp; self, Y&amp; other); // OK: explicit object parameter
+//  Y&amp; operator=(Y&amp;&amp;, int num = 1);        // Error: has other non-object parameters
+};
+}}
+
+The move assignment operator is called whenever it is selected by {{rlp|overload resolution}}, e.g. when an object appears on the left-hand side of an assignment expression, where the right-hand side is an rvalue of the same or implicitly convertible type.
+
+Move assignment operators typically transfer the resources held by the argument (e.g. pointers to dynamically-allocated objects, file descriptors, TCP sockets, thread handles, etc.), rather than make copies of them, and leave the argument in some valid but otherwise indeterminate state. Since move assignment doesn’t change the lifetime of the argument, the destructor will typically be called on the argument at a later point. For example, move-assigning from a {{lc|std::string}} or from a {{lc|std::vector}} may result in the argument being left empty. A move assignment is less, not more restrictively defined than ordinary assignment; where ordinary assignment must leave two copies of data at completion, move assignment is required to leave only one.
+
+===Implicitly-declared move assignment operator===
+If no user-defined move assignment operators are provided for a class type, and all of the following is true:
+* there are no user-declared {{rlp|copy constructor}}s;
+* there are no user-declared {{rlp|move constructor}}s;
+* there are no user-declared {{rlp|copy assignment|copy assignment operator}}s;
+* there is no user-declared {{rlp|destructor}},
+then the compiler will declare a move assignment operator as an {{c/core|inline public}} member of its class with the signature {{c|1=T&amp; T::operator=(T&amp;&amp;)}}. 
+
+A class can have multiple move assignment operators, e.g. both {{c|1=T&amp; T::operator=(const T&amp;&amp;)}} and {{c|1=T&amp; T::operator=(T&amp;&amp;)}}. If some user-defined move assignment operators are present, the user may still force the generation of the implicitly declared move assignment operator with the keyword {{tt|default}}.
+
+The implicitly-declared move assignment operator has an exception specification as described in {{rev inl|until=c++17|{{rlp|except spec|dynamic exception specification}}}}{{rev inl|since=c++17|{{rlp|noexcept spec|noexcept specification}}}}.
+
+Because some assignment operator (move or copy) is always declared for any class, the base class assignment operator is always hidden. If a using-declaration is used to bring in the assignment operator from the base class, and its argument type could be the same as the argument type of the implicit assignment operator of the derived class, the using-declaration is also hidden by the implicit declaration.
+
+===Implicitly-defined move assignment operator===
+If the implicitly-declared move assignment operator is neither deleted nor trivial, it is defined (that is, a function body is generated and compiled) by the compiler if {{rlp|definition#ODR-use|odr-used}}{{rev inl|since=c++14|&lt;!-- P0859R0 --&gt; or {{rlp|constant expression#Functions and variables needed for constant evaluation|needed for constant evaluation}}}}.
+
+For union types, the implicitly-defined move assignment operator copies the object representation (as by {{lc|std::memmove}}).
+
+For non-union class types, the move assignment operator performs full member-wise move assignment of the object's direct bases and immediate non-static members, in their declaration order, using built-in assignment for the scalars, memberwise move-assignment for arrays, and move assignment operator for class types (called non-virtually).
+
+{{rrev multi|since1=c++14|since2=c++23
+|rev1=The implicitly-defined move assignment operator for a class {{tt|T}} is {{rlpt|constexpr}} if
+* {{tt|T}} is a [[cpp/named req/LiteralType|literal type]], and
+* the assignment operator selected to move each direct base class subobject is a constexpr function, and
+* for each non-static data member of {{tt|T}} that is of class type (or array thereof), the assignment operator selected to move that member is a constexpr function.
+|rev2=The implicitly-defined move assignment operator for a class {{tt|T}} is {{rlpt|constexpr}}.
+}}
+
+As with copy assignment, it is unspecified whether virtual base class subobjects that are accessible through more than one path in the inheritance lattice, are assigned more than once by the implicitly-defined move assignment operator:
+{{source|1=
+struct V
+{
+    V&amp; operator=(V&amp;&amp; other)
+    {
+        // this may be called once or twice
+        // if called twice, 'other' is the just-moved-from V subobject
+        return *this;
+    }
+};
+
+struct A : virtual V {}; // operator= calls V::operator=
+struct B : virtual V {}; // operator= calls V::operator=
+struct C : B, A {};      // operator= calls B::operator=, then A::operator=
+                         // but they may only call V::operator= once
+
+int main()
+{
+    C c1, c2;
+    c2 = std::move(c1);
+}
+}}
+
+===Deleted move assignment operator===
+The implicitly-declared or defaulted move assignment operator for class {{tt|T}} is defined as deleted if any of the following conditions is satisfied:
+* {{tt|T}} has a non-static data member of a const-qualified non-class type (or possibly multi-dimensional array thereof).
+* {{tt|T}} has a non-static data member of a reference type.
+* {{tt|T}} has a {{rlp|object#Potentially constructed subobject|potentially constructed subobject}} of class type {{tt|M}} (or possibly multi-dimensional array thereof) such that the overload resolution as applied to find {{tt|M}}'s move assignment operator
+:* does not result in a usable candidate, or
+:* in the case of the subobject being a {{rlp|union#Union-like classes|variant member}}, selects a non-trivial function.
+
+A deleted implicitly-declared move assignment operator is ignored by {{rlp|overload resolution}}.
+
+===Trivial move assignment operator===
+The move assignment operator for class {{tt|T}} is trivial if all of the following is true:
+* It is not user-provided (meaning, it is implicitly-defined or defaulted);
+* {{tt|T}} has no virtual member functions;
+* {{tt|T}} has no virtual base classes;
+* the move assignment operator selected for every direct base of {{tt|T}} is trivial;
+* the move assignment operator selected for every non-static class type (or array of class type) member of {{tt|T}} is trivial.
+
+A trivial move assignment operator performs the same action as the trivial copy assignment operator, that is, makes a copy of the object representation as if by {{lc|std::memmove}}. All data types compatible with the C language are trivially move-assignable.
+
+===Eligible move assignment operator===
+{{cpp/language/eligible special member function|move assignment operator}}
+
+Triviality of eligible move assignment operators determines whether the class is a [[cpp/named req/TriviallyCopyable|trivially copyable type]].
+
+===Notes===
+If both copy and move assignment operators are provided, overload resolution selects the move assignment if the argument is an {{rlp|value category|''rvalue''}} (either a {{rlp|value category|''prvalue''}} such as a nameless temporary or an {{rlp|value category|''xvalue''}} such as the result of {{lc|std::move}}), and selects the copy assignment if the argument is an {{rlp|value category|''lvalue''}} (named object or a function/operator returning lvalue reference). If only the copy assignment is provided, all argument categories select it (as long as it takes its argument by value or as reference to const, since rvalues can bind to const references), which makes copy assignment the fallback for move assignment, when move is unavailable.
+
+It is unspecified whether virtual base class subobjects that are accessible through more than one path in the inheritance lattice, are assigned more than once by the implicitly-defined move assignment operator (same applies to {{rlp|copy assignment}}).
+
+See {{rlp|operators#Assignment operator|assignment operator overloading}} for additional detail on the expected behavior of a user-defined move-assignment operator.
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    std::string s;
+    
+    A() : s("test") {}
+    
+    A(const A&amp; o) : s(o.s) { std::cout &lt;&lt; "move failed!\n"; }
+    
+    A(A&amp;&amp; o) : s(std::move(o.s)) {}
+    
+    A&amp; operator=(const A&amp; other)
+    {
+         s = other.s;
+         std::cout &lt;&lt; "copy assigned\n";
+         return *this;
+    }
+    
+    A&amp; operator=(A&amp;&amp; other)
+    {
+         s = std::move(other.s);
+         std::cout &lt;&lt; "move assigned\n";
+         return *this;
+    }
+};
+
+A f(A a) { return a; }
+
+struct B : A
+{
+    std::string s2; 
+    int n;
+    // implicit move assignment operator B&amp; B::operator=(B&amp;&amp;)
+    // calls A's move assignment operator
+    // calls s2's move assignment operator
+    // and makes a bitwise copy of n
+};
+
+struct C : B
+{
+    ~C() {} // destructor prevents implicit move assignment
+};
+
+struct D : B
+{
+    D() {}
+    ~D() {} // destructor would prevent implicit move assignment
+    D&amp; operator=(D&amp;&amp;) = default; // force a move assignment anyway 
+};
+
+int main()
+{
+    A a1, a2;
+    std::cout &lt;&lt; "Trying to move-assign A from rvalue temporary\n";
+    a1 = f(A()); // move-assignment from rvalue temporary
+    std::cout &lt;&lt; "Trying to move-assign A from xvalue\n";
+    a2 = std::move(a1); // move-assignment from xvalue
+    
+    std::cout &lt;&lt; "\nTrying to move-assign B\n";
+    B b1, b2;
+    std::cout &lt;&lt; "Before move, b1.s = \"" &lt;&lt; b1.s &lt;&lt; "\"\n";
+    b2 = std::move(b1); // calls implicit move assignment
+    std::cout &lt;&lt; "After move, b1.s = \"" &lt;&lt; b1.s &lt;&lt; "\"\n";
+    
+    std::cout &lt;&lt; "\nTrying to move-assign C\n";
+    C c1, c2;
+    c2 = std::move(c1); // calls the copy assignment operator
+    
+    std::cout &lt;&lt; "\nTrying to move-assign D\n";
+    D d1, d2;
+    d2 = std::move(d1);
+}
+|output=
+Trying to move-assign A from rvalue temporary
+move assigned
+Trying to move-assign A from xvalue
+move assigned
+
+Trying to move-assign B
+Before move, b1.s = "test"
+move assigned
+After move, b1.s = ""&lt;!-- note, gcc 4.7.1 still prints "test", clang 3.1 works --&gt;
+
+Trying to move-assign C
+copy assigned
+
+Trying to move-assign D
+move assigned
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1353|std=C++11|before=the conditions where defaulted move assignment operators are&lt;br&gt;defined as deleted did not consider multi-dimensional array types|after=consider these types}}
+{{dr list item|wg=cwg|dr=1402|std=C++11|before=a defaulted move assignment operator that would&lt;br&gt;call a non-trivial copy assignment operator was&lt;br&gt;deleted; a defaulted move assignment operator that&lt;br&gt;is deleted still participated in overload resolution|after=allows call to such&lt;br&gt;copy assignment&lt;br&gt;operator; made ignored&lt;br&gt;in overload resolution}}
+{{dr list item|wg=cwg|dr=1806|std=C++11|before=specification for a defaulted move assignment operator&lt;br&gt;involving a virtual base class was missing|after=added}}
+{{dr list item|wg=cwg|dr=2094|std=C++11|before=a volatile subobject made of a defaulted&lt;br&gt;move assignment operator non-trivial ({{cwg|496}})|after=triviality not affected}}
+{{dr list item|wg=cwg|dr=2180|std=C++11|before=a defaulted move assignment operator for class {{tt|T}}&lt;br&gt;was not defined as deleted if {{tt|T}} is abstract and has&lt;br&gt;non-move-assignable direct virtual base classes|after=the operator is defined&lt;br&gt;as deleted in this case}}
+{{dr list item|wg=cwg|dr=2595|std=C++20|before=a move assignment operator was not eligible if there&lt;br&gt;is another move assignment operator which is more&lt;br&gt;constrained but does not satisfy its associated constraints|after=it can be eligible in this case}}
+{{dr list item|wg=cwg|dr=2690|std=C++11|before=the implicitly-defined move assignment operator for&lt;br&gt;union types did not copy the object representation|after=they copy the object&lt;br&gt;representation}}
+{{dr list end}}
+
+===See also===
+* {{rlp|constructor}}
+* {{rlp|converting constructor}}
+* {{rlp|copy assignment}}
+* {{rlp|copy constructor}}
+* {{rlp|default constructor}}
+* {{rlp|destructor}}
+* {{rlp|initialization}}
+** {{rlp|aggregate initialization}}
+** {{rlp|constant initialization}}
+** {{rlp|copy initialization}}
+** {{rlp|default initialization}}
+** {{rlp|direct initialization}}
+** {{rlp|list initialization}}
+** {{rlp|reference initialization}}
+** {{rlp|value initialization}}
+** {{rlp|zero initialization}}
+* {{rlp|move constructor}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

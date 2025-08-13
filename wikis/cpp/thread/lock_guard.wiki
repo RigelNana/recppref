@@ -1,0 +1,111 @@
+{{cpp/title|lock_guard}}
+{{cpp/thread/lock_guard/navbar}}
+{{ddcl|header=mutex|since=c++11|1=
+template&lt; class Mutex &gt;
+class lock_guard;
+}}
+
+The class {{tt|lock_guard}} is a mutex wrapper that provides a convenient [[cpp/language/raii|RAII-style]] mechanism for owning a mutex for the duration of a scoped block.
+
+When a {{tt|lock_guard}} object is created, it attempts to take ownership of the mutex it is given. When control leaves the scope in which the {{tt|lock_guard}} object was created, the {{tt|lock_guard}} is destructed and the mutex is released.
+
+The {{tt|lock_guard}} class is non-copyable.
+
+===Template parameters===
+{{par begin}}
+{{par|Mutex|the type of the mutex to lock. The type must meet the {{named req|BasicLockable}} requirements}}
+{{par end}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|mutex_type}}|Mutex}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/lock_guard/dsc constructor}}
+{{dsc inc|cpp/thread/lock_guard/dsc destructor}}
+{{dsc inc|cpp/thread/lock_guard/dsc operator{{=}}}}
+{{dsc end}}
+
+===Notes===
+A common beginner error is to "forget" to give a {{tt|lock_guard}} variable a name, e.g. {{c|std::lock_guard(mtx);}} (which default constructs a {{tt|lock_guard}} variable named {{tt|mtx}}) or {{c|std::lock_guard{mtx};}} (which constructs a prvalue object that is immediately destroyed), thereby not actually constructing a lock that holds a mutex for the rest of the scope.
+
+{{rrev|since=c++17|
+{{ltt|cpp/thread/scoped_lock|std::scoped_lock}} offers an alternative for {{tt|lock_guard}} that provides the ability to lock multiple mutexes using a deadlock avoidance algorithm.
+}}
+
+===Example===
+{{example
+|Demonstrates safe and unsafe increments of a volatile variable by two threads.
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string_view&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+
+volatile int g_i = 0;
+std::mutex g_i_mutex;  // protects g_i
+
+void safe_increment(int iterations)
+{
+    const std::lock_guard&lt;std::mutex&gt; lock(g_i_mutex);
+    while (iterations-- &gt; 0)
+        g_i = g_i + 1;
+    std::cout &lt;&lt; "thread #" &lt;&lt; std::this_thread::get_id() &lt;&lt; ", g_i: " &lt;&lt; g_i &lt;&lt; '\n';
+
+    // g_i_mutex is automatically released when lock goes out of scope
+}
+
+void unsafe_increment(int iterations)
+{
+    while (iterations-- &gt; 0)
+        g_i = g_i + 1;
+    std::osyncstream(std::cout) &lt;&lt; "thread #" &lt;&lt; std::this_thread::get_id()
+                                &lt;&lt; ", g_i: " &lt;&lt; g_i &lt;&lt; '\n';
+}
+
+int main()
+{
+    auto test = [](std::string_view fun_name, auto fun)
+    {
+        g_i = 0;
+        std::cout &lt;&lt; fun_name &lt;&lt; ":\nbefore, g_i: " &lt;&lt; g_i &lt;&lt; '\n';
+        {
+            std::jthread t1(fun, 1'000'000);
+            std::jthread t2(fun, 1'000'000);
+        }
+        std::cout &lt;&lt; "after, g_i: " &lt;&lt; g_i &lt;&lt; "\n\n";
+    };
+    test("safe_increment", safe_increment);
+    test("unsafe_increment", unsafe_increment);
+}
+|p=true
+|output=
+safe_increment:
+before, g_i: 0
+thread #140121493231360, g_i: 1000000
+thread #140121484838656, g_i: 2000000
+after, g_i: 2000000
+
+unsafe_increment:
+before, g_i: 0
+thread #140121484838656, g_i: 1028945
+thread #140121493231360, g_i: 1034337
+after, g_i: 1034337
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2981|std=C++17|before=redundant deduction guide from {{tt|lock_guard&lt;Mutex&gt;}} was provided|after=removed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc scoped_lock}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

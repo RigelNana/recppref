@@ -1,0 +1,99 @@
+{{cpp/thread/packaged_task/title|packaged_task}}
+{{cpp/thread/packaged_task/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+packaged_task() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class F &gt;
+explicit packaged_task( F&amp;&amp; f );
+}}
+{{dcl|since=c++11|until=c++17|num=3|
+template&lt; class F, class Allocator &gt;
+explicit packaged_task( std::allocator_arg_t, const Allocator&amp; a, F&amp;&amp; f );
+}}
+{{dcl|since=c++11|num=4|1=
+packaged_task( const packaged_task&amp; ) = delete;
+}}
+{{dcl|num=5|since=c++11|
+packaged_task( packaged_task&amp;&amp; rhs ) noexcept;
+}}
+{{dcl end}}
+
+Constructs a new {{tt|std::packaged_task}} object.
+
+@1@ Constructs a {{tt|std::packaged_task}} object with no task and no shared state.
+
+@2,3@ Constructs a {{tt|std::packaged_task}} object with a shared state and a copy of the task, initialized with {{c|std::forward&lt;F&gt;(f)}}.{{rev inl|until=c++17| The allocator {{c|a}} is used to allocate memory necessary to store the task.}}
+
+@@ {{cpp/enable if|plural=yes|{{c/core|std::decay&lt;F&gt;::type}} is not the same type as {{c/core|std::packaged_task&lt;R(Args...)&gt;}}}}.
+{{rev begin}}
+{{rev|until=c++17|
+Let {{c|t1}}, {{c|t2}}, ..., {{c|tN}} be values of the corresponding types in {{tt|Args}}, if {{box|{{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}{{c/core|(f, t1, t2, ..., tN)}}}} is not a valid expression, the program is ill-formed.
+}}
+{{rev|since=c++17|
+If {{c|std::is_invocable_r_v&lt;R, F&amp;, Args...&gt;}} is {{c|false}}, the program is ill-formed.
+}}
+{{rev end}}
+
+@@ If invoking {{c|f}} itself and invoking a copy of {{c|f}} behave differently, the behavior is undefined.
+
+@4@ The copy constructor is deleted, {{tt|std::packaged_task}} is move-only.
+
+@5@ Constructs a {{tt|std::packaged_task}} with the shared state and task formerly owned by {{c|rhs}}, leaving {{c|rhs}} with no shared state and a moved-from task.
+
+===Parameters===
+{{par begin}}
+{{par|f|the callable target (function, member function, lambda expression, function object) to execute}}
+{{par|a|the allocator to use when storing the task}}
+{{par|rhs|the {{tt|std::packaged_task}} to move from}}
+{{par end}}
+
+===Exceptions===
+@2@ Any exceptions thrown by copy/move constructor of {{c|f}} and possibly {{lc|std::bad_alloc}} if the allocation fails.
+
+@3@ Any exceptions thrown by copy/move constructor of {{c|f}} and by the allocator's {{tt|allocate}} function if memory allocation fails.
+
+===Example===
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int fib(int n)
+{
+    if (n &lt; 3)
+        return 1;
+    else
+        return fib(n - 1) + fib(n - 2);
+}
+
+int main()
+{
+    std::packaged_task&lt;int(int)&gt; fib_task(&amp;fib); 
+    
+    std::cout &lt;&lt; "Starting task\n";
+    auto result = fib_task.get_future();
+    std::thread t(std::move(fib_task), 42);
+    
+    std::cout &lt;&lt; "Waiting for task to finish..." &lt;&lt; std::endl;
+    std::cout &lt;&lt; result.get() &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "Task complete\n";
+    t.join();
+}
+|output=
+Starting task
+Waiting for task to finish...
+267914296
+Task complete
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2067|std=C++11|before=the parameter type of the copy constructor was {{tt|packaged_task&amp;}}|after=added {{c/core|const}}}}
+{{dr list item|wg=lwg|dr=2097|std=C++11|before=for overloads {{v|2,3}}, {{tt|F}} could be {{tt|std::packaged_task&lt;R(Args...)&gt;}}|after={{tt|F}} is constrained}}
+{{dr list end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

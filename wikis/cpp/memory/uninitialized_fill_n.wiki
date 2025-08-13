@@ -1,0 +1,121 @@
+{{cpp/title|uninitialized_fill_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcla|num=1|constexpr=c++26|
+template&lt; class NoThrowForwardIt, class Size, class T &gt;
+NoThrowForwardIt uninitialized_fill_n( NoThrowForwardIt first,
+                                       Size count, const T&amp; value );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class NoThrowForwardIt, class Size, class T &gt;
+NoThrowForwardIt uninitialized_fill_n( ExecutionPolicy&amp;&amp; policy,
+                                       NoThrowForwardIt first,
+                                       Size count, const T&amp; value );
+}}
+{{dcl end}}
+
+@1@ Copies {{c|value}} to an uninitialized memory area {{counted range|first|count}} as if by
+{{box|
+{{c/core|for (; count--; ++first)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{rlpi|voidify}}{{c/core|(*first))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type(value);}}&lt;br&gt;
+{{c/core|return first;}}
+}}
+@@ If an exception is thrown during the initialization, the objects already constructed are destroyed in an unspecified order.
+
+@2@ Same as {{v|1}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the range of the elements to initialize}}
+{{par|count|number of elements to construct}}
+{{par|value|the value to construct the elements with}}
+{{par hreq}}
+{{par req named|NoThrowForwardIt|ForwardIterator}}
+{{par req|No increment, assignment, comparison, or indirection through valid instances of {{tt|NoThrowForwardIt}} may throw exceptions.{{rev inl|until=c++11| Applying {{c/core|&amp;*}} to a {{tt|NoThrowForwardIt}} value must yield a pointer to its value type.}}}}
+{{par end}}
+
+===Return value===
+As described above.
+
+===Complexity===
+Linear in {{c|count}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===Notes===
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} for [[cpp/memory#Uninitialized memory algorithms|specialized memory algorithms]], {{vl|1}}}}
+
+===Possible implementation===
+{{eq fun|1=
+template&lt;class NoThrowForwardIt, class Size, class T&gt;
+constexpr NoThrowForwardIt uninitialized_fill_n(NoThrowForwardIt first,
+                                                Size count, const T&amp; value)
+{
+    using V = typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type;
+    NoThrowForwardIt current = first;
+    try
+    {
+        for (; count &gt; 0; ++current, (void) --count)
+            ::new (static_cast&lt;void*&gt;(std::addressof(*current))) V(value);
+        return current;
+    }
+    catch (...)
+    {
+        for (; first != current; ++first)
+            first-&gt;~V();
+        throw;
+    }
+    return current;
+}
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+
+int main()
+{
+    std::string* p;
+    std::size_t sz;
+    std::tie(p, sz) = std::get_temporary_buffer&lt;std::string&gt;(4);
+    std::uninitialized_fill_n(p, sz, "Example");
+    
+    for (std::string* i = p; i != p + sz; ++i)
+    {
+        std::cout &lt;&lt; *i &lt;&lt; '\n';
+        i-&gt;~basic_string&lt;char&gt;();
+    }
+    std::return_temporary_buffer(p);
+}
+|output=
+Example
+Example
+Example
+Example
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=866|std=C++98|before=given {{tt|T}} as the value type of {{tt|NoThrowForwardIt}}, if&lt;br&gt;{{c/core|T::operator new}} exists, the program might be ill-formed|after=uses global placement {{c/core|new}} instead}}
+{{dr list item|wg=lwg|dr=1339|std=C++98|before=the location of the first element following&lt;br&gt;the filling range was not returned|after=returned}}
+{{dr list item|wg=lwg|dr=2433|std=C++11|before=this algorithm might be hijacked by overloaded {{c/core|operator&amp;}}|after=uses {{lc|std::addressof}}}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=this algorithm might create objects on a {{c/core|const}} storage|after=kept disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc uninitialized_fill}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_fill_n}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

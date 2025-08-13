@@ -1,0 +1,110 @@
+{{cpp/locale/ctype/title|narrow, do_narrow}}
+{{cpp/locale/ctype/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+char narrow( CharT c, char dflt ) const;
+}}
+{{dcl|num=2|1=
+public:
+const CharT* narrow( const CharT* beg, const CharT* end, 
+                     char dflt, char* dst ) const;
+}}
+{{dcl|num=3|1=
+protected:
+virtual char do_narrow( CharT c, char dflt ) const;
+}}
+{{dcl|num=4|1=
+protected:
+virtual const CharT* do_narrow( const CharT* beg, const CharT* end, 
+                                char dflt, char* dst ) const;
+}}
+{{dcl end}}
+
+@1,2@ Public member function, calls the corresponding protected virtual member function {{tt|do_narrow}} overload of the most derived class. Overload (1) calls {{c|do_narrow(c, dflt)}}, overload (2) calls {{c|do_narrow(beg, end, dflt, dst)}}.
+
+@3@ Converts the (possibly wide) character {{c|c}} to multibyte representation if the character can be represented with a single byte (for example, ASCII characters in UTF-8 encoding are single bytes). Returns {{c|dflt}} if such conversion does not exist.
+
+@4@ For every character in the character array {{range|beg|end}}, writes narrowed characters (or {{c|dflt}} whenever narrowing fails) to the successive locations in the character array pointed to by {{c|dst}}.
+
+Narrowing is always successful and is always reversible (by calling {{lc|widen()}}) for all characters from the {{rev inl|until=c++23|[[cpp/language/charset#Basic source character set|basic source character set]]}}{{rev inl|since=c++23|[[cpp/language/charset#Basic character set|basic character set]]}}.
+* i.e. {{c|1=do_widen(do_narrow(c, 0)) == c}} always holds for any character {{c|c}} in the {{rev inl|until=c++23|[[cpp/language/charset#Basic source character set|basic source character set]]}}{{rev inl|since=c++23|[[cpp/language/charset#Basic character set|basic character set]]}}.
+
+Narrowing, if successful, preserves all character classification categories known to {{lc|is()}}.
+* i.e. {{c|is(m, c) {{!!}} !ctc.is(m, do_narrow(c, dflt))}} is always {{c|true}} for any named {{tt|ctype}} category with a {{tt|ctype&lt;char&gt;}} facet {{c|ctc}} and {{tt|ctype_base::mask}} value {{c|m}} (unless {{tt|do_narrow}} returns {{c|dflt}}).
+
+Narrowing of any digit character guarantees that if the result is subtracted from the character literal {{c|'0'}}, the difference equals the digit value of the original character.
+* i.e. for any digit character {{c|c}}, the expression {{c|(do_narrow(c, dflt) - '0')}} evaluates to the digit value of the character.
+
+===Parameters===
+{{par begin}}
+{{par|c|character to convert}}
+{{par|dflt|default value to produce if the conversion fails}}
+{{par|beg|pointer to the first character in an array of characters to convert}}
+{{par|end|one past the end pointer for the array of characters to convert}}
+{{par|dst|pointer to the first element of the array of characters to fill}}
+{{par end}}
+
+===Return value===
+@1,3@ Narrowed character or {{c|dflt}} if narrowing fails.
+@2,4@ {{c|end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+
+void try_narrow(const std::ctype&lt;wchar_t&gt;&amp; f, wchar_t c)
+{
+    char n = f.narrow(c, 0);
+    if (n)
+        std::wcout &lt;&lt; '\'' &lt;&lt; c &lt;&lt; "' narrowed to " &lt;&lt; +(unsigned char)n &lt;&lt; '\n';
+    else
+        std::wcout &lt;&lt; '\'' &lt;&lt; c &lt;&lt; "' could not be narrowed\n";
+}
+ 
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    std::wcout.imbue(std::locale());
+    std::wcout &lt;&lt; std::hex &lt;&lt; std::showbase &lt;&lt; "In US English UTF-8 locale:\n";
+    auto&amp; f = std::use_facet&lt;std::ctype&lt;wchar_t&gt;&gt;(std::locale());
+    try_narrow(f, L'A');
+    try_narrow(f, L'Ａ');
+    try_narrow(f, L'ě');
+    
+    std::locale::global(std::locale("cs_CZ.iso88592"));
+    auto&amp; f2 = std::use_facet&lt;std::ctype&lt;wchar_t&gt;&gt;(std::locale());
+    std::wcout &lt;&lt; "In Czech ISO-8859-2 locale:\n";
+    try_narrow(f2, L'A');
+    try_narrow(f2, L'Ａ');
+    try_narrow(f2, L'ě');
+}
+|p=true
+|output=
+In US English UTF-8 locale:
+'A' narrowed to 0x41
+'Ａ' could not be narrowed
+'ě' could not be narrowed
+In Czech ISO-8859-2 locale:
+'A' narrowed to 0x41
+'Ａ' could not be narrowed
+'ě' narrowed to 0xec
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=126|std=C++98|before=1. the code representing reversibility was&lt;br&gt;{{c|1=do_widen(do_narrow(c), 0) == c}}&lt;br&gt;2. the code representing category preservation was&lt;br&gt;{{c|is(m, c) {{!!}} !ctc.is(m, do_narrow(c), dflt)}}|after=corrected both}}
+{{dr list item|wg=lwg|dr=153|std=C++98|before={{tt|narrow}} always called overload (4)|after=calls the corresponding overload}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/locale/ctype/dsc widen}}
+{{dsc inc|cpp/io/basic_ios/dsc narrow}}
+{{dsc inc|cpp/string/multibyte/dsc wctob}}
+{{dsc end}}
+
+{{langlinks|ja|zh}}

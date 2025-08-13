@@ -1,0 +1,82 @@
+{{cpp/experimental/simd_mask/title|simd_mask}}
+{{cpp/experimental/simd/simd_mask/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=parallelism_ts_2|1=
+simd_mask() noexcept = default;
+}}
+{{dcl|num=2|since=parallelism_ts_2|1=
+explicit simd_mask( bool value ) noexcept;
+}}
+{{dcl|num=3|since=parallelism_ts_2|1=
+template&lt; class U &gt;
+simd_mask( const simd_mask&lt;U, simd_abi::fixed_size&lt;size()&gt;&gt;&amp; other ) noexcept;
+}}
+{{dcl|num=4|since=parallelism_ts_2|1=
+template&lt; class U, class Flags &gt;
+simd_mask( const bool* mem, Flags flags );
+}}
+{{dcl|num=5|since=parallelism_ts_2|notes={{mark implicit}}|1=
+simd_mask( const simd_mask&amp; other ) noexcept = default;
+}}
+{{dcl|num=6|since=parallelism_ts_2|notes={{mark implicit}}|1=
+simd_mask( simd_mask&amp;&amp; other ) noexcept = default;
+}}
+{{dcl end}}
+
+@1@ Constructs a {{tt|simd_mask}} using {{lt|cpp/language/default initialization}} (constructed without initializer) or {{lt|cpp/language/value initialization}} (constructed with an empty initializer).
+@2@ The broadcast constructor constructs a {{tt|simd_mask}} with all values initialized to {{c|value}}.
+@3@ Constructs a {{tt|simd_mask}} where the i-th element is initialized to {{c|other[i]}} {{simd_for_all_i}}. {{cpp/enable_if|{{tt|Abi}} is {{c/core|simd_abi::fixed_size&lt;size()&gt;}}}}.
+@4@ The load constructor constructs a {{tt|simd_mask}} where the i-th element is initialized to {{c|mem[i]}} {{simd_for_all_i}}.
+@5,6@ Implicitly declared copy and move constructors. Constructs a {{tt|simd_mask}} where each element is initialized from the values of the elements in {{c|other}}.
+
+===Parameters===
+{{par begin}}
+{{par|value|the value used for initialization of all {{tt|simd_mask}} elements}}
+{{par|other|another {{tt|simd_mask}} to copy from}}
+{{par|mem|a pointer into an array where {{range|mem|mem + size()}} is a valid range}}
+{{par|flags|if of type {{ltt|cpp/experimental/simd/vector_aligned|vector_aligned_tag}}, the load constructor may assume {{tt|mem}} to point to storage aligned by {{ltt|cpp/experimental/simd/memory_alignment|memory_alignment_v&lt;simd_mask&gt;}}}}
+{{par hreq}}
+{{par req|{{tt|is_simd_flag_type_v&lt;Flags&gt;}} must be {{c/core|true}}.}}
+{{par end}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstddef&gt;
+#include &lt;experimental/simd&gt;
+#include &lt;iostream&gt;
+namespace stdx = std::experimental;
+
+int main()
+{
+    [[maybe_unused]]
+    stdx::native_simd_mask&lt;int&gt; a;       // uninitialized
+    stdx::native_simd_mask&lt;int&gt; b(true); // all elements initialized with true
+    stdx::native_simd_mask&lt;int&gt; c{};     // all elements initialized with false
+
+    alignas(stdx::memory_alignment_v&lt;stdx::native_simd_mask&lt;int&gt;&gt;)
+        std::array&lt;bool, stdx::native_simd_mask&lt;int&gt;::size() * 2&gt; mem = {};
+    std::ranges::generate(mem, [i{0}] mutable -&gt; bool { return i++ &amp; 1; });
+
+    stdx::native_simd_mask&lt;int&gt; d(&amp;mem[0], stdx::vector_aligned);  // {0, 1, 0, 1, ...}
+    stdx::native_simd_mask&lt;int&gt; e(&amp;mem[1], stdx::element_aligned); // {1, 0, 1, 0, ...}
+
+    const auto xored = b ^ c ^ d ^ e;
+
+    for (std::size_t i{}; i != xored.size(); ++i)
+        std::cout &lt;&lt; xored[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=0 0 0 0 0 0 0 0
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/element aligned}}
+{{dsc inc|cpp/experimental/simd/vector_aligned}}
+{{dsc inc|cpp/experimental/simd/overaligned}}
+{{dsc inc|cpp/experimental/simd/dsc memory_alignment}}
+{{dsc inc|cpp/experimental/simd/simd_mask/dsc copy_from}}
+{{dsc end}}

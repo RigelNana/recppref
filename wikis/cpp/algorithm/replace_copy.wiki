@@ -1,0 +1,179 @@
+{{cpp/title|replace_copy|replace_copy_if}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+&lt;!-- P2248R8 does NOT update replace_copy --&gt;
+{{dcla|num=1|constexpr=c++20|
+template&lt; class InputIt, class OutputIt, class T &gt;
+OutputIt replace_copy( InputIt first, InputIt last, OutputIt d_first,
+                       const T&amp; old_value, const T&amp; new_value );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class T &gt;
+ForwardIt2 replace_copy
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      const T&amp; old_value, const T&amp; new_value );
+}}
+{{dcl rev begin|num=3}}
+{{dcla|anchor=3|constexpr=c++20|until=c++26|
+template&lt; class InputIt, class OutputIt, class UnaryPred, class T &gt;
+OutputIt replace_copy_if
+    ( InputIt first, InputIt last, OutputIt d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class InputIt, class OutputIt, class UnaryPred,
+          class T = typename std::iterator_traits
+                        &lt;OutputIt&gt;::value_type &gt;
+constexpr OutputIt replace_copy_if
+    ( InputIt first, InputIt last, OutputIt d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=4}}
+{{dcl|since=c++17|until=c++26|
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2,
+          class UnaryPred, class T &gt;
+ForwardIt2 replace_copy_if
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2,
+          class UnaryPred, class T = typename std::iterator_traits
+                                         &lt;ForwardIt2&gt;::value_type &gt;
+ForwardIt2 replace_copy_if
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl end}}
+
+Copies the elements from the range {{range|first|last}} to another range beginning at {{c|d_first}}, while replacing all elements satisfying specific criteria with {{c|new_value}}.
+
+@1@ Replaces all elements that are equal to {{c|old_value}} (using {{c/core|1=operator==}}).
+
+@3@ Replaces all elements for which predicate {{c|p}} returns {{c|true}}.
+
+@2,4@ Same as {{v|1,3}}, but executed according to {{c|policy}}.
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+If any of the results of the expressions {{c|*first}} and {{c|new_value}} is not [[cpp/iterator#Types and writability|writable]] to {{c|d_first}}, the program is ill-formed.
+
+If the source and destination ranges overlap, the behavior is undefined.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to copy}}
+{{par|d_first|the beginning of the destination range}}
+{{par|old_value|the value of elements to replace}}
+{{par exec pol}}
+{{par pred1|p|if the element value should be replaced|p1=InputIt}}
+{{par|new_value|the value to use as replacement}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===Return value===
+Iterator to the element past the last element copied.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+@1,2@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} comparisons using {{c/core|1=operator==}}.
+@3,4@ Exactly {{mathjax-or|\(\scriptsize N\)|N}} applications of the predicate {{c|p}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+{{eq impl
+|title1=replace_copy|ver1=1|1=
+template&lt;class InputIt, class OutputIt, class T&gt;
+OutputIt replace_copy(InputIt first, InputIt last, OutputIt d_first,
+                      const T&amp; old_value, const T&amp; new_value)
+{
+    for (; first != last; ++first)
+        *d_first++ = (*first == old_value) ? new_value : *first;
+    return d_first;
+}
+|title2=replace_copy_if|ver2=3|2=
+template&lt;class InputIt, class OutputIt, class UnaryPred,
+         class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type&gt;
+OutputIt replace_copy_if(InputIt first, InputIt last, OutputIt d_first,
+                         UnaryPred p, const T&amp; new_value)
+{
+    for (; first != last; ++first)
+        *d_first++ = p(*first) ? new_value : *first;
+    return d_first;
+}
+}}
+
+===Notes===
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|[[cpp/language/list initialization|List-initialization]] for algorithms {{vl|3,4}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+void println(const auto&amp; seq)
+{
+    for (const auto&amp; e : seq)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+ 
+int main()
+{
+    std::vector&lt;short&gt; src{3, 1, 4, 1, 5, 9, 2, 6, 5};
+    println(src);
+    std::vector&lt;int&gt; dst(src.size());
+    std::replace_copy_if(src.cbegin(), src.cend(),
+                         dst.begin(),
+                         [](short n){ return n &gt; 5; }, 0);
+    println(dst);
+
+    std::vector&lt;std::complex&lt;double&gt;&gt; src2{&lt;!----&gt;{1, 3}, {2, 4}, {3, 5}&lt;!----&gt;},
+                                      dst2(src2.size());
+    println(src2);
+    #ifdef __cpp_lib_algorithm_default_value_type
+        std::replace_copy_if(src2.cbegin(), src2.cend(), dst2.begin(),
+            [](std::complex&lt;double&gt; z){ return std::abs(z) &lt; 5; },
+            {4, 2}); // Possible, since the T is deduced.
+    #else
+        std::replace_copy_if(src2.cbegin(), src2.cend(), dst2.begin(),
+            [](std::complex&lt;double&gt; z){ return std::abs(z) &lt; 5; },
+            std::complex&lt;double&gt;{4, 2});
+    #endif
+    println(dst2);
+}
+|output=
+3 1 4 1 5 9 2 6 5 
+3 1 4 1 5 0 2 0 5 
+(1,3) (2,4) (3,5) 
+(4,2) (4,2) (3,5)
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=283|std=C++98|before={{tt|T}} was required to be {{named req|CopyAssignable}} (and {{named req|EqualityComparable}} for&lt;br&gt;{{tt|replace_copy}}), but the value type of {{tt|InputIt}} is not always {{tt|T}}|after=removed the requirement}}
+{{dr list item|wg=lwg|dr=337|std=C++98|before={{tt|replace_copy_if}} only required {{tt|InputIt}} to&lt;br&gt;meet the requirements of {{named req|Iterator}}&lt;ref&gt;The actual defect in the C++ standard is that the template parameter {{tt|InputIterator}} was misspecified as {{tt|Iterator}}. This affects the type requirements because the C++ standard states that for the function templates in the algorithms library, the template type parameters whose name ends with {{tt|Iterator}} imply the type requirements of the corresponding iterator categories.&lt;/ref&gt;|after=corrected to&lt;br&gt;{{named req|InputIterator}}}}
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc replace}}
+{{dsc inc|cpp/algorithm/dsc remove}}
+{{dsc inc|cpp/algorithm/ranges/dsc replace_copy}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

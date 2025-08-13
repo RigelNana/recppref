@@ -1,0 +1,468 @@
+{{title|Pack {{mark since c++11}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+A pack is a C++ entity that defines one of the following:
+* a parameter pack
+:* template parameter pack
+:* function parameter pack
+{{rrev|since=c++20|
+* {{rlp|lambda#Lambda capture|lambda init-capture pack}}
+}}
+{{rrev|since=c++26|
+* {{rlp|structured binding|structured binding pack}}
+}}
+
+A template parameter pack is a template parameter that accepts zero or more template arguments (non-types, types, or templates). A function parameter pack is a function parameter that accepts zero or more function arguments. 
+
+{{rrev|since=c++20|A lambda init-capture pack is a lambda capture that introduces an init-capture for each of the elements in the pack expansion of its initializer.}}
+
+{{rrev|since=c++26|A structured binding pack is an identifier in the structured binding declaration that introduces zero or more structured bindings.}}
+
+The number of elements of a pack is equal to:
+* the number of arguments provided for the parameter pack, if the pack is a template or function parameter pack,
+{{rrev|since=c++20|
+* the number of elements in the pack expansion of its initializer, if the pack is a lambda init-capture pack,
+}}
+{{rrev|since=c++26|
+* structured binding size of the initializer less the number of non-pack elements in the structured binding declaration, if the pack is a structured binding pack.
+}}
+{{anchor|Variadic template}}
+A template with at least one parameter pack is called a ''variadic template''.
+
+===Syntax===
+Template parameter pack (appears in {{rlp|type alias|alias template}}, 
+{{rlp|class template|class template}}{{rev inl|since=c++14|, {{rlp|variable template}}}}{{rev inl|since=c++20|, {{rlp|constraints|concept}}}} and {{rlp|function template|function template}} parameter lists)
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|type}} {{ttb|...}} {{spar optional|pack-name}}}}
+{{sdsc|num=2|{{ttb|typename}}{{ttb|{{!}}}}{{ttb|class}} {{ttb|...}} {{spar optional|pack-name}}}}
+{{sdsc|num=3|{{spar|type-constraint}} {{ttb|...}} {{spar optional|pack-name}}|notes={{mark since c++20}}}}
+{{sdsc|num=4|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{ttb|class}} {{ttb|...}} {{spar optional|pack-name}}|notes={{mark until c++17}}}}
+{{sdsc|num=4|{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{ttb|typename}}{{ttb|{{!}}}}{{ttb|class}} {{ttb|...}} {{spar optional|pack-name}}|notes={{mark since c++17}}}}
+{{sdsc end}}
+Function parameter pack (a form of {{rlp|declarations|declarator}}, appears in a function parameter list of a variadic function template)
+{{sdsc begin}}
+{{sdsc|num=5|{{spar|pack-name}} {{ttb|...}} {{spar optional|pack-param-name}}}}
+{{sdsc end}}
+{{rrev|since=c++20|
+For the syntax of non-parameter packs, see {{rlp|lambda#Lambda capture|lambda init-capture pack}} {{rev inl|since=c++26|and {{rlp|structured binding|structured binding pack}}}}.
+}}
+
+Pack expansion (appears in a body of a template)
+{{sdsc begin}}
+{{sdsc|num=6|{{spar|pattern}} {{ttb|...}}&lt;!----&gt;}}
+{{sdsc end}}
+
+@1@ A non-type template parameter pack with an optional name
+@2@ A type template parameter pack with an optional name
+
+{{rrev|since=c++20|@3@ A {{rlp|constraints|constrained}} type template parameter pack with an optional name}}
+@4@ A template template parameter pack with an optional name
+@5@ A function parameter pack with an optional name
+@6@ Pack expansion: expands to a list of zero or more {{tt|pattern}}s. The pattern must include at least one pack.
+
+===Explanation===
+A variadic class template can be instantiated with any number of template arguments:
+{{source|
+template&lt;class... Types&gt;
+struct Tuple {};
+
+Tuple&lt;&gt; t0;           // Types contains no arguments
+Tuple&lt;int&gt; t1;        // Types contains one argument: int
+Tuple&lt;int, float&gt; t2; // Types contains two arguments: int and float
+Tuple&lt;0&gt; t3;          // error: 0 is not a type
+}}
+
+A variadic function template can be called with any number of function arguments (the template arguments are deduced through {{rlp|template argument deduction}}):
+{{source|
+template&lt;class... Types&gt;
+void f(Types... args);
+
+f();       // OK: args contains no arguments
+f(1);      // OK: args contains one argument: int
+f(2, 1.0); // OK: args contains two arguments: int and double
+}}
+
+In a primary class template, the template parameter pack must be the final parameter in the template parameter list. In a function template, the template parameter pack may appear earlier in the list provided that all following parameters can be deduced from the function arguments, or have default arguments:
+{{source|1=
+template&lt;typename U, typename... Ts&gt;    // OK: can deduce U
+struct valid;
+// template&lt;typename... Ts, typename U&gt; // Error: Ts... not at the end
+// struct Invalid;
+
+template&lt;typename... Ts, typename U, typename=void&gt;
+void valid(U, Ts...);    // OK: can deduce U
+// void valid(Ts..., U); // Can't be used: Ts... is a non-deduced context in this position
+
+valid(1.0, 1, 2, 3);     // OK: deduces U as double, Ts as {int, int, int}
+}}
+
+If every valid specialization of a variadic template requires an empty template parameter pack, the program is ill-formed, no diagnostic required.
+
+===Pack expansion===
+A pattern followed by an ellipsis, in which the name of at least one pack appears at least once, is ''expanded'' into zero or more instantiations of the pattern, where the name of the pack is replaced by each of the elements from the pack, in order. Instantiations of {{lsd|#Alignment specifier}}s are space-separated, other instantiations are comma-separated.
+
+{{source|
+template&lt;class... Us&gt;
+void f(Us... pargs) {}
+
+template&lt;class... Ts&gt;
+void g(Ts... args)
+{
+    f(&amp;args...); // “&amp;args...” is a pack expansion
+                 // “&amp;args” is its pattern
+}
+
+g(1, 0.2, "a"); // Ts... args expand to int E1, double E2, const char* E3
+                // &amp;args... expands to &amp;E1, &amp;E2, &amp;E3
+                // Us... pargs expand to int* E1, double* E2, const char** E3
+}}
+
+If the names of two packs appear in the same pattern, they are expanded simultaneously, and they must have the same length:
+
+{{source|
+template&lt;typename...&gt;
+struct Tuple {};
+
+template&lt;typename T1, typename T2&gt;
+struct Pair {};
+
+template&lt;class... Args1&gt;
+struct zip
+{
+    template&lt;class... Args2&gt;
+    struct with
+    {
+        typedef Tuple&lt;Pair&lt;Args1, Args2&gt;...&gt; type;
+        // Pair&lt;Args1, Args2&gt;... is the pack expansion
+        // Pair&lt;Args1, Args2&gt; is the pattern
+    };
+};
+
+typedef zip&lt;short, int&gt;::with&lt;unsigned short, unsigned&gt;::type T1;
+// Pair&lt;Args1, Args2&gt;... expands to
+// Pair&lt;short, unsigned short&gt;, Pair&lt;int, unsigned int&gt; 
+// T1 is Tuple&lt;Pair&lt;short, unsigned short&gt;, Pair&lt;int, unsigned&gt;&gt;
+
+// typedef zip&lt;short&gt;::with&lt;unsigned short, unsigned&gt;::type T2;
+// error: pack expansion contains packs of different lengths
+}}
+
+If a pack expansion is nested within another pack expansion, the packs that appear inside the innermost pack expansion are expanded by it, and there must be another pack mentioned in the enclosing pack expansion, but not in the innermost one:
+
+{{source|
+template&lt;class... Args&gt;
+void g(Args... args)
+{
+    f(const_cast&lt;const Args*&gt;(&amp;args)...); 
+    // const_cast&lt;const Args*&gt;(&amp;args) is the pattern, it expands two packs
+    // (Args and args) simultaneously
+
+    f(h(args...) + args...); // Nested pack expansion:
+    // inner pack expansion is "args...", it is expanded first
+    // outer pack expansion is h(E1, E2, E3) + args..., it is expanded
+    // second (as h(E1, E2, E3) + E1, h(E1, E2, E3) + E2, h(E1, E2, E3) + E3)
+}
+}}
+
+When the number of elements in a pack is zero (empty pack), the instantiation of a pack expansion does not alter the syntactic interpretation of the enclosing construct, even in cases where omitting the pack expansion entirely would otherwise be ill-formed or would result in a syntax ambiguity. The instantiation produces an empty list.
+
+{{source|
+template&lt;class... Bases&gt; 
+struct X : Bases... { };
+
+template&lt;class... Args&gt; 
+void f(Args... args) 
+{
+    X&lt;Args...&gt; x(args...);
+}
+
+template void f&lt;&gt;(); // OK, X&lt;&gt; has no base classes
+                     // x is a variable of type X&lt;&gt; that is value-initialized
+}}
+
+===Expansion loci===&lt;!-- loci is the plural of locus --&gt;
+Depending on where the expansion takes place, the resulting comma-separated (or space-separated for {{lsd|#Alignment specifier}}s) list is a different kind of list: function parameter list, member initializer list, attribute list, etc. The following is the list of all allowed contexts:
+
+====Function argument lists====
+A pack expansion may appear inside the parentheses of a function call operator, in which case the largest expression or {{rlp|initialization|brace-enclosed initializer list}} to the left of the ellipsis is the pattern that is expanded:
+
+{{source|
+f(args...);              // expands to f(E1, E2, E3)
+f(&amp;args...);             // expands to f(&amp;E1, &amp;E2, &amp;E3)
+f(n, ++args...);         // expands to f(n, ++E1, ++E2, ++E3);
+f(++args..., n);         // expands to f(++E1, ++E2, ++E3, n);
+
+f(const_cast&lt;const Args*&gt;(&amp;args)...);
+// f(const_cast&lt;const E1*&gt;(&amp;X1), const_cast&lt;const E2*&gt;(&amp;X2), const_cast&lt;const E3*&gt;(&amp;X3))
+
+f(h(args...) + args...); // expands to 
+// f(h(E1, E2, E3) + E1, h(E1, E2, E3) + E2, h(E1, E2, E3) + E3)
+}}
+
+====Parenthesized initializers====
+A pack expansion may appear inside the parentheses of a {{rlp|direct initialization|direct initializer}}, a {{rlp|explicit cast|function-style cast}}, and other contexts ({{rlp|initializer list|member initializer}}, {{rlp|new|new-expression}}, etc.) in which case the rules are identical to the rules for a function call expression above:
+
+{{source|1=
+Class c1(&amp;args...);             // calls Class::Class(&amp;E1, &amp;E2, &amp;E3)
+Class c2 = Class(n, ++args...); // calls Class::Class(n, ++E1, ++E2, ++E3);
+
+::new((void *)p) U(std::forward&lt;Args&gt;(args)...) // std::allocator::allocate
+}}
+
+====Brace-enclosed initializers====
+In a brace-enclosed initializer list, a pack expansion may appear as well:
+
+{{source|1=
+template&lt;typename... Ts&gt;
+void func(Ts... args)
+{
+    const int size = sizeof...(args) + 2;
+    int res[size] = {1, args..., 2};
+    
+    // since initializer lists guarantee sequencing, this can be used to
+    // call a function on each element of a pack, in order:
+    int dummy[sizeof...(Ts)] = {(std::cout &lt;&lt; args, 0)...};
+}
+}}
+
+====Template argument lists====
+Pack expansions can be used anywhere in a template argument list, provided the template has the parameters to match the expansion:
+
+{{source|
+template&lt;class A, class B, class... C&gt;
+void func(A arg1, B arg2, C... arg3)
+{
+    container&lt;A, B, C...&gt; t1; // expands to container&lt;A, B, E1, E2, E3&gt; 
+    container&lt;C..., A, B&gt; t2; // expands to container&lt;E1, E2, E3, A, B&gt; 
+    container&lt;A, C..., B&gt; t3; // expands to container&lt;A, E1, E2, E3, B&gt; 
+}
+}}
+
+====Function parameter list====
+In a function parameter list, if an ellipsis appears in a parameter declaration (whether it names a function parameter pack (as in, {{spar|Args}}{{ttb|...}} {{spar|args}}) or not) the parameter declaration is the pattern:
+{{source|
+template&lt;typename... Ts&gt;
+void f(Ts...) {}
+
+f('a', 1); // Ts... expands to void f(char, int)
+f(0.1);    // Ts... expands to void f(double)
+
+template&lt;typename... Ts, int... N&gt;
+void g(Ts (&amp;...arr)[N]) {}
+
+int n[1];
+
+g&lt;const char, int&gt;("a", n); // Ts (&amp;...arr)[N] expands to 
+                            // const char (&amp;)[2], int(&amp;)[1]
+}}
+Note: In the pattern {{tt|Ts (&amp;...arr)[N]}}, the ellipsis is the innermost element, not the last element as in all other pack expansions.
+
+Note: {{tt|Ts (&amp;...)[N]}} is not allowed because the C++11 grammar requires the parenthesized ellipsis to have a name: {{cwg|1488}}.
+
+====Template parameter list====
+Pack expansion may appear in a template parameter list:
+
+{{source|
+template&lt;typename... T&gt;
+struct value_holder
+{
+    template&lt;T... Values&gt; // expands to a non-type template parameter 
+    struct apply {};      // list, such as &lt;int, char, int(&amp;)[5]&gt;
+};
+}}
+
+====Base specifiers and member initializer lists====
+A pack expansion may designate the list of base classes in a {{rlp|class|class declaration}}. Typically, this also means that the constructor needs to use a pack expansion in the {{rlp|initializer list|member initializer list}} to call the constructors of these bases:
+
+{{source|
+template&lt;class... Mixins&gt;
+class X : public Mixins...
+{
+public:
+    X(const Mixins&amp;... mixins) : Mixins(mixins)... {}
+};
+}}
+
+====Lambda captures====
+Pack expansion may appear in the capture clause of a {{rlp|lambda}} expression:
+{{source|1=
+template&lt;class... Args&gt;
+void f(Args... args)
+{
+    auto lm = [&amp;, args...] { return g(args...); };
+    lm();
+}
+}}
+
+====The {{c/core|sizeof...}} operator====
+The {{rlpt|sizeof...}} operator is classified as a pack expansion as well:
+
+{{source|1=
+template&lt;class... Types&gt;
+struct count
+{
+    static const std::size_t value = sizeof...(Types);
+};
+}}
+
+{{rrev|until=c++17|
+====Dynamic exception specifications====
+The list of exceptions in a {{rlp|except spec|dynamic exception specification}} may also be a pack expansion:
+
+{{source|
+template&lt;class... X&gt;
+void func(int arg) throw(X...)
+{
+    // ... throw different Xs in different situations
+}
+}}
+}}
+
+====Alignment specifier====
+Pack expansions are allowed in both the lists of types and the lists of expressions used by the keyword {{rlpt|alignas}}. The instantiations are space-separated:
+{{source|
+template&lt;class... T&gt;
+struct Align
+{
+    alignas(T...) unsigned char buffer[128];
+};
+
+Align&lt;int, short&gt; a; // the alignment specifiers after expansion are
+                     // alignas(int) alignas(short)
+                     // (no comma in between)
+}}
+
+====Attribute list====
+Pack expansions are allowed in the lists of {{rlp|attributes}}, if permitted by the attribute's specification. For example:
+{{source|
+template&lt;int... args&gt;
+[[vendor::attr(args)...]] void* f();
+}}
+
+{{rrev|since=c++17|
+====Fold expressions====
+In {{rlp|fold|fold expressions}}, the pattern is the entire subexpression that does not contain an unexpanded pack.
+
+====Using-declarations====
+In {{rlp|using declaration}}s, ellipsis may appear in the list of declarators, this is useful when deriving from a template parameter pack:
+{{source|
+template&lt;typename... bases&gt;
+struct X : bases...
+{
+    using bases::g...;
+};
+X&lt;B, D&gt; x; // OK: B::g and D::g introduced
+}}
+}}
+
+
+{{rrev|since=c++26|
+====Pack indexing====
+In {{rlp|pack indexing}}, the pack expansion contains an unexpanded pack followed by an ellipsis and subscript. The pattern of pack indexing expression is an {{spar|identifier}}, while the pattern of pack indexing specifier is a {{spar|typedef-name}}.
+
+{{source|1=
+consteval auto first_plus_last(auto... args)
+{
+    return args...[0] + args...[sizeof...(args) - 1];
+}
+
+static_assert(first_plus_last(5) == 10);
+static_assert(first_plus_last(5, 4) == 9);
+static_assert(first_plus_last(5, 6, 2) == 7);
+}}
+
+====Friend declarations====
+In class {{rlp|friend|friend declarations}}, each type specifier can be followed by an ellipsis:
+
+{{source|
+struct C {};
+struct E { struct Nested; };
+
+template&lt;class... Ts&gt;
+class R
+{
+    friend Ts...;
+};
+
+template&lt;class... Ts, class... Us&gt;
+class R&lt;R&lt;Ts...&gt;, R&lt;Us...&gt;&gt;
+{
+    friend Ts::Nested..., Us...;
+};
+
+R&lt;C, E&gt; rce;           // classes C and E are friends of R&lt;C, E&gt;
+R&lt;R&lt;E&gt;, R&lt;C, int&gt;&gt; rr; // E::Nested and C are friends of R&lt;R&lt;E&gt;, R&lt;C, int&gt;&gt;
+}}
+
+====Fold expanded constraints====
+In {{rlpsd|constraints#Fold expanded constraints}}, the pattern is the constraint of that fold expanded constraint.
+
+A fold expanded constraint is not instantiated.
+}}
+
+===Notes===
+{{todo|a few words about partial specializations and other ways to access individual elements? Mention recursion vs logarithmic vs shortcuts such as fold expressions}}
+{{ftm begin|sort=yes}}
+{{ftm|__cpp_variadic_templates|std=C++11|value=200704L|{{ls|#Variadic template}}s}}
+{{ftm|__cpp_pack_indexing|std=C++26|value=202311L|{{ls|#Pack indexing}}}}
+{{ftm end}}
+
+===Example===
+The below example defines a function similar to {{lc|std::printf}}, that replace each occurrence of the character {{tt|%}} in the format string with a value.
+
+The first overload is called when only the format string is passed and there is no parameter expansion.
+
+The second overload contains a separate template parameter for the head of the arguments and a parameter pack, this allows the recursive call to pass only the tail of the parameters until it becomes empty.
+
+{{ttb|Targs}} is the template parameter pack and {{ttb|Fargs}} is the function parameter pack.
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+void tprintf(const char* format) // base function
+{
+    std::cout &lt;&lt; format;
+}
+
+template&lt;typename T, typename... Targs&gt;
+void tprintf(const char* format, T value, Targs... Fargs) // recursive variadic function
+{
+    for (; *format != '\0'; format++)
+    {
+        if (*format == '%')
+        {
+            std::cout &lt;&lt; value;
+            tprintf(format + 1, Fargs...); // recursive call
+            return;
+        }
+        std::cout &lt;&lt; *format;
+    }
+}
+
+int main()
+{
+    tprintf("% world% %\n", "Hello", '!', 123);
+}
+|output=
+Hello world! 123
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1533|std=C++11|before=a pack expansion could occur in a member initializer for a member|after=not allowed}}
+{{dr list item|wg=cwg|dr=2717|std=C++11|before=instantiations of alignment specifiers were comma-separated|after=they are space-separated}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc|{{rlp|function template|Function template}}|Defines a family of functions}}
+{{dsc|{{rlp|class template|Class template}}|Defines a family of classes}}
+{{dsc|{{rlpt|sizeof...}}|Queries the number of elements in a pack}}
+{{dsc|[[cpp/utility/variadic|C-style variadic function]]|Takes a variable number of arguments}}
+{{dsc|[[cpp/preprocessor/replace|Preprocessor macros]]|Can be variadic as well}}
+{{dsc|{{rlp|fold|Fold expression}}|Reduces a pack over a binary operator}}
+{{dsc|{{rlp|pack indexing|Pack indexing}}|Accesses the element of a pack at specified index}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|ja|ru|zh}}

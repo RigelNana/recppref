@@ -1,0 +1,211 @@
+{{title|{{tt|noexcept}} specifier {{mark since c++11}}}}
+{{cpp/language/exceptions/navbar}}
+
+Specifies whether a function could throw exceptions.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|noexcept}}}}
+{{sdsc|num=2|{{ttb|noexcept(}}{{spar|expression}}{{ttb|)}}}}
+{{sdsc|num=3|{{ttb|throw()}}|notes={{mark life|deprecated=c++17|removed=c++20|br=yes}}&lt;!----&gt;}}
+{{sdsc end}}
+@1@ Same as {{ttb|noexcept(true)}}
+@2@ If {{spar|expression}} evaluates to {{c|true}}, the function is declared not to throw any exceptions. A {{ttb|(}} following {{ttb|noexcept}} is always a part of this form (it can never start an initializer).
+@3@ Same as {{ttb|noexcept(true)}} (see {{rlp|except spec|dynamic exception specification}} for its semantics before C++17)
+
+{{par begin}}
+{{par|{{spar|expression}}|{{rlp|constant expression#Converted constant expression|contextually converted constant expression of type {{c/core|bool}}}}}}
+{{par end}}
+
+===Explanation===
+{{rrev multi|until1=c++17|rev1=
+The noexcept-specification is not a part of the function type (just like {{rlp|except spec|dynamic exception specification}}) and can only appear as a part of a {{rlp|lambda|lambda declarator}} or a top-level {{rlp|function|function declarator}} when declaring functions, variables, non-static data members of type function, pointer to function, reference to function, or pointer to member function, and also when declaring a parameter or a return type in one of those declarations that in turn happens to be a pointer or reference to function. It cannot appear in a {{rlp|typedef}} or {{rlp|type alias}} declaration.
+{{source|1=
+void f() noexcept; // the function f() does not throw
+void (*fp)() noexcept(false); // fp points to a function that may throw
+void g(void pfa() noexcept);  // g takes a pointer to function that doesn't throw
+// typedef int (*pf)() noexcept; // error
+}}
+|rev2=
+The noexcept-specification is a part of the function type and may appear as part of any {{rlp|function|function declarator}}.
+}}
+
+Every function in C++ is either ''non-throwing'' or ''potentially throwing'':
+* ''potentially-throwing'' functions are:
+
+{{rrev|until=c++17|
+:* functions declared with a non-empty {{rlp|except spec|dynamic exception specification}}
+}}
+:* functions declared with {{tt|noexcept}} specifier whose {{spar|expression}} evaluates to {{tt|false}}
+:* functions declared without {{tt|noexcept}} specifier except for
+::* {{rlp|destructor}}s unless the destructor of any potentially-constructed base or member is ''potentially-throwing'' (see below)
+::* {{rlp|default constructor}}s, {{rlp|copy constructor}}s, {{rlp|move constructor}}s that are implicitly-declared or defaulted on their first declaration unless 
+:::* a constructor for a base or member that the implicit definition of the constructor would call is ''potentially-throwing'' (see below)
+:::* a subexpression of such an initialization, such as a default argument expression, is ''potentially-throwing'' (see below)
+:::* a default member initializer (for default constructor only) is ''potentially-throwing'' (see below)
+::* {{rlp|copy assignment}} operators, {{rlp|move assignment}} operators that are implicitly-declared or defaulted on their first declaration unless the invocation of any assignment operator in the implicit definition is ''potentially-throwing'' (see below)
+{{rrev|since=c++20|
+::* {{rlp|default comparisons|comparison operators}} that are defaulted on their first declaration unless the invocation of any comparison operator in the implicit definition is ''potentially-throwing'' (see below)
+}}
+::* [[cpp/memory/new/operator delete|deallocation functions]]
+* non-throwing functions are all others (those with noexcept specifier whose {{spar|expression}} evaluates to {{tt|true}} as well as destructors, defaulted special member functions, and deallocation functions)
+
+{{rlp|function template#Explicit instantiation|Explicit instantiations}} may use the noexcept specifier, but it is not required. If used, the exception specification must be the same as for all other declarations. A diagnostic is required only if the exception specifications are not the same within a single translation unit.
+
+Functions differing only in their exception specification cannot be overloaded {{rev inl|since=c++17|(just like the return type, exception specification is part of function type, but not part of the function signature)}}.
+{{source|1=
+void f() noexcept;
+void f(); // error: different exception specification
+void g() noexcept(false);
+void g(); // ok, both declarations for g are potentially-throwing
+}}
+
+Pointers (including pointers to member function) to non-throwing functions {{rev inl|until=c++17|can be assigned to or used to initialize}}{{rev inl|since=c++17|are {{rlp|implicit conversion#Function pointer conversions|implicitly convertible}} to}} pointers to potentially-throwing functions, but not the other way around.
+{{source|1=
+void ft(); // potentially-throwing
+void (*fn)() noexcept = ft; // error
+}}
+
+If a virtual function is non-throwing, all declarations, including the definition, of every overrider must be non-throwing as well, unless the overrider is defined as deleted:
+{{source|1=
+struct B
+{
+    virtual void f() noexcept;
+    virtual void g();
+    virtual void h() noexcept = delete;
+};
+
+struct D: B
+{
+    void f();          // ill-formed: D::f is potentially-throwing, B::f is non-throwing
+    void g() noexcept; // OK
+    void h() = delete; // OK
+};
+}}
+
+Non-throwing functions are permitted to call potentially-throwing functions. Whenever an exception is thrown and the search for a handler encounters the outermost block of a non-throwing function, the function {{lc|std::terminate}} is called:
+{{source|
+extern void f(); // potentially-throwing
+
+void g() noexcept
+{
+    f();      // valid, even if f throws
+    throw 42; // valid, effectively a call to std::terminate
+}
+}}
+
+The exception specification of a function template specialization is not instantiated along with the function declaration; it is instantiated only when ''needed'' (as defined below).
+
+The exception-specification of an implicitly-declared special member function is also evaluated only when needed (in particular, implicit declaration of a member function of a derived class does not require the exception-specification of a base member function to be instantiated).
+
+When the noexcept-specification of a function template specialization is ''needed'', but hasn't yet been instantiated, the dependent names are looked up and any templates used in the {{spar|expression}} are instantiated as if for the declaration of the specialization.
+
+A noexcept-specification of a function is considered to be ''needed'' in the following contexts:
+* in an expression, where the function is selected by overload resolution
+* the function is {{rlp|definition#ODR-use|odr-used}}
+* the function would be odr-used but appears in an unevaluated operand
+{{source|1=
+template&lt;class T&gt;
+T f() noexcept(sizeof(T) &lt; 4);
+
+int main()
+{
+    decltype(f&lt;void&gt;()) *p; // f unevaluated, but noexcept-spec is needed
+                            // error because instantiation of the noexcept specification 
+                            // calculates sizeof(void)
+}
+}}
+* the specification is needed to compare to another function declaration (e.g. on a virtual function overrider or on an explicit specialization of a function template)
+* in a function definition
+* the specification is needed because a defaulted special member function needs to check it in order to decide its own exception specification (this takes place only when the specification of the defaulted special member function is, itself, needed).
+
+Formal definition of ''potentially-throwing expression'' (used to determine the default exception specification of destructors, constructors, and assignment operators as described above):
+
+An expression {{tt|e}} is ''potentially-throwing'' if:
+* {{tt|e}} is a function call to a function, pointer to function, or pointer to member function which is ''potentially-throwing''{{rev inl|until=c++17|, unless {{tt|e}} is a {{rlp|constant expression|core constant expression}}}}
+* {{tt|e}} makes an implicit call to a ''potentially-throwing'' function (such as an overloaded operator, an allocation function in a {{tt|new}}-expression, a constructor for a function argument, or a destructor if {{tt|e}} is a full-expression)
+* {{tt|e}} is a {{rlp|throw|{{tt|throw}}-expression}}
+* {{tt|e}} is a {{rlpt|dynamic_cast}} that casts a polymorphic reference type 
+* {{tt|e}} is a {{rlpt|typeid}} expression applied to a dereferenced pointer to a polymorphic type
+* {{tt|e}} has an immediate subexpression that is potentially-throwing
+
+{{source|1=
+struct A
+{
+    A(int = (A(5), 0)) noexcept;
+    A(const A&amp;) noexcept;
+    A(A&amp;&amp;) noexcept;
+    ~A();
+};
+
+struct B
+{
+    B() throw();
+    B(const B&amp;) = default; // implicit exception specification is noexcept(true)
+    B(B&amp;&amp;, int = (throw Y(), 0)) noexcept;
+    ~B() noexcept(false);
+};
+
+int n = 7;
+struct D : public A, public B
+{
+    int * p = new int[n];
+    // D::D() potentially-throwing because of the new operator
+    // D::D(const D&amp;) non-throwing
+    // D::D(D&amp;&amp;) potentially-throwing: the default argument for B’s constructor may throw
+    // D::~D() potentially-throwing
+
+    // note; if A::~A() were virtual, this program would be ill-formed because an overrider
+    // of a non-throwing virtual cannot be potentially-throwing
+};
+}}
+
+===Notes===
+One of the uses of the constant {{spar|expression}} is (along with the {{rlp|noexcept|{{tt|noexcept}} operator}}) to define function templates that declare {{ttb|noexcept}} for some types but not others.
+
+Note that a {{ttb|noexcept}} specification on a function is not a compile-time check; it is merely a method for a programmer to inform the compiler whether or not a function should throw exceptions.  The compiler can use this information to enable certain optimizations on non-throwing functions as well as enable the {{rlp|noexcept|{{tt|noexcept}} operator}}, which can check at compile time if a particular expression is declared to throw any exceptions. For example, containers such as {{lc|std::vector}} will move their elements if the elements' move constructor is {{ttb|noexcept}}, and copy otherwise (unless the copy constructor is not accessible, but a potentially throwing move constructor is, in which case the strong exception guarantee is waived).
+
+====Deprecates====
+{{ttb|noexcept}} is an improved version of {{rlp|except spec|{{c|throw()}}}}, which is deprecated in C++11. Unlike pre-C++17 {{rlp|except spec|{{c|throw()}}}}, {{ttb|noexcept}} will not call {{lc|std::unexpected}}, may or may not unwind the stack, and will call {{lc|std::terminate}}, which potentially allows the compiler to implement {{ttb|noexcept}} without the runtime overhead of {{rlp|except spec|{{c|throw()}}}}. As of C++17, {{c|throw()}} is redefined to be an exact equivalent of {{c|noexcept(true)}}.
+{{feature test macro|std=C++17|value=201510L|__cpp_noexcept_function_type|Make exception specifications be part of the type system}}
+
+===Keywords===
+{{ltt|cpp/keyword/noexcept}}{{rev inl|since=c++17|until=c++20|,
+{{ltt|cpp/keyword/throw}}}}
+
+===Example===
+{{example
+|code=
+// whether foo is declared noexcept depends on if the expression
+// T() will throw any exceptions
+template&lt;class T&gt;
+void foo() noexcept(noexcept(T())) {}
+
+void bar() noexcept(true) {}
+void baz() noexcept { throw 42; } // noexcept is the same as noexcept(true)
+
+int main() 
+{
+    foo&lt;int&gt;(); // noexcept(noexcept(int())) =&gt; noexcept(true), so this is fine
+
+    bar(); // fine
+    baz(); // compiles, but at runtime this calls std::terminate
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1330|std=C++11|before=an exception specification might be eagerly instantiated|after=it is only instantiated only if needed}}
+{{dr list item|wg=cwg|dr=1740|std=C++11|before=a {{c|(}} following {{c|noexcept}} might start an initializer|after=it can only be a part of&lt;br&gt;noexcept specification}}
+{{dr list item|wg=cwg|dr=2039|std=C++11|before=only the expression before conversion is required to be constant|after= the conversion must also be&lt;br&gt;valid in a constant expression}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc noexcept}}
+{{dsc inc|cpp/language/dsc except spec}}
+{{dsc inc|cpp/language/dsc throw}}
+{{dsc inc|cpp/utility/dsc move_if_noexcept}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

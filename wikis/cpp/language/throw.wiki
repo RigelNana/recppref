@@ -1,0 +1,256 @@
+{{title|Throwing exceptions}}
+{{cpp/language/expressions/exceptions/navbar}}
+Throwing an {{rlp|exceptions|exception}} transfers control to a {{rlp|catch|handler}}.
+
+An exception can be thrown from [[#throw expressions|{{c/core|throw}} expressions]], the following contexts may also throw exceptions:
+* [[cpp/memory/new/operator new|allocation functions]]
+* {{rlpt|dynamic_cast}}
+* {{rlpt|typeid}}
+* {{rlp|new|{{c/core|new}} expressions}}
+* {{lt|cpp/standard library}} functions
+
+===Exception object===
+Throwing an exception initializes an object with dynamic {{rlp|storage duration}}, called the ''exception object''.
+
+If the type of the exception object would be one of the following types, the program is ill-formed:
+* an {{rlpsd|type#Incomplete type}}
+* an {{rlp|abstract class|abstract class type}}
+* a pointer to an incomplete type other than (possibly cv-qualified) {{c/core|void}}
+
+====Constructing and destructing exception objects====
+Given the type of the exception object as {{tt|T}}:
+* Let {{c|obj}} be an lvalue of type {{c/core|const T}}, the {{rlp|copy initialization|copy-initialization}} of an object of type {{tt|T}} from {{c|obj}} must be well-formed.
+* If {{tt|T}} is a class type:
+:* The selected {{rlp|constructor}} is {{rlp|definition#ODR-use|odr-used}}.
+:* The {{rlp|destructor}} of {{tt|T}} is {{rlp|destructor#Potentially-invoked constructor|potentially invoked}}.
+
+The memory for the exception object is allocated in an unspecified way. The only guarantee is that the storage will never be allocated by global [[cpp/memory/new/operator new|allocation functions]].
+
+If a {{rlp|catch|handler}} exits by [[#throw expressions|rethrowing]], control is passed to another handler for the same exception object. The exception object is not destructed in this case.
+
+{{rev begin}}
+{{rev|until=c++11|
+When the last remaining active handler for the exception exits by any means other than rethrowing, the exception object is destroyed and the implementation may deallocate the memory for the temporary object in an unspecified way.
+
+The destruction occurs immediately after the destruction of the object declared in the “parameter list” in the handler.
+}}
+{{rev|since=c++11|
+The points of potential destruction for the exception object are:
+* When an active handler for the exception exits by any means other than rethrowing, immediately after the destruction of the object (if any) declared in the “parameter list” in the handler.
+* When an object of type {{lc|std::exception_ptr}} that refers to the exception object is destroyed, before the destructor of {{lc|std::exception_ptr}} returns.
+
+Among all points of potential destruction for the exception object, there is an unspecified last one where the exception object is destroyed. All other points {{rlp|multithread|happen before}} that last one. The implementation may then deallocate the memory for the exception object in an unspecified way.
+}}
+{{rev end}}
+
+{{anchor|throw expressions}}
+==={{c/core|throw}} expressions===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|throw}} {{spar|expression}}}}
+{{sdsc|num=2|{{ttb|throw}}}}
+{{sdsc end}}
+
+@1@ Throws a new exception.
+@2@ Rethrows the exception currently being handled.
+
+{{par begin}}
+{{par|{{spar|expression}}|the expression used to construct the exception object}}
+{{par end}}
+
+
+When a new exception is thrown, its exception object is determined as follows:
+# The {{rlp|implicit conversion#Array-to-pointer conversion|array-to-pointer}} and {{rlp|implicit conversion#Function-to-pointer conversion|function-to-pointer}} standard conversions are performed on {{spar sep|expression}}.
+# Let {{c|ex}} be the conversion result:
+::* The type of the exception object is determined by removing any top-level cv-qualifiers from the type of {{c|ex}}.
+::* The exception object is {{rlp|copy initialization|copy-initialized}} from {{c|ex}}.
+
+If a program attempts to rethrow an exception when no exception is presently being handled, {{lc|std::terminate}} will be invoked. Otherwise, the exception is reactivated with the existing exception object (no new exception object is created), and the exception is no longer
+considered to be caught.
+
+{{source|
+try
+{
+    // throwing a new exception 123
+    throw 123;
+}
+catch (...) // catch all exceptions
+{
+    // respond (partially) to exception 123
+    throw; // pass the exception to some other handler
+}
+}}
+
+===Stack unwinding===
+Once the exception object is constructed, the control flow works backwards (up the call stack) until it reaches the start of a {{rlp|try|{{c/core|try}} block}}, at which point the parameters of all associated handlers are compared, in order of appearance, with the type of the exception object to find a {{rlp|catch#Matching exceptions|match}}. If no match is found, the control flow continues to unwind the stack until the next {{c/core|try}} block, and so on. If a match is found, the control flow jumps to the matching handler.
+
+As the control flow moves up the call stack, destructors are invoked for all objects with {{rlp|storage duration|automatic storage duration}} that are constructed, but not yet destroyed, since the corresponding {{c/core|try}} block was entered, in reverse order of completion of their constructors. If an exception is thrown from a destructor of a local variable or of a temporary used in a {{rlp|return}} statement, the destructor for the object returned from the function is also invoked.
+
+If an exception is thrown from a constructor or (rare) from a destructor of an object (regardless of the object's storage duration), destructors are called for all fully-constructed non-static non-variant members and base classes, in reverse order of completion of their constructors. Variant members of {{rlpsd|union#Union-like classes}} are only destroyed in the case of unwinding from constructor, and if the active member changed between initialization and destruction, the behavior is undefined.
+{{rrev|since=c++11|If a delegating constructor exits with an exception after the non-delegating constructor successfully completed, the destructor for this object is called.}}
+If the exception is thrown from a constructor that is invoked by a {{rlp|new|new-expression}}, the matching [[cpp/memory/new/operator delete|deallocation function]] is called, if available.
+
+This process is called ''stack unwinding''.
+
+If any function that is called directly by the stack unwinding mechanism, after initialization of the exception object and before the start of the exception handler, exits with an exception, {{lc|std::terminate}} is called. Such functions include {{rlp|destructor}}s of objects with automatic storage duration whose scopes are exited, and the copy constructor of the exception object that is called (if not {{rlp|copy elision|elided}}) to initialize catch-by-value arguments.
+
+If an exception is thrown and not caught, including exceptions that escape the initial function of {{lc|std::thread}}, the main function, and the constructor or destructor of any static or thread-local objects, then {{lc|std::terminate}} is called. It is implementation-defined whether any stack unwinding takes place for uncaught exceptions.
+
+===Notes===
+When rethrowing exceptions, the second form must be used to avoid object slicing in the (typical) case where exception objects use inheritance:
+{{source|
+try
+{
+    std::string("abc").substr(10); // throws std::out_of_range
+}
+catch (const std::exception&amp; e)
+{
+    std::cout &lt;&lt; e.what() &lt;&lt; '\n';
+//  throw e; // copy-initializes a new exception object of type std::exception
+    throw;   // rethrows the exception object of type std::out_of_range
+}
+}}
+
+The {{c/core|throw}}-expression is classified as {{rlp|value category|prvalue expression}} of type {{c/core|void}}. Like any other expression, it may be a sub-expression in another expression, most commonly in the {{rlpsd|operator other#Conditional operator}}:
+{{source|1=
+double f(double d)
+{
+    return d &gt; 1e7 ? throw std::overflow_error("too big") : d;
+}
+
+int main()
+{
+    try
+    {
+        std::cout &lt;&lt; f(1e10) &lt;&lt; '\n';
+    }
+    catch (const std::overflow_error&amp; e)
+    {
+        std::cout &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/throw}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+struct A
+{
+    int n;
+    
+    A(int n = 0): n(n) { std::cout &lt;&lt; "A(" &lt;&lt; n &lt;&lt; ") constructed successfully\n"; }
+    ~A() { std::cout &lt;&lt; "A(" &lt;&lt; n &lt;&lt; ") destroyed\n"; }
+};
+
+int foo()
+{
+    throw std::runtime_error("error");
+}
+
+struct B
+{
+    A a1, a2, a3;
+    
+    B() try : a1(1), a2(foo()), a3(3)
+    {
+        std::cout &lt;&lt; "B constructed successfully\n";
+    }
+    catch(...)
+    {
+        std::cout &lt;&lt; "B::B() exiting with exception\n";
+    }
+    
+    ~B() { std::cout &lt;&lt; "B destroyed\n"; }
+};
+
+struct C : A, B
+{
+    C() try
+    {
+        std::cout &lt;&lt; "C::C() completed successfully\n";
+    }
+    catch(...)
+    {
+        std::cout &lt;&lt; "C::C() exiting with exception\n";
+    }
+    
+    ~C() { std::cout &lt;&lt; "C destroyed\n"; }
+};
+
+int main () try
+{
+    // creates the A base subobject
+    // creates the a1 member of B
+    // fails to create the a2 member of B
+    // unwinding destroys the a1 member of B
+    // unwinding destroys the A base subobject
+    C c;
+}
+catch (const std::exception&amp; e)
+{
+    std::cout &lt;&lt; "main() failed to create C with: " &lt;&lt; e.what();
+}
+|output=
+A(0) constructed successfully
+A(1) constructed successfully
+A(1) destroyed
+B::B() exiting with exception
+A(0) destroyed
+C::C() exiting with exception
+main() failed to create C with: error
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=499|std=C++98|before=an array with unknown bound could not be thrown because&lt;br&gt;its type is incomplete, but an exception object can be&lt;br&gt;created from the decayed pointer without any problem|after=apply the type completion&lt;br&gt;requirement to the&lt;br&gt;exception object instead}}
+{{dr list item|wg=cwg|dr=668|std=C++98|before={{lc|std::terminate}} was not called if an exception is thrown&lt;br&gt;from the destructor of a local non-automatic object&lt;!-- Use negative form to avoid mentioning 'thread-local' --&gt;|after=call {{lc|std::terminate}}&lt;br&gt;in this case}}
+{{dr list item|wg=cwg|dr=1863|std=C++11|before=copy constructor was not required for move-only&lt;br&gt;exception objects when thrown, but copying allowed later|after=copy constructor required}}
+{{dr list item|wg=cwg|dr=1866|std=C++98|before=variant members were leaked on stack unwinding from constructor|after=variant members destroyed}}
+{{dr list item|wg=cwg|dr=2176|std=C++98|before=throw from a local variable destructor&lt;br&gt;could skip return value destructor|after=function return value&lt;br&gt;added to unwinding}}
+{{dr list item|wg=cwg|dr=2699|std=C++98|before={{c|throw "EX"}} would actually throw {{c/core|char*}} rather than {{c/core|const char*}}|after=corrected}}
+{{dr list item|wg=cwg|dr=2711|std=C++98|before=the source of the copy-initialization of&lt;br&gt;the exception object was not specified|after=copy-initialized&lt;br&gt;from {{spar|expression}}}}
+{{dr list item|wg=cwg|dr=2775|std=C++98|before=the exception object copy-initialization requirement was unclear|after=made clear}}
+{{dr list item|wg=cwg|dr=2854|std=C++98|before=the storage duration of exception objects was unclear|after=made clear}}
+{{dr list item|paper=P1825R0|std=C++11|before=implicit move from parameters was forbidden in {{tt|throw}}|after=allowed}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.6.18|title=Throwing an exception|id=expr.throw}}
+{{ref std|section=14.2|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.18|title=Throwing an exception|id=expr.throw}}
+{{ref std|section=14.2|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.17|title=Throwing an exception|id=expr.throw}}
+{{ref std|section=18.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+
+===See also===
+* {{rlp|copy elision}}
+* {{rlp|try|{{c/core|try}} block}}
+* {{rlp|catch|handler}}
+* {{rlp|noexcept spec|{{c/core|noexcept}} specifier}}
+* [[cpp/error#Exception handling|Exception handling]]
+{{rrev|until=c++17|* {{rlp|except spec|dynamic exception specifications}}}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

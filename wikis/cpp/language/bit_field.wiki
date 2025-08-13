@@ -1,0 +1,210 @@
+{{title|Bit-field}}
+{{cpp/language/classes/navbar}}
+Declares a class data member with explicit size, in bits. Adjacent bit-field members may (or may not) be packed to share and straddle the individual bytes.
+
+A bit-field declaration is a {{rlp|data members|class data member declaration}} which uses the following declarator:
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|identifier}} {{spar optional|attr}} {{ttb|:}} {{spar|size}}
+}}
+{{sdsc|num=2|notes={{mark since c++20}}|
+{{spar optional|identifier}} {{spar optional|attr}} {{ttb|:}} {{spar|size}} {{spar|brace-or-equal-initializer}}
+}}
+{{sdsc end}}
+
+The ''type'' of the bit-field is introduced by the {{spar|decl-specifier-seq}} of the {{rlp|declarations|declaration syntax}}.
+
+{{par begin}}
+{{par|{{spar|attr}}|{{mark since c++11}} sequence of any number of {{rlp|attributes}}}}
+{{par|{{spar|identifier}}|the name of the bit-field that is being declared. The name is optional: unnamed bit-fields introduce the specified number of {{rlp|object#Object representation and value representation|padding bits}}.}}
+{{par|{{spar|size}}|an {{rlp|constant expression#Integral constant expression|integral constant expression}} with a value greater or equal to zero. When greater than zero, this is the number of bits that this bit-field will occupy. The value zero is only allowed for nameless bit-fields and has [[#zero size|special meaning]].}}
+{{par|{{spar|brace-or-equal-initializer}}|{{rlp|data members#Member initialization|default member initializer}} to be used with this bit-field}}
+{{par end}}
+
+===Explanation===
+The type of a bit-field can only be integral (including {{c/core|bool}}) or (possibly cv-qualified) enumeration type, an unnamed bit-field cannot be declared with a cv-qualified type.
+
+A bit-field cannot be a {{rlp|static|static data member}}.
+
+There are no bit-field {{rlp|value category|prvalues}}: lvalue-to-rvalue conversion always produces an object of the underlying type of the bit-field.
+
+The number of bits in a bit-field sets the limit to the range of values it can hold:
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    // three-bit unsigned field, allowed values are 0...7
+    unsigned int b : 3;
+};
+
+int main()
+{
+    S s = {6};
+    
+    ++s.b; // store the value 7 in the bit-field
+    std::cout &lt;&lt; s.b &lt;&lt; '\n';
+    
+    ++s.b; // the value 8 does not fit in this bit-field
+    std::cout &lt;&lt; s.b &lt;&lt; '\n'; // formally implementation-defined, typically 0
+}
+|p=true
+|output=
+7
+0
+}}
+
+Multiple adjacent bit-fields are usually packed together (although this behavior is implementation-defined):
+
+{{example
+|code=
+#include &lt;bit&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+struct S
+{
+    // will usually occupy 2 bytes:
+    unsigned char b1 : 3; // 1st 3 bits (in 1st byte) are b1
+    unsigned char    : 2; // next 2 bits (in 1st byte) are blocked out as unused
+    unsigned char b2 : 6; // 6 bits for b2 - doesn't fit into the 1st byte =&gt; starts a 2nd
+    unsigned char b3 : 2; // 2 bits for b3 - next (and final) bits in the 2nd byte
+};
+
+int main()
+{
+    std::cout &lt;&lt; sizeof(S) &lt;&lt; '\n'; // usually prints 2
+
+    S s;
+    // set distinguishable field values
+    s.b1 = 0b111;
+    s.b2 = 0b101111;
+    s.b3 = 0b11;
+
+    // show layout of fields in S
+    auto i = std::bit_cast&lt;std::uint16_t&gt;(s);
+    // usually prints 1110000011110111
+    // breakdown is:  └┬┘├┘└┬┘└─┬──┘└┤
+    //                b1 u  a   b2  b3
+    // where “u” marks the unused :2 specified in the struct, and
+    // “a” marks compiler-added padding to byte-align the next field.
+    // Byte-alignment is happening because b2's type is declared unsigned char;
+    // if b2 were declared uint16_t there would be no “a”, b2 would abut “u”.
+    for (auto b = i; b; b &gt;&gt;= 1) // print LSB-first
+        std::cout &lt;&lt; (b &amp; 1);
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+2
+1110000011110111
+}}
+
+{{anchor|zero size}}
+The special unnamed bit-field of size zero can be forced to break up padding. It specifies that the next bit-field begins at the beginning of its allocation unit:
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    // will usually occupy 2 bytes:
+    // 3 bits: value of b1
+    // 5 bits: unused
+    // 2 bits: value of b2
+    // 6 bits: unused
+    unsigned char b1 : 3;
+    unsigned char :0; // start a new byte
+    unsigned char b2 : 2;
+};
+
+int main()
+{
+    std::cout &lt;&lt; sizeof(S) &lt;&lt; '\n'; // usually prints 2
+                                    // would usually print 1 if not for
+                                    // the padding break in line 11
+}
+|p=true
+|output=
+2
+}}
+
+If the specified size of the bit-field is greater than the size of its type, the value is limited by the type: a {{c|std::uint8_t b : 1000;}} would still hold values in the range {{closed range|0|255}}. The extra bits are {{rlp|object#Object representation and value representation|padding bits}}.
+
+Because bit-fields do not necessarily begin at the beginning of a byte, address of a bit-field cannot be taken. Pointers and non-const references to bit-fields are not possible. When {{rlp|reference initialization|initializing a const reference}} from a bit-field, a temporary is created (its type is the type of the bit-field), copy initialized with the value of the bit-field, and the reference is bound to that temporary.
+{{rrev multi
+|rev1=
+There are no {{rlp|data members#Member initialization|default member initializers}} for bit-fields: {{c|1=int b : 1 = 0;}} and {{c|int b : 1 {0}&lt;!----&gt;}} are ill-formed.
+|since2=c++20|rev2={{anchor|Cpp20 Default member initializers for bit fields}}
+In case of ambiguity between the size of the bit-field and the default member initializer, the longest sequence of tokens that forms a valid size is chosen:
+{{source|1=
+int a;
+const int b = 0;
+
+struct S
+{
+    // simple cases
+    int x1 : 8 = 42; // OK; "= 42" is brace-or-equal-initializer
+    int x2 : 8 {42}; // OK; "{42}" is brace-or-equal-initializer
+
+    // ambiguities
+    int y1 : true ? 8 : a = 42;   // OK; brace-or-equal-initializer is absent
+    int y2 : true ? 8 : b = 42;   // error: cannot assign to const int
+    int y3 : (true ? 8 : b) = 42; // OK; "= 42" is brace-or-equal-initializer
+    int z : 1 {{!!}} new int{0};      // OK; brace-or-equal-initializer is absent
+};
+}}
+}}
+
+===Notes===
+The following properties of bit-fields are ''implementation-defined'':
+* The value that results from assigning or initializing a signed bit-field with a value out of range, or from incrementing a signed bit-field past its range.
+* Everything about the actual allocation details of bit-fields within the class object.
+:* For example, on some platforms, bit-fields don't straddle bytes, on others they do.
+:* Also, on some platforms, bit-fields are packed left-to-right, on others right-to-left.
+
+In the C programming language, the width of a bit-field cannot exceed the width of the underlying type, and whether {{c/core|int}} bit-fields that are not explicitly {{c/core|signed}} or {{c/core|unsigned}} are signed or unsigned is implementation-defined. For example, {{c|int b : 3;}} may have the range of values {{closed range|0|7}} or {{closed range|-4|3}} in C, but only the latter choice is allowed in C++.
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=324|std=C++98|before=it was unspecified whether the return value&lt;br&gt;of an assignment to a bit-field is a bit-field|after=added bit-field specifications for&lt;br&gt;operators which may return lvalues}}
+{{dr list item|wg=cwg|dr=739|std=C++98|before=signedness of bit-fields that are neither declared&lt;br&gt;{{c/core|signed}} nor {{c/core|unsigned}} were implementation-defined|after=consistent with underlying types}}
+{{dr list item|wg=cwg|dr=2229|std=C++98|before=unnamed bit-fields could be declared with a cv-qualified type|after=prohibited}}
+{{dr list item|wg=cwg|dr=2511|std=C++98|before=cv-qualifications were not allowed in bit-field types|after=bit-fields can have cv-qualified&lt;br&gt;enumeration types}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=11.4.10|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11.4.9|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=12.2.4|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc bitset}}
+{{dsc inc|cpp/container/dsc vector_bool}}
+{{dsc|[[cpp/utility/bit|'''Bit manipulation''']] {{mark c++20}}|utilities to access, manipulate, and process individual bits and bit sequences}}
+{{dsc see c|c/language/bit field|Bit-fields|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

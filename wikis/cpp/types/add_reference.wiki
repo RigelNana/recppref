@@ -1,0 +1,116 @@
+{{cpp/title|add_lvalue_reference|add_rvalue_reference}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|num=1|1=
+template&lt; class T &gt;
+struct add_lvalue_reference;
+}}
+{{dcl|since=c++11|num=2|1=
+template&lt; class T &gt;
+struct add_rvalue_reference;
+}}
+{{dcl end}}
+
+Creates an lvalue or rvalue reference type of {{tt|T}}.
+
+{|class="wikitable" style="text-align: center;"
+!rowspan=2|{{nbsp}}Type trait{{nbsp}}
+!colspan=2|The type referred by the nested type {{ttn|type}}
+|-
+!{{nbsp}}{{ttn|T}} is a [[cpp/meta#Definitions|referenceable type]]{{nbsp}}
+!{{nbsp}}{{ttn|T}} is not a referenceable type{{nbsp}}
+|-
+|{{v|1}}
+|{{tt|T&amp;}}&lt;ref&gt;This rule reflects the semantics of {{lsd|cpp/language/reference#Reference collapsing}}.&lt;/ref&gt;
+|rowspan=2|{{tt|T}}
+|-
+|{{v|2}}
+|{{tt|T&amp;&amp;}}&lt;ref&gt;This rule reflects the semantics of {{lsd|cpp/language/reference#Reference collapsing}}. Note that {{c/core|std::add_rvalue_reference&lt;T&amp;&gt;::type}} is {{tt|T&amp;}}, which is not an rvalue reference type.&lt;/ref&gt;
+|}
+&lt;references/&gt;
+
+{{cpp/types/nospec|any}}
+
+===Nested types===
+{{dsc begin}}
+{{dsc hitem|Name|Definition}}
+{{dsc|{{tt|type}}|determined as above}}
+{{dsc end}}
+
+===Helper types===
+{{dcl begin}}
+{{dcl|since=c++14|1=
+template&lt; class T &gt;
+using add_lvalue_reference_t = typename add_lvalue_reference&lt;T&gt;::type;
+}}
+{{dcl|since=c++14|1=
+template&lt; class T &gt;
+using add_rvalue_reference_t = typename add_rvalue_reference&lt;T&gt;::type;
+}}
+{{dcl end}}
+
+===Notes===
+The major difference to directly using {{tt|T&amp;}} or {{tt|T&amp;&amp;}} is that {{tt|T}} can be a non-[[cpp/meta#Definitions|referenceable]] type. For example, {{c/core|std::add_lvalue_reference&lt;void&gt;::type}} is {{c/core|void}}, while {{c/core|void&amp;}} leads to a compilation error.
+
+===Possible implementation===
+{{eq fun
+|1=
+namespace detail
+{
+    template&lt;class T&gt;
+    struct type_identity { using type = T; }; // or use std::type_identity (since C++20)
+    
+    template&lt;class T&gt; // Note that “cv void&amp;” is a substitution failure
+    auto try_add_lvalue_reference(int) -&gt; type_identity&lt;T&amp;&gt;;
+    template&lt;class T&gt; // Handle T = cv void case
+    auto try_add_lvalue_reference(...) -&gt; type_identity&lt;T&gt;;
+    
+    template&lt;class T&gt;
+    auto try_add_rvalue_reference(int) -&gt; type_identity&lt;T&amp;&amp;&gt;;
+    template&lt;class T&gt;
+    auto try_add_rvalue_reference(...) -&gt; type_identity&lt;T&gt;;
+} // namespace detail
+
+template&lt;class T&gt;
+struct add_lvalue_reference
+    : decltype(detail::try_add_lvalue_reference&lt;T&gt;(0)) {};
+
+template&lt;class T&gt;
+struct add_rvalue_reference
+    : decltype(detail::try_add_rvalue_reference&lt;T&gt;(0)) {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;type_traits&gt;
+
+using non_ref = int;
+static_assert(std::is_lvalue_reference_v&lt;non_ref&gt; == false);
+
+using l_ref = std::add_lvalue_reference_t&lt;non_ref&gt;;
+static_assert(std::is_lvalue_reference_v&lt;l_ref&gt; == true);
+
+using r_ref = std::add_rvalue_reference_t&lt;non_ref&gt;;
+static_assert(std::is_rvalue_reference_v&lt;r_ref&gt; == true);
+
+using void_ref = std::add_lvalue_reference_t&lt;void&gt;;
+static_assert(std::is_reference_v&lt;void_ref&gt; == false);
+
+int main() {}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2101|std=c++11|before=the program was ill-formed if {{tt|T}} is a {{lsd|cpp/language/function#Function type}} with {{spar|cv}} or {{spar|ref}}|after=the type produced is {{tt|T}} in this case}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_reference}}
+{{dsc inc|cpp/types/dsc remove_reference}}
+{{dsc inc|cpp/types/dsc remove_cvref}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

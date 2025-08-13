@@ -1,0 +1,114 @@
+{{cpp/ranges/title|rotate_copy|rotate_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr rotate_copy_result&lt;I, O&gt;
+    rotate_copy( I first, I middle, S last, O result );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr rotate_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    rotate_copy( R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle, O result );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using rotate_copy_result = in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ Copies the elements from the source range {{range|first|last}}, to the destination range beginning at {{c|result}} in such a way, that the element {{c|*middle}} becomes the first element of the destination range and {{c|*(middle - 1)}} becomes the last element. The result is that the destination range contains a ''left rotated'' copy of the source range.
+@@ The behavior is undefined if either {{range|first|middle}} or {{range|middle|last}} is not a valid range, or the source and destination ranges overlap.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}} and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the source range of elements to copy from}}
+{{par|r|the source range of elements to copy from}}
+{{par|middle|the iterator to the element that should appear at the beginning of the destination range}}
+{{par|result|beginning of the destination range}}
+{{par end}}
+
+===Return value===
+{{c|1= {last, result + N} }}, where {{c|1=N = ranges::distance(first, last)}}.
+
+===Complexity===
+''Linear'': exactly {{c|N}} assignments.
+
+===Notes===
+If the value type is {{named req|TriviallyCopyable}} and the iterator types satisfy {{lconcept|contiguous_iterator}}, implementations of {{tt|ranges::rotate_copy}} usually avoid multiple assignments by using a "bulk copy" function such as {{lc|std::memmove}}.
+
+===Possible implementation===
+See also the implementations in [https://github.com/gcc-mirror/gcc/blob/14d8a5ae472ca5743016f37da2dd4770d83dea21/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1511-L1539 libstdc++] and [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L4466-L4514 MSVC STL].
+{{eq fun|1=
+struct rotate_copy_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::rotate_copy_result&lt;I, O&gt;
+        operator()(I first, I middle, S last, O result) const
+    {
+        auto c1 {ranges::copy(middle, std::move(last), std::move(result))};
+        auto c2 {ranges::copy(std::move(first), std::move(middle), std::move(c1.out))};
+        return {std::move(c1.in), std::move(c2.out)};
+    }
+
+    template&lt;ranges::forward_range R, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::rotate_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle, O result) const
+    {
+        return (*this)(ranges::begin(r), std::move(middle),
+                       ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr rotate_copy_fn rotate_copy {};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; src {1, 2, 3, 4, 5};
+    std::vector&lt;int&gt; dest(src.size());
+    auto pivot = std::ranges::find(src, 3);
+
+    std::ranges::rotate_copy(src, pivot, dest.begin());
+    for (int i : dest)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    // copy the rotation result directly to the std::cout
+    pivot = std::ranges::find(dest, 1);
+    std::ranges::rotate_copy(dest, pivot, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+}
+|output=
+3 4 5 1 2
+1 2 3 4 5
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/dsc rotate_copy}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

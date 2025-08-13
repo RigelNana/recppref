@@ -1,0 +1,81 @@
+{{cpp/thread/promise/title|set_exception}}
+{{cpp/thread/promise/navbar}}
+{{ddcl|since=c++11|
+void set_exception( std::exception_ptr p );
+}}
+
+Atomically stores the exception pointer {{c|p}} into the shared state and makes the state ready. 
+
+The operation behaves as though {{lc|set_value}}, {{tt|set_exception}}, {{lc|set_value_at_thread_exit}}, and {{lc|set_exception_at_thread_exit}} acquire a single mutex associated with the promise object while updating the promise object.
+
+An exception is thrown if there is no shared state or the shared state already stores a value or exception.
+
+Calls to this function do not introduce data races with calls to {{lc|get_future}} (therefore they need not synchronize with each other).
+
+===Parameters===
+{{par begin}}
+{{par|p|exception pointer to store. The behavior is undefined if {{c|p}} is null}}
+{{par end}}
+
+===Return value===
+(none)
+
+===Exceptions===
+{{lc|std::future_error}} on the following conditions:
+
+* {{c|*this}} has no shared state. The error code is set to {{ltt|cpp/thread/future_errc|no_state}}.
+
+* The shared state already stores a value or exception. The error code is set to {{ltt|cpp/thread/future_errc|promise_already_satisfied}}.
+
+===Example===
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int main()
+{
+    std::promise&lt;int&gt; p;
+    std::future&lt;int&gt; f = p.get_future();
+
+    std::thread t([&amp;p]
+    {
+        try
+        {
+            // code that may throw
+            throw std::runtime_error("Example");
+        }
+        catch (...)
+        {
+            try
+            {
+                // store anything thrown in the promise
+                p.set_exception(std::current_exception());
+                // or throw a custom exception instead
+                // p.set_exception(std::make_exception_ptr(MyException("mine")));
+            }
+            catch (...) {} // set_exception() may throw too
+        }
+    });
+
+    try
+    {
+        std::cout &lt;&lt; f.get();
+    }
+    catch (const std::exception&amp; e)
+    {
+        std::cout &lt;&lt; "Exception from the thread: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    t.join();
+}
+|output=
+Exception from the thread: Example
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc set_exception_at_thread_exit}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

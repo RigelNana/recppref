@@ -1,0 +1,95 @@
+{{cpp/title|setvbuf}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+int setvbuf( std::FILE* stream, char* buffer, int mode, std::size_t size );
+}}
+
+Changes the buffering mode of the given file stream {{c|stream}} as indicated by the argument {{c|mode}}. In addition,
+
+* If {{c|buffer}} is a null pointer, resizes the internal buffer to {{c|size}}.
+* If {{c|buffer}} is not a null pointer, instructs the stream to use the user-provided buffer of size {{c|size}} beginning at {{c|buffer}}. The stream must be closed (with {{lc|std::fclose}}) before the [[cpp/language/lifetime|lifetime]] of the array pointed to by {{c|buffer}} ends. The contents of the array after a successful call to {{lc|std::setvbuf}} are indeterminate and any attempt to use it is undefined behavior.
+
+===Parameters===
+{{par begin}}
+{{par|stream|the file stream to set the buffer to}}
+{{par|buffer|pointer to a buffer for the stream to use or null pointer to change size and mode only}}
+{{par|mode|2=buffering mode to use. It can be one of the following values:
+{{cpp/io/c/buffering modes}}
+}}
+{{par|size|size of the buffer}}
+{{par end}}
+
+===Return value===
+{{c|0}} on success or nonzero on failure.
+
+===Notes===
+This function may only be used after {{c|stream}} has been associated with an open file, but before any other operation (other than a failed call to {{lc|std::setbuf}}/{{tt|std::setvbuf}}).
+
+Not all {{c|size}} bytes will necessarily be used for buffering: the actual buffer size is usually rounded down to a multiple of 2, a multiple of page size, etc.
+
+On many implementations, line buffering is only available for terminal input streams.
+
+A common error is setting the buffer of {{tt|stdin}} or {{tt|stdout}} to an array whose lifetime ends before the program terminates:
+{{source|1=
+int main()
+{
+    char buf[BUFSIZ];
+    std::setbuf(stdin, buf);
+} // lifetime of buf ends, undefined behavior
+}}
+
+The default buffer size {{lc|BUFSIZ}} is expected to be the most efficient buffer size for file I/O on the implementation, but POSIX [https://pubs.opengroup.org/onlinepubs/9699919799/functions/fstat.html {{tt|fstat}}] often provides a better estimate.
+
+===Example===
+{{example
+|One use case for changing buffer size is when a better size is known.
+|code=
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+#include &lt;sys/stat.h&gt;
+
+int main()
+{
+    std::FILE* fp = std::fopen("/tmp/test.txt", "w+");
+    if (!fp)
+    {
+        std::perror("fopen");
+        return EXIT_FAILURE;
+    }
+
+    struct stat stats;
+    if (fstat(fileno(fp), &amp;stats) == -1) // POSIX only
+    {
+        std::perror("fstat");
+        return EXIT_FAILURE;
+    }
+
+    std::cout &lt;&lt; "BUFSIZ is " &lt;&lt; BUFSIZ &lt;&lt; ", but optimal block size is "
+              &lt;&lt; stats.st_blksize &lt;&lt; '\n';
+    if (std::setvbuf(fp, nullptr, _IOFBF, stats.st_blksize) != 0)
+    {
+        std::perror("setvbuf failed"); // POSIX version sets errno
+        return EXIT_FAILURE;
+    }
+
+    // Read entire file: use truss/strace to observe the read(2) syscalls used
+    for (int ch; (ch = std::fgetc(fp)) != EOF;)
+    {}
+
+    std::fclose(fp);
+    return EXIT_SUCCESS;
+}
+|p=true
+|output=
+BUFSIZ is 8192, but optimal block size is 65536
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc setbuf}}
+{{dsc inc|cpp/io/basic_filebuf/dsc setbuf}}
+{{dsc see c|c/io/setvbuf}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

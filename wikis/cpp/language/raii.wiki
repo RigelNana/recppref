@@ -1,0 +1,57 @@
+{{title|RAII}}
+{{cpp/language/navbar}}
+
+''Resource Acquisition Is Initialization'' or RAII, is a C++ programming technique&lt;ref&gt;[https://www.stroustrup.com/bs_faq2.html#finally RAII in Stroustrup's C++ FAQ]&lt;/ref&gt;&lt;ref&gt;[https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#e6-use-raii-to-prevent-leaks C++ Core Guidelines E.6 "Use RAII to prevent leaks"]&lt;/ref&gt; which binds the life cycle of a resource that must be acquired before use (allocated heap memory, thread of execution, open socket, open file, locked mutex, disk space, database connection—anything that exists in limited supply) to the {{rlp|lifetime}} of an object.
+
+RAII guarantees that the resource is available to any function that may access the object (resource availability is a [[enwiki:Class_invariant|class invariant]], eliminating redundant runtime tests). It also guarantees that all resources are released when the lifetime of their controlling object ends, in reverse order of acquisition. Likewise, if resource acquisition fails (the constructor exits with an exception), all resources acquired by every fully-constructed member and base subobject are released in reverse order of initialization. This leverages the core language features ({{rlp|lifetime|object lifetime}}, {{rlp|statements|scope exit}}, {{rlp|initializer_list#Initialization_order|order of initialization}} and {{rlp|throw#Stack_unwinding|stack unwinding}}) to eliminate resource leaks and guarantee exception safety. Another name for this technique is ''Scope-Bound Resource Management'' (SBRM), after the basic use case where the lifetime of an RAII object ends due to scope exit.
+
+RAII can be summarized as follows:
+* encapsulate each resource into a class, where
+:* the constructor acquires the resource and establishes all class invariants or throws an exception if that cannot be done,
+:* the destructor releases the resource and never throws exceptions;
+* always use the resource via an instance of a RAII-class that either
+:* has automatic storage duration or temporary lifetime itself, or
+:* has lifetime that is bounded by the lifetime of an automatic or temporary object.
+
+{{rrev|since=c++11|
+Move semantics enable the transfer of resources and ownership between objects, inside and outside containers, and across threads, while ensuring resource safety.
+}}
+
+Classes with {{tt|open()}}/{{tt|close()}}, {{tt|lock()}}/{{tt|unlock()}}, or {{tt|init()}}/{{tt|copyFrom()}}/{{tt|destroy()}} member functions are typical examples of non-RAII classes:
+{{source|1=
+std::mutex m;
+
+void bad() 
+{
+    m.lock();             // acquire the mutex
+    f();                  // if f() throws an exception, the mutex is never released
+    if (!everything_ok())
+        return;           // early return, the mutex is never released
+    m.unlock();           // if bad() reaches this statement, the mutex is released
+}
+
+void good()
+{
+    std::lock_guard&lt;std::mutex&gt; lk(m); // RAII class: mutex acquisition is initialization
+    f();                               // if f() throws an exception, the mutex is released
+    if (!everything_ok())
+        return;                        // early return, the mutex is released
+}                                      // if good() returns normally, the mutex is released
+}}
+
+===The standard library===
+The C++ library classes that manage their own resources follow RAII: {{lc|std::string}}, {{lc|std::vector}}{{rev inl|since=c++20|, {{lc|std::jthread}}}}, and many others acquire their resources in constructors (which throw exceptions on errors), release them in their destructors (which never throw), and don't require explicit cleanup.
+
+{{rrev|since=c++11|
+In addition, the standard library offers several RAII wrappers to manage user-provided resources:
+* {{lc|std::unique_ptr}} and {{lc|std::shared_ptr}} through {{lc|std::make_unique}} and {{lc|std::make_shared}} to manage dynamically-allocated memory;
+* {{lc|std::lock_guard}}, {{lc|std::unique_lock}}, {{lc|std::shared_lock}} to manage mutexes.
+}}
+
+===Notes===
+RAII does not apply to the management of the resources that are not acquired before use: CPU time, core availability, cache capacity, entropy pool capacity, network bandwidth, electric power consumption, stack memory. For such resources, a C++ class constructor cannot guarantee resource availability for the duration of object lifetime, and other means of resource management have to be used.
+
+===External links===
+&lt;references/&gt;
+
+{{langlinks|es|ja|ru|zh}}

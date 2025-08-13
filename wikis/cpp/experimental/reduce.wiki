@@ -1,0 +1,122 @@
+{{cpp/experimental/parallel/title|reduce}}
+{{cpp/experimental/parallelism/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/numeric}}
+{{dcl|num=1|since=parallelism|
+template&lt; class InputIt &gt;
+typename std::iterator_traits&lt;InputIt&gt;::value_type reduce(
+    InputIt first, InputIt last );
+}}
+{{dcl|num=2|since=parallelism|
+template&lt; class ExecutionPolicy, class InputIterator &gt;
+typename std::iterator_traits&lt;InputIt&gt;::value_type reduce(
+    ExecutionPolicy&amp;&amp; policy, InputIt first, InputIt last );
+}}
+{{dcl|num=3|since=parallelism|
+template&lt; class InputIt, class T &gt;
+T reduce( InputIt first, InputIt last, T init );
+}}
+{{dcl|num=4|since=parallelism|
+template&lt; class ExecutionPolicy, class InputIt, class T &gt;
+T reduce( ExecutionPolicy&amp;&amp; policy, InputIt first, InputIt last, T init );
+}}
+{{dcl|num=5|since=parallelism|
+template&lt; class InputIt, class T, class BinaryOp &gt;
+T reduce( InputIt first, InputIt last, T init, BinaryOp binary_op );
+}}
+{{dcl|num=6|since=parallelism|
+template&lt; class ExecutionPolicy, class InputIt, class T, class BinaryOp &gt;
+T reduce( ExecutionPolicy&amp;&amp; policy,
+          InputIt first, InputIt last, T init, BinaryOp binary_op );
+}}
+{{dcl end}}
+
+@1@ Same as {{c|reduce(first, last, typename std::iterator_traits&lt;InputIt&gt;::value_type{})}}.
+@3@ Same as {{c|reduce(first, last, init, std::plus&lt;&gt;())}}.
+@5@ Reduces the range {{range|first|last}}, possibly permuted and aggregated in unspecified manner, along with the initial value {{c|init}} over {{c|binary_op}}.
+@2,4,6@ Same as {{v|1,3,5}}, but executed according to {{c|policy}}.
+
+The behavior is non-deterministic if {{c|binary_op}} is not associative or not commutative.
+
+The behavior is undefined if {{c|binary_op}} modifies any element or invalidates any iterator in {{range|first|last}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements to apply the algorithm to}}
+{{par|init|the initial value of the generalized sum}}
+{{par|policy|the [[cpp/experimental/parallelism#Execution_policies|execution policy]]}}
+{{par|binary_op|binary {{named req|FunctionObject}} that will be applied in unspecified order to the result of dereferencing the input iterators, the results of other {{c|binary_op}} and {{c|init}}}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===Return value===
+Generalized sum of {{c|init}} and {{c|*first}}, {{c|*(first + 1)}}, ... {{c|*(last - 1)}} over {{c|binary_op}},
+
+where generalized sum {{math|GSUM(op, a{{su|b=1}}, ..., a{{su|b=N}})}} is defined as follows: 
+* if {{math|N{{=}}1}}, {{math|a{{su|b=1}}}}
+* if {{math|N &gt; 1}}, {{math|op(GSUM(op, b{{su|b=1}}, ..., b{{su|b=K}}), GSUM(op, b{{su|b=M}}, ..., b{{su|b=N}}))}} where
+:* {{math|b{{su|b=1}}, ..., b{{su|b=N}}}} may be any permutation of {{math|a1, ..., aN}} and
+:* {{math|1 &lt; K+1 {{=}} M ≤ N}}
+
+in other words, the elements of the range may be grouped and rearranged in arbitrary order.
+
+===Complexity===
+{{math|O(last - first)}} applications of {{c|binary_op}}.
+
+===Exceptions===
+{{cpp/experimental/exceptions_reporting_behavior}}
+
+===Notes===
+If the range is empty, {{c|init}} is returned, unmodified.
+
+{{cpp/experimental/execution_policy_note}}
+
+===Example===
+{{example|reduce is the out-of-order version of {{lc|std::accumulate}}:
+|code=
+#include &lt;chrono&gt;
+#include &lt;experimental/execution_policy&gt;
+#include &lt;experimental/numeric&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;double&gt; v(10'000'007, 0.5);
+
+    {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double result = std::accumulate(v.begin(), v.end(), 0.0);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double, std::milli&gt; ms = t2 - t1;
+        std::cout &lt;&lt; std::fixed &lt;&lt; "std::accumulate result " &lt;&lt; result
+                  &lt;&lt; " took " &lt;&lt; ms.count() &lt;&lt; " ms\n";
+    }
+
+    {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double result = std::experimental::parallel::reduce(
+                            std::experimental::parallel::par,
+                            v.begin(), v.end());
+        auto t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double, std::milli&gt; ms = t2 - t1;
+        std::cout &lt;&lt; "parallel::reduce result "
+                  &lt;&lt; result &lt;&lt; " took " &lt;&lt; ms.count() &lt;&lt; " ms\n";
+    }
+}
+|p=true
+|output=
+std::accumulate result 5000003.50000 took 12.7365 ms
+parallel::reduce result 5000003.50000 took 5.06423 ms
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/experimental/parallelism/dsc transform_reduce}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

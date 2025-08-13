@@ -1,0 +1,186 @@
+{{title|{{tt|try}} block}}
+{{cpp/language/try/navbar}}
+An {{rlp|exceptions|exception}} thrown in a {{c/core|try}} block can possibly be handled by an associated handler.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|try}} {{spar|compound-statement}} {{spar|handler-seq}}
+}}
+{{sdsc|num=2|
+{{ttb|try}} {{spar optional|ctor-initializer}} {{spar|compound-statement}} {{spar|handler-seq}}
+}}
+{{sdsc end}}
+
+@1@ An [[#Ordinary try block|ordinary {{c/core|try}} block]].
+
+@2@ A [[#Function try block|function {{c/core|try}} block]]. {{spar|compound-statement}} must be the compound statement component of a function body.
+
+{{par begin}}
+{{par|{{spar|compound-statement}}|a {{rlp|statements#Compound statements|compound statement}}}}
+{{par|{{spar|handler-seq}}|a non-empty sequence of {{rlp|catch|handlers}}}}
+{{par|{{spar|ctor-initializer}}|member initializer list (for {{rlp|constructor#Member initializer list|constructors}} only)}}
+{{par end}}
+
+{{anchor|Ordinary try block}}
+===Ordinary {{c/core|try}} block===
+An ordinary {{c/core|try}} block is a {{rlp|statements|statement}}.
+
+If an exception is thrown from its {{spar|compound-statement}}, the exception will be matched against the {{rlp|catch|handlers}} in its {{spar sep|handler-seq}}:
+{{source|
+void f()
+{
+    throw 1;     // NOT handled by the handler below
+    try
+    {
+        throw 2; // handled by the associated handler
+    }
+    catch (...)
+    {
+        // handles the exception 2
+    }
+    throw 3;     // NOT handled by the handler above
+}
+}}
+
+{{anchor|Function try block}}
+===Function {{c/core|try}} block===
+A function {{c/core|try}} block is a special kind of {{rlp|function#Function definition|function body}}.
+
+If an exception is thrown from its {{spar|compound-statement}} or {{spar|ctor-initializer}} (if any), the exception will be matched against the {{rlp|catch|handlers}} in its {{spar sep|handler-seq}}:
+{{source|
+int f(bool cond)
+{
+    if (cond)
+        throw 1;
+    return 0;
+}
+
+struct X
+{
+    int mem;
+    
+    X() try : mem(f(true)) {}
+    catch (...)
+    {
+        // handles the exception 1
+    }
+    
+    X(int) try
+    {
+        throw 2;
+    }
+    catch (...)
+    {
+        // handles the exception 2
+    }
+};
+}}
+
+Exceptions thrown in destructors of objects with static {{rlp|storage duration}} or in constructors of objects associated with {{rlp|scope#Block scope|non-block variables}} with static storage duration are not caught by a function {{c/core|try}} block on the {{rlp|main function|{{c/core|main}} function}}.
+
+{{rrev|since=c++11|
+Exceptions thrown in destructors of objects with thread storage duration or in constructors of objects associated with non-block variables with thread storage duration are not caught by a function {{c/core|try}} block on the initial function of the thread.
+}}
+
+Flowing off the end of the {{spar|compound-statement}} of a {{rlp|catch|handler}} of a function {{c/core|try}} block is equivalent to flowing off the end of the {{c/core|compound-statement}} of that function {{c/core|try}} block, unless the function is a constructor or destructor (see below).
+
+{{anchor|Constructor and destructor try block}}
+====Constructor and destructor {{c/core|try}} block====
+For a class {{tt|C}}, if the function body of its constuctor or destructor definition is a function {{c/core|try}} block, and an exception is thrown during the initialization or destruction, respectively, of {{tt|C}}’s subobjects, the exception will also be matched against the {{rlp|catch|handlers}} in the {{spar sep|handler-seq}} of the function {{c/core|try}} block:
+{{source|1=
+int f(bool cond = true)
+{
+    if (cond)
+        throw 1;
+    return 0;
+}
+
+struct X
+{
+    int mem = f();
+    
+    ~X()
+    {
+        throw 2;
+    }
+};
+
+struct Y
+{
+    X mem;
+    
+    Y() try {}
+    catch (...)
+    {
+        // handles the exception 1
+    }
+    
+    ~Y() try {}
+    catch (...)
+    {
+        // handles the exception 2
+    }
+};
+}}
+
+Referring to any non-static member or base class of an object in the handler for a function {{c/core|try}} block of a constructor or destructor for that object results in undefined behavior.
+
+If a {{rlp|return|{{c/core|return}} statement}} appears in a handler of the function {{c/core|try}} block of a constructor, the program is ill-formed.
+
+The {{rlp|catch#Activating the handler|currently handled exception}} is rethrown if control reaches the end of a handler of the function {{c/core|try}} block of a constructor or destructor.
+
+===Control flow===
+The {{spar|compound-statement}} of a {{c/core|try}} block is a {{rlp|statements#Control-flow-limited statements|control-flow-limited statement}}:
+{{source|
+void f()
+{
+    goto label;     // error
+    try
+    {
+        goto label; // OK
+        label: ;
+    }
+    catch (...)
+    {
+        goto label; // error
+    }
+}
+}}
+
+A {{rlp|statements#Jump statements|jump statement}} ({{rlpt|goto}}, {{rlpt|break}}, {{rlpt|return}}, {{rlpt|continue}}) can be used to transfer control out of a {{c/core|try}} block (including its handlers). When this happens, each variable declared in the {{c/core|try}} block will be destroyed in the context that directly contains its declaration:
+{{source|
+try
+{
+    T1 t1;
+    try
+    {
+        T2 t2;
+        goto label; // destroy t2 first, then t1
+    }
+    catch(...)
+    {
+        // executed if an exception is thrown while destroying t2
+    }
+}
+catch(...)
+{
+    // executed if an exception is thrown while destroying t1
+}
+label: ;
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/try}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=98|std=C++98|before=a {{c/core|switch}} statement can transfer control&lt;br&gt;into the {{spar|compound-statement}} of a {{c/core|try}} block|after=prohibited}}
+{{dr list item|wg=cwg|dr=1167|std=C++98|before=it was unspecified whether a function {{c/core|try}} block on a destructor&lt;br&gt;will catch exceptions from a base or member destructor|after=such exceptions&lt;br&gt;are caught}}
+{{dr list end}}
+
+===See also===
+* {{rlp|throw|Throwing exceptions}}
+* {{rlp|catch|Handling exceptions}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

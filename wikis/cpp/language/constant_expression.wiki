@@ -1,0 +1,596 @@
+{{title|Constant expressions}}
+{{cpp/language/expressions/navbar}}
+
+Defines an {{rlp|expressions|expression}} that can be evaluated at compile time.
+
+Such expressions can be used as non-type template arguments, array sizes, and in other contexts that require constant expressions, e.g.
+{{source|1=
+int n = 1;
+std::array&lt;int, n&gt; a1;  // Error: “n” is not a constant expression
+const int cn = 2;
+std::array&lt;int, cn&gt; a2; // OK: “cn” is a constant expression
+}}
+
+===Definition===
+{{rev begin}}
+{{rev|until=c++11|
+An expression that belongs to any of the constant expression categories listed below is a ''constant expression''.
+{{collapse top|C++98 constant expression categories}}
+====Integral constant expression (C++98)====
+In the following places, C++ requires expressions that evaluate to an integral or enumeration constant:
+* {{rlp|array|array bounds}} (including the dimensions in {{rlp|new|{{c/core|new}} expressions}} other than the first)
+* {{rlp|statements#Labels|{{c/core|case}} label}} constants
+* {{rlp|bit field|bit-field}} lengths
+* {{rlp|enum|enumerator}} initializers
+* {{rlp|static|static data member}} initializers
+* {{rlpsd|template parameters#Template non-type arguments}} of integral or enumeration type
+
+An expression satisfying all following conditions is an ''integral constant-expression''{{sep}}:
+* It only involves the following entities:
+:* literals of arithmetic types
+:* enumerators
+:* variables or static data members satisfying all following conditions:
+::* They are const-qualified.
+::* They are not volatile-qualified.
+::* They are of integral or enumeration types.
+::* They are initialized with constant expressions.
+:* {{rlpsd|template parameters#Non-type template parameters}} of integral or enumeration types
+:* {{rlpt|sizeof}} expressions
+* It does not use any floating-point literals, unless they are {{rlp|explicit cast|explicitly converted}} to integral or enumeration types.
+* It does not apply any conversion to non-integral and non-enumeration types.
+* It does not use any of the following entities except in the operands of {{c/core|sizeof}}:
+:* function
+:* class object
+:* pointer
+:* reference
+:* assignment operator
+:* increment operator
+:* decrement operator
+:* function-call operator
+:* comma operator
+
+====Other constant expression categories====
+Other expressions are considered constant expressions only for the purpose of {{rlp|constant initialization}}. Such a constant expression must be one of the following expressions:
+* an expression that evaluates to a {{rlp|pointer#Null pointers|null pointer value}}
+* an expression that evaluates to a null pointer-to-member value
+* an arithmetic constant expression
+* an address constant expression
+* a reference constant expression
+* an address constant expression for a complete object type, plus or minus an integral constant expression
+* a pointer-to-member constant expression
+
+An ''arithmetic constant expression'' is an expression satisfying the requirements for an integral constant expression, with the following exceptions:
+* Floating-point literals can be used without explicit conversion.
+* Conversions to floating-point types can be applied.
+
+An ''address constant expression'' is an expression of pointer type satisfying all following conditions:
+* The pointer points to an lvalue designating an object of {{rlpsd|storage duration#Static storage duration}}, a {{rlp|string literal}}, or a {{rlp|function}}. The object is not a {{rlp|object#Subobjects|subobject}} of non-{{rlps|classes#POD class}} type.
+* The pointer is created by one of the following methods:
+:* explicitly using the address-of operator
+:* implicitly using a non-type template parameter of pointer type
+:* using an expression of array or function type
+* The expression does not call any function.
+* The expression uses explicit pointer conversions (except {{rlpt|dynamic_cast}}) and the following operators without accessing the result object:
+:* subscript operator
+:* indirection operator
+:* address-of operator
+:* member access operator
+* If the subscript operator is used, one of its operands is an integral constant expression.
+
+A ''reference constant expression'' is an expression of reference type satisfying all following conditions:
+* The reference designates an object of static storage duration, a non-type template parameter of reference type, or a function. The reference does not designate a member or base class of non-POD class type.
+* The expression does not call any function.
+* The expression uses explicit reference conversions (except {{rlpt|dynamic_cast}}) and the following operators without accessing the result object:
+:* subscript operator
+:* indirection operator
+:* address-of operator
+:* member access operator
+* If the subscript operator is used, one of its operands is an integral constant expression.
+
+A ''pointer-to-member constant expression'' is an expression of pointer-to-member type where the pointer is created by applying the address-of operator to a qualified identifier, optionally preceded by an explicit pointer-to-member conversion.
+{{collapse bottom}}
+}}
+{{rev|since=c++11|until=c++14|
+The following expressions are collectively called ''constant expressions''{{sep}}:
+* prvalue [[#Core constant expression|core constant expressions]] of non-pointer [[#Literal types|literal type]]
+* lvalue core constant expressions that designate objects with {{rlpsd|storage duration#Static storage duration}} or functions
+* prvalue core constant expressions of pointer type that evaluate to one of the following values:
+:* the address of an object with static storage duration
+:* the address of a function
+:* a {{rlp|pointer#Null pointers|null pointer value}}
+* prvalue core constant expressions of type {{lc|std::nullptr_t}}
+}}
+{{rev|since=c++14|until=c++26|
+The following entities are ''permitted results of a constant expression''{{sep}}:
+* temporary objects with {{rlpsd|storage duration#Static storage duration}}
+* non-temporary objects with static storage duration whose values satisfy the constraints listed below
+* {{rev inl|since=c++20|non-{{rlp|consteval|immediate}} }}functions
+
+A ''constant expression'' is either a glvalue [[#Core constant expression|core constant expression]] that refers to an entity that is a permitted result of a constant expression, or a prvalue core constant expression whose value satisfies the following constraints:
+* If the value is an object of class type, each non-static data member of reference type refers to an entity that is a permitted result of a constant expression.
+* If the value is an object of {{rlpsd|type#Scalar type}}, it does not have an {{rlp|default initialization#Indeterminate and erroneous values|indeterminate}} value.
+* If the value is of {{rlp|pointer|pointer type}}, it is one of the following values:
+:* the address of an object with static storage duration
+:* the address past the end of an object with static storage duration
+:* the address of a{{rev inl|since=c++20| non-immediate}} function
+:* a {{rlp|pointer#Null pointers|null pointer value}}
+{{rrev|since=c++20|
+* If the value is of pointer-to-member-function type, it does not designate an immediate function.
+}}
+* If the value is an object of class or array type, each subobject satisfies these constraints for the value.
+}}
+{{rev|since=c++26|
+A ''constant expression'' is either a glvalue [[#Core constant expression|core constant expression]] that refers to an object or a non-{{rlp|consteval|immediate function}}, or a prvalue core constant expression whose value satisfies the following constraints:
+* Each [[#Constituent entities|constituent reference]] refers to an object or a non-immediate function.
+* No [[#Constituent entities|constituent value]] of {{rlpsd|type#Scalar type}} is an {{rlp|default initialization#Indeterminate and erroneous values|indeterminate or erroneous value}}.
+* No constituent value of pointer type is a pointer to an immediate function or an {{rlp|pointer#Invalid pointers|invalid pointer value}}.
+* No constituent value of pointer-to-member type designates an immediate function.
+}}
+{{rev end}}
+
+When determining whether an expression is a constant expression, {{rlp|copy elision}} is assumed not to be performed.
+
+The C++98 definition of constant expressions is entirely within the collpase box. The following description applies to C++11 and later C++ versions.
+
+===Literal type===
+The following types are collectively called ''literal types''{{sep}}:
+* possibly cv-qualified {{c/core|void}}
+* {{rlpsd|type#Scalar type}}
+* {{rlp|reference|reference type}}
+* an {{rlp|array}} of literal type
+* possibly cv-qualified class type that satisfies all following conditions:
+:* It has a {{rev inl|until=c++20|{{rlpsd|destructor#Trivial destructor}}}}{{rev inl|since=c++20|{{rlp|constexpr#constexpr destructor|{{c/core|constexpr}} destructor}}}}.
+:* All of its non-static non-variant data members and base classes are of non-volatile literal types.
+:* It is one of the following types:
+{{rrev|since=c++17|
+::* a {{rlpsd|lambda#Closure type}}
+}}
+::* an {{rlp|aggregate initialization#Definitions|aggregate}} union type that satisfies one of the following conditions:
+:::* It has no {{rlp|union#Union-like classes|variant member}}.
+:::* It has at least one variant member of non-volatile literal type.
+::* a non-union aggregate type, and each of its {{rlp|union#Anonymous unions|anonymous union}} members satisfies one of the following conditions:
+:::* It has no variant member.
+:::* It has at least one variant member of non-volatile literal type.
+::* a type with at least one {{c/core|constexpr}} constructor (template) that is not a copy or move constructor
+
+Only objects of literal types can be created within a constant expression.
+
+===Core constant expression===
+A ''core constant expression'' is any expression whose evaluation '''would not''' evaluate any one of the following language constructs:
+{|class="wikitable"
+!Language construct
+!{{nbsp|4}}Version{{nbsp|4}}
+!Paper(s)
+|-
+|the {{rlpt|this}} pointer, except in a {{rlp|constexpr#constexpr function|{{c/core|constexpr}} function}} that is being evaluated as part of the expression, or when appearing in an implicit or explicit class member access expression
+|
+|{{stddoc|N2235}}
+|-
+|a control flow that passes through a declaration of a {{rlp|scope#Block scope|block variable}} with static or thread {{rlp|storage duration}} that is not [[#Usable in constant expressions|usable in constant expressions]]
+|{{mark since c++23}}
+|{{stddoc|P2242R3}}
+|}
+
+{{todo|Transfer the contents from the raw-HTML ordered list below to the wikitable above, while adding the papers/CWG issues that introduced the corresponding item to the standard. The mini-examples are not preserved, they can be combined to form a large example at the bottom of this page.}}
+
+&lt;ol&gt;
+&lt;li&gt; a function call expression that calls a function (or a constructor) that is not declared {{rlp|constexpr}} 
+{{source|1=
+constexpr int n = std::numeric_limits&lt;int&gt;::max(); // OK: max() is constexpr
+constexpr int m = std::time(nullptr); // Error: std::time() is not constexpr
+}}
+&lt;li&gt; a function call to a constexpr function which is declared, but not defined
+&lt;li&gt; a function call to a constexpr function/constructor template instantiation where the instantiation fails to satisfy {{rlp|constexpr|constexpr function/constructor}} requirements.
+&lt;li&gt; a function call to a constexpr virtual function, invoked on an object whose dynamic type is constexpr-unknown
+&lt;li&gt; an expression that would exceed the implementation-defined limits
+&lt;li&gt; an expression whose evaluation leads to any form of core language {{rlp|ub|undefined}}{{rev inl|since=c++26| or erroneous}} behavior, except for any potential undefined behavior introduced by {{rlpsd|attributes#Standard attributes}}.
+{{source|1=
+constexpr double d1 = 2.0 / 1.0; // OK
+constexpr double d2 = 2.0 / 0.0; // Error: not defined
+constexpr int n = std::numeric_limits&lt;int&gt;::max() + 1; // Error: overflow
+int x, y, z[30];
+constexpr auto e1 = &amp;y - &amp;x;        // Error: undefined
+constexpr auto e2 = &amp;z[20] - &amp;z[3]; // OK
+constexpr std::bitset&lt;2&gt; a; 
+constexpr bool b = a[2]; // UB, but unspecified if detected
+}}
+&lt;li&gt; {{mark until c++17}} a {{rlp|lambda|lambda expression}}
+&lt;li&gt; an lvalue-to-rvalue {{rlp|implicit conversion}} unless applied to...
+&lt;ol type="a"&gt;
+&lt;li&gt; a glvalue of type (possibly cv-qualified) {{lc|std::nullptr_t}}
+&lt;li&gt; a non-volatile literal-type glvalue that designates an object that is [[#Usable in constant expressions|usable in constant expressions]] 
+{{source|1=
+int main()
+{
+    const std::size_t tabsize = 50;
+    int tab[tabsize]; // OK: tabsize is a constant expression
+                      // because tabsize is usable in constant expressions
+                      // because it has const-qualified integral type, and
+                      // its initializer is a constant initializer
+    
+    std::size_t n = 50;
+    const std::size_t sz = n;
+    int tab2[sz]; // Error: sz is not a constant expression
+                  // because sz is not usable in constant expressions
+                  // because its initializer was not a constant initializer
+}
+}}
+&lt;li&gt; a non-volatile literal-type glvalue that refers to a non-volatile object whose lifetime began within the evaluation of this expression
+&lt;/ol&gt;
+&lt;li&gt; an lvalue-to-rvalue {{rlp|implicit conversion}} or modification applied to a non-active member of a {{rlp|union}} or its subobject (even if it shares a common initial sequence with the active member)
+&lt;li&gt; an lvalue-to-rvalue implicit conversion on an object {{rlp|default initialization|whose value is indeterminate}}
+&lt;li&gt; an invocation of implicit copy/move constructor/assignment for a union whose active member is mutable (if any), with lifetime beginning outside the evaluation of this expression
+&lt;li&gt; {{mark until c++20}} an assignment expression that would change the active member of a union
+&lt;li&gt; conversion from [[cpp/language/pointer#Pointers to void|pointer to {{c/core|void}}]] to a pointer-to-object type {{tt|T*}}{{rev inl|since=c++26| unless the pointer holds a null pointer value or points to an object whose type is {{rlp|implicit conversion#Similar types|similar}} to {{tt|T}}}}
+&lt;li&gt; {{rlpt|dynamic_cast}} {{rev inl|since=c++20|whose operand is a glvalue that refers to an object whose dynamic type is constexpr-unknown}}
+&lt;li&gt; {{rlpt|reinterpret_cast}}
+&lt;li&gt; {{mark until c++20}} pseudo-destructor call
+&lt;li&gt; {{mark until c++14}} an increment or a decrement operator
+&lt;li&gt;
+{{mark since c++14}} modification of an object, unless the object has non-volatile literal type and its lifetime began within the evaluation of the expression
+{{source|1=
+constexpr int incr(int&amp; n)
+{
+    return ++n;
+}
+
+constexpr int g(int k)
+{
+    constexpr int x = incr(k); // Error: incr(k) is not a core constant
+                               // expression because lifetime of k
+                               // began outside the expression incr(k)
+    return x;
+}
+
+constexpr int h(int k)
+{
+    int x = incr(k); // OK: x is not required to be initialized
+                     // with a core constant expression
+    return x;
+}
+
+constexpr int y = h(1); // OK: initializes y with the value 2
+                        // h(1) is a core constant expression because
+                        // the lifetime of k begins inside the expression h(1)
+}}
+&lt;li&gt; {{mark since c++20}} a destructor call or pseudo destructor call for an object whose lifetime did not begin within the evaluation of this expression
+&lt;li&gt; a {{rlpt|typeid}} expression applied to a glvalue of polymorphic type {{rev inl|since=c++20|and that glvalue refers to an object whose dynamic type is constexpr-unknown}}
+&lt;li&gt; a {{rlp|new|{{c/core|new}} expression}}{{rev inl|since=c++20|, unless one of the following conditions is satisfied:}}
+{{rev begin}}
+{{rev|since=c++20|
+* The selected [[cpp/memory/new/operator new|allocation function]] is a replaceable global allocation function and the allocated storage is deallocated within the evaluation of this expression.
+}}
+{{rev|since=c++26|
+* The selected allocation function is a non-allocating form with an allocated type {{tt|T}}, and the placement argument satisfies all following conditions:
+:* It points to:
+::* an object whose type is similar to {{tt|T}}, if {{tt|T}} is not an array type, or
+::* the first element of an object of a type similar to {{tt|T}}, if {{tt|T}} is an array type.
+:* It points to storage whose duration began within the evaluation of this expression.
+}}
+{{rev end}}
+&lt;li&gt; a {{rlp|delete|{{c/core|delete}} expression}}{{rev inl|since=c++20|, unless it deallocates a region of storage allocated within the evaluation of this expression}}
+&lt;li&gt; {{mark since c++20}} Coroutines: an {{rlp|coroutines#co_await|await-expression}} or a {{rlp|coroutines#co_yield|yield-expression}}
+&lt;li&gt; {{mark since c++20}} a {{rlpsd|operator comparison#Three-way comparison}} when the result is unspecified
+&lt;li&gt; an equality or relational operator whose result is unspecified
+&lt;li&gt; {{mark until c++14}} an assignment or a compound assignment operator
+&lt;li&gt; {{mark until c++26}} a throw expression
+&lt;li&gt; {{mark since c++26}} a construction of an exception object, unless the exception object and all of its implicit copies created by invocations of {{lc|std::current_exception}} or {{lc|std::rethrow_exception}} are destroyed within the evaluation of this expression
+{{source|1=
+constexpr void check(int i)
+{
+    if (i &lt; 0)
+        throw i;
+}
+
+constexpr bool is_ok(int i)
+{
+    try {
+        check(i);
+    } catch (...) {
+        return false;
+    }
+    return true;
+}
+
+constexpr bool always_throw()
+{
+    throw 12;
+    return true;
+}
+
+static_assert(is_ok(5)); // OK
+static_assert(!is_ok(-1)); // OK since C++26
+static_assert(always_throw()); // Error: uncaught exception
+}}
+&lt;li&gt; an {{rlp|asm|asm-declaration}}
+&lt;li&gt; an invocation of the {{lc|va_arg}} macro
+&lt;li&gt; a {{rlpt|goto}} statement
+&lt;li&gt; a {{rlpt|dynamic_cast}} or {{rlpt|typeid}} expression {{rev inl|since=c++26|or {{rlp|new|{{c/core|new}} expression}}}} that would throw an exception {{rev inl|since=c++26|where no definition of the exception type is reachable}}
+&lt;li&gt; inside a lambda expression, a reference to {{c|this}} or to a variable defined outside that lambda, if that reference would be an odr-use
+{{source|1=
+void g()
+{
+    const int n = 0;
+    
+    constexpr int j = *&amp;n; // OK: outside of a lambda-expression
+    
+    [=]
+    {
+        constexpr int i = n;   // OK: 'n' is not odr-used and not captured here.
+        constexpr int j = *&amp;n; // Ill-formed: '&amp;n' would be an odr-use of 'n'.
+    };
+}
+}}
+{{rrev|since=c++17|
+note that if the ODR-use takes place in a function call to a closure, it does not refer to {{c|this}} or to an enclosing variable, since it accesses a closure's data member instead
+{{source|1=
+// OK: 'v' &amp; 'm' are odr-used but do not occur in a constant-expression
+// within the nested lambda
+auto monad = [](auto v){ return [=]{ return v; }; };
+auto bind = [](auto m){ return [=](auto fvm){ return fvm(m()); }; };
+
+// OK to have captures to automatic objects created during constant expression evaluation.
+static_assert(bind(monad(2))(monad)() == monad(2)());
+}}
+}}
+&lt;/ol&gt;
+
+====Extra requirements====
+Even if an expression {{c|E}} does not evaluate anything stated above, it is implementation-defined whether {{c|E}} is a core constant expression if evaluating {{c|E}} would result in {{rlp|ub|runtime-undefined behavior}}.
+
+Even if an expression {{c|E}} does not evaluate anything stated above, it is unspecified whether {{c|E}} is a core constant expression if evaluating {{c|E}} would evalute any of the following:
+* An operation with undefined behavior in the {{lt|cpp/standard library}}.
+* An invocation of the {{lc|va_start}} macro.
+
+For the purposes of determining whether an expression is a core constant expression, the evaluation of the body of a member function of {{c/core|std::allocator&lt;T&gt;}} is ignored if {{tt|T}} is a literal type.
+
+For the purposes of determining whether an expression is a core constant expression, the evaluation of a call to a trivial copy/move constructor or copy/move assignment operator of a {{rlp|union}} is considered to copy/move the active member of the union, if any.
+
+{{rrev|since=c++26|
+For the purposes of determining whether an expression is a core constant expression, the evaluation of an identifier expression that names a {{rlp|structured binding}} {{c|bd}} has the following semantics:
+* If {{c|bd}} is an lvalue referring to the object bound to an invented reference {{c|ref}}, the behavior is as if {{c|ref}} were nominated.
+* Otherwise, if {{c|bd}} names an array element, the behavior is that of evaluating {{c|e[i]}}, where {{c|e}} is the name of the variable initialized from the initializer of the structured binding declaration, and {{c|i}} is the index of the element referred to by {{c|bd}}.
+* Otherwise, if {{c|bd}} names a class member, the behavior is that of evaluating {{c|e.m}}, where {{c|e}} is the name of the variable initialized from the initializer of the structured binding declaration, and {{c|m}} is the name of the member referred to by {{c|bd}}.
+}}
+
+During the evaluation of the expression as a core constant expression, all identifier expressions and uses of {{c|*this}} that refer to an object or reference whose lifetime began outside the evaluation of the expression are treated as referring to a specific instance of that object of that object or reference whose lifetime and that of all subobjects (including all union members) includes the entire constant evaluation.
+* For such an object{{rev inl|since=c++20| that is not [[#Usable in constant expressions|usable in constant expressions]]}}, the dynamic type of the object is ''constexpr-unknown''.
+* For such a reference{{rev inl|since=c++20| that is not usable constant expression}}s, the reference is treated as binding to an unspecified object of the referenced type whose lifetime and that of all subobjects includes the entire constant evaluation and whose dynamic type is constexpr-unknown.
+
+===Integral constant expression===
+''Integral constant expression'' is an expression of integral or unscoped enumeration type implicitly converted to a prvalue, where the converted expression is a core constant expression.
+
+If an expression of class type is used where an integral constant expression is expected, the expression is {{rlp|implicit cast|contextually implicitly converted}} to an integral or unscoped enumeration type.
+
+===Converted constant expression===
+A ''converted constant expression'' of type {{tt|T}} is an expression {{rlp|implicit cast|implicitly converted}} to type {{tt|T}}, where the converted expression is a constant expression, and the implicit conversion sequence contains only:
+:* constexpr {{rlp|cast operator|user-defined conversions}}
+:* {{rlpsd|implicit conversion#Lvalue-to-rvalue conversion}}s
+:* {{rlpsd|implicit conversion#Integral promotion}}s
+:* non-narrowing {{rlpsd|implicit conversion#Integral conversions}}
+:* {{rlpsd|implicit conversion#Floating-point promotion}}s
+:* non-narrowing {{rlpsd|implicit conversion#Floating-point conversions}}
+{{rev begin}}
+{{rev|since=c++17|
+:* {{rlpsd|implicit conversion#Array-to-pointer conversion}}s
+:* {{rlpsd|implicit conversion#Function-to-pointer conversion}}s
+:* {{rlpsd|implicit conversion#Function pointer conversions}}
+:* {{rlpsd|implicit conversion#Qualification conversions}}
+:* {{rlp|implicit conversion#Pointer conversions|null pointer conversions}} from {{lc|std::nullptr_t}}
+:* {{rlp|implicit conversion#Pointer-to-member conversions|null member pointer conversions}} from {{lc|std::nullptr_t}}
+}}
+{{rev end}}
+
+And if any {{rlp|reference initialization|reference binding}} takes place, it can only be {{rlpsd|reference initialization#Direct binding}}.
+
+The following contexts require a converted constant expression:
+* the {{spar|constant-expression}} of {{rlp|switch#Labels|{{c/core|case}} labels}}
+* {{rlp|enum|enumerator initializers}} when the underlying type is fixed
+* {{rev inl|until=c++17|integral and enumeration }}non-type {{rlp|template parameters|template arguments}}
+{{rev begin}}
+{{rev|since=c++14|
+* {{rlp|array|array bounds}}
+* the dimensions in {{rlp|new|{{c/core|new}} expressions}} other than the first
+}}
+{{rev|since=c++26|
+* the index of {{rlp|pack indexing|pack indexing expression}} and {{rlp|pack indexing|pack indexing specifier}}
+}}
+{{rev end}}
+
+A ''contextually converted constant expression of type {{c/core|bool}}'' is an expression,  {{rlp|implicit cast#Contextual conversions|contextually converted to {{c/core|bool}}}}, where the converted expression is a constant expression and the conversion sequence contains only the conversions above.
+
+The following contexts require a contextually converted constant expression of type {{c/core|bool}}:
+* {{rlp|noexcept spec|{{c/core|noexcept}} specifications}}
+{{rev begin}}
+{{rev|until=c++23|
+* {{rlp|static_assert|{{c/core|static_assert}} declarations}}
+}}
+{{rev|since=c++17|until=c++23|
+* {{rlp|if#Constexpr if|constexpr if-statements}}
+}}
+{{rev|since=c++20|
+* {{rlp|explicit|conditional {{c/core|explicit}} specifiers}}
+}}
+{{rev end}}
+
+
+{{rev begin}}
+{{rev|since=c++26|
+===Constituent entities===
+The ''constituent values'' of an object {{c|obj}} are defined as follows:
+* If {{c|obj}} has scalar type, the constituent value is the value of {{c|obj}}.
+* Otherwise, the constituent values are the constituent values of any direct {{rlpsd|object#Subobjects}} of {{c|obj}} other than {{rlp|union|inactive union members}}.
+
+The ''constituent references'' of an object {{c|obj}} include the following references:
+* any direct members of {{c|obj}} that have reference type
+* the constituent references of any direct subobjects of {{c|obj}} other than inactive union members
+
+The ''constituent values'' and ''constituent references'' of a variable {{c|var}} are defined as follows:
+* If {{c|var}} declares an object, the constituent values and references are the constituent values and references of that object.
+* If {{c|var}} declares a reference, the constituent reference is that reference.
+
+For any constituent reference {{c|ref}} of a variable {{c|var}}, if {{c|ref}} is bound to a temporary object or subobject thereof whose lifetime is extended to that of {{c|ref}}, the constituent values and references of that temporary object are also constituent values and references of {{c|var}}, recursively.
+
+===Constexpr-representable entities===
+Objects with static storage duration is ''constexpr-referenceable'' at any point in the program.
+
+An object {{c|obj}} with automatic storage duration is ''constexpr-referenceable'' from a point {{ttb|P}} if the smallest {{rlp|scope}} enclosing the variable {{c|var}} and the smallest scope enclosing {{ttb|P}} that are the same function parameter scope that does not associate with the parameter list of a {{rlp|requires|{{c/core|requires}} expression}}, where {{c|var}} is the variable corresponding to {{c|obj}}’s complete object or the variable to whose lifetime that of {{c|obj}} is {{rlp|reference initialization#Lifetime of a temporary|extended}}.
+
+An object or reference {{c|x}} is ''constexpr-representable'' at a point {{ttb|P}} if all following conditions are satisfied:
+* For each constituent value of {{c|x}} that points to an object {{c|obj}}, {{c|obj}} is constexpr-referenceable from {{ttb|P}}.
+* For each constituent value of {{c|x}} that points past an object {{c|obj}}, {{c|obj}} is constexpr-referenceable from {{ttb|P}}.
+* For each constituent reference of {{c|x}} that refers to an object {{c|obj}}, {{c|obj}} is constexpr-referenceable from {{ttb|P}}.
+}}
+{{rev|since=c++20|
+===Constant-initialized entities===
+{{rev begin}}
+{{rev|until=c++26|
+A variable or temporary object {{c|obj}} is ''constant-initialized'' if all following conditions are satisfied:
+* Either it has an initializer, or its type is {{rlp|default initialization#Default-initialization of a const object|const-default-constructible}}.
+* The {{rlp|expressions#Full-expressions|full-expression}} of its initialization is a constant expression in the context of requiring a constant expression, except that if {{c|obj}} is an object, that full-expression may also invoke {{rlp|constexpr#constexpr constructor|{{c/core|constexpr}} constructors}} for {{c|obj}} and its subobjects even if those objects are of non-literal class types.
+}}
+{{rev|since=c++26|
+A variable {{c|var}} is ''constant-initializable'' if all following conditions are satisfied:
+* The {{rlp|expressions#Full-expressions|full-expression}} of its initialization is a constant expression in the context of requiring a constant expression.
+* Immediately after the initializing declaration of {{c|var}}, the object or reference declared by {{c|var}} is constexpr-representable.
+* If the object or reference {{c|x}} declared by {{c|var}} has static or thread storage duration, {{c|x}} is constexpr-representable at the nearest point whose immediate scope is a namespace scope that follows the initializing declaration of {{c|var}}.
+
+A constant-initializable variable is ''constant-initialized'' if either it has an initializer, or its type is {{rlp|default initialization#Default-initialization of a const object|const-default-constructible}}.
+}}
+{{rev end}}
+
+===Usable in constant expressions===
+A variable is ''potentially-constant'' if it is a {{rlp|constexpr#constexpr variable|{{c/core|constexpr}} variable}} or it has reference or non-volatile const-qualified integral or enumeration type.
+
+A constant-initialized potentially-constant variable {{c|var}} is ''usable in constant expressions'' at a point {{ttb|P}} if {{c|var}}’s initializing declaration {{ttb|D}} is reachable from {{ttb|P}} and any of the following conditions is satisfied:
+* {{c|var}} is a {{c/core|constexpr}} variable.
+* {{c|var}} is not initialized to a {{rlp|tu local|TU-local}} value.
+* {{ttb|P}} is in the same translation unit as {{ttb|D}}.
+
+{{rev begin}}
+{{rev|until=c++26|
+An object or reference is ''usable in constant expressions'' at a point {{ttb|P}} if it is one of the following entities:
+* a variable that is usable in constant expressions at {{ttb|P}}
+* a temporary object of non-volatile const-qualified literal type whose lifetime is extended to that of a variable that is usable in constant expressions at {{ttb|P}}
+* a {{rlps|template parameters#template parameter object}}
+* a {{rlp|string literal}} object
+* a non-mutable subobject of any of the above
+* a reference member of any of the above
+}}
+{{rev|since=c++26|
+An object or reference is ''potentially usable in constant expressions'' at a point {{ttb|P}} if it is one of the following entities:
+* a variable that is usable in constant expressions at {{ttb|P}}
+* a temporary object of non-volatile const-qualified literal type whose lifetime is extended to that of a variable that is usable in constant expressions at {{ttb|P}}
+* a {{rlps|template parameters#template parameter object}}
+* a {{rlp|string literal}} object
+* a non-mutable subobject of any of the above
+* a reference member of any of the above
+
+An object or reference is ''usable in constant expressions'' at point {{ttb|P}} if it is an object or reference that is potentially usable in constant expressions at {{ttb|P}} and is constexpr-representable at {{ttb|P}}.
+}}
+{{rev end}}
+
+===Manifestly constant-evaluated expressions===
+The following expressions (including conversions to the destination type) are ''manifestly constant-evaluated''{{sep}}:
+* {{rlp|array|array bounds}}
+* the dimensions in {{rlp|new|{{c/core|new}} expressions}} other than the first
+* {{rlp|bit field|bit-field}} lengths
+* {{rlp|enum|enumeration}} initializers
+* {{rlp|alignas|alignments}}
+* the {{spar|constant-expression}} of {{rlp|switch#Labels|{{c/core|case}} labels}}
+* non-type {{rlp|template parameters|template arguments}}
+* expressions in {{rlp|noexcept spec|{{c/core|noexcept}} specifications}}
+* expressions in {{rlp|static assert|{{c/core|static_assert}} declarations}}
+* initializers of {{rlp|constexpr|constexpr variables}}
+* conditions of {{rlp|if#Constexpr if|constexpr if-statements}}
+* expressions in {{rlp|explicit|conditional {{c/core|explicit}} specifiers}}
+* {{rlp|consteval|immediate invocations}}
+* constraint expressions in {{rlp|constraints#Concepts|concept}} definitions, {{rlp|constraints#Nested requirements|nested requirements}}, and {{rlp|constraints#Requires clauses|{{c/core|requires}} clauses}}, when determining whether the constraints are satisfied&lt;!-- they are not evaluated during definition --&gt;
+* initializers of variables with reference type or const-qualified integral or enumeration type, but only if the initializers are constant expressions
+* initializers of static and thread local variables, but only if all subexpressions of the initializers (including constructor calls and implicit conversions) are constant expressions (that is, if the initializers are {{rlp|constant initialization|constant initializers}})
+
+Whether an evaluation occurs in a manifestly constant-evaluated context can be detected by {{lc|std::is_constant_evaluated}}{{rev inl|since=c++23| and {{rlpt|if#Consteval if|if consteval}}}}.
+}}
+{{rev end}}
+
+===Functions and variables needed for constant evaluation===
+Following expressions or conversions are ''potentially constant evaluated'':
+* manifestly constant-evaluated expressions
+* potentially-evaluated expressions
+* immediate subexpressions of a {{rlp|initialization|braced-enclosed initializer list}} (constant evaluation may be necessary to determine whether {{rlp|list initialization#Narrowing conversions|a conversion is narrowing}})
+* address-of expressions that occur within a {{rlp|templates#Templated entity|templated entity}} (constant evaluation may be necessary to determine whether such an expression is {{rlp|dependent name#Value-dependent expressions|value-dependent}})
+* subexpressions of one of the above that are not a subexpression of a nested {{rlp|expressions#Unevaluated expressions|unevaluated operand}}
+
+A function is ''needed for constant evaluation'' if it is a constexpr function and {{rlp|definition#Naming a function|named by}} an expression that is potentially constant evaluated.
+
+A variable is ''needed for constant evaluation'' if it is either a constexpr variable or is of non-volatile const-qualified integral type or of reference type and the {{rlp|expressions#Primary expressions|identifier expression}} that denotes it is potentially constant evaluated.
+
+Definition of a defaulted function and instantiation of a {{rlp|function template}} specialization {{rev inl|since=c++14|or {{rlp|variable template}} specialization}} are triggered if the function {{rev inl|since=c++14|or variable}} is needed for constant evaluation.
+
+===Constant subexpression===&lt;!-- LWG 2234/2296, not since C++17 --&gt;
+A ''constant subexpression'' is an expression whose evaluation as {{rlp|expressions#Full-expressions|subexpression}} of an expression {{c|e}} would not prevent {{c|e}} from being a [[#Core constant expressions|core constant expression]], where {{c|e}} is not any of the following expressions:
+* {{rlp|throw|{{c/core|throw}} expression}}
+{{rrev|since=c++20|
+* {{rlp|coroutines|yield expression}}
+}}
+* {{rlp|operator assignment|assignment expression}}
+* {{rlp|operator other#Built-in comma operator|comma expression}}
+
+===Notes===
+{{ftm begin|core=yes|sort=yes}}
+{{ftm|value=201711L|std=C++20|dr=11|__cpp_constexpr_in_decltype|Generation of function and variable definitions when [[#Functions and variables needed for constant evaluation|needed for constant evaluation]]}}
+{{ftm|value=201907L|std=C++20|__cpp_constexpr_dynamic_alloc|Operations for dynamic storage duration in {{c/core|constexpr}} functions}}
+{{ftm|rowspan=2|value=202306L|std=C++26|__cpp_constexpr|{{c/core|constexpr}} cast from {{c/core|void*}}: towards constexpr type-erasure}}
+{{ftm|value=202406L|std=C++26|-|{{c/core|constexpr}} placement {{c/core|new}} and {{c/core|new[]}}}}
+{{ftm|value=202411L|std=C++26|__cpp_constexpr_exceptions|{{c/core|constexpr}} exceptions}}
+{{ftm end}}
+
+===Example===
+{{example}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=94|std=C++98|before=arithmetic constant expressions could not&lt;br&gt;involve variables and static data members|after=they can}}
+{{dr list item|wg=cwg|dr=366|std=C++98|before=expressions involving string literals&lt;br&gt;could be integral constant expressions|after=they are not}}
+{{dr list item|wg=cwg|dr=457|std=C++98|before=expressions involving volatile variables&lt;br&gt;could be integral constant expressions|after=they are not}}
+{{dr list item|wg=cwg|dr=1293|std=C++11|before=it was unclear whether string literals&lt;br&gt;are usable in constant expressions|after=they are usable}}
+{{dr list item|wg=cwg|dr=1311|std=C++11|before=volatile glvalues could be used in constant expressions|after=prohibited}}
+{{dr list item|wg=cwg|dr=1312|std=C++11|before={{c/core|reinterpret_cast}} is prohibited in constant expressions,&lt;br&gt;but casting to and from {{c/core|void*}} could achieve the same effect|after=prohibited conversions&lt;br&gt;from type ''cv'' {{c/core|void*}} to&lt;br&gt;a pointer-to-object type}}
+{{dr list item|wg=cwg|dr=1313|std=C++11|before=undefined behavior was permitted;&lt;br&gt;all pointer subtraction was prohibited|after=UB prohibited; same-array&lt;br&gt;pointer subtraction OK}}
+{{dr list item|wg=cwg|dr=1405|std=C++11|before=for objects that are usable in constant expressions,&lt;br&gt;their mutable subobjects were also usable|after=they are not usable}}
+{{dr list item|wg=cwg|dr=1454|std=C++11|before=passing constants through constexpr&lt;br&gt;functions via references was not allowed|after=allowed}}
+{{dr list item|wg=cwg|dr=1455|std=C++11|before=converted constant expressions could only be prvalues|after=can be lvalues}}
+{{dr list item|wg=cwg|dr=1456|std=C++11|before=an address constant expression could not&lt;br&gt;designate the address one past the end of an array|after=allowed}}
+{{dr list item|wg=cwg|dr=1535|std=C++11|before=a {{c/core|typeid}} expression whose operand is of a&lt;br&gt;polymorphic class type was not a core constant&lt;br&gt;expression even if no runtime check is involved|after=the operand constraint&lt;br&gt;is limited to glvalues of&lt;br&gt;polymorphic class types}}
+{{dr list item|wg=cwg|dr=1581|std=C++11|before=functions needed for constant evaluation were&lt;br&gt;not required to be defined or instantiated|after=required}}&lt;!-- P0859R0 --&gt;
+{{dr list item|wg=cwg|dr=1613|std=C++11|before=core constant expressions could evaluate any&lt;br&gt;ODR-used reference inside lambda expressions|after=some references could&lt;br&gt;not be evaluated}}
+{{dr list item|wg=cwg|dr=1694|std=C++11|before=binding the value of a temporary to a static storage&lt;br&gt;duration reference was a constant expression|after=it is not a&lt;br&gt;constant expression}}
+{{dr list item|wg=cwg|dr=1872|std=C++11|before=core constant expressions could invoke {{c/core|constexpr}} function template&lt;br&gt;insantiations that do not satisfy the {{c/core|constexpr}} function requirements|after=such instantiations&lt;br&gt;cannot be invoked}}
+{{dr list item|wg=cwg|dr=1952|std=C++11|before=standard library undefined behaviors&lt;br&gt;were required to be diagnosed|after=unspecified whether&lt;br&gt;they are diagnosed}}
+{{dr list item|wg=cwg|dr=2022|std=C++98|before=the determination of constant expression might&lt;br&gt;depend on whether copy elision is performed|after=assume that copy elision&lt;br&gt;is always performed}}
+{{dr list item|wg=cwg|dr=2126|std=C++11|before=constant initialized lifetime-extended temporaries of const-&lt;br&gt;qualified literal types were not usable in constant expressions|after=usable}}
+{{dr list item|wg=cwg|dr=2129|std=C++11|before=integer literals were not constant expressions|after=they are}}
+{{dr list item|wg=cwg|dr=2167|std=C++11|before=non-member references local to an evaluation&lt;br&gt;made the evaluation non-constexpr|after=non-member&lt;br&gt;references allowed}}
+{{dr list item|wg=cwg|dr=2278|std=C++98|before=the resolution of {{cwg|2022}} was not implementable|after=assume that copy elision&lt;br&gt;is never performed}}
+{{dr list item|wg=cwg|dr=2299|std=C++14|before=it was unclear whether macros in {{header|cstdarg}}&lt;br&gt;can be used in constant evaluation|after={{tt|va_arg}} forbidden,&lt;br&gt;{{tt|va_start}} unspecified}}
+{{dr list item|wg=cwg|dr=2400|std=C++11|before=invoking a constexpr virtual function on an object not usable&lt;br&gt;in constant expressions and whose lifetime began outside the&lt;br&gt;expression containing the invocation could be a constant expression|after=it is not a&lt;br&gt;constant expression}}
+{{dr list item|wg=cwg|dr=2490|std=C++20|before=(pseudo) destructor calls lacked&lt;br&gt;restrictions in constant evaluation|after=restriction added}}
+{{dr list item|wg=cwg|dr=2552|std=C++23|before=when evaluating a core constant expression, the control&lt;br&gt;flow could not pass through a declaration of a non-block variable|after=it can}}
+{{dr list item|wg=cwg|dr=2558|std=C++11|before=an indeterminate value could be a constant expression|after=not a constant expression}}
+{{dr list item|wg=cwg|dr=2647|std=C++20|before=variables of volatile-qualified types could be potentially-constant|after=they are not}}
+{{dr list item|wg=cwg|dr=2763|std=C++11|before=the violation of {{attr|noreturn}} was not required&lt;br&gt;to be detected during constant evaluation|after=required}}
+{{dr list item|wg=cwg|dr=2851|std=C++11|before=converted constant expressions did&lt;br&gt;not allow floating-point conversions|after=allow non-narrowing&lt;br&gt;floating-point conversions}}
+{{dr list item|wg=cwg|dr=2907|std=C++11|before=core constant expressions could not apply&lt;br&gt;lvalue-to-rvalue conversions to {{lc|std::nullptr_t}} glvalues|after=can apply such&lt;br&gt;conversions}}
+{{dr list item|wg=cwg|dr=2909|std=C++20|before=a variable without an initializer could only be&lt;br&gt;constant-initialized if its default-initialization&lt;br&gt;results in some initialization being performed|after=can only be constant-&lt;br&gt;initialized if its type is&lt;br&gt;const-default-initializable}}
+{{dr list item|wg=cwg|dr=2924|std=C++11&lt;br&gt;C++23|before=it was unspecified whether an expression violating&lt;br&gt;the constraints of {{attr|noreturn}} (C++11) or&lt;br&gt;{{attr|assume}} (C++23) is a core constant expression|after=it is&lt;br&gt;implementation-defined}}
+{{dr list item|paper=P2280R4|std=C++11|before=evaluating an expression containing an identifier expression&lt;br&gt;or {{c|*this}} that refers to an object or reference whose lifetime&lt;br&gt;began outside this evaluation is not a constant expression|after=it can be a&lt;br&gt;constant expression}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc constexpr}}
+{{dsc inc|cpp/types/dsc is_literal_type}}
+{{dsc see c|c/language/constant expression|Constant expressions|nomono=true}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

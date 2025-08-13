@@ -1,0 +1,154 @@
+{{cpp/title|scoped_lock}}
+{{cpp/thread/scoped_lock/navbar}}
+{{ddcl|header=mutex|since=c++17|1=
+template&lt; class... MutexTypes &gt;
+class scoped_lock;
+}}
+
+The class {{tt|scoped_lock}} is a mutex wrapper that provides a convenient [[enwiki:Resource_Acquisition_Is_Initialization|RAII-style]] mechanism for owning zero or more mutexes for the duration of a scoped block.
+
+When a {{tt|scoped_lock}} object is created, it attempts to take ownership of the mutexes it is given. When control leaves the scope in which the {{tt|scoped_lock}} object was created, the {{tt|scoped_lock}} is destructed and the mutexes are released. If several mutexes are given, deadlock avoidance algorithm is used as if by {{lc|std::lock}}.
+
+The {{tt|scoped_lock}} class is non-copyable.
+
+===Template parameters===
+{{par begin}}
+{{par|MutexTypes|the types of the mutexes to lock. The types must meet the {{named req|Lockable}} requirements unless {{c|1=sizeof...(MutexTypes) == 1}}, in which case the only type must meet {{named req|BasicLockable}}}}
+{{par end}}
+
+===Member types===
+{{dsc begin}}
+{{dsc hitem|Member type|Definition}}
+{{dsc|{{tt|mutex_type}}&lt;br&gt;{{mark cond present}}|
+If {{c|1=sizeof...(MutexTypes) == 1}}, member type {{tt|mutex_type}} is the same as {{tt|Mutex}}, the sole type in {{tt|MutexTypes...}}.
+Otherwise, there is no member {{tt|mutex_type}}.
+}}
+{{dsc end}}
+
+===Member functions===
+{{dsc begin}}
+{{dsc inc|cpp/thread/scoped_lock/dsc constructor}}
+{{dsc inc|cpp/thread/scoped_lock/dsc destructor}}
+{{dsc inc|1=cpp/thread/scoped_lock/dsc operator=}}
+{{dsc end}}
+
+===Notes===
+A common beginner error is to "forget" to give a {{tt|scoped_lock}} variable a name, e.g. {{c|std::scoped_lock(mtx);}} (which default constructs a {{tt|scoped_lock}} variable named {{tt|mtx}}) or {{c|std::scoped_lock{mtx};}} (which constructs a prvalue object that is immediately destroyed), thereby not actually constructing a lock that holds a mutex for the rest of the scope.
+
+{{feature test macro|__cpp_lib_scoped_lock|std=C++17|value=201703L|[[#Top|{{tt|std::scoped_lock}}]]}}
+
+===Example===
+{{example
+|The following example uses {{tt|std::scoped_lock}} to lock pairs of mutexes without deadlock and is RAII-style.
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+using namespace std::chrono_literals;
+ 
+struct Employee
+{
+    std::vector&lt;std::string&gt; lunch_partners;
+    std::string id;
+    std::mutex m;
+    Employee(std::string id) : id(id) {}
+    std::string partners() const
+    {
+        std::string ret = "Employee " + id + " has lunch partners: ";
+        for (int count{}; const auto&amp; partner : lunch_partners)
+            ret += (count++ ? ", " : "") + partner;
+        return ret;
+    }
+};
+ 
+void send_mail(Employee&amp;, Employee&amp;)
+{
+    // Simulate a time-consuming messaging operation
+    std::this_thread::sleep_for(1s);
+}
+ 
+void assign_lunch_partner(Employee&amp; e1, Employee&amp; e2)
+{
+    static std::mutex io_mutex;
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+        std::cout &lt;&lt; e1.id &lt;&lt; " and " &lt;&lt; e2.id &lt;&lt; " are waiting for locks" &lt;&lt; std::endl;
+    }
+
+    {
+        // Use std::scoped_lock to acquire two locks without worrying about
+        // other calls to assign_lunch_partner deadlocking us
+        // and it also provides a convenient RAII-style mechanism
+        
+        std::scoped_lock lock(e1.m, e2.m);
+
+        // Equivalent code 1 (using std::lock and std::lock_guard)
+        // std::lock(e1.m, e2.m);
+        // std::lock_guard&lt;std::mutex&gt; lk1(e1.m, std::adopt_lock);
+        // std::lock_guard&lt;std::mutex&gt; lk2(e2.m, std::adopt_lock);
+
+        // Equivalent code 2 (if unique_locks are needed, e.g. for condition variables)
+        // std::unique_lock&lt;std::mutex&gt; lk1(e1.m, std::defer_lock);
+        // std::unique_lock&lt;std::mutex&gt; lk2(e2.m, std::defer_lock);
+        // std::lock(lk1, lk2);
+        {
+            std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+            std::cout &lt;&lt; e1.id &lt;&lt; " and " &lt;&lt; e2.id &lt;&lt; " got locks" &lt;&lt; std::endl;
+        }
+        e1.lunch_partners.push_back(e2.id);
+        e2.lunch_partners.push_back(e1.id);
+    }
+    
+    send_mail(e1, e2);
+    send_mail(e2, e1);
+}
+ 
+int main()
+{
+    Employee alice("Alice"), bob("Bob"), christina("Christina"), dave("Dave");
+ 
+    // Assign in parallel threads because mailing users about lunch assignments
+    // takes a long time
+    std::vector&lt;std::thread&gt; threads;
+    threads.emplace_back(assign_lunch_partner, std::ref(alice), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(alice));
+    threads.emplace_back(assign_lunch_partner, std::ref(dave), std::ref(bob));
+ 
+    for (auto&amp; thread : threads)
+        thread.join();
+    std::cout &lt;&lt; alice.partners() &lt;&lt; '\n'  &lt;&lt; bob.partners() &lt;&lt; '\n'
+              &lt;&lt; christina.partners() &lt;&lt; '\n' &lt;&lt; dave.partners() &lt;&lt; '\n';
+}
+|p=true
+|output=
+Alice and Bob are waiting for locks
+Alice and Bob got locks
+Christina and Bob are waiting for locks
+Christina and Alice are waiting for locks
+Dave and Bob are waiting for locks
+Dave and Bob got locks
+Christina and Alice got locks
+Christina and Bob got locks
+Employee Alice has lunch partners: Bob, Christina
+Employee Bob has lunch partners: Alice, Dave, Christina
+Employee Christina has lunch partners: Alice, Bob
+Employee Dave has lunch partners: Bob
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2981|std=C++17|before=redundant deduction guide from {{tt|scoped_lock&lt;MutexTypes...&gt;}} was provided|after=removed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc lock_guard}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

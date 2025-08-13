@@ -1,0 +1,99 @@
+{{title|delete expression}}
+{{cpp/language/expressions/navbar}}
+
+Destroys object(s) previously allocated by the {{rlp|new|new-expression}} and releases obtained memory area.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|::}}{{mark optional}} {{ttb|delete&amp;nbsp;&amp;nbsp;}} {{spar|expression}}}}
+{{sdsc|num=2|{{ttb|::}}{{mark optional}} {{ttb|delete[]}} {{spar|expression}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|expression}}|one of the following:
+* an expression of class type {{rlp|implicit conversion|contextually implicitly convertible}} to a pointer to object type
+* a prvalue of pointer to object type}}
+{{par end}}
+
+@1@ Destroys one non-array object created by a {{rlp|new|new-expression}}.
+@2@ Destroys an array created by a {{rlp|new|new[]-expression}}.
+
+===Explanation===
+Given the pointer evaluated from {{spar|expression}} (after possible conversions) as {{c|ptr}}.
+
+@1@ {{c|ptr}} must be one of
+* a null pointer,
+* a pointer to a non-array object created by a {{rlp|new|new-expression}}, or
+* a pointer to a base subobject of a non-array object created by a {{rlp|new|new-expression}}.
+@@ The pointed-to type of {{c|ptr}} must be {{rlp|implicit conversion#Similar types|similar}} to the type of the object (or of a base subobject). If {{c|ptr}} is anything else, including if it is a pointer obtained by the array form of {{rlp|new|new-expression}}, the behavior is {{rlp|ub|undefined}}.
+
+@2@ {{c|ptr}} must be a null pointer or a pointer whose value is previously obtained by an array form of {{rlp|new|new-expression}} whose [[cpp/memory/new/operator new|allocation function]] was not a non-allocating form (i.e. overload {{v|10}}).
+@@ The pointed-to type of {{c|ptr}} must be {{rlp|implicit conversion#Similar types|similar}} to the element type of the array object. If {{c|ptr}} is anything else, including if it is a pointer obtained by the non-array form of {{rlp|new|new-expression}}, the behavior is {{rlp|ub|undefined}}.
+
+The result of the delete-expression always has type {{c/core|void}}.
+
+If the object being deleted has incomplete class type at the point of deletion, {{rev inl|until=c++26|and the complete class has a non-trivial destructor or a deallocation function, the behavior is undefined}}{{rev inl|since=c++26|the program is ill-formed}}.
+
+If {{c|ptr}} is not a null pointer{{rev inl|since=c++20| and the [[cpp/memory/new/operator delete|deallocation function]] is not a destroying delete}}, the delete-expression invokes the {{rlp|destructor}} (if any) for the object that is being destroyed, or for every element of the array being destroyed (proceeding from the last element to the first element of the array). The destructor must be {{rlp|access|accessible}} from the point where the delete-expression appears.
+
+After that, whether or not an exception was thrown by any destructor, the delete-expression invokes the [[cpp/memory/new/operator delete|deallocation function]]: either {{c|operator delete}} (first version) or {{c|operator delete[]}} (second version){{rev inl|since=c++14|, unless the matching new-expression was combined with another new-expression}}.
+
+The deallocation function's name is {{rlp|lookup|looked up}} in the scope of the dynamic type of the object pointed to by {{c|ptr}}, which means class-specific deallocation functions, if present, are found before the global ones. If {{ttb|::}} is present in the delete-expression, only the global namespace is examined by this lookup. In any case, any declarations other than of usual deallocation functions are discarded.
+
+If any deallocation function is found, the function to be called is selected as follows (see [[cpp/memory/new/operator delete|deallocation function]] for a more detailed description of these functions and their effects):
+{{rev begin}}
+{{rev|since=c++20|
+* If at least one of the deallocation functions is a destroying delete, all non-destroying deletes are ignored.
+}}
+{{rev|since=c++17|
+* If the type's alignment requirement exceeds {{tt|__STDCPP_DEFAULT_NEW_ALIGNMENT__}}, alignment-aware deallocation functions (with a parameter of type {{lc|std::align_val_t}}) are  preferred. For other types, the alignment-unaware deallocation functions (without a  parameter of type {{lc|std::align_val_t}}) are preferred.
+:* If more than one preferred functions are found, only preferred functions are considered in the next step.
+:* If no preferred functions are found, the non-preferred ones are considered in the next step.
+* If only one function is left, that function is selected.
+}}
+{{rev end}}
+* If the deallocation functions that were found are class-specific, size-unaware class-specific deallocation function (without a parameter of type {{lc|std::size_t}}) is preferred over size-aware class-specific deallocation function (with a parameter of type {{lc|std::size_t}}).
+{{rrev|since=c++14|
+* Otherwise, lookup reached global scope, and:
+:* If the type is complete and if, for the array form only, the operand is a pointer to a class type with a non-trivial destructor or a (possibly multi-dimensional) array thereof, the global size-aware global function (with a parameter of type {{lc|std::size_t}}) is selected.
+:* Otherwise, it is unspecified whether the global size-aware deallocation function (with a parameter of type {{lc|std::size_t}}) or the global size-unaware deallocation function (without a parameter of type {{lc|std::size_t}}) is selected.
+}}
+
+The selected deallocation function must be {{rlp|access|accessible}} from the point where the delete-expression appears, unless the deallocation function is selected at the point of definition of the {{rlpsd|type#Dynamic type}}’s {{rlpsd|virtual#Virtual destructor}}.
+
+The pointer to the block of storage to be reclaimed is passed to the [[cpp/memory/new/operator delete|deallocation function]] that was selected by the process above as the first argument. The size of the block is passed as the optional {{lc|std::size_t}} argument. {{rev inl|since=c++17|The alignment requirement is passed as the optional {{lc|std::align_val_t}} argument.}}
+
+If {{c|ptr}} is a null pointer value, no destructors are called, and
+the deallocation function may or may not be called (it's unspecified), but the default deallocation functions are guaranteed to do nothing when passed a null pointer.
+
+If {{c|ptr}} is a pointer to a base class subobject of the object that was allocated with {{rlp|new}}, the destructor of the base class must be {{rlp|virtual}}, otherwise the behavior is undefined.
+
+===Notes===
+A pointer to {{c/core|void}} cannot be deleted because it is not a pointer to an object type.
+
+{{rrev|since=c++11|
+Because a pair of brackets following the keyword {{c/core|delete}} is always interpreted as the array form of a delete-expression, a {{rlp|lambda|lambda-expression}} with an empty capture list immediately after {{c/core|delete}} must be enclosed in parentheses.
+{{source|1=
+// delete []{ return new int; }(); // parse error
+delete ([]{ return new int; })();  // OK
+}}
+}}
+
+===Keywords===
+{{ltt|cpp/keyword/delete}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=288|std=C++98|before=for the first form, the static type of the&lt;br&gt;operand was compared with its dynamic type|after=compare the static type of the object&lt;br&gt;to be deleted with its dynamic type}}
+{{dr list item|wg=cwg|dr=353|std=C++98|before=whether the deallocation function will be invoked if&lt;br&gt;the destructor throws an exception was unspecified|after=always invoked}}
+{{dr list item|wg=cwg|dr=599|std=C++98|before=the first form could take a null pointer of&lt;br&gt;any type, including function pointers|after=except pointers to object types,&lt;br&gt;all other pointer types are rejected}}
+{{dr list item|wg=cwg|dr=1642|std=C++98|before={{spar|expression}} could be a pointer lvalue|after=not allowed}}
+{{dr list item|wg=cwg|dr=2474|std=C++98|before=deleting a pointer to an object of a similar but&lt;br&gt;different type resulted in undefined behavior|after=made well-defined}}
+{{dr list item|wg=cwg|dr=2624|std=C++98|before=pointers obtained from non-allocating&lt;br&gt;{{c/core|operator new[]}} could be passed to {{c/core|delete[]}}|after=prohibited}}
+{{dr list item|wg=cwg|dr=2758|std=C++98|before=it was unclear how access control was done for&lt;br&gt;the deallocation function and the destructor|after=made clear}}
+{{dr list end}}
+
+===See also===
+* {{rlp|new}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

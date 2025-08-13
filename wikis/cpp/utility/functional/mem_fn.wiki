@@ -1,0 +1,135 @@
+{{cpp/title|mem_fn}}
+{{cpp/utility/functional/navbar}}
+{{ddcl|header=functional|since=c++11|notes={{mark constexpr since c++20}}|1=
+template&lt; class M, class T &gt;
+/* unspecified */ mem_fn( M T::* pm ) noexcept;
+}}
+
+Function template {{tt|std::mem_fn}} generates wrapper objects for pointers to members, which can store, copy, and invoke a [[cpp/language/pointer#Pointers to members|pointer to member]]. Both references and pointers (including smart pointers) to an object can be used when invoking a {{tt|std::mem_fn}}.
+
+===Parameters===
+{{par begin}}
+{{par|pm|pointer to member that will be wrapped}}
+{{par end}}
+
+===Return value===
+{{tt|std::mem_fn}} returns a call wrapper {{c|fn}} of unspecified type that has the following members:
+
+{{member|{{small|std::mem_fn}} ''return type''|2=
+{{rrev|until=c++20|
+===Member types===
+{{dsc begin}}
+{{dsc hitem|type|definition}}
+{{dsc|{{tt|result_type}}{{mark deprecated c++17}}|the return type of {{c|pm}} if {{c|pm}} is a pointer to member function, not defined for pointer to member object}}
+{{dsc|{{tt|argument_type}}{{mark deprecated c++17}}|{{tt|T*}}, possibly cv-qualified, if {{c|pm}} is a pointer to member function taking no arguments}}
+{{dsc|{{tt|first_argument_type}}{{mark deprecated c++17}}|{{tt|T*}} if {{c|pm}} is a pointer to member function taking one argument}}
+{{dsc|{{tt|second_argument_type}}{{mark deprecated c++17}}|{{tt|T1}} if {{c|pm}} is a pointer to member function taking one argument of type {{tt|T1}}}}
+{{dsc end}}
+}}
+
+===Member function===
+{{dcl begin}}
+{{dcla|constexpr=c++20|1=
+template&lt; class... Args &gt;
+/* see below */ operator()(Args&amp;&amp;... args) /* cvref-qualifiers */
+    noexcept(/* see below */);
+}}
+
+{{dcl end}}
+
+The expression {{c|fn(args)}} is equivalent to {{box|{{rlpi|/|INVOKE}}{{c/core|(pmd, args)}}}}, where {{c|pmd}} is the {{named req|Callable}} object held by {{c|fn}}, it is of type {{tt|M T::*}} and is direct-non-list-initialized with {{c|pm}}.
+
+Thus, the return type of {{c/core|operator()}} is {{c/core|std::result_of&lt;decltype(pm)(Args&amp;&amp;...)&gt;::type}} {{rev inl|since=c++17|or equivalently {{c/core|std::invoke_result_t&lt;decltype(pm), Args&amp;&amp;...&gt;}}, and the value in {{c/core|noexcept}} specifier is equal to {{c|std::is_nothrow_invocable_v&lt;decltype(pm), Args&amp;&amp;...&gt;)}}}}.
+
+Each argument in {{c|args}} is perfectly forwarded, as if by {{c|std::forward&lt;Args&gt;(args)...}}.
+}}
+
+===Example===
+{{example
+|Use {{tt|std::mem_fn}} to store and execute a member function and a member object:
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo
+{
+    void display_greeting()
+    {
+        std::cout &lt;&lt; "Hello, world.\n";
+    }
+    
+    void display_number(int i)
+    {
+        std::cout &lt;&lt; "number: " &lt;&lt; i &lt;&lt; '\n';
+    }
+    
+    int add_xy(int x, int y)
+    {
+        return data + x + y;
+    }
+    
+    template&lt;typename... Args&gt; int add_many(Args... args)
+    {
+        return data + (args + ...);
+    }
+    
+    auto add_them(auto... args) // C++20 required
+    {
+        return data + (args + ...);
+    }
+    
+    int data = 7;
+};
+
+int main()
+{
+    auto f = Foo{};
+    
+    auto greet = std::mem_fn(&amp;Foo::display_greeting);
+    greet(f);
+    
+    auto print_num = std::mem_fn(&amp;Foo::display_number);
+    print_num(f, 42);
+    
+    auto access_data = std::mem_fn(&amp;Foo::data);
+    std::cout &lt;&lt; "data: " &lt;&lt; access_data(f) &lt;&lt; '\n';
+    
+    auto add_xy = std::mem_fn(&amp;Foo::add_xy);
+    std::cout &lt;&lt; "add_xy: " &lt;&lt; add_xy(f, 1, 2) &lt;&lt; '\n';
+    
+    auto u = std::make_unique&lt;Foo&gt;();
+    std::cout &lt;&lt; "access_data(u): " &lt;&lt; access_data(u) &lt;&lt; '\n';
+    std::cout &lt;&lt; "add_xy(u, 1, 2): " &lt;&lt; add_xy(u, 1, 2) &lt;&lt; '\n';
+    
+    auto add_many = std::mem_fn(&amp;Foo::add_many&lt;short, int, long&gt;);
+    std::cout &lt;&lt; "add_many(u, ...): " &lt;&lt; add_many(u, 1, 2, 3) &lt;&lt; '\n';
+
+    auto add_them = std::mem_fn(&amp;Foo::add_them&lt;short, int, float, double&gt;);
+    std::cout &lt;&lt; "add_them(u, ...): " &lt;&lt; add_them(u, 5, 7, 10.0f, 13.0) &lt;&lt; '\n';
+}
+|output=
+Hello, world.
+number: 42
+data: 7
+add_xy: 10
+access_data(u): 7
+add_xy(u, 1, 2): 10
+add_many(u, ...): 13
+add_them(u, ...): 42
+}}
+
+=== Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++11|dr=2048|before=unnecessary overloads provided|after=removed}}
+{{dr list item|wg=lwg|std=C++11|dr=2489|before={{c/core|noexcept}} not required|after=required}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc function}}
+{{dsc inc|cpp/utility/functional/dsc move_only_function}}
+{{dsc inc|cpp/utility/functional/dsc bind}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

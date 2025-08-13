@@ -1,0 +1,87 @@
+{{cpp/thread/unique_lock/title|try_lock}}
+{{cpp/thread/unique_lock/navbar}}
+{{dcl begin}}
+{{dcl|since=c++11|1=
+bool try_lock();
+}}
+{{dcl end}}
+
+Tries to lock (i.e., takes ownership of) the associated mutex without blocking. Effectively calls {{c|mutex()-&gt;try_lock()}}.
+
+{{lc|std::system_error}} is thrown if there is no associated mutex or if the mutex is already locked by this {{lc|std::unique_lock}}.
+
+===Parameters===
+(none)
+
+===Return value===
+{{c|true}} if the ownership of the mutex has been acquired successfully, {{c|false}} otherwise.
+
+===Exceptions===
+* Any exceptions thrown by {{c|mutex()-&gt;try_lock()}} ({{named req|Mutex}} types do not throw in {{tt|try_lock}}, but a custom {{named req|Lockable}} might).
+
+* If there is no associated mutex, {{lc|std::system_error}} with an error code of {{lc|std::errc::operation_not_permitted}}.
+
+* If the mutex is already locked by this {{tt|std::unique_lock}}, {{lc|std::system_error}} with an error code of {{lc|std::errc::resource_deadlock_would_occur}}.
+
+===Example===
+{{example
+|The following examples try to acquire a mutex that was locked and unlocked.
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+using namespace std::chrono_literals;
+
+int main()
+{
+    std::mutex counter_mutex;
+    std::vector&lt;std::thread&gt; threads;
+    using Id = int;
+
+    auto worker_task = [&amp;](Id id, std::chrono::seconds wait, std::chrono::seconds acquire)
+    {
+        // wait for a few seconds before acquiring lock.
+        std::this_thread::sleep_for(wait);
+
+        std::unique_lock&lt;std::mutex&gt; lock(counter_mutex, std::defer_lock);
+        if (lock.try_lock())
+            std::cout &lt;&lt; '#' &lt;&lt; id &lt;&lt; ", lock acquired.\n";
+        else
+        {
+            std::cout &lt;&lt; '#' &lt;&lt; id &lt;&lt; ", failed acquiring lock.\n";
+            return;
+        }
+
+        // keep the lock for a while.
+        std::this_thread::sleep_for(acquire);
+
+        std::cout &lt;&lt; '#' &lt;&lt; id &lt;&lt; ", releasing lock (via destructor).\n";
+    };
+
+    threads.emplace_back(worker_task, Id{0}, 0s, 2s);
+    threads.emplace_back(worker_task, Id{1}, 1s, 0s);
+    threads.emplace_back(worker_task, Id{2}, 3s, 0s);
+
+    for (auto&amp; thread : threads)
+        thread.join();
+}
+|output=
+#0, lock acquired.
+#1, failed acquiring lock.
+#0, releasing lock (via destructor).
+#2, lock acquired.
+#2, releasing lock (via destructor).
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/thread/unique_lock/dsc lock}}
+{{dsc inc|cpp/thread/unique_lock/dsc try_lock_for}}
+{{dsc inc|cpp/thread/unique_lock/dsc try_lock_until}}
+{{dsc inc|cpp/thread/unique_lock/dsc unlock}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

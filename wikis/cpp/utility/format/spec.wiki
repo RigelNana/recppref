@@ -1,0 +1,259 @@
+{{title|Standard format specification {{mark since c++20}}}}
+{{cpp/utility/format/navbar}}
+
+For basic types and string types, the format specification is based on the [https://docs.python.org/3/library/string.html#formatspec format specification in Python].
+
+The syntax of format specifications is:
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|fill-and-align}} {{spar optional|sign}} {{ttb|#}}{{mark optional}} {{ttb|0}}{{mark optional}} {{spar optional|width}} {{spar optional|precision}} {{ttb|L}}{{mark optional}} {{spar optional|type}}
+}}
+{{sdsc end}}
+
+The {{spar|sign}}, {{ttb|#}} and {{ttb|0}} options are only valid when an integer or floating-point presentation type is used.
+
+===Fill and align===
+{{spar|fill-and-align}} is an optional ''fill'' character (which can be any character other than {{ttb|{}} or {{ttb|}&lt;nowiki/&gt;}}), followed by one of the ''align'' options {{ttb|&lt;}}, {{ttb|&gt;}}, {{ttb|^}}.
+
+If no fill character is specified, it defaults to the space character. For a format specification in a Unicode encoding, the fill character must correspond to a single Unicode scalar value.
+
+The meaning of ''align'' options is as follows:
+
+* {{ttb|&lt;}}: Forces the formatted argument to be aligned to the start of the available space by inserting {{math|n}} fill characters after the formatted argument. This is the default when a non-integer non-floating-point presentation type is used.
+* {{ttb|&gt;}}: Forces the formatted argument to be aligned to the end of the available space by inserting {{math|n}} fill characters before the formatted argument. This is the default when an integer or floating-point presentation type is used.
+* {{ttb|^}}: Forces the formatted argument to be centered within the available space by inserting {{math|⌊{{mfrac|n|2}}⌋}} characters before and {{math|⌈{{mfrac|n|2}}⌉}} characters after the formatted argument.
+
+In each case, {{math|n}} is the difference of the minimum field width (specified by {{spar|width}}) and the [[#Width estimation|estimated width]] of the formatted argument, or 0 if the difference is less than 0.
+
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;format&gt;
+
+int main()
+{
+    char c = 120;
+    assert(std::format("{:6}", 42)    == "    42");
+    assert(std::format("{:6}", 'x')   == "x     ");
+    assert(std::format("{:*&lt;6}", 'x') == "x*****");
+    assert(std::format("{:*&gt;6}", 'x') == "*****x");
+    assert(std::format("{:*^6}", 'x') == "**x***");
+    assert(std::format("{:6d}", c)    == "   120");
+    assert(std::format("{:6}", true)  == "true  ");
+}
+}}
+
+{{anchor|Sign}}
+
+===Sign, #, and 0===
+The {{spar|sign}} option can be one of following:
+* {{ttb|+}}: Indicates that a sign should be used for both non-negative and negative numbers. The {{tt|+}} sign is inserted before the output value for non-negative numbers.
+* {{ttb|-}}: Indicates that a sign should be used for negative numbers only (this is the default behavior).
+* space: Indicates that a leading space should be used for non-negative numbers, and a minus sign for negative numbers.
+
+Negative zero is treated as a negative number.
+
+The {{spar|sign}} option applies to floating-point infinity and NaN.
+
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;format&gt;
+#include &lt;limits&gt;
+
+int main()
+{
+    double inf = std::numeric_limits&lt;double&gt;::infinity();
+    double nan = std::numeric_limits&lt;double&gt;::quiet_NaN();
+    assert(std::format("{0:},{0:+},{0:-},{0: }", 1)   == "1,+1,1, 1");
+    assert(std::format("{0:},{0:+},{0:-},{0: }", -1)  == "-1,-1,-1,-1");
+    assert(std::format("{0:},{0:+},{0:-},{0: }", inf) == "inf,+inf,inf, inf");
+    assert(std::format("{0:},{0:+},{0:-},{0: }", nan) == "nan,+nan,nan, nan");
+}
+}}
+
+The {{ttb|#}} option causes the ''alternate form'' to be used for the conversion.
+* For integral types, when binary, octal, or hexadecimal presentation type is used, the  alternate form inserts the prefix ({{tt|0b}}, {{tt|0}}, or {{tt|0x}}) into the output value after the sign character (possibly space) if there is one, or add it before the output value otherwise.
+* For floating-point types, the alternate form causes the result of the conversion of finite values to always contain a decimal-point character, even if no digits follow it. Normally, a decimal-point character appears in the result of these conversions only if a digit follows it. In addition, for {{ttb|g}} and {{ttb|G}} conversions, trailing zeros are not removed from the result.
+
+The {{ttb|0}} option pads the field with leading zeros (following any indication of sign or base) to the field width, except when applied to an infinity or NaN. If the {{tt|0}} character and an ''align'' option both appear, the {{tt|0}} character is ignored.
+
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;format&gt;
+
+int main()
+{
+    char c = 120;
+    assert(std::format("{:+06d}", c)   == "+00120");
+    assert(std::format("{:#06x}", 0xa) == "0x000a");
+    assert(std::format("{:&lt;06}", -42)  == "-42   "); // 0 is ignored because of '&lt;'
+}
+}}
+
+===Width and precision===
+{{spar|width}} is either a positive decimal number, or a nested replacement field ({{ttb|{}&lt;!----&gt;}} or {{ttb|{}}''n''{{ttb|}&lt;!----&gt;}}). If present, it specifies the minimum field width.
+
+{{spar|precision}} is a dot ({{ttb|.}}) followed by either a non-negative decimal number or a nested replacement field. This field indicates the precision or maximum field size. It can only be used with floating-point and string types.
+* For floating-point types, this field specifies the formatting precision.
+* For string types, it provides an upper bound for the estimated width (see [[#Width estimation|below]]) of the prefix of the string to be copied to the output. For a string in a Unicode encoding, the text to be copied to the output is the longest prefix of whole extended grapheme clusters whose estimated width is no greater than the precision.
+
+If a nested replacement field is used for {{spar|width}} or {{spar|precision}}, and the corresponding argument is not of {{rev inl|until=c++23|[[cpp/language/type|integral type]]}}{{rev inl|since=c++23|[[cpp/language/type|standard signed or unsigned integer type]]}}, or is negative, an exception of type {{lc|std::format_error}} is thrown.
+
+{{source|1=
+float pi = 3.14f;
+assert(std::format("{:10f}", pi)           == "  3.140000"); // width = 10
+assert(std::format("{:{}f}", pi, 10)       == "  3.140000"); // width = 10
+assert(std::format("{:.5f}", pi)           == "3.14000");    // precision = 5
+assert(std::format("{:.{}f}", pi, 5)       == "3.14000");    // precision = 5
+assert(std::format("{:10.5f}", pi)         == "   3.14000"); // width = 10, precision = 5
+assert(std::format("{:{}.{}f}", pi, 10, 5) == "   3.14000"); // width = 10, precision = 5
+
+auto b1 = std::format("{:{}f}", pi, 10.0); // throws: width is not of integral type
+auto b2 = std::format("{:{}f}", pi, -10);  // throws: width is negative
+auto b3 = std::format("{:.{}f}", pi, 5.0); // throws: precision is not of integral type
+}}
+
+{{anchor|Width estimation}}
+The width of a string is defined as the estimated number of column positions appropriate for displaying it in a terminal.
+
+For the purpose of width computation, a string is assumed to be in an implementation-defined encoding. The method of width computation is unspecified, but for a string in a Unicode encoding, implementation should estimate the width of the string as the sum of estimated widths of the first code points in its [https://www.unicode.org/reports/tr29/ extended grapheme clusters]. The estimated width is 2 for the following code points, and is 1 otherwise:
+
+* Any code point whose Unicode property [https://www.unicode.org/reports/tr44/#East_Asian_Width {{tt|East_Asian_Width}}] has value Fullwidth ({{tt|F}}) or Wide ({{tt|W}})
+* U+4DC0 - U+4DFF (Yijing Hexagram Symbols)
+* U+1F300 – U+1F5FF (Miscellaneous Symbols and Pictographs)
+* U+1F900 – U+1F9FF (Supplemental Symbols and Pictographs)
+
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;format&gt;
+
+int main()
+{
+    assert(std::format("{:.^5s}",   "🐱")    == ".🐱..");
+    assert(std::format("{:.5s}",    "🐱🐱🐱") == "🐱🐱");
+    assert(std::format("{:.&lt;5.5s}", "🐱🐱🐱") == "🐱🐱.");
+}
+}}
+
+===L (locale-specific formatting)===
+The {{ttb|L}} option causes the locale-specific form to be used. This option is only valid for arithmetic types.
+
+* For integral types, the locale-specific form inserts the appropriate digit group separator characters according to the context's locale.
+* For floating-point types, the locale-specific form inserts the appropriate digit group and radix separator characters according to the context's locale.
+* For the textual representation of {{tt|bool}}, the locale-specific form uses the appropriate string as if obtained with {{lc|std::numpunct::truename}} or {{lc|std::numpunct::falsename}}.
+
+===Type===
+The {{spar|type}} option determines how the data should be presented.
+
+The available string presentation types are:
+* none, {{ttb|s}}: Copies the string to the output.
+{{rrev|since=c++23|
+* {{ttb|?}}: Copies the escaped string (see [[#Formatting escaped characters and strings|below]]) to the output.
+}}
+
+The available integer presentation types for integral types other than {{c/core|char}}, {{c/core|wchar_t}}, and {{c/core|bool}} are:
+* {{ttb|b}}: Binary format. Produces the output as if by calling {{c|std::to_chars(first, last, value, 2)}}. The base prefix is {{tt|0b}}.
+* {{ttb|B}}: same as {{ttb|b}}, except that the base prefix is {{tt|0B}}.
+* {{ttb|c}}: Copies the character {{c|static_cast&lt;CharT&gt;(value)}} to the output, where {{tt|CharT}} is the character type of the format string. Throws {{lc|std::format_error}} if value is not in the range of representable values for {{tt|CharT}}.
+* {{ttb|d}}: Decimal format. Produces the output as if by calling {{c|std::to_chars(first, last, value)}}.
+* {{ttb|o}}: Octal format. Produces the output as if by calling {{c|std::to_chars(first, last, value, 8)}}. The base prefix is {{tt|0}} if the corresponding argument value is non-zero and is empty otherwise.
+* {{ttb|x}}: Hex format. Produces the output as if by calling {{c|std::to_chars(first, last, value, 16)}}. The base prefix is {{tt|0x}}.
+* {{ttb|X}}: same as {{ttb|x}}, except that it uses uppercase letters for digits above 9 and the base prefix is {{tt|0X}}.
+* none: same as {{ttb|d}}.
+
+The available {{c/core|char}} and {{c/core|wchar_t}} presentation types are:
+* none, {{ttb|c}}: Copies the character to the output.
+* {{ttb|b}}, {{ttb|B}}, {{ttb|d}}, {{ttb|o}}, {{ttb|x}}, {{ttb|X}}: Uses integer presentation types with the value {{c|static_cast&lt;unsigned char&gt;(value)}} or {{c|static_cast&lt;std::make_unsigned_t&lt;wchar_t&gt;&gt;(value)}} respectively.
+{{rrev|since=c++23|
+* {{ttb|?}}: Copies the escaped character (see [[#Formatting escaped characters and strings|below]]) to the output.
+}}
+
+The available {{c/core|bool}} presentation types are:
+* none, {{ttb|s}}: Copies textual representation ({{ttb|true}} or {{ttb|false}}, or the locale-specific form) to the output.
+* {{ttb|b}}, {{ttb|B}}, {{ttb|d}}, {{ttb|o}}, {{ttb|x}}, {{ttb|X}}: Uses integer presentation types with the value {{c|static_cast&lt;unsigned char&gt;(value)}}.
+
+The available floating-point presentation types are:
+* {{ttb|a}}: If ''precision'' is specified, produces the output as if by calling {{c|std::to_chars(first, last, value, std::chars_format::hex, precision)}} where {{c|precision}} is the specified precision; otherwise, the output is produced as if by calling {{c|std::to_chars(first, last, value, std::chars_format::hex)}}.
+* {{ttb|A}}: same as {{ttb|a}}, except that it uses uppercase letters for digits above 9 and uses {{tt|P}} to indicate the exponent.
+* {{ttb|e}}: Produces the output as if by calling {{c|std::to_chars(first, last, value, std::chars_format::scientific, precision)}} where {{c|precision}} is the specified precision, or 6 if precision is not specified.
+* {{ttb|E}}: same as {{ttb|e}}, except that it uses {{tt|E}} to indicate the exponent.
+* {{ttb|f}}, {{ttb|F}}: Produces the output as if by calling {{c|std::to_chars(first, last, value, std::chars_format::fixed, precision)}} where {{c|precision}} is the specified precision, or 6 if precision is not specified.
+* {{ttb|g}}: Produces the output as if by calling {{c|std::to_chars(first, last, value, std::chars_format::general, precision)}} where {{c|precision}} is the specified precision, or 6 if precision is not specified.
+* {{ttb|G}}: same as {{ttb|g}}, except that it uses {{tt|E}} to indicate the exponent.
+* none: If ''precision'' is specified, produces the output as if by calling {{c|std::to_chars(first, last, value, std::chars_format::general, precision)}} where {{c|precision}} is the specified precision; otherwise, the output is produced as if by calling {{c|std::to_chars(first, last, value)}}.
+
+For lower-case presentation types, infinity and NaN are formatted as {{tt|inf}} and {{tt|nan}}, respectively.
+For upper-case presentation types, infinity and NaN are formatted as {{tt|INF}} and {{tt|NAN}}, respectively.
+
+The available pointer presentation types (also used for {{lc|std::nullptr_t}}) are:
+* none, {{ttb|p}}: If {{lc|std::uintptr_t}} is defined, produces the output as if by calling {{c|std::to_chars(first, last, reinterpret_cast&lt;std::uintptr_t&gt;(value), 16)}} with the prefix {{tt|0x}} added to the output; otherwise, the output is implementation-defined.
+{{rrev|since=c++26|
+* {{ttb|P}}: same as {{ttb|p}}, except that it uses uppercase letters for digits above 9 and the base prefix is {{tt|0X}}.
+}}
+
+
+{{rrev|since=c++23|
+===Formatting escaped characters and strings===
+A character or string can be formatted as ''escaped'' to make it more suitable for debugging or for logging.
+
+Escaping is done as follows:
+
+* For each well-formed code unit sequence that encodes a character ''C'':
+:* If ''C'' is one of the characters in the following table, the corresponding escape sequence is used.
+
+{{cpp/utility/format/spec/escape}}
+
+:* Otherwise, if ''C'' is not the space character (byte 0x20 in ASCII encoding), and either
+::* the associated character encoding is a Unicode encoding and
+:::*  ''C'' corresponds to a Unicode scalar value whose Unicode property [https://www.unicode.org/reports/tr44/#General_Category_Values {{tt|General_Category}}] has a value in the groups {{tt|Separator}} ({{tt|Z}}) or {{tt|Other}} ({{tt|C}}), or
+:::* ''C'' is not immediately preceded by a non-escaped character, and  ''C'' corresponds to a Unicode scalar value which has the Unicode property {{tt|1=Grapheme_Extend=Yes}}, or
+::* the associated character encoding is not a Unicode encoding and ''C'' is one of an implementation-defined set of separator or non-printable characters
+:: the escape sequence is {{tt|'''\u{'''''hex-digit-sequence'''''}'''}}, where {{tt|''hex-digit-sequence''}} is the shortest hexadecimal representation of ''C'' using lower-case hexadecimal digits.
+:* Otherwise, ''C'' is copied as is.
+* A code unit sequence that is a shift sequence has unspecified effect on the output and further decoding of the string.
+* Other code units (i.e. those in ill-formed code unit sequences) are each replaced with {{tt|'''\x{'''''hex-digit-sequence'''''}'''}}, where {{tt|''hex-digit-sequence''}} is the shortest hexadecimal representation of the code unit using lower-case hexadecimal digits.
+
+The escaped string representation of a string is constructed by escaping the code unit sequences in the string, as described above, and quoting the result with double quotes.
+
+The escaped representation of a character is constructed by escaping it as described above, and quoting the result with single quotes.
+
+{{example
+|[https://godbolt.org/z/WxhTs6b69 Compiler Explorer demo]:
+|code=
+#include &lt;print&gt;
+
+int main()
+{
+    std::println("[{:?}]", "h\tllo");             // prints: ["h\tllo"]
+    std::println("[{:?}]", "Спасибо, Виктор ♥!"); // prints: ["Спасибо, Виктор ♥!"]
+    std::println("[{:?}] [{:?}]", '\'', '"');     // prints: ['\'', '"']
+
+    // The following examples assume use of the UTF-8 encoding
+    std::println("[{:?}]", std::string("\0 \n \t \x02 \x1b", 9));
+                                             // prints: ["\u{0} \n \t \u{2} \u{1b}"]
+    std::println("[{:?}]", "\xc3\x28");      // invalid UTF-8
+                                             // prints: ["\x{c3}("]
+    std::println("[{:?}]", "\u0301");        // prints: ["\u{301}"]
+    std::println("[{:?}]", "\\\u0301");      // prints: ["\\\u{301}"]
+    std::println("[{:?}]", "e\u0301\u0323"); // prints: ["ẹ́"]
+}
+}}
+}}
+
+===Notes===
+In most of the cases the syntax is similar to the old {{ttb|%}}-formatting, with the addition of the {{ttb|{}&lt;!----&gt;}} and with {{ttb|:}} used instead of {{ttb|%}}. For example, {{c/core|"%03.2f"}} can be translated to {{c/core|"{:03.2f}"}}.
+
+{{ftm begin}}
+{{ftm|__cpp_lib_format_uchar|Formatting of code units as unsigned integers|std=C++20|dr=yes|value=202311L}}
+{{ftm end}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3721|std=C++20|before=zero is not allowed for the width field&lt;br&gt;in standard format specification|after=zero is permitted if specified&lt;br&gt;via a replacement field}}
+{{dr list item|paper=P2909R4|std=C++20|before={{c/core|char}} or {{c/core|wchar_t}} might be formatted as&lt;br&gt;out-of-range unsigned integer values|after=code units are converted to the corresponding&lt;br&gt;unsigned type before such formatting}}
+{{dr list end}}
+
+{{langlinks|es|ja|ru|zh}}

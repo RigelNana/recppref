@@ -1,0 +1,138 @@
+{{cpp/ranges/title|partition_copy|partition_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|Call signature}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O1, std::weakly_incrementable O2,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+requires std::indirectly_copyable&lt;I, O1&gt; &amp;&amp;
+         std::indirectly_copyable&lt;I, O2&gt;
+constexpr partition_copy_result&lt;I, O1, O2&gt;
+    partition_copy( I first, S last, O1 out_true, O2 out_false,
+                    Pred pred, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::input_range R,
+          std::weakly_incrementable O1, std::weakly_incrementable O2,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O1&gt; &amp;&amp;
+         std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O2&gt;
+constexpr partition_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O1, O2&gt;
+    partition_copy( R&amp;&amp; r, O1 out_true, O2 out_false,
+                    Pred pred, Proj proj = {} );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O1, class O2 &gt;
+using partition_copy_result = ranges::in_out_out_result&lt;I, O1, O2&gt;;
+}}
+{{dcl end}}
+
+@1@ Copies the elements from the input range {{range|first|last}} to two different output ranges depending on the value returned by the predicate {{c|pred}}. The elements that satisfy the predicate {{c|pred}} after projection by {{c|proj}} are copied to the range beginning at {{c|out_true}}. The rest of the elements are copied to the range beginning at {{c|out_false}}. The behavior is undefined if the input range overlaps either of the output ranges.
+
+@2@ Same as {{v|1}}, but uses {{c|r}} as the source range, as if using {{c|ranges::begin(r)}} as {{c|first}}, and {{c|ranges::end(r)}} as {{c|last}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the input range of elements to copy from}}
+{{par|r|the input range of elements to copy from}}
+{{par|out_true|the beginning of the output range for the elements that satisfy {{c|pred}}}}
+{{par|out_false|the beginning of the output range for the elements that do not satisfy {{c|pred}}}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj|projection to apply to the elements}}
+{{par end}}
+
+===Return value===
+{{c|{last, o1, o2} }}, where {{tt|o1}} and {{tt|o2}} are the ends of the output ranges respectively, after the copying is complete.
+
+===Complexity===
+Exactly {{c|ranges::distance(first, last)}} applications of the corresponding predicate {{c|comp}} and any projection {{c|proj}}.
+
+&lt;!-- ===Exceptions=== --&gt;
+===Possible implementation===
+{{eq fun|1=
+struct partition_copy_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+             std::weakly_incrementable O1, std::weakly_incrementable O2,
+             class Proj = std::identity, std::indirect_unary_predicate&lt;
+             std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    requires std::indirectly_copyable&lt;I, O1&gt; &amp;&amp; std::indirectly_copyable&lt;I, O2&gt;
+    constexpr ranges::partition_copy_result&lt;I, O1, O2&gt;
+        operator()(I first, S last, O1 out_true, O2 out_false,
+                   Pred pred, Proj proj = {}) const
+    {
+        for (; first != last; ++first)
+            if (!!std::invoke(pred, std::invoke(proj, *first)))
+                *out_true = *first, ++out_true;
+            else
+                *out_false = *first, ++out_false;
+        return {std::move(first), std::move(out_true), std::move(out_false)};
+    }
+
+    template&lt;ranges::input_range R,
+             std::weakly_incrementable O1, std::weakly_incrementable O2,
+             class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O1&gt; &amp;&amp;
+             std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O2&gt;
+    constexpr ranges::partition_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O1, O2&gt;
+        operator()(R&amp;&amp; r, O1 out_true, O2 out_false, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(out_true),
+                       std::move(out_false), std::move(pred), std::move(proj));
+    }
+};
+
+inline constexpr partition_copy_fn partition_copy {};
+}}
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;cctype&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    const auto in = {'N', '3', 'U', 'M', '1', 'B', '4', 'E', '1', '5', 'R', '9'};
+
+    std::vector&lt;int&gt; o1(size(in)), o2(size(in));
+
+    auto pred = [](char c) { return std::isalpha(c); };
+
+    auto ret = std::ranges::partition_copy(in, o1.begin(), o2.begin(), pred);
+
+    std::ostream_iterator&lt;char&gt; cout {std::cout, " "};
+    std::cout &lt;&lt; "in = ";
+    std::ranges::copy(in, cout);
+    std::cout &lt;&lt; "\no1 = ";
+    std::copy(o1.begin(), ret.out1, cout);
+    std::cout &lt;&lt; "\no2 = ";
+    std::copy(o2.begin(), ret.out2, cout);
+    std::cout &lt;&lt; '\n';
+}
+|output=
+in = N 3 U M 1 B 4 E 1 5 R 9
+o1 = N U M B E R
+o2 = 3 1 4 1 5 9
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc stable_partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/dsc partition_copy}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,294 @@
+{{title|{{tt|constexpr}} specifier {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+:*{{ttb|constexpr}} - specifies that the value of a variable{{rev inl|since=c++26|, {{rlp|structured binding}}}} or function can appear in {{rlp|constant expression}}s
+
+===Explanation===
+The {{c/core|constexpr}} specifier declares that it is possible to evaluate the value of the entities at compile time. Such entities can then be used where only compile time {{rlp|constant expression}}s are allowed (provided that appropriate function arguments are given).
+
+A {{c/core|constexpr}} specifier used in an object declaration{{rev inl|until=c++14| or non-static member function}} implies {{c/core|const}}.
+
+A {{c/core|constexpr}} specifier used in the first declaration of a function{{rev inl|since=c++17| or {{rlp|static}} data member}} implies {{c/core|inline}}. If any declaration of a function or function template has a {{c/core|constexpr}} specifier, then every declaration must contain that specifier.
+
+{{anchor|constexpr variable}}
+==={{c/core|constexpr}} variable===
+A variable{{rev inl|since=c++14| or variable template}} can be declared {{c/core|constexpr}} if all following conditions are satisfied:
+* The declaration is a {{rlp|definition}}.
+* It is of a {{rlpsd|constant expression#Literal type}}.
+* It is initialized (by the declaration).
+{{rev begin}}
+{{rev|until=c++26|
+* The {{rlp|expressions#Full-expressions|full-expression}} of its initialization is a {{rlp|constant expression}}.
+}}
+{{rev|since=c++26|
+* It is {{rlp|constant expression#Constant-initialized entities|constant-initializable}}.
+}}
+{{rev end}}
+{{rrev|since=c++20|{{anchor|Constant destruction}}
+* It has constant destruction, which means one of the following conditions needs to be satisfied:
+:* It is not of class type nor (possibly multi-dimensional) array thereof.
+:* It is of a class type with a {{c/core|constexpr}} destructor or (possibly multi-dimensional) array thereof, and for a hypothetical expression {{c|e}} whose only effect is to destroy the object, {{c|e}} would be a {{rlpsd|constant expression#Core constant expression}} if the lifetime of the object and its non-mutable subobjects (but not its mutable subobjects) were considered to start within {{c|e}}.
+
+If a {{c/core|constexpr}} variable is not {{rlp|tu local|translation-unit-local}}, it should not be initialized to refer to a translation-unit-local entity that is usable in constant expressions, nor have a subobject that refers to such an entity. Such initialization is disallowed in a {{rlp|modules|module interface unit}} (outside its {{rlpsd|modules#Private module fragment}}, if any) or a module partition, and is deprecated in any other context.
+}}
+
+{{anchor|constexpr function}}
+==={{c/core|constexpr}} function===
+A function or function template can be declared {{c/core|constexpr}}.
+
+A function is ''constexpr-suitable'' if all following conditions are satisfied:
+{{rev begin}}
+{{rev|until=c++20|
+* It is not a {{rlp|virtual}} function.
+}}
+{{rev|until=c++23|
+* Its return type (if exists) is a {{rlpsd|constant expression#Literal type}}.
+* Each of its parameter types is a literal type.
+}}
+{{rev|since=c++20|
+* It is not a {{rlp|coroutines|coroutine}}.
+}}
+* If it is a constructor{{rev inl|since=c++20| or destructor}}, its class does not have any {{rlp|derived class#Virtual base classes|virtual base class}}.
+{{rev end}}
+{{rev begin}}
+{{rev|until=c++14|
+* Its function body is {{c|1== default}}, {{c|1== delete}}, or a compound statement {{rlp|statements#Substatements|enclosing}} only the following:
+:* {{rlp|statements#Expression statements|null statements}}
+:* {{rlpt|static_assert}} declarations
+:* {{rlpt|typedef}} declarations and {{rlp|type alias|alias}} declarations that do not define classes or enumerations
+:* {{rlp|namespace#Using-declarations|{{c/core|using}} declarations}}
+:* {{rlp|namespace#Using-directives|{{c/core|using}} directives}}
+:* exactly one {{rlpt|return}} statement if the function is not a constructor
+}}
+{{rev|since=c++14|until=c++23|
+* Its function body is {{c|1== default}}, {{c|1== delete}}, or{{rev inl|until=c++20| a compound statement that}} does '''not''' {{rlp|statements#Substatements|enclose}} the following:
+:* {{rlp|goto}} statements
+:* statements with {{rlp|statements#Labeled statements|labels}} other than {{c/core|case}} and {{c/core|default}}
+{{rrev|until=c++20|
+:* {{rlp|try|{{c/core|try}} blocks}}
+:* {{rlp|asm|inline assembly}} declarations
+:* definitions of variables for which {{rlp|default initialization|no initialization is performed}}
+}}
+:* definitions of variables of non-literal types
+:* definitions of variables of static or thread {{rlp|storage duration}}
+}}
+{{rev end}}
+
+Except for instantiated {{c/core|constexpr}} functions, non-templated {{c/core|constexpr}} functions must be constexpr-suitable.
+
+{{rrev|until=c++23|
+For a non-constructor {{c/core|constexpr}} function that is neither defaulted nor templated, if no argument values exist such that an invocation of the function could be an evaluated subexpression of a {{rlpsd|constant expression#Core constant expression}}, the program is ill-formed, no diagnostic required.
+
+For a templated {{c/core|constexpr}} function, if no specialization of the function/class template would make the templated function constexpr-suitable when considered as a non-templated function, the program is ill-formed, no diagnostic required.
+}}
+
+An invocation of a {{c/core|constexpr}} function in a given context produces the same result as an invocation of an equivalent non-{{c/core|constexpr}} function in the same context in all respects, with the following exceptions:
+* An invocation of a {{c/core|constexpr}} function can appear in a {{rlp|constant expression}}.
+* {{rlp|copy elision|Copy elision}} is not performed in a constant expression.
+
+{{anchor|constexpr constructor}}
+==={{c/core|constexpr}} constructor===
+On top of the requirements of {{c/core|constexpr}} functions, a constructor also needs to satisfy all following conditions to be constexpr-suitable:
+{{rrev|until=c++23|
+*Its function body is {{c|1== delete}} or satisfies the following additional requirements:
+{{rrev|until=c++20|
+:* If the class is a {{rlp|union}} having variant members, exactly one of them is initialized.
+:* If the class is a {{rlp|union#Union-like classes|union-like class}}, but is not a union, for each of its anonymous union members having variant members, exactly one of them is initialized.
+:* Every non-variant non-static data member and base class subobject is initialized.
+}}
+:* If the constructor is a {{rlpsd|constructor#Delegating constructor}}, the target constructor is a {{c/core|constexpr}} constructor.
+:* If the constructor is a non-delegating constructor, every constructor selected to initialize non-static data members and base class subobjects is a {{c/core|constexpr}} constructor.
+}}
+* The class does not have any {{rlp|derived class#Virtual base classes|virtual base class}}.
+
+{{rrev|until=c++23|
+For a {{c/core|constexpr}} constructor that is neither defaulted nor templated, if no argument values exist such that an invocation of the function could be an evaluated subexpression of the initialization full-expression of some object subject to {{rlp|constant expression}}, the program is ill-formed, no diagnostic required.
+}}
+
+{{anchor|constexpr destructor}}
+==={{c/core|constexpr}} destructor===
+{{rev begin}}
+{{rev|until=c++20|
+Destructors cannot be {{c/core|constexpr}}, but a {{rlp|destructor#Trivial destructor|trivial destructor}} can be implicitly called in constant expressions.
+}}
+{{rev|since=c++20|
+On top of the requirements of {{c/core|constexpr}} functions, a destructor also needs to satisfy all following conditions to be constexpr-suitable:
+{{rrev|until=c++23|
+* For every subobject of class type or (possibly multi-dimensional) array thereof, that class type has a {{c/core|constexpr}} destructor.
+}}
+* The class does not have any virtual base class.
+}}
+{{rev end}}
+
+===Notes===
+{{rrev|until=c++17|
+Because the {{rlpt|noexcept}} operator always returns {{c|true}} for a constant expression, it can be used to check if a particular invocation of a constexpr function takes the constant expression branch:
+{{source|1=
+constexpr int f(); 
+constexpr bool b1 = noexcept(f()); // false, undefined constexpr function
+constexpr int f() { return 0; }
+constexpr bool b2 = noexcept(f()); // true, f() is a constant expression
+}}
+}}
+
+{{rrev|since=c++23|
+It is possible to write a constexpr function whose invocation can never satisfy the requirements of a core constant expression:
+
+{{source|1=
+void f(int&amp; i) // not a constexpr function
+{
+    i = 0;
+}
+
+constexpr void g(int&amp; i) // well-formed since C++23
+{
+    f(i); // unconditionally calls f, cannot be a constant expression
+}
+}}
+}}
+
+Constexpr constructors are permitted for classes that are not literal types. For example, the default constructor of {{lc|std::shared_ptr}} is constexpr, allowing {{rlp|constant initialization}}.
+
+Reference variables can be declared constexpr (their initializers have to be {{rlp|constant expression#Constant expression|reference constant expressions}}):
+{{source|1=
+static constexpr int const&amp; x = 42; // constexpr reference to a const int object
+                                    // (the object has static storage duration
+                                    //  due to life extension by a static reference)
+}}
+
+{{rrev|since=c++20|1=
+Even though {{c/core|try}} blocks and inline assembly are allowed in constexpr functions, throwing exceptions {{rev inl|since=c++26|that are uncaught}} or executing the assembly is still disallowed in a constant expression.
+
+If a variable has constant destruction, there is no need to generate machine code in order to call destructor for it, even if its destructor is not trivial.
+
+A non-lambda, non-special-member, and non-templated constexpr function cannot implicitly become an immediate function. Users need to explicitly mark it {{c/core|consteval}} to make such an intended function definition well-formed.
+}}
+{{ftm begin|core=1|std=1|comment=1|sort=1}}
+{{ftm|value=200704L|std=C++11|__cpp_constexpr|rowspan="9"|{{c/core|constexpr}}}}
+{{ftm|value=201304L|std=C++14|-|[[#relaxed-constexpr|Relaxed {{c/core|constexpr}}]], [[#constexpr-method-is-const|non-{{c/core|const}} {{c/core|constexpr}} methods]]}}
+{{ftm|value=201603L|std=C++17|-|[[cpp/language/lambda|Constexpr lambda]]}}
+{{ftm|value=201907L|std=C++20|-|Trivial {{rlp|default initialization}} and {{rlp|asm|asm-declaration}} in {{c/core|constexpr}} functions}}
+{{ftm|value=202002L|std=C++20|-|Changing the active member of a union in constant evaluation}}
+{{ftm|value=202110L|std=C++23|-|Non-[[cpp/named req/LiteralType|literal]] variables, labels, and {{ltt|cpp/language|goto}} statements in constexpr functions}}
+{{ftm|value=202207L|std=C++23|-|Relaxing some {{c/core|constexpr}} restrictions}}
+{{ftm|value=202211L|std=C++23|-|Permitting {{c/core|static}} {{c/core|constexpr}} variables in {{c/core|constexpr}} functions}}
+{{ftm|value=202306L|std=C++26|-|Constexpr cast from {{c/core|void*}}: towards constexpr type-erasure}}
+{{ftm|value=201711L|std=C++11)&lt;br&gt;(DR|__cpp_constexpr_in_decltype|Generation of function and variable definitions when [[cpp/language/constant expression#Functions and variables needed for constant evaluation|needed for constant evaluation]]}}
+{{ftm|value=201907L|std=C++20|__cpp_constexpr_dynamic_alloc|Operations for dynamic storage duration in {{c/core|constexpr}} functions}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/constexpr}}
+
+===Example===
+{{example
+|Defines C++11/14 {{c/core|constexpr}} functions that compute factorials; defines a literal type that extends string literals:
+|code=
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+// C++11 constexpr functions use recursion rather than iteration
+constexpr int factorial(int n)
+{
+    return n &lt;= 1 ? 1 : (n * factorial(n - 1));
+}
+
+// C++14 constexpr functions may use local variables and loops
+#if __cplusplus &gt;= 201402L
+constexpr int factorial_cxx14(int n)
+{
+    int res = 1;
+    while (n &gt; 1)
+        res *= n--;
+    return res;
+}
+#endif // C++14
+
+// A literal class
+class conststr
+{
+    const char* p;
+    std::size_t sz;
+public:
+    template&lt;std::size_t N&gt;
+    constexpr conststr(const char(&amp;a)[N]): p(a), sz(N - 1) {}
+    
+    // constexpr functions signal errors by throwing exceptions
+    // in C++11, they must do so from the conditional operator ?:
+    constexpr char operator[](std::size_t n) const
+    {
+        return n &lt; sz ? p[n] : throw std::out_of_range("");
+    }
+    
+    constexpr std::size_t size() const { return sz; }
+};
+
+// C++11 constexpr functions had to put everything in a single return statement
+// (C++14 does not have that requirement)
+constexpr std::size_t countlower(conststr s, std::size_t n = 0,
+                                             std::size_t c = 0)
+{
+    return n == s.size() ? c :
+        'a' &lt;= s[n] &amp;&amp; s[n] &lt;= 'z' ? countlower(s, n + 1, c + 1)
+                                   : countlower(s, n + 1, c);
+}
+
+// An output function that requires a compile-time constant, for testing
+template&lt;int n&gt;
+struct constN
+{
+    constN() { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "4! = ";
+    constN&lt;factorial(4)&gt; out1; // computed at compile time
+    
+    volatile int k = 8; // disallow optimization using volatile
+    std::cout &lt;&lt; k &lt;&lt; "! = " &lt;&lt; factorial(k) &lt;&lt; '\n'; // computed at run time
+    
+    std::cout &lt;&lt; "The number of lowercase letters in \"Hello, world!\" is ";
+    constN&lt;countlower("Hello, world!")&gt; out2; // implicitly converted to conststr
+    
+    constexpr int a[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+    constexpr int length_a = sizeof a / sizeof(int); // std::size(a) in C++17,
+                                                      // std::ssize(a) in C++20
+    std::cout &lt;&lt; "Array of length " &lt;&lt; length_a &lt;&lt; " has elements: ";
+    for (int i = 0; i &lt; length_a; ++i)
+        std::cout &lt;&lt; a[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+4! = 24
+8! = 40320
+The number of lowercase letters in "Hello, world!" is 9
+Array of length 12 has elements: 0 1 2 3 4 5 6 7 8 0 0 0
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1358|std=c++11|before=templated {{c/core|constexpr}} functions also needed&lt;br&gt;to have at least one valid argument value|after=no need}}
+{{dr list item|wg=cwg|dr=1359|std=c++11|before={{c/core|constexpr}} union constructors&lt;br&gt;must initialize all data members|after=initializes exactly one data&lt;br&gt;member for non-empty unions}}
+{{dr list item|wg=cwg|dr=1366|std=c++11|before=classes with {{c/core|constexpr}} constructors whose function bodies&lt;br&gt;are {{c|1== default}} or {{c|1== delete}} could have virtual base classes|after=such classes can neither&lt;br&gt;have virtual base classes}}
+{{dr list item|wg=cwg|dr=1595|std=c++11|before={{c/core|constexpr}} delegating constructors required&lt;br&gt;all involved constructors to be {{c/core|constexpr}}|after=only requires the target&lt;br&gt;constructor to be {{c/core|constexpr}}}}
+{{dr list item|wg=cwg|dr=1712|std=C++14|before=a {{c/core|constexpr}} variable template was required to have&lt;br&gt;all its declarations contain the {{c/core|constexpr}} specifier&lt;ref&gt;It is redundant because there cannot be more than one declaration of a variable template with the {{c/core|constexpr}} specifier.&lt;/ref&gt;|after=not required anymore}}
+{{dr list item|wg=cwg|dr=1911|std=c++11|before={{c/core|constexpr}} constructors for non-literal types were not allowed|after=allowed in constant initialization}}
+{{dr list item|wg=cwg|dr=2004|std=c++11|before=copy/move of a union with a mutable member&lt;br&gt;was allowed in a constant expression|after=mutable variants disqualify&lt;br&gt;implicit copy/move}}
+{{dr list item|wg=cwg|dr=2022|std=C++98|before=whether equivalent {{c/core|constexpr}} and non-{{c/core|constexpr}}&lt;br&gt;function produce equal result might depend&lt;br&gt;on whether copy elision is performed|after=assume that copy elision is always&lt;br&gt;performed in constant expressions}}
+{{dr list item|wg=cwg|dr=2163|std=c++14|before=labels were allowed in {{c/core|constexpr}} functions&lt;br&gt;even though {{c/core|goto}} statements are prohibited|after=labels also prohibited}}
+{{dr list item|wg=cwg|dr=2268|std=c++11|before=copy/move of a union with a mutable member was&lt;br&gt;prohibited by the resolution of {{cwg|2004}}|after=allowed if the object is created&lt;br&gt;within the constant expression}}
+{{dr list item|wg=cwg|dr=2278|std=C++98|before=the resolution of {{cwg|2022}} was not implementable|after=assume that copy elision is never&lt;br&gt;performed in constant expressions}}
+{{dr list item|wg=cwg|dr=2531|std=c++11|before=a non-inline variable became inline&lt;br&gt;if it is redeclared with {{c/core|constexpr}}|after=the variable does&lt;br&gt;not become inline}}
+&lt;!-- CWG 2602 does not affect the behavior of constexpr function itself, but its resolution is applied retroactively (i.e., uses “is constexpr-suitable” instead of “satisfy the requirements for a constexpr function”) --&gt;
+{{dr list end}}
+&lt;references/&gt;
+
+===See also===
+{{dsc begin}}
+{{dsc|{{rlp|constant expression}}|defines an {{rlp|expressions|expression}} that can be evaluated at compile time}}
+{{dsc inc|cpp/language/dsc consteval}}
+{{dsc inc|cpp/language/dsc constinit}}
+{{dsc see c|c/language/constexpr}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

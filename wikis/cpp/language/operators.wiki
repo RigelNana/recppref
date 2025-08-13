@@ -1,0 +1,538 @@
+{{title|operator overloading}}
+{{cpp/language/expressions/navbar}}
+
+Customizes the C++ operators for operands of user-defined types.
+
+===Syntax===
+''Operator functions'' are {{rlp|function}}s with special function names:
+
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|operator}} {{spar|op}}}}
+{{sdsc|num=2|{{ttb|operator}} {{ttb|new}}&lt;br&gt;{{ttb|operator}} {{ttb|new []}}}} 
+{{sdsc|num=3|{{ttb|operator}} {{ttb|delete}}&lt;br&gt;{{ttb|operator}} {{ttb|delete []}}}}
+{{sdsc|num=4|notes={{mark since c++20}}|{{ttb|operator}} {{ttb|co_await}}}}
+{{sdsc end}}
+{{par begin}}
+{{par|{{spar|op}}|any of the following operators:{{c|+}} {{c|-}} {{c|*}} {{c|/}} {{c|%}} {{c|^}} {{c|&amp;}} {{c|{{!}}}} {{c|~}} {{c|!}} {{c|1==}} {{c|&lt;}} {{c|&gt;}} {{c|1=+=}} {{c|1=-=}} {{c|1=*=}} {{c|1=/=}} {{c|1=%=}} {{c|1=^=}} {{c|1=&amp;=}} {{c|1={{!}}=}} {{c|&lt;&lt;}} {{c|&gt;&gt;}} {{c|1=&gt;&gt;=}} {{c|1=&lt;&lt;=}} {{c|1===}} {{c|1=!=}} {{c|1=&lt;=}} {{c|1=&gt;=}} {{rev inl|since=c++20|{{c|1=&lt;=&gt;}}}} {{c|&amp;&amp;}} {{c|{{!}}{{!}}}} {{c|++}} {{c|--}} {{c|,}} {{c|-&gt;*}} {{c|-&gt;}} {{c|()}} {{c|[]}}}}
+{{par end}}
+
+@1@ An overloaded punctuation operator.
+
+@2@ An [[cpp/memory/new/operator new|allocation function]].
+
+@3@ A [[cpp/memory/new/operator delete|deallocation function]].
+
+@4@ An overloaded {{c/core|co_await}} operator for use in {{rlp|coroutines#co_await|{{c/core|co_await}} expressions}}.
+
+The behaviors of non-punctuation operators are described in their own respective pages. Unless otherwise specified, the remaining description in this page does not apply to these functions.
+
+===Explanation===
+When an operator appears in an {{rlp|expressions|expression}}, and at least one of its operands has a {{rlp|class|class type}} or an {{rlp|enum|enumeration type}}, then {{rlp|overload resolution}} is used to determine the user-defined function to be called among all the functions whose signatures match the following:
+{|class="wikitable" style="font-size: 85%; text-align: left;"
+|-
+!Expression
+!As member function 
+!As non-member function
+!Example
+|-
+|@a
+|(a).operator@ ( )
+|operator@ (a)
+|{{c|!std::cin}} calls {{c|std::cin.operator!()}}
+|-
+|a@b
+|(a).operator@ (b)
+|operator@ (a, b)
+|{{c|std::cout &lt;&lt; 42}} calls {{c|std::cout.operator&lt;&lt;(42)}}
+|-
+|a=b
+|(a).operator= (b)
+|{{no|cannot be non-member}}
+|Given {{c|std::string s;}}, {{c|1=s = "abc";}} calls {{c|1=s.operator=("abc")}}
+|-
+|a(b...)
+|(a).operator()(b...)
+|{{no|cannot be non-member}}
+|Given {{c|std::random_device r;}}, {{c|1=auto n = r();}} calls {{c|r.operator()()}}
+|-
+|a[b...]
+|(a).operator[](b...)
+|{{no|cannot be non-member}}
+|Given {{c|std::map&lt;int, int&gt; m;}}, {{c|1=m[1] = 2;}} calls {{c|m.operator[](1)}}
+|-
+|a-&gt;
+|(a).operator-&gt;( )
+|{{no|cannot be non-member}}
+|Given {{c|std::unique_ptr&lt;S&gt; p;}}, {{c|p-&gt;bar()}} calls {{c|p.operator-&gt;()}}
+|-
+|a@
+|(a).operator@ (0)
+|operator@ (a, 0)
+|Given {{c|std::vector&lt;int&gt;::iterator i;}}, {{c|i++}} calls {{c|i.operator++(0)}}
+|-
+|colspan="4"|
+In this table, {{ttb|@}} is a placeholder representing all matching operators: all prefix operators in @a, all postfix operators other than -&gt; in a@, all infix operators other than = in a@b.
+|}
+
+{{rrev|since=c++20|
+In addition, for comparison operators {{c|{{==}}}}, {{c|!{{=}}}}, {{c|&lt;}}, {{c|&gt;}}, {{c|&lt;{{=}}}}, {{c|&gt;{{=}}}}, {{c|&lt;{{=}}&gt;}}, overload resolution also considers the {{rlp|overload resolution#Call to an overloaded operator|rewritten candidates}} {{c/core|operator{{==}}}} or {{c/core|operator&lt;{{=}}&gt;}}.
+}}
+
+Overloaded operators (but not the built-in operators) can be called using function notation:
+{{source|1=
+std::string str = "Hello, ";
+str.operator+=("world");                      // same as str += "world";
+operator&lt;&lt;(operator&lt;&lt;(std::cout, str), '\n'); // same as std::cout &lt;&lt; str &lt;&lt; '\n';
+                                              // (since C++17) except for sequencing
+}}
+
+{{rrev|since=c++23|1=
+====Static overloaded operators====
+Overloaded operators that are member functions can be declared [[cpp/language/static#Static member functions|static]]. However, this is only allowed for {{c/core|operator()}} and {{c/core|operator[]}}.
+
+Such operators can be called using function notation. However, when these operators appear in expressions, they still require an object of class type.
+
+{{source|1=
+struct SwapThem
+{
+    template&lt;typename T&gt;
+    static void operator()(T&amp; lhs, T&amp; rhs) 
+    {
+        std::ranges::swap(lhs, rhs);
+    }
+    
+    template&lt;typename T&gt;
+    static void operator[](T&amp; lhs, T&amp; rhs)
+    {
+        std::ranges::swap(lhs, rhs);
+    } 
+};
+inline constexpr SwapThem swap_them{};
+
+void foo()
+{
+    int a = 1, b = 2;
+    
+    swap_them(a, b); // OK
+    swap_them[a, b]; // OK
+    
+    SwapThem{}(a, b); // OK
+    SwapThem{}[a, b]; // OK
+    
+    SwapThem::operator()(a, b); // OK
+    SwapThem::operator[](a, b); // OK
+    
+    SwapThem(a, b); // error, invalid construction
+    SwapThem[a, b]; // error
+}
+}}
+}}
+
+===Restrictions===
+* An operator function must have at least one function parameter or implicit object parameter whose type is a class, a reference to a class, an enumeration, or a reference to an enumeration.
+* The operators {{ttb|::}} (scope resolution), {{ttb|.}} (member access), {{ttb|.*}} (member access through pointer to member), and {{ttb|?:}} (ternary conditional) cannot be overloaded.
+* New operators such as {{ttb|**}}, {{ttb|&lt;&gt;}}, or {{ttb|&amp;{{!}}}} cannot be created.
+* It is not possible to change the precedence, grouping, or number of operands of operators.
+* The overload of operator {{ttb|-&gt;}} must either return a raw pointer, or return an object (by reference or by value) for which operator {{ttb|-&gt;}} is in turn overloaded.
+* The overloads of operators {{ttb|&amp;&amp;}} and {{ttb|{{!!}}}} lose short-circuit evaluation.
+{{rrev|until=c++17|
+* {{ttb|&amp;&amp;}}, {{ttb|{{!!}}}}, and {{ttb|,}} lose their special {{rlp|eval order|sequencing properties}} when overloaded and behave like regular function calls even when they are used without function-call notation.
+}}
+
+===Canonical implementations===
+Besides the restrictions above, the language puts no other constraints on what the overloaded operators do, or on the return type (it does not participate in overload resolution), but in general, overloaded operators are expected to behave as similar as possible to the built-in operators: {{c/core|operator+}} is expected to add, rather than multiply its arguments, {{c/core|operator{{=}}}} is expected to assign, etc. The related operators are expected to behave similarly ({{c/core|operator+}} and {{c/core|operator+{{=}}}} do the same addition-like operation). The return types are limited by the expressions in which the operator is expected to be used: for example, assignment operators return by reference to make it possible to write {{c|1=a = b = c = d}}, because the built-in operators allow that.
+
+Commonly overloaded operators have the following typical, canonical forms:&lt;ref&gt;[https://stackoverflow.com/questions/4421706/4421719#4421719 Operator Overloading] on StackOverflow C++ FAQ&lt;/ref&gt;
+
+====Assignment operator====
+The assignment operator {{c/core|1=operator=}} has special properties: see {{rlp|copy assignment}} and {{rlp|move assignment}} for details.
+
+The canonical copy-assignment operator is expected to [https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#c62-make-copy-assignment-safe-for-self-assignment be safe on self-assignment], and to return the lhs by reference:
+{{source|1=
+// copy assignment
+T&amp; operator=(const T&amp; other)
+{
+    // Guard self assignment
+    if (this == &amp;other)
+        return *this;
+    
+    // assume *this manages a reusable resource, such as a heap-allocated buffer mArray
+    if (size != other.size)           // resource in *this cannot be reused
+    {
+        temp = new int[other.size];   // allocate resource, if throws, do nothing
+        delete[] mArray;              // release resource in *this
+        mArray = temp;
+        size = other.size;
+    }
+    
+    std::copy(other.mArray, other.mArray + other.size, mArray);
+    return *this;
+}
+}}
+
+{{rrev|since=c++11|
+The canonical move assignment is expected to [https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#c64-a-move-operation-should-move-and-leave-its-source-in-a-valid-state leave the moved-from object in valid state] (that is, a state with class invariants intact), and either [https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#c65-make-move-assignment-safe-for-self-assignment do nothing] or at least leave the object in a valid state on self-assignment, and return the lhs by reference to non-const, and be noexcept:
+{{source|1=
+// move assignment
+T&amp; operator=(T&amp;&amp; other) noexcept
+{
+    // Guard self assignment
+    if (this == &amp;other)
+        return *this; // delete[]/size=0 would also be ok
+    
+    delete[] mArray;                               // release resource in *this
+    mArray = std::exchange(other.mArray, nullptr); // leave other in valid state
+    size = std::exchange(other.size, 0);
+    return *this;
+}
+}}
+}}
+
+In those situations where copy assignment cannot benefit from resource reuse (it does not manage a heap-allocated array and does not have a (possibly transitive) member that does, such as a member {{lc|std::vector}} or {{lc|std::string}}), there is a popular convenient shorthand: the copy-and-swap assignment operator, which takes its parameter by value (thus working as both copy- and move-assignment depending on the value category of the argument), swaps with the parameter, and lets the destructor clean it up.
+{{source|1=
+// copy assignment (copy-and-swap idiom)
+T&amp; T::operator=(T other) noexcept // call copy or move constructor to construct other
+{
+    std::swap(size, other.size); // exchange resources between *this and other
+    std::swap(mArray, other.mArray);
+    return *this;
+} // destructor of other is called to release the resources formerly managed by *this
+}}
+This form automatically provides {{rlp|exceptions#Exception safety|strong exception guarantee}}, but prohibits resource reuse.
+
+====Stream extraction and insertion====
+The overloads of {{tt|operator&gt;&gt;}} and {{tt|operator&lt;&lt;}} that take a {{c/core|std::istream&amp;}} or {{c/core|std::ostream&amp;}} as the left hand argument are known as insertion and extraction operators. Since they take the user-defined type as the right argument ({{tt|b}} in {{tt|''a @ b''}}), they must be implemented as non-members. 
+{{source|1=
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const T&amp; obj)
+{
+    // write obj to stream
+    return os;
+}
+
+std::istream&amp; operator&gt;&gt;(std::istream&amp; is, T&amp; obj)
+{
+    // read obj from stream
+    if (/* T could not be constructed */)
+        is.setstate(std::ios::failbit);
+    return is;
+}
+}}
+These operators are sometimes implemented as {{rlp|friend|friend functions}}.
+
+====Function call operator====
+When a user-defined class overloads the function call operator {{c/core|operator()}}, it becomes a {{named req|FunctionObject}} type.
+
+An object of such a type can be used in a function call expression:
+{{source|1=
+// An object of this type represents a linear function of one variable a * x + b.
+struct Linear
+{
+    double a, b;
+    
+    double operator()(double x) const
+    {
+        return a * x + b;
+    }
+};
+
+int main()
+{
+    Linear f{2, 1};  // Represents function 2x + 1.
+    Linear g{-1, 0}; // Represents function -x.
+    // f and g are objects that can be used like a function.
+    
+    double f_0 = f(0);
+    double f_1 = f(1);
+    
+    double g_0 = g(0);
+}
+}}
+
+Many standard library {{lt|cpp/algorithm}}s accept {{named req|FunctionObject}}s to customize behavior. There are no particularly notable canonical forms of {{c/core|operator()}}, but to illustrate the usage:
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct Sum
+{
+    int sum = 0;
+    void operator()(int n) { sum += n; }
+};
+
+int main()
+{
+    std::vector&lt;int&gt; v = {1, 2, 3, 4, 5};
+    Sum s = std::for_each(v.begin(), v.end(), Sum());
+    std::cout &lt;&lt; "The sum is " &lt;&lt; s.sum &lt;&lt; '\n';
+}
+|output=
+The sum is 15
+}}
+
+====Increment and decrement====
+When the postfix increment or decrement operator appears in an expression, the corresponding user-defined function ({{c/core|operator++}} or {{c/core|operator--}}) is called with an integer argument {{c|0}}. Typically, it is declared as {{c|T operator++(int)}} or {{c|T operator--(int)}}, where the argument is ignored. The postfix increment and decrement operators are usually implemented in terms of the prefix versions:
+{{source|1=
+struct X
+{
+    // prefix increment
+    X&amp; operator++()
+    {
+        // actual increment takes place here
+        return *this; // return new value by reference
+    }
+    
+    // postfix increment
+    X operator++(int)
+    {
+        X old = *this; // copy old value
+        operator++();  // prefix increment
+        return old;    // return old value
+    }
+    
+    // prefix decrement
+    X&amp; operator--()
+    {
+        // actual decrement takes place here
+        return *this; // return new value by reference
+    }
+    
+    // postfix decrement
+    X operator--(int)
+    {
+        X old = *this; // copy old value
+        operator--();  // prefix decrement
+        return old;    // return old value
+    }
+};
+}}
+Although the canonical implementations of the prefix increment and decrement operators return by reference, as with any operator overload, the return type is user-defined; for example the overloads of these operators for {{lc|std::atomic}} return by value.
+
+====Binary arithmetic operators====
+Binary operators are typically implemented as non-members to maintain symmetry (for example, when adding a complex number and an integer, if {{c/core|operator+}} is a member function of the complex type, then only {{c|complex + integer}} would compile, and not {{c|integer + complex}}). Since for every binary arithmetic operator there exists a corresponding compound assignment operator, canonical forms of binary operators are implemented in terms of their compound assignments:
+{{source|1=
+class X
+{
+public:
+    X&amp; operator+=(const X&amp; rhs) // compound assignment (does not need to be a member,
+    {                           // but often is, to modify the private members)
+        /* addition of rhs to *this takes place here */
+        return *this; // return the result by reference
+    }
+    
+    // friends defined inside class body are inline and are hidden from non-ADL lookup
+    friend X operator+(X lhs,        // passing lhs by value helps optimize chained a+b+c
+                       const X&amp; rhs) // otherwise, both parameters may be const references
+    {
+        lhs += rhs; // reuse compound assignment
+        return lhs; // return the result by value (uses move constructor)
+    }
+};
+}}
+
+====Comparison operators====
+Standard library algorithms such as {{lc|std::sort}} and containers such as {{lc|std::set}} expect {{c/core|operator&lt;}} to be defined, by default, for the user-provided types, and expect it to implement strict weak ordering (thus satisfying the {{named req|Compare}} requirements). An idiomatic way to implement strict weak ordering for a structure is to use lexicographical comparison provided by {{lc|std::tie}}:
+{{source|1=
+struct Record
+{
+    std::string name;
+    unsigned int floor;
+    double weight;
+    
+    friend bool operator&lt;(const Record&amp; l, const Record&amp; r)
+    {
+        return std::tie(l.name, l.floor, l.weight)
+             &lt; std::tie(r.name, r.floor, r.weight); // keep the same order
+    }
+};
+}}
+
+Typically, once {{c/core|operator&lt;}} is provided, the other relational operators are implemented in terms of {{c/core|operator&lt;}}.
+{{source|1=
+inline bool operator&lt; (const X&amp; lhs, const X&amp; rhs) { /* do actual comparison */ }
+inline bool operator&gt; (const X&amp; lhs, const X&amp; rhs) { return rhs &lt; lhs; }
+inline bool operator&lt;=(const X&amp; lhs, const X&amp; rhs) { return !(lhs &gt; rhs); }
+inline bool operator&gt;=(const X&amp; lhs, const X&amp; rhs) { return !(lhs &lt; rhs); }
+}}
+
+Likewise, the inequality operator is typically implemented in terms of {{c/core|1=operator==}}:
+{{source|1=
+inline bool operator==(const X&amp; lhs, const X&amp; rhs) { /* do actual comparison */ }
+inline bool operator!=(const X&amp; lhs, const X&amp; rhs) { return !(lhs == rhs); }
+}}
+
+When three-way comparison (such as {{lc|std::memcmp}} or {{lc|std::string::compare}}) is provided, all six two-way comparison operators may be expressed through that:
+{{source|1=
+inline bool operator==(const X&amp; lhs, const X&amp; rhs) { return cmp(lhs,rhs) == 0; }
+inline bool operator!=(const X&amp; lhs, const X&amp; rhs) { return cmp(lhs,rhs) != 0; }
+inline bool operator&lt; (const X&amp; lhs, const X&amp; rhs) { return cmp(lhs,rhs) &lt;  0; }
+inline bool operator&gt; (const X&amp; lhs, const X&amp; rhs) { return cmp(lhs,rhs) &gt;  0; }
+inline bool operator&lt;=(const X&amp; lhs, const X&amp; rhs) { return cmp(lhs,rhs) &lt;= 0; }
+inline bool operator&gt;=(const X&amp; lhs, const X&amp; rhs) { return cmp(lhs,rhs) &gt;= 0; }
+}}
+
+====Array subscript operator====
+User-defined classes that provide array-like access that allows both reading and writing typically define two overloads for {{c/core|operator[]}}: const and non-const variants:
+{{source|1=
+struct T
+{
+          value_t&amp; operator[](std::size_t idx)       { return mVector[idx]; }
+    const value_t&amp; operator[](std::size_t idx) const { return mVector[idx]; }
+};
+}}
+{{rrev|since=c++23|
+Alternatively, they can be expressed as a single member function template using an {{rlpsd|member functions#Explicit object parameter}}:
+{{source|1=
+struct T
+{
+    decltype(auto) operator[](this auto&amp; self, std::size_t idx) 
+    { 
+        return self.mVector[idx]; 
+    }
+};
+}}
+}}
+If the value type is known to be a scalar type, the const variant should return by value.
+
+Where direct access to the elements of the container is not wanted or not possible or distinguishing between lvalue {{c|1=c[i] = v;}} and rvalue {{c|1=v = c[i];}} usage, {{c/core|operator[]}} may return a proxy. See for example {{lc|std::bitset::operator[]}}.
+
+{{rrev multi|until1=c++23|rev1=
+{{c/core|operator[]}} can only take one subscript. In order to provide multidimensional array access semantics, e.g. to implement a 3D array access {{c|1=a[i][j][k] = x;}}, {{c/core|operator[]}} has to return a reference to a 2D plane, which has to have its own {{c/core|operator[]}} which returns a reference to a 1D row, which has to have {{c/core|operator[]}} which returns a reference to the element. To avoid this complexity, some libraries opt for overloading {{c/core|operator()}} instead, so that 3D access expressions have the Fortran-like syntax {{c|1=a(i, j, k) = x;}}.
+|rev2=
+{{c/core|operator[]}} can take any number of subscripts. For example, an {{c/core|operator[]}} of a 3D array class declared as {{c|T&amp; operator[](std::size_t x, std::size_t y, std::size_t z);}} can directly access the elements.
+
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+
+template&lt;typename T, std::size_t Z, std::size_t Y, std::size_t X&gt;
+struct Array3d
+{
+    std::array&lt;T, X * Y * Z&gt; m{};
+
+    constexpr T&amp; operator[](std::size_t z, std::size_t y, std::size_t x) // C++23
+    {
+        assert(x &lt; X and y &lt; Y and z &lt; Z);
+        return m[z * Y * X + y * X + x];
+    }
+};
+
+int main()
+{
+    Array3d&lt;int, 4, 3, 2&gt; v;
+    v[3, 2, 1] = 42;
+    std::cout &lt;&lt; "v[3, 2, 1] = " &lt;&lt; v[3, 2, 1] &lt;&lt; '\n';
+}
+|output=
+v[3, 2, 1] = 42
+}}
+}}
+
+====Bitwise arithmetic operators====
+User-defined classes and enumerations that implement the requirements of {{named req|BitmaskType}} are required to overload the bitwise arithmetic operators {{c/core|operator&amp;}}, {{c/core|operator{{!}}}}, {{c/core|operator^}}, {{c/core|operator~}}, {{c/core|operator&amp;{{=}}}}, {{c/core|operator{{!}}{{=}}}}, and {{c/core|operator^{{=}}}}, and may optionally overload the shift operators {{c/core|operator&lt;&lt;}} {{c/core|operator&gt;&gt;}}, {{c/core|operator&gt;&gt;{{=}}}}, and {{c/core|operator&lt;&lt;{{=}}}}. The canonical implementations usually follow the pattern for binary arithmetic operators described above.
+
+====Boolean negation operator====
+{{rev begin}}
+{{rev|until=c++11|
+The operator {{c/core|operator!}} is commonly overloaded by the user-defined classes that are intended to be used in boolean contexts. Such classes also provide a user-defined conversion function to boolean type (see {{lc|std::basic_ios}} for the standard library example), and the expected behavior of {{c/core|operator!}} is to return the value opposite of {{c/core|operator bool}}.
+}}
+{{rev|since=c++11|
+Since the built-in operator {{c|!}} performs {{rlp|implicit conversion#Contextual conversions|contextual conversion to {{c/core|bool}}}}, user-defined classes that are intended to be used in boolean contexts could provide only {{c/core|operator bool}} and need not overload {{c/core|operator!}}.
+}}
+{{rev end}}
+
+====Rarely overloaded operators====
+The following operators are rarely overloaded:
+* The address-of operator, {{c/core|operator&amp;}}. If the unary &amp; is applied to an lvalue of incomplete type and the complete type declares an overloaded {{c/core|operator&amp;}}, it is unspecified whether the operator has the built-in meaning or the operator function is called. Because this operator may be overloaded, generic libraries use {{lc|std::addressof}} to obtain addresses of objects of user-defined types. The best known example of a canonical overloaded {{c/core|operator&amp;}} is the Microsoft class [https://docs.microsoft.com/en-us/cpp/atl/reference/ccomptrbase-class?view=msvc-160#operator_amp {{tt|CComPtrBase}}]. An example of this operator's use in EDSL can be found in [https://www.boost.org/doc/libs/release/libs/spirit/doc/html/spirit/qi/reference/operator/and_predicate.html boost.spirit].
+* The boolean logic operators, {{c/core|operator&amp;&amp;}} and {{c/core|operator{{!!}}}}. Unlike the built-in versions, the overloads cannot implement short-circuit evaluation.{{rev inl|until=c++17| Also unlike the built-in versions, they do not sequence their left operand before the right one.}} In the standard library, these operators are only overloaded for {{lc|std::valarray}}.
+* The comma operator, {{c/core|operator,}}. {{rev inl|until=c++17|Unlike the built-in version, the overloads do not sequence their left operand before the right one.}} Because this operator may be overloaded, generic libraries use expressions such as {{c|a, void(), b}} instead of {{c|a, b}} to sequence execution of expressions of user-defined types. The boost library uses {{c/core|operator,}} in [https://www.boost.org/doc/libs/release/libs/assign/doc/index.html#intro boost.assign], [https://github.com/boostorg/spirit/blob/develop/include/boost/spirit/home/qi/string/symbols.hpp#L317 boost.spirit], and other libraries. The database access library [https://soci.sourceforge.net/doc.html SOCI] also overloads {{c/core|operator,}}.
+* The member access through pointer to member {{c/core|operator-&gt;*}}. There are no specific downsides to overloading this operator, but it is rarely used in practice. It was suggested that it could be part of a [https://www.aristeia.com/Papers/DDJ_Oct_1999.pdf smart pointer interface], and in fact is used in that capacity by actors in [https://www.boost.org/doc/libs/release/libs/phoenix/doc/html/phoenix/modules/operator.html#phoenix.modules.operator.member_pointer_operator boost.phoenix]. It is more common in EDSLs such as [https://github.com/schlangster/cpp.react/blob/legacy1/include/react/Signal.h#L557 cpp.react].
+
+===Notes===
+{{ftm begin|std=1|comment=1}}
+{{ftm|std=C++23|value=202207L|__cpp_static_call_operator|static {{c/core|operator()}}}}
+{{ftm|std=C++23|value=202211L|__cpp_multidimensional_subscript|static {{c/core|operator[]}}}}
+{{ftm end}}
+
+===Keywords===
+{{ltt|cpp/keyword/operator}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+class Fraction
+{
+    // or C++17's std::gcd
+    constexpr int gcd(int a, int b) { return b == 0 ? a : gcd(b, a % b); }
+    
+    int n, d;
+public:
+    constexpr Fraction(int n, int d = 1) : n(n / gcd(n, d)), d(d / gcd(n, d)) {}
+    
+    constexpr int num() const { return n; }
+    constexpr int den() const { return d; }
+    
+    constexpr Fraction&amp; operator*=(const Fraction&amp; rhs)
+    {
+        int new_n = n * rhs.n / gcd(n * rhs.n, d * rhs.d);
+        d = d * rhs.d / gcd(n * rhs.n, d * rhs.d);
+        n = new_n;
+        return *this;
+    }
+};
+
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; out, const Fraction&amp; f)
+{
+   return out &lt;&lt; f.num() &lt;&lt; '/' &lt;&lt; f.den();
+}
+
+constexpr bool operator==(const Fraction&amp; lhs, const Fraction&amp; rhs)
+{
+    return lhs.num() == rhs.num() &amp;&amp; lhs.den() == rhs.den();
+}
+
+constexpr bool operator!=(const Fraction&amp; lhs, const Fraction&amp; rhs)
+{
+    return !(lhs == rhs);
+}
+
+constexpr Fraction operator*(Fraction lhs, const Fraction&amp; rhs)
+{
+    return lhs *= rhs;
+}
+
+int main()
+{
+    constexpr Fraction f1{3, 8}, f2{1, 2}, f3{10, 2};
+    std::cout &lt;&lt; f1 &lt;&lt; " * " &lt;&lt; f2 &lt;&lt; " = " &lt;&lt; f1 * f2 &lt;&lt; '\n'
+              &lt;&lt; f2 &lt;&lt; " * " &lt;&lt; f3 &lt;&lt; " = " &lt;&lt; f2 * f3 &lt;&lt; '\n'
+              &lt;&lt;  2 &lt;&lt; " * " &lt;&lt; f1 &lt;&lt; " = " &lt;&lt;  2 * f1 &lt;&lt; '\n';
+    static_assert(f3 == f2 * 10);
+}
+|output=
+3/8 * 1/2 = 3/16
+1/2 * 5/1 = 5/2
+2 * 3/8 = 3/4
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1481|std=C++98|before=the non-member prefix increment operator could only have a parameter&lt;br&gt;of class type, enumeration type, or a reference type to such types|after=no type requirement}}
+{{dr list item|wg=cwg|dr=2931|std=C++23|before=explicit object member operator functions could only have no parameter&lt;br&gt;of class type, enumeration type, or a reference type to such types|after=prohibited}}
+{{dr list end}}
+
+===See also===
+* {{rlp|operator precedence|Operator precedence}}
+* {{rlp|operator alternative|Alternative operator syntax}}
+* {{rlp|adl|Argument-dependent lookup}}
+{{cpp/language/operators}}
+
+===External links===
+{{eli|&lt;references/&gt;}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

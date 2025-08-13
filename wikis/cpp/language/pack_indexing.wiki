@@ -1,0 +1,237 @@
+{{title|Pack indexing {{mark since c++26}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+Accesses the element of a {{rlp|pack}} at a specified index.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|id-expression}} {{ttb|...[}} {{spar|expression}} {{ttb|]}}}}
+{{sdsc|num=2|{{spar|typedef-name}} {{ttb|...[}} {{spar|expression}} {{ttb|]}}}}
+{{sdsc end}}
+
+@1@ Pack indexing expression
+@2@ Pack indexing specifier
+
+{{par begin}}
+{{par|{{spar|typedef-name}}|an [[cpp/language/identifiers|identifier]] or a [[cpp/language/templates#template-id|simple-template-id]] that names a pack}}
+{{par|{{spar|id-expression}}|an [[cpp/language/expressions#Primary expressions|id-expression]] that names a pack}}
+{{par|{{spar|expression}}|a {{rlp|constant expression|converted constant expression}} {{c|I}} of type {{c/core|std::size_t}} designated as index where {{c|I}} is within the range {{range plain|0|sizeof...(P)}} for some pack {{c|P}} in pack indexing}}
+{{par end}}
+
+===Explanation===
+Pack indexing is a ''pack expansion'' of the unexpanded pack followed by an ellipsis and index inside the subscript. There are two kinds of pack indexing: pack indexing expression and pack indexing specifier.
+
+Let {{tt|P}} be a non-empty pack containing {{tt|P{{sub|0}}, P{{sub|1}}, ..., P{{sub|n-1}}}} and {{tt|I}} be a valid index, the instantiation of the expansion {{tt|P...[I]}} yields the pack element {{tt|P{{sub|I}}}} of {{tt|P}}.
+
+Indexing a pack with non-constant expression index {{tt|I}} is not allowed.
+{{source|1=
+int runtime_idx();
+
+void bar(auto... args)
+{
+    auto a = args...[0];
+    const int n = 1;
+    auto b = args...[n];
+    int m = 2;
+    auto c = args...[m]; // error: 'm' is not a constant expression
+    auto d = args...[runtime_idx()]; // error: 'runtime_idx()' is not a constant expression
+}
+}}
+
+Indexing a pack of template template parameters is not possible. 
+{{source|1=
+template &lt;template &lt;typename...&gt; typename... Temps&gt;
+using A = Temps...[0]&lt;&gt;; // error: 'Temps' is a pack of template template parameters
+
+template &lt;template &lt;typename...&gt; typename... Temps&gt;
+using B = Temps&lt;&gt;...[0]; // error: 'Temps&lt;&gt;' doesn't denote pack name 
+                         // although it is a simple-template-id
+}}
+
+===Pack indexing expression===
+{{sdsc begin}}
+{{sdsc|{{spar|id-expression}} {{ttb|...[}} {{spar|expression}} {{ttb|]}}}}
+{{sdsc end}}
+
+Pack indexing expression denotes the ''id-expression'', the expression of pack element {{tt|P{{sub|I}}}}. The {{spar|id-expression}} shall be introduced by the declaration of:
+* {{rlp|pack|non-type template parameter pack}}, 
+* {{rlp|pack|function parameter pack}},
+* {{rlp|lambda#Lambda capture|lambda init-capture pack}}, or
+* {{rlp|structured_binding|structured binding pack}}.
+
+{{source|1=
+template &lt;std::size_t I, typename... Ts&gt;
+constexpr auto element_at(Ts... args)
+{
+    // 'args' introduced in function parameter pack declaration
+    return args...[I];
+}
+
+static_assert(element_at&lt;0&gt;(3, 5, 9) == 3);
+static_assert(element_at&lt;2&gt;(3, 5, 9) == 9);
+static_assert(element_at&lt;3&gt;(3, 5, 9) == 4); // error:  out of bounds
+static_assert(element_at&lt;0&gt;() == 1); // error: out of bounds, empty pack
+
+template &lt;std::size_t I, typename Tup&gt;
+constexpr auto structured_binding_element_at(Tup tup)
+{
+    auto [...elems] = tup;
+    // 'elems' introduced in structured binding pack declaration
+    return elems...[I];
+}
+
+struct A { bool a; int b; };
+
+static_assert(structured_binding_element_at&lt;0&gt;(A {true, 4}) == true);
+static_assert(structured_binding_element_at&lt;1&gt;(A {true, 4}) == 4);
+
+// 'Vals' introduced in non-type template parameter pack declaration
+template &lt;std::size_t I, std::size_t... Vals&gt;
+constexpr std::size_t double_at = Vals...[I] * 2; // OK
+
+template &lt;std::size_t I, typename... Args&gt;
+constexpr auto foo(Args... args)
+{
+    return [...members = args](Args...[I] op)
+    {
+        // 'members' introduced in lambda init-capture pack
+        return members...[I] + op;
+    };
+}
+
+static_assert(foo&lt;0&gt;(4, "Hello", true)(5) == 9);
+static_assert(foo&lt;1&gt;(3, std::string("C++"))("26") == "C++26");
+}}
+
+Indexing pack of complex expressions other than id-expression is not allowed.
+{{source|1=
+template &lt;std::size_t I, auto... Vals&gt;
+constexpr auto identity_at = (Vals)...[I]; // error
+// use 'Vals...[I]' instead
+
+template &lt;std::size_t I, std::size_t... Vals&gt;
+constexpr std::size_t triple_at = (Vals * 3)...[I]; // error
+// use 'Vals...[I] * 3' instead
+
+template &lt;std::size_t I, typename... Args&gt;
+constexpr decltype(auto) get(Args&amp;&amp;... args) noexcept
+{
+    return std::forward&lt;Args&gt;(args)...[I]; // error
+    // use 'std::forward&lt;Args...[I]&gt;(args...[I])' instead
+}
+}}
+
+Applying {{rlpt|decltype}} to pack indexing expression is the same as applying {{rlpt|decltype}} to id-expression.
+
+{{source|1=
+void f() 
+{
+    [](auto... args)
+    {
+        using T0 = decltype(args...[0]);   // 'T0' is 'double'
+        using T1 = decltype((args...[0])); // 'T1' is 'double&amp;'
+    }(3.14);
+}
+}}
+
+===Pack indexing specifier===
+{{sdsc begin}}
+{{sdsc|{{spar|typedef-name}} {{ttb|...[}} {{spar|expression}} {{ttb|]}}}}
+{{sdsc end}}
+
+Pack indexing specifier denotes the ''computed-type-specifier'', the type of pack element {{tt|P{{sub|I}}}}. The {{spar|typedef-name}} shall be introduced by the declaration of {{rlp|pack|type template parameter pack}}.
+
+{{source|1=
+template &lt;typename... Ts&gt;
+using last_type_t = Ts...[sizeof...(Ts) - 1];
+
+static_assert(std::is_same_v&lt;last_type_t&lt;&gt;, int&gt;); // error: out of bounds
+static_assert(std::is_same_v&lt;last_type_t&lt;int&gt;, int&gt;);
+static_assert(std::is_same_v&lt;last_type_t&lt;bool, char&gt;, char&gt;);
+static_assert(std::is_same_v&lt;last_type_t&lt;float, int, bool*&gt;, bool*&gt;);
+}}
+
+Pack indexing specifier can appear as:
+* a {{rlp|declarations#Specifiers|simple type specifier}},
+* a {{rlp|derived class|base class specifier}},
+* a {{rlp|identifiers#Qualified identifiers|nested name specifier}}, or
+* the {{rlp|identifiers#Unqualified identifiers|type of an explicit destructor call}}.
+
+Pack indexing specifier can be used in function or constructor parameter list to establish {{rlpsd|template argument deduction#Non-deduced contexts}} in template argument deduction.
+
+{{source|1=
+template &lt;typename...&gt;
+struct type_seq {};
+
+template &lt;typename... Ts&gt;
+auto f(Ts...[0] arg, type_seq&lt;Ts...&gt;)
+{
+    return arg;
+}
+
+// OK: "Hello" is implicitly converted to 'std::string_view'
+std::same_as&lt;std::string_view&gt; auto a = f("Hello", type_seq&lt;std::string_view&gt;{});
+
+// Error: "Ok" is not convertible to 'int'
+std::same_as&lt;int&gt; auto b = f("Ok", type_seq&lt;int, const char*&gt;{});
+}}
+
+===Notes===
+Before C++26, {{c|Ts...[N]}} was a valid syntax for declaring function parameter pack of unnamed arrays of size {{c|N}}, where the parameter types were further adjusted to pointers. Since C++26, {{c|Ts...[1]}} is interpreted as a pack indexing specifier which would change the behavior below to #2. To preserve the first behavior, the function parameter pack must be named, or manually adjusted to a pack of pointer types.
+
+{{source|1=
+template &lt;typename... Ts&gt;
+void f(Ts... [1]);
+
+template &lt;typename... Ts&gt;
+void g(Ts... args[1]);
+
+template &lt;typename... Ts&gt;
+void h(Ts*...); // clearer but more permissive: Ts... can contain cv void or function types
+
+void foo() 
+{
+    f&lt;char, bool&gt;(nullptr, nullptr);
+    // behavior #1 (before C++26):
+    //  calls void 'f&lt;char, bool&gt;(char*, bool*)' (aka 'f&lt;char, bool&gt;(char[1], bool[1])')
+    // behavior #2 (since C++26): 
+    //  error: supposedly called 'void f&lt;char, bool&gt;(bool)'
+    //  but provided with 2 arguments instead of 1
+
+    g&lt;char, bool&gt;(nullptr, nullptr);
+    // calls 'g&lt;char, bool&gt;(char*, bool*)' (aka 'g&lt;char, bool&gt;(char[1], bool[1])')
+
+    h&lt;char, bool&gt;(nullptr, nullptr);
+    // calls 'h&lt;char, bool&gt;(char*, bool*)'
+}
+}}
+
+{{feature test macro|std=C++26|value=202311L|__cpp_pack_indexing|[[#top|Pack indexing]]}}
+
+===Example===
+{{example|code=
+#include &lt;tuple&gt;
+
+template &lt;std::size_t... Indices, typename Decomposable&gt;
+constexpr auto splice(Decomposable d)
+{
+    auto [...elems] = d;
+    return std::make_tuple(elems...[Indices]...);
+}
+
+struct Point
+{
+    int x;
+    int y;
+    int z;
+};
+
+int main() 
+{
+    constexpr Point p { .x = 1, .y = 4, .z = 3 };
+    static_assert(splice&lt;2, 1, 0&gt;(p) == std::make_tuple(3, 4, 1));
+    static_assert(splice&lt;1, 1, 0, 0&gt;(p) == std::make_tuple(4, 4, 1, 1));
+}
+}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

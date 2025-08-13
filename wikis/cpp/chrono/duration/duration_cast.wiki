@@ -1,0 +1,101 @@
+{{cpp/chrono/title|duration_cast}}
+{{cpp/chrono/duration/navbar}}
+{{ddcl|since=c++11|header=chrono|
+template&lt; class ToDuration, class Rep, class Period &gt;
+constexpr ToDuration duration_cast( const std::chrono::duration&lt;Rep, Period&gt;&amp; d );
+}}
+
+Converts a {{lc|std::chrono::duration}} to a duration of different type {{tt|ToDuration}}.
+
+The function only participate in overload resolution if {{tt|ToDuration}} is a specialization of {{lc|std::chrono::duration}}.
+
+Let
+* {{tt|ToRep}} be {{c/core|typename ToDuration::rep}},
+* {{tt|ToPeriod}} be {{c/core|typename ToDuration::period}},
+* {{tt|CF}} be {{c/core|std::ratio_divide&lt;Period, ToPeriod&gt;}},
+* {{tt|CR}} be {{c/core|std::common_type&lt;Rep, ToRep, std::intmax_t&gt;::type}},
+* {{c|cr_count}} be {{c|static_cast&lt;CR&gt;(d.count())}},
+* {{c|cr_num}} be {{c|static_cast&lt;CR&gt;(CF::num)}}, and
+* {{c|cr_den}} be {{c|static_cast&lt;CR&gt;(CF::den)}},
+the result is:
+{|class="wikitable"
+!rowspan=2 colspan=2|
+!colspan=2|{{c|CF::num}}
+|-
+!{{c|1}}
+!not {{c|1}}
+|-
+!rowspan=2|{{c|CF::den}}
+!{{c|1}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (d.count()))}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (cr_count * cr_num))}}
+|-
+!not {{c|1}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (cr_count / cr_den))}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (cr_count * cr_num / cr_den))}}
+|}
+
+===Parameters===
+{{par begin}}
+{{par|d|duration to convert}}
+{{par end}}
+
+===Return value===
+{{c|d}} converted to a duration of type {{tt|ToDuration}}.
+
+===Notes===
+No implicit conversions are used. Multiplications and divisions are avoided where possible, if it is known at compile time that one or more parameters are {{c|1}}. Computations are done in the widest type available and converted, as if by {{ltt|cpp/language/static_cast}}, to the result type only when finished.
+
+Casting between integer durations where the source period is exactly divisible by the target period (e.g. hours to minutes) or between floating-point durations can be performed with ordinary casts or implicitly via {{rlp|duration|{{tt|std::chrono::duration}} constructors}}, no {{tt|duration_cast}} is needed.
+
+Casting from a floating-point duration to an integer duration is [[cpp/language/implicit_conversion#Floating-integral_conversions|subject to undefined behavior]] when the floating-point value is NaN, infinity, or too large to be representable by the target's integer type. Otherwise, casting to an integer duration is subject to truncation as with any {{c/core|static_cast}} to an integer type.
+
+===Example===
+{{example
+|This example measures the execution time of a function.
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;ratio&gt;
+#include &lt;thread&gt;
+
+void f()
+{
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+int main()
+{
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    f();
+    const auto t2 = std::chrono::high_resolution_clock::now();
+    
+    // floating-point duration: no duration_cast needed
+    const std::chrono::duration&lt;double, std::milli&gt; fp_ms = t2 - t1;
+    
+    // integral duration: requires duration_cast
+    const auto int_ms = std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(t2 - t1);
+    
+    // converting integral duration to integral duration of
+    // shorter divisible time unit: no duration_cast needed
+    const std::chrono::duration&lt;long, std::micro&gt; int_usec = int_ms;
+    
+    std::cout &lt;&lt; "f() took " &lt;&lt; fp_ms &lt;&lt; ", or "
+              &lt;&lt; int_ms &lt;&lt; " (whole milliseconds), or "
+              &lt;&lt; int_usec &lt;&lt; " (whole microseconds)\n";
+}
+|p=true
+|output=
+f() took 1000.14ms, or 1000ms (whole milliseconds), or 1000000us (whole microseconds)
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/dsc duration}}
+{{dsc inc|cpp/chrono/time_point/dsc time_point_cast}}
+{{dsc inc|cpp/chrono/duration/dsc floor}}
+{{dsc inc|cpp/chrono/duration/dsc ceil}}
+{{dsc inc|cpp/chrono/duration/dsc round}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

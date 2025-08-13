@@ -1,0 +1,153 @@
+{{cpp/title|make_shared|make_shared_for_overwrite}}
+{{cpp/memory/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++11|notes={{mark|T is not array}}|
+template&lt; class T, class... Args &gt;
+shared_ptr&lt;T&gt; make_shared( Args&amp;&amp;... args );
+}}
+{{dcla|num=2|since=c++20|notes={{mark|T is U[]}}|
+template&lt; class T &gt;
+shared_ptr&lt;T&gt; make_shared( std::size_t N );
+}}
+{{dcl|num=3|since=c++20|notes={{mark|T is U[N]}}|
+template&lt; class T &gt;
+shared_ptr&lt;T&gt; make_shared();
+}}
+{{dcl|num=4|since=c++20|notes={{mark|T is U[]}}|
+template&lt; class T &gt;
+shared_ptr&lt;T&gt; make_shared( std::size_t N, const std::remove_extent_t&lt;T&gt;&amp; u );
+}}
+{{dcl|num=5|since=c++20|notes={{mark|T is U[N]}}|
+template&lt; class T &gt;
+shared_ptr&lt;T&gt; make_shared( const std::remove_extent_t&lt;T&gt;&amp; u );
+}}
+{{dcla|num=6|since=c++20|notes={{mark|T is not U[]}}|
+template&lt; class T &gt;
+shared_ptr&lt;T&gt; make_shared_for_overwrite();
+}}
+{{dcl|num=7|since=c++20|notes={{mark|T is U[]}}|
+template&lt; class T &gt;
+shared_ptr&lt;T&gt; make_shared_for_overwrite( std::size_t N );
+}}
+{{dcl end}}
+
+@1@ Constructs an object of type {{tt|T}} and wraps it in a {{lc|std::shared_ptr}} using {{c|args}} as the parameter list for the constructor of {{tt|T}}. The object is constructed as if by the expression {{c|::new (pv) T(std::forward&lt;Args&gt;(args)...)}}, where {{tt|pv}} is an internal {{c|void*}} pointer to storage suitable to hold an object of type {{tt|T}}. The storage is typically larger than {{c|sizeof(T)}} in order to use one allocation for both the control block of the shared pointer and the {{tt|T}} object. The {{tt|std::shared_ptr}} constructor called by this function enables {{tt|shared_from_this}} with a pointer to the newly constructed object of type {{tt|T}}. {{rrev|since=c++20|{{cpp/enable_if|T is not an array type}}.}}
+@2,3@ Same as {{v|1}}, but the object constructed is a possibly-multidimensional array whose non-array elements of type {{c|std::remove_all_extents_t&lt;T&gt;}} are value-initialized as if by placement-new expression {{c|::new(pv) std::remove_all_extents_t&lt;T&gt;()}}. The overload {{v|2}} creates an array of size {{c|N}} along the first dimension. The array elements are initialized in ascending order of their addresses, and when their lifetime ends are destroyed in the reverse order of their original construction.
+@4,5@ Same as {{v|2,3}}, but every element is initialized from the default value {{c|u}}. If {{tt|U}} is not an array type, then this is performed as if by the same placement-new expression as in {{v|1}}; otherwise, this is performed as if by initializing every non-array element of the (possibly multidimensional) array with the corresponding element from {{c|u}} with the same placement-new expression as in {{v|1}}. The overload {{v|4}} creates an array of size {{c|N}} along the first dimension. The array elements are initialized in ascending order of their addresses, and when their lifetime ends are destroyed in the reverse order of their original construction.
+@6@ Same as {{v|1}} if {{tt|T}} is not an array type and {{v|3}} if {{tt|T}} is {{c|U[N]}}, except that the created object is [[cpp/language/default initialization|default-initialized]].
+@7@ Same as {{v|2}}, except that the individual array elements are [[cpp/language/default initialization|default-initialized]].
+
+In each case, the object {{rev inl|since=c++20|(or individual elements if {{tt|T}} is an array type)}} will be destroyed by {{c|p-&gt;~X()}}, where {{tt|p}} is a pointer to the object and {{tt|X}} is its type.
+
+===Parameters===
+{{par begin}}
+{{par|args|list of arguments with which an instance of {{tt|T}} will be constructed}}
+{{par|N|array size to use}}
+{{par|u|the initial value to initialize every element of the array}}
+{{par end}}
+
+===Return value===
+{{lc|std::shared_ptr}} of an instance of type {{tt|T}}.
+
+===Exceptions===
+May throw {{lc|std::bad_alloc}} or any exception thrown by the constructor of {{tt|T}}. If an exception is thrown, the functions have no effect. {{rev inl|since=c++20|If an exception is thrown during the construction of the array, already-initialized elements are destroyed in reverse order.}}
+
+===Notes===
+This function may be used as an alternative to {{c|std::shared_ptr&lt;T&gt;(new T(args...))}}. The trade-offs are:
+* {{c|std::shared_ptr&lt;T&gt;(new T(args...))}} performs at least two allocations (one for the object {{tt|T}} and one for the control block of the shared pointer), while {{c|std::make_shared&lt;T&gt;}} typically performs only one allocation (the standard recommends, but does not require this; all known implementations do this).
+* If any {{lc|std::weak_ptr}} references the control block created by {{tt|std::make_shared}} after the lifetime of all shared owners ended, the memory occupied by {{tt|T}} persists until all weak owners get destroyed as well, which may be undesirable if {{c|sizeof(T)}} is large.
+* {{c|std::shared_ptr&lt;T&gt;(new T(args...))}} may call a non-public constructor of {{tt|T}} if executed in context where it is accessible, while {{tt|std::make_shared}} requires public access to the selected constructor.
+* Unlike the {{lc|std::shared_ptr}} constructors, {{tt|std::make_shared}} does not allow a custom deleter.
+* {{tt|std::make_shared}} uses {{c|::new}}, so if any special behavior has been set up using a class-specific {{ltt|cpp/memory/new/operator_new|operator new}}, it will differ from {{c|std::shared_ptr&lt;T&gt;(new T(args...))}}.
+{{rrev|until=c++20|* {{lc|std::shared_ptr}} supports array types (as of C++17), but {{tt|std::make_shared}} does not. This functionality is supported by [https://www.boost.org/doc/libs/1_66_0/libs/smart_ptr/doc/html/smart_ptr.html#make_shared {{tt|boost::make_shared}}].
+}}
+{{rrev|until=c++17|* code such as {{c|f(std::shared_ptr&lt;int&gt;(new int(42)), g())}} can cause a memory leak if {{tt|g}} gets called after {{c|new int(42)}} and throws an exception, while {{c|f(std::make_shared&lt;int&gt;(42), g())}} is safe, since two function calls are [[cpp/language/eval_order|never interleaved]].}}
+{{cpp/memory/shared_ptr/enabling shared_from_this}}
+
+{{ftm begin|comment=yes|std=yes}}
+{{ftm|__cpp_lib_shared_ptr_arrays|Array support of {{ttt|std::make_shared}}; overloads {{v|2-5|2}}|value=201707L|std=C++20}}
+{{ftm|__cpp_lib_smart_ptr_for_overwrite|Smart pointer creation with default initialization ({{lc|std::allocate_shared_for_overwrite}}, {{tt|std::make_shared_for_overwrite}}, {{lc|std::make_unique_for_overwrite}}); overloads {{v|6,7|6}}|value=202002L|std=C++20}}
+{{ftm end}}
+
+===Example===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+struct C
+{
+    // constructors needed (until C++20)
+    C(int i) : i(i) {}
+    C(int i, float f) : i(i), f(f) {}
+    int i;
+    float f{};
+};
+
+int main()
+{
+    // using `auto` for the type of `sp1`
+    auto sp1 = std::make_shared&lt;C&gt;(1); // overload (1)
+    static_assert(std::is_same_v&lt;decltype(sp1), std::shared_ptr&lt;C&gt;&gt;);
+    std::cout &lt;&lt; "sp1-&gt;{ i:" &lt;&lt; sp1-&gt;i &lt;&lt; ", f:" &lt;&lt; sp1-&gt;f &lt;&lt; " }\n";
+
+    // being explicit with the type of `sp2`
+    std::shared_ptr&lt;C&gt; sp2 = std::make_shared&lt;C&gt;(2, 3.0f); // overload (1)
+    static_assert(std::is_same_v&lt;decltype(sp2), std::shared_ptr&lt;C&gt;&gt;);
+    static_assert(std::is_same_v&lt;decltype(sp1), decltype(sp2)&gt;);
+    std::cout &lt;&lt; "sp2-&gt;{ i:" &lt;&lt; sp2-&gt;i &lt;&lt; ", f:" &lt;&lt; sp2-&gt;f &lt;&lt; " }\n";
+
+    // shared_ptr to a value-initialized float[64]; overload (2):
+    std::shared_ptr&lt;float[]&gt; sp3 = std::make_shared&lt;float[]&gt;(64);
+
+    // shared_ptr to a value-initialized long[5][3][4]; overload (2):
+    std::shared_ptr&lt;long[][3][4]&gt; sp4 = std::make_shared&lt;long[][3][4]&gt;(5);
+
+    // shared_ptr to a value-initialized short[128]; overload (3):
+    std::shared_ptr&lt;short[128]&gt; sp5 = std::make_shared&lt;short[128]&gt;();
+
+    // shared_ptr to a value-initialized int[7][6][5]; overload (3):
+    std::shared_ptr&lt;int[7][6][5]&gt; sp6 = std::make_shared&lt;int[7][6][5]&gt;();
+
+    // shared_ptr to a double[256], where each element is 2.0; overload (4):
+    std::shared_ptr&lt;double[]&gt; sp7 = std::make_shared&lt;double[]&gt;(256, 2.0);
+
+    // shared_ptr to a double[7][2], where each double[2]
+    // element is {3.0, 4.0}; overload (4):
+    std::shared_ptr&lt;double[][2]&gt; sp8 = std::make_shared&lt;double[][2]&gt;(7, {3.0, 4.0});
+
+    // shared_ptr to a vector&lt;int&gt;[4], where each vector
+    // has contents {5, 6}; overload (4):
+    std::shared_ptr&lt;std::vector&lt;int&gt;[]&gt; sp9 =
+        std::make_shared&lt;std::vector&lt;int&gt;[]&gt;(4, {5, 6});
+
+    // shared_ptr to a float[512], where each element is 1.0; overload (5):
+    std::shared_ptr&lt;float[512]&gt; spA = std::make_shared&lt;float[512]&gt;(1.0);
+
+    // shared_ptr to a double[6][2], where each double[2] element
+    // is {1.0, 2.0}; overload (5):
+    std::shared_ptr&lt;double[6][2]&gt; spB = std::make_shared&lt;double[6][2]&gt;({1.0, 2.0});
+
+    // shared_ptr to a vector&lt;int&gt;[4], where each vector
+    // has contents {5, 6}; overload (5):
+    std::shared_ptr&lt;std::vector&lt;int&gt;[4]&gt; spC =
+        std::make_shared&lt;std::vector&lt;int&gt;[4]&gt;({5, 6});
+}
+|output=
+sp1-&gt;{ i:1, f:0 }
+sp2-&gt;{ i:2, f:3 }
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc allocate_shared}}
+{{dsc inc|cpp/memory/dsc enable_shared_from_this}}
+{{dsc inc|cpp/memory/unique_ptr/dsc make_unique}}
+{{dsc inc|cpp/memory/new/dsc operator_new}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

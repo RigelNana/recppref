@@ -1,0 +1,136 @@
+{{title|Copy-initialization}}
+{{cpp/language/initialization/navbar}}
+Initializes an object from another object.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|T}} {{spar|object}} {{ttb|1==}} {{spar|other}}{{ttb|;}}}}
+{{sdsc|num=2|notes={{mark until c++11}}|{{spar|T}} {{spar|object}} {{ttb|1==}} {{ttb|{}}{{spar|other}}{{ttb|};}}}}
+{{sdsc|num=3|{{spar|f}}{{ttb|(}}{{spar|other}}{{ttb|)}}}}
+{{sdsc|num=4|{{ttb|return}} {{spar|other}}{{ttb|;}}}}
+{{sdsc|num=5|{{ttb|throw }}{{spar|object}}{{ttb|;}}
+{{ttb|catch (}}{{spar|T}} {{spar|object}}{{ttb|)}}}}
+{{sdsc|num=6|{{spar|T}} {{spar|array}}{{ttb|[}}{{spar|N}}{{ttb|1=] = {}}{{spar|other-sequence}}{{ttb|};}}}}
+{{sdsc end}}
+
+===Explanation===
+Copy-initialization is performed in the following situations:
+@1@ When a named variable (automatic, static, or thread-local) of a non-reference type {{tt|T}} is declared with the initializer consisting of an equals sign followed by an expression.
+@2@ {{mark until c++11}} When a named variable of a scalar type {{tt|T}} is declared with the initializer consisting of an equals sign followed by a brace-enclosed expression (Note: as of C++11, this is classified as {{rlp|list initialization}}, and narrowing conversion is not allowed).
+@3@ When {{rlp|operator other#Built-in function call operator|passing an argument}} to a function by value.
+@4@ When {{rlp|return|returning}} from a function that returns by value.
+@5@ When {{rlp|throw|throwing}} or {{rlp|catch|catching}} an exception by value.
+@6@ As part of {{rlp|aggregate initialization}}, to initialize each element for which an initializer is provided.
+
+The effects of copy-initialization are:
+
+{{rev begin}}
+{{rev|since=c++17|
+* First, if {{tt|T}} is a class type and the initializer is a {{rlp|value category|prvalue}} expression whose cv-unqualified type is the same class as {{tt|T}}, the initializer expression itself, rather than a temporary materialized from it, is used to initialize the destination object: see {{rlp|copy elision}}.
+}}
+{{rev end}}
+
+* Otherwise, if {{tt|T}} is a class type and the cv-unqualified version of the type of {{spar|other}} is {{tt|T}} or a class derived from {{tt|T}}, the {{rlp|converting constructor|non-explicit constructors}} of {{tt|T}} are examined and the best match is selected by overload resolution. That constructor is then called to initialize the object.
+
+* Otherwise, if {{tt|T}} is a class type, and  the cv-unqualified version of the type of {{spar|other}} is not {{tt|T}} or derived from {{tt|T}}, or if {{tt|T}} is non-class type, but the type of {{spar|other}} is a class type, {{rlp|implicit cast|user-defined conversion sequences}} that can convert from the type of {{spar|other}} to {{tt|T}} (or to a type derived from {{tt|T}} if {{tt|T}} is a class type and a conversion function is available) are examined and the best one is selected through overload resolution. The result of the conversion, which is a {{rev inl|until=c++11|rvalue temporary}}{{rev inl|since=c++11|until=c++17|prvalue temporary}}{{rev inl|since=c++17|prvalue expression}} of the cv-unqualified version of {{tt|T}} if a {{rlp|converting constructor}} was used, is then used to {{rlp|direct initialization|direct-initialize}} the object. {{rev inl|until=c++17|The last step is usually {{rlp|copy elision|optimized out}} and the result of the conversion is constructed directly in the memory allocated for the target object, but the appropriate constructor (move or copy) is required to be accessible even though it's not used.}}
+
+* Otherwise (if neither {{tt|T}} nor the type of {{spar|other}} are class types), {{rlp|implicit cast|standard conversions}} are used, if necessary, to convert the value of {{spar|other}} to the cv-unqualified version of {{tt|T}}.
+
+===Notes===
+Copy-initialization is less permissive than direct-initialization: {{rlp|explicit|explicit constructors}} are not {{rlp|converting constructor}}s and are not considered for copy-initialization.
+{{source|1=
+struct Exp { explicit Exp(const char*) {} }; // not convertible from const char*
+Exp e1("abc");  // OK
+Exp e2 = "abc"; // Error, copy-initialization does not consider explicit constructor
+
+struct Imp { Imp(const char*) {} }; // convertible from const char*
+Imp i1("abc");  // OK
+Imp i2 = "abc"; // OK
+}}
+
+In addition, the implicit conversion in copy-initialization must produce {{tt|T}} directly from the initializer, while, e.g. direct-initialization expects an implicit conversion from the initializer to an argument of {{tt|T}}'s constructor.
+{{source|1=
+struct S { S(std::string) {} }; // implicitly convertible from std::string
+S s("abc");   // OK: conversion from const char[4] to std::string
+S s = "abc";  // Error: no conversion from const char[4] to S
+S s = "abc"s; // OK: conversion from std::string to S
+}}
+
+If {{spar|other}} is an rvalue expression, a {{rlp|move constructor}} will be selected by overload resolution and called during copy-initialization. This is still considered copy-initialization; there is no special term (e.g., move-initialization) for this case.
+
+{{rlp|implicit cast|Implicit conversion}} is defined in terms of copy-initialization: if an object of type {{tt|T}} can be copy-initialized with expression {{tt|E}}, then {{tt|E}} is implicitly convertible to {{tt|T}}.
+
+The equals sign, {{ttb|1==}}, in copy-initialization of a named variable is not related to the assignment operator. Assignment operator overloads have no effect on copy-initialization.
+
+===Example===
+{{example
+|
+|code=
+#include &lt;memory&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+ 
+struct A
+{
+    operator int() { return 12;}
+};
+ 
+struct B
+{
+    B(int) {}
+};
+ 
+int main()
+{
+    std::string s = "test";        // OK: constructor is non-explicit
+    std::string s2 = std::move(s); // this copy-initialization performs a move
+ 
+//  std::unique_ptr&lt;int&gt; p = new int(1); // error: constructor is explicit
+    std::unique_ptr&lt;int&gt; p(new int(1));  // OK: direct-initialization
+ 
+    int n = 3.14;    // floating-integral conversion
+    const int b = n; // const doesn't matter
+    int c = b;       // ...either way
+ 
+    A a;
+    B b0 = 12;
+//  B b1 = a;       // &lt; error: conversion from 'A' to non-scalar type 'B' requested
+    B b2{a};        // &lt; identical, calling A::operator int(), then B::B(int)
+    B b3 = {a};     // &lt;
+    auto b4 = B{a}; // &lt;
+    
+//  b0 = a;         // &lt; error, assignment operator overload needed
+
+    [](...){}(c, b0, b3, b4); // pretend these variables are used
+}
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=5|std=C++98|before=the cv-qualification of the destination type is applied to&lt;br&gt;the temporary initialized by a converting constructor|after=the temporary is not cv-qualified}}
+{{dr list item|wg=cwg|dr=177|std=C++98|before=the value category of the temporary created during&lt;br&gt;copy-initialization of a class object is unspecified|after=specified as rvalue}}
+{{dr list end}}
+
+===See also===
+* {{rlp|copy elision}}
+* {{rlp|converting constructor}}
+* {{rlp|copy assignment}}
+* {{rlp|copy constructor}}
+* {{rlp|default constructor}}
+* {{rlp|destructor}}
+* {{rlpt|explicit}}
+* {{rlp|initialization}}
+** {{rlp|aggregate initialization}}
+** {{rlp|constant initialization}}
+** {{rlp|default initialization}}
+** {{rlp|direct initialization}}
+** {{rlp|initializer list}}
+** {{rlp|list initialization}}
+** {{rlp|reference initialization}}
+** {{rlp|value initialization}}
+** {{rlp|zero initialization}}
+* {{rlp|move assignment}}
+* {{rlp|move constructor}}
+* {{rlpt|new}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,67 @@
+{{cpp/memory/allocator/title|allocate_at_least}}
+{{cpp/memory/allocator/navbar}}
+{{ddcl|since=c++23|
+constexpr std::allocation_result&lt;T*, std::size_t&gt;
+    allocate_at_least( std::size_t n );
+}}
+
+Allocates {{c|count * sizeof(T)}} bytes of uninitialized storage, where {{tt|count}} is an unspecified integer value not less than {{c|n}}, by calling {{c|::operator new}} (possibly with an additional {{lc|std::align_val_t}} argument), but it is unspecified when and how this function is called.
+
+Then, this function creates an array of type {{c|T[count]}} in the storage and starts its lifetime, but does not start lifetime of any of its elements.
+
+In order to use this function in a constant expression, the allocated storage must be deallocated within the evaluation of the same expression.&lt;!-- missing in P0401R6, see LWG3684 --&gt;
+
+Use of this function is ill-formed if {{tt|T}} is an [[cpp/language/type#Incomplete type|incomplete type]].
+
+===Parameters===
+{{par begin}}
+{{par|n|the lower bound of number of objects to allocate storage for}}
+{{par end}}
+
+===Return value===
+{{c|std::allocation_result&lt;T*&gt;{p, count}&lt;!----&gt;}}, where {{tt|p}} points to the first element of an array of {{tt|count}} objects of type {{tt|T}} whose elements have not been constructed yet.
+
+===Exceptions===
+Throws {{lc|std::bad_array_new_length}} if {{c|std::numeric_limits&lt;std::size_t&gt;::max() / sizeof(T) &lt; n}}, or {{lc|std::bad_alloc}} if allocation fails.
+
+===Notes===
+{{tt|allocate_at_least}} is mainly provided for contiguous containers, e.g. {{lc|std::vector}} and {{lc|std::basic_string}}, in order to reduce reallocation by making their capacity match the actually allocated size when possible.
+
+The "unspecified when and how" wording makes it possible to [[cpp/language/new#Allocation|combine or optimize away heap allocations]] made by the standard library containers, even though such optimizations are disallowed for direct calls to {{c|::operator new}}. For example, this is implemented by libc++ ([https://github.com/llvm-mirror/libcxx/blob/master@%7B2017-02-09%7D/include/memory#L1766-L1772] and [https://github.com/llvm-mirror/libcxx/blob/master@%7B2017-02-09%7D/include/new#L211-L217]).
+
+After calling {{ttt|allocate_at_least}} and before construction of elements, pointer arithmetic of {{c|T*}} is well-defined within the allocated array, but the behavior is undefined if elements are accessed.
+{{feature test macro|__cpp_lib_allocate_at_least|std=C++23|value=202302L|{{tt|allocate_at_least}} etc.}}
+
+===Example===
+{{example
+|code=
+#include &lt;memory&gt;
+#include &lt;print&gt;
+
+int main()
+{
+    const std::size_t count{69};
+    std::allocator&lt;int&gt; alloc;
+    std::allocation_result res{alloc.allocate_at_least(count)};
+    std::print("count: {}\n"
+               "res.ptr: {}\n"
+               "res.count: {}\n", count, res.ptr, res.count);
+
+    /* construct, use, then destroy elements */
+
+    alloc.deallocate(res.ptr, res.count);
+}
+|p=true
+|output=
+count: 69
+res.ptr: 0x555a486a0960
+res.count: 96
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocation_result}}
+{{dsc inc|cpp/memory/allocator_traits/dsc allocate_at_least}}
+{{dsc end}}
+
+{{langlinks|es|ja|ru|zh}}

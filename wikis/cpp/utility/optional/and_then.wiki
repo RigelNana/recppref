@@ -1,0 +1,130 @@
+{{cpp/utility/optional/title|and_then}}
+{{cpp/utility/optional/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) &amp;;
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) const&amp;;
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) &amp;&amp;;
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) const&amp;&amp;;
+}}
+{{dcl end}}
+
+If {{c|*this}} contains a value, invokes {{c|f}} with the contained value as an argument, and returns the result of that invocation; otherwise, returns an empty {{tt|std::optional}}.
+
+The return type (see below) must be a specialization of {{lc|std::optional}} (unlike {{rlpt|transform|transform()}}). Otherwise, the program is ill-formed.
+
+@1@ Equivalent to&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, T&amp;&gt;&gt;{};}}
+
+@2@ Equivalent to&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, const T&amp;&gt;&gt;{};}}
+
+@3@ Equivalent to&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), std::move(value()));
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, T&gt;&gt;{};}}
+
+@4@ Equivalent to&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), std::move(value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, const T&gt;&gt;{};}}
+
+===Parameters===
+{{par begin}}
+{{par|f|a suitable function or {{named req|Callable}} object that returns an {{lc|std::optional}}}}
+{{par end}}
+
+===Return value===
+The result of {{c|f}} or an empty {{lc|std::optional}}, as described above.
+
+===Notes===
+Some languages call this operation ''flatmap''.
+
+{{feature test macro|__cpp_lib_optional|std=C++23|value=202110L|{{rlp|/#Monadic operations|Monadic operations}} in {{lc|std::optional}}}}
+
+===Example===
+{{example
+|code=
+#include &lt;charconv&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;optional&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+std::optional&lt;int&gt; to_int(std::string_view sv)
+{
+    int r{};
+    auto [ptr, ec]{std::from_chars(sv.data(), sv.data() + sv.size(), r)};
+    if (ec == std::errc())
+        return r;
+    else
+        return std::nullopt;
+}
+
+int main()
+{
+    using namespace std::literals;
+
+    const std::vector&lt;std::optional&lt;std::string&gt;&gt; v
+    {
+        "1234", "15 foo", "bar", "42", "5000000000", " 5", std::nullopt, "-43"
+    };
+
+    for (auto&amp;&amp; x : v {{!}} std::views::transform(
+        [](auto&amp;&amp; o)
+        {
+            // debug print the content of input optional&lt;string&gt;
+            std::cout &lt;&lt; std::left &lt;&lt; std::setw(13)
+                      &lt;&lt; std::quoted(o.value_or("nullopt")) &lt;&lt; " -&gt; ";
+
+            return o
+                // if optional is nullopt convert it to optional with "" string
+                .or_else([]{ return std::optional{""s}; })
+                // flatmap from strings to ints (making empty optionals where it fails)
+                .and_then(to_int)
+                // map int to int + 1
+                .transform([](int n) { return n + 1; })
+                // convert back to strings
+                .transform([](int n) { return std::to_string(n); })
+                // replace all empty optionals that were left by
+                // and_then and ignored by transforms with "NaN"
+                .value_or("NaN"s);
+        }))
+        std::cout &lt;&lt; x &lt;&lt; '\n';
+}
+|output=
+"1234"        -&gt; 1235
+"15 foo"      -&gt; 16
+"bar"         -&gt; NaN
+"42"          -&gt; 43
+"5000000000"  -&gt; NaN
+" 5"          -&gt; NaN
+"nullopt"     -&gt; NaN
+"-43"         -&gt; -42
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/utility/optional/dsc value_or}}
+{{dsc inc|cpp/utility/optional/dsc transform}}
+{{dsc inc|cpp/utility/optional/dsc or_else}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

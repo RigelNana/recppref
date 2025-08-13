@@ -1,0 +1,68 @@
+{{cpp/title|rethrow_if_nested}}
+{{cpp/error/navbar}}
+{{ddcla|header=exception|since=c++11|constexpr=c++26|
+template&lt; class E &gt;
+void rethrow_if_nested( const E&amp; e );
+}}
+
+If {{tt|E}} is not a polymorphic class type, or if {{lc|std::nested_exception}} is an inaccessible or ambiguous base class of {{tt|E}}, there is no effect.
+
+Otherwise, performs
+
+{{source|1=
+if (auto p = dynamic_cast&lt;const std::nested_exception*&gt;(std::addressof(e)))
+    p-&gt;rethrow_nested();
+}}
+
+===Parameters===
+{{par begin}}
+{{par|e|the exception object to rethrow}}
+{{par end}}
+
+===Notes===
+Unlike many related functions, this function is ''not'' intended to be called with a {{c|std::exception_ptr}} but rather an actual exception reference.
+
+{{ftm begin}}
+{{ftm|__cpp_lib_constexpr_exceptions|value=202411L|std=C++26|{{c/core|constexpr}} for exception types}}
+{{ftm end}}
+
+===Possible implementation===
+{{eq fun|1=
+namespace details
+{
+    template&lt;class E&gt;
+    struct can_dynamic_cast
+        : std::integral_constant&lt;bool,
+              std::is_polymorphic&lt;E&gt;::value &amp;&amp;
+              (!std::is_base_of&lt;std::nested_exception, E&gt;::value {{!!}} 
+                std::is_convertible&lt;E*, std::nested_exception*&gt;::value)
+          &gt; {};
+
+    template&lt;class T&gt;
+    void rethrow_if_nested_impl(const T&amp; e, std::true_type)
+    {
+        if (auto nep = dynamic_cast&lt;const std::nested_exception*&gt;(std::addressof(e)))
+            nep-&gt;rethrow_nested();
+    }
+
+    template&lt;class T&gt;
+    void rethrow_if_nested_impl(const T&amp;, std::false_type) {}
+}
+
+template&lt;class T&gt;
+void rethrow_if_nested(const T&amp; t)
+{
+    details::rethrow_if_nested_impl(t, details::can_dynamic_cast&lt;T&gt;());
+}
+}}
+
+===Example===
+{{include|cpp/error/example_nested_exception}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/error/dsc nested_exception}}
+{{dsc inc|cpp/error/dsc throw_with_nested}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

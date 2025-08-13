@@ -1,0 +1,68 @@
+{{cpp/title|tmpfile}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+std::FILE* tmpfile();
+}}
+
+Creates and opens a temporary file with a unique auto-generated filename. 
+
+The file is opened as a binary file for update (as by {{lc|std::fopen}} with access mode {{c/core|"wb+"}}). At least {{lc|TMP_MAX}} files may be opened during the lifetime of a program (this limit may be shared with {{lc|std::tmpnam}} and may be further limited by {{lc|FOPEN_MAX}}).
+
+If the program closes the file, e.g. by executing {{lc|std::fclose}}, the file is automatically deleted.
+
+If the program terminates normally (by calling {{lc|std::exit}}, returning from {{c|main}}, etc), all files that were opened by calling {{tt|std::tmpfile}} are also automatically deleted.
+
+If the program terminates abnormally, it is implementation-defined if these temporary files are deleted.
+
+===Parameters===
+(none)
+
+===Return value===
+The associated file stream or a null pointer if an error has occurred.
+
+===Notes===
+On some implementations (e.g. older Linux), this function actually creates, opens, and immediately deletes the file from the file system: as long as an open file descriptor to a deleted file is held by a program, the file exists, but since it was deleted, its name does not appear in any directory, so that no other process can open it. Once the file descriptor is closed, or once the program terminates (normally or abnormally), the space occupied by the file is reclaimed by the filesystem. Newer Linux (since 3.11 or later, depending on filesystem) creates such invisible temporary files in one step, via special flag in the [https://man7.org/linux/man-pages/man2/open.2.html {{tt|open()}}] syscall.
+
+On some implementations (e.g. Windows), elevated privileges are required as the function may create the temporary file in a system directory.
+
+===Example===
+{{example
+|code=
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+#include &lt;filesystem&gt;
+#include &lt;iostream&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    std::cout &lt;&lt; "TMP_MAX = " &lt;&lt; TMP_MAX &lt;&lt; '\n'
+              &lt;&lt; "FOPEN_MAX = " &lt;&lt; FOPEN_MAX &lt;&lt; '\n';
+    std::FILE* tmpf = std::tmpfile();
+    std::fputs("Hello, world", tmpf);
+    std::rewind(tmpf);
+    char buf[6];
+    std::fgets(buf, sizeof buf, tmpf);
+    std::cout &lt;&lt; buf &lt;&lt; '\n';
+
+    // Linux-specific method to display the tmpfile name
+    std::cout &lt;&lt; fs::read_symlink(
+                     fs::path("/proc/self/fd") / std::to_string(fileno(tmpf))
+                 ) &lt;&lt; '\n';
+}
+|p=true
+|output=
+TMP_MAX = 238328
+FOPEN_MAX = 16
+Hello
+"/tmp/tmpfBlY1lI (deleted)"
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc tmpnam}}
+{{dsc inc|cpp/filesystem/dsc temp_directory_path}}
+{{dsc see c|c/io/tmpfile}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

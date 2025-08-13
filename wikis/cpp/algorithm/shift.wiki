@@ -1,0 +1,173 @@
+{{cpp/title|shift_left|shift_right}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class ForwardIt &gt;
+constexpr ForwardIt shift_left( ForwardIt first, ForwardIt last,
+                                typename std::iterator_traits&lt;ForwardIt&gt;::
+                                    difference_type n );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt shift_left( ExecutionPolicy&amp;&amp; policy,
+                      ForwardIt first, ForwardIt last,
+                      typename std::iterator_traits&lt;ForwardIt&gt;::
+                          difference_type n );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class ForwardIt &gt;
+constexpr ForwardIt shift_right( ForwardIt first, ForwardIt last,
+                                 typename std::iterator_traits&lt;ForwardIt&gt;::
+                                     difference_type n );
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt shift_right( ExecutionPolicy&amp;&amp; policy,
+                       ForwardIt first, ForwardIt last,
+                       typename std::iterator_traits&lt;ForwardIt&gt;::
+                           difference_type n );
+}}
+{{dcl end}}
+
+Shifts the elements in the range {{range|first|last}} by {{c|n}} positions.
+
+@1@ Shifts the elements towards the beginning of the range.
+* If {{c|1=n == 0 {{!!}} n &gt;= last - first}}, there are no effects.
+* Otherwise, for every integer {{c|i}} in {{range|0|last - first - n}}, moves the element originally at position {{c|first + n + i}} to position {{c|first + i}}.
+@@ The moves are performed in increasing order of {{tt|i}} starting from {{c|0}}.
+
+@3@ Shifts the elements towards the end of the range.
+* If {{c|1=n == 0 {{!!}} n &gt;= last - first}}, there are no effects.
+* Otherwise, for every integer {{c|i}} in {{range|0|last - first - n}}, moves the element originally at position {{c|first + i}} to position {{c|first + n + i}}.
+@@ If {{tt|ForwardIt}} meets the {{named req|BidirectionalIterator}} requirements, then the moves are performed in decreasing order of {{c|i}} starting from {{c|last - first - n - 1}}.
+
+@2,4@ Same as {{v|1}} and {{v|3}}, respectively, but executed according to {{c|policy}} and the moves may be performed in any order.
+@@ {{cpp/enable if|{{c|std::is_execution_policy_v&lt;std::remove_cvref_t&lt;ExecutionPolicy&gt;&gt;}} is {{c|true}}|plural=yes}}.
+
+Elements that are in the original range but not the new range are left in a valid but unspecified state.
+
+If any of the following conditions is satisfied, the behavior is undefined:
+* {{c|1=n &gt;= 0}} is not {{c|true}}.
+* The type of {{c|*first}} is not {{named req|MoveAssignable}}.
+* For {{tt|shift_right}}, {{tt|ForwardIt}} is neither {{named req|BidirectionalIterator}} nor {{named req|ValueSwappable}}.
+
+===Parameters===
+{{par begin}}
+{{par|first|the beginning of the original range}}
+{{par|last|the end of the original range}}
+{{par|n|the number of positions to shift}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par end}}
+
+===Return value===
+@1,2@ The end of the resulting range.
+* If {{c|n}} is less than {{c|std::distance(first, last)}}, returns an iterator equal to {{c|std::next(first, (std::distance(first, last) - n))}}.
+* Otherwise, returns {{c|first}}.
+
+@3,4@ The beginning of the resulting range.
+* If {{c|n}} is less than {{c|std::distance(first, last)}}, returns an iterator equal to {{c|std::next(first, n)}}.
+* Otherwise, returns {{c|last}}.
+
+===Complexity===
+@1,2@ At most {{c|std::distance(first, last) - n}} assignments.
+@3,4@ At most {{c|std::distance(first, last) - n}} assignment or swaps.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior}}
+
+===Notes===
+{{feature test macro|__cpp_lib_shift|std=C++20|value=201806L|{{ttt|std::shift_left}} and {{ttt|std::shift_right}}}}
+
+===Example===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int value{0};
+    bool specified_state{true};
+   
+    S(int v = 0) : value{v} {}
+    S(S const&amp; rhs) = default;
+    S(S&amp;&amp; rhs) { *this = std::move(rhs); }
+    S&amp; operator=(S const&amp; rhs) = default;
+    S&amp; operator=(S&amp;&amp; rhs)
+    {
+        if (this != &amp;rhs)
+        {
+            value = rhs.value;
+            specified_state = rhs.specified_state;
+            rhs.specified_state = false;
+        }
+        return *this;
+    }
+};
+
+template&lt;typename T&gt;
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::vector&lt;T&gt; const&amp; v)
+{
+    for (const auto&amp; s : v)
+    {
+        if constexpr (std::is_same_v&lt;T, S&gt;)
+            s.specified_state ? os &lt;&lt; s.value &lt;&lt; ' ' : os &lt;&lt; ". ";
+        else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+            os &lt;&lt; (s.empty() ? "." : s) &lt;&lt; ' ';
+        else
+            os &lt;&lt; s &lt;&lt; ' ';
+    }
+    return os;
+}
+
+int main()
+{
+    std::cout &lt;&lt; std::left;
+    
+    std::vector&lt;S&gt;           a{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;int&gt;         b{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;std::string&gt; c{"α", "β", "γ", "δ", "ε", "ζ", "η"};
+    
+    std::cout &lt;&lt; "vector&lt;S&gt; \tvector&lt;int&gt; \tvector&lt;string&gt;\n";
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+    std::shift_left(begin(a), end(a), 3);
+    std::shift_left(begin(b), end(b), 3);
+    std::shift_left(begin(c), end(c), 3);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+    std::shift_right(begin(a), end(a), 2);
+    std::shift_right(begin(b), end(b), 2);
+    std::shift_right(begin(c), end(c), 2);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+    std::shift_left(begin(a), end(a), 8); // has no effect: n &gt;= last - first
+    std::shift_left(begin(b), end(b), 8); // ditto
+    std::shift_left(begin(c), end(c), 8); // ditto
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+//  std::shift_left(begin(a), end(a), -3); // UB, e.g. segfault
+}
+|p=true &lt;!-- accessing objects after move --&gt;
+|output=
+vector&lt;S&gt;       vector&lt;int&gt;     vector&lt;string&gt;
+1 2 3 4 5 6 7   1 2 3 4 5 6 7   α β γ δ ε ζ η
+4 5 6 7 . . .   4 5 6 7 5 6 7   δ ε ζ η . . .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc inc|cpp/algorithm/dsc move_backward}}
+{{dsc inc|cpp/algorithm/dsc rotate}}
+{{dsc inc|cpp/algorithm/ranges/dsc shift}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

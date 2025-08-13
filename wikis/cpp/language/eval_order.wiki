@@ -1,0 +1,240 @@
+{{title|Order of evaluation}}
+{{cpp/language/expressions/navbar}}
+
+Order of evaluation of any part of any expression, including order of evaluation of function arguments is ''unspecified'' (with some exceptions listed below). The compiler can evaluate operands and other subexpressions in any order, and may choose another order when the same expression is evaluated again.
+
+There is no concept of left-to-right or right-to-left evaluation in C++. This is not to be confused with left-to-right and right-to-left associativity of operators: the expression {{c|a() + b() + c()}} is parsed as {{c|(a() + b()) + c()}} due to left-to-right associativity of operator+, but {{c|c()}} may be evaluated first, last, or between {{c|a()}} or {{c|b()}} at run time:
+
+{{example
+|code=
+#include &lt;cstdio&gt;
+
+int a() { return std::puts("a"); }
+int b() { return std::puts("b"); }
+int c() { return std::puts("c"); }
+
+void z(int, int, int) {}
+
+int main()
+{
+    z(a(), b(), c());       // all 6 permutations of output are allowed
+    return a() + b() + c(); // all 6 permutations of output are allowed
+}
+|p=true
+|output=
+b
+c
+a
+c
+a 
+b
+}}
+
+==="Sequenced before" rules {{mark since c++11}}===
+====Evaluation of Expressions====
+Evaluation of each expression includes:
+* ''Value computations'': calculation of the value that is returned by the expression. This may involve determination of the identity of the object (glvalue evaluation, e.g. if the expression returns a reference to some object) or reading the value previously assigned to an object (prvalue evaluation, e.g. if the expression returns a number, or some other value).
+* Initiation of ''side effects'': access (read or write) to an object designated by a volatile glvalue, modification (writing) to an object, calling a library I/O function, or calling a function that does any of those operations.
+
+====Ordering====
+''Sequenced before'' is an asymmetric, transitive, pair-wise relationship between evaluations within the same thread.
+
+* If A is sequenced before B (or, equivalently, B is ''sequenced after'' A), then evaluation of A will be complete before evaluation of B begins.
+* If A is not sequenced before B and B is sequenced before A, then evaluation of B will be complete before evaluation of A begins.
+* If A is not sequenced before B and B is not sequenced before A, then two possibilities exist:
+** Evaluations of A and B are ''unsequenced'': they may be performed in any order and may overlap (within a single thread of execution, the compiler may interleave the CPU instructions that comprise A and B).
+** Evaluations of A and B are ''indeterminately sequenced'': they may be performed in any order but may not overlap: either A will be complete before B, or B will be complete before A. The order may be the opposite the next time the same expression is evaluated.
+
+====Rules====
+@1@ Each value computation and side effect of a {{rlp|expressions#Full-expressions|full-expression}} is sequenced before each value computation and side effect of the next full-expression.
+
+@2@ The value computations (but not the side effects) of the operands to any {{rlp|expressions#Operators|operator}} are sequenced before the value computation of the result of the operator (but not its side effects).
+
+@3@ When calling a function (whether or not the function is inline, and whether or not explicit function call syntax is used), every value computation and side effect associated with any argument expression, or with the postfix expression designating the called function, is sequenced before execution of every expression or statement in the body of the called function.
+
+@4@ The value computation of the built-in {{rlp|operator incdec#Built-in postfix operators|post-increment and post-decrement}} operators is sequenced before its side effect.
+
+@5@ The side effect of the built-in {{rlp|operator incdec#Built-in prefix operators|pre-increment and pre-decrement}} operators is sequenced before its value computation (implicit rule due to definition as compound assignment).
+
+@6@ Every value computation and side effect of the first (left) argument of the built-in {{rlp|operator logical|logical}} AND operator {{c|&amp;&amp;}}, the built-in logical OR operator {{c|{{!!}}}} and the built-in {{rlp|operator other#Built-in comma operator|comma operator}} {{c|,}} is sequenced before every value computation and side effect of the second (right) argument.
+
+@7@ Every value computation and side effect associated with the first expression in the {{rlpsd|operator other#Conditional operator}} {{c|?:}} is sequenced before every value computation and side effect associated with the second or third expression.
+
+@8@ The side effect (modification of the left argument) of the built-in {{rlp|operator assignment#Builtin direct assignment|assignment}} operator and of all built-in {{rlp|operator assignment#Builtin compound assignment|compound}} assignment operators is sequenced after the value computation (but not the side effects) of both left and right arguments, and is sequenced before the value computation of the assignment expression (that is, before returning the reference to the modified object).
+
+@9@ In {{rlp|list initialization|list-initialization}}, every value computation and side effect of a given initializer clause is sequenced before every value computation and side effect associated with any initializer clause that follows it in the brace-enclosed comma-separated list of initializers.
+
+@10@ A function call that is not sequenced before or sequenced after another expression evaluation outside of the function (possibly another function call) is indeterminately sequenced with respect to that evaluation (the program must behave {{rlp|as if}} the CPU instructions that constitute a function call were not interleaved with instructions constituting evaluations of other expressions, including other function calls, even if the function was inlined).
+{{rev begin}}
+{{rev|since=c++17|The rule 10 has one exception: function calls made by a standard library algorithm executing under {{ltt|cpp/algorithm/execution_policy_tag_t|std::execution::par_unseq}} execution policy are unsequenced and may be arbitrarily interleaved with each other.}}
+{{rev end}}
+
+@11@ The call to the allocation function ({{ltt|cpp/memory/new/operator new|operator new}}) is {{rev inl|until=c++17|indeterminately sequenced with respect to}}{{rev inl|since=c++17|sequenced before}} the evaluation of the constructor arguments in a {{rlp|new|{{c/core|new}} expression}}.
+
+@12@ When returning from a function, copy-initialization of the temporary that is the result of evaluating the function call is sequenced before the destruction of all temporaries at the end of the operand of the {{rlp|return|{{c/core|return}} statement}}, which, in turn, is sequenced before the destruction of local variables of the block enclosing the {{c/core|return}} statement.
+
+{{rev begin}}
+{{rev|since=c++17|
+@13@ In a function-call expression, the expression that names the function is sequenced before every argument expression and every default argument.
+
+@14@ In a function call, value computations and side effects of the initialization of every  parameter are indeterminately sequenced with respect to value computations and side effects of any other parameter.
+
+@15@ Every overloaded operator obeys the sequencing rules of the built-in operator it overloads when called using operator notation.
+
+@16@ In a subscript expression {{c|E1[E2]}}, every value computation and side effect of {{c|E1}} is sequenced before every value computation and side effect of {{c|E2}}.
+
+@17@ In a pointer-to-member expression {{c|E1.*E2}} or {{c|E1-&gt;*E2}}, every value computation and side effect of {{c|E1}} is sequenced before every value computation and side effect of {{c|E2}} (unless the dynamic type of {{c|E1}} does not contain the member to which {{c|E2}} refers).
+
+@18@ In a shift operator expression {{c|E1 &lt;&lt; E2}} and {{c|E1 &gt;&gt; E2}}, every value computation and side effect of {{c|E1}} is sequenced before every value computation and side effect of {{c|E2}}.
+
+@19@ In every simple assignment expression {{c|1=E1 = E2}} and every compound assignment expression {{c|1=E1 @= E2}}, every value computation and side effect of {{c|E2}} is sequenced before every value computation and side effect of {{c|E1}}.
+
+@20@ Every expression in a comma-separated list of expressions in a parenthesized initializer is evaluated as if for a function call (indeterminately-sequenced).
+}}
+{{rev end}}
+
+====Undefined behavior====
+The behavior is {{rlp|ub|undefined}} in the following cases:
+
+@1@ A side effect on a {{rlpsd|memory model#Memory location}} is unsequenced relative to another side effect on the same memory location:
+{{source|1=
+i = ++i + 2;       // well-defined
+i = i++ + 2;       // undefined behavior until C++17
+f(i = -2, i = -2); // undefined behavior until C++17
+f(++i, ++i);       // undefined behavior until C++17, unspecified after C++17
+i = ++i + i++;     // undefined behavior
+}}
+
+@2@ A side effect on a memory location is unsequenced relative to a value computation using the value of any object in the same memory location:
+{{source|1=
+cout &lt;&lt; i &lt;&lt; i++; // undefined behavior until C++17
+a[i] = i++;       // undefined behavior until C++17
+n = ++i + i;      // undefined behavior
+}}
+
+@3@ Starting or ending the {{rlp|lifetime}} of an object in a memory location is unsequenced relative to any of the following operations:
+* a side effect on the same memory location
+* a value computation using the value of any object in the same memory location
+* starting or ending the lifetime of an object occupying storage that overlaps with the memory location
+{{source|1=
+union U { int x, y; } u;
+(u.x = 1, 0) + (u.y = 2, 0); // undefined behavior
+}}
+
+===Sequence point rules {{mark until c++11}}===
+====Pre-C++11 Definitions====
+Evaluation of an expression might produce side effects, which are: accessing an object designated by a volatile lvalue, modifying an object, calling a library I/O function, or calling a function that does any of those operations.
+
+A ''sequence point'' is a point in the execution sequence where all side effects from the previous evaluations in the sequence are complete, and no side effects of the subsequent evaluations started.
+
+====Pre-C++11 Rules====
+@1@ There is a sequence point at the end of each {{rlp|expressions#Full-expressions|full-expression}} (typically, at the semicolon).
+
+@2@ When calling a function (whether or not the function is inline and whether or not function call syntax was used), there is a sequence point after the evaluation of all function arguments (if any) which takes place before execution of any expressions or statements in the function body.
+
+@3@ When returning from a function, there is a sequence point after the copy-initialization of the result of the function call, and before the destruction of all temporary objects at the end of {{spar|expression}} in the {{rlp|return|{{c/core|return}} statement}} (if any).
+
+@4@ There is a sequence point after the copying of a returned value of a function and before the execution of any expressions outside the function.
+
+@5@ Once the execution of a function begins, no expressions from the calling function are evaluated until execution of the called function has completed (functions cannot be interleaved).
+ 
+@6@ In the evaluation of each of the following four expressions, using the built-in (non-overloaded) operators, there is a sequence point after the evaluation of the expression {{c|a}}.
+
+{{source|
+a &amp;&amp; b
+a {{!!}} b
+a ? b : c
+a , b
+}}
+
+====Pre-C++11 Undefined behavior====
+The behavior is {{rlp|ub|undefined}} in the following cases:
+
+@1@ Between the previous and next sequence point, the value of any object in a memory location is modified more than once by the evaluation of an expression:
+{{source|1=
+i = ++i + i++;     // undefined behavior
+i = i++ + 1;       // undefined behavior
+i = ++i + 1;       // undefined behavior
+++ ++i;            // undefined behavior
+f(++i, ++i);       // undefined behavior
+f(i = -1, i = -1); // undefined behavior
+}}
+
+@2@ Between the previous and next sequence point, for an object whose value is modified by the evaluation of an expression, its prior value is accessed in a way other than to determine the value to be stored:
+{{source|1=
+cout &lt;&lt; i &lt;&lt; i++; // undefined behavior
+a[i] = i++;       // undefined behavior
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1885|std=C++11|before=sequencing of the destruction of automatic&lt;br&gt;variables on function return was not explicit|after=sequencing rules added}}
+{{dr list item|wg=cwg|dr=1949|std=C++11|before=“sequenced after” was used but not defined in the C++ standard|after=defined as the inverse&lt;br&gt;of “sequenced before”}}
+{{dr list item|wg=cwg|dr=1953|std=C++11|before=side effects and value computations involving a memory&lt;br&gt;location could be unsequenced relative to starting or ending&lt;br&gt;the lifetime of an object in the same memory location|after=the behavior is&lt;br&gt;undefined in this case}}
+{{dr list item|wg=cwg|dr=2146|std=C++98|before=the cases involving undefined behaviors did not consider bit-fields|after=considered}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=6.9.1|title=Program execution|id=intro.execution}}
+{{ref std|section=7.6.1.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=7.6.2.8|title=New|id=expr.new}}
+{{ref std|section=7.6.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=7.6.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=7.6.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=7.6.19|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=7.6.20|title=Comma operator|id=expr.comma}}
+{{ref std|section=9.4.5|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.9.1|title=Program execution|id=intro.execution}}
+{{ref std|section=7.6.1.5|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=7.6.2.7|title=New|id=expr.new}}
+{{ref std|section=7.6.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=7.6.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=7.6.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=7.6.19|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=7.6.20|title=Comma operator|id=expr.comma}}
+{{ref std|section=9.4.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=4.6|title=Program execution|id=intro.execution}}
+{{ref std|section=8.2.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=8.3.4|title=New|id=expr.new}}
+{{ref std|section=8.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=8.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=8.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=8.18|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=8.19|title=Comma operator|id=expr.comma}}
+{{ref std|section=11.6.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=1.9|title=Program execution|id=intro.execution}}
+{{ref std|section=5.2.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=5.3.4|title=New|id=expr.new}}
+{{ref std|section=5.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=5.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=5.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=5.17|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=5.18|title=Comma operator|id=expr.comma}}
+{{ref std|section=8.5.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=1.9|title=Program execution|id=intro.execution}}
+{{ref std|section=5.2.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=5.3.4|title=New|id=expr.new}}
+{{ref std|section=5.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=5.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=5.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=5.17|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=5.18|title=Comma operator|id=expr.comma}}
+{{ref std|section=8.5.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+
+===See also===
+* {{rlp|operator precedence|Operator precedence}} which defines how expressions are built from their source code representation.
+{{dsc begin}}
+{{dsc see c|c/language/eval order|Order of evaluation|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

@@ -1,0 +1,240 @@
+{{title|Partial template specialization}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+Allows customizing class {{rev inl|since=c++14|and variable}} templates for a given category of template arguments.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{spar|class-key}} {{spar|class-head-name}} {{ttb|&lt;}} {{spar|argument-list}} {{ttb|&gt;}} {{spar|declaration}}
+}}
+{{sdsc|num=2|notes={{mark since c++14}}|1=
+{{ttb|template}} {{ttb|&lt;}} {{spar|parameter-list}} {{ttb|&gt;}} {{spar|decl-specifier-seq}} {{spar|declarator}} {{ttb|&lt;}} {{spar|argument-list}} {{ttb|&gt;}} {{spar optional|initializer}}
+}}
+{{sdsc end}}
+where {{spar|class-head-name}} identifies the name of a previously declared {{rlp|class template}}{{rev inl|since=c++14| and {{spar|declarator}} identifies the name of a previously declared {{rlp|variable template}}}}.
+
+Partial specialization may be declared in any scope where its primary template may be defined (which may be different from the scope where the primary template is defined; such as with out-of-class specialization of a {{rlp|member template}}). Partial specialization has to appear after the non-specialized template declaration.
+
+For example,
+{{source|
+template&lt;class T1, class T2, int I&gt;
+class A {};             // primary template
+
+template&lt;class T, int I&gt;
+class A&lt;T, T*, I&gt; {};   // #1: partial specialization where T2 is a pointer to T1
+
+template&lt;class T, class T2, int I&gt;
+class A&lt;T*, T2, I&gt; {};  // #2: partial specialization where T1 is a pointer
+
+template&lt;class T&gt;
+class A&lt;int, T*, 5&gt; {}; // #3: partial specialization where
+                        //     T1 is int, I is 5, and T2 is a pointer
+
+template&lt;class X, class T, int I&gt;
+class A&lt;X, T*, I&gt; {};   // #4: partial specialization where T2 is a pointer
+}}
+
+Examples of partial specializations in the standard library include {{lc|std::unique_ptr}}, which has a partial specialization for array types.
+
+===The argument list===
+The following restrictions apply to the {{spar|argument-list}} of a partial template specialization:
+@1@ The argument list cannot be identical to the non-specialized argument list (it must specialize something):
+{{source|
+template&lt;class T1, class T2, int I&gt; class B {};        // primary template
+template&lt;class X, class Y, int N&gt; class B&lt;X, Y, N&gt; {}; // error
+}}
+{{rrev|since=c++11|{{mark unreviewed dr|CWG|1495}}
+Moreover, the specialization has to be more specialized than the primary template
+{{source|1=
+template&lt;int N, typename T1, typename... Ts&gt; struct B;
+template&lt;typename... Ts&gt; struct B&lt;0, Ts...&gt; {}; // Error: not more specialized
+}}
+}}
+
+@2@ Default arguments cannot appear in the argument list
+@3@ If any argument is a pack expansion, it must be the last argument in the list
+@4@ {{mark unreviewed dr|CWG|1315}}Non-type argument expressions can use template parameters as long as the parameter appears at least once outside a {{rlp|template argument deduction#Non-deduced contexts|non-deduced context}} (note that only clang and gcc 12 support this feature currently):
+{{source|1=
+template&lt;int I, int J&gt; struct A {};
+template&lt;int I&gt; struct A&lt;I + 5, I * 2&gt; {}; // error, I is not deducible
+
+template&lt;int I, int J, int K&gt; struct B {};
+template&lt;int I&gt; struct B&lt;I, I * 2, 2&gt; {};  // OK: first parameter is deducible
+}}
+@5@ Non-type template argument cannot specialize a template parameter whose type depends on a parameter of the specialization:
+{{source|1=
+template&lt;class T, T t&gt; struct C {}; // primary template
+template&lt;class T&gt; struct C&lt;T, 1&gt;;   // error: type of the argument 1 is T,
+                                    // which depends on the parameter T
+
+template&lt;int X, int (*array_ptr)[X]&gt; class B {}; // primary template
+int array[5];
+template&lt;int X&gt; class B&lt;X, &amp;array&gt; {}; // error: type of the argument &amp;array is
+                                       // int(*)[X], which depends on the parameter X
+}}
+
+===Name lookup===
+Partial template specializations are not found by name lookup. Only if the primary template is found by name lookup, its partial specializations are considered. In particular, a using declaration that makes a primary template visible, makes partial specializations visible as well:
+{{source|1=
+namespace N
+{
+    template&lt;class T1, class T2&gt; class Z {}; // primary template
+}
+using N::Z; // refers to the primary template
+
+namespace N
+{
+    template&lt;class T&gt; class Z&lt;T, T*&gt; {};     // partial specialization
+}
+Z&lt;int, int*&gt; z; // name lookup finds N::Z (the primary template), the
+                // partial specialization with T = int is then used
+}}
+
+===Partial ordering===
+When a class {{rev inl|since=c++14|or variable}} template is instantiated, and there are partial specializations available, the compiler has to decide if the primary template is going to be used or one of its partial specializations. 
+
+@1@ If only one specialization matches the template arguments, that specialization is used
+@2@ If more than one specialization matches, partial order rules are used to determine which specialization is more specialized. The most specialized specialization is used, if it is unique (if it is not unique, the program cannot be compiled)
+@3@ If no specializations match, the primary template is used
+{{source|1=
+// given the template A as defined above
+A&lt;int, int, 1&gt; a1;   // no specializations match, uses primary template
+A&lt;int, int*, 1&gt; a2;  // uses partial specialization #1 (T = int, I = 1)
+A&lt;int, char*, 5&gt; a3; // uses partial specialization #3, (T = char)
+A&lt;int, char*, 1&gt; a4; // uses partial specialization #4, (X = int, T = char, I = 1)
+A&lt;int*, int*, 2&gt; a5; // error: matches #2 (T = int, T2 = int*, I= 2)
+                     //        matches #4 (X = int*, T = int, I = 2)
+                     // neither one is more specialized than the other
+}}
+
+Informally "A is more specialized than B" means "A accepts a subset of the types that B accepts".
+
+Formally, to establish more-specialized-than relationship between partial specializations, each is first converted to a fictitious function template as follows:
+* the first function template has the same template parameters as the first partial specialization and has just one function parameter, whose type is a class template specialization with all the template arguments from the first partial specialization
+* the second function template has the same template parameters as the second partial specialization and has just one function parameter whose type is a class template specialization with all the template arguments from the second partial specialization.
+
+The function templates are then ranked as if for {{rlpsd|function template#Function template overloading}}.
+
+{{source|1=
+template&lt;int I, int J, class T&gt; struct X {}; // primary template
+template&lt;int I, int J&gt;          struct X&lt;I, J, int&gt;
+{
+    static const int s = 1;
+}; // partial specialization #1
+// fictitious function template for #1 is
+// template&lt;int I, int J&gt; void f(X&lt;I, J, int&gt;); #A
+
+template&lt;int I&gt;                 struct X&lt;I, I, int&gt;
+{
+    static const int s = 2;
+}; // partial specialization #2
+// fictitious function template for #2 is 
+// template&lt;int I&gt;        void f(X&lt;I, I, int&gt;); #B
+
+int main()
+{
+    X&lt;2, 2, int&gt; x; // both #1 and #2 match
+// partial ordering for function templates:
+// #A from #B: void(X&lt;I, J, int&gt;) from void(X&lt;U1, U1, int&gt;): deduction OK
+// #B from #A: void(X&lt;I, I, int&gt;) from void(X&lt;U1, U2, int&gt;): deduction fails
+// #B is more specialized
+// #2 is the specialization that is instantiated
+    std::cout &lt;&lt; x.s &lt;&lt; '\n'; // prints 2
+}
+}}
+
+===Members of partial specializations===
+The template parameter list and the template argument list of a member of a partial specialization must match the parameter list and the argument list of the partial specialization. 
+
+Just like with members of primary templates, they only need to be defined if used in the program.
+
+Members of partial specializations are not related to the members of the primary template.
+
+Explicit (full) specialization of a member of a partial specialization is declared the same way as an explicit specialization of the primary template.
+
+{{source|1=
+template&lt;class T, int I&gt; // primary template
+struct A
+{
+    void f(); // member declaration
+};
+
+template&lt;class T, int I&gt;
+void A&lt;T, I&gt;::f() {}     // primary template member definition
+
+// partial specialization
+template&lt;class T&gt;
+struct A&lt;T, 2&gt;
+{
+    void f();
+    void g();
+    void h();
+};
+
+// member of partial specialization
+template&lt;class T&gt;
+void A&lt;T, 2&gt;::g() {}
+
+// explicit (full) specialization
+// of a member of partial specialization
+template&lt;&gt;
+void A&lt;char, 2&gt;::h() {}
+
+int main()
+{
+    A&lt;char, 0&gt; a0;
+    A&lt;char, 2&gt; a2;
+    a0.f(); // OK, uses primary template’s member definition
+    a2.g(); // OK, uses partial specialization's member definition
+    a2.h(); // OK, uses fully-specialized definition of
+            // the member of a partial specialization
+    a2.f(); // error: no definition of f() in the partial
+            // specialization A&lt;T,2&gt; (the primary template is not used)
+}
+}}
+
+If a primary template is a member of another class template, its partial specializations are members of the enclosing class template. If the enclosing template is instantiated, the declaration of each member partial specialization is instantiated as well (the same way declarations, but not definitions, of all other members of a template are instantiated).
+
+If the primary member template is explicitly (fully) specialized for a given (implicit) specialization of the enclosing class template, the partial specializations of the member
+template are ignored for this specialization of the enclosing class template.
+
+If a partial specialization of the member template is explicitly specialized for a given (implicit) specialization of the enclosing class template, the primary member template and its other partial specializations are still considered for this specialization
+of the enclosing class template.
+
+{{source|1=
+template&lt;class T&gt; struct A // enclosing class template
+{
+    template&lt;class T2&gt;
+    struct B {};      // primary member template
+    template&lt;class T2&gt;
+    struct B&lt;T2*&gt; {}; // partial specialization of member template
+};
+
+template&lt;&gt;
+template&lt;class T2&gt;
+struct A&lt;short&gt;::B {}; // full specialization of primary member template
+                       // (will ignore the partial)
+
+A&lt;char&gt;::B&lt;int*&gt; abcip;  // uses partial specialization T2=int
+A&lt;short&gt;::B&lt;int*&gt; absip; // uses full specialization of the primary (ignores partial)
+A&lt;char&gt;::B&lt;int&gt; abci;    // uses primary
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=727|std=C++98|before=partial and full specializations not allowed in&lt;br&gt;class scope|after=allowed in any scope}}
+{{dr list item|wg=cwg|dr=1315|std=C++98|before=template parameter could not be used in non-type&lt;br&gt;template arguments other than id-expressions|after=expressions ok as long as deducible}}
+{{dr list item|wg=cwg|dr=1495|std=C++11|before=the specification was unclear when involving parameter pack|after=the specialization shall be more specialized}}
+{{dr list item|wg=cwg|dr=1711|std=C++14|before=missing specification of variable template partial specializations|after=add support for variable templates}}
+{{dr list item|wg=cwg|dr=1819|std=C++98|before=acceptable scopes for definition of partial specialization|after=make partial specialization can be declared&lt;br&gt;in the same scope with primary templates}}
+{{dr list item|wg=cwg|dr=2330|std=C++14|before=missing references to variable templates|after=add support for variable templates}}
+{{dr list end}}
+
+===See also===
+* {{rlp|templates}}
+* {{rlp|class template}}
+* {{rlp|function template}}
+* {{rlp|template specialization|full template specialization}}
+
+{{langlinks|es|ja|ru|zh}}

@@ -1,0 +1,157 @@
+{{cpp/ranges/title|uninitialized_default_construct}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|Call signature}}
+{{dcla|num=1|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-iterator I, no-throw-sentinel-for&lt;I&gt; S &gt;
+    requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+I uninitialized_default_construct( I first, S last );
+}}
+{{dcla|num=2|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-range R &gt;
+    requires std::default_initializable&lt;ranges::range_value_t&lt;R&gt;&gt;
+ranges::borrowed_iterator_t&lt;R&gt;
+    uninitialized_default_construct( R&amp;&amp; r );
+}}
+{{dcl end}}
+
+@1@ Constructs objects of type {{c/core|std::iter_value_t&lt;I&gt;}} in the uninitialized memory area {{range|first|last}} by [[cpp/language/default initialization|default-initialization]], as if by
+{{box|
+{{c/core|1=for (; first != last; ++first)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{lti|cpp/memory/voidify}}{{c/core|(*first))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|std::remove_reference_t&lt;std::iter_reference_t&lt;I&gt;&gt;;}}&lt;br&gt;
+{{c/core|return first;}}
+}}
+@@ If an exception is thrown during the initialization, the objects already constructed are destroyed in an unspecified order.
+
+@2@ Equivalent to {{c|ranges::uninitialized_default_construct(ranges::begin(r), ranges::end(r))}}.
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par|first, last|iterator-sentinel pair denoting the range of the elements to initialize}}
+{{par|r|the range of the elements to initialize}}
+{{par end}}
+
+===Return value===
+As described above.
+
+===Complexity===
+Linear in the distance between {{c|first}} and {{c|last}}.
+
+===Exceptions===
+Any exception thrown on construction of the elements in the destination range.
+
+===Notes===
+An implementation may skip the objects construction (without changing the observable effect) if no non-trivial default constructor is called while default-initializing a {{c/core|std::iter_value_t&lt;I&gt;}} object, which can be detected by {{lc|std::is_trivially_default_constructible}}.
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} for [[cpp/memory#Uninitialized memory algorithms|specialized memory algorithms]], {{vl|1,2}} }}
+
+===Possible implementation===
+{{eq fun|1=
+struct uninitialized_default_construct_fn
+{
+    template&lt;no-throw-forward-iterator I, no-throw-sentinel-for&lt;I&gt; S&gt;
+        requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+    constexpr I operator()(I first, S last) const
+    {
+        using ValueType = std::remove_reference_t&lt;std::iter_reference_t&lt;I&gt;&gt;;
+        if constexpr (std::is_trivially_default_constructible_v&lt;ValueType&gt;)
+            return ranges::next(first, last); // skip initialization
+        I rollback{first};
+        try
+        {
+            for (; !(first == last); ++first)
+                ::new (static_cast&lt;void*&gt;(std::addressof(*first))) ValueType;
+            return first;
+        }
+        catch (...) // rollback: destroy constructed elements
+        {
+            for (; rollback != first; ++rollback)
+                ranges::destroy_at(std::addressof(*rollback));
+            throw;
+        }
+    }
+    
+    template&lt;no-throw-forward-range R&gt;
+        requires std::default_initializable&lt;ranges::range_value_t&lt;R&gt;&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt; operator()(R&amp;&amp; r) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r));
+    }
+};
+
+inline constexpr uninitialized_default_construct_fn uninitialized_default_construct{};
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    struct S { std::string m{"▄▀▄▀▄▀▄▀"}; };
+    
+    constexpr int n{4};
+    alignas(alignof(S)) char out[n * sizeof(S)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;S*&gt;(out)};
+        auto last{first + n};
+        
+        std::ranges::uninitialized_default_construct(first, last);
+        
+        auto count{1};
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; count++ &lt;&lt; ' ' &lt;&lt; it-&gt;m &lt;&lt; '\n';
+        
+        std::ranges::destroy(first, last);
+    }
+    catch (...) { std::cout &lt;&lt; "Exception!\n"; }
+    
+    // Notice that for "trivial types" the uninitialized_default_construct
+    // generally does not zero-fill the given uninitialized memory area.
+    constexpr char sample[]{'A', 'B', 'C', 'D', '\n'};
+    char v[]{'A', 'B', 'C', 'D', '\n'};
+    std::ranges::uninitialized_default_construct(std::begin(v), std::end(v));
+    if (std::memcmp(v, sample, sizeof(v)) == 0)
+    {
+        std::cout &lt;&lt; "  ";
+        // Maybe undefined behavior, pending CWG 1997 to be resolved:
+        // for (const char c : v) { std::cout &lt;&lt; c &lt;&lt; ' '; }
+        for (const char c : sample)
+            std::cout &lt;&lt; c &lt;&lt; ' ';
+    }
+    else
+        std::cout &lt;&lt; "Unspecified\n";
+}
+|p=true
+|output=
+1 ▄▀▄▀▄▀▄▀
+2 ▄▀▄▀▄▀▄▀
+3 ▄▀▄▀▄▀▄▀
+4 ▄▀▄▀▄▀▄▀
+  A B C D
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=this algorithm might create objects on a {{c/core|const}} storage|after=kept disallowed}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_default_construct_n}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_default_construct}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

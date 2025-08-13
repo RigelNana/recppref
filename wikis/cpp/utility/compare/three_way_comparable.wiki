@@ -1,0 +1,93 @@
+{{cpp/title|three_way_comparable|three_way_comparable_with}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|compare}}
+{{dcl|since=c++20|num=1|1=
+template&lt; class T, class Cat = std::partial_ordering &gt;
+concept three_way_comparable =
+    __WeaklyEqualityComparableWith&lt;T, T&gt; &amp;&amp;
+    __PartiallyOrderedWith&lt;T, T&gt; &amp;&amp;
+    requires(const std::remove_reference_t&lt;T&gt;&amp; a,
+             const std::remove_reference_t&lt;T&gt;&amp; b) {
+        { a &lt;=&gt; b } -&gt; __ComparesAs&lt;Cat&gt;;
+    };
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class T, class U, class Cat = std::partial_ordering &gt;
+concept three_way_comparable_with =
+    std::three_way_comparable&lt;T, Cat&gt; &amp;&amp;
+    std::three_way_comparable&lt;U, Cat&gt; &amp;&amp;
+    __ComparisonCommonTypeWith&lt;T, U&gt; &amp;&amp;
+    std::three_way_comparable&lt;
+        std::common_reference_t&lt;
+            const std::remove_reference_t&lt;T&gt;&amp;,
+            const std::remove_reference_t&lt;U&gt;&amp;&gt;, Cat&gt; &amp;&amp;
+    __WeaklyEqualityComparableWith&lt;T, U&gt; &amp;&amp;
+    __PartiallyOrderedWith&lt;T, U&gt; &amp;&amp;
+    requires(const std::remove_reference_t&lt;T&gt;&amp; t,
+             const std::remove_reference_t&lt;U&gt;&amp; u) {
+        { t &lt;=&gt; u } -&gt; __ComparesAs&lt;Cat&gt;;
+        { u &lt;=&gt; t } -&gt; __ComparesAs&lt;Cat&gt;;
+    };
+}}
+{{dcl|notes={{mark expos}}|num=3|1=
+template&lt; class T, class Cat &gt;
+concept __ComparesAs =
+    std::same_as&lt;std::common_comparison_category_t&lt;T, Cat&gt;, Cat&gt;;
+}}
+{{dcl end}}
+
+@1@ The concept {{tt|std::three_way_comparable}} specifies that the three way comparison operator {{tt|1=&lt;=&gt;}} on {{tt|T}} yield results consistent with the comparison category implied by {{tt|Cat}}.
+
+@2@ The concept {{tt|std::three_way_comparable_with}} specifies that the three way comparison operator {{tt|1=&lt;=&gt;}} on (possibly mixed) {{tt|T}} and {{tt|U}} operands yield results consistent with the comparison category implied by {{tt|Cat}}. Comparing mixed operands yields results equivalent to comparing the operands converted to their common type.
+
+{{ltt|cpp/concepts/equality_comparable|''__WeaklyEqualityComparableWith''}}, {{ltt|cpp/concepts/totally_ordered|''__PartiallyOrderedWith''}}, and {{ltt|cpp/concepts/equality_comparable|''__ComparisonCommonTypeWith''}} are exposition-only concepts. See descriptions of {{lconcept|equality_comparable}} and {{lconcept|totally_ordered}}. 
+
+===Semantic requirements===
+These concepts are modeled only if they are satisfied and all concepts they subsume are modeled.
+
+@1@ {{tt|T}} and {{tt|Cat}} model {{c|std::three_way_comparable&lt;T, Cat&gt;}} only if, given lvalues {{tt|a}} and {{tt|b}} of type {{c|const std::remove_reference_t&lt;T&gt;}}, following are true:
+* {{c|1=(a &lt;=&gt; b == 0) == bool(a == b)}},
+* {{c|1=(a &lt;=&gt; b != 0) == bool(a != b)}},
+* {{c|1=((a &lt;=&gt; b) &lt;=&gt; 0)}} and {{c|1=(0 &lt;=&gt; (b &lt;=&gt; a))}} are equal,
+* {{c|1=bool(a &gt; b) == bool(b &lt; a)}},
+* {{c|1=bool(a &gt;= b) == !bool(a &lt; b)}},
+* {{c|1=bool(a &lt;= b) == !bool(b &lt; a)}},
+* {{c|1=(a &lt;=&gt; b &lt; 0) == bool(a &lt; b)}},
+* {{c|1=(a &lt;=&gt; b &gt; 0) == bool(a &gt; b)}},
+* {{c|1=(a &lt;=&gt; b &lt;= 0) == bool(a &lt;= b)}}, and
+* {{c|1=(a &lt;=&gt; b &gt;= 0) == bool(a &gt;= b)}}, and
+* if {{tt|Cat}} is convertible to {{lc|std::strong_ordering}}, {{tt|T}} models {{lconcept|totally_ordered}}.
+
+@2@ {{tt|T}}, {{tt|U}}, and {{tt|Cat}} model {{c|std::three_way_comparable_with&lt;T, U, Cat&gt;}} only if given
+* {{tt|t}} and {{tt|t2}}, lvalues denoting distinct equal objects of types {{c|const std::remove_reference_t&lt;T&gt;}} and {{c|std::remove_reference_t&lt;T&gt;}} respectively, and
+* {{tt|u}} and {{tt|u2}}, lvalues denoting distinct equal objects of types {{c|const std::remove_reference_t&lt;U&gt;}} and {{c|std::remove_reference_t&lt;U&gt;}} respectively.
+Let {{tt|C}} be {{c|std::common_reference_t&lt;const std::remove_reference_t&lt;T&gt;&amp;, const std::remove_reference_t&lt;U&gt;&amp;&gt;}} and given an expression {{tt|E}} and a type {{tt|C}}, let {{c|CONVERT_TO&lt;C&gt;(E)}} be:
+{{rrev multi|rev1=
+* {{c|static_cast&lt;C&gt;(std::as_const(E))}}.
+|since2=c++23|rev2=
+* {{c|static_cast&lt;const C&amp;&gt;(std::as_const(E))}} if that is a valid expression,
+* {{c|static_cast&lt;const C&amp;&gt;(std::move(E))}} otherwise.
+}}
+the following are true: 
+* {{c|1=t &lt;=&gt; u}} and {{c|1=u &lt;=&gt; t}} have the same domain,
+* {{c|1=((t &lt;=&gt; u) &lt;=&gt; 0)}} and {{c|1=(0 &lt;=&gt; (u &lt;=&gt; t))}} are equal,
+* {{c|1=(t &lt;=&gt; u == 0) == bool(t == u)}},
+* {{c|1=(t &lt;=&gt; u != 0) == bool(t != u)}},
+* {{c|1=Cat(t &lt;=&gt; u) == Cat(CONVERT_TO&lt;C&gt;(t2) &lt;=&gt; CONVERT_TO&lt;C&gt;(u2))}},
+* {{c|1=(t &lt;=&gt; u &lt; 0) == bool(t &lt; u)}},
+* {{c|1=(t &lt;=&gt; u &gt; 0) == bool(t &gt; u)}},
+* {{c|1=(t &lt;=&gt; u &lt;= 0) == bool(t &lt;= u)}},
+* {{c|1=(t &lt;=&gt; u &gt;= 0) == bool(t &gt;= u)}}, and
+* if {{tt|Cat}} is convertible to {{lc|std::strong_ordering}}, {{tt|T}} and {{tt|U}} model {{c|std::totally_ordered_with&lt;T, U&gt;}}.
+
+{{cpp/concepts/equality preservation}}
+{{cpp/concepts/implicit expression variations}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/concepts/dsc equality_comparable}}
+{{dsc inc|cpp/concepts/dsc totally_ordered}}
+{{dsc end}}
+
+{{langlinks|de|es|ja|ru|zh}}

@@ -1,0 +1,110 @@
+{{cpp/experimental/ranges/title|mismatch}}
+{{cpp/experimental/ranges/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/ranges/algorithm}}
+{{dcl|since=ranges|num=1|1=
+template&lt; InputIterator I1, Sentinel&lt;I1&gt; S1, InputIterator I2, Sentinel&lt;I2&gt; S2,
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity,
+          class Pred = ranges::equal_to&lt;&gt; &gt;
+    requires IndirectRelation&lt;Pred, projected&lt;I1, Proj1&gt;, projected&lt;I2, Proj2&gt;&gt;
+auto mismatch( I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = Pred{},
+               Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} )
+    -&gt; ranges::tagged_pair&lt;tag::in1(I1), tag::in2(I2)&gt;;
+}}
+{{dcl|since=ranges|num=2|1=
+template&lt; InputRange R1, InputRange R2,
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity,
+          class Pred = ranges::equal_to&lt;&gt; &gt;
+    requires IndirectRelation&lt;Pred, projected&lt;ranges::iterator_t&lt;R1&gt;, Proj1&gt;,
+                              projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+auto mismatch( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = Pred{}, 
+               Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} )
+    -&gt; ranges::tagged_pair&lt;tag::in1(ranges::safe_iterator_t&lt;R1&gt;),
+                           tag::in2(ranges::safe_iterator_t&lt;R2&gt;)&gt;;
+}}
+{{dcl|since=ranges|num=3|notes={{mark deprecated}}|1=
+template&lt; InputIterator I1, Sentinel&lt;I1&gt; S1, class I2,
+          class Pred  = ranges::equal_to&lt;&gt;,
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity &gt;
+    requires InputIterator&lt;std::decay_t&lt;I2&gt;&gt; &amp;&amp; !Range&lt;I2&gt; &amp;&amp;
+             IndirectRelation&lt;Pred, projected&lt;I1, Proj1&gt;,
+                                    projected&lt;std::decay_t&lt;I2&gt;, Proj2&gt;&gt;
+auto mismatch( I1 first1, S1 last1, I2&amp;&amp; first2_, Pred pred = Pred{},
+               Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} )
+    -&gt; ranges::tagged_pair&lt;tag::in1(I1), tag::in2(std::decay_t&lt;I2&gt;)&gt;;
+}}
+{{dcl|since=ranges|num=4|notes={{mark deprecated}}|1=
+template&lt; InputRange R1, class I2, class Pred = ranges::equal_to&lt;&gt;,
+          class Proj1 = ranges::identity, class Proj2 = ranges::identity &gt;
+    requires InputIterator&lt;std::decay_t&lt;I2&gt;&gt; &amp;&amp; !Range&lt;I2&gt; &amp;&amp;
+             IndirectRelation&lt;Pred, projected&lt;ranges::iterator_t&lt;R1&gt;, Proj1&gt;,
+                                    projected&lt;std::decay_t&lt;I2&gt;, Proj2&gt;&gt;
+auto mismatch( R1&amp;&amp; r1, I2&amp;&amp; first2_, Pred pred = Pred{},
+               Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{} )
+    -&gt; ranges::tagged_pair&lt;tag::in1(ranges::safe_iterator_t&lt;Rng1&gt;),
+                           tag::in2(std::decay_t&lt;I2&gt;)&gt;;
+}}
+{{dcl end}}
+
+@1@ Returns the first mismatching pair of elements from two ranges: one defined by {{range|first1|last1}} and another defined by {{range|first2|last2}}.
+@2@ Same as {{v|1}}, but uses {{c|r1}} as the first source range and {{c|r2}} as the second source range, as if using {{c|ranges::begin(r1)}} as {{c|first1}}, {{c|ranges::end(r1)}} as {{c|last1}}, {{c|ranges::begin(r2)}} as {{c|first2}}, and {{c|ranges::end(r2)}} as {{c|last2}}.
+@3@ Same as {{v|1}}, but behaves as if {{c|first2}} is {{c|1=std::decay_t&lt;I2&gt; first2 = std::forward&lt;I2&gt;(first2_);}} and {{c|last2}} is {{c|ranges::unreachable{}}}. The underlying algorithm never increments {{c|first2}} more than {{c|last1 - first1}} times.
+@4@ Same as {{v|3}}, but uses {{c|r1}} as the first source range, as if using {{c|ranges::begin(r1)}} as {{c|first1}} and {{c|ranges::end(r1)}} as {{c|last1}}.
+
+Elements are compared using {{c|pred}} to the projected elements of the two ranges, as if by {{c|ranges::invoke(pred, ranges::invoke(proj1, *i), ranges::invoke(proj2, *j))}}.
+
+{{cpp/experimental/ranges/algorithm/tparams}}
+
+===Parameters===
+{{par begin}}
+{{par|first1, last1|the first range of the elements}}
+{{par|r1|the first range of the elements}}
+{{par|first2, last2|the second range of the elements}}
+{{par|r2|the second range of the elements}}
+{{par|first2_|the beginning of the second range of the elements}}
+{{par|pred|predicate to apply to the projected elements}}
+{{par|proj1|projection to apply to the elements in the first range}}
+{{par|proj2|projection to apply to the elements in the second range}}
+{{par end}}
+
+===Return value===
+A {{tt|tagged_pair}} object with iterators to the first two non-equal elements (the iterator from the first range has the tag {{c|in1}} and the iterator from the second range has the tag {{c|in2}}).
+
+If no mismatches are found when the comparison reaches {{c|last1}} or {{c|last2}}, whichever happens first, the pair holds the end iterator and the corresponding iterator from the other range.
+
+===Complexity===
+At most {{c|last1}} - {{c|first1}} applications of the predicate and each projection.
+
+===Possible implementation===
+{{eq fun
+|1=
+template&lt;InputIterator I1, Sentinel&lt;I1&gt; S1, InputIterator I2, Sentinel&lt;I2&gt; S2,
+         class Proj1 = ranges::identity, class Proj2 = ranges::identity,
+         class Pred = ranges::equal_to&lt;&gt;&gt;
+    requires IndirectRelation&lt;Pred, projected&lt;I1, Proj1&gt;, projected&lt;I2, Proj2&gt;&gt;
+auto mismatch(I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = Pred{},
+              Proj1 proj1 = Proj1{}, Proj2 proj2 = Proj2{})
+    -&gt; ranges::tagged_pair&lt;tag::in1(I1), tag::in2(I2)&gt;
+{
+    while (first1 != last1 &amp;&amp; first2 != last2 &amp;&amp;
+           ranges::invoke(pred, ranges::invoke(proj1, *first1),
+                                ranges::invoke(proj2, *first2)))
+    {
+        ++first1;
+        ++first2;
+    }
+    return {first1, first2};
+}
+}}
+
+===Example===
+{{example}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc mismatch}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc equal}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc find}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc lexicographical_compare}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc search}}
+{{dsc end}}

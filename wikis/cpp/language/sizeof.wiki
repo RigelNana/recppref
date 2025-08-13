@@ -1,0 +1,145 @@
+{{title|{{tt|sizeof}} operator}}
+{{cpp/language/expressions/navbar}}
+Queries size of the object or type.
+
+Used when actual size of the object must be known.
+
+===Syntax===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|sizeof(}} {{spar|type}} {{ttb|)}}}}
+{{sdsc|num=2|{{ttb|sizeof}} {{spar|expression}} {{ttb|}}}}
+{{sdsc end}}
+
+@1@ Yields the size in bytes of the {{rlp|object|object representation}} of {{spar|type}}.
+@2@ Yields the size in bytes of the object representation of the type of {{spar|expression}}, if that expression is evaluated.
+
+{{par begin}}
+{{par|{{spar|type}}|a {{spar|type-id}} (see {{rlp|type#Type naming|type naming}})}}
+{{par|{{spar|expression}}|an expression whose {{rlp|operator precedence}} is not lower than {{tt|sizeof}} (e.g. {{c|sizeof a + b}} is parsed as {{c|(sizeof a) + b}} instead of {{c|sizeof (a + b)}})}}
+{{par end}}
+
+The result of a {{tt|sizeof}} expression is a {{rlp|constant expression}} of type {{lc|std::size_t}}.
+
+===Notes===
+Depending on the computer architecture, a {{enwiki|byte}} may consist of 8 or more bits, the exact number being recorded in {{lc|CHAR_BIT}}.
+
+The following {{tt|sizeof}} expressions always evaluate to {{c|1}}:
+* {{c|sizeof(char)}}
+* {{c|sizeof(signed char)}}
+* {{c|sizeof(unsigned char)}}
+{{rev begin}}
+{{rev|since=c++17|
+* {{c|sizeof(std::byte)}}
+}}
+{{rev|since=c++20|
+* {{c|sizeof(char8_t)}}
+}}
+{{rev end}}
+
+{{tt|sizeof}} cannot be used with function types, incomplete types, or bit-field {{rev inl|until=c++11|lvalues}}{{rev inl|since=c++11|glvalues}}.
+
+When applied to a reference type, the result is the size of the referenced type.
+
+When applied to a class type, the result is the number of bytes occupied by a complete object of that class, including any additional padding required to place such object in an array. The number of bytes occupied by a {{rlp|object#Subobjects|potentially-overlapping subobject}} may be less than the size of that object.
+
+The result of {{tt|sizeof}} is always nonzero, even if applied to an empty class type.
+
+When applied to an expression, {{tt|sizeof}} does {{rlp|expressions#Potentially-evaluated expressions|not evaluate the expression}}{{rev inl|since=c++11| (i.e. the expression is an unevaluated operand)}}, and even if the expression designates a polymorphic object, the result is the size of the static type of the expression. Lvalue-to-rvalue, array-to-pointer, or function-to-pointer conversions are not performed.{{rev inl|since=c++17| {{rlp|implicit conversion#Temporary materialization|Temporary materialization}}, however, is (formally) performed for prvalue arguments: the program is ill-formed if the argument is not destructible.}}
+
+===Keywords===
+{{ltt|cpp/keyword/sizeof}}
+
+===Example===
+{{example
+|The example output corresponds to a system with 64-bit pointers and 32-bit int (a.k.a. {{rlp|types#Data models|'''LP64''' or '''LLP64'''}}).
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+
+struct Empty          { };
+struct Base           { int a; };
+struct Derived : Base { int b; };
+struct Bit            { unsigned bit: 1; };
+struct CharChar       { char c; char c2; };
+struct CharCharInt    { char c; char c2; int i; };
+struct IntCharChar    { int i;  char c;  char c2; };
+struct CharIntChar    { char c; int i;   char c2; };
+struct CharShortChar  { char c; short s; char c2; };
+
+int main()
+{
+    Empty e;
+    Derived d;
+    Base&amp; b = d;
+    [[maybe_unused]] Bit bit;
+    int a[10];
+    
+    auto f = [&amp;]() { return sizeof(int[10]) == sizeof a ? throw 1 : e; };
+//  f(); // the return type is Empty, but always throws 1
+    
+    auto println = [](auto rem, std::size_t size) { std::cout &lt;&lt; rem &lt;&lt; size &lt;&lt; '\n'; };
+    
+    println( "1) sizeof empty class:              ", sizeof e                     );
+    println( "2) sizeof pointer:                  ", sizeof &amp;e                    );
+    println( "3) sizeof(Bit) class:               ", sizeof(Bit)                  );
+    println( "4) sizeof(int[10]) array of 10 int: ", sizeof(int[10])              );
+    println( "5) sizeof a        array of 10 int: ", sizeof a                     );
+    println( "6) length of array of 10 int:       ", ((sizeof a) / (sizeof *a))   );
+    println( "7) length of array of 10 int (2):   ", ((sizeof a) / (sizeof a[0])) );
+    println( "8) sizeof the Derived class:        ", sizeof d                     );
+    println( "9) sizeof the Derived through Base: ", sizeof b                     );
+    println( "A) sizeof(unsigned):                ", sizeof(unsigned)             );
+    println( "B) sizeof(int):                     ", sizeof(int)                  );
+    println( "C) sizeof(short):                   ", sizeof(short)                );
+    println( "D) sizeof(char):                    ", sizeof(char)                 );
+    println( "E) sizeof(CharChar):                ", sizeof(CharChar)             );
+    println( "F) sizeof(CharCharInt):             ", sizeof(CharCharInt)          );
+    println( "G) sizeof(IntCharChar):             ", sizeof(IntCharChar)          );
+    println( "H) sizeof(CharIntChar):             ", sizeof(CharIntChar)          );
+    println( "I) sizeof(CharShortChar):           ", sizeof(CharShortChar)        );
+    println( "J) sizeof f():                      ", sizeof f()                   );
+    println( "K) sizeof Base::a:                  ", sizeof Base::a               );
+
+//  println( "sizeof function:        ", sizeof(void()) ); // error
+//  println( "sizeof incomplete type: ", sizeof(int[])  ); // error
+//  println( "sizeof bit-field:       ", sizeof bit.bit ); // error
+}
+|p=true
+|output=
+1) sizeof empty class:              1
+2) sizeof pointer:                  8
+3) sizeof(Bit) class:               4
+4) sizeof(int[10]) array of 10 int: 40
+5) sizeof a        array of 10 int: 40
+6) length of array of 10 int:       10
+7) length of array of 10 int (2):   10
+8) sizeof the Derived class:        8
+9) sizeof the Derived through Base: 4
+A) sizeof(unsigned):                4
+B) sizeof(int):                     4
+C) sizeof(short):                   2
+D) sizeof(char):                    1
+E) sizeof(CharChar):                2
+F) sizeof(CharCharInt):             8
+G) sizeof(IntCharChar):             8
+H) sizeof(CharIntChar):             12
+I) sizeof(CharShortChar):           6
+J) sizeof f():                      1
+K) sizeof Base::a:                  4
+
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1553|std=C++11|before={{tt|sizeof}} could be used with bit-field xvalues|after=prohibited}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignof}}
+{{dsc inc|cpp/language/dsc sizeof...}}
+{{dsc inc|cpp/types/dsc numeric_limits}}
+{{dsc see c|c/language/sizeof}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

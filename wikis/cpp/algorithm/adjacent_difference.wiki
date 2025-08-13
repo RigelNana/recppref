@@ -1,0 +1,222 @@
+{{cpp/title|adjacent_difference}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt &gt;
+OutputIt adjacent_difference( InputIt first, InputIt last,
+                              OutputIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt2 adjacent_difference( ExecutionPolicy&amp;&amp; policy,
+                                ForwardIt1 first, ForwardIt1 last,
+                                ForwardIt2 d_first );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class BinaryOp &gt;
+OutputIt adjacent_difference( InputIt first, InputIt last, 
+                              OutputIt d_first, BinaryOp op );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class BinaryOp &gt;
+ForwardIt2 adjacent_difference( ExecutionPolicy&amp;&amp; policy,
+                                ForwardIt1 first, ForwardIt1 last, 
+                                ForwardIt2 d_first, BinaryOp op );
+}}
+{{dcl end}}
+
+Let {{tt|T}} be the value type of {{c|decltype(first)}}. 
+
+@1@ If {{range|first|last}} is empty, does nothing.
+@@ Otherwise, performs the following operations in order:
+# Creates an accumulator {{c|acc}} of type {{tt|T}}, and initializes it with {{c|*first}}.
+# Assigns {{c|acc}} to {{c|*d_first}}.
+# For each iterator {{c|iter}} in {{range|++first|last}} in order, performs the following operations in order:
+::@a@ Creates an object {{c|val}} of type {{tt|T}}, and initializes it with {{c|*iter}}.
+::@b@ Computes {{rev inl|until=c++20|{{c|val - acc}}}}{{rev inl|since=c++20|{{c|val - std::move(acc)}}}}.
+::@c@ Assigns the result to {{c|*++d_first}}.
+::@d@ {{rev inl|until=c++20|Copy}}{{rev inl|since=c++20|Move}} assigns from {{c|val}} to {{c|acc}}.
+
+@2@ If {{range|first|last}} is empty, does nothing.
+@@ Otherwise, performs the following operations in order:
+# Assigns {{c|*first}} to {{c|*d_first}}.
+# For each integer {{c|i}} in {{range|1|std::distance(first, last)}}, performs the following operations in order:
+::@a@ Computes {{c|curr - prev}}, where {{c|curr}} is the next {{c|i}}{{su|b=th}} iterator of {{c|first}}, and {{c|prev}} is the next {{c|i - 1}}{{su|b=th}} iterator of {{c|first}}.
+::@b@ Assigns the result to {{c|*dest}}, where {{c|dest}} is the next {{c|i}}{{su|b=th}} iterator of {{c|d_first}}.
+
+@3@ Same as {{v|1}}, but computes {{rev inl|until=c++20|{{c|op(val, acc)}}}}{{rev inl|since=c++20|{{c|op(val, std::move(acc))}}}} instead.
+
+@4@ Same as {{v|2}}, but computes {{c|op(curr, prev)}} instead.
+
+Given {{c|binary_op}} as the actual binary operation:
+
+* If any of the following conditions is satisfied, the program is ill-formed:
+:* For overloads {{v|1,3}}:
+::* {{tt|T}} is not constructible from {{c|*first}}.
+::* {{c|acc}} is not [[cpp/iterator#Types and writability|writable]] to {{c|d_first}}.
+::* The result of {{rev inl|until=c++20|{{c|binary_op(val, acc)}}}}{{rev inl|since=c++20|{{c|binary_op(val, std::move(acc))}}}} is not writable to {{c|d_first}}.
+:* For overloads {{v|2,4}}:
+::* {{c|*first}} is not writable to {{c|d_first}}.
+::* The result of {{c|binary_op(*first, *first)}} is not writable to {{c|d_first}}.
+
+* Given {{c|d_last}} as the iterator to be [[#Return value|returned]], if any of the following conditions is satisfied, the behavior is undefined:
+{{rrev|since=c++20|
+:* For overloads {{v|1,3}}, {{tt|T}} is not {{named req|MoveAssignable}}.
+}}
+:* For overloads {{v|2,4}}, {{range|first|last}} and {{range|d_first|d_last}} overlaps.
+:* {{c|binary_op}} modifies any element of {{range|first|last}} or {{range|d_first|d_last}}.
+:* {{c|binary_op}} invalidates any iterator or subrange in {{closed range|first|last}} or {{closed range|d_first|d_last}}.
+
+===Parameters===
+{{par begin}}
+{{par|first, last|the range of elements}}
+{{par|d_first|the beginning of the destination range}}
+{{par exec pol}}
+{{par op2|op|t1=iterator_traits&lt;InputIt&gt;::value_type|rp=OutputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===Return value===
+Iterator to the element past the last element written, or {{c|d_first}} if {{range|first|last}} is empty.
+
+===Complexity===
+Given {{mathjax-or|\(\scriptsize N\)|N}} as {{c|std::distance(first, last)}}:
+
+@1,2@ Exactly {{mathjax-or|\(\scriptsize N-1\)|N-1}} applications of {{c/core|operator-}}.
+
+@3,4@ Exactly {{mathjax-or|\(\scriptsize N-1\)|N-1}} applications of the binary function {{c|op}}.
+
+===Exceptions===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===Possible implementation===
+{{eq impl
+|title1=adjacent_difference (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt&gt;
+constexpr // since C++20
+OutputIt adjacent_difference(InputIt first, InputIt last, OutputIt d_first)
+{
+    if (first == last)
+        return d_first;
+    
+    typedef typename std::iterator_traits&lt;InputIt&gt;::value_type value_t;
+    value_t acc = *first;
+    *d_first = acc;
+    
+    while (++first != last)
+    {
+        value_t val = *first;
+        *++d_first = val - std::move(acc); // std::move since C++20
+        acc = std::move(val);
+    }
+    
+    return ++d_first;
+}
+|title2=adjacent_difference (3)|ver2=3|2=
+template&lt;class InputIt, class OutputIt, class BinaryOp&gt;
+constexpr // since C++20
+OutputIt adjacent_difference(InputIt first, InputIt last, 
+                             OutputIt d_first, BinaryOp op)
+{
+    if (first == last)
+        return d_first;
+    
+    typedef typename std::iterator_traits&lt;InputIt&gt;::value_type value_t;
+    value_t acc = *first;
+    *d_first = acc;
+    
+    while (++first != last)
+    {
+        value_t val = *first;
+        *++d_first = op(val, std::move(acc)); // std::move since C++20
+        acc = std::move(val);
+    }
+    
+    return ++d_first;
+}
+}}
+
+===Notes===
+{{c|acc}} was introduced because of the resolution of {{lwg|539}}. The reason of using {{c|acc}} rather than directly calculating the differences is because the semantic of the latter is confusing if the following types mismatch:
+* the value type of {{tt|InputIt}}
+* the writable type(s) of {{tt|OutputIt}}
+* the types of the parameters of {{c/core|operator-}} or {{c|op}}
+* the return type of {{c/core|operator-}} or {{c|op}}
+
+{{c|acc}} serves as the intermediate object to cache values of the iterated elements:
+* its type is the value type of {{tt|InputIt}}
+* the value written to {{c|d_first}} (which is the return value of {{c/core|operator-}} or {{c|op}}) is assigned to it
+* its value is passed to {{c/core|operator-}} or {{c|op}}
+
+{{source|1=
+char i_array[4] = {100, 100, 100, 100};
+int  o_array[4];
+ 
+// OK: performs conversions when needed
+// 1. creates “acc” of type char (the value type)
+// 2. “acc” is assigned to the first element of “o_array”
+// 3. the char arguments are used for long multiplication (char -&gt; long)
+// 4. the long product is assigned to the output range (long -&gt; int)
+// 5. the next value of “i_array” is assigned to “acc”
+// 6. go back to step 3 to process the remaining elements in the input range
+std::adjacent_difference(i_array, i_array + 4, o_array, std::multiplies&lt;long&gt;{});
+}}
+
+===Example===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+void println(auto comment, const auto&amp; sequence)
+{
+    std::cout &lt;&lt; comment;
+    for (const auto&amp; n : sequence)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    // Default implementation - the difference between two adjacent items
+    std::vector v{4, 6, 9, 13, 18, 19, 19, 15, 10};
+    println("Initially, v = ", v);
+    std::adjacent_difference(v.begin(), v.end(), v.begin());
+    println("Modified v = ", v);
+    
+    // Fibonacci
+    std::array&lt;int, 10&gt; a {1};
+    std::adjacent_difference(std::begin(a), std::prev(std::end(a)),
+                             std::next(std::begin(a)), std::plus&lt;&gt;{});
+    println("Fibonacci, a = ", a);
+}
+|output=
+Initially, v = 4 6 9 13 18 19 19 15 10 
+Modified v = 4 2 3 4 5 1 0 -4 -5 
+Fibonacci, a = 1 1 2 3 5 8 13 21 34 55
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op}} could not have side effects|after=it cannot modify&lt;br&gt;the ranges involved}}
+{{dr list item|wg=lwg|dr=539|std=C++98|before=the type requirements needed for the result&lt;br&gt;evaluations and assignments to be valid were missing|after=added}}
+{{dr list item|wg=lwg|dr=3058|std=C++17|before=for overloads {{v|2,4}}, the result of each invocation&lt;br&gt;of {{c/core|operator-}} or {{c|op}} was assigned to a temporary&lt;br&gt;object, and that object is assigned to the output range|after=assign the results&lt;br&gt;to the output&lt;br&gt;range directly}}
+{{dr list end}}
+
+===See also===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc partial_sum}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

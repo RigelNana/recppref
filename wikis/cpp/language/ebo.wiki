@@ -1,0 +1,144 @@
+{{title|Empty base optimization}}
+{{cpp/language/classes/navbar}}
+Allows the size of an empty base subobject to be zero.
+
+===Explanation===
+The size of any {{rlp|object}} or member subobject is required to be at least 1 even if the type is an empty {{rlp|class|class type}} (that is, a class or struct that has no non-static data members), {{rev inl|since=c++20|(unless with {{attr|no_unique_address}}, see below)}} in order to be able to guarantee that the addresses of distinct objects of the same type are always distinct.
+
+However, base class subobjects are not so constrained, and can be completely optimized out from the object layout:
+
+{{example|code=
+struct Base {}; // empty class
+
+struct Derived1 : Base
+{
+    int i;
+};
+
+int main()
+{
+    // the size of any object of empty class type is at least 1
+    static_assert(sizeof(Base) &gt;= 1);
+    
+    // empty base optimization applies
+    static_assert(sizeof(Derived1) == sizeof(int));
+}
+}}
+
+Empty base optimization is prohibited if one of the empty base classes is also the type or the base of the type of the first non-static data member, since the two base subobjects of the same type are required to have different addresses within the object representation of the most derived type.
+
+A typical example of such situation is the naive implementation of {{lc|std::reverse_iterator}} (derived from the empty base {{lc|std::iterator}}), which holds the underlying iterator (also derived from {{lc|std::iterator}}) as its first non-static data member.
+
+{{example|code=
+struct Base {}; // empty class
+
+struct Derived1 : Base
+{
+    int i;
+};
+
+struct Derived2 : Base
+{
+    Base c; // Base, occupies 1 byte, followed by padding for i
+    int i;
+};
+
+struct Derived3 : Base
+{
+    Derived1 c; // derived from Base, occupies sizeof(int) bytes
+    int i;
+};
+
+int main()
+{
+    // empty base optimization does not apply,
+    // base occupies 1 byte, Base member occupies 1 byte
+    // followed by 2 bytes of padding to satisfy int alignment requirements
+    static_assert(sizeof(Derived2) == 2*sizeof(int));
+    
+    // empty base optimization does not apply,
+    // base takes up at least 1 byte plus the padding
+    // to satisfy alignment requirement of the first member (whose
+    // alignment is the same as int)
+    static_assert(sizeof(Derived3) == 3*sizeof(int));
+}
+}}
+
+If multiple inheritance occurs, then the specific optimizations are compiler specific.
+* In MSVC, the null base class optimization is applied with and only with the last null base class, the rest of the null base classes are not applied with the null base optimization and one byte is allocated.
+* In GCC, no matter how many empty base classes exist, the empty base class applies the empty base class optimization without allocating any space and the empty base class address is the same as the first address of the derived class object.
+
+{{rev begin}}
+{{rev|since=c++11|
+Empty base optimization is ''required'' for {{named req|StandardLayoutType}}s in order to maintain the requirement that the pointer to a standard-layout object, converted using {{rlpt|reinterpret_cast}}, points to its initial member, which is why the requirements for a standard layout type include "has all non-static data members declared in the same class (either all in the derived or all in some base)" and "has no base classes of the same type as the first non-static data member".
+}}
+{{rev end}}
+
+{{rev begin}}
+{{rev|since=c++20|
+The empty member subobjects are permitted to be optimized out just like the empty bases if they use the attribute {{attr|no_unique_address}}. Taking the address of such member results in an address that may equal the address of some other member of the same object.
+{{example|code=
+struct Empty {}; // empty class
+
+struct X
+{
+    int i;
+    [[no_unique_address]] Empty e;
+};
+
+int main()
+{
+    // the size of any object of empty class type is at least 1
+    static_assert(sizeof(Empty) &gt;= 1);
+    
+    // empty member optimized out:
+    static_assert(sizeof(X) == sizeof(int));
+}
+}}
+}}
+{{rev end}}
+
+===Notes===
+Empty base optimization is commonly used by allocator-aware standard library classes ({{lc|std::vector}}, {{lc|std::function}}, {{lc|std::shared_ptr}}, etc) to avoid occupying any additional storage for its allocator member if the allocator is stateless. This is achieved by storing one of the required data members (e.g., {{tt|begin}}, {{tt|end}}, or {{tt|capacity}} pointer for the {{tt|vector}}) in an equivalent of [https://www.boost.org/doc/libs/release/libs/utility/doc/html/utility/utilities/compressed_pair.html {{tt|boost::compressed_pair}}] with the allocator.
+
+===References===
+{{ref std c++23}}
+{{ref std|section=7.6.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=7.6.2.5|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=11|title=Classes|id=class}}
+{{ref std|section=11.4|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=7.6.2.4|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=11|title=Classes|id=class}}
+{{ref std|section=11.4|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=8.3.3|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=12|title=Classes|id=class}}
+{{ref std|section=12.2|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=5.3.3|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=9|title=Classes|id=class}}
+{{ref std|section=9.2|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.10|title=Equality operators|id=expr.eq|p=2}}
+{{ref std|section=5.3.3|title=Sizeof|id=expr.sizeof|p=2}}
+{{ref std|section=9|title=Classes|id=class|p=4,7}}
+{{ref std|section=9.2|title=Class members|id=class.mem|p=20}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.10|title=Equality operators|id=expr.eq|p=2}}
+{{ref std|section=5.3.3|title=Sizeof|id=expr.sizeof|p=2}}
+{{ref std|section=9|title=Classes|id=class|p=3}}
+{{ref std end}}
+
+===External links===
+{{eli|[https://en.wikibooks.org/wiki/More_C%2B%2B_Idioms/Empty_Base_Optimization More C++ Idioms/Empty Base Optimization] &amp;mdash; A wikibook}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}
