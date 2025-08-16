@@ -144,7 +144,7 @@ class ImprovedWikiTextParser:
             template_data = {
                 "type": "template",
                 "name": str(template.name).strip(),
-                "named_params": {}
+                "params": {}
             }
             
             # 解析参数 - 所有参数都放入 named_params
@@ -154,11 +154,11 @@ class ImprovedWikiTextParser:
                 if param.name:
                     # 使用实际的参数名称（包括数字索引）
                     param_name = str(param.name).strip()
-                    template_data["named_params"][param_name] = param_value
+                    template_data["params"][param_name] = param_value
                 else:
                     # 理论上不应该到这里，因为 mwparserfromhell 总是给参数分配名称
                     # 但以防万一，使用索引作为名称
-                    template_data["named_params"][str(i + 1)] = param_value
+                    template_data["params"][str(i + 1)] = param_value
             
             return template_data
             
@@ -168,7 +168,7 @@ class ImprovedWikiTextParser:
                 "type": "template",
                 "name": "parse_error", 
                 "error": str(e),
-                "named_params": {}
+                "params": {}
             }
     
     def _parse_parameter_value(self, param_value) -> Union[str, Dict[str, Any], List[Any]]:
@@ -324,21 +324,20 @@ class ImprovedWikiTextParser:
 def main():
     """主函数示例"""
     parser = ImprovedWikiTextParser()
-    
+
     # 测试单个文件
-    test_file = "/Users/rigelshrimp/cppref_migration/wikis/cpp/chrono/duration.wiki"
-    
+    test_file = "wikis/cpp/algorithm/accumulate.wiki"
+
     print("=== 顺序解析结果 ===")
     result = parser.parse_file(test_file)
     parser.save_to_json(result, "sequential_output.json")
-    
+
     print("=== 按章节组织结果 ===")
     with open(test_file, 'r', encoding='utf-8') as f:
         content = f.read()
-    
+
     section_result = parser.parse_with_sections(content, test_file)
     parser.save_to_json(section_result, "sectioned_output.json")
-    
 
 
 if __name__ == "__main__":
