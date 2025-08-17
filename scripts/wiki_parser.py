@@ -2,6 +2,8 @@ import mwparserfromhell
 import json
 from typing import Dict, List, Any, Union
 import logging
+import argparse
+import os
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -322,22 +324,77 @@ class ImprovedWikiTextParser:
 
 
 def main():
-    """主函数示例"""
-    parser = ImprovedWikiTextParser()
+    """
+    主函数，用于解析 wiki 文件并输出 JSON。
+    使用 argparse 提供灵活的命令行接口。
+    """
+    # --- Argument Parser Setup ---
+    parser = argparse.ArgumentParser(
+        description="Parse a MediaWiki file and output its structure as JSON.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    
+    parser.add_argument(
+        "input_file", 
+        type=str,
+        help="Path to the .wiki file to be parsed."
+    )
+    
+    parser.add_argument(
+        "-o", "--output_dir", 
+        type=str, 
+        default=".",
+        help="Directory to save the output JSON files. Defaults to the current directory."
+    )
+    
+    parser.add_argument(
+        "--no-sequential",
+        action="store_true",
+        help="Disable the generation of the sequential (flat) output JSON."
+    )
+    
+    parser.add_argument(
+        "--no-sectioned",
+        action="store_true",
+        help="Disable the generation of the sectioned (structured) output JSON."
+    )
+    
+    args = parser.parse_args()
 
-    # 测试单个文件
-    test_file = "wikis/cpp/algorithm/accumulate.wiki"
+    # --- File Processing ---
+    if not os.path.exists(args.input_file):
+        logger.error(f"Input file not found: {args.input_file}")
+        return
 
-    print("=== 顺序解析结果 ===")
-    result = parser.parse_file(test_file)
-    parser.save_to_json(result, "sequential_output.json")
+    if not os.path.isdir(args.output_dir):
+        logger.info(f"Output directory not found. Creating it: {args.output_dir}")
+        os.makedirs(args.output_dir)
 
-    print("=== 按章节组织结果 ===")
-    with open(test_file, 'r', encoding='utf-8') as f:
-        content = f.read()
+    base_filename = os.path.splitext(os.path.basename(args.input_file))[0]
+    
+    wiki_parser = ImprovedWikiTextParser()
 
-    section_result = parser.parse_with_sections(content, test_file)
-    parser.save_to_json(section_result, "sectioned_output.json")
+    # --- Parsing and Saving ---
+    try:
+        with open(args.input_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        if not args.no_sequential:
+            print("=== Generating sequential output... ===")
+            sequential_result = wiki_parser.parse_content(content, args.input_file)
+            output_path = os.path.join(args.output_dir, f"{base_filename}_sequential.json")
+            wiki_parser.save_to_json(sequential_result, output_path)
+
+        if not args.no_sectioned:
+            print("=== Generating sectioned output... ===")
+            section_result = wiki_parser.parse_with_sections(content, args.input_file)
+            output_path = os.path.join(args.output_dir, f"{base_filename}_sectioned.json")
+            wiki_parser.save_to_json(section_result, output_path)
+            
+        print("\nParsing complete.")
+
+    except Exception as e:
+        logger.error(f"An error occurred during parsing: {e}")
 
 
 if __name__ == "__main__":
