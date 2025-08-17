@@ -1,0 +1,98 @@
+{{title|delete 表达式}}
+{{cpp/language/expressions/navbar}}
+
+销毁先前由 {{rlp|new|new 表达式}}分配的对象，并释放获得的内存区域。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|::}}{{mark optional}} {{ttb|delete&amp;nbsp;&amp;nbsp;}} {{spar|表达式}}}}
+{{sdsc|num=2|{{ttb|::}}{{mark optional}} {{ttb|delete[]}} {{spar|表达式}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|表达式}}|以下之一：
+* 具有{{rlp|implicit conversion|可按语境转换}}到对象指针的具有类类型的表达式
+* 对象指针类型的纯右值}}
+{{par end}}
+
+@1@ 销毁 {{rlp|new|new 表达式}}创建的单个非数组对象
+@2@ 销毁 {{rlp|new|new[] 表达式}}创建的数组
+
+===解释===
+给定从{{spar sep|表达式}}求值（并可能经过转换后）得到的指针为 {{c|ptr}}。
+
+@1@ {{c|ptr}} 必须是以下之一：
+* 空指针。
+* 指向 {{rlp|new|new 表达式}}所创建的非数组对象的指针。
+* 指向 {{rlp|new|new 表达式}}所创建的对象的基类子对象的指针。
+@@ {{c|ptr}} 的被指向类型必须与该对象（或基类子对象）的类型{{rlp|implicit conversion#相似类型|相似}}。如果 {{c|ptr}} 是其他值，包括它是通过 {{rlp|new|new 表达式}}的数组形式获得的指针的情况，那么行为{{rlp|ub|未定义}}。
+
+@2@ {{c|ptr}} 必须是空指针值或先前由 {{rlp|new|new 表达式}}的数组形式所获得的指针值，其中的[[cpp/memory/new/operator new|分配函数]]不是不分配形式（即重载 {{v|10}}）。
+@@ {{c|ptr}} 的被指向类型必须与数组对象的元素类型{{rlp|implicit conversion#相似类型|相似}}。如果 {{c|ptr}} 是其他值，包括它是通过 {{rlp|new|new 表达式}}的非数组形式获得的指针的情况，那么行为{{rlp|ub|未定义}}。
+
+表达式的结果始终具有 {{c/core|void}} 类型。
+
+如果被删除的对象在删除点拥有不完整类类型，{{rev inl|until=c++26|且完整类类型拥有不平凡的析构函数或解分配函数，那么行为未定义}}{{rev inl|since=c++26|那么程序非良构}}。
+
+如果 {{c|ptr}} 不是空指针{{rev inl|since=c++20|且[[cpp/memory/new/operator delete|解分配函数]]不是销毁 delete}}，那么 delete 表达式会对被销毁的对象，或对要被销毁的数组的每个元素（从数组的最后元素行进到首元素），调用它的{{rlp|destructor|析构函数}}（如果存在）。析构函数必须在 delete 表达式的出现点{{rlp|access|可访问}}。
+
+然后，{{rev inl|since=c++14|除非它匹配的 new 表达式已经与另一 new 表达式合并，否则}}无论析构函数是否抛出异常，delete 表达式都会调用[[cpp/memory/new/operator delete|解分配函数]]：{{c|operator delete}}（版本一）或 {{c|operator delete[]}}（版本二）。
+
+在 {{c|ptr}} 所指向对象的动态类型的作用域中{{rlp|lookup|查找}}解分配函数的名字，这表示如果存在类特有解分配函数，那么它将会在全局版本之前被找到。如果 delete 表达式中存在 {{ttb|::}}，那么查找中只检查全局命名空间。任何情况中，都丢弃除了常规解分配函数之外的所有声明。
+
+如果查找找到了解分配函数，那么按以下方式选择所调用的函数（有关这些函数及它们的效果的更详细描述见[[cpp/memory/new/operator delete|解分配函数]]）：
+{{rev begin}}
+{{rev|since=c++20|
+* 如果至少一个解分配函数是销毁 delete，那么忽略所有非销毁 delete。
+}}
+{{rev|since=c++17|
+* 如果类型的对齐要求超出 {{tt|__STDCPP_DEFAULT_NEW_ALIGNMENT__}}，那么优先采用具对齐解分配函数（有一个 {{lc|std::align_val_t}} 类型的形参）。对于其他类型，优先采用不具对齐解分配函数（没有 {{lc|std::align_val_t}} 类型的形参）。
+:* 如果找到了多于一个优先函数，那么在下一步中只考虑优先函数。
+:* 如果找不到优先函数，那么在下一步中考虑非优先函数。
+* 如果只剩下一个函数，那么选择该函数。
+}}
+{{rev end}}
+* 如果找到的解分配函数是类特有的，那么优先采用不具大小的类特有解分配函数（无 {{lc|std::size_t}} 类型的形参）而不是具大小的类特有解分配函数（带 {{lc|std::size_t}} 类型的形参）
+{{rrev|since=c++14|
+* 否则，查找抵达全局作用域，且：
+:* 如果类型完整，且只对于数组形式，如果它的操作数是指向拥有不平凡的析构函数的类或它的（可以是多维的）数组的指针，那么就会选择具大小的全局函数（带 {{lc|std::size_t}} 类型的形参）。
+:* 否则，选择全局具大小解分配函数（带 {{lc|std::size_t}} 类型的形参）还是全局不具大小解分配函数（无 {{lc|std::size_t}} 类型的形参）是未指明的。
+}}
+
+选择的解分配函数必须在 delete 表达式的出现点{{rlp|access|可访问}}，除非解分配函数是在{{rlps|type#动态类型}}的{{rlps|virtual#虚析构函数}}的定义处选择的。
+
+指向要被回收的存储块的指针会作为首个实参，传递给按上述方式所选择的[[cpp/memory/new/operator delete|解分配函数]]。块大小作为可选的 {{lc|std::size_t}} 实参传递。{{rev inl|since=c++17|对齐要求作为可选的 {{lc|std::align_val_t}} 实参传递。}}
+
+如果 {{c|ptr}} 是空指针值，那么不会调用析构函数，且可能会也可能不会调用解分配函数（这是未指明的），但默认的解分配函数保证在传递了空指针时不做任何事。
+
+如果 {{c|ptr}} 是指向 {{rlp|new}} 所分配的对象的基类子对象的指针，那么基类的析构函数必须是{{rlp|virtual|虚函数}}，否则行为未定义。
+
+===注解===
+不能删除指向 {{c/core|void}} 的指针，因为它不是指向对象类型的指针。
+
+{{rrev|since=c++11|
+因为关键词 {{tt|delete}} 之后的一对方括号始终被解释为 delete 的数组形式，所以紧跟在 {{c/core|delete}} 之后的拥有空捕获列表的 {{rlp|lambda|lambda 表达式}}必须以括号包围。
+{{source|1=
+// delete []{ return new int; }(); // 解析错误
+delete ([]{ return new int; })();  // OK
+}}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/delete}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=288|std=C++98|before=在第一种形式中会比较操作数的静态类型和动态类型|after=改为比较要被删除的对象的静态类型和动态类型}}
+{{dr list item|wg=cwg|dr=353|std=C++98|before=未指明析构函数在抛出异常的情况下是否会调用解分配函数|after=总是会调用}}
+{{dr list item|wg=cwg|dr=599|std=C++98|before=第一种形式可以接受任何空指针，包括函数指针|after=不接受指向对象类型的指针以外的指针类型}}
+{{dr list item|wg=cwg|dr=1642|std=C++98|before={{spar sep|表达式}}可以是指针左值|after=已禁止}}
+{{dr list item|wg=cwg|dr=2474|std=C++98|before=删除指向拥有相似但不同的类型的对象的指针会导致未定义行为|after=赋予良好定义}}
+{{dr list item|wg=cwg|dr=2624|std=C++98|before=从不分配的 {{c/core|operator new[]}} 获取的指针可以传给 {{c/core|delete[]}}|after=已禁止}}
+{{dr list item|wg=cwg|dr=2758|std=C++98|before=不明确如何对解分配函数和析构函数进行权限控制|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|new}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,311 @@
+{{title|字符串字面量}}
+{{cpp/language/expressions/navbar}}
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|"}}{{spar optional|s字符序列}}{{ttb|"}}}}
+{{sdsc|num=2|{{ttb|R"}}{{spar optional|d字符序列}}{{ttb|(}}{{spar optional|r字符序列}}{{ttb|)}}{{spar optional|d字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=3|{{ttb|L"}}{{spar optional|s字符序列}}{{ttb|"}}}}
+{{sdsc|num=4|{{ttb|LR"}}{{spar optional|d字符序列}}{{ttb|(}}{{spar optional|r字符序列}}{{ttb|)}}{{spar optional|d字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=5|{{ttb|u8"}}{{spar optional|s字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=6|{{ttb|u8R"}}{{spar optional|d字符序列}}{{ttb|(}}{{spar optional|r字符序列}}{{ttb|)}}{{spar optional|d字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=7|{{ttb|u"}}{{spar optional|s字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=8|{{ttb|uR"}}{{spar optional|d字符序列}}{{ttb|(}}{{spar optional|r字符序列}}{{ttb|)}}{{spar optional|d字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=9|{{ttb|U"}}{{spar optional|s字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc|num=10|{{ttb|UR"}}{{spar optional|d字符序列}}{{ttb|(}}{{spar optional|r字符序列}}{{ttb|)}}{{spar optional|d字符序列}}{{ttb|"}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+===解释===
+{{par begin}}
+{{par|{{spar|s字符序列}}|一个或多个{{spar|s字符}}}}
+{{par|{{spar|s字符}}|下列之一：
+* 一个{{spar|基本s字符}}
+* 一个转义序列，定义见{{rlp|escape|转义序列}}
+* 一个通用字符名，定义见{{rlp|escape|转义序列}}}}
+{{par|{{spar|基本s字符}}|{{rlp|charset#翻译字符集|翻译字符集}}中的字符，不包括双引号（{{ttb|"}}）、反斜杠（{{ttb|\}}）和换行符}}
+{{par|{{spar|d字符序列}}|一个或多个{{spar|d字符}}，最多十六个}}
+{{par|{{spar|d字符}}|{{rlp|charset#基本字符集|基本字符集}}中的字符，不包括括号、反斜杠和[[cpp/string/byte/isspace|空格]]}}
+{{par|{{spar|r字符序列}}|一个或多个{{spar|r字符}}，不得包含闭序列 {{box|{{ttb|)}}{{spar|d字符序列}}{{ttb|"}}}}}}
+{{par|{{spar|r字符}}|{{rlp|charset#翻译字符集|翻译字符集}}中的字符}}
+{{par end}}
+
+{{anchor|信息表格}}
+{|class="wikitable" style="text-align: center;"
+!语法
+!种类
+!类型
+!编码
+|-
+|{{v|1,2}}
+|普通字符串字面量
+|{{c/core|const char[N]}}
+|{{rlp|charset#代码单元与字面量编码|普通字面量编码}}
+|-
+|{{v|3,4}}
+|宽字符串字面量
+|{{c/core|const wchar_t[N]}}
+|{{rlp|charset#代码单元与字面量编码|宽字面量编码}}
+|-
+|{{v|5,6}}
+|UTF-8 字符串字面量
+|{{rrev multi|until1=c++20|rev1={{c/core|const char[N]}}|rev2={{c/core|const char8_t[N]}}}}
+|UTF-8
+|-
+|{{v|7,8}}
+|UTF-16 字符串字面量
+|{{c/core|const char16_t[N]}}
+|UTF-16
+|-
+|{{nbsp}}{{v|9,10}}{{nbsp}}
+|{{nbsp}}UTF-32 字符串字面量{{nbsp}}
+|{{c/core|const char32_t[N]}}
+|UTF-32
+|}
+
+在上方表格列出的类型中，{{c|N}} 是编码后的代码单元的个数，通过[[#初始化|以下]]方法确定。
+
+普通{{rev inl|since=c++11|和 UTF-8 }}字符串字面量被统称为窄字符串字面量。
+
+对字符串字面量求值会得到一个具有静态{{rlp|storage duration|存储期}}的字符串字面量对象。未指定各字符串字面量是否会存储到{{rlp|object#子对象|不重叠的对象}}，以及连续求值相同的字符串字面量是否会产生不同的对象。
+
+试图修改字符串字面量对象的效果未定义。
+
+{{source|1=
+bool b = "bar" == 3 + "foobar"; // 可以是 true 或 false，未指定
+
+const char* pc = "Hello";
+char* p = const_cast&lt;char*&gt;(pc);
+p[0] = 'M'; // 行为未定义
+}}
+
+{{rrev|since=c++11|
+===原始字符串字面量===
+原始字符串字面量是前缀包含 {{box|{{ttb|R}}}} 的字符串字面量（语法 {{v|2,4,6,8,10}}）。这种字面量不会转义任何字符，也就是说分隔序列 {{box|{{spar sep|d字符序列}}{{ttb|(}}}} 和 {{box|{{ttb|)}}{{spar sep|d字符序列}}}} 中间的所有字符都是字符串的一部分。两端的{{spar sep|d字符序列}}必须是相同的字符序列。
+
+{{source|1=
+// OK：包含一个反斜杠，等价于 "\\"
+R"(\)";
+
+// OK：包含四个 \n 字符对，等价于 "\\n\\n\\n\\n"
+R"(\n\n\n\n)";
+
+// OK：包含一个右括号、两个双引号和一个左括号，等价于 ")\"\"("
+R"-()""()-";
+
+// OK：等价于 "\n)\\\na\"\"\n"
+R"a(
+)\
+a""
+)a";
+
+// OK：等价于 "x = \"\"\\y\"\""
+R"(x = ""\y"")";
+
+// R"&lt;&lt;(-_-)&gt;&gt;"; // 错误：两端的分隔序列不匹配
+// R"-()-"-()-"; // 错误：)-" 在中间出现，导致字面量终止
+}}
+}}
+
+===初始化===
+字符串字面量对象会以与该字面量的{{spar sep|s字符}}{{rev inl|since=c++11|和{{spar sep|r字符}}}}序列对应的代码单元值序列，加上一个终止空字符（U+0000），按以下顺序初始化：
+
+@1@ 对于每个{{spar|基本s字符}}，{{rev inl|since=c++11|{{spar|r字符}}，}}{{rlp|escape|简单转义序列}}和{{rlp|escape|通用字符名}}的相接序列，它表示的字符序列会通过该字符串字面量关联的字符编码被编码成一个代码单元序列。如果有字符无法在关联的字符编码中表示，那么程序非良构。
+@@ 如果关联的字符编码有状态，那么这些序列中的第一个序列会以初始编码状态开始进行编码，并且后续的每个序列都会以前一个序列的最终编码状态开始进行编码。
+
+@2@ 对于每个{{rlp|escape|数值转义序列}}，给定 {{c|v}} 为该转义序列中的数位序列组成的八进制或十六进制数字表示的整数值，{{tt|T}} 为该字符串字面量的数组元素类型（见[[#信息表格|上表]]）：
+* 如果 {{c|v}} 在 {{tt|T}} 的表示范围内，那么该转义序列对应一个值为 {{c|v}} 的代码单元。
+* 否则，如果{{rev inl|since=c++11|该字符串字面量具有语法 {{v|1}} 或 {{v|3}}，并且}} {{c|v}} 在 {{tt|T}} 的底层类型对应的无符号整数类型的表示范围内，那么该转义序列对应一个代码单元，带代码单元具有一个 {{tt|T}} 类型的与  {{math|v mod 2{{su|p=S}}}} 同余的值，其中 {{c|S}} 是 {{tt|T}} 的宽度。
+* 否则程序非良构。
+@@ 如果关联的字符编码有状态，那么此类序列不会影响编码状态。
+
+@3@ 每个{{rlp|escape|条件转义序列}}都对应一个值由实现定义的代码单元。
+@@ 如果关联的字符编码有状态，那么由实现定义此类序列对编码状态的影响。
+
+===拼接===
+在{{rlp|translation phases#阶段 6|翻译阶段 6}}（预处理后），相邻的字符串字面量会被拼接起来：
+
+* 如果两个字符串的[[#解释|种类]]相同，那么拼接后的字符串字面量也具有该种类。
+
+{{rev begin}}
+{{rev|until=c++11|
+* 如果一个普通字符串字面量与一个宽字符串字面量相邻，那么行为未定义。
+}}
+{{rev|since=c++11|
+* 如果一个普通字符串字面量与一个其他种类的字符串字面量相邻，那么拼接后的字符串字面量的种类与后者相同。
+* 如果一个 UTF-8 字符串字面量与一个宽字符串字面量相邻，那么程序非良构。
+{{rev begin}}
+{{rev|until=c++23|
+* 其他组合受条件性支持，并且语义由实现定义。&lt;ref&gt;没有支持这种拼接的已知实现。&lt;/ref&gt;
+}}
+{{rev|since=c++23|
+* 其他组合非良构。
+}}
+{{rev end}}
+}}
+{{rev end}}
+
+{{source|1=
+"Hello, " "world!" // 在阶段 6，这两个字符串字面量会组成 "Hello, world!"
+ 
+L"Δx = %" PRId16   // 在阶段 4，PRId16 展开成 "d"
+                   // 在阶段 6，L"Δx = %" 与 "d" 组成 L"Δx = %d"
+}}
+
+&lt;references/&gt;
+
+===不求值字符串===
+以下语境需要字符串字面量，但不会对它求值：
+* {{rlp|language linkage|语言链接}}说明
+{{rev begin}}
+{{rev|since=c++11|
+* {{rlpt|static_assert}}
+* {{rlps|user literal#字面量运算符}}名
+}}
+{{rev|since=c++14|
+* {{attr|deprecated}}
+}}
+{{rev|since=c++20|
+* {{attr|nodiscard}}
+}}
+{{rev|since=c++26|
+* {{rlp|function#弃置函数|弃置函数体}}
+}}
+{{rev end}}
+
+
+{{rev begin}}
+{{rev|until=c++26|
+{{rev inl|since=c++11|除了字面量运算符名（只能使用普通字符串字面量）以外，}}标准没有指定这些语境下是否允许使用普通字符串字面量以外的字符串字面量。实现的行为不一致。
+}}
+{{rev|since=c++26|
+这些语境下只能使用普通字符串字面量。
+
+不求值字符串中的每个{{rlp|escape|通用字符名}}和{{rlp|escape|简单转义序列}}都会被它表示的{{rlp|charset|翻译字符集}}成员替代。包含数值转义序列或条件转义序列的不求值字符串非良构。
+}}
+{{rev end}}
+
+===注解===
+字符串字面量可用于{{rlp|aggregate initialization|初始化字符数组}}。如果数组初始化类似 {{c|1=char str[] = "foo";}}，那么 {{c|str}} 将含有字符串 {{c|"foo"}} 的副本。
+
+{{rev begin}}
+{{rev|until=c++11|
+字符串字面量可以转换到且可以赋给非 const 的 {{c/core|char*}} 或 {{c/core|wchar_t*}} 以与 C 兼容，在 C 中字符串字面量类型是 {{c/core|char[N]}} 或 {{c/core|wchar_t[N]}}。这种隐式转换被弃用。
+}}
+{{rev|since=c++11|
+字符串字面量不可转换到或赋给非 const 的 {{tt|CharT*}}。如果想要这种转换，那么就必须用显式转换（例如 {{rlpt|const_cast}}）。
+}}
+{{rev end}}
+
+字符串字面量不需要是一个空终止字符序列：如果字符串字面量包含内嵌的空字符，那么它表示含有多于一条字符串的数组。
+{{source|1=
+const char* p = "abc\0def"; // std::strlen(p) == 3，但数组大小是 8
+}}
+
+如果字符串字面量中一个十六进制转义后随一个合法十六进制数位，那么可能会因为转义序列无效而编译失败。此时可以拼接字符串：
+{{source|1=
+//const char* p = "\xfff"; // 错误：十六进制转义序列在范围外
+const char* p = "\xff""f"; // OK ：此字面量是保有 {'\xff','f','\0'} 的 const char[3]
+}}
+
+{{ftm begin|sort=yes}}
+{{ftm|__cpp_char8_t|std=C++23|dr=20|value=202207L|兼容 {{c/core|char8_t}} 并修复可移植性（允许从 UTF-8 字符串字面量{{rlp|aggregate initialization#字符数组|初始化（{{c/core|unsigned}}）{{c/core|char}} 数组}}）}}
+{{ftm|__cpp_raw_strings|std=C++11|value=200710L|原始字符串字面量}}
+{{ftm|__cpp_unicode_literals|std=C++11|value=200710L|Unicode 字符串字面量}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+// array1 和 array2 包含相同的值：
+char array1[] = "Foo" "bar";
+char array2[] = {'F', 'o', 'o', 'b', 'a', 'r', '\0'};
+
+const char* s1 = R"foo(
+Hello
+  World
+)foo";
+// 同
+const char* s2 = "\nHello\n  World\n";
+// 同
+const char* s3 = "\n"
+                 "Hello\n"
+                 "  World\n";
+
+const wchar_t* s4 = L"ABC" L"DEF"; // OK，同下
+const wchar_t* s5 = L"ABCDEF";
+const char32_t* s6 = U"GHI" "JKL"; // OK，同下
+const char32_t* s7 = U"GHIJKL";
+const char16_t* s9 = "MN" u"OP" "QR"; // OK，同下
+const char16_t* sA = u"MNOPQR";
+
+// const auto* sB = u"Mixed" U"Types";
+        // C++23 前实现可能不支持；C++23 起非良构
+
+const wchar_t* sC = LR"--(STUV)--"; // OK，原始字符串字面量
+
+int main()
+{
+    std::cout &lt;&lt; array1 &lt;&lt; ' ' &lt;&lt; array2 &lt;&lt; '\n'
+              &lt;&lt; s1 &lt;&lt; s2 &lt;&lt; s3 &lt;&lt; std::endl;
+    std::wcout &lt;&lt; s4 &lt;&lt; ' ' &lt;&lt; s5 &lt;&lt; ' ' &lt;&lt; sC
+               &lt;&lt; std::endl;
+}
+|output= 
+Foobar Foobar
+
+Hello
+  World
+
+Hello
+  World
+
+Hello
+  World
+
+ABCDEF ABCDEF STUV
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=411|paper=P2029R4|std=C++98|before=字符串字面量中的转义序列不能对应多个代码单元|after=可以对应}}
+{{dr list item|wg=cwg|dr=1656|paper=P2029R4|std=C++98|before=字符串字面量中的数值转义序列对应的字符不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=1759|std=C++11|before=UTF-8 字符串字面量可能会有 {{c/core|char}} 无法表示的编码单元|after={{c/core|char}} 可以表示所有 UTF-8 编码单元}}
+{{dr list item|wg=cwg|dr=1823|std=C++98|before=字符串字面量是否有别由实现定义|after=区别性未指明，相同字符串字面量能产生不同对象}}
+{{dr list item|wg=cwg|dr=2333|paper=P2029R4|std=C++11|before=不明确 UTF-8/16/32 字符串字面量&lt;br&gt;是否可以包含数值转义序列|after=使之明确}}
+{{dr list item|wg=cwg|dr=2870|std=C++11&lt;!-- C++98 的用词是“在翻译阶段 6，相邻的窄字符串字面量会拼接在一起，相邻的宽字符串字面量也会拼接在一起”，这意味着拼接多个普通字符串字面量得到的是普通字符串字面量 --&gt;|before=两个普通字符串字面量的拼接结果不明确|after=使之明确}}
+{{dr list item|paper=P1854R4|std=C++23|before=包含不可编码字符的通常或宽字符串字面量受条件性支持|after=包含此类字面量的程序非良构}}
+{{dr list item||paper=P2029R4|std=C++98|before=1. 不明确字符串字面量是否可以包含不可编码字符&lt;br&gt;2. 不明确字符串字面量是否可以包含表示的代码单元&lt;br&gt;{{nbsp|4}}无法以字面量的数组元素类型表示的数值转义序列|after=1. 包含它们的通常或宽字符串字面量受条件性支持&lt;ref&gt;后续 P1854R4 被接受为缺陷报告，覆盖了此修改方案。&lt;/ref&gt;&lt;br&gt;2. 在底层类型对应的无符号整数类型&lt;br&gt;{{nbsp|4}}也无法表示的情况下程序非良构}}
+{{dr list end}}
+&lt;references/&gt;
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=5.13.5|title=String literals|id=lex.string}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=5.13.5|title=String literals|id=lex.string}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=5.13.5|title=String literals|id=lex.string}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=2.14.5|title=String literals|id=lex.string}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=2.14.5|title=String literals|id=lex.string}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=2.13.4|title=String literals|id=lex.string}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=2.13.4|title=String literals|id=lex.string}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc user literal}}
+{{dsc see c|c/language/string literal|字符串字面量|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

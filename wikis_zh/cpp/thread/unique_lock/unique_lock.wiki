@@ -1,0 +1,98 @@
+{{cpp/thread/unique_lock/title|unique_lock}}
+{{cpp/thread/unique_lock/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|1=
+unique_lock() noexcept;
+}}
+{{dcl|num=2|since=c++11|1=
+unique_lock( unique_lock&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=3|since=c++11|1=
+explicit unique_lock( mutex_type&amp; m );
+}}
+{{dcl|num=4|since=c++11|1=
+unique_lock( mutex_type&amp; m, std::defer_lock_t t ) noexcept;
+}}
+{{dcl|num=5|since=c++11|1=
+unique_lock( mutex_type&amp; m, std::try_to_lock_t t );
+}}
+{{dcl|num=6|since=c++11|1=
+unique_lock( mutex_type&amp; m, std::adopt_lock_t t );
+}}
+{{dcl|num=7|since=c++11|1=
+template&lt; class Rep, class Period &gt;
+unique_lock( mutex_type&amp; m,
+             const std::chrono::duration&lt;Rep, Period&gt;&amp; timeout_duration );
+}}
+{{dcl|num=8|since=c++11|1=
+template&lt; class Clock, class Duration &gt;
+unique_lock( mutex_type&amp; m,
+             const std::chrono::time_point&lt;Clock, Duration&gt;&amp; timeout_time );
+}}
+{{dcl end}}
+
+构造 {{tt|unique_lock}}，可选地锁定提供的互斥体。
+
+@1@ 构造无关联互斥体的 {{tt|unique_lock}}。
+@2@ 移动构造函数。以 {{c|other}} 的内容初始化 {{tt|unique_lock}}。令 {{c|other}} 无关联互斥体。
+@3-8@ 构造以 {{c|m}} 为关联互斥体的 {{tt|unique_lock}}。另外：
+:@3@ 通过调用 {{c|m.lock()}} 锁定关联互斥体。
+:@4@ 不锁定关联互斥体。
+:@5@ 通过调用 {{c|m.try_lock()}} 尝试锁定关联互斥体而不阻塞。若 {{tt|Mutex}} 不满足{{named req|Lockable}}则行为未定义。
+:@6@ 假定调用方线程已保有 {{c|m}} 上的非共享锁（即由 {{tt|lock}}、{{tt|try_lock}}、{{tt|try_lock_for}} 或 {{tt|try_lock_until}} 取得的锁）。若非如此则行为未定义。&lt;!-- P2160R1 --&gt;
+:@7@ 通过调用 {{c|m.try_lock_for(timeout_duration)}} 尝试锁定关联互斥体。阻塞到经过指定的 {{c|timeout_duration}} 或获得锁这两个事件的先达成者为止。可能阻塞长于 {{tt|timeout_duration}}。若 {{tt|Mutex}} 不满足{{named req|TimedLockable}}则行为未定义。
+:@8@ 通过调用 {{c|m.try_lock_until(timeout_time)}} 尝试锁定关联互斥体。阻塞到抵达指定的 {{tt|timeout_time}} 或获得锁这两个事件的先达成者为止。可能阻塞长于抵达 {{tt|timeout_time}}。若 {{tt|Mutex}} 不满足{{named req|TimedLockable}}则行为未定义。
+
+===参数===
+{{par begin}}
+{{par|other|用以初始化状态的另一 {{tt|unique_lock}}}}
+{{par|m|与锁关联且可选的获得所有权的互斥体}}
+{{par|t|用于选择拥有不同锁定策略的构造函数的标签形参}}
+{{par|timeout_duration|要阻塞的最大时长}}
+{{par|timeout_time|要阻塞到的最大时间点}}
+{{par end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+std::mutex m_a, m_b, m_c;
+int a, b, c = 1;
+
+void update()
+{
+    {   // 注意：可用 std::lock_guard 或 atomic&lt;int&gt; 代替
+        std::unique_lock&lt;std::mutex&gt; lk(m_a);
+        a++;
+    }
+    
+    {   // 注意：细节和替代品见 std::lock 及 std::scoped_lock
+        std::unique_lock&lt;std::mutex&gt; lk_b(m_b, std::defer_lock);
+        std::unique_lock&lt;std::mutex&gt; lk_c(m_c, std::defer_lock);
+        std::lock(lk_b, lk_c);
+        b = std::exchange(c, b+c);
+    }
+}
+
+int main()
+{
+    std::vector&lt;std::thread&gt; threads;
+    for (unsigned i = 0; i &lt; 12; ++i)
+        threads.emplace_back(update);
+
+    for (auto&amp; i : threads)
+        i.join();
+    
+    std::cout "第 " &lt;&lt; a &lt;&lt; " 和第 " &lt;&lt; a + 1 &lt;&lt; " 个斐波那契数: "
+              &lt;&lt; b &lt;&lt; " 和 " &lt;&lt; c &lt;&lt; '\n';
+}
+|output=
+第 12 和第 13 个斐波那契数: 144 和 233
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

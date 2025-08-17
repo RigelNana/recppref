@@ -1,0 +1,197 @@
+{{cpp/ranges/title|next_permutation|next_permutation_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;I, Comp, Proj&gt;
+constexpr next_permutation_result&lt;I&gt;
+    next_permutation( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::bidirectional_range R, class Comp = ranges::less,
+          class Proj = std::identity &gt;
+requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+constexpr next_permutation_result&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;
+    next_permutation( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I &gt;
+using next_permutation_result = ranges::in_found_result&lt;I&gt;;
+}}
+{{dcl end}}
+
+@1@ 将范围 {{range|first|last}} 变换到下个{{enwiki|permutation|排列}}，其中所有排列的集合''词法上''相对于比较函数对象 {{c|comp}} 和投影函数对象 {{c|proj}} 定序。若存在''“下个排列”''则返回 {{c|{last, true} }}；否则将范围变换到词法上的首个排列，如同用 {{c|ranges::sort(first, last, comp, proj)}}，并返回 {{c|{last, false} }}。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要“重排”的|sentinel=yes}}
+{{par|r|要''重排''的元素 {{lconcept|range}}}}
+{{par|comp|若第一实参''小于''第二个则返回 {{c|true}} 的比较{{named req|FunctionObject|函数对象}}}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 若新排列词法上''大于''{{sep}}旧者则为 {{c|ranges::next_permutation_result&lt;I&gt;{last, true} }}。若抵达最后的排列并重置范围为首排列则为 {{c|ranges::next_permutation_result&lt;I&gt;{last, false} }}。
+
+@2@ 同 {{v|1}}，但返回类型为 {{c|ranges::next_permutation_result&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;}}。
+
+===异常===
+从迭代器操作或元素交换所抛出的任何异常。
+
+===复杂度===
+至多交换 {{mathjax-or|\(\scriptsize N/2\)|N/2}} 次，其中 {{mathjax-or|\(\scriptsize N\)|N}} 在情况 {{v|1}} 中为 {{c|ranges::distance(first, last)}}，在情况 {{v|2}} 中为 {{c|ranges::distance(r)}}。在整个重排序列中，典型实现在排列的整个序列中平均每次调用使用 3 次比较和 1.5 次交换。
+
+===注解===
+{{cpp/algorithm/notes swap vectorization}}
+
+===可能的实现===
+{{eq fun|1=
+struct next_permutation_fn
+{
+    template&lt;std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Comp = ranges::less, class Proj = std::identity&gt;
+    requires std::sortable&lt;I, Comp, Proj&gt;
+    constexpr ranges::next_permutation_result&lt;I&gt;
+        operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        // 检查序列是否至少拥有两个元素
+        if (first == last)
+            return {std::move(first), false};
+        I i_last{ranges::next(first, last)};
+        I i{i_last};
+        if (first == --i)
+            return {std::move(i_last), false};
+        // 主“重排”循环
+        for (;;)
+        {
+            I i1{i};
+            if (std::invoke(comp, std::invoke(proj, *--i), std::invoke(proj, *i1)))
+            {
+                I j{i_last};
+                while (!std::invoke(comp, std::invoke(proj, *i), std::invoke(proj, *--j)))
+                {}
+                std::iter_swap(i, j);
+                std::reverse(i1, i_last);
+                return {std::move(i_last), true};
+            }
+            // 耗尽重排“空间”
+            if (i == first)
+            {
+                std::reverse(first, i_last);
+                return {std::move(i_last), false};
+            }
+        }
+    }
+
+    template&lt;ranges::bidirectional_range R, class Comp = ranges::less,
+             class Proj = std::identity&gt;
+    requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+    constexpr ranges::next_permutation_result&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr next_permutation_fn next_permutation {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;compare&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+struct S
+{
+    char c;
+    int i;
+    auto operator&lt;=&gt;(const S&amp;) const = default;
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const S&amp; s)
+    {
+        return os &lt;&lt; "{'" &lt;&lt; s.c &lt;&lt; "', " &lt;&lt; s.i &lt;&lt; "}";
+    }
+};
+
+auto print = [](auto const&amp; v, char term = ' ')
+{
+    std::cout &lt;&lt; "{ ";
+    for (const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '}' &lt;&lt; term;
+};
+
+int main()
+{
+    std::cout &lt;&lt; "生成所有排列（迭代器情形）:\n";
+    std::string s{"abc"};
+    do
+    {
+        print(s);
+    }
+    while (std::ranges::next_permutation(s.begin(), s.end()).found);
+
+    std::cout &lt;&lt; "\n" "生成所有排列（范围情形）:\n";
+    std::array a{'a', 'b', 'c'};
+    do
+    {
+        print(a);
+    }
+    while (std::ranges::next_permutation(a).found);
+
+    std::cout &lt;&lt; "\n" "用比较器生成所有排列:\n";
+    using namespace std::literals;
+    std::array z{"█"s, "▄"s, "▁"s};
+    do
+    {
+        print(z);
+    }
+    while (std::ranges::next_permutation(z, std::greater()).found);
+
+    std::cout &lt;&lt; "\n" "用投影生成所有排列:\n";
+    std::array&lt;S, 3&gt; r{S{'A',3}, S{'B',2}, S{'C',1}&lt;!----&gt;};
+    do
+    {
+        print(r, '\n');
+    }
+    while (std::ranges::next_permutation(r, {}, &amp;S::c).found);
+}
+|output=
+生成所有排列（迭代器情形）:
+{ a b c } { a c b } { b a c } { b c a } { c a b } { c b a }
+生成所有排列（范围情形）:
+{ a b c } { a c b } { b a c } { b c a } { c a b } { c b a }
+用比较器生成所有排列:
+{ █ ▄ ▁ } { █ ▁ ▄ } { ▄ █ ▁ } { ▄ ▁ █ } { ▁ █ ▄ } { ▁ ▄ █ }
+用投影生成所有排列:
+{ {'A', 3} {'B', 2} {'C', 1} }
+{ {'A', 3} {'C', 1} {'B', 2} }
+{ {'B', 2} {'A', 3} {'C', 1} }
+{ {'B', 2} {'C', 1} {'A', 3} }
+{ {'C', 1} {'A', 3} {'B', 2} }
+{ {'C', 1} {'B', 2} {'A', 3} }
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc prev_permutation}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_permutation}}
+{{dsc inc|cpp/algorithm/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/dsc prev_permutation}}
+{{dsc inc|cpp/algorithm/dsc is_permutation}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,560 @@
+{{title|指针声明}}
+{{cpp/language/declarations/navbar}}
+
+声明指针或指向成员指针类型的变量。
+
+===语法===
+指针的声明是简单声明，它的{{rlp|declarations|声明符}}拥有下列形式：
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|*}} {{spar optional|属性}} {{spar optional|cv限定符}} {{spar|声明符}}
+}}
+{{sdsc|num=2|
+{{spar|嵌套名说明符}} {{ttb|*}} {{spar optional|属性}} {{spar optional|cv限定符}} {{spar|声明符}}
+}}
+{{sdsc end}}
+
+@1@'''指针声明符'''：声明 {{c|S* D;}} 将 {{c|D}} 声明为指向{{rlp|declarations#说明符|声明说明符序列}} {{tt|S}} 所确定类型的指针。
+@2@'''成员指针声明符'''：声明 {{c|S C::* D;}} 将 {{c|D}} 声明为指向 {{tt|C}} 的声明说明符序列 {{tt|S}} 所确定类型的非静态数据成员的指针。
+
+{{par begin}}
+{{par|{{spar|嵌套名说明符}}|{{rlp|identifiers#有限定的标识符|名字和作用域解析运算符 {{ttb|::}} 的序列}}}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}的列表}}
+{{par|{{spar|cv限定符}}|应用到被声明指针的 const/volatile 限定（而并非被指向类型，它的限定是声明说明符序列的一部分）}}
+{{par|{{spar|声明符}}|除引用声明符之外的任意{{rlp|declarations|声明符}}（不存在指向引用的指针）。它可以是另一指针声明符（允许指向指针的指针）}}
+{{par end}}
+
+不存在指向{{rlp|reference|引用}}的指针和指向{{rlp|bit field|位域}}的指针。
+当没有详述地提及“指针”时，通常不包含指向（非静态）成员的指针。
+
+===指针===
+指针类型的值是下列之一：
+* ''指向对象或函数的指针''（此时我们说该指针''指向''{{sep}}函数或对象），或
+* ''对象末尾后指针''，或
+* 该类型的''[[#空指针|空指针值]]''，或
+* ''[[#无效指针|无效指针值]]''。
+
+指向对象的指针''表示''{{sep}}该对象所占用的内存的首字节的地址。对象的末尾后指针''表示''{{sep}}内存中该对象所占用的存储之后的首个字节的地址。
+
+注意，两个表示同一地址的指针也可能拥有不同的值。
+
+{{source|1=
+struct C
+{
+    int x, y;
+} c;
+
+int* px = &amp;c.x;   // px 的值是“指向 c.x 的指针”
+int* pxe= px + 1; // pxe 的值是“ c.x 的尾后指针”
+int* py = &amp;c.y;   // py 的值是“指向 c.y 的指针”
+
+assert(pxe == py); // == 测试两个指针是否表示相同地址
+                   // 可能或可能不引发断言
+
+*pxe = 1; // 即使未引发断言，行为也未定义
+}}
+
+通过无效指针值间接寻址，和将无效指针值传递给解分配函数的行为均未定义。无效指针值的任何其他用法的行为都由实现定义。部分实现会将复制无效指针值的行为定义为造成由系统生成的运行时错误。
+
+====对象指针====
+对象指针能以应用于任何对象类型（包含另一指针类型）的表达式的{{rlp|operator member access|取址运算符}}的返回值初始化：
+
+{{source|1=
+int n;
+int* np = &amp;n;          // 指向 int 的指针
+int* const* npp = &amp;np; // 指向【指向非 const int 的 const 指针】的非 const 指针
+
+int a[2];
+int (*ap)[2] = &amp;a;     // 指向含有 int 的数组的指针
+
+struct S { int n; };
+
+S s = {1};
+int* sp = &amp;s.n;        // 指向作为 s 的成员的 int 的指针
+}}
+
+对象指针可以作为内建间接寻址运算符（一元 {{tt|operator*}}）的操作数，并返回指代被指向对象的{{rlp|value category#左值|左值表达式}}：
+
+{{source|1=
+int n;
+int* p = &amp;n;     // 指向 n 的指针
+int&amp; r = *p;     // 绑定到指代 n 的左值表达式的引用
+r = 7;           // 在 n 存储 int 7
+std::cout &lt;&lt; *p; // 左值到右值隐式转换从 n 读取值
+}}
+
+指向类对象的指针也能作为成员访问运算符 {{rlp|operator member access#内建的成员访问运算符|operator-&gt;}} 和 {{rlp|operator member access#内建的成员指针访问运算符|operator-&gt;*}} 的左侧操作数。
+
+由于存在{{rlp|implicit conversion|数组到指针}}的隐式转换，可以以数组类型的表达式初始化指向数组首元素的指针：
+
+{{source|1=
+int a[2];
+int* p1 = a; // 指向数组 a 首元素 a[0]（一个 int）的指针
+
+int b[6][3][8];
+int (*p2)[3][8] = b; // 指向数组 b 首元素 b[0] 的指针，
+                     // 被指者为含有 3 个【含有 8 个 int 元素的数组】元素的数组
+}}
+
+由于存在指针的{{rlp|implicit conversion|派生类到基类}}的隐式转换，可以以派生类的地址初始化指向基类的指针：
+
+{{source|1=
+struct Base {};
+struct Derived : Base {};
+
+Derived d;
+Base* p = &amp;d;
+}}
+
+如果 {{tt|Derived}} 是{{rlp|object#多态对象|多态的}}，那么这种指针可用于进行{{rlp|virtual|虚函数调用}}。
+
+某些{{rlp|operator arithmetic#加法性运算符|加法、减法}}、{{rlp|operator incdec|自增和自减}}运算符对于指向数组元素的指针有定义：这种指针满足{{named req|RandomAccessIterator}}要求，并使得 C++ 库[[cpp/algorithm|算法]]可以用于原始数组。
+
+某些情况下，{{rlp|operator comparison#指针比较运算符|比较运算符}}对指针有定义：两个表示相同地址的指针比较相等，两个空指针值比较相等，指向同一数组中的元素的指针的比较与各元素的数组下标的比较方式相同，而指向拥有相同{{rlp|access|成员访问}}的非静态数据成员的指针以各成员的声明顺序进行比较。
+
+多数实现也为随机来源的指针提供{{enwiki|Total order#Strict total order|严格全序}}，例如将它们实现为连续虚拟地址空间中的地址。未能做到的实现（例如，其中并非指针的所有位都是内存地址的一部分因而在比较时必须忽略之，或者要求附带的计算，或者指针与整数并非一对一关系），为指针提供了具有此项保证的 {{lc|std::less}} 特化。这使得可在关联容器（如 {{lc|std::set}} 或 {{lc|std::map}}）中使用所有随机来源的指针。
+
+{{anchor|指向 void 的指针}}
+====指向 {{c/core|void}} 的指针====
+指向任意类型对象的指针都可以被{{rlp|implicit conversion|隐式转换成}}指向 {{c/core|void}} 的指针（可有 {{rlp|cv|cv 限定}}）；它的值不会改变。逆向的转换要求 {{rlp|static_cast}} 或{{rlp|explicit cast|显式转换}}，并生成它的原指针值：
+
+{{source|1=
+int n = 1;
+int* p1 = &amp;n;
+void* pv = p1;
+int* p2 = static_cast&lt;int*&gt;(pv);
+std::cout &lt;&lt; *p2 &lt;&lt; '\n'; // 打印 1
+}}
+
+如果原指针指向某多态类型对象中的基类子对象，则可用 {{rlpt|dynamic_cast}} 获得指向最终派生类型的完整对象的 {{c/core|void*}}。
+
+指向 {{c/core|void}} 的指针与指向 {{c/core|char}} 的指针拥有相同的大小、表示及对齐。
+
+{{c/core|void}} 指针被用来传递未知类型的对象，这在 C 接口中常见：{{lc|std::malloc}} 返回 {{c/core|void*}}，{{lc|std::qsort}} 期待接受两个 {{c/core|const void*}} 参数的用户提供回调。[https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_create.html {{tt|pthread_create}}] 期待接受并返回 {{c/core|void*}} 的用户提供的回调。所有情况下，调用方负责在使用前将指针转换到正确类型。
+
+====函数指针====
+函数指针能以非成员函数或静态成员函数的地址初始化。由于存在{{rlp|implicit conversion|函数到指针}}的隐式转换，取址运算符可以忽略：
+{{source|1=
+void f(int);
+void (*p1)(int) = &amp;f;
+void (*p2)(int) = f; // 与 &amp;f 相同
+}}
+
+与函数或函数的引用不同，函数指针是对象，从而能存储于数组、被复制、被赋值等：
+{{source|1=
+void (a[10])(int);  // 错误：函数数组
+void (&amp;a[10])(int); // 错误：引用数组
+void (*a[10])(int); // OK：函数指针数组
+}}
+
+注意：涉及函数指针的声明经常可以通过类型别名简化：
+{{source|1=
+using F = void(int); // 用来简化声明的具名类型别名
+F a[10];  // 错误：函数数组
+F&amp; a[10]; // 错误：引用数组
+F* a[10]; // OK：函数指针数组
+}}
+
+函数指针可用作{{rlp|operator other|函数调用运算符}}的左侧操作数，这会调用被指向的函数：
+{{source|1=
+int f(int n)
+{
+    std::cout &lt;&lt; n &lt;&lt; '\n';
+    return n * n;
+}
+
+int main()
+{
+    int (*p)(int) = f;
+    int x = p(7);
+}
+}}
+
+解引用函数指针生成标识被指向函数的左值：
+
+{{source|1=
+int f();
+int (*p)() = f;  // 指针 p 指向 f
+int (&amp;r)() = *p; // 将标识 f 的左值绑定到引用
+r();             // 通过左值引用调用函数 f
+(*p)();          // 通过函数左值调用函数 f
+p();             // 直接通过指针调用函数 f
+}}
+
+如果只有一个重载匹配指针类型，那么函数指针可以从可包含函数、函数模板特化及函数模板的一个重载集进行初始化（细节见{{rlp|overloaded address|重载函数的地址}}）：
+
+{{source|1=
+template&lt;typename T&gt;
+T f(T n) { return n; }
+
+double f(double n) { return n; }
+
+int main()
+{
+    int (*p)(int) = f; // 实例化并选择 f&lt;int&gt;
+}
+}}
+
+{{rlp|operator comparison#指针比较运算符|相等比较运算符}}对于函数指针有定义（如果指向同一函数，那么它们比较相等）。
+
+===成员指针===
+====数据成员指针====
+指向作为类 {{tt|C}} 的成员的非静态数据成员 {{tt|m}} 的指针，能准确地以表达式 {{tt|&amp;C::m}} 初始化。在 {{tt|C}} 的成员函数中，如 {{tt|&amp;(C::m)}} 或 {{tt|&amp;m}} 这样的表达式不构成指向成员指针。
+
+这种指针能用作{{rlp|operator member access|成员指针访问运算符}} {{tt|operator.*}} 与 {{tt|operator-&gt;*}} 的右侧操作数：
+
+{{source|1=
+struct C { int m; };
+
+int main()
+{
+    int C::* p = &amp;C::m;          // 指向类 C 的数据成员 m
+    C c = {7};
+    std::cout &lt;&lt; c.*p &lt;&lt; '\n';   // 打印 7
+    C* cp = &amp;c;
+    cp-&gt;m = 10;
+    std::cout &lt;&lt; cp-&gt;*p &lt;&lt; '\n'; // 打印 10
+}
+}}
+
+指向一个可访问且无歧义的非虚基类的数据成员的指针，可以{{rlp|implicit conversion|隐式转换}}成指向派生类的同一数据成员的指针：
+
+{{source|1=
+struct Base { int m; };
+struct Derived : Base {};
+
+int main()
+{
+    int Base::* bp = &amp;Base::m;
+    int Derived::* dp = bp;
+    Derived d;
+    d.m = 1;
+    std::cout &lt;&lt; d.*dp &lt;&lt; ' ' &lt;&lt; d.*bp &lt;&lt; '\n'; // 打印 1 1
+}
+}}
+
+相反方向的转换，即从指向派生类的数据成员的指针到指向无歧义非虚基类的数据成员的指针，允许由 {{rlp|static_cast}} 和{{rlp|explicit cast|显式转换}}来进行，即使基类没有该成员（但当用该指针访问时，最终派生类中有）：
+
+{{source|1=
+struct Base {};
+struct Derived : Base { int m; };
+
+int main()
+{
+    int Derived::* dp = &amp;Derived::m;
+    int Base::* bp = static_cast&lt;int Base::*&gt;(dp);
+    
+    Derived d;
+    d.m = 7;
+    std::cout &lt;&lt; d.*bp &lt;&lt; '\n'; // OK：打印 7
+    
+    Base b;
+    std::cout &lt;&lt; b.*bp &lt;&lt; '\n'; // 未定义行为
+}
+}}
+
+成员指针的被指向类型也可以是成员指针自身：成员指针可有多级，而且在每级可以有不同的 cv 限定。指针和成员指针的混合也可以多级组合：
+
+{{source|1=
+struct A
+{
+    int m;
+    // 指向非 const 成员的 const 指针
+    int A::* const p;
+};
+
+int main()
+{
+    // 指向（A 的）数据成员的非 const 指针
+    // 该成员是一个指向【（A 的）非 const 成员】的 const 指针
+    int A::* const A::* p1 = &amp;A::p;
+    
+    const A a = {1, &amp;A::m};
+    std::cout &lt;&lt; a.*(a.*p1) &lt;&lt; '\n'; // 打印 1
+    
+    // 指向 const 成员指针的常规非 const 指针
+    int A::* const* p2 = &amp;a.p;
+    std::cout &lt;&lt; a.**p2 &lt;&lt; '\n'; // 打印 1
+}
+}}
+
+====成员函数指针====
+指向作为类 {{tt|C}} 的成员的非静态成员函数 {{tt|f}} 的指针，能准确地以表达式 {{tt|&amp;C::f}} 初始化。在 {{tt|C}} 的成员函数内，如 {{tt|&amp;(C::f)}} 或 {{tt|&amp;f}}，这样的表达式不构成成员函数指针。
+
+这种指针可以用作{{rlp|operator member access|成员指针访问运算符}} {{tt|operator.*}} 与 {{tt|operator-&gt;*}} 的右操作数。它的{{rlp|value category#未决成员函数调用|结果表达式}}只能用作函数调用运算符的左侧操作数：
+
+{{source|1=
+struct C
+{
+    void f(int n) { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    void (C::* p)(int) = &amp;C::f; // 指向类 C 的成员函数 f 的指针
+    C c;
+    (c.*p)(1);                  // 打印 1
+    C* cp = &amp;c;
+    (cp-&gt;*p)(2);                // 打印 2
+}
+}}
+
+
+指向基类的成员函数的指针可以{{rlp|implicit conversion|隐式转换}}成指向派生类的同一成员函数的指针：
+
+{{source|1=
+struct Base
+{
+    void f(int n) { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+struct Derived : Base {};
+
+int main()
+{
+    void (Base::* bp)(int) = &amp;Base::f;
+    void (Derived::* dp)(int) = bp;
+    Derived d;
+    (d.*dp)(1);
+    (d.*bp)(2);
+}
+}}
+
+相反方向的转换，即从指向派生类的成员函数的指针到指向无歧义非虚基类的成员函数的指针，允许由 {{rlp|static_cast}} 与{{rlp|explicit cast|显式转换}}来进行，即使基类没有该成员函数（但在用该指针进行访问时，最终派生类有）：
+
+{{source|1=
+struct Base {};
+struct Derived : Base
+{
+    void f(int n) { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    void (Derived::* dp)(int) = &amp;Derived::f;
+    void (Base::* bp)(int) = static_cast&lt;void (Base::*)(int)&gt;(dp);
+    
+    Derived d;
+    (d.*bp)(1); // OK：打印 1
+    
+    Base b;
+    (b.*bp)(2); // 未定义行为
+}
+}}
+
+成员函数指针可用作回调或函数对象，通常在应用 {{lc|std::mem_fn}} 或 {{lc|std::bind}} 之后：
+
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstddef&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::vector&lt;std::string&gt; v = {"a", "ab", "abc"};
+    std::vector&lt;std::size_t&gt; l;
+    transform(v.begin(), v.end(), std::back_inserter(l),
+              std::mem_fn(&amp;std::string::size));
+    for(std::size_t n : l)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1 2 3
+}}
+
+===空指针===
+每个类型的指针都拥有一个特殊值，称为该类型的''空指针值''。值为空的指针不指向对象或函数（解引用空指针的行为未定义），并与所有值同样为''空''{{sep}}的同类型指针比较相等。
+
+需要将指针初始化为空或赋空值给既存指针时，可以使用以下''空指针常量''{{sep}}之一：
+* 值为零的整数字面量。
+{{rrev|since=c++11|
+* {{lc|std::nullptr_t}} 类型的纯右值（通常是 {{c|nullptr}}）。
+}}
+也可以使用宏 {{lc|NULL}}，它会展开成一个由实现定义的空指针常量。
+
+{{rlp|zero initialization|零初始化}}和{{rlp|value initialization|值初始化}}也初始化指针为它对应的空值。
+
+空指针可以用来指示对象不存在（例如 {{l2tf std|cpp/utility/functional/function/target}}），或作为其他错误条件的指示器（例如 {{rlp|dynamic_cast}}）。通常，接受指针实参的函数始终需要检查值是否为空，并以不同方式处理该情况（例如，{{rlp|delete|delete 表达式}}在传递空指针时不做任何事）。
+
+===无效指针===
+如果满足以下任一条件，那么指针值 {{c|p}} 在某个求值 {{c|e}} 的''语境中有效''：
+* {{c|p}} 是空指针值。
+* {{c|p}} 是指向函数的指针。
+* {{c|p}} 是指向对象 {{c|o}} 的指针或 {{c|o}} 的末尾后指针，并且 {{c|e}} 在 {{c|o}} 的存储区域的持续期间内进行。
+
+如果某个求值 {{c|e}} 中使用了指针值 {{c|p}}，并且 {{c|p}} 在 {{c|e}} 的语境中无效，那么：
+* 如果 {{c|e}} 是{{rlp|operator member access#内建的间接寻址运算符|间接寻址}}或者对[[cpp/memory/new/operator delete|解分配函数]]的调用，那么行为未定义。
+* 否则行为由实现定义。
+
+{{source|1=
+int* f()
+{
+    int obj;
+    int* local_ptr = new (&amp;obj) int;
+    
+    *local_ptr = 1; // OK，对 “*local_ptr” 的求值在 “obj” 的存储期内
+    
+    return local_ptr;
+}
+
+int* ptr = f();  // “obj” 的存储期已经结束，因此在以下语境中 “ptr” 是无效指针
+
+int* copy = ptr; // 由实现定义的行为
+*ptr = 2;        // 未定义行为：对无效指针间接寻址
+delete ptr;      // 未定义行为：从无效指针解分配存储
+}}
+
+===常量性===
+* 如果指针声明中 {{spar sep|cv限定符}}在 {{ttb|*}} 之前出现，那么它是声明说明符序列的一部分，并应用到被指向的对象。
+* 如果指针声明中 {{spar sep|cv限定符}}在 {{ttb|*}} 之后出现，那么它是{{rlps|declarations#声明符}}的一部分，并应用到所声明的指针。
+{| class="wikitable"
+|-
+!语法||含义
+|-
+| {{c/core|const T*}} ||指向 const 对象的指针
+|-
+| {{c/core|T const*}} ||指向 const 对象的指针
+|-
+| {{c/core|T* const}} ||指向对象的 const 指针
+|-
+| {{c/core|const T* const}} ||指向 const 对象的 const 指针
+|-
+| {{c/core|T const* const}} ||指向 const 对象的 const 指针
+|}
+
+{{source|1=
+// pc 是一个指向 const int 的非 const 指针
+// cpc 是一个指向 const int 的 const 指针
+// ppc 是一个指向【一个指向 const int 的非 const 指针】的非 const 指针
+const int ci = 10, *pc = &amp;ci, *const cpc = pc, **ppc;
+// p 是一个指向非 const int 的非 const 指针
+// cp 是一个指向非 const int 的 const 指针
+int i, *p, *const cp = &amp;i;
+
+i = ci;    // OK：复制 const int 值到非 const int
+*cp = ci;  // OK：能（通过 const 指针）修改非 const int
+pc++;      // OK：能修改非 const 指针（指向 const int）
+pc = cpc;  // OK：能修改非 const 指针（指向 const int）
+pc = p;    // OK：能修改非 const 指针（指向 const int）
+ppc = &amp;pc; // OK：const int 的指针的地址是 const int 的指针的指针
+
+ci = 1;    // 错误：不能修改 const int
+ci++;      // 错误：不能修改 const int
+*pc = 2;   // 错误：不能修改被指向的 const int
+cp = &amp;ci;  // 错误：不能修改 const 指针（指向非 const int）
+cpc++;     // 错误：不能修改 const 指针（指向 const int）
+p = pc;    // 错误：非 const int 的指针不能指向 const int
+ppc = &amp;p;  // 错误：const int 的指针的指针不能指向非 const int 的指针
+}}
+
+通常，从一个多级指针到另一个的隐式转换遵循{{rlps|implicit conversion#限定性转换}}中描述的规则。
+
+===合成指针类型===
+但{{rlp|operator comparison|比较运算符}}的某个操作数或{{rlps|operator other#条件运算符}}的第二个或第三个操作数是指针或成员指针类型，那么会确定一个合成指针类型作为这些操作数的公共类型。
+
+给定两个类型分别是 {{tt|T1}} 和 {{tt|T2}} 的操作数 {{c|p1}} 和 {{c|p2}}，只有满足以下条件之一，{{c|p1}} 和 {{c|p2}} 才能有合成指针类型：
+{{rev begin}}
+{{rev|until=c++14|
+* {{c|p1}} 和 {{c|p2}} 都是指针。
+* {{c|p1}} 和 {{c|p2}} 中的一个操作数是指针，并且另一操作数是空指针常量。
+{{rrev|since=c++11|
+* {{c|p1}} 和 {{c|p2}} 都是空指针常量，并且 {{tt|T1}} 和 {{tt|T2}} 至少有一个不是整数类型。
+}}
+}}
+{{rev|since=c++14|
+* {{tt|T1}} 和 {{tt|T2}} 至少有一个是指针类型，成员指针类型或 {{lc|std::nullptr_t}}。
+}}
+{{rev end}}
+
+按以下方式确定 {{c|p1}} 和 {{c|p2}} 的''合成指针类型'' {{tt|C}}：
+{{rev begin}}
+{{rev|until=c++11|
+* 如果 {{c|p1}} 是[[#空指针|空指针常量]]，那么 {{tt|C}} 是 {{tt|T2}}。
+* 否则，如果 {{c|p2}} 是空指针常量，那么 {{tt|C}} 是 {{tt|T1}}。
+}}
+{{rev|since=c++11|
+* 如果 {{c|p1}} 和 {{c|p2}} 都是[[#空指针|空指针常量]]，那么 {{tt|C}} 是 {{lc|std::nullptr_t}}。
+* 否则，如果 {{c|p1}} 是空指针常量，那么 {{tt|C}} 是 {{tt|T2}}。
+* 否则，如果 {{c|p2}} 是空指针常量，那么 {{tt|C}} 是 {{tt|T1}}。
+}}
+{{rev end}}
+* 否则，如果满足以下所有条件：
+:* {{tt|T1}} 或 {{tt|T2}} 是“指向 ''cv1'' {{c/core|void}} 的指针”。
+:* 另一类型是“指向 ''cv2'' {{tt|T}} 的指针”，其中 {{tt|T}} 是{{rlp|type|对象类型}}或 {{c/core|void}}。
+: 那么 {{tt|C}} 是“指向 ''cv12'' {{c/core|void}} 的指针”，其中 ''cv12'' 是 ''cv1'' 和 ''cv2'' 的并集。
+{{rrev|since=c++17|
+* 否则，如果满足以下所有条件：
+:* {{tt|T1}} 或 {{tt|T2}} 是“指向函数类型 {{tt|F1}} 的指针”。
+:* 另一类型是“指向 noexcept 函数类型 {{tt|F2}} 的指针”。
+:* {{tt|F1}} 与 {{tt|F2}} 除了 noexcept 以外都相同。
+: 那么 {{tt|C}} 是“指向 {{tt|F1}} 的指针”。
+}}
+* 否则，如果满足以下所有条件：
+:* {{tt|T1}} 是“指向 {{tt|C1}} 的指针”。
+:* {{tt|T2}} 是“指向 {{tt|C2}} 的指针”。
+:* {{tt|C1}} 和 {{tt|C2}} 其中的一个类型{{rlp|reference initialization#定义|引用关联于}}另一类型。
+: 那么{{tt|C}} 是
+:* {{tt|T1}} 和 {{tt|T2}} 的{{rlp|implicit conversion#合并 cv 限定性|限定性组合类型}}，如果 {{tt|C1}} 引用关联于 {{tt|C2}}，或
+:* {{tt|T2}} 和 {{tt|T1}} 的限定性组合类型，如果 {{tt|C2}} 引用关联于 {{tt|C1}}。
+{{rrev|since=c++17|
+* 否则，如果满足以下所有条件：
+:* {{tt|T1}} or {{tt|T2}} 是“指向 {{tt|C1}} 的函数类型 {{tt|F1}} 成员的指针”。
+:* 另一类型是“指向 {{tt|C2}} 的 noexcept 函数类型 {{tt|F2}} 成员的指针”。
+:* {{tt|C1}} 和 {{tt|C2}} 其中的一个类型引用关联于另一类型。
+:* {{tt|F1}} 与 {{tt|F2}} 除了 noexcept 以外都相同。
+: 那么 {{tt|C}} 是
+:* “指向 {{tt|C2}} 的类型 {{tt|F1}} 成员的指针”，如果 {{tt|C1}} 引用关联于 {{tt|C2}}，或
+:* “指向 {{tt|C1}} 的类型 {{tt|F1}} 成员的指针”，如果 {{tt|C2}} 引用关联于 {{tt|C1}}。
+}}
+* 否则，如果满足以下所有条件：
+:* {{tt|T1}} 是“指向 {{tt|C1}} 的非函数类型 {{tt|M1}} 成员的指针”。
+:* {{tt|T2}} 是“指向 {{tt|C2}} 的非函数类型 {{tt|M2}} 成员的指针”。
+:* {{tt|M1}} 和 {{tt|M2}} 除了顶层 cv 限定以外都相同。
+:* {{tt|C1}} 和 {{tt|C2}} 其中的一个类型引用关联于另一类型。
+: 那么 {{tt|C}} 是
+:* {{tt|T2}} 和 {{tt|T1}} 的限定性组合类型，如果 {{tt|C1}} 引用关联于 {{tt|C2}}，或
+:* {{tt|T1}} 和 {{tt|T2}} 的限定性组合类型，如果 {{tt|C2}} 引用关联于 {{tt|C1}}。
+* 否则，如果 {{tt|T1}} 和 {{tt|T2}} 是{{rlps|implicit conversion#相似类型}}，那么 {{tt|C}} 是 {{tt|T1}} 和 {{tt|T2}} 的限定性组合类型。
+* 否则，{{c|p1}} 和 {{c|p2}} 没有合成指针类型，需要确定 {{tt|C}} 的程序非良构。
+
+{{source|1=
+using p = void*;
+using q = const int*;
+// 确定 “p” 和 “q” 的合成指针类型属于
+// 【“指向 cv1 void 的指针”和“指向 cv2 T 的指针”】这种情况：
+// cv1 = 空, cv2 = const, cv12 = const
+// 将 “cv12 = const” 带入 “指向 cv12 void 的指针”：
+// 合成指针类型是 “const void*”
+
+using pi = int**;
+using pci = const int**;
+// 确定 “pi” 和 “pci” 的合成指针类型属于
+// 【指向相似类型 “C1” 和 “C2” 的指针】这种情况：
+// C1 = int*, C2 = const int*
+// 因为它们相似，所以它们互相引用关联于对方
+// 合成指针类型是 “p1” 和 “pc1”（或 “pci” 和 “pi”）
+// 的限定性组合类型：“const int**”
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=73|std=C++98|before=指向对象的指针与指向数组尾后的指针无法比较相等（即使地址相同）|after=对非空非函数指针比较它们表示的地址}}
+{{dr list item|wg=cwg|dr=903|std=C++98|before=任何求值为 0 的整型常量表达式都是空指针常量|after=仅限值为 0 的整数字面量}}
+{{dr list item|wg=cwg|dr=1438|std=C++98|before=以任何方式使用无效指针值的行为都未定义|after=除了间接寻址和传递给解分配函数&lt;br&gt;以外的行为都由实现定义}}
+{{dr list item|wg=cwg|dr=1512|paper=N3624|std=C++98|before=合成指针类型的规则不完整，从而不允许&lt;br&gt;{{c/core|int**}} 与 {{c/core|const int**}} 间的比较|after=使之完整}}
+{{dr list item|wg=cwg|dr=2206|std=C++98|before=指向 {{c/core|void}} 的指针和函数指针有合成指针类型|after=它们没有合成指针类型}}
+{{dr list item|wg=cwg|dr=2381|std=C++17|before=确定合成指针类型的过程中不允许进行函数指针转换|after=可以进行}}
+{{dr list item|wg=cwg|dr=2822|std=C++98|before=存储区域不再持续时会使指针值失效|after=指针有效性基于求值语境}}
+{{dr list item|wg=cwg|dr=2933|std=C++98|before=函数指针始终无效|after=始终有效}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/pointer|指针声明}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

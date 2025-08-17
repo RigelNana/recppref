@@ -1,0 +1,137 @@
+{{title|复制初始化}}
+{{cpp/language/initialization/navbar}}
+从另一个对象初始化对象。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|T}} {{spar|对象}} {{ttb|1==}} {{spar|其他对象}}{{ttb|;}}}}
+{{sdsc|num=2|notes={{mark until c++11}}|{{spar|T}} {{spar|对象}} {{ttb|1==}} {{ttb|{}}{{spar|其他对象}}{{ttb|};}}}}
+{{sdsc|num=3|{{spar|f}}{{ttb|(}}{{spar|其他对象}}{{ttb|)}}}}
+{{sdsc|num=4|{{ttb|return}} {{spar|其他对象}}{{ttb|;}}}}
+{{sdsc|num=5|{{ttb|throw }}{{spar|对象}}{{ttb|;}}
+{{ttb|catch (}}{{spar|T}} {{spar|对象}}{{ttb|)}}}}
+{{sdsc|num=6|{{spar|T}} {{spar|数组}}{{ttb|[}}{{spar|N}}{{ttb|1=] = {}}{{spar|其他序列}}{{ttb|};}}}}
+{{sdsc end}}
+
+===解释===
+复制初始化在下列情况中进行：
+@1@ 当非引用类型 {{tt|T}} 的具名变量（自动、静态或线程局部），声明时带有以等号后随一个表达式所构成的初始化器时。
+@2@ {{mark until c++11}}当标量类型 {{tt|T}} 的具名变量，声明时带有以等号后随一个花括号环绕的表达式所构成的初始化器时（注意：从 C++11 开始，这被归类为{{rlp|list initialization|列表初始化}}，且不允许窄化转换）。
+@3@ 当按值{{rlp|operator other#内建的函数调用运算符|传递实参}}到函数时。
+@4@ 当从按值返回的函数中{{rlp|return|返回}}时。
+@5@ 当按值{{rlp|throw|抛出}}或{{rlp|catch|捕获}}异常时。
+@6@ 作为{{rlp|aggregate initialization|聚合初始化}}的一部分，用以初始化每个提供了初始化器的元素。
+
+复制初始化的效果是：
+
+{{rev begin}}
+{{rev|since=c++17|
+* 首先，如果 {{tt|T}} 是类类型，且初始化器是{{rlp|value category|纯右值}}表达式，而它的无 cv 限定的类型是与 {{tt|T}} 相同的类，那么以初始化器表达式自身（而非从它所实质化的临时量）初始化目标对象：见{{rlp|copy elision|复制消除}}。
+}}
+{{rev end}}
+
+* 否则，如果 {{tt|T}} 是类类型，且 {{spar|其他对象}} 的类型的无 cv 限定版本是 {{tt|T}} 或是从 {{tt|T}} 派生的类，那么检测 {{tt|T}} 的{{rlp|converting constructor|非显式构造函数}}，并由重载决议选择最佳匹配。然后调用构造函数以初始化该对象。
+
+* 否则，如果 {{tt|T}} 是类类型，且 {{spar|其他对象}} 的类型的无 cv 限定版本不是 {{tt|T}} 或从 {{tt|T}} 派生，或如果 {{tt|T}} 是非类类型，但 {{spar|其他对象}} 的类型是类类型，那么检测能从 {{spar|其他对象}} 的类型转换到 {{tt|T}}（或当 {{tt|T}} 是类类型且存在转换函数时，转换到某个从 {{tt|T}} 派生的类型）的{{rlp|implicit conversion|用户定义转换序列}}，并通过重载决议选择最佳候选。该转换的结果（如果使用{{rlp|converting constructor|转换构造函数}}，那么就是 {{tt|T}} 的无 cv 限定版本的{{rev inl|until=c++11|右值临时量}}{{rev inl|since=c++11|until=c++17|纯右值临时量}}{{rev inl|since=c++17|纯右值表达式}}）会被用于{{rlp|direct initialization|直接初始化}}该对象。{{rev inl|until=c++17|最后一步通常会被{{rlp|copy elision|优化掉}}，而是将转换结果直接构造于分配给目标对象的内存之中，但即便不会使用，也要求适合的构造函数（移动或复制）是可以访问的。}}
+
+* 否则（如果 {{tt|T}} 和 {{spar|其他对象}} 的类型都不是类类型），则在需要时用{{rlp|implicit conversion|标准转换}}将 {{spar|其他对象}} 的值转换成 {{tt|T}} 的无 cv 限定版本。
+
+===注解===
+复制初始化不如直接初始化宽容：{{rlp|explicit|explicit 构造函数}}不是{{rlp|converting constructor|转换构造函数}}，也不会被复制初始化考虑。
+{{source|1=
+struct Exp { explicit Exp(const char*) {} }; // 不能从 const char* 转换
+Exp e1("abc");  // OK
+Exp e2 = "abc"; // 错误，复制初始化不考虑 explicit 构造函数
+
+struct Imp { Imp(const char*) {} }; // 可以从 const char* 转换
+Imp i1("abc");  // OK
+Imp i2 = "abc"; // OK
+}}
+
+另外，复制初始化中的隐式转换必须从初始化器直接生成 {{tt|T}}，然而直接初始化则存在比如期待一个从初始化器到 {{tt|T}} 的某个构造函数实参的隐式转换的情况。
+{{source|1=
+struct S { S(std::string) {} }; // 可以从 std::string 转换
+S s("abc");   // OK：从 const char[4] 转换到 std::string
+S s = "abc";  // 错误：没有从 const char[4] 到 S 的转换
+S s = "abc"s; // OK：从 std::string 转换到 S
+}}
+
+如果 {{spar|其他对象}} 是右值表达式，那么重载决议会选择{{rlp|move constructor|移动构造函数}}并在复制初始化期间调用它。这仍然被当做复制初始化；没有此种特殊情况的专门术语（如“移动初始化”）。
+
+{{rlp|implicit conversion|隐式转换}}以复制初始化的方式定义：如果能以表达式 {{tt|E}} 复制初始化 {{tt|T}} 类型的对象，那么 {{tt|E}} 就可以隐式转换到 {{tt|T}}。
+
+具名变量的复制初始化中的等号 {{ttb|1==}} 与赋值运算符无关。重载的赋值运算符对复制初始化没有影响。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;memory&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+ 
+struct A 
+{
+    operator int() { return 12;}
+};
+ 
+struct B 
+{
+    B(int) {}
+};
+ 
+int main()
+{
+    std::string s = "test";        // OK：构造函数非显式
+    std::string s2 = std::move(s); // 此复制初始化进行移动
+ 
+//  std::unique_ptr&lt;int&gt; p = new int(1); // 错误：构造函数是显式的
+    std::unique_ptr&lt;int&gt; p(new int(1));  // OK：直接初始化
+
+    int n = 3.14;    // 浮点数整数转换
+    const int b = n; // 不受 const 影响
+    int c = b;       // ……反之亦然
+
+    A a;
+    B b0 = 12;
+//  B b1 = a;       // &lt; 错误：要求从 'A' 到非标量类型 'B' 的转换
+    B b2{a};        // &lt; 等同：调用 A::operator int()，然后是::B(int)
+    B b3 = {a};     // &lt;
+    auto b4 = B{a}; // &lt;
+    
+//  b0 = a;         // &lt; 错误：需要重载赋值运算符
+
+    [](...){}(c, b0, b3, b4); // 假装使用了这些变量
+}
+ | output=
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=5|std=C++98|before=目标类型的 cv 限定会应用到转换构造函数初始化的临时量|after=临时量不再有 cv 限定}}
+{{dr list item|wg=cwg|dr=177|std=C++98|before=未指定复制初始化类对象时生成的临时量的值类别|after=指定为右值}}
+{{dr list end}}
+
+===参阅===
+* {{rlp | copy elision | 复制消除}}
+* {{rlp | converting constructor | 转换构造函数}}
+* {{rlp | copy assignment | 复制赋值}}
+* {{rlp | copy constructor | 复制构造函数}}
+* {{rlp | default constructor | 默认构造函数}}
+* {{rlp | destructor | 析构函数}}
+* {{rlpt | explicit}}
+* {{rlp | initialization | 初始化}}
+** {{rlp | aggregate initialization | 聚合初始化}}
+** {{rlp | constant initialization | 常量初始化}}
+** {{rlp | default initialization | 默认初始化}}
+** {{rlp | direct initialization | 直接初始化}}
+** {{rlp | initializer list | 成员初始化器列表}}
+** {{rlp | list initialization | 列表初始化}}
+** {{rlp | reference initialization | 引用初始化}}
+** {{rlp | value initialization | 值初始化}}
+** {{rlp | zero initialization | 零初始化}}
+* {{rlp | move assignment | 移动赋值}}
+* {{rlp | move constructor | 移动构造函数}}
+* {{rlpt | new}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

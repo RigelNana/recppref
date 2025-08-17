@@ -1,0 +1,120 @@
+{{cpp/title| exit}}
+{{cpp/utility/program/navbar}}
+{{dcl begin}}
+{{dcl header|cstdlib}}
+{{dcl rev multi|until1=c++11|dcl1=
+             void exit( int exit_code );
+|dcl2=
+[[noreturn]] void exit( int exit_code );
+}}
+{{dcl end}}
+
+导致正常程序发出终止。
+
+进行一些清理步骤：
+
+{{rrev multi|until1=c++11
+|rev1=
+@1@ 销毁具有静态存储期的对象，并且调用之前通过调用 {{lc|std::atexit}} 注册的函数：
+:@a@ 具有静态存储期的非局部对象会以它们的构造函数的完成顺序逆序销毁。
+:@b@ 通过 {{lc|std::atexit}} 注册的函数会按照它们的注册顺序逆序调用，但一个函数会在它被注册时已经被调用过的之前注册的函数之后被调用。
+:@c@ 对于每个通过 {{lc|std::atexit}} 注册的函数 {{c|f}} 和每个具有静态存储期的非局部对象 {{c|obj}}，
+:* 如果 {{c|f}} 在初始化 {{c|obj}} 前注册，那么 {{c|f}} 只能在 {{c|obj}} 销毁后调用；
+:* 如果 {{c|f}} 在初始化 {{c|obj}} 后注册，那么 {{c|f}} 只能在 {{c|obj}} 销毁前调用。
+:@d@ 对于每个具有静态存储期的局部对象 {{c|obj}}，它会以如同在 {{c|obj}} 的构造函数完成时通过 {{lc|std::atexit}} 注册一个调用 {{c|obj}} 的析构函数的函数销毁。
+|rev2=
+@1@ 拥有关联到当前线程的线程局域[[cpp/language/storage duration|存储期]]的对象的析构函数、拥有静态存储期的对象的析构函数及以 {{lc|std::atexit}} 注册的函数并发执行，同时维持下列保证：
+:@a@ 线程局域对象的最末析构函数[[cpp/language/eval order|按顺序早于]]静态对象的首个析构函数。
+:@b@ 如果线程局域或静态对象 A 的构造函数或[[cpp/language/initialization#动态初始化|动态初始化]]完成按顺序早于线程局域或静态对象 B，那么 B 的析构完成按顺序早于 A 的析构开始。
+:@c@ 如果静态对象 A 的初始化完成按顺序早于 {{lc|std::atexit}} 对某函数 F 的调用，那么在终止期间对 F 的调用按顺序早于 A 的析构开始。
+:@d@ 如果 {{lc|std::atexit}} 对某函数 F 的调用按顺序早于静态对象 A 的初始化完成，那么终止期间 A 的析构开始按顺序早于对 F 的调用。
+:@e@ 如果 {{lc|std::atexit}} 对某函数 F1 的调用按顺序早于 {{lc|std::atexit}} 对某函数 F2 的调用，那么终止期间对 F2 的调用按顺序早于对 F1 的调用。}}
+
+:* 以上内容中，
+::* 如果任何以 {{tt|atexit}} 注册的函数或任何静态/线程局域对象的析构函数抛出异常，那么就会调用 {{lc|std::terminate}}。
+::* 如果编译器将对象动态初始化提升到[[cpp/language/initialization|非局部初始化]]的静态初始化阶段，那么析构顺序忠实于它本应有的动态初始化。
+::* 如果函数局域（块作用域）静态对象被销毁，然后该函数从另一静态对象被调用，且控制流经过该对象的定义（或如果它被间接使用，那么就是经过指针或引用），那么行为未定义。
+::* 如果函数局域（块作用域）静态对象在对象或数组的构造期间初始化，那么只有在销毁该类的所有子对象或该数组的所有元素后才销毁它。
+@2@ 清除所有 C 流的缓冲区并关闭它们。
+@3@ 移除 {{lc|std::tmpfile}} 所创建的文件。
+@4@ 将控制返回给宿主环境。如果 {{tt|exit_code}} 是 {{lc|0}} 或 {{lc|EXIT_SUCCESS}}，那么返回实现定义的指示成功终止的状态。如果 {{tt|exit_code}} 是 {{lc|EXIT_FAILURE}}，那么返回实现定义的指示不成功终止的状态。其他情况下返回实现定义的状态值。
+
+不回溯栈：不调用拥有自动[[cpp/language/storage duration|存储期]]变量的析构函数。
+
+===与 main 函数的关系===
+从 [[cpp/language/main function|main 函数]]以 {{tt|return}} 语句或以抵达函数尾返回，会进行正常函数终止（调用拥有自动[[cpp/language/storage duration|存储期]]的对象的析构函数），再执行 {{tt|std::exit}}，将返回语句的实参（或如果使用隐式返回就是 {{c|0}}）作为 {{tt|exit_code}} 传递。
+
+===参数===
+{{par begin}}
+{{par|exit_code|程序的退出状态}}
+{{par end}}
+
+===返回值===
+（无）
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+
+struct Static
+{
+    ~Static() 
+    {
+        std::cout &lt;&lt; "Static 析构函数r\n";
+    }
+};
+
+struct Local
+{
+    ~Local() 
+    {
+        std::cout &lt;&lt; "Local 析构函数\n";
+    }
+};
+
+Static static_variable; // *会*调用此对象的析构函数
+
+void atexit_handler()
+{
+    std::cout &lt;&lt; "atexit 处理函数\n";
+}
+
+int main()
+{
+    Local local_variable; // *不会*调用此对象的析构函数
+    const int result = std::atexit(atexit_handler); // 将调用处理函数
+  
+    if (result != 0)
+    {
+        std::cerr &lt;&lt; "atexit 注册失败\n";
+        return EXIT_FAILURE;
+    }
+
+    std::cout &lt;&lt; "测试\n";
+    std::exit(EXIT_FAILURE);
+
+    std::cout &lt;&lt; "此行*不*会执行\n";
+}
+|output=
+测试
+atexit 处理函数
+Static 析构函数
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3|std=C++98|before=在清理步骤中，(1) 通过 {{lc|std::atexit}} 注册新的函数或 (2) 初始化静态局部对象的行为不明确|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/program/dsc abort}}
+{{dsc inc|cpp/utility/program/dsc atexit}}
+{{dsc inc|cpp/utility/program/dsc quick_exit}}
+{{dsc inc|cpp/utility/program/dsc at_quick_exit}}
+{{dsc see c|c/program/exit}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

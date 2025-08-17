@@ -1,0 +1,88 @@
+{{cpp/experimental/fs/title|copy}}
+{{cpp/experimental/fs/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/filesystem}}
+{{dcl|num=1|since=fs_ts|1=
+void copy( const path&amp; from, const path&amp; to );
+void copy( const path&amp; from, const path&amp; to, error_code&amp; ec );
+}}
+{{dcl|num=2|since=fs_ts|1=
+void copy( const path&amp; from, const path&amp; to, copy_options options );
+void copy( const path&amp; from, const path&amp; to, copy_options options, error_code&amp; ec );
+}}
+{{dcl end}}
+
+复制文件和目录，有各种选项：
+
+@1@ 默认，等价于 {{v|2}} 中以 {{tt|copy_options::none}} 用作 {{c|options}}。
+@2@ 赋值文件或目录 {{c|from}} 到文件或目录 {{c|to}}，使用 {{c|options}} 所指定的复制选项。如果 {{c|options}} 中给出的任何 {{rlp|copy_options}} 选项组中有多于一个选项，则其行为未定义（即使是与 {{tt|copy}} 无关的 {{tt|copy_file}} 组也是如此）。
+
+行为如下：
+* 首先，在做任何别的事之前，通过不多于一次对 {{ltt|cpp/experimental/fs/status|status}} 的调用（或者，当 {{c|options}} 中给出 {{tt|copy_options::skip_symlinks}} 或{{tt|copy_options::create_symlinks}} 时，通过一次对 {{tt|symlink_status}} 的调用）获取 {{c|from}} 的类型和权限。
+* 如果必要，以相同方式，通过不多于一次 {{tt|status}} 或 {{tt|symlink_status}} 调用，获取 {{c|to}} 的状态。
+* 如果 {{c|from}} 不存在，则报告错误。
+* 如果 {{c|from}} 和 {{c|to}} 按 {{ltt|cpp/experimental/fs/equivalent|equivalent()}} 确定为相同文件，则报告错误。
+* 如果 {{c|from}} 或 {{c|to}} 任一者按 {{ltt|cpp/experimental/fs/is_other|is_other}} 确定不是常规文件、目录或符号链接，则报告错误。
+* 如果 {{c|from}} 是目录但 {{c|to}} 是常规文件，则报告错误。
+* 如果 {{c|from}} 是符号链接，则
+:* 如果 {{c|options}} 中给出了 {{tt|copy_options::skip_symlink}}，则不做任何事。
+:* 否则，如果 {{c|to}} 不存在且 {{c|options}} 中给出了 {{tt|copy_options::copy_symlinks}}，则表现如同 {{c|copy_symlink(from, to)}}。
+:* 否则，报告错误。
+* 否则，如果 {{c|from}} 是常规文件，则
+:* 如果 {{c|options}} 中给出了 {{tt|copy_options::directories_only}}，则不做任何事。
+:* 否则，如果 {{c|options}} 中给出了 {{tt|copy_options::create_symlinks}}，则创建到 {{c|to}} 的符号链接。注意：除非 {{c|to}} 处于当前目录，否则 {{c|from}} 必须为绝对路径。
+:* 否则，如果 {{c|options}} 中给出了 {{tt|copy_options::create_hard_links}}，则创建到 {{c|to}} 的硬链接。
+:* 否则，如果 {{c|to}} 是目录，则表现如同 {{c|copy_file(from, to/from.filename(), options)}}（创建 {{c|from}} 的副本为目录 {{c|to}} 中的文件）。
+:* 否则，表现为 {{c|copy_file(from, to, options)}}（复制文件）。
+* 否则，如果 {{c|from}} 是目录而 {{c|options}} 要么具有 {{tt|copy_options::recursive}} 要么为 {{tt|copy_options::none}}。
+:* 如果 {{c|to}} 不存在，则首先执行 {{c|create_directory(to, from)}}（创建新目录并带有原目录属性的副本）。
+:* 然后，无论 {{c|to}} 已经存在还是刚刚创建，如同以 {{c|for (const directory_entry&amp; x : directory_iterator(from))}} 对 {{c|from}} 中包含的文件进行迭代，并对每个目录项，递归调用 {{c|copy(x.path(), to/x.path().filename(), options {{!}} unspecified)}}，其中 ''unspecified'' 为一个特殊位，在 {{c|options}} 中设置时没有其他含义（设置该位的唯一目的是当 {{c|options}} 为 {{tt|copy_options::none}} 时避免递归复制子目录）。
+* 否则不做任何事。
+
+===参数===
+{{par begin}}
+{{par|from|到源文件、目录或符号链接的路径}}
+{{par|to|到目标文件、目录或符号链接的路径}}
+{{par|ec|用于无抛出重载中报告错误的输出形参}}
+{{par end}}
+
+===返回值===
+（无）
+
+===异常===
+{{cpp/experimental/fs/error_handling|from|to}}
+
+===注解===
+复制目录时的默认行为是非递归的复制：复制文件但不复制子目录：
+{{source|1=
+// 给定
+// /dir1 包含 /dir1/file1, /dir1/file2, /dir1/dir2
+// 而 /dir1/dir2 包含 /dir1/dir2/file3
+// 调用
+std::experimental::filesystem::copy("/dir1", "/dir3");
+// 后，创建了 /dir3（带有 /dir1 的属性）
+// /dir1/file1 被复制为 /dir3/file1
+// /dir1/file2 被复制为 /dir3/file2
+}}
+
+而使用 {{tt|copy_options::recursive}}，则也复制子目录，以及递归地复制它们的内容。
+&lt;!-- unclear how that comes from the 15.3[fs.op.copy]/24, but that's what the TS says right after --&gt;
+{{source|1=
+// ...但调用
+std::experimental::filesystem::copy("/dir1", "/dir3", copy_options::recursive);
+// 后，/dir3 被创建（具有 /dir1 的属性）
+// /dir1/file1 被复制为 /dir3/file1
+// /dir1/file2 被复制为 /dir3/file2
+// /dir3/dir2 被创建（具有 /dir1/dir2 的属性）
+// /dir1/dir2/file3 被复制为 /dir3/dir2/file3
+}}
+
+===示例===
+{{cpp/experimental/fs/copy_example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/fs/dsc copy_options}}
+{{dsc inc|cpp/experimental/fs/dsc copy_symlink}}
+{{dsc inc|cpp/experimental/fs/dsc copy_file}}
+{{dsc end}}

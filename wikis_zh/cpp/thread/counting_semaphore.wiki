@@ -1,0 +1,113 @@
+{{cpp/title|counting_semaphore|binary_semaphore}}
+{{cpp/thread/counting_semaphore/navbar}}
+{{dcl begin}}
+{{dcl header|semaphore}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::ptrdiff_t LeastMaxValue = /* 由实现定义 */ &gt;
+class counting_semaphore;
+}}
+{{dcl|num=2|since=c++20|1=
+using binary_semaphore = std::counting_semaphore&lt;1&gt;;
+}}
+{{dcl end}}
+
+@1@ {{tt|counting_semaphore}} 是一个轻量同步原语，能控制对共享资源的访问。不同于 {{lc|std::mutex}}，{{tt|counting_semaphore}} 允许同一资源进行多个并发的访问，至少允许 {{tt|LeastMaxValue}} 个同时的访问者。若 {{tt|LeastMaxValue}} 为负则程序非良构。
+
+@2@ {{tt|binary_semaphore}} 是 {{lc|std::counting_semaphore}} 的特化的别名，其 {{tt|LeastMaxValue}} 为 {{c|1}}。实现可能将 {{tt|binary_semaphore}} 实现得比 {{lc|std::counting_semaphore}} 的默认实现更高效。
+
+{{tt|counting_semaphore}} 含有由构造函数初始化的内部计数器。调用 {{lc|acquire()}} 与相关方法减少此计数器，而调用 {{lc|release()}} 则增加它。当计数器为零时，{{lc|acquire()}} 阻塞该计数器直至它增加，但 {{lc|try_acquire()}} 不阻塞；{{lc|try_acquire_for()}} 与 {{lc|try_acquire_until()}} 阻塞直至计数器增加或到达时限。
+
+类似于 {{lc|std::condition_variable::wait()}}，{{tt|counting_semaphore}} 的 {{lc|try_acquire()}} 可能虚假地失败。
+
+{{tt|std::counting_semaphore}} 的特化不满足{{named req|DefaultConstructible}}、{{named req|CopyConstructible}}、{{named req|MoveConstructible}}、{{named req|CopyAssignable}}和{{named req|MoveAssignable}}。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员名|定义}}
+{{dsc expos mem obj|counter|private=yes|{{lc|std::ptrdiff_t}} 类型的内部计数器。}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc constructor}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc destructor}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc operator{{=}}}}
+
+{{dsc h2|操作}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc release}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc acquire}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc try_acquire}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc try_acquire_for}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc try_acquire_until}}
+
+{{dsc h2|常量}}
+{{dsc inc|cpp/thread/counting_semaphore/dsc max}}
+{{dsc end}}
+
+===注解===
+如其名所示，{{tt|LeastMaxValue}} 是''最小''{{sep}}的最大值，而非''实际''{{sep}}最大值。因此 {{lc|max()}} 能产生大于 {{tt|LeastMaxValue}} 的值。
+
+不同于 {{lc|std::mutex}}，{{tt|counting_semaphore}} 不与执行线程捆绑——例如，能在不同于释放信号量的线程获取该信号量。能同时进行 {{tt|counting_semaphore}} 上的所有操作而无需联系到任何特定的执行线程，但析构函数能在一个不同的线程上执行但不能在多个线程同时执行。
+
+信号量常用于发信/提醒而非互斥，通过初始化该信号量为 {{c|0}} 从而阻塞尝试 {{lc|acquire()}} 的接收者，直至提醒者通过调用 {{c|release(n)}} “发信”。在此方面可把信号量当作 {{lc|std::condition_variable}} 的代用品，通常它有更好的性能。
+
+{{feature test macro|__cpp_lib_semaphore|{{tt|std::counting_semaphore}}, {{tt|std::binary_semaphore}}|std=C++20|value=201907L}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;semaphore&gt;
+#include &lt;thread&gt;
+
+// 全局二元信号量实例
+// 设置对象计数为零
+// 对象处于未被发信状态
+std::binary_semaphore smphSignalMainToThread{0};
+std::binary_semaphore smphSignalThreadToMain{0};
+ 
+void ThreadProc()
+{
+    // 通过尝试减少信号量的计数等待来自主程序的信号
+    smphSignalMainToThread.acquire();
+ 
+    // 此调用阻塞直至信号量的计数被从主程序增加
+ 
+    std::cout &lt;&lt; "[线程] 获得信号" &lt;&lt; std::endl; // 回应消息
+ 
+    // 等待 3 秒以模拟某种线程正在进行的工作
+    using namespace std::literals;
+    std::this_thread::sleep_for(3s);
+ 
+    std::cout &lt;&lt; "[线程] 发送信号\n"; // 消息
+ 
+    // 对主程序回复发信
+    smphSignalThreadToMain.release();
+}
+ 
+int main()
+{
+    // 创建某个工作线程
+    std::thread thrWorker(ThreadProc);
+ 
+    std::cout &lt;&lt; "[主] 发送信号\n"; // 消息
+ 
+    // 通过增加信号量的计数对工作线程发信以开始工作
+    smphSignalMainToThread.release();
+ 
+    // 通过试图减少信号量的计数等待直至工作线程完成工作
+    smphSignalThreadToMain.acquire();
+ 
+    std::cout &lt;&lt; "[主] 获得信号\n"; // 回应消息
+    thrWorker.join();
+}
+|output=
+[主] 发送信号
+[线程] 获得信号
+[线程] 发送信号
+[主] 获得信号
+}}
+
+{{langlinks|en|es|ja|ru}}

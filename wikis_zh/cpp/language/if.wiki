@@ -1,0 +1,408 @@
+{{title|{{tt|if}} 语句}}
+{{cpp/language/statements/navbar}}
+有条件地执行另一条语句。
+
+用于需要基于条件{{rev inl|since=c++23|或者 {{c/core|if}} 语句是否在明显常量求值语境下求值}}执行的代码。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}} {{ttb|(}} {{spar optional|初始化语句}} {{spar|条件}} {{ttb|)}} {{spar|true分支语句}}
+}}
+{{sdsc|num=2|
+{{spar optional|属性}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}} {{ttb|(}} {{spar optional|初始化语句}} {{spar|条件}} {{ttb|)}} {{spar|true分支语句}} {{ttb|else}} {{spar|false分支语句}}
+}}
+
+{{sdsc|num=3|notes={{mark since c++23}}|
+{{spar optional|属性}} {{ttb|if}} {{ttb|!}}{{mark optional}} {{ttb|consteval}} {{spar|复合语句}}
+}}
+{{sdsc|num=4|notes={{mark since c++23}}|
+{{spar optional|属性}} {{ttb|if}} {{ttb|!}}{{mark optional}} {{ttb|consteval}} {{spar|复合语句}} {{ttb|else}} {{spar|语句}}
+}}
+{{sdsc end}}
+
+@1@ 不带 {{c/core|else}} 分支的 {{c/core|if}} 语句
+@2@ 带 {{c/core|else}} 分支的 {{c/core|if}} 语句
+@3@ 不带 {{c/core|else}} 分支的 consteval if 语句
+@4@ 带 {{c/core|else}} 分支的 consteval if 语句
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}}}
+{{par|{{ttb|constexpr}}|{{mark since c++17}} 出现时，该语句是 constexpr if 语句}}
+{{par|{{spar|初始化语句}}|{{mark since c++17}} 下列之一：
+* {{rlp|statements|表达式语句}}（可以是空语句 {{c|;}}）
+* {{rlp|declarations|简单声明}}，典型的是带初始化器的变量声明，但它可以声明任意多个变量，或是一条{{rlp|structured binding|结构化绑定}}声明
+{{rrev|since=c++23|
+* {{rlp|type alias|别名声明}}
+}}
+注意，任何{{spar sep|初始化语句}}都应以分号 {{ttb|;}} 结束。这是它常被非正式地描述成后随分号的表达式或声明的原因。}}
+{{par|{{spar|条件}}|[[#条件|条件]]}}
+{{par|{{spar|true分支语句}}|任意当{{spar sep|条件}}求值为 {{c|true}} 时会执行的{{rlp|statements|语句}}}}
+{{par|{{spar|false分支语句}}|当{{spar sep|条件}}求值为 {{c|false}} 时会执行的语句}}
+{{par|{{spar|复合语句}}|当此 {{c/core|if}} 语句在{{rlp|constant expression#明显常量求值的表达式|明显常量求值语境}}下求值时会执行的{{rlps|statements#复合语句}}（{{c/core|consteval}} 前附 {{tt|!}} 的情况下条件变成“不在这种语境下求值”）}}
+{{par|{{spar|语句}}|当此 {{c/core|if}} 语句不在明显常量求值语境下求值时会执行的语句（{{c/core|consteval}} 未前附 {{tt|!}} 的情况下条件变成“在这种语境下求值”）}}
+{{par end}}
+
+{{cpp/language/condition|usage=确定控制会继续前往哪个分支|bool=yes}}
+
+===分支选择===
+如果{{spar sep|条件}}产生了 {{c|true}}，那么就会执行{{spar|true分支语句}}。
+
+如果 {{c/core|if}} 语句存在 {{c/core|else}} 部分，且{{spar sep|条件}}产生了 {{c|false}}，那么就会执行 {{spar|false分支语句}}。
+
+如果 {{c/core|if}} 语句存在 {{c/core|else}} 部分，且 {{spar sep|true分支语句}}也是 {{c/core|if}} 语句，那么内层 {{c/core|if}} 语句必须也含有 {{c/core|else}} 部分（换言之，在嵌套 {{c/core|if}} 语句中 {{c/core|else}} 会关联到最近的尚未有关联 {{c/core|else}} 的 {{c/core|if}}）。
+
+{{example|code=
+#include &lt;iostream&gt;
+
+int main()
+{
+    // 带 else 子句的简单 if 语句
+    int i = 2;
+    if (i &gt; 2)
+        std::cout &lt;&lt; i &lt;&lt; " 大于 2\n";
+    else
+        std::cout &lt;&lt; i &lt;&lt; " 不大于 2\n";
+    
+    // 嵌套 if 语句
+    int j = 1;
+    if (i &gt; 1)
+        if (j &gt; 2)
+            std::cout &lt;&lt; i &lt;&lt; " &gt; 1 且 " &lt;&lt; j &lt;&lt; " &gt; 2\n";
+        else // 此 else 属于 if (j &gt; 2)，而不是 if (i &gt; 1)
+            std::cout &lt;&lt; i &lt;&lt; " &gt; 1 且 " &lt;&lt; j &lt;&lt; " &lt;= 2\n";
+    
+    // 以下声明可用于含 dynamic_cast 的条件
+    struct Base
+    {
+        virtual ~Base() {}
+    };
+    
+    struct Derived : Base
+    {
+        void df() { std::cout &lt;&lt; "df()\n"; }
+    };
+    
+    Base* bp1 = new Base;
+    Base* bp2 = new Derived;
+    
+    if (Derived* p = dynamic_cast&lt;Derived*&gt;(bp1)) // 转型失败，返回 nullptr
+        p-&gt;df(); // 不会执行
+    
+    if (auto p = dynamic_cast&lt;Derived*&gt;(bp2)) // 转型成功
+        p-&gt;df(); // 会执行
+}
+|output=
+2 不大于 2
+2 &gt; 1 且 1 &lt;= 2
+df()
+}}
+
+
+{{rrev|since=c++17|
+===带初始化器的 {{c/core|if}} 语句===
+如果使用{{spar|初始化语句}}，那么 {{c/core|if}} 语句等价于
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|初始化语句}}&lt;br&gt;
+:{{spar optional|属性}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}} {{ttb|(}} {{spar|条件}} {{ttb|)}}&lt;br&gt;
+::{{spar|true分支语句}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+或
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|初始化语句}}&lt;br&gt;
+:{{spar optional|属性}} {{ttb|if}} {{ttb|constexpr}}{{mark optional}} {{ttb|(}} {{spar|条件}} {{ttb|)}}&lt;br&gt;
+::{{spar|true分支语句}}&lt;br&gt;
+:{{ttb|else}}
+::{{spar|false分支语句}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+但{{spar sep|初始化语句}}声明的名字（如果{{spar sep|初始化语句}}是声明）和{{spar sep|条件}}声明的名字（如果{{spar sep|条件}}是声明）处于同一作用域中，同时也是两条{{spar sep|语句}}所在的作用域。
+
+{{source|1=
+std::map&lt;int, std::string&gt; m;
+std::mutex mx;
+extern bool shared_flag; // 由 mx 保护
+
+int demo()
+{
+    if (auto it = m.find(10); it != m.end())
+        return it-&gt;second.size();
+    
+    if (char buf[10]; std::fgets(buf, 10, stdin))
+        m[0] += buf;
+    
+    if (std::lock_guard lock(mx); shared_flag)
+    {
+        unsafe_ping();
+        shared_flag = false;
+    }
+    
+    if (int s; int count = ReadBytesWithSignal(&amp;s))
+    {
+        publish(count);
+        raise(s);
+    }
+    
+    if (const auto keywords = {"if", "for", "while"};
+        std::ranges::any_of(keywords, [&amp;tok](const char* kw) { return tok == kw; }))
+    {
+        std::cerr &lt;&lt; "Token 不能是关键词\n");
+    }
+}
+}}
+}}
+
+
+{{rrev|since=c++17|
+===constexpr if===
+以 {{c/core|if constexpr}} 开始的语句被称为 ''constexpr if 语句''。constexpr if 语句的所有子语句都是{{rlps|statements#有控制流限制的语句}}。
+
+在 constexpr if 语句中，{{spar sep|条件}}的值必须是{{rev inl|until=c++23|{{rlp|constant expression#经转换的常量表达式|可按语境转换到 {{c/core|bool}} 类型的经转换常量表达式}}}}{{rev inl|since=c++23|{{rlp|implicit conversion#按语境转换|按语境转换到 {{c/core|bool}} 的表达式}}，其中转换为{{rlp|constant expression|常量表达式}}}}。
+
+如果{{spar sep|条件}}的值是 {{c|true}}，那么舍弃 {{spar|false分支语句}}（如果存在），否则舍弃 {{spar|true分支语句}}。
+
+被舍弃语句中的 {{c/core|return}} 语句不会参与函数返回类型推导：
+{{source|1=
+template&lt;typename T&gt;
+auto get_value(T t)
+{
+    if constexpr (std::is_pointer_v&lt;T&gt;)
+        return *t; // 对 T = int* 推导返回类型为 int
+    else
+        return t;  // 对 T = int 推导返回类型为 int
+}
+}}
+
+被舍弃语句可以 {{rlp|definition#单一定义规则（ODR）|ODR 使用}}未定义的变量：
+{{source|
+extern int x; // 不需要 x 的定义
+
+int f()
+{
+    if constexpr (true)
+        return 0;
+    else if (x)
+        return x;
+    else
+        return -x;
+}
+}}
+
+在模板外，被舍弃语句会受到完整的检查。{{c/core|if constexpr}} 不是 {{ltt|cpp/preprocessor/conditional|#if}} 预处理指令的替代品：
+
+{{source|1=
+void f()
+{
+    if constexpr (false)
+    {
+        int i = 0;
+        int *p = i; // 在被舍弃语句中仍为错误
+    }
+}
+}}
+
+如果 constexpr if 语句在{{rlps|templates#模板化实体}}内出现，且如果{{spar sep|条件}}在实例化后不是{{rlp|dependent name#值待决表达式|值待决}}的，那么外围模板被实例化时不会实例化被舍弃语句。
+{{source|
+template&lt;typename T, typename ... Rest&gt;
+void g(T&amp;&amp; p, Rest&amp;&amp; ...rs)
+{
+    // ... 处理 p
+    if constexpr (sizeof...(rs) &gt; 0)
+        g(rs...); // 始终不会对空实参列表实例化。
+}
+}}
+
+实例化后仍为值待决的一个例子是嵌套模板：
+{{source|1=
+template&lt;class T&gt;
+void g()
+{
+    auto lm = [=](auto p)
+    {
+        if constexpr (sizeof(T) == 1 &amp;&amp; sizeof p == 1)
+        {
+            // 此条件在 g&lt;T&gt; 实例化后仍为值待决的，这会影响 lambda 的隐式捕获
+            // 在实例化 lambda 函数体后，此复合语句才可能被舍弃
+        }
+    };
+}
+}}
+
+被舍弃语句不能对所有特化均非良构：
+{{source|1=
+template&lt;typename T&gt;
+void f()
+{
+    if constexpr (std::is_arithmetic_v&lt;T&gt;)
+        // ...
+    else {
+        using invalid_array = int[-1]; // 非良构：对于所有 T 都非法
+        static_assert(false, "必须是算术类型"); // CWG2518 前非良构
+    }
+}
+}}
+
+实现 {{cwg|2518}} 前对这种万应语句的常用变通方案，是一条始终为 {{c|false}} 的类型待决表达式：
+{{source|1=
+template&lt;typename&gt;
+constexpr bool dependent_false_v = false;
+
+template&lt;typename T&gt;
+void f()
+{
+    if constexpr (std::is_arithmetic_v&lt;T&gt;)
+        // ...
+    else {
+        // CWG2518 前的变通方案
+        static_assert(dependent_false_v&lt;T&gt;, "必须是算术类型"); // OK
+    }
+}
+}}
+
+可以将 {{rlp|typedef|typedef 声明}}{{rev inl|since=c++23|和{{rlp|type alias|别名声明}}}}用作 constexpr if 语句的初始化语句以减少类型别名的作用域。
+
+{{example}}
+}}
+
+
+{{rrev|since=c++23|
+===consteval if===
+以 {{c/core|if consteval}} 开始的语句被称为 ''consteval if 语句''。constexpr if 语句的所有子语句都是{{rlps|statements#有控制流限制的语句}}。
+
+{{spar sep|语句}}必须是复合语句，并且在它不是复合语句时也会被视为此 consteval if 语句的一部分（因此产生编译错误）：
+{{example|code=
+constexpr void f(bool b)
+{
+    if (true)
+        if consteval {}
+        else ; // 错误：不是复合语句，else 不与外层 if 关联
+}
+}}
+
+如果在{{rlp|constant expression#明显常量求值的表达式|明显常量求值语境}}中求值 consteval if 语句，那么就会执行{{spar|复合语句}}。否则会执行{{spar|语句}}（如果存在）。
+
+如果语句以 {{c/core|if !consteval}} 开始，那么{{spar sep|复合语句}}和{{spar|语句}}（如果存在）必须都是复合语句。这种语句不被认为是 consteval if 语句，但它等价于 consteval if 语句：
+* {{c|if !consteval {/* 语句 */} }} 等价于&lt;br&gt;
+: {{c|if consteval {} else {/* 语句 */} }}。
+* {{c|if !consteval {/* 语句1 */} else {/* 语句2 */} }} 等价于&lt;br&gt;
+: {{c|if consteval {/* 语句2 */} else {/* 语句1 */} }}。
+
+consteval if 语句中的{{spar|复合语句}}（或否定形式中的{{spar|语句}}）是{{rlp|consteval|立即函数语境}}，在其中对立即函数的调用不需要是常量表达式。
+
+{{example
+|code=
+#include &lt;cmath&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+
+constexpr bool is_constant_evaluated() noexcept
+{
+    if consteval { return true; } else { return false; }
+}
+
+constexpr bool is_runtime_evaluated() noexcept
+{
+    if not consteval { return true; } else { return false; }
+}
+
+consteval std::uint64_t ipow_ct(std::uint64_t base, std::uint8_t exp)
+{
+    if (!base) return base;
+    std::uint64_t res{1};
+    while (exp)
+    {
+        if (exp &amp; 1) res *= base;
+        exp /= 2;
+        base *= base;
+    }
+    return res;
+}
+
+constexpr std::uint64_t ipow(std::uint64_t base, std::uint8_t exp)
+{
+    if consteval // 使用编译时友好的算法
+    {
+        return ipow_ct(base, exp);
+    }
+    else // 使用运行时求值
+    {
+        return std::pow(base, exp);
+    }
+}
+
+int main(int, const char* argv[])
+{
+    static_assert(ipow(0, 10) == 0 &amp;&amp; ipow(2, 10) == 1024);
+    std::cout &lt;&lt; ipow(std::strlen(argv[0]), 3) &lt;&lt; '\n';
+}
+}}
+}}
+
+===注解===
+如果 {{spar sep|true分支语句}}或 {{spar sep|false分支语句}}不是复合语句，那么按如同是复合语句一样处理：
+{{source|
+if (x)
+    int i;
+// i 不再在作用域中
+}}
+与下面相同
+{{source|
+if (x)
+{
+    int i;
+}
+// i 不再在作用域中
+}}
+
+如果{{spar sep|条件}}是声明，那么它引入的名字的作用域是两个语句体的合并作用域：
+{{source|1=
+if (int x = f())
+{
+    int x; // 错误：重复声明了 x
+}
+else
+{
+    int x; // 错误：重复声明了 x
+}
+}}
+
+如果通过 {{rlpt|goto}} 或 {{lc|longjmp}} 进入 {{spar|true分支语句}}，那么不会对{{spar sep|条件}}求值，也不会执行 {{spar|false分支语句}}。
+
+{{rrev|since=c++17|until=c++23|
+constexpr if 语句的{{spar sep|条件}}中不允许除了到 {{c/core|bool}} 的非{{rlps|list initialization#窄化}}{{rlps|implicit conversion#整数转换}}之外的内建转换。
+}}
+
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=201606L|std=C++17|__cpp_if_constexpr|{{c/core|constexpr}} {{tt|if}}}}
+{{ftm|value=202106L|std=C++23|__cpp_if_consteval|{{c/core|consteval}} {{tt|if}}}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/if}},
+{{ltt|cpp/keyword/else}},
+{{ltt|cpp/keyword/constexpr}},
+{{ltt|cpp/keyword/consteval}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=631|std=C++98|before=未指明通过标签抵达第一子语句时的控制流|after=不对条件求值，也不执行第二子语句（与 C 的行为一致）}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_constant_evaluated}}
+{{dsc see c|c/language/if |{{tt|if}} 语句|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

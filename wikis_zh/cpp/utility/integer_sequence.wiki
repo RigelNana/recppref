@@ -1,0 +1,174 @@
+{{cpp/title|integer_sequence}}
+{{cpp/meta/navbar}}
+{{ddcl|since=c++14|header=utility|feature=__cpp_lib_integer_sequence|1=
+template&lt; class T, T... Ints &gt;
+class integer_sequence;
+}}
+
+类模板 {{tt|std::integer_sequence}} 表示一个编译时的整数序列。在用作{{lt|cpp/language/function template|函数模板}}的实参时，能推导{{lt|cpp/language/parameter pack|参数包}} {{tt|Ints}} 并将它用于包展开。
+
+===模板形参===
+{{par begin}}
+{{par|T|用于序列元素的整数类型}}
+{{par|...Ints|表示序列的非类型形参包}}
+{{par end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem sfun|cpp/utility/integer_sequence|inlinemem=true|title=size|返回 {{tt|Ints}} 中的元素数}}
+{{dsc end}}
+
+{{member|{{small|std::integer_sequence::}}size|2=
+{{ddcl|1=
+static constexpr std::size_t size() noexcept;
+}}
+
+返回 {{tt|Ints}} 中的元素数。等价于 {{c|sizeof...(Ints)}}。
+
+===返回值===
+{{tt|Ints}} 中的元素数。
+}}
+
+===辅助模板===
+针对 {{tt|T}} 为 {{lc|std::size_t}} 的常用情况，定义辅助别名模板 {{tt|std::index_sequence}}。
+
+{{ddcl|1=
+template&lt; std::size_t... Ints &gt;
+using index_sequence = std::integer_sequence&lt;std::size_t, Ints...&gt;;
+}}
+
+分别定义辅助别名模板 {{tt|std::make_integer_sequence}} 与 {{tt|std::make_index_sequence}}，用于简化以 {{c|0}}, {{c|1}}, {{c|2}}, {{tt|...}}, {{c|N - 1}} 为 {{tt|Ints}} 创建 {{tt|std::integer_sequence}} 与 {{tt|std::index_sequence}} 类型：
+
+{{dcl begin}}
+{{dcl|1=
+template&lt; class T, T N &gt;
+using make_integer_sequence = std::integer_sequence&lt;T, /* 序列 0, 1, 2, ..., N-1 */&gt;;
+}}
+{{dcl|1=
+template&lt; std::size_t N &gt;
+using make_index_sequence = std::make_integer_sequence&lt;std::size_t, N&gt;;
+}}
+{{dcl end}}
+
+若 {{tt|N}} 为负则程序非良构。若 {{tt|N}} 为零，则指示类型为 {{tt|integer_sequence&lt;T&gt;}}。
+
+定义辅助别名模板 {{tt|std::index_sequence_for}}，以将任何类型形参包转换为同长度的索引序列：
+
+{{ddcl|1=
+template&lt; class... T &gt;
+using index_sequence_for = std::make_index_sequence&lt;sizeof...(T)&gt;;
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_integer_sequence|编译期整数序列|value=201304L|std=C++14}}
+
+===可能的实现===
+
+{{eq impl
+|title1=make_integer_sequence|1=
+namespace detail {
+template&lt;class T, T I, T N, T... integers&gt;
+struct make_integer_sequence_helper
+{
+    using type = typename make_integer_sequence_helper&lt;T, I + 1, N, integers..., I&gt;::type;
+};
+
+template&lt;class T, T N, T... integers&gt;
+struct make_integer_sequence_helper&lt;T, N, N, integers...&gt;
+{
+    using type = std::integer_sequence&lt;T, integers...&gt;;
+};
+}
+
+template&lt;class T, T N&gt;
+using make_integer_sequence = detail::make_integer_sequence_helper&lt;T, 0, N&gt;::type;
+}}
+
+===示例===
+{{example
+|另见 {{lc|std::apply}} 中可能的实现作为另一个例子。
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+#include &lt;utility&gt;
+ 
+namespace details {
+template &lt;typename Array, std::size_t... I&gt;
+constexpr auto array_to_tuple_impl(const Array&amp; a, std::index_sequence&lt;I...&gt;)
+{
+    return std::make_tuple(a[I]...);
+}
+ 
+template &lt;class Ch, class Tr, class Tuple, std::size_t... Is&gt;
+void print_tuple_impl(std::basic_ostream&lt;Ch, Tr&gt;&amp; os,
+                      const Tuple&amp; t,
+                      std::index_sequence&lt;Is...&gt;)
+{
+    ((os &lt;&lt; (Is ? ", " : "") &lt;&lt; std::get&lt;Is&gt;(t)), ...);
+}
+}
+ 
+template &lt;typename T, T... ints&gt;
+void print_sequence(int id, std::integer_sequence&lt;T, ints...&gt; int_seq)
+{
+    std::cout &lt;&lt; id &lt;&lt; ") 大小为 " &lt;&lt; int_seq.size() &lt;&lt; " 的序列: ";
+    ((std::cout &lt;&lt; ints &lt;&lt; ' '), ...);
+    std::cout &lt;&lt; '\n';
+}
+ 
+template &lt;typename T, std::size_t N, typename Indx = std::make_index_sequence&lt;N&gt;&gt;
+constexpr auto array_to_tuple(const std::array&lt;T, N&gt;&amp; a)
+{
+    return details::array_to_tuple_impl(a, Indx{});
+}
+ 
+template &lt;class Ch, class Tr, class... Args&gt;
+auto&amp; operator&lt;&lt;(std::basic_ostream&lt;Ch, Tr&gt;&amp; os, const std::tuple&lt;Args...&gt;&amp; t)
+{
+    os &lt;&lt; '(';
+    details::print_tuple_impl(os, t, std::index_sequence_for&lt;Args...&gt;{});
+    return os &lt;&lt; ')';
+}
+ 
+int main()
+{
+    print_sequence(1, std::integer_sequence&lt;unsigned, 9, 2, 5, 1, 9, 1, 6&gt;{});
+    print_sequence(2, std::make_integer_sequence&lt;int, 12&gt;{});
+    print_sequence(3, std::make_index_sequence&lt;10&gt;{});
+    print_sequence(4, std::index_sequence_for&lt;std::ios, float, signed&gt;{});
+ 
+    constexpr std::array&lt;int, 4&gt; array{1, 2, 3, 4};
+ 
+    auto tuple1 = array_to_tuple(array);
+    static_assert(std::is_same_v&lt;decltype(tuple1),
+                                 std::tuple&lt;int, int, int, int&gt;&gt;, "");
+    std::cout &lt;&lt; "5) tuple1: " &lt;&lt; tuple1 &lt;&lt; '\n';
+ 
+    constexpr auto tuple2 = array_to_tuple&lt;int, 4,
+        std::integer_sequence&lt;std::size_t, 1, 0, 3, 2&gt;&gt;(array);
+    std::cout &lt;&lt; "6) tuple2: " &lt;&lt; tuple2 &lt;&lt; '\n';
+}
+|output=
+1) 大小为 7 的序列: 9 2 5 1 9 1 6 
+2) 大小为 12 的序列: 0 1 2 3 4 5 6 7 8 9 10 11 
+3) 大小为 10 的序列: 0 1 2 3 4 5 6 7 8 9 
+4) 大小为 3 的序列: 0 1 2 
+5) tuple1: (1, 2, 3, 4)
+6) tuple2: (2, 1, 4, 3)
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/array/dsc to_array}}
+{{dsc inc|cpp/types/dsc integral_constant}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

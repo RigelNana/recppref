@@ -1,0 +1,138 @@
+{{cpp/string/basic_string/title|find}}
+{{cpp/string/basic_string/navbar}}
+{{dcl begin}}
+{{dcla|anchor=no|num=1|noexcept=c++11|constexpr=c++20|1=
+size_type find( const basic_string&amp; str, size_type pos = 0 ) const;
+}}
+{{dcla|anchor=no|num=2|constexpr=c++20|1=
+size_type find( const CharT* s, size_type pos, size_type count ) const;
+}}
+{{dcla|anchor=no|num=3|constexpr=c++20|1=
+size_type find( const CharT* s, size_type pos = 0 ) const;
+}}
+{{dcla|anchor=no|num=4|noexcept=c++11|constexpr=c++20|1=
+size_type find( CharT ch, size_type pos = 0 ) const;
+}}
+{{dcla|anchor=no|num=5|since=c++17|constexpr=c++20|1=
+template&lt; class StringViewLike &gt;
+size_type find( const StringViewLike&amp; t,
+                size_type pos = 0 ) const noexcept(/* 见下文 */);
+}}
+{{dcl end}}
+
+寻找首个等于给定字符序列的子串。搜索从 {{c|pos}} 开始，也就是说找到的子串不会从 {{c|pos}} 之前的位置开始。
+
+@1@ 寻找等于 {{c|str}} 的首个子串。
+
+@2@ 寻找首个等于范围 {{range|s|s + count}} 的子串。此范围可以包含空字符。
+
+@@ 如果 {{range|s|s + count}} 不是[[cpp/iterator#范围|有效范围]]，那么行为未定义。
+
+@3@ 寻找首个等于 {{c|s}} 所指向的字符串的子串。该字符串的长度由首个空字符，通过 {{c|Traits::length(s)}} 确定。
+
+@@ 如果 {{range|s|s + Traits::length(s)}} 不是[[cpp/iterator#范围|有效范围]]，那么行为未定义。
+
+@4@ 寻找首个字符 {{c|ch}}（由后述规则当作单字符子串）。
+
+@5@ {{cpp/string/sv hack|寻找首个等于字符串视图 {{c|sv}} 的子串}}
+
+正式而言，如果以下表达式都是 {{c|true}}，那么在位置 {{c|xpos}} ''找到''{{sep}}子串 {{c|str}}：
+* {{c|1=xpos &gt;= pos}} 
+* {{c|1=xpos + str.size() &lt;= size()}}
+* 对于 {{c|str}} 中所有位置 {{c|n}}，{{c|Traits::eq(at(xpos + n), str.at(n))}}
+
+特别是，这意味着
+* 只有在 {{c|1=pos &lt;= size() - str.size()}} 时才能找到子串。
+* 在且仅在 {{c|1=pos &lt;= size()}} 时才能在 {{c|pos}} 找到空子串。
+* 对于非空子串，如果 {{c|1=pos &gt;= size()}}，那么函数始终返回 {{lc|npos}}。
+
+===参数===
+{{par begin}}
+{{par|str|要搜索的字符串}}
+{{par|pos|开始搜索的位置}}
+{{par|count|要搜索的子串长度}}
+{{par|s|指向要搜索的字符串的指针}}
+{{par|ch|要搜索的字符}}
+{{par|t|要搜索的对象（可转换到 {{lc|std::basic_string_view}}）}}
+{{par end}} 
+
+===返回值===
+找到的子串的首字符位置，或在找不到这种子串时返回 {{lc|npos}}。
+
+===异常===
+@1,4@ 不抛出。
+@5@ {{noexcept|std::is_nothrow_convertible_v&lt;const T&amp;, std::basic_string_view&lt;CharT, Traits&gt;&gt;}}
+
+{{cpp/strong exception safety guarantee}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+void print(int id, std::string::size_type n, std::string const&amp; s)
+{
+    std::cout &lt;&lt; id &lt;&lt; ") ";
+    if (std::string::npos == n)
+        std::cout &lt;&lt; "没有找到！n == npos\n";
+    else
+        std::cout &lt;&lt; "在位置 n = " &lt;&lt; n &lt;&lt; " 找到，substr(" &lt;&lt; n &lt;&lt; ") = "
+                  &lt;&lt; std::quoted(s.substr(n)) &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string::size_type n;
+    std::string const s = "This is a string";  /*
+                             ^  ^  ^
+                             1  2  3           */
+    
+    // 从首个位置开始搜索
+    n = s.find("is");
+    print(1, n, s);
+    
+    // 从位置 5 开始搜索
+    n = s.find("is", 5);
+    print(2, n, s);
+    
+    // 寻找单个字符
+    n = s.find('a');
+    print(3, n, s);
+    
+    // 寻找单个字符
+    n = s.find('q');
+    print(4, n, s);
+}
+|output=
+1) 在位置 n = 2 找到，substr(2) = "is is a string"
+2) 在位置 n = 5 找到，substr(5) = "is a string"
+3) 在位置 n = 8 找到，substr(8) = "a string"
+4) 没有找到！n == npos
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=847|std=C++98|before=没有异常安全保证|after=添加强异常安全保证}}
+{{dr list item|wg=lwg|dr=2064|std=C++11|before=重载 {{v|3,4}} 是 noexcept 的|after=移除}}
+{{dr list item|wg=lwg|dr=2946|std=C++17|before=重载 {{v|5}} 在某些情况下会导致歧义|after=通过使之为模板来避免}}
+{{dr list item|paper=P1148R0|std=C++11&lt;br&gt;C++17|before=重载 {{v|4,5}} 的 noexcept 意外地被 LWG2064/LWG2946 丢弃|after=恢复}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/byte/dsc strstr}}
+{{dsc inc|cpp/string/wide/dsc wcsstr}}
+{{dsc inc|cpp/string/byte/dsc strchr}}
+{{dsc inc|cpp/string/wide/dsc wcschr}}
+{{dsc inc|cpp/string/basic_string/dsc rfind}}
+{{dsc inc|cpp/string/basic_string/dsc find_first_of}}
+{{dsc inc|cpp/string/basic_string/dsc find_first_not_of}}
+{{dsc inc|cpp/string/basic_string/dsc find_last_of}}
+{{dsc inc|cpp/string/basic_string/dsc find_last_not_of}}
+{{dsc inc|cpp/string/basic_string_view/dsc find}}
+{{dsc inc|cpp/algorithm/dsc search}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

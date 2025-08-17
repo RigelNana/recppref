@@ -1,0 +1,334 @@
+{{title|非静态成员函数}}
+{{cpp/language/classes/navbar}}
+非静态成员函数是在类的{{rlp|class|成员说明}}中不带 {{rlpt|static}} 或 {{rlpt|friend}} 说明符声明的函数。（这些关键词的效果见{{rlp|static#静态成员函数|静态成员函数}}与{{rlp|friend|友元声明}}）
+
+{{source|1=
+class S
+{
+    int mf1(); // 非静态成员函数声明
+    void mf2() volatile, mf3() &amp;&amp;; // 可以有 cv 限定符或引用限定符
+        // 上面的声明与下面分开的两个声明等价：
+        // void mf2() volatile;
+        // void mf3() &amp;&amp;;
+    
+    int mf4() const { return data; } // 可以内联定义
+    virtual void mf5() final; // 可以是虚函数，可以使用 final/override
+    S() : data(12) {} // 构造函数也是成员函数
+    int data;
+};
+
+int S::mf1() { return 7; } // 不内联定义就必须在命名空间定义
+}}
+
+{{rlp|constructor|构造函数}}、{{rlp|destructor|析构函数}}和{{rlp|cast operator|转换函数}}的声明使用的是特殊的语法。本页描述的规则可能不适用于这些函数。细节可以参考它们的相应页面。
+
+{{rrev|since=c++23|
+''显式对象成员函数''{{sep}}是有{{rlp|function#形参列表|显式对象形参}}的非静态成员函数。
+}}
+''隐式对象成员函数''{{sep}}是没有显式对象形参的非静态成员函数（C++23 前，这是仅有的非静态成员函数种类，因而在文献中被称为“非静态成员函数”）。
+
+===解释===
+允许任何{{rlp|function|函数声明}}，外加非静态成员函数专用的语法元素：{{rlp|abstract class|纯说明符}}，cv 限定符{{rev inl|since=c++11|，引用限定符，{{rlpt|final}} 与 {{rlpt|override}} 说明符}}，以及{{rlp|initializer list|成员初始化器列表}}。
+
+可以通过以下方式调用类 {{tt|X}} 的非静态成员函数：
+@1@ 对 {{tt|X}} 类型的对象使用类成员访问运算符调用
+@2@ 对{{rlp|derived class|派生}}自 {{tt|X}} 的类的对象调用
+@3@ 从 {{tt|X}} 的成员函数体内直接调用
+@4@ 从派生自 {{tt|X}} 的类的成员函数体内直接调用
+
+在不是 {{tt|X}} 类型或派生自 {{tt|X}} 的类型对象上调用类 {{tt|X}} 的非静态成员函数的行为未定义。
+
+在 {{tt|X}} 的非静态成员函数的体内，任何解析为 {{tt|X}} 或 {{tt|X}} 的某个基类的非类型非静态成员的{{rlp|expressions|标识表达式}} {{c|e}}（例如一个标识符）都会被变换为成员访问表达式 {{c|(*this).e}}（除非它已经是成员访问表达式的一部分）。模板定义语境中不会发生这种变换，因此有时需要明确地对某个名字前附 {{c|this-&gt;}}，以使它成为{{rlp|dependent name|待决的}}名字。
+
+{{source|1=
+struct S
+{
+    int n;
+    void f();
+};
+
+void S::f()
+{
+    n = 1; // 变换为 (*this).n = 1;
+}
+
+int main()
+{
+    S s1, s2;
+    s1.f(); // 更改 s1.n
+}
+}}
+
+在 {{tt|X}} 的非静态成员函数体内，任何解析到 {{tt|X}} 或 {{tt|X}} 的某个基类的静态成员、枚举项或嵌套类型的无限定标识都会被变换为对应的有限定标识。
+
+{{source|1=
+struct S
+{
+    static int n;
+    void f();
+};
+
+void S::f()
+{
+    n = 1; // 变换为 S::n = 1;
+}
+
+int main()
+{
+    S s1, s2;
+    s1.f(); // 更改 S::n
+}
+}}
+
+====有 cv 限定符的成员函数====
+非静态成员函数可以带 cv 限定符序列（{{c/core|const}}、{{c/core|volatile}} 或 {{c/core|const}} 和 {{c/core|volatile}} 的组合）声明，这些限定符在{{rlp|function|函数声明}}中的形参列表之后出现。带有不同 cv 限定符（或无限定）的函数具有不同类型，从而可以相互重载。
+
+在有 cv 限定符的函数体内，{{c|*this}} 有同样的 cv 限定，例如在有 {{c/core|const}} 限定符的成员函数中只能正常地调用其他有 {{c/core|const}} 限定符的成员函数。（如果应用了 {{rlpt|const_cast}}，或通过不涉及 {{rlpt|this}} 的访问路径，那么仍然可以调用没有 {{c/core|const}} 限定符的成员函数。）
+
+{{source|1=
+#include &lt;vector&gt;
+
+struct Array
+{
+    std::vector&lt;int&gt; data;
+    Array(int sz) : data(sz) {}
+    
+    // const 成员函数
+    int operator[](int idx) const
+    {                     // this 指针具有类型 const Array*
+        return data[idx]; // 变换为 (*this).data[idx];
+    }
+    
+    // 非 const 成员函数
+    int&amp; operator[](int idx)
+    {                     // this 指针具有类型 Array*
+        return data[idx]; // 变换为 (*this).data[idx]
+    }
+};
+
+int main()
+{
+    Array a(10);
+    a[1] = 1;  // OK：a[1] 的类型是 int&amp;
+    const Array ca(10);
+    ca[1] = 2; // 错误：ca[1] 的类型是 int
+}
+}}
+
+{{rrev|since=c++11|
+===有引用限定符的成员函数===
+非静态成员函数可以不带引用限定符，带有左值引用限定符（函数名后的 {{tt|&amp;}} 记号），或带有右值引用限定符（函数名后的 {{tt|&amp;&amp;}} 记号）声明。在{{rlp|overload resolution|重载决议}}中，按下列方式对待类 X 的非静态有 cv 限定符序列的成员函数：
+* 不带引用限定符：隐式对象形参具有到 cv 限定的 X 的左值引用类型，并额外允许绑定到右值隐含对象实参
+* 左值引用限定符：隐式对象形参具有到 cv 限定的 X 的左值引用类型
+* 右值引用限定符：隐式对象形参具有到 cv 限定的 X 的右值引用类型
+
+{{source|1=
+#include &lt;iostream&gt;
+
+struct S
+{
+    void f() &amp;  { std::cout &lt;&lt; "左值\n"; }
+    void f() &amp;&amp; { std::cout &lt;&lt; "右值\n"; }
+};
+
+int main()
+{
+    S s;
+    s.f();            // 打印“左值”
+    std::move(s).f(); // 打印“右值”
+    S().f();          // 打印“右值”
+}
+}}
+
+注意：与 cv 限定性不同，引用限定性不改变 {{rlpt|this}} 指针的性质：即使在右值引用限定的函数中，{{c|*this}} 仍是左值表达式。
+}}
+
+===虚函数和纯虚函数===
+非静态成员函数可以声明为''虚''{{sep}}或''纯虚''{{sep}}函数。细节见{{rlp|virtual|虚函数}}与{{rlp|abstract class|抽象类}}。
+
+{{rrev|since=c++23|
+===显式对象成员函数===
+对于声明不带有 cv 限定符或引用限定符的非静态非虚成员函数，如果它的首个形参不是{{rlp|parameter pack|函数形参包}}，那么可以（通过在该形参前附关键词 {{c/core|this}} 的方式）指定该形参为{{rlps|function#显式对象形参}}。
+
+{{source|1=
+struct X
+{
+    void foo(this X const&amp; self, int i); // 同 void foo(int i) const &amp;;
+//  void foo(int i) const &amp;;             // 错误：已经声明
+
+    void bar(this X self, int i); // 按值传递对象：复制 *this
+};
+}}
+
+对于成员函数模板，显式对象形参的类型和值类别可以被推导，因此该语言特性也被称为“推导 {{tt|this}}”：
+
+{{source|1=
+struct X
+{
+    template&lt;typename Self&gt;
+    void foo(this Self&amp;&amp;, int);
+};
+
+struct D : X {};
+
+void ex(X&amp; x, D&amp; d)
+{
+    x.foo(1);       // Self = X&amp;
+    move(x).foo(2); // Self = X
+    d.foo(3);       // Self = D&amp;
+}
+}}
+
+这使得可以对 const 和非 const 成员函数进行去重，例子参见[[cpp/language/operators#数组下标运算符|数组下标运算符]]。
+
+在有显式对象形参的函数体内不能使用 {{c|this}} 指针：所有成员访问必须通过第一个形参进行，就像在静态成员函数中一样：
+{{source|1=
+struct C
+{
+    void bar();
+    
+    void foo(this C c)
+    {
+        auto x = this; // 错误：不能使用 this
+        bar();         // 错误：没有隐式的 this-&gt;
+        c.bar();       // OK
+    }
+};
+}}
+
+指向有显式对象形参的成员函数的指针是普通的函数指针，而不是成员的指针：
+{{source|1=
+struct Y 
+{
+    int f(int, int) const&amp;;
+    int g(this Y const&amp;, int, int);
+};
+
+auto pf = &amp;Y::f;
+pf(y, 1, 2);              // 错误：不能调用指向成员函数的指针
+(y.*pf)(1, 2);            // OK
+std::invoke(pf, y, 1, 2); // OK
+
+auto pg = &amp;Y::g;
+pg(y, 3, 4);              // OK
+(y.*pg)(3, 4);            // 错误：pg 不是指向成员函数的指针
+std::invoke(pg, y, 3, 4); // OK
+}}
+}}
+
+===特殊成员函数===
+一些成员函数是''特殊''{{sep}}的：在某些环境下，即使用户不定义，编译器也会定义它们。它们是：
+* {{rlp|default constructor|默认构造函数}}
+* {{rlp|copy constructor|复制构造函数}}
+{{rrev|since=c++11|
+* {{rlp|move constructor|移动构造函数}}
+}}
+* {{rlp|copy assignment|复制赋值运算符}}
+{{rrev|since=c++11|
+* {{rlp|move assignment|移动赋值运算符}}
+}}
+* {{rev inl|until=c++20|{{rlp|destructor|析构函数}}}}{{rev inl|since=c++20|{{rlp|destructor#预期的析构函数|预期的析构函数}}}}
+
+特殊成员函数{{rev inl|since=c++20|以及{{rlp|default comparisons|比较运算符}}}}是仅有的能被''预置''{{sep}}的函数，即使用 {{c/core|1== default}} 替代函数体进行定义（细节见其相应页面）。
+
+===注解===
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=200710L|std=C++11|__cpp_ref_qualifiers|{{rlp|function/#函数声明|引用限定符}}}}
+{{ftm|value=202110L|std=C++23|__cpp_explicit_this_parameter|{{rlps|function#显式对象形参}}（[[#显式对象成员函数|推导 {{tt|this}}]]）}}
+{{ftm end}}
+
+===示例===
+{{example
+|
+|code= 
+#include &lt;exception&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct S
+{
+    int data;
+    
+    // 简单的转换构造函数（声明）
+    S(int val);
+    
+    // 简单的显式构造函数（声明）
+    explicit S(std::string str);
+    
+    // const 成员函数（定义）
+    virtual int getData() const { return data; }
+    
+};
+
+// 构造函数的定义
+S::S(int val) : data(val)
+{
+    std::cout &lt;&lt; "调用构造函数1，data = " &lt;&lt; data &lt;&lt; '\n';
+}
+
+// 此构造函数拥有 catch 子句
+S::S(std::string str) try : data(std::stoi(str))
+{
+    std::cout &lt;&lt; "调用构造函数2，data = " &lt;&lt; data &lt;&lt; '\n';
+}
+catch(const std::exception&amp;)
+{
+    std::cout &lt;&lt; "构造函数2失败，字符串为 '" &lt;&lt; str &lt;&lt; "'\n";
+    throw; // 构造函数的 catch 子句应该始终重新抛出异常
+}
+
+struct D : S
+{
+    int data2;
+    // 带默认实参的构造函数
+    D(int v1, int v2 = 11) : S(v1), data2(v2) {}
+    
+    // 虚成员函数
+    int getData() const override { return data * data2; }
+    
+    // 左值限定的赋值运算符
+    D&amp; operator=(D other) &amp;
+    {
+        std::swap(other.data, data);
+        std::swap(other.data2, data2);
+        return *this;
+    }
+};
+
+int main()
+{
+    D d1 = 1;
+    S s2("2");
+    
+    try
+    {
+         S s3("不是数字");
+    }
+    catch(const std::exception&amp;) {}
+    
+    std::cout &lt;&lt; s2.getData() &lt;&lt; '\n';
+    
+    D d2(3, 4);
+    d2 = d1;   // OK：赋值给左值
+//  D(5) = d1; // 错误：没有适合的 operator= 重载
+}
+|output=
+调用构造函数1，data = 1
+调用构造函数2，data = 2
+构造函数2失败，字符串为 '不是数字'
+2
+调用构造函数1，data = 3
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=194|std=C++98|before=（非静态）成员函数的名字可以与所在类的名字相同|after=添加命名限制}}
+{{dr list end}}
+
+===参阅===
+*{{rlp|classes|类}}
+*{{rlp|data members|非静态数据成员}}
+*{{rlp|static|静态数据成员}}
+
+{{langlinks|de|en|es|ja|ru}}

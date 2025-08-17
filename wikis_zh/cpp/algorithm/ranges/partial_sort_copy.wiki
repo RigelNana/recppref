@@ -1,0 +1,194 @@
+{{cpp/ranges/title|partial_sort_copy|partial_sort_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::random_access_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Comp = ranges::less, class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_copyable&lt;I1, I2&gt; &amp;&amp;
+         std::sortable&lt;I2, Comp, Proj2&gt; &amp;&amp;
+         std::indirect_strict_weak_order&lt;Comp, std::projected&lt;I1, Proj1&gt;,
+             std::projected&lt;I2, Proj2&gt;&gt;
+constexpr partial_sort_copy_result&lt;I1, I2&gt;
+    partial_sort_copy( I1 first, S1 last, I2 result_first, S2 result_last,
+                       Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::random_access_range R2,
+          class Comp = ranges::less, class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;&gt; &amp;&amp;
+         std::sortable&lt;ranges::iterator_t&lt;R2&gt;, Comp, Proj2&gt; &amp;&amp;
+         std::indirect_strict_weak_order&lt;Comp, std::projected&lt;ranges::iterator_t&lt;R1&gt;,
+             Proj1&gt;, std::projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+constexpr partial_sort_copy_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                   ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+    partial_sort_copy( R1&amp;&amp; r, R2&amp;&amp; result_r,
+                       Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using partial_sort_copy_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+复制来自源范围 {{range|first|last}} 的前 {{c|N}} 个元素，如同它按照 {{c|comp}} 与 {{c|proj1}} 部分排序，到目标范围 {{range|result_first|result_first + N}}，其中 {{mathjax-or|1=\(\scriptsize N = \min{(L_1, L_2)}\)|2=N = min(L₁, L₂)}}，{{mathjax-or|\(\scriptsize L_1\)|L₁}} 等于 {{c|ranges::distance(first, last)}} 而 {{mathjax-or|\(\scriptsize L_2\)|L₂}} 等于 {{c|ranges::distance(result_first, result_last)}}。
+
+''不''保证保持相等元素间的顺序。
+
+@1@ 用函数对象 {{c|proj1}} 投影源范围元素，并用函数对象 {{c|proj2}} 投影目标元素。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围并以 {{c|result_r}} 为目标范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}}，以 {{c|ranges::end(r)}} 为 {{c|last}}，以 {{c|ranges::begin(result_r)}} 为 {{c|result_first}}，并以 {{c|ranges::end(result_r)}} 为 {{c|result_last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=复制来源的|range=源|sentinel=yes}}
+{{par|r|复制来源的源范围}}
+{{par range|result_first|result_last|3=|range=目标|sentinel=yes}}
+{{par|result_r|目标范围}}
+{{par|comp|应用到投影后元素的比较}}
+{{par|proj1|应用到源范围元素的投影}}
+{{par|proj2|应用到目标范围元素的投影}}
+{{par end}}
+
+===返回值===
+等于 {{c|{last, result_first + N} }} 的对象。
+
+===复杂度===
+至多比较 {{mathjax-or|\(\scriptsize L_1 \cdot \log{(N)}\)|L₁•log(N)}} 次，投影 {{mathjax-or|\(\scriptsize 2 \cdot L_1 \cdot \log{(N)}\)|2•L₁•log(N)}} 次。
+
+===可能的实现===
+{{eq fun|1=
+struct partial_sort_copy_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::random_access_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Comp = ranges::less, class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_copyable&lt;I1, I2&gt; &amp;&amp; std::sortable&lt;I2, Comp, Proj2&gt; &amp;&amp;
+             std::indirect_strict_weak_order&lt;Comp, std::projected&lt;I1, Proj1&gt;,
+             std::projected&lt;I2, Proj2&gt;&gt;
+    constexpr ranges::partial_sort_copy_result&lt;I1, I2&gt;
+        operator()(I1 first, S1 last, I2 result_first, S2 result_last,
+                   Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        if (result_first == result_last)
+            return {std::move(ranges::next(std::move(first), std::move(last))),
+                    std::move(result_first)};
+
+        auto out_last{result_first};
+        // 复制首 N 个元素
+        for (; !(first == last or out_last == result_last); ++out_last, ++first)
+            *out_last = *first;
+
+        // 转换 N 个复制的元素为最大堆
+        ranges::make_heap(result_first, out_last, comp, proj2);
+
+        // 处理剩余的输入范围（若存在），保持堆属性
+        for (; first != last; ++first)
+        {
+            if (std::invoke(comp, std::invoke(proj1, *first),
+                                  std::invoke(proj2, *result_first)))
+            {
+                // 弹出最大项并塞入新找到的较小项
+                ranges::pop_heap(result_first, out_last, comp, proj2);
+                *(out_last - 1) = *first;
+                ranges::push_heap(result_first, out_last, comp, proj2);
+            }
+        }
+
+        // 输出范围中首 N 个元素仍为堆——转换之为已排序范围
+        ranges::sort_heap(result_first, out_last, comp, proj2);
+
+        return {std::move(first), std::move(out_last)};
+    }
+
+    template&lt;ranges::input_range R1, ranges::random_access_range R2,
+             class Comp = ranges::less, class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;&gt; &amp;&amp;
+             std::sortable&lt;ranges::iterator_t&lt;R2&gt;, Comp, Proj2&gt; &amp;&amp;
+             std::indirect_strict_weak_order&lt;Comp, std::projected&lt;ranges::iterator_t&lt;R1&gt;,
+             Proj1&gt;, std::projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+    constexpr ranges::partial_sort_copy_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+              ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+        operator()(R1&amp;&amp; r, R2&amp;&amp; result_r, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       ranges::begin(result_r), ranges::end(result_r),
+                       std::move(comp), std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr partial_sort_copy_fn partial_sort_copy {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;forward_list&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+void print(std::string_view rem, std::ranges::input_range auto const&amp; v)
+{
+    for (std::cout &lt;&lt; rem; const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    const std::forward_list source{4, 2, 5, 1, 3};
+
+    print("以升序写入较小 vector: ", "");
+
+    std::vector dest1{10, 11, 12};
+    print("const source list: ", source);
+    print("destination range: ", dest1);
+    std::ranges::partial_sort_copy(source, dest1);
+    print("partial_sort_copy: ", dest1);
+
+    print("以降序写入较大 vector:", "");
+
+    std::vector dest2{10, 11, 12, 13, 14, 15, 16};
+    print("const source list: ", source);
+    print("destination range: ", dest2);
+    std::ranges::partial_sort_copy(source, dest2, std::greater{});
+    print("partial_sort_copy: ", dest2);
+}
+|output=
+以升序写入较小 vector:
+const source list: 4 2 5 1 3
+destination range: 10 11 12
+partial_sort_copy: 1 2 3
+以降序写入较大 vector:
+const source list: 4 2 5 1 3
+destination range: 10 11 12 13 14 15 16
+partial_sort_copy: 5 4 3 2 1 15 16
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc make_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc push_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc pop_heap}}
+{{dsc inc|cpp/algorithm/dsc partial_sort_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,115 @@
+{{cpp/title|start_lifetime_as|start_lifetime_as_array}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|{{tt|std::start_lifetime_as}}}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class T &gt;
+T* start_lifetime_as( void* p ) noexcept;
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; class T &gt;
+const T* start_lifetime_as( const void* p ) noexcept;
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; class T &gt;
+volatile T* start_lifetime_as( volatile void* p ) noexcept;
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class T &gt;
+const volatile T* start_lifetime_as( const volatile void* p ) noexcept;
+}}
+{{dcl h|{{tt|std::start_lifetime_as_array}}}}
+{{dcl|num=5|since=c++23|1=
+template&lt; class T &gt;
+T* start_lifetime_as_array( void* p, std::size_t n ) noexcept;
+}}
+{{dcl|num=6|since=c++23|1=
+template&lt; class T &gt;
+const T* start_lifetime_as_array( const void* p,
+                                  std::size_t n ) noexcept;
+}}
+{{dcl|num=7|since=c++23|1=
+template&lt; class T &gt;
+volatile T* start_lifetime_as_array( volatile void* p,
+                                     std::size_t n ) noexcept;
+}}
+{{dcl|num=8|since=c++23|1=
+template&lt; class T &gt;
+const volatile T* start_lifetime_as_array( const volatile void* p,
+                                           std::size_t n ) noexcept;
+}}
+{{dcl end}}
+
+@1-4@ [[cpp/language/object#对象创建|隐式创建]]类型为 {{tt|T}}、地址为 {{c|p}} 的完整对象以及内嵌于它的对象。以和调用 {{c|std::bit_cast&lt;U&gt;(E)}} 相同的方式确定每个被创建的{{named req|TriviallyCopyable}}类型 {{tt|U}} 的对象 {{tti|obj}} 的值，但不实际访问其存储，其中 {{tt|E}} 是指代 {{tti|obj}} 的 {{tt|U}} 类型的左值。否则，未指定这种被创建的对象的值。
+* {{tt|T}} 必须为{{named req|ImplicitLifetimeType}}且必须为[[cpp/language/type#不完整类型|完整类型]]，否则程序非良构。
+* 若符合以下条件则行为未定义：
+:* {{range|p|(char*)p + sizeof(T)}} 不指代作为可由 {{c|p}} 抵达的存储区域的子集的已分配的存储区域，或
+:* 该区域未对 {{tt|T}} 恰当地对齐。
+* 注意未指定值可以为不确定值。
+@5-8@ [[cpp/language/object#对象创建|隐式创建]]元素类型为 {{tt|T}}、长度为 {{c|n}} 的数组。确切地说，若 {{c|n &gt; 0}} 为 {{c|true}} 则等价于 {{c|std::start_lifetime_as&lt;U&gt;(p)}}，其中 {{tt|U}} 为“{{c|n}} 个 {{tt|T}} 的数组”。否则函数无效果。
+* {{tt|T}} 必须为[[cpp/language/type#不完整类型|完整类型]]，否则程序非良构。
+* 若符合以下条件则行为未定义：
+:* 非空的 {{c|p}} 未对 {{tt|T}} 的数组恰当地对齐，或
+:* {{c|1=n &lt;= std::size_t(-1) / sizeof(T)}} 为 {{c|false}}，或
+:* {{c|n &gt; 0}} 且 {{range|(char*)p|(char*)p + (n * sizeof(T))}} 不指代作为可由 {{c|p}} 抵达的存储区域的子集的已分配的存储区域。
+
+===参数===
+{{par begin}}
+{{par|p|组成对象的区域的地址}}
+{{par|n|要创建的数组的元素数}}
+{{par end}}
+
+===返回值===
+@1-4@ 指向如上所述的完整对象的指针。
+@5-8@ 指向被创建的数组的首元素的指针，若存在该数组；否则返回比较等于 {{c|p}} 的指针。
+
+===注解===
+{{c|new (void_ptr) unsigned char[size]}} 或 {{c|new (void_ptr) std::byte[size]}} 如 {{tt|std::start_lifetime_as}} 的无类型版本一样起作用，但它不保持对象表示。
+
+{{c|std::start_lifetime_as}} 处理非数组类型以及已知边界数组，而 {{c|std::start_lifetime_as_array}} 处理未知边界数组。
+
+{{feature test macro|__cpp_lib_start_lifetime_as|std=C++23|value=202207L|显式生存期管理}}
+
+===示例===
+{{example
+|code=
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+int main()
+{
+    alignas(std::complex&lt;float&gt;) unsigned char network_data[sizeof(std::complex&lt;float&gt;)]
+    {
+        0xcd, 0xcc, 0xcc, 0x3d, 0xcd, 0xcc, 0x4c, 0x3e
+    };
+
+//  auto d = *reinterpret_cast&lt;std::complex&lt;float&gt;*&gt;(network_data);
+//  std::cout &lt;&lt; d &lt;&lt; '\n'; // UB：network_data 不指向一个 complex&lt;float&gt;
+
+//  auto d1 = *std::launder(reinterpret_cast&lt;std::complex&lt;float&gt;*&gt;(network_data));
+//  std::cout &lt;&lt; d1 &lt;&lt; '\n'; // UB：隐式创建的对象具有动态存储期并具有不确定的初值，
+//                              即使为其提供存储的数组具有确定的字节内容也是如此。
+//                              另见 CWG2721。
+
+    auto d2 = *std::start_lifetime_as&lt;std::complex&lt;float&gt;&gt;(network_data);
+    std::cout &lt;&lt; d2 &lt;&lt; '\n'; // OK
+}
+|p=true
+|output=
+(0.1,0.2)
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Explicit lifetime management|id=obj.lifetime|section=20.2.6}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/dsc bit_cast}}
+{{dsc inc|cpp/container/span/dsc as_bytes}}
+{{dsc end}}
+
+{{langlinks|ar|de|en|es|fr|it|ja|pl|pt|ru}}

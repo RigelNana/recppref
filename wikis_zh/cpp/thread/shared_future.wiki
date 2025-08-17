@@ -1,0 +1,99 @@
+{{cpp/title|shared_future}}
+{{cpp/thread/shared_future/navbar}}
+{{dcl begin}}
+{{dcl header|future}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt; class shared_future;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class T &gt; class shared_future&lt;T&amp;&gt;;
+}}
+{{dcl|num=3|since=c++11|
+template&lt;&gt; class shared_future&lt;void&gt;;
+}}
+{{dcl end}}
+
+类模板 {{tt|std::shared_future}} 提供一种访问异步操作结果的机制，类似 {{lc|std::future}}，但允许多个线程等候同一共享状态。不同于仅可移动的 {{lc|std::future}}（只有一个实例能指代任何特定的异步结果），{{tt|std::shared_future}} 可复制而且多个共享未来体对象能指代同一共享状态。
+
+从多个线程访问同一共享状态，若每个线程都是通过其自身的 {{tt|shared_future}} 对象副本进行访问，则是安全的。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/future/dsc constructor|shared_future}}
+{{dsc mem dtor|cpp/thread/shared_future/~shared_future|销毁未来体对象}}
+{{dsc mem fun|cpp/thread/shared_future/operator{{=}}|赋值内容}}
+
+{{dsc h2|获取结果}}
+{{dsc inc|cpp/thread/future/dsc get|shared_future}}
+
+{{dsc h2|状态}}
+{{dsc inc|cpp/thread/future/dsc valid|shared_future}}
+{{dsc inc|cpp/thread/future/dsc wait|shared_future}}
+{{dsc inc|cpp/thread/future/dsc wait_for|shared_future}}
+{{dsc inc|cpp/thread/future/dsc wait_until|shared_future}}
+{{dsc end}}
+
+===示例===
+{{example
+|{{tt|shared_future}} 可用于同时向多个线程发信，类似 {{lc|std::condition_variable::notify_all()}}。
+|code=
+#include &lt;chrono&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+
+int main()
+{   
+    std::promise&lt;void&gt; ready_promise, t1_ready_promise, t2_ready_promise;
+    std::shared_future&lt;void&gt; ready_future(ready_promise.get_future());
+
+    std::chrono::time_point&lt;std::chrono::high_resolution_clock&gt; start;
+
+    auto fun1 = [&amp;, ready_future]() -&gt; std::chrono::duration&lt;double, std::milli&gt; 
+    {
+        t1_ready_promise.set_value();
+        ready_future.wait(); // 等待来自 main() 的信号
+        return std::chrono::high_resolution_clock::now() - start;
+    };
+
+
+    auto fun2 = [&amp;, ready_future]() -&gt; std::chrono::duration&lt;double, std::milli&gt; 
+    {
+        t2_ready_promise.set_value();
+        ready_future.wait(); // 等待来自 main() 的信号
+        return std::chrono::high_resolution_clock::now() - start;
+    };
+
+    auto fut1 = t1_ready_promise.get_future();
+    auto fut2 = t2_ready_promise.get_future();
+
+    auto result1 = std::async(std::launch::async, fun1);
+    auto result2 = std::async(std::launch::async, fun2);
+
+    // 等待线程变为就绪
+    fut1.wait();
+    fut2.wait();
+
+    // 线程已就绪，开始时钟
+    start = std::chrono::high_resolution_clock::now();
+
+    // 向线程发信使之运行
+    ready_promise.set_value();
+
+    std::cout &lt;&lt; "线程 1 启动 "
+              &lt;&lt; result1.get().count() &lt;&lt; " ms 后接到信号\n"
+              &lt;&lt; "线程 2 启动 "
+              &lt;&lt; result2.get().count() &lt;&lt; " ms 后接到信号\n";
+}
+|p=true
+|output=
+线程 1 启动 0.072 ms 后接到信号
+线程 2 启动 0.041 ms 后接到信号
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc async}}
+{{dsc inc|cpp/thread/dsc future}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

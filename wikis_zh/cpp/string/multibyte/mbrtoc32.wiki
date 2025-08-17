@@ -1,0 +1,95 @@
+{{cpp/title|mbrtoc32}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cuchar|since=c++11|
+std::size_t mbrtoc32( char32_t* pc32,
+                      const char* s,
+                      std::size_t n,
+                      std::mbstate_t* ps );
+}}
+
+将窄多字节字符转换为其 UTF-32 字符表示。
+
+若 {{c|s}} 非空，则检查 {{c|s}} 指向字节开始的至多 {{c|n}} 字节多字节字符串，以判断补完下个多字节字符所需的字节数（含任意迁移序列）。若函数判定 {{tt|s}} 中下个多字节字符完整有效，则将它转换成对应 32 位宽字符存储于 {{c|*pc32}}（若 {{c|pc32}} 非空）。
+
+若 {{c|*s}} 中多字节字符对应一个多 {{tt|char32_t}} 序列（对 UTF-32 而言不可能），则在首次调用此函数后更新 {{c|*ps}} 使得下次调用 {{tt|mbrtoc32}} 时不必考虑 {{c|*s}} 也能写入附加的 {{c/core|char32_t}}。
+
+若 {{c|s}} 是空指针，则忽略 {{c|n}} 与 {{c|pc32}} 的值，该调用等价于 {{c|std::mbrtoc32(NULL, "", 1, ps)}}。
+
+若产生的宽字符是空字符，则转换状态 {{c|*ps}} 表示初始迁移状态。
+
+此函数使用的多字节编码由当前活跃的 C 本地环境指定。
+
+===参数===
+{{par begin}}
+{{par|pc32|指向将写入产生的 32 位宽字符的位置的指针}}
+{{par|s|指向用作输入的多字节字符串的指针}}
+{{par|n|{{c|s}} 中能检验的字节数上的限制}}
+{{par|ps|指向转译多字节字符串时所用的转换状态对象的指针}}
+{{par end}}
+
+===返回值===
+下列首个适用者：
+* 若从 {{c|s}} 转换的字符为空字符（并存储于 {{c|*pc32}} 中，若它非空）则为 {{c|0}}。
+* 成功从 {{c|s}} 转换的多字节字符的字节数 {{c|[1...n]}}。
+* 若现已将来自多 {{c/core|char32_t}} 字符的下个 {{c/core|char32_t}} 写入 {{c|*pc32}}，则为 {{c|-3}}。此情况下不从输入处理字节。
+* 若接下来 {{c|n}} 个字节组成不完整，但到此仍合法的多字节字符则为 {{c|-2}}。不写入内容到 {{c|*pc32}}。
+* 若出现编码错误则为 {{c|-1}}。不写入内容到 {{c|*pc32}}，存储 {{lc|EILSEQ}} 于 {{lc|errno}} 且 {{c|*ps}} 的值未指定。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;clocale&gt;
+#include &lt;cstring&gt;
+#include &lt;cuchar&gt;
+#include &lt;cwchar&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+
+    std::string str = "z\u00df\u6c34\U0001F34C"; // 即 u8"zß水🍌"
+
+    std::cout &lt;&lt; "处理 " &lt;&lt; str.size() &lt;&lt; " 个字节: [ " &lt;&lt; std::showbase;
+    for (unsigned char c : str)
+        std::cout &lt;&lt; std::hex &lt;&lt; +c &lt;&lt; ' ';
+    std::cout &lt;&lt; "]\n";
+
+    std::mbstate_t state{}; // 零初始化为初始状态
+    char32_t c32;
+    const char* ptr = str.c_str(), *end = str.c_str() + str.size() + 1;
+
+    while (std::size_t rc = std::mbrtoc32(&amp;c32, ptr, end - ptr, &amp;state))
+    {
+        std::cout &lt;&lt; "下一个 UTF-32 字符: " &lt;&lt; std::hex
+                  &lt;&lt; static_cast&lt;int&gt;(c32) &lt;&lt; " 来自 ";
+        assert(rc != (std::size_t)-3); // UTF-32 中没有代理对
+        if (rc == (std::size_t)-1)
+            break;
+        if (rc == (std::size_t)-2)
+            break;
+        std::cout &lt;&lt; std::dec &lt;&lt; rc &lt;&lt; " 个字符 [ ";
+        for (std::size_t n = 0; n &lt; rc; ++n)
+            std::cout &lt;&lt; std::hex &lt;&lt; +static_cast&lt;unsigned char&gt;(ptr[n]) &lt;&lt; ' ';
+        std::cout &lt;&lt; "]\n";
+        ptr += rc;
+    }
+}
+|output=
+处理 10 个字节: [ 0x7a 0xc3 0x9f 0xe6 0xb0 0xb4 0xf0 0x9f 0x8d 0x8c ]
+下一个 UTF-32 字符: 0x7a 来自 1 个字符 [ 0x7a ]
+下一个 UTF-32 字符: 0xdf 来自 2 个字符 [ 0xc3 0x9f ]
+下一个 UTF-32 字符: 0x6c34 来自3 个字符 [ 0xe6 0xb0 0xb4 ]
+下一个 UTF-32 字符: 0x1f34c 来自 4 个字符 [ 0xf0 0x9f 0x8d 0x8c ]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc c32rtomb}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in|mem=std::codecvt&lt;char32_t, char, std::mbstate_t&gt;}}
+{{dsc see c|c/string/multibyte/mbrtoc32}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

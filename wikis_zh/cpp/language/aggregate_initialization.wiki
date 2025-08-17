@@ -1,0 +1,443 @@
+{{title|聚合初始化}}
+{{cpp/language/initialization/navbar}}
+从初始化器列表初始化聚合体。{{rev inl|since=c++11|此为{{rlp|list initialization|列表初始化}}的一种形式。}}
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|T 对象}}{{nbspt}}{{ttb|1== {}} {{spar|实参1, 实参2, ...}} {{ttb|};}}}}
+{{sdsc|num=2|{{spar|T 对象}} {{ttb|{}} {{spar|实参1, 实参2, ...}} {{ttb|};}}|notes={{mark since c++11}}}}
+{{sdsc|num=3|{{spar|T 对象}}{{nbspt}}{{ttb|1== { .}}{{spar|指派符1}}{{nbspt}}{{ttb|1==}}{{nbspt}}{{spar|实参1}} {{ttb|, .}}{{spar|指派符2}} {{ttb|{}} {{spar|实参2}} {{ttb|}&lt;!-- --&gt;}} {{spar|...}} {{ttb|};}}|notes={{mark since c++20}}}}
+{{sdsc|num=4|{{spar|T 对象}} {{ttb|{ .}}{{spar|指派符1}}{{nbspt}}{{ttb|1==}}{{nbspt}}{{spar|实参1}} {{ttb|, .}}{{spar|指派符2}} {{ttb|{}} {{spar|实参2}} {{ttb|}&lt;!-- --&gt;}} {{spar|...}} {{ttb|};}}|notes={{mark since c++20}}}}
+{{sdsc end}}
+
+@1,2@ 用通常的初始化器列表初始化聚合体。
+@3,4@ 用{{ls|#指派初始化器}}初始化聚合体（仅支持聚合类）。
+
+===定义===
+====聚合体====
+''聚合体''{{sep}}是下列类型之一：
+* 数组类型
+* 符合以下条件的类类型：
+{{rrev multi
+|until1=c++11|rev1=
+:* 没有用户声明的构造函数
+|until2=c++20|rev2=
+:* 没有{{rlp|function#由用户提供的函数|用户提供}}、{{rlp|using declaration#继承构造函数|继承}}或 {{rlp|explicit}} 的构造函数
+|rev3=
+:* 没有用户声明或继承的构造函数
+}}
+:* 没有私有或受保护的直接非静态数据成员
+{{rrev multi
+|until1=c++17|rev1=
+:* 没有{{rlp|derived class|基类}}
+|rev2=
+:* 没有{{rlps|derived class#虚基类}}
+:* 没有{{rlp|derived class#私有继承|私有}}或{{rlp|derived class#受保护继承|受保护}}的直接基类
+}}
+:* 没有虚成员函数
+{{rrev|since=c++11|until=c++14|
+:* 没有{{rlp|data members#成员初始化|默认成员初始化器}}
+}}
+
+====元素====
+聚合体的''元素''{{sep}}有：
+* 对于数组，按下标顺序包含所有数组元素，或者，
+{{rev begin}}
+{{rev|until=c++17|
+* 对于类，按声明顺序包含所有不是匿名{{rlp|bit field|位域}}的非静态数据成员。
+}}
+{{rev|since=c++17|
+* 对于类，按声明顺序包含所有直接基类，然后按声明顺序包含所有不是匿名{{rlp|bit field|位域}}或{{rlp|union#匿名联合体|匿名联合体}}成员的非静态数据成员。
+}}
+{{rev end}}
+
+====附属关系====
+花括号包围的初始化器列表中的每个{{rlp|initialization|初始化器子句}}都属于要初始化的聚合体的某个元素或者它的某个子聚合体的某个元素。
+
+考虑由按下述方式初始化并可能会更改的两个序列，一个由初始化器组成，另一个由聚合体元素组成：
+
+* 对于每个初始化器，如果满足以下任意条件，那么它属于对应的聚合体元素 {{c|elem}}：
+:* {{c|elem}} 不是聚合体。
+:* 初始化器以 {{c|{}} 开始。
+:* 初始化器是表达式，并且存在可以将该表达式转换到 {{c|elem}} 的类型的{{rlp|implicit conversion|隐式转换序列}}。
+:* {{c|elem}} 是没有聚合体元素的聚合体。
+
+* 否则，聚合体元素 {{c|elem}} 是一个聚合体，并且该子聚合体会在聚合体元素序列中被替换为它的各个元素，然后以相同的初始化器序列和修改后的聚合体元素序列继续进行附属关系分析。也就是说，这套规则会递归地用于聚合体的各个子聚合体。
+
+在所有初始化器子句都被耗尽时，分析结束。如果还存在不属于任何聚合体元素或其子聚合体的初始化器子句，那么程序非良构。
+
+{{source|1=
+struct S1 { int a, b; };
+struct S2 { S1 s, t; };
+
+// “x” 的每个子聚合体都有一个附属的以 { 开始的初始化器子句
+S2 x[2] =
+{
+    // 属于 “x[0]”
+    {
+        {1, 2}, // 属于 “x[0].s”
+        {3, 4}  // 属于 “x[0].t”
+    },
+    // 属于 “x[1]”
+    {
+        {5, 6}, // 属于 “x[1].s”
+        {7, 8}  // 属于 “x[1].t”
+    }
+};
+
+// “x” 和 “y” 的值相同（见下文）
+S2 y[2] = {1, 2, 3, 4, 5, 6, 7, 8};
+
+// “y” 的附属关系分析流程：
+// 1. 初始化聚合体元素序列（x[0], x[1]）以及
+//    初始化器子句序列（1, 2, 3, 4, 5, 6, 7, 8）。
+// 2. 从每个序列的首元素开始，检查 1 是否属于 x[0]：
+//    · x[0] 是聚合体。
+//    · 1 不以 { 开始。
+//    · 1 是表达式，但不能隐式转换到 S2。
+//    · x[0] 有聚合体元素。
+// 3. 0 不属于 x[0]，因此 x[0] 会被替换成 x[0].s 和 x[0].t。
+//    聚合体元素序列变成了（x[0].s, x[0].t, x[1]）。
+// 4. 恢复附属关系检查，但是 1 还是不属于 x[0].s either。
+// 5. 聚合体元素序列现在变成了（x[0].s.a, x[0].s.b, x[0].t, x[1]）。
+// 6. 再次恢复附属关系检查：
+//    1 属于 x[0].s.a，而且 2 属于 x[0].s.b。
+// 7. 附属关系分析的剩余部分也按类似方式进行。
+
+char cv[4] = {'a', 's', 'd', 'f', 0}; // 错误：初始化器子句过多
+}}
+
+===初始化过程===
+====确定元素种类====
+聚合初始化的效果是：
+
+@1@ 按以下规则决定''显式初始化元素''：
+
+{{rrev|since=c++20|
+:* 如果初始化器列表是[[#指派初始化器|指派初始化器列表]]（聚合体此时只能具有类类型），每个指派符中的标识符必须指名该类的一个非静态数据成员，并且聚合体中显式初始化元素是这些成员或包含这些成员的元素。
+}}
+:* 否则，如果初始化器列表不为空，那么显式初始化元素是聚合体中的前 n 个元素，其中 n 是初始化器列表中的元素数量。
+:* 否则初始化器列表必须为空，并且不存在显式初始化元素。
+
+:如果聚合体是联合体并且显式初始化元素不止一个，那么程序非良构：
+
+{{source|1=
+union u { int a; const char* b; };
+
+u a = {1};                   // OK：显式初始化成员 a
+u b = {0, "asdf"};           // 错误：显式初始化两个成员
+u c = {"asdf"};              // 错误：不能以 "asdf" 初始化 int
+
+// C++20 指派初始化器列表
+u d = {.b = "asdf"};         // OK：可以显式初始化非开头元素
+u e = {.a = 1, .b = "asdf"}; // 错误：显式初始化两个成员
+}}
+
+@2@ {{rev inl|since=c++11|按元素顺序}}初始化聚合体中的每个元素。{{rev inl|since=c++11|也就是说，给定某个元素，它关联的所有的值计算和副作用都会{{rlp|eval order|按顺序早于}}按顺序在它之后的所有元素关联的所有的值计算和副作用。}}
+
+====显式初始化元素====
+对于每个显式初始化元素：
+{{rrev|since=c++20|
+* 如果该元素是匿名联合体成员，并且初始化器列表是[[#指派初始化器|指派初始化器列表]]，那么该元素会被指派初始化器列表 {{c|{D}&lt;!-- --&gt;}} 初始化，其中 {{tt|D}} 是指名该匿名联合体成员的成员的指派初始化器子句。只能有一个这样的指派初始化器子句。
+
+{{source|1=
+struct C
+{
+    union
+    {
+        int a;
+        const char* p;
+    };
+    
+    int x;
+} c = {.a = 1, .x = 3}; // 以 1 初始化 c.a 并且以 3 初始化 c.x
+}}
+
+* 否则，如果初始化器列表是指派初始化器列表，那么元素会以对应的指派初始化器子句的初始化器初始化。
+:* 如果该初始化器具有{{rlp|initialization|语法 {{v|1}}}}，并且需要通过窄化转换来转换语法中的表达式，那么程序非良构。
+}}
+
+
+{{rev begin}}
+{{rev|until=c++20|
+* 初始化器列表是花括号包围的初始化器列表：
+}}
+{{rev|since=c++20|
+* 否则，初始化器列表是非指派的花括号包围的初始化器列表：
+}}
+{{rev end}}
+
+:* 如果该元素有附属的初始化器子句，那么它会以该初始化器子句{{rlp|copy initialization|复制初始化}}。
+:* 否则，该元素会以一个花括号包围的初始化器列表复制初始化，该初始化器列表会按出现顺序包含所有属于该元素的任何子对象的初始化器子句。
+
+{{source|1=
+struct A
+{
+    int x;
+    
+    struct B
+    {
+        int i;
+        int j;
+    } b;
+} a = {1, {2, 3}&lt;!-- --&gt;}; // 以 1 初始化 a.x，以 2 初始化 a.b.i，以 3 初始化 a.b.j
+
+struct base1 { int b1, b2 = 42; };
+
+struct base2
+{
+    base2()
+    {
+        b3 = 42;
+    }
+    
+    int b3;
+};
+
+struct derived : base1, base2
+{
+    int d;
+};
+
+derived d1{&lt;!----&gt;{1, 2}, {}, 4}; // 以  1 初始化 d1.b1，以 2 初始化 d1.b2，
+                           //             以 42 初始化 d1.b3，以 4 初始化 d1.d
+derived d2{&lt;!----&gt;{}, {}, 4};     // 以  0 初始化 d2.b1，以 42 初始化 d2.b2，
+                           //             以 42 初始化 d2.b3，以  4 初始化 d2.d
+}}
+
+====隐式初始化元素====
+对于不是联合体的聚合体，每个没有显式初始化的元素会按以下规则初始化：
+{{rrev|since=c++11|
+* 如果该元素有{{rlp|data members#成员初始化|默认成员初始化器}}，那么以该初始化器初始化该元素。
+}}
+* 否则，如果该元素不是引用，那么以空初始化器列表{{rlp|copy initialization|复制初始化}}该元素。
+* 否则程序非良构。
+
+{{source|1=
+struct S
+{
+    int a;
+    const char* b;
+    int c;
+    int d = b[a];
+};
+
+// 以 1 初始化 ss.a，
+// 以 "asdf" 初始化 ss.b，
+// 以表达式 int{} 的值（0）初始化 ss.c，
+// 以 ss.b[ss.a] 的值（'s'）初始化 ss.d
+S ss = {1, "asdf"};
+}}
+
+
+如果聚合体为联合体且该初始化器列表为空，那么：
+{{rrev|since=c++11|
+* 如果有任何可变成员具有默认成员初始化器，那么该成员以它的默认成员初始化器初始化。
+}}
+* 否则，联合体的首个成员（如果有）以空初始化器列表进行复制初始化。
+
+===未知边界数组===
+以花括号包围的初始化器列表初始化的未知边界数组的元素个数是该数组显式初始化元素的个数。未知边界数组不能以 {{c|{}&lt;!----&gt;}} 初始化。
+
+{{source|1=
+int x[] = {1, 3, 5}; // x 有 3 个元素
+
+struct Y { int i, j, k; };
+
+Y y[] = {1, 2, 3, 4, 5, 6}; // y 只有 2 个元素：
+                            // 1、2 和 3 属于 y[0]，
+                            // 4、5 和 6 属于 y[1]
+
+int z[] = {} // 错误：不能声明没有元素的数组
+}}
+
+
+{{rrev|since=c++20|
+===指派初始化器===
+语法形式 {{v|3,4}} 被称为指派初始化器：每个 {{spar|指派符}} 必须指名 T 的一个直接非静态数据成员，而表达式中所用的所有 {{spar|指派符}} 必须按照与 T 的数据成员相同的顺序出现。
+{{source|1=
+struct A { int x; int y; int z; };
+
+A a{.y = 2, .x = 1}; // 错误：指派符的顺序不匹配声明顺序
+A b{.x = 1, .z = 2}; // OK：b.y 被初始化为 0
+}}
+
+指派初始化器所指名的每个直接非静态数据成员，从它的指派符后随的对应花括号或等号初始化器初始化。禁止窄化转换。
+
+指派初始化器可以用来将{{rlp|union|联合体}}初始化为它的首个成员之外的状态。只可以为一个联合体提供一个初始化器。
+{{source|1=
+union u { int a; const char* b; };
+
+u f = {.b = "asdf"};         // OK：联合体的活跃成员是 b
+u g = {.a = 1, .b = "asdf"}; // 错误：只可提供一个初始化器
+}}
+
+对于非联合体的聚合体中未提供指派初始化器的元素，按上述针对初始化器子句的数量少于成员数量时的规则进行初始化（如果提供默认成员初始化器就使用它，否则用空列表进行初始化）：
+{{source|1=
+struct A
+{
+    string str;
+    int n = 42;
+    int m = -1;
+};
+
+A{.m = 21}  // 以 {} 初始化 str，这样会调用默认构造函数
+            // 然后以 = 42 初始化 n
+            // 然后以 = 21 初始化 m
+}}
+
+如果以指派初始化器子句初始化的聚合体拥有一个匿名联合体成员，那么对应的指派初始化器必须指名该匿名联合体的其中一个成员。
+
+注意：乱序的指派初始化、嵌套的指派初始化、指派初始化器与常规初始化器的混合，以及数组的指派初始化在 [[c/language/struct initialization|C 编程语言]]中受支持，但在 C++ 不允许。
+{{source|1=
+struct A { int x, y; };
+struct B { struct A a; };
+
+struct A a = {.y = 1, .x = 2}; // C 中合法，C++ 中非法（乱序）
+int arr[3] = {[1] = 5};        // C 中合法，C++ 中非法（数组）
+struct B b = {.a.x = 0};       // C 中合法，C++ 中非法（嵌套）
+struct A a = {.x = 1, 2};      // C 中合法，C++ 中非法（混合）
+}}
+}}
+
+===字符数组===
+普通字符类型（{{c/core|char}}、{{c/core|signed char}}、{{c/core|unsigned char}}）{{rev inl|since=c++20|、{{c/core|char8_t}}}}{{rev inl|since=c++11|、{{c/core|char16_t}}、{{c/core|char32_t}}}} 或 {{c/core|wchar_t}} 的数组能分别从普通{{rlp|string literal|字符串字面量}}{{rev inl|since=c++20|、UTF-8 字符串字面量}}{{rev inl|since=c++11|、UTF-16 字符串字面量、UTF-32 字符串字面量}}或宽字符串字面量初始化，可以以花括号环绕。{{rev inl|since=c++20&lt;!-- P2513R3 --&gt;|另外，{{c/core|char}} 或 {{c/core|unsigned char}} 的数组可以由 UTF-8 字符串字面量初始化，可用花括号环绕字符串字面量。}}字符串字面量的相继字符（包含隐含的空终止字符）初始化各数组元素。如果指定了数组大小且大于字符串字面量中的字符数，那么剩余字符会被零初始化。
+
+{{source|1=
+char a[] = "abc";
+// 等价于 char a[4] = {'a', 'b', 'c', '\0'};
+
+//  unsigned char b[3] = "abc"; // 错误：初始化器字符串太长
+unsigned char b[5]{"abc"};
+// 等价于 unsigned char b[5] = {'a', 'b', 'c', '\0', '\0'};
+
+wchar_t c[] = {L"кошка"}; // 花括号可以省略
+// 等价于 wchar_t c[6] = {L'к', L'о', L'ш', L'к', L'а', L'\0'};
+}}
+
+===注解===
+聚合类或数组可以包含非聚合的{{rev inl|since=c++17|公开基类、}}成员或元素，它们以上述方式初始化（例如从对应的初始化器子句复制初始化）。
+
+C++11 前，聚合初始化中曾允许窄化转换，但此后不再被允许。
+
+C++11 前，由于语法限制，聚合初始化只能用于变量定义，而不能用于{{rlp|constructor|构造函数初始化列表}}、 {{rlp|new|new 表达式}}或临时对象创建。
+
+C 中，长度比字符串字面量的大小少一的字符数组可以从字符串字面量初始化；产生的数组是非空终止的。这在 C++ 中不允许。
+{{ftm begin|core=1|sort=1}}
+{{ftm|__cpp_aggregate_bases|value=201603L|std=C++17|带有基类的聚合类}}
+{{ftm|__cpp_aggregate_nsdmi|value=201304L|std=C++14|带有默认成员初始化器的聚合类}}
+{{ftm|__cpp_aggregate_paren_init|value=201902L|std=C++20|形式为{{rlp|direct initialization|直接初始化}}的聚合初始化}}
+{{ftm|__cpp_char8_t|value=202207L|std=C++23|dr=20|{{c/core|char8_t}} 兼容性与可移植性修正（允许从 {{rlp|string literal|UTF-8 字符串字面量}}[[#字符数组|初始化 ({{c/core|unsigned char}} 的数组]]）}}
+{{ftm|__cpp_designated_initializers|value=201707L|std=C++20|{{ls|#指派初始化器}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstdio&gt;
+#include &lt;string&gt;
+
+struct S
+{
+    int x;
+    
+    struct Foo
+    {
+        int i;
+        int j;
+        int a[3];
+    } b;
+};
+
+int main()
+{
+    S s1 = {1, {2, 3, {4, 5, 6}&lt;!----&gt;}&lt;!----&gt;};
+    S s2 = {1, 2, 3, 4, 5, 6};  // 相同，但有花括号消除
+    S s3{1, {2, 3, {4, 5, 6}&lt;!----&gt;}&lt;!----&gt;}; // 相同，使用直接列表初始化语法
+    S s4{1, 2, 3, 4, 5, 6}; // CWG 1270 前错误：花括号消除只能与等号一起使用
+
+    int ar[] = {1, 2, 3}; // ar 是 int[3]
+//  char cr[3] = {'a', 'b', 'c', 'd'}; // 初始化器子句过多
+    char cr[3] = {'a'}; // 数组初始化为 {'a', '\0', '\0'}
+
+    int ar2d1[2][2] = {{1, 2}, {3, 4}}; // 完全花括号的 2D 数组： {1, 2}
+                                        //                      {3, 4}
+    int ar2d2[2][2] = {1, 2, 3, 4}; // 花括号消除： {1, 2}
+                                    //             {3, 4}
+    int ar2d3[2][2] = {{1}, {2}};   // 仅第一列： {1, 0}
+                                    //           {2, 0}
+
+    std::array&lt;int, 3&gt; std_ar2{&lt;!----&gt;{1, 2, 3}&lt;!----&gt;};  // std::array 是聚合体
+    std::array&lt;int, 3&gt; std_ar1 = {1, 2, 3}; // 可以消除花括号
+
+//  int ai[] = {1, 2.0}; // 从 double 到 int 的窄化转换：
+                         // C++11 中错误，C++03 中 OK
+
+    std::string ars[] = {std::string("one"), // 复制初始化
+                         "two",              // 转换，然后复制初始化
+                         {'t', 'h', 'r', 'e', 'e'}&lt;!----&gt;}; // 列表初始化
+    
+    union U
+    {
+        int a;
+        const char* b;
+    };
+    U u1 = {1};         // OK，联合体的首个成员
+//  U u2 = {0, "asdf"}; // 错误：用过多的初始化器初始化联合体
+//  U u3 = {"asdf"};    // 错误：到 int 的转换无效
+
+    [](...) { std::puts("未使用变量的垃圾收集——完成。"); }
+    (
+        s1, s2, s3, s4, ar, cr, ar2d1, ar2d2, ar2d3, std_ar2, std_ar1, u1
+    );
+}
+
+// 聚合体
+struct base1 { int b1, b2 = 42; };
+
+// 非聚合体
+struct base2
+{
+    base2() : b3(42) {}
+    
+    int b3;
+};
+
+// C++17 里是聚合体
+struct derived : base1, base2 { int d; };
+
+derived d1{&lt;!----&gt;{1, 2}, {}, 4}; // d1.b1 = 1，d1.b2 = 2 ，d1.b3 = 42，d1.d = 4
+derived d2{&lt;!----&gt;{}, {}, 4};     // d2.b1 = 0，d2.b2 = 42，d2.b3 = 42，d2.d = 4
+|output=
+未使用变量的垃圾收集——完成。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=413|std=C++98|before=聚合初始化会初始化匿名位域|after=忽略它们}}
+{{dr list item|wg=cwg|dr=737|std=C++98|before=当字符数组被字符数量少于数组大小的字符串初始化时，&lt;br&gt;尾后 {{c|'\0'}} 后面的数组元素不会被初始化|after=这些元素会被零初始化}}
+{{dr list item|wg=cwg|dr=1270|std=C++11|before=只能在复制列表初始化中使用花括号消除|after=在也可以在其他地方使用}}
+&lt;!-- CWG 1355 号问题已通过修改“用户提供（的函数）”的定义的方式解决，参考 cpp/language/function 页面的该条目 --&gt;
+{{dr list item|wg=cwg|dr=1518|std=C++11|before=声明了 explicit 默认构造函数或有继承构造函数的类可以是聚合体|after=它不是聚合体}}
+{{dr list item|wg=cwg|dr=1622|std=C++98|before=不能以 {{c|{}&lt;!----&gt;}} 初始化联合体|after=可以这样初始化}}
+{{dr list item|wg=cwg|dr=2149|paper=P3106R1|std=C++98|before=不明确推导数组大小时是否适用花括号省略|after=适用}}
+{{dr list item|wg=cwg|dr=2272|std=C++98|before=会以空初始化列表复制初始化没有显式初始化的非静态引用成员|after=此时程序非良构}}
+{{dr list item|wg=cwg|dr=2610|std=C++17|before=聚合体类型不能有私有或受保护的间接基类|after=可以有}}
+{{dr list item|wg=cwg|dr=2619|std=C++20|before=从指派初始化器进行的初始化的种类不明确|after=取决于初始化器的种类}}
+{{dr list item|paper=P2513R3|std=C++20|before=UTF-8 字符串字面量不能初始化 {{c/core|char}} 或&lt;br&gt;{{c/core|unsigned char}} 数组，这与 C 或 C++17 不兼容|after=这种初始化合法}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+* {{rlp|initialization|初始化}}
+** {{rlp|constant initialization|常量初始化}}
+** {{rlp|list initialization|列表初始化}}
+** {{rlp|reference initialization|引用初始化}}
+** {{rlp|value initialization|值初始化}}
+** {{rlp|zero initialization|零初始化}}
+{{dsc begin}}
+{{dsc see c|c/language/struct initialization|结构体与联合体初始化|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

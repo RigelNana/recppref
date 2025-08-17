@@ -1,0 +1,155 @@
+{{cpp/container/vector/title|reserve}}
+{{cpp/container/vector/navbar}}
+{{ddcl|notes={{mark constexpr since c++20}}|
+void reserve( size_type new_cap );
+}}
+
+增加 {{tt|vector}} 的容量（即 {{tt|vector}} 在不重新分配存储的情况下能最多能持有的元素的数量）到大于或等于 {{c|new_cap}} 的值。如果 {{c|new_cap}} 大于当前的 {{lc|capacity()}}，那么就会分配新存储，否则该方法不做任何事。
+
+{{tt|reserve()}} 不会更改 {{tt|vector}} 的大小。
+
+{{cpp/container/note iterator invalidation|vector|reserve}}
+
+在调用 {{tt|reserve()}} 后，插入只会在它将导致 {{tt|vector}} 的大小大于 {{lc|capacity()}} 的值时触发重新分配。
+
+===参数===
+{{par begin}}
+{{par|new_cap|{{tt|vector}} 的新容量}}
+{{par hreq}}
+{{par req insertable|T|MoveInsertable|notes={{mark since c++11}}}}
+{{par end}}
+
+===返回值===
+（无）
+
+===异常===
+* 在 {{c|new_cap &gt; max_size()}} 时抛出 {{lc|std::length_error}}。
+* 任何 {{tt|Allocator::allocate()}} 会抛出的异常（典型为 {{lc|std::bad_alloc}}）。
+
+如果抛出异常，那么此函数无效果（[[cpp/language/exceptions|强异常保证]]）。
+{{rrev|since=c++11|
+如果 {{tt|T}} 的移动构造函数不是 {{c/core|noexcept}} 的且 {{tt|T}} 非{{named req|CopyInsertable}}到 {{c|*this}}，那么 {{tt|vector}} 将使用移动构造函数。如果它抛出异常，那么摒弃保证，且效果未指定。
+}}
+
+===复杂度===
+最多与容器的 {{lc|size()}} 成线性。
+
+===注解===
+正确使用 {{tt|reserve()}} 能避免不必要的分配，但不适当地使用 {{tt|reserve()}}（例如在每次 {{lc|push_back()}} 调用前调用它）可能会实际增加重分配的数量（通过导致容量线性而非指数增长）并导致计算复杂度增加，性能下降。例如，按引用接受任意 {{tt|vector}} 并后附元素的函数通常''不''应在 {{tt|vector}} 上调用 {{tt|reserve()}}，因为它不知道该 {{tt|vector}} 的使用特征。
+
+插入范围时，{{lc|insert()}} 的范围版本通常更合适，因为它保持正确的容量增长行为，而与 {{tt|reserve()}} 后随一系列 {{lc|push_back()}} 不同。
+
+不能用 {{tt|reserve()}} 减少容器容量。为该目的提供的是 {{lc|shrink_to_fit()}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;new&gt;
+#include &lt;vector&gt;
+
+// 带调试输出的最小 C++11 分配器
+template&lt;class Tp&gt;
+struct NAlloc
+{
+    typedef Tp value_type;
+    
+    NAlloc() = default;
+    template&lt;class T&gt;
+    NAlloc(const NAlloc&lt;T&gt;&amp;) {}
+    
+    Tp* allocate(std::size_t n)
+    {
+        n *= sizeof(Tp);
+        Tp* p = static_cast&lt;Tp*&gt;(::operator new(n));
+        std::cout &lt;&lt; "在 " &lt;&lt; p &lt;&lt; " 分配 " &lt;&lt; n &lt;&lt; " 个字节\n";
+        return p;
+    }
+    
+    void deallocate(Tp* p, std::size_t n)
+    {
+        std::cout &lt;&lt; "在 " &lt;&lt; p &lt;&lt; "解分配 " &lt;&lt; n * sizeof *p &lt;&lt; " 个字节\n";
+        ::operator delete(p);
+    }
+};
+
+template&lt;class T, class U&gt;
+bool operator==(const NAlloc&lt;T&gt;&amp;, const NAlloc&lt;U&gt;&amp;) { return true; }
+
+template&lt;class T, class U&gt;
+bool operator!=(const NAlloc&lt;T&gt;&amp;, const NAlloc&lt;U&gt;&amp;) { return false; }
+
+int main()
+{
+    constexpr int max_elements = 32;
+    
+    std::cout &lt;&lt; "使用 reserve：\n";
+    {
+        std::vector&lt;int, NAlloc&lt;int&gt;&gt; v1;
+        v1.reserve(max_elements); // 预留至少 max_elements * sizeof(int) 个字节
+
+        for (int n = 0; n &lt; max_elements; ++n)
+            v1.push_back(n);
+    }
+    
+    std::cout &lt;&lt; "不使用 reserve：\n";
+    {
+        std::vector&lt;int, NAlloc&lt;int&gt;&gt; v1;
+        
+        for (int n = 0; n &lt; max_elements; ++n)
+        {
+            if (v1.size() == v1.capacity())
+                std::cout &lt;&lt; "size() == capacity() == " &lt;&lt; v1.size() &lt;&lt; '\n';
+            v1.push_back(n);
+        }
+    }
+}
+|p=true
+|output=
+使用 reserve：
+在 0xa6f840 分配 128 个字节
+在 0xa6f840 解分配 128 个字节
+
+不使用 reserve：
+size() == capacity() == 0
+在 0xa6f840 分配 4 个字节
+
+size() == capacity() == 1
+在 0xa6f860 分配 8 个字节
+在 0xa6f840 解分配 4 个字节
+
+size() == capacity() == 2
+在 0xa6f840 分配 16 个字节
+在 0xa6f860 解分配 8 个字节
+
+size() == capacity() == 4
+在 0xa6f880 分配 32 个字节
+在 0xa6f840 解分配 16 个字节
+
+size() == capacity() == 8
+在 0xa6f8b0 分配 64 个字节
+在 0xa6f880 解分配 32 个字节
+
+size() == capacity() == 16
+在 0xa6f900 分配 128 个字节
+在 0xa6f8b0 解分配 64 个字节
+
+在 0xa6f900 解分配 128 个字节
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=329|std=C++98|before=插入操作使 {{tt|vector}} 的大小超过向上一次&lt;br&gt;{{tt|reserve()}} 调用提供的大小时可能会重分配|after=只有在大小超过&lt;br&gt;{{lc|capacity()}} 时才会重分配}}
+{{dr list item|wg=lwg|dr=2033|std=C++11|before={{tt|T}} 不需要{{named req|MoveInsertable}}|after=需要}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc capacity|vector}}
+{{dsc inc|cpp/container/dsc max_size|vector}}
+{{dsc inc|cpp/container/dsc resize|vector}}
+{{dsc inc|cpp/container/dsc shrink_to_fit|vector}}
+{{dsc end}}
+
+{{langlinks|cs|de|en|es|fr|it|ja|pt|ru}}

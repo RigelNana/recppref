@@ -1,0 +1,326 @@
+{{title|语句}}
+{{cpp/language/statements/navbar}}
+
+''语句''{{sep}}是依序执行的 C++ 程序片段。任何函数体都是语句的序列。例如：
+
+{{source|1=
+int main()
+{
+    int n = 1;                        // 声明语句
+    n = n + 1;                        // 表达式语句
+    std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; '\n'; // 表达式语句
+    return 0;                         // 返回语句
+}  
+}}
+
+C++ 包含下列类型的语句：
+* {{ls|#带标号语句}}
+* {{ls|#表达式语句}}
+* {{ls|#复合语句}}
+* {{ls|#选择语句}}
+* {{ls|#循环语句}}
+* {{ls|#跳转语句}}
+{{rrev|since=c++26|
+* {{ls|#断言语句}}
+}}
+* {{ls|#声明语句}}
+* [[#try 块|{{tt|try}} 块]]
+{{rrev|since=tm_ts|
+* {{ls|#atomic 与 synchronized 块}}
+}}
+
+===带标号语句===
+带标号语句为控制流而使语句带上标号。
+
+{{sdsc begin}}
+{{sdsc|
+{{spar|标号 语句}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|标号}}|应用到语句的标号（定义见下文）}}
+{{par|{{spar|语句}}|标号应用到的语句，它自己可以是带标号语句，从而允许语句带有多个标号}}
+{{par end}}
+
+====标号====
+{{spar sep|标号}}定义如下：
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{spar|标识符}} {{ttb|:}}
+}}
+{{sdsc|num=2|
+{{spar optional|属性}} {{ttb|case}} {{spar|常量表达式}} {{ttb|:}}
+}}
+{{sdsc|num=3|
+{{spar optional|属性}} {{ttb|default:}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|goto}} 的目标
+@2@ {{rlp|switch}} 语句中的 {{c/core|case}} 标号
+@3@ {{rlp|switch}} 语句中的 {{c/core|default}} 标号
+
+{{rrev|since=c++11|
+{{rlp|attributes|属性}}序列{{spar sep|属性}}可以紧接标号之前出现（这种情况下它应用到标号），或紧跟在语句自身之后出现，这种情况下它应用到整条语句。
+}}
+
+声明于函数内并带标识符的标号（且仅有标号）在该函数内、所有内嵌块、其自身声明的前后每处都在作用域内。
+
+一个函数中的两个标号不得拥有同一标识符。
+
+{{rrev|since=c++23|
+标号除了可以应用到语句上以外，还可以在[[#复合语句|复合语句]]中的任意地方使用。
+}}
+
+{{rlp|unqualified lookup|无限定查找}}找不到标号：标号能与程序中任何其他实体拥有相同的名字。
+
+{{source|
+void f()
+{
+    {
+        goto label; // label 在作用域内，尽管它在后面才声明
+        label:      // 从 C++23 开始，标号可以在块的末尾单独出现
+    }
+    goto label; // 标号忽略块作用域
+}
+
+void g()
+{
+    goto label; // 错误：label 不在 g() 的作用域内
+}
+}}
+
+====有控制流限制的语句====
+以下语句是''有控制流限制的语句''：
+* {{rlp|try|{{c/core|try}} 块}}的{{spar|复合语句}}。
+* {{rlp|catch|处理块}}的{{spar|复合语句}}。
+{{rev begin}}
+{{rev|since=c++17|
+* {{rlp|if#constexpr if|constexpr {{c/core|if}} 语句}}的所有[[#子语句|子语句]]。
+}}
+{{rev|since=c++23|
+* {{rlp|if#consteval if|consteval {{c/core|if}} 语句}}的所有子语句。
+}}
+{{rev end}}
+
+对于每条有控制流限制的语句 {{tt|S}}：
+* 在 {{tt|S}} 中声明的所有 {{c/core|goto}} 目标标号只能由 {{tt|S}} 的语句指涉。
+* {{tt|S}} 中出现的每个 {{c/core|case}} 或 {{c/core|default}} 标号都只能关联到 {{tt|S}} 中的 {{rlp|switch|{{c/core|switch}} 语句}}。
+
+===表达式语句===
+表达式后跟一个分号是一条语句。
+
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|属性}} {{spar optional|表达式}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}}任意数量{{rlp|attributes|属性}}的序列}}
+{{par|{{spar|表达式}}|一个{{rlp|expressions|表达式}}}}
+{{par end}}
+
+典型 C++ 程序的大部分语句都是表达式语句，例如赋值和函数调用。
+
+没有表达式的表达式语句被称作''空语句''。它通常用来为 {{rlp|for}} 或 {{rlp|while}} 循环提供空循环体。{{rev inl|until=c++23|它也可用于在复合语句的末尾引入标号。}}
+
+===复合语句===
+复合语句或（代码）块是花括号环绕的语句序列。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|{}} {{spar optional|语句...}} {{spar optional|标号...}}{{mark since c++23}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc end}}
+
+当需要一条语句，但要按顺序执行多条语句时（例如在 {{rlp|if}} 语句或循环中），可以使用复合语句：
+
+{{source|1=
+if (x &gt; 5)          // if 语句的开始
+{                   // 块的开始
+    int n = 1;      // 声明语句
+    std::cout &lt;&lt; n; // 表达式语句
+}                   // 块的结束，if 语句的结束
+}}
+
+每个复合语句都引入其自身的块{{rlp|scope|作用域}}；在块中声明的变量在闭花括号处以逆序销毁：
+
+{{source|
+int main()
+{ // 外层块的开始
+    {                                // 内层块的开始
+        std::ofstream f("test.txt"); // 声明语句
+        f &lt;&lt; "abc\n";                // 表达式语句
+    }                                // 内层块结束，冲洗并关闭 f
+    std::ifstream f("test.txt"); // 声明语句
+    std::string str;             // 声明语句
+    f &gt;&gt; str;                    // 表达式语句
+} // 外层块的结束，销毁 str，关闭 f
+}}
+
+{{rrev|since=c++23|
+在复合语句末尾的[[#带标号语句|标号]]被视为如同其后随一个空语句。
+}}
+
+===选择语句===
+选择语句在数个控制流中选择一个。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|if constexpr}}{{mark optional}} {{ttb|(}} {{spar optional|初始化语句}} {{spar|条件}} {{ttb|)}} {{spar|true分支语句}}
+}}
+{{sdsc|num=2|
+{{spar optional|属性}} {{ttb|if constexpr}}{{mark optional}} {{ttb|(}} {{spar optional|初始化语句}} {{spar|条件}} {{ttb|)}} {{spar|语句}} {{ttb|else}} {{spar|语句}}
+}}
+{{sdsc|num=3|
+{{spar optional|属性}} {{ttb|switch (}} {{spar optional|初始化语句}} {{spar|条件}} {{ttb|)}} {{spar|语句}}
+}}
+{{sdsc|num=4|notes={{mark since c++23}}|
+{{spar optional|属性}} {{ttb|if !}}{{mark optional}} {{ttb|consteval}} {{spar|复合语句}}
+}}
+{{sdsc|num=5|notes={{mark since c++23}}|
+{{spar optional|属性}} {{ttb|if !}}{{mark optional}} {{ttb|consteval}} {{spar|复合语句}} {{ttb|else}} {{spar|语句}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|if}} 语句
+@2@ 带 else 子句的 {{rlp|if}} 语句
+@3@ {{rlp|switch}} 语句
+@4@ {{rlp|if#consteval if|consteval if}} 语句
+@5@ 带 else 子句的 {{rlp|if#consteval if|consteval if}} 语句
+
+===循环语句===
+循环语句重复执行一些代码。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|while (}} {{spar|条件}} {{ttb|)}} {{spar|语句}}
+}}
+{{sdsc|num=2|
+{{spar optional|属性}} {{ttb|do}} {{spar|语句}} {{ttb|while (}} {{spar|表达式}} {{ttb|);}} 
+}}
+{{sdsc|num=3|
+{{spar optional|属性}} {{ttb|for (}} {{spar optional|初始化语句 条件}} {{ttb|;}} {{spar optional|表达式}} {{ttb|)}} {{spar|语句}}
+}}
+{{sdsc|num=4|notes={{mark since c++11}}|
+{{spar optional|属性}} {{ttb|for (}} {{spar optional|初始化语句}}{{mark since c++20}} {{spar|for范围声明}} {{ttb|:}} {{spar|for范围初始化器}} {{ttb|)}} {{spar|语句}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|while}} 循环
+@2@ {{rlp|do|do-while}} 循环
+@3@ {{rlp|for|for}} 循环
+@4@ {{rlp|range-for|范围 for}} 循环
+
+===跳转语句===
+跳转语句无条件地转移控制流。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|break;}}
+}}
+{{sdsc|num=2|
+{{spar optional|属性}} {{ttb|continue;}}
+}}
+{{sdsc|num=3|
+{{spar optional|属性}} {{ttb|return}} {{spar optional|表达式}} {{ttb|;}}
+}}
+{{sdsc|num=4|notes={{mark since c++11}}|
+{{spar optional|属性}} {{ttb|return}} {{spar|花括号初始化器列表}} {{ttb|;}}
+}}
+{{sdsc|num=5|
+{{spar optional|属性}} {{ttb|goto}} {{spar|标识符}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+@1@ {{rlp|break}} 语句
+@2@ {{rlp|continue}} 语句
+@3@ 可带表达式的 {{rlp|return}} 语句
+@4@ 使用{{rlp|list initialization|列表初始化}}的 {{rlp|return}} 语句
+@5@ {{rlp|goto}} 语句
+
+注意：对于所有跳转语句，转移出循环、出块或回到被初始化且具有自动存储期的变量之前，会牵涉到对“转移发起点在作用域中而目标点不在，且具有自动存储期”的对象的销毁。如果有多个对象被初始化，那么销毁顺序与初始化顺序相反。
+
+{{rrev|since=c++26|
+===断言语句===
+契约断言。
+
+{{sdsc begin}}
+{{sdsc|{{ttb|contract_assert}} {{spar optional|属性}} {{ttb|(}} {{spar|谓词}} {{ttb|)}} {{ttb|;}}}}
+{{sdsc end}}
+
+@1@ [[cpp/language/contract_assert|{{tt|contract_assert}}]] 语句。
+}}
+
+===声明语句===
+声明语句在块中引入一个或多个标识符。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|块声明}}
+}}
+{{sdsc end}}
+
+@1@ 细节见{{rlp|declarations|声明}}及{{rlp|initialization|初始化}}。
+
+==={{c/core|try}} 块===
+{{c/core|try}} 块提供当执行其他语句时捕获从其中抛出的异常的能力。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|try}} {{spar|复合语句}} {{spar|处理块序列}}
+}}
+{{sdsc end}}
+
+@1@ 细节见 {{rlp|try|{{c/core|try}} 块}}。
+
+
+{{rev begin}}
+{{rev|since=tm_ts|
+===atomic 与 synchronized 块===
+atomic 与 synchronized 块用来实现{{rlp|transactional memory|事务性内存}}。
+
+{{sdsc begin}}
+{{sdsc|num=1|notes={{mark since tm ts}}|
+{{ttb|synchronized}} {{spar|复合语句}}
+}}
+{{sdsc|num=2|notes={{mark since tm ts}}|
+{{ttb|atomic_noexcept}} {{spar|复合语句}}
+}}
+{{sdsc|num=3|notes={{mark since tm ts}}|
+{{ttb|atomic_cancel}} {{spar|复合语句}}
+}}
+{{sdsc|num=4|notes={{mark since tm ts}}|
+{{ttb|atomic_commit}} {{spar|复合语句}}
+}}
+{{sdsc end}}
+@1@ {{rlp|transactional memory#synchronized 块|synchronized 块}}，与所有 synchronized 块在一个全序中执行
+@2@ 在发生异常时中止的 {{rlps|transactional memory#atomic 块}}
+@3@ 在发生异常时回滚的 {{rlps|transactional memory#atomic 块}}
+@4@ 在发生异常时提交的 {{rlps|transactional memory#atomic 块}}
+}}
+{{rev end}}
+
+===子语句===&lt;!-- CWG 2309 --&gt;
+某个语句的''子语句''{{sep}}是以下之一：
+* 对于[[#带标号语句|带标号语句]]，子语句是它的{{spar|语句}}。
+* 对于[[#复合语句|复合语句]]，子语句是它的{{spar sep|语句...}}中的任意语句。
+* 对于[[#选择语句|选择语句]]，子语句是它的任意{{spar sep|语句}}{{rev inl|since=c++23|或{{spar sep|复合语句}}}}。
+* 对于[[#循环语句|循环语句]]，子语句是它的{{spar|语句}}。
+
+在满足以下任意条件时，语句 {{c|S1}} ''包围''{{sep}}语句 {{c|S2}}：
+* {{c|S2}} 是 {{c|S1}} 的子语句。
+* {{c|S1}} 是选择语句或循环语句，并且 {{c|S2}} 是 {{c|S1}} 的 {{spar|初始化语句}}。
+* {{c|S1}} 是 {{rlp|try|{{c/core|try}} 块}}，并且 {{c|S2}} 要么是它的{{spar|复合语句}}，要么是它的{{spar sep|处理块序列}}中的任意{{rlp|catch|处理块}}的{{spar|复合语句}}。
+* {{c|S1}} 包围了语句 {{c|S3}}，并且 {{c|S3}} 也包围了 {{c|S2}}。
+
+如果语句 {{c|S2}} 包围了语句 {{c|S1}}，那么 {{c|S1}} 被 {{c|S2}} ''包围''。
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/statements|语句|nomono=true}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

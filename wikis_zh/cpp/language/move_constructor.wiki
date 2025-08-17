@@ -1,0 +1,225 @@
+{{title|移动构造函数}}
+{{cpp/language/classes/navbar}}
+
+移动构造函数是一种{{rlp|constructor|构造函数}}，可以提供一个相同类类型实参调用，并复制该实参的内容，有可能会修改实参。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar sep|类名}}{{ttb|(}}{{spar sep|形参列表}}{{ttb|);}}}}
+{{sdsc|num=2|{{spar sep|类名}}{{ttb|(}}{{spar sep|形参列表}}{{ttb|)}} {{spar|函数体}}}}
+{{sdsc|num=3|{{spar sep|类名}}{{ttb|(}}{{spar sep|单形参列表}}{{ttb|1=) = default;}}}}
+{{sdsc|num=4|{{spar sep|类名}}{{ttb|(}}{{spar sep|形参列表}}{{ttb|1=) = delete;}}}}
+{{sdsc|num=5|{{spar sep|类名}}{{ttb|::}}{{spar sep|类名}}{{ttb|(}}{{spar sep|形参列表}}{{ttb|)}} {{spar|函数体}}}}
+{{sdsc|num=6|{{spar sep|类名}}{{ttb|::}}{{spar sep|类名}}{{ttb|(}}{{spar sep|单形参列表}}{{ttb|1=) = default;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类名}}|要声明移动构造函数的类}}
+{{par|{{spar|形参列表}}|满足以下条件的非空{{rlps|function#形参列表}}：
+* 给定该类的类型为 {{tt|T}}，第一个形参的类型是 {{c/core|T&amp;&amp;}}，{{c/core|const T&amp;&amp;}}，{{c/core|volatile T&amp;&amp;}} 或 {{c/core|const volatile T&amp;&amp;}}，并且
+* 要么没有其他形参，要么其他形参都有{{rlp|default arguments|默认实参}}}}
+{{par|{{spar|单形参列表}}|只有一个形参的{{rlps|function#形参列表}}，该形参没有默认实参，并且类型是 {{c/core|T&amp;&amp;}}，{{c/core|const T&amp;&amp;}}，{{c/core|volatile T&amp;&amp;}} 或 {{c/core|const volatile T&amp;&amp;}}}}
+{{par|{{spar|函数体}}|移动构造函数的{{rlp|constructor|函数体}}}}
+{{par end}}
+
+===解释===
+@1@ 类定义中的移动构造函数的声明。
+@2-4@ 类定义中的移动构造函数的定义。
+:@3@ 移动构造函数会被显式预置。
+:@4@ 移动构造函数会被弃置。
+@5,6@ 类定义之外的移动构造函数的定义（该类必须包含声明 {{v|1}}）。
+:@6@ 移动构造函数会被显式预置。
+
+{{source|1=
+struct X
+{
+    X(X&amp;&amp; other); // 移动构造函数
+//  X(X other);   // 错误：形参类型不正确
+};
+
+struct Y
+{
+    Y(Y&amp;&amp; other, int num = 1); // 有多个形参的移动构造函数
+//  Y(Y&amp;&amp; other, int num);     // 错误：num 没有默认实参
+};
+}}
+
+当从同类型的{{rev inl|until=c++17|{{rlps|value category#右值}}（亡值或纯右值）}}{{rev inl|since=c++17|亡值}}{{rlp|initialization|初始化}}（{{rlp|direct initialization|直接初始化}}或{{rlp|copy initialization|复制初始化}}）对象时，会调用移动构造函数，情况包括：
+* 初始化：{{c|1=T a = std::move(b);}} 或 {{c|1=T a(std::move(b));}}，其中 {{c|b}} 的类型是 {{tt|T}}；
+* 函数实参传递：{{c|f(std::move(a));}}，其中 {{c|a}} 的类型是 {{tt|T}} 且 {{c|f}} 是 {{c|Ret f(T t)}}；
+* 函数返回：在像 {{c|T f()}} 这样的函数中的 {{c|return a;}}，其中 {{c|a}} 的类型是 {{tt|T}}，且 {{tt|T}} 有移动构造函数。
+
+当初始化式是纯右值时，{{rev inl|until=c++17|通常会优化掉}}{{rev inl|since=c++17|始终不会进行}}对移动构造函数的调用，见{{rlp|copy elision|复制消除}}。
+
+典型的移动构造函数转移实参曾保有的资源（例如指向动态分配对象的指针，文件描述符，TCP 套接字，线程句柄，等等），而非复制它们，并使它的实参遗留在某个合法但不确定的状态。由于移动构造并不改变实参的生存期，因此实参通常会在接下来的某一时刻被析构。例如，从 {{lc|std::string}} 或从 {{lc|std::vector}} 移动可以导致实参状态为空。对于某些类型，例如 {{lc|std::unique_ptr}}，移动后的状态是明确的。
+
+===隐式声明的移动构造函数===
+如果不对类类型提供任何用户定义的移动构造函数，且满足下列所有条件：
+* 没有用户声明的{{rlp|copy constructor|复制构造函数}}；
+* 没有用户声明的{{rlp|copy assignment|复制赋值运算符}}；
+* 没有用户声明的{{rlp|move assignment|移动赋值运算符}}；
+* 没有用户声明的{{rlp|destructor|析构函数}}；
+
+那么编译器将声明一个移动构造函数作为这个类的非 {{rlp|explicit}} 的 {{c/core|inline public}} 成员，签名是 {{c|T::T(T&amp;&amp;)}}。
+
+一个类可以拥有多个移动构造函数，例如 {{c|T::T(const T&amp;&amp;)}} 和 {{c|T::T(T&amp;&amp;)}}。当存在用户定义的移动构造函数时，用户仍然可以通过关键词 {{c/core|default}} 强制编译器生成隐式声明的移动构造函数。
+
+隐式声明（或在它的首个声明被预置）的移动构造函数具有{{rev inl|until=c++17|{{rlp|except spec|动态异常说明}}}}{{rev inl|since=c++17|{{rlp|noexcept spec|noexcept 说明}}}}中所描述的异常说明。
+
+===隐式定义的移动构造函数===
+如果隐式声明的移动构造函数没有被弃置也不平凡，那么当它被 {{rlps|definition#ODR 使用}}&lt;!-- P0859R0 --&gt;或用于{{rlp|constant expression#常量求值所需要的函数与变量|常量求值}}时，它会被编译器定义（生成并编译函数体）。对于联合体类型，隐式定义的移动构造函数（如同以 {{lc|std::memmove}}）复制它的对象表示。对于非联合类类型，该构造函数用以{{rlps|value category#亡值}}实参执行的直接初始化，按照初始化顺序，对对象的各直接基类子对象和成员子对象进行完整的逐对象移动。对每个引用类型的非静态数据成员，移动构造函数将该引用绑定到源引用所绑定到的同一对象或函数。
+
+如果它满足对于 {{rev inl|until=c++23|{{rlp|constexpr#constexpr 构造函数|{{tt|constexpr}} 构造函数}}}}{{rev inl|since=c++23|{{rlp|constexpr#constexpr 函数|{{tt|constexpr}} 函数}}}}的要求，那么生成的移动构造函数也是 {{c/core|constexpr}}。
+
+===弃置的移动构造函数===
+类 {{tt|T}} 中隐式声明的或显式预置的移动构造函数在它有一个具有类类型 {{tt|M}}（或它的可以有多维的数组类型）的{{rlps|object#潜在构造的子对象}}，并且满足以下任意条件，那么该移动构造函数被定义为弃置的：
+* {{tt|M}} 有一个被弃置或无法从该默认构造函数访问的析构函数。
+* 为寻找 {{tt|M}} 的移动构造函数而进行的重载决议
+:* 没有产生可用候选，或者
+:* 在该子对象是{{rlp|union#联合体式的类|变体成员}}时，选择了非平凡的函数。
+
+{{rlp|overload resolution|重载决议}}会忽略这种构造函数（否则它会阻止从右值复制初始化）。
+
+===平凡的移动构造函数===
+如果满足下列所有条件，类 {{tt|T}} 移动构造函数是平凡的：
+* 它不是用户提供的（即它是隐式定义或预置的）；
+* {{tt|T}} 没有虚成员函数；
+* {{tt|T}} 没有虚基类；
+* 为 {{tt|T}} 的每个直接基类选择的移动构造函数都是平凡的；
+* 为 {{tt|T}} 的每个类类型（或类类型数组）的非静态成员选择的移动构造函数都是平凡的。
+
+平凡的移动构造函数是与平凡的复制构造函数实施相同动作的构造函数，即它如同用 {{lc|std::memmove}} 来进行对象表示的复制。所有与 C 语言兼容的数据类型都可以平凡移动。
+
+===合格的移动构造函数===
+{{cpp/language/eligible special member function|移动构造函数}}
+
+合格的移动构造函数的平凡性确定该类是否为{{rlp|lifetime#隐式生存期类型|隐式生存期类型}}，以及该类是否为[[cpp/named req/TriviallyCopyable|可平凡复制类型]]。
+
+===注解===
+为使{{rlp|exceptions#异常安全|强异常保证}}可行，用户定义的移动构造函数不应该抛出异常。例如，{{lc|std::vector}} 在需要重新放置元素时，基于 {{lc|std::move_if_noexcept}} 在移动和复制之间选择。
+
+如果同时提供了复制和移动构造函数而没有其他可行的构造函数，那么重载决议在实参是相同类型的{{rlps|value category#右值}}（如 {{lc|std::move}} 的结果的{{rlps|value category#亡值}}，或如无名临时量的{{rlps|value category#纯右值}}）时选择移动构造函数，而在实参是{{rlps|value category#左值}}（具名对象或返回左值引用的函数/运算符）时选择复制构造函数。如果只提供复制构造函数，那么重载决议对于所有实参类别都会选择它（只要它接收到 const 的引用，因为右值能绑定到 const 引用），这使得复制可以作为在移动不可用时的后备。
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    std::string s;
+    int k;
+    
+    A() : s("测试"), k(-1) {}
+    A(const A&amp; o) : s(o.s), k(o.k) { std::cout &lt;&lt; "移动失败！\n"; }
+    A(A&amp;&amp; o) noexcept :
+        s(std::move(o.s)),       // 类类型成员的显式移动
+        k(std::exchange(o.k, 0)) // 非类类型成员的显式移动
+    {}
+};
+
+A f(A a)
+{
+    return a;
+}
+
+struct B : A
+{
+    std::string s2;
+    int n;
+    // 隐式移动构造函数 B::(B&amp;&amp;)
+    // 调用 A 的移动构造函数
+    // 调用 s2 的移动构造函数
+    // 并进行 n 的逐位复制
+};
+
+struct C : B
+{
+    ~C() {} // 析构函数阻止隐式移动构造函数 C::(C&amp;&amp;)
+};
+
+struct D : B
+{
+    D() {}
+    ~D() {}           // 析构函数阻止隐式移动构造函数 D::(D&amp;&amp;)
+    D(D&amp;&amp;) = default; // 强制生成移动构造函数
+};
+
+int main()
+{
+    std::cout &lt;&lt; "尝试移动 A\n";
+    A a1 = f(A()); // 按值返回时，从函数形参移动构造它的目标
+    
+    std::cout &lt;&lt; "移动前，a1.s = " &lt;&lt; std::quoted(a1.s)
+        &lt;&lt; " a1.k = " &lt;&lt; a1.k &lt;&lt; '\n';
+    
+    A a2 = std::move(a1); // 从亡值移动构造
+    std::cout &lt;&lt; "移动后，a1.s = " &lt;&lt; std::quoted(a1.s)
+        &lt;&lt; " a1.k = " &lt;&lt; a1.k &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "\n尝试移动 B\n";
+    B b1;
+    
+    std::cout &lt;&lt; "移动前，b1.s = " &lt;&lt; std::quoted(b1.s) &lt;&lt; "\n";
+    
+    B b2 = std::move(b1); // 调用隐式移动构造函数
+    std::cout &lt;&lt; "移动后，b1.s = " &lt;&lt; std::quoted(b1.s) &lt;&lt; "\n";
+    
+    std::cout &lt;&lt; "\n尝试移动 C\n";
+    C c1;
+    C c2 = std::move(c1); // 调用复制构造函数
+    
+    std::cout &lt;&lt; "\n尝试移动 D\n";
+    D d1;
+    D d2 = std::move(d1);
+}
+|output=
+尝试移动 A
+移动前，a1.s = "测试" a1.k = -1
+移动后，a1.s = "" a1.k = 0
+
+尝试移动 B
+移动前，b1.s = "测试"
+移动后，b1.s = ""
+
+尝试移动 C
+移动失败！
+
+尝试移动 D
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1353|std=C++11|before=弃置隐式声明的移动构造函数的条件没有考虑多维数组类型|after=考虑这些类型}}
+{{dr list item|wg=cwg|dr=1402|std=C++11|before=会调用非平凡复制构造函数的预置移动构造函数会被弃置；&lt;br&gt;被弃置的预置移动构造函数仍参与重载决议|after=允许调用这种复制构造函数；&lt;br&gt;使重载决议将忽略它}}
+{{dr list item|wg=cwg|dr=1491|std=C++11|before=有具有右值引用类型的非静态数据成员的类的预置移动构造函数会被弃置|after=不会被弃置}}
+{{dr list item|wg=cwg|dr=2094|std=C++11|before=volatile 子对象使移动构造函数变得不平凡（{{cwg|496}}）|after=平凡性不受影响}}
+{{dr list item|wg=cwg|dr=2595|std=C++20|before=对于一个移动构造函数，如果存在其他更受约束但&lt;br&gt;无法满足关联约束的移动构造函数，那么它无法合格|after=此时它可以合格}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|converting constructor|转换构造函数}}
+* {{rlp|copy assignment|复制赋值}}
+* {{rlp|copy constructor|复制构造函数}}
+* {{rlp|copy elision|复制消除}}
+* {{rlp|default constructor|默认构造函数}}
+* {{rlp|destructor|析构函数}}
+* {{rlpt|explicit}}
+* {{rlp|initialization|初始化}}
+** {{rlp|aggregate initialization|聚合初始化}}
+** {{rlp|constant initialization|常量初始化}}
+** {{rlp|copy initialization|复制初始化}}
+** {{rlp|default initialization|默认初始化}}
+** {{rlp|direct initialization|直接初始化}}
+** {{rlp|initializer list|初始化列表}}
+** {{rlp|list initialization|列表初始化}}
+** {{rlp|reference initialization|引用初始化}}
+** {{rlp|value initialization|值初始化}}
+** {{rlp|zero initialization|零初始化}}
+* {{rlp|move assignment|移动赋值}}
+* {{rlpt|new}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,153 @@
+{{cpp/title|scoped_lock}}
+{{cpp/thread/scoped_lock/navbar}}
+{{ddcl|header=mutex|since=c++17|1=
+template&lt; class... MutexTypes &gt;
+class scoped_lock;
+}}
+
+类 {{tt|scoped_lock}} 是提供便利 [[enwiki:Resource_Acquisition_Is_Initialization|RAII 风格]]机制的互斥包装器，它在作用域块的存在期间占有一或多个互斥体。
+
+当创建 {{tt|scoped_lock}} 对象时，它尝试取得各给定互斥体的所有权。当控制离开创建 {{tt|scoped_lock}} 对象的作用域时，析构 {{tt|scoped_lock}} 并释放各互斥体。若给出多个互斥体，则如同用 {{lc|std::lock}} 使用免死锁算法。
+
+{{tt|scoped_lock}} 类不可复制。
+
+===模板形参===
+{{par begin}}
+{{par|MutexTypes|要锁定的各互斥体的类型。这些类型必须满足{{named req|Lockable}}要求，除非 {{c|1=sizeof...(MutexTypes) == 1}}，该情况下唯一的类型必须满足{{named req|BasicLockable}}}}
+{{par end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|mutex_type}}&lt;br&gt;{{mark cond present}}|
+若 {{c|1=sizeof...(MutexTypes) == 1}}，成员类型 {{tt|mutex_type}} 与 {{tt|Mutex}} 相同，即 {{tt|MutexTypes...}} 中的唯一类型。
+否则，没有成员 {{tt|mutex_type}}。
+}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/scoped_lock/dsc constructor}}
+{{dsc inc|cpp/thread/scoped_lock/dsc destructor}}
+{{dsc inc|1=cpp/thread/scoped_lock/dsc operator=}}
+{{dsc end}}
+
+===注解===
+一种常见的新手错误，是“忘记”为 {{tt|scoped_lock}} 变量命名，例如 {{c|std::scoped_lock(mtx);}}（默认构造了一个名为 {{tt|mtx}} 的 {{tt|scoped_lock}} 变量）或者 {{c|std::scoped_lock{mtx};}}（构造了一个右值对象并立即销毁），而并未实际创建在作用域的剩余部分中持有互斥体的锁。
+
+{{feature test macro|__cpp_lib_scoped_lock|std=C++17|value=201703L|[[#Top|{{tt|std::scoped_lock}}]]}}
+
+===示例===
+{{example
+|以下示例用 {{tt|std::scoped_lock}} 锁定互斥体对而不死锁，且为 RAII 风格。
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+using namespace std::chrono_literals;
+ 
+struct Employee
+{
+    std::vector&lt;std::string&gt; lunch_partners;
+    std::string id;
+    std::mutex m;
+    Employee(std::string id) : id(id) {}
+    std::string partners() const
+    {
+        std::string ret = "雇员 " + id + " 的午餐伙伴: ";
+        for (int count{}; const auto&amp; partner : lunch_partners)
+            ret += (count++ ? ", " : "") + partner;
+        return ret;
+    }
+};
+ 
+void send_mail(Employee&amp;, Employee&amp;)
+{
+    // 模拟耗时的发信操作
+    std::this_thread::sleep_for(1s);
+}
+ 
+void assign_lunch_partner(Employee&amp; e1, Employee&amp; e2)
+{
+    static std::mutex io_mutex;
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+        std::cout &lt;&lt; e1.id &lt;&lt; " 和 " &lt;&lt; e2.id &lt;&lt; " 正等待锁定" &lt;&lt; std::endl;
+    }
+
+    {
+        // 用 std::scoped_lock 取得两个锁，而无需担心
+        // 其他对 assign_lunch_partner 的调用死锁我们
+        // 而且它亦提供便利的 RAII 风格机制
+        
+        std::scoped_lock lock(e1.m, e2.m);
+
+        // 等价代码 1（用 std::lock 和 std::lock_guard ）
+        // std::lock(e1.m, e2.m);
+        // std::lock_guard&lt;std::mutex&gt; lk1(e1.m, std::adopt_lock);
+        // std::lock_guard&lt;std::mutex&gt; lk2(e2.m, std::adopt_lock);
+
+        // 等价代码 2（若需要 unique_lock，例如对于条件变量）
+        // std::unique_lock&lt;std::mutex&gt; lk1(e1.m, std::defer_lock);
+        // std::unique_lock&lt;std::mutex&gt; lk2(e2.m, std::defer_lock);
+        // std::lock(lk1, lk2);
+        {
+            std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+            std::cout &lt;&lt; e1.id &lt;&lt; " 和 " &lt;&lt; e2.id &lt;&lt; " 获得了锁" &lt;&lt; std::endl;
+        }
+        e1.lunch_partners.push_back(e2.id);
+        e2.lunch_partners.push_back(e1.id);
+    }
+    
+    send_mail(e1, e2);
+    send_mail(e2, e1);
+}
+ 
+int main()
+{
+    Employee alice("Alice"), bob("Bob"), christina("Christina"), dave("Dave");
+ 
+    // 在并行线程中指派，因为就午餐指派发邮件消耗很长时间
+    std::vector&lt;std::thread&gt; threads;
+    threads.emplace_back(assign_lunch_partner, std::ref(alice), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(alice));
+    threads.emplace_back(assign_lunch_partner, std::ref(dave), std::ref(bob));
+ 
+    for (auto&amp; thread : threads)
+        thread.join();
+    std::cout &lt;&lt; alice.partners() &lt;&lt; '\n'  &lt;&lt; bob.partners() &lt;&lt; '\n'
+              &lt;&lt; christina.partners() &lt;&lt; '\n' &lt;&lt; dave.partners() &lt;&lt; '\n';
+}
+|p=true
+|output=
+Alice 和 Bob 正等待锁定
+Alice 和 Bob 获得了锁
+Christina 和 Bob 正等待锁定
+Christina 和 Alice 正等待锁定
+Dave 和 Bob 正等待锁定
+Dave 和 Bob 获得了锁
+Christina 和 Alice 获得了锁
+Christina 和 Bob 获得了锁
+雇员 Alice 的午餐伙伴: Bob, Christina
+雇员 Bob 的午餐伙伴: Alice, Dave, Christina
+雇员 Christina 的午餐伙伴: Alice, Bob
+雇员 Dave 的午餐伙伴: Bob
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2981|std=C++17|before=曾提供来自 {{tt|scoped_lock&lt;MutexTypes...&gt;}} 的冗余推导指引|after=已移除}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc lock_guard}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

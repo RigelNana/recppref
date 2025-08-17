@@ -1,0 +1,269 @@
+{{cpp/memory/unique_ptr/title|unique_ptr}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcl h|unique_ptr&lt;T&gt; 主模板的成员}}
+{{dcl|num=1|
+constexpr unique_ptr() noexcept;
+constexpr unique_ptr( std::nullptr_t ) noexcept;
+}}
+{{dcla|num=2|constexpr=c++23|
+explicit unique_ptr( pointer p ) noexcept;
+}}
+{{dcla|num=3|constexpr=c++23|
+unique_ptr( pointer p, /* 见下文 */ d1 ) noexcept;
+}}
+{{dcla|num=4|constexpr=c++23|
+unique_ptr( pointer p, /* 见下文 */ d2 ) noexcept;
+}}
+{{dcla|num=5|constexpr=c++23|
+unique_ptr( unique_ptr&amp;&amp; u ) noexcept;
+}}
+{{dcla|num=6|constexpr=c++23|
+template&lt; class U, class E &gt;
+unique_ptr( unique_ptr&lt;U, E&gt;&amp;&amp; u ) noexcept;
+}}
+{{dcl|num=7|1=
+unique_ptr( const unique_ptr&amp; ) = delete;
+}}
+{{dcl|num=8|removed=c++17|
+template&lt; class U &gt;
+unique_ptr( std::auto_ptr&lt;U&gt;&amp;&amp; u ) noexcept;
+}}
+{{dcl h|unique_ptr&lt;T[]&gt; 数组版本特化的成员}}
+{{dcl|num=1|
+constexpr unique_ptr() noexcept;
+constexpr unique_ptr( std::nullptr_t ) noexcept;
+}}
+{{dcla|num=2|anchor=no|constexpr=c++23|
+template&lt; class U &gt;
+explicit unique_ptr( U p ) noexcept;
+}}
+{{dcla|num=3|anchor=no|constexpr=c++23|
+template&lt; class U &gt;
+unique_ptr( U p, /* 见下文 */ d1 ) noexcept;
+}}
+{{dcla|num=4|anchor=no|constexpr=c++23|
+template&lt; class U &gt;
+unique_ptr( U p, /* 见下文 */ d2 ) noexcept;
+}}
+{{dcla|num=5|anchor=no|constexpr=c++23|
+unique_ptr( unique_ptr&amp;&amp; u ) noexcept;
+}}
+{{dcla|num=6|anchor=no|constexpr=c++23|
+template&lt; class U, class E &gt;
+unique_ptr( unique_ptr&lt;U, E&gt;&amp;&amp; u ) noexcept;
+}}
+{{dcl|num=7|1=
+unique_ptr( const unique_ptr&amp; ) = delete;
+}}
+{{dcl end}}
+
+@1@ 构造不拥有对象的 {{tt|std::unique_ptr}}。值初始化存储的指针和存储的删除器。要求 {{tt|Deleter}} {{named req|DefaultConstructible}}且构造不抛异常。{{cpp/enable if|plural=yes| {{c|std::is_default_constructible&lt;Deleter&gt;::value}} 为 {{c|true}} 且 {{c|Deleter}} 不是指针类型}}。
+
+@2@ 构造拥有 {{c|p}} 的 {{tt|std::unique_ptr}}，以 {{c|p}} 初始化存储的指针，并值初始化存储的删除器。要求 {{tt|Deleter}} {{named req|DefaultConstructible}}且构造不抛异常。{{cpp/enable if|plural=yes| {{c|std::is_default_constructible&lt;Deleter&gt;::value}} 为 {{c|true}} 且 {{c|Deleter}} 不是指针类型}}。
+{{rrev|since=c++17|
+[[cpp/language/class template argument deduction|类模板实参推导]]不选择此构造函数。
+}}
+
+@3,4@ 构造拥有 {{c|p}} 的 {{tt|std::unique_ptr}} 对象，以 {{c|p}} 初始化存储的指针，并按下列方式初始化删除器 {{tt|D}}（依赖于 {{tt|D}} 是否为引用类型）。
+
+:@a@ 若 {{tt|D}} 是非引用类型 {{c|A}}，则签名是：
+{{dcl begin}}
+{{dcl|num=1|unique_ptr(pointer p, const A&amp; d) noexcept;|notes=（要求 {{tt|Deleter}} 为不抛出{{named req|CopyConstructible}}）}}
+{{dcl|num=2|unique_ptr(pointer p, A&amp;&amp; d) noexcept;|notes=（要求 {{tt|Deleter}} 为不抛出{{named req|MoveConstructible}}）}}
+{{dcl end}}
+
+:@b@ 若 {{tt|D}} 是左值引用类型 {{c|A&amp;}}，则签名是：
+{{dcl begin}}
+{{dcl|num=1|unique_ptr(pointer p, A&amp; d) noexcept;}}
+{{dcl|num=2|1=unique_ptr(pointer p, A&amp;&amp; d) = delete;}}
+{{dcl end}}
+
+:@c@ 若 {{tt|D}} 是左值引用类型 {{c/core|const A&amp;}}，则签名是：
+{{dcl begin}}
+{{dcl|num=1|unique_ptr(pointer p, const A&amp; d) noexcept;}}
+{{dcl|num=2|1=unique_ptr(pointer p, const A&amp;&amp; d) = delete;}}
+{{dcl end}}
+@@ 所有情况下删除器从 {{c|std::forward&lt;decltype(d)&gt;(d)}} 初始化。{{cpp/enable if|plural=yes| {{c|std::is_constructible&lt;D, decltype(d)&gt;::value}} 为 {{c|true}} }}。
+{{rrev|since=c++17|
+[[cpp/language/class template argument deduction|类模板实参推导]]不选择这两个构造函数。
+}}
+
+@2-4@ 数组特化中表现同主模板中接收一个指针参数的构造函数，此外除非下列之一为真，否则它们不参与重载决议：
+* {{tt|U}} 与 {{tt|pointer}} 为同一类型，或
+* {{tt|U}} 为 {{lc|std::nullptr_t}}，或
+* {{tt|pointer}} 与 {{tt|element_type*}} 为同一类型且 {{tt|U}} 为指针类型 {{tt|V*}}，满足 {{tt|V(*)[]}} 可隐式转换为 {{tt|element_type(*)[]}}。
+
+@5@ 通过从 {{c|u}} 转移所有权给 {{c|*this}} 构造 {{tt|unique_ptr}} 并存储空指针于 {{c|u}}。此构造函数仅若 {{c|std::is_move_constructible&lt;Deleter&gt;::value}} 为 {{c|true}} 才参与重载决议&lt;!-- LWG 2899 --&gt;。若 {{tt|Deleter}} 不是引用类型，则要求它为不抛出{{named req|MoveConstructible}}（若 {{tt|Deleter}} 是引用，则 {{tt|get_deleter()}} 和 {{tt|u.get_deleter()}} 在移动构造后引用相同值）。
+
+@6@ 通过从 {{c|u}} 转移所有权给 {{c|*this}} 构造 {{tt|unique_ptr}}，其中 {{c|u}} 以指定的删除器（{{tt|E}}）构造。它依赖于 {{tt|E}} 是否为引用类型，如下：
+:@a@ 若 {{tt|E}} 是引用类型，则从 {{c|u}} 的删除器复制构造此删除器（要求此构造不抛出）
+:@b@ 若 {{tt|E}} 不是引用类型，则从 {{c|u}} 的删除器移动构造此删除器（要求此构造不抛出）
+@@ 此构造函数仅若下列皆为真才参与重载决议：
+:@a@ {{c|unique_ptr&lt;U, E&gt;::pointer}} 可隐式转换为 {{tt|pointer}}
+:@b@ U 不是数组类型
+:@c@ {{tt|Deleter}} 是引用类型且 {{tt|E}} 与 {{tt|Deleter}} 为同一类型，或 {{tt|Deleter}} 不是引用类型且 {{tt|E}} 可隐式转换为 {{tt|Deleter}}
+
+@6@ 数组特化中，表现同在主模板中的版本，但它仅若下列皆为真才会参与重载决议
+* {{tt|U}} 是数组类型
+* {{tt|pointer}} 与 {{tt|element_type*}} 是同一类型
+* {{c|unique_ptr&lt;U,E&gt;::pointer}} 与 {{c|unique_ptr&lt;U,E&gt;::element_type*}} 是同一类型
+* {{c|unique_ptr&lt;U,E&gt;::element_type(*)[]}} 可转换为 {{tt|element_type(*)[]}}
+* {{tt|Deleter}} 是引用类型且 {{tt|E}} 与 {{tt|Deleter}} 是同一类型，或 {{tt|Deleter}} 非引用类型且 {{tt|E}} 可隐式转换为 {{tt|Deleter}}。
+
+@7@ 复制构造函数被显式弃置。
+
+@8@ 构造 {{tt|unique_ptr}}，其中以 {{ltf|cpp/memory/auto_ptr/release|u.release}} 初始化存储的指针，并值初始化存储的删除器。此构造函数仅若 {{tt|U*}} 可隐式转换为 {{tt|T*}} 且 {{tt|Deleter}} 与 {{tt|std::default_delete&lt;T&gt;}} 为同一类型才参与重载决议。
+
+===参数===
+{{par begin}}
+{{par|p|指向要管理的对象的指针}}
+{{par|d1, d2|用于销毁对象的删除器}}
+{{par|u|获取所有权来源的智能指针}}
+{{par end}}
+
+===注解===
+{{rrev|since=c++14|
+使用 {{lc|std::make_unique|std::make_unique&lt;T&gt;}} 是更好的做法，可取代与 new 一起使用的重载 {{v|2}}。
+}}
+
+{{c|std::unique_ptr&lt;Derived&gt;}} 通过重载 {{v|6}} 可隐式转换为 {{c|std::unique_ptr&lt;Base&gt;}}（因为被管理指针和 {{lc|std::default_delete}} 都可隐式转换）。
+
+因为默认构造函数是 {{c/core|constexpr}}，故静态的 {{tt|unique_ptr}} 在任何动态初始化之前，作为[[cpp/language/initialization#非局部变量|静态非局部初始化]]的一部分初始化。这使得在任何静态对象的构造函数中使用 {{tt|unique_ptr}} 都是安全的。
+
+{{rrev|since=c++17|无源自指针类型的[[cpp/language/class template argument deduction|类模板实参推导]]，因为不可能区分从 {{c/core|new}} 的数组和非数组形式获得的指针。}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo // 要管理的对象
+{
+    Foo() { std::cout &lt;&lt; "Foo 构造\n"; }
+    Foo(const Foo&amp;) { std::cout &lt;&lt; "Foo 复制构造\n"; }
+    Foo(Foo&amp;&amp;) { std::cout &lt;&lt; "Foo 移动构造\n"; }
+    ~Foo() { std::cout &lt;&lt; "~Foo 析构\n"; }
+};
+
+struct D // 删除器
+{
+    D() {};
+    D(const D&amp;) { std::cout &lt;&lt; "D 复制构造\n"; }
+    D(D&amp;) { std::cout &lt;&lt; "D 非 const 复制构造\n";}
+    D(D&amp;&amp;) { std::cout &lt;&lt; "D 移动构造\n"; }
+    void operator()(Foo* p) const
+    {
+        std::cout &lt;&lt; "用 D 删除 Foo\n";
+        delete p;
+    };
+};
+
+int main()
+{
+    std::cout &lt;&lt; "构造函数示例 (1)...\n";
+    std::unique_ptr&lt;Foo&gt; up1;  // up1 为空
+    std::unique_ptr&lt;Foo&gt; up1b(nullptr);  // up1b 为空
+
+    std::cout &lt;&lt; "构造函数示例 (2)...\n";
+    {
+        std::unique_ptr&lt;Foo&gt; up2(new Foo); // up2 现在占有 Foo
+    } // Foo 被删除
+
+    std::cout &lt;&lt; "构造函数示例 (3)...\n";
+    D d;
+    {  // 删除器类型不是引用
+       std::unique_ptr&lt;Foo, D&gt; up3(new Foo, d); // 复制删除器
+    }
+    {  // 删除器类型是引用
+       std::unique_ptr&lt;Foo, D&amp;&gt; up3b(new Foo, d); // up3b 保有到 d 的引用
+    }
+
+    std::cout &lt;&lt; "构造函数示例 (4)...\n";
+    {  // 删除器不是引用
+       std::unique_ptr&lt;Foo, D&gt; up4(new Foo, D()); // 移动删除器
+    }
+
+    std::cout &lt;&lt; "构造函数示例 (5)...\n";
+    {
+       std::unique_ptr&lt;Foo&gt; up5a(new Foo);
+       std::unique_ptr&lt;Foo&gt; up5b(std::move(up5a)); // 所有权转移
+    }
+
+    std::cout &lt;&lt; "构造函数示例 (6)...\n";
+    {
+        std::unique_ptr&lt;Foo, D&gt; up6a(new Foo, d); // 复制 D
+        std::unique_ptr&lt;Foo, D&gt; up6b(std::move(up6a)); // 移动 D
+
+        std::unique_ptr&lt;Foo, D&amp;&gt; up6c(new Foo, d); // D 是引用
+        std::unique_ptr&lt;Foo, D&gt; up6d(std::move(up6c)); // 复制 D
+    }
+
+#if (__cplusplus &lt; 201703L)
+    std::cout &lt;&lt; "构造函数示例 (7)...\n";
+    {
+        std::auto_ptr&lt;Foo&gt; up7a(new Foo);
+        std::unique_ptr&lt;Foo&gt; up7b(std::move(up7a)); // 所有权转移
+    }
+#endif
+
+    std::cout &lt;&lt; "数组构造函数示例...\n";
+    {
+        std::unique_ptr&lt;Foo[]&gt; up(new Foo[3]);
+    } // 删除三个 Foo 对象
+}
+|output=
+构造函数示例 (1)...
+构造函数示例 (2)...
+Foo 构造
+~Foo 析构
+构造函数示例 (3)...
+Foo 构造
+D 复制构造
+用 D 删除 Foo
+~Foo 析构
+Foo 构造
+用 D 删除 Foo
+~Foo 析构
+构造函数示例 (4)...
+Foo 构造
+D 移动构造
+用 D 删除 Foo
+~Foo 析构
+构造函数示例 (5)...
+Foo 构造
+~Foo 析构
+构造函数示例 (6)...
+Foo 构造
+D 复制构造
+D 移动构造
+Foo 构造
+D 非 const 复制构造
+用 D 删除 Foo
+~Foo 析构
+用 D 删除 Foo
+~Foo 析构
+构造函数示例 (7)...
+Foo 构造
+~Foo 析构
+数组构造函数示例...
+Foo 构造
+Foo 构造
+Foo 构造
+~Foo 析构
+~Foo 析构
+~Foo 析构
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before={{tt|unique_ptr&lt;T[]&gt;}} 的构造函数拒绝限定转换|after=接受}}
+{{dr list item|wg=lwg|dr=2520|std=C++11|before={{tt|unique_ptr&lt;T[]&gt;}} 被意外地设为不可从 {{tt|nullptr_t}} 构造|after=使之可构造}}
+{{dr list item|wg=lwg|dr=2801|std=C++11|before=默认构造函数未受约束|after=已约束}}
+{{dr list item|wg=lwg|dr=2899|std=C++11|before=移动构造函数未受约束|after=已约束}}
+{{dr list item|wg=lwg|dr=2905|std=C++11|before=来自指针和删除器的构造函数上的约束错误|after=更正}}
+{{dr list item|wg=lwg|dr=2944|std=C++11|before=某些前条件被 LWG 2905 意外丢弃|after=恢复}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,133 @@
+{{cpp/chrono/title|zoned_time}}
+{{cpp/chrono/zoned_time/navbar}}
+{{dcl begin}}
+{{dcl header|chrono}}
+{{dcl|since=c++20|1=
+template&lt;
+    class Duration,
+    class TimeZonePtr = const std::chrono::time_zone*
+&gt; class zoned_time;
+}}
+{{dcl|since=c++20|1=
+using zoned_seconds = std::chrono::zoned_time&lt;std::chrono::seconds&gt;;
+}}
+{{dcl end}}
+
+类 {{tt|zoned_time}} 表示一个时区与一种分辨率是 {{tt|Duration}} 的 {{lc|std::chrono::time_point}} 的逻辑配对。
+
+{{tt|zoned_time}} 的不变量是它始终指代合法的时区并表示该时区中存在且无歧义的时间点。与此不变量一致的是， {{tt|zoned_time}} 无移动构造函数或移动赋值运算符；试图移动 {{tt|zoned_time}} 将进行复制。
+
+如果 {{tt|Duration}} 不是 {{lc|std::chrono::duration}} 的特化，那么程序非良构。
+
+模板形参 {{tt|TimeZonePtr}} 允许用户提供他们自身的时区指针类型并进一步经由 {{lc|std::chrono::zoned_traits}} 定制 {{tt|zoned_time}} 的行为。定制的时区类型不需要支持 {{lc|std::chrono::time_zone}} 所支持的所有操作，只需支持实际在 {{tt|zoned_time}} 上调用的函数所用到的操作。
+
+{{tt|TimeZonePtr}} 必须{{named req|MoveConstructible}}。允许仅移动的 {{tt|TimeZonePtr}}，但难以使用，因为 {{tt|zoned_time}} 将不可移动且不可能访问存储的 {{tt|TimeZonePtr}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem |成员类型|定义}}
+{{dsc|{{tt|duration}}|{{c/core|std::common_type_t&lt;Duration, std::chrono::seconds&gt;}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/zoned_time/dsc constructor}}
+{{dsc inc|1=cpp/chrono/zoned_time/dsc operator=}}
+{{dsc inc|cpp/chrono/zoned_time/dsc get_time_zone}}
+{{dsc inc|cpp/chrono/zoned_time/dsc get_local_time}}
+{{dsc inc|cpp/chrono/zoned_time/dsc get_sys_time}}
+{{dsc inc|cpp/chrono/zoned_time/dsc get_info}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/zoned_time/dsc operator cmp}}
+{{dsc inc|cpp/chrono/zoned_time/dsc operator ltlt}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/zoned_time/dsc formatter}}
+{{dsc hash|cpp/chrono/zoned_time|nested=true|notes={{mark c++26}}}}
+{{dsc end}}
+
+===辅助特化===
+{{dcl begin}}
+{{dcl|since=c++23|1=
+template&lt; class Duration &gt;
+constexpr bool enable_nonlocking_formatter_optimization
+  &lt;chrono::zoned_time&lt;Duration, const chrono::time_zone*&gt;&gt; = true;
+}}
+{{dcl end}}
+
+这个 {{ltt std|cpp/utility/format/enable_nonlocking_formatter_optimization}} 针对 {{tt|chrono::zoned_time}} 对象的打印启用 {{ltt std|cpp/io/print}} 和 {{ltt std|cpp/io/println}} 的高效实现。
+
+==={{rl|deduction guides|推导指引}}===
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;chrono&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    constexpr std::string_view locations[] =
+    {
+        "Africa/Casablanca",   "America/Argentina/Buenos_Aires",
+        "America/Barbados",    "America/Indiana/Petersburg",
+        "America/Tarasco_Bar", "Antarctica/Casey",
+        "Antarctica/Vostok",   "Asia/Magadan",
+        "Asia/Manila",         "Asia/Shanghai",
+        "Asia/Tokyo",          "Atlantic/Bermuda",
+        "Australia/Darwin",    "Europe/Isle_of_Man",
+        "Europe/Laputa",       "Indian/Christmas",
+        "Indian/Cocos",        "Pacific/Galapagos",
+    };
+    
+    constexpr auto width = std::ranges::max_element(locations, {},
+        [](const auto&amp; s){ return s.length(); })-&gt;length();
+    
+    for (const auto location : locations)
+        try
+        {
+            // 'location' 不在时区数据库中的情况下可能会抛出异常
+            const std::chrono::zoned_time zt{location, std::chrono::system_clock::now()};
+            std::cout &lt;&lt; std::setw(width) &lt;&lt; location &lt;&lt; " - 时区时间：" &lt;&lt; zt &lt;&lt; '\n';
+        }
+        catch (std::runtime_error&amp; ex)
+        {
+            std::cout &lt;&lt; "Error: " &lt;&lt; ex.what() &lt;&lt; '\n';
+        }
+}
+|p=true
+|output=&lt;nowiki/&gt;
+             Africa/Casablanca - 时区时间：2023-06-29 20:58:34.697449319 +01
+America/Argentina/Buenos_Aires - 时区时间：2023-06-29 16:58:34.709957354 -03
+              America/Barbados - 时区时间：2023-06-29 15:58:34.709977888 AST
+    America/Indiana/Petersburg - 时区时间：2023-06-29 15:58:34.709998072 EDT
+Error: tzdb: cannot locate zone: America/Tarasco_Bar
+              Antarctica/Casey - 时区时间：2023-06-30 06:58:34.710093685 +11
+             Antarctica/Vostok - 时区时间：2023-06-30 01:58:34.710107932 +06
+                  Asia/Magadan - 时区时间：2023-06-30 06:58:34.710121831 +11
+                   Asia/Manila - 时区时间：2023-06-30 03:58:34.710134751 PST
+                 Asia/Shanghai - 时区时间：2023-06-30 03:58:34.710153259 CST
+                    Asia/Tokyo - 时区时间：2023-06-30 04:58:34.710172815 JST
+              Atlantic/Bermuda - 时区时间：2023-06-29 16:58:34.710191043 ADT
+              Australia/Darwin - 时区时间：2023-06-30 05:28:34.710236720 ACST
+            Europe/Isle_of_Man - 时区时间：2023-06-29 20:58:34.710256834 BST
+Error: tzdb: cannot locate zone: Europe/Laputa
+              Indian/Christmas - 时区时间：2023-06-30 02:58:34.710360409 +07
+                  Indian/Cocos - 时区时间：2023-06-30 02:28:34.710377520 +0630
+             Pacific/Galapagos - 时区时间：2023-06-29 13:58:34.710389952 -06
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/dsc time_zone}}
+{{dsc end}}
+
+{{langlinks|de|es|en|ja|ru}}

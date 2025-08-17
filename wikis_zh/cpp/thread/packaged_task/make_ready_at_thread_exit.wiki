@@ -1,0 +1,95 @@
+{{cpp/thread/packaged_task/title|make_ready_at_thread_exit}}
+{{cpp/thread/packaged_task/navbar}}
+{{ddcl|since=c++11|
+void make_ready_at_thread_exit( ArgTypes... args );
+}}
+
+如同以 {{box|{{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}{{c/core|(f, args...)}}}} 调用存储的任务 {{c|f}}。任务返回值或任何抛出的异常被存储于 {{c|*this}} 的共享状态。
+
+只有在在当前线程退出，并销毁所有线程局域存储期对象后，共享状态才会就绪。
+
+===参数===
+{{par begin}}
+{{par|args|调用时传递给存储任务的形参}}
+{{par end}}
+
+===返回值===
+（无）
+
+===异常===
+在以下情况下抛出 {{lc|std::future_error}}：
+
+* 存储的任务已经调用过。此时设置错误类别为 {{tt|promise_already_satisfied}}。
+* {{c|*this}} 没有共享状态。设此时设置错误类别为 {{ltt|cpp/thread/future_errc|no_state}}。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;thread&gt;
+#include &lt;utility&gt;
+
+struct ProgramState
+{
+    std::packaged_task&lt;void()&gt; task;
+    std::future&lt;void&gt; future;
+    std::thread worker;
+};
+
+static void worker(std::shared_ptr&lt;ProgramState&gt; state)
+{
+    state-&gt;task.make_ready_at_thread_exit(); // 立即执行任务
+
+    auto status = state-&gt;future.wait_for(std::chrono::seconds(0));
+    if (status == std::future_status::timeout)
+        std::cout &lt;&lt; "worker：未来体尚未就绪\n";
+    else
+        std::cout &lt;&lt; "worker：未来体已经就绪\n";
+
+    std::cout &lt;&lt; "worker：退出\n";
+}
+
+static std::shared_ptr&lt;ProgramState&gt; create_state()
+{
+    auto state = std::make_shared&lt;ProgramState&gt;();
+    state-&gt;task = std::packaged_task&lt;void()&gt;{[]
+    {
+        std::cout &lt;&lt; "task: 已执行\n";
+    }&lt;!----&gt;};
+    state-&gt;future = state-&gt;task.get_future();
+    state-&gt;worker = std::thread{worker, state};
+    return state;
+}
+
+int main()
+{
+    auto state = create_state();
+
+    state-&gt;worker.join();
+    std::cout &lt;&lt; "main: worker 完成\n";
+
+    auto status = state-&gt;future.wait_for(std::chrono::seconds(0));
+    if (status == std::future_status::timeout)
+        std::cout &lt;&lt; "main：未来体尚未就绪\n";
+    else
+        std::cout &lt;&lt; "main：未来体已经就绪";
+}
+|output=
+task: 已执行
+worker：未来体尚未就绪
+worker：退出
+main: worker 完成
+worker：结果尚未就绪
+main：未来体已经就绪
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/packaged_task/dsc operator()}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,236 @@
+{{title|包索引 {{mark since c++26}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+访问处于指定索引的{{rlp|pack|包}}元素。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|标识表达式}} {{ttb|...[}} {{spar|表达式}} {{ttb|]}}}}
+{{sdsc|num=2|{{spar|typedef 名}} {{ttb|...[}} {{spar|表达式}} {{ttb|]}}}}
+{{sdsc end}}
+
+@1@ 包索引表达式
+@2@ 包索引说明符
+
+{{par begin}}
+{{par|{{spar|typedef 名}}|指名包名的[[cpp/language/identifiers|标识符]]或者[[cpp/language/templates#模板标识|简单模板标识]]}}
+{{par|{{spar|标识表达式}}|指名包名的[[cpp/language/expressions#基本表达式|标识表达式]]}}
+{{par|{{spar|表达式}}| {{c/core|std::size_t}} 类型的{{rlp|constant expression#经转换的常量表达式|经转换常量表达式}} {{c|I}}，{{c|I}} 在形参包 {{c|P}} 的范围 {{range plain|0|sizeof...(P)}} 内作为指示展开包的索引}}
+{{par end}}
+
+===解释===
+包索引是 ''包展开''，未展开包后随省略号和下标内的索引。有两种包索引：包索引表达式和包索引说明符。
+
+令 {{tt|P}} 是包含 {{tt|P{{sub|0}}, P{{sub|1}}, ..., P{{sub|n-1}}}} 的非空包，且 {{tt|I}} 是一个有效索引，那么展开 {{tt|P...[I]}} 的实例化将产生 {{tt|P}} 的包元素 {{tt|P{{sub|I}}}}。
+
+不允许使用非常量表达式的索引 {{tt|I}} 访问包。
+{{source|1=
+int runtime_idx();
+
+void bar(auto... args)
+{
+    auto a = args...[0];
+    const int n = 1;
+    auto b = args...[n];
+    int m = 2;
+    auto c = args...[m]; // 错误：m 不是常量表达式
+    auto d = args...[runtime_idx()]; // 错误：'runtime_idx()' 不是常量表达式
+}
+}}
+
+模板模板形参的包无法通过索引访问。
+{{source|1=
+template &lt;template &lt;typename...&gt; typename... Temps&gt;
+using A = Temps...[0]&lt;&gt;; // 错误： 'Temp' 是模板模板形参包
+
+template &lt;template &lt;typename...&gt; typename... Temps&gt;
+using B = Temps&lt;&gt;...[0]; // 错误：'Temps&lt;&gt;' 不表示包名，即使它是简单模板标识
+}}
+
+===包索引表达式===
+{{sdsc begin}}
+{{sdsc|{{spar|标识表达式}} {{ttb|...[}} {{spar|表达式}} {{ttb|]}}}}
+{{sdsc end}}
+
+包索引表达式表示 ''标识表达式''，即包的元素 {{tt|P{{sub|I}}}} 的表达式。{{spar|标识表达式}} 应通过以下声明引入：
+* {{rlp|pack|非类型模板形参包}}，
+* {{rlp|pack|函数形参包}}，
+* {{rlp|lambda#捕获|lambda 初始化捕获包}}，或
+* {{rlp|structured_binding|结构化绑定包}}。
+
+{{source|1=
+template &lt;std::size_t I, typename... Ts&gt;
+constexpr auto element_at(Ts... args)
+{
+    // 'args' 在函数形参包声明中引入
+    return args...[I];
+}
+
+static_assert(element_at&lt;0&gt;(3, 5, 9) == 3);
+static_assert(element_at&lt;2&gt;(3, 5, 9) == 9);
+static_assert(element_at&lt;3&gt;(3, 5, 9) == 4); // 错误：超出范围
+static_assert(element_at&lt;0&gt;() == 1); // 错误：超出范围，空包
+
+template &lt;std::size_t I, typename Tup&gt;
+constexpr auto structured_binding_element_at(Tup tup)
+{
+    auto [...elems] = tup;
+    // 'elems' 在结构化绑定包的声明中引入
+    return elems...[I];
+}
+
+struct A { bool a; int b; };
+
+static_assert(structured_binding_element_at&lt;0&gt;(A {true, 4}) == true);
+static_assert(structured_binding_element_at&lt;1&gt;(A {true, 4}) == 4);
+
+// 'Vals' 在非类型模板形参包声明中引入
+template &lt;std::size_t I, std::size_t... Vals&gt;
+constexpr std::size_t double_at = Vals...[I] * 2; // OK
+
+template &lt;std::size_t I, typename... Args&gt;
+constexpr auto foo(Args... args)
+{
+    return [...members = args](Args...[I] op)
+    {
+        // 'members' 在 lambda 初始化捕获包中引入
+        return members...[I] + op;
+    };
+}
+
+static_assert(foo&lt;0&gt;(4, "Hello", true)(5) == 9);
+static_assert(foo&lt;1&gt;(3, std::string("C++"))("26") == "C++26");
+}}
+
+不允许使用标识表达式以外的复杂表达式对包索引访问。
+{{source|1=
+template &lt;std::size_t I, auto... Vals&gt;
+constexpr auto identity_at = (Vals)...[I]; // 错误
+// 使用 'Vals...[I]' 代替
+
+template &lt;std::size_t I, std::size_t... Vals&gt;
+constexpr std::size_t triple_at = (Vals * 3)...[I]; // 错误
+// 使用 'Vals...[I] * 3' 代替
+
+template &lt;std::size_t I, typename... Args&gt;
+constexpr decltype(auto) get(Args&amp;&amp;... args) noexcept
+{
+    return std::forward&lt;Args&gt;(args)...[I]; // 错误
+    // 使用 'std::forward&lt;Args...[I]&gt;(args...[I])' 代替
+}
+}}
+
+将 {{rlpt|decltype}} 应用于包索引表达式与将 {{rlpt|decltype}} 应用于标识表达式相同。
+
+{{source|1=
+void f() 
+{
+    [](auto... args)
+    {
+        using T0 = decltype(args...[0]);   // 'T0' 是 'double'
+        using T1 = decltype((args...[0])); // 'T1' 是 'double&amp;'
+    }(3.14);
+}
+}}
+
+===包索引说明符===
+{{sdsc begin}}
+{{sdsc|{{spar|typedef 名}} {{ttb|...[}} {{spar|表达式}} {{ttb|]}}}}
+{{sdsc end}}
+
+包索引说明符表示 ''经计算类型说明符''，即包元素 {{tt|P{{sub|I}}}} 的类型。{{spar|typedef 名}} 应由{{rlp|pack|类型模板形参包}}的声明引入。
+
+{{source|1=
+template &lt;typename... Ts&gt;
+using last_type_t = Ts...[sizeof...(Ts) - 1];
+
+static_assert(std::is_same_v&lt;last_type_t&lt;&gt;, int&gt;); // 错误：超出范围
+static_assert(std::is_same_v&lt;last_type_t&lt;int&gt;, int&gt;);
+static_assert(std::is_same_v&lt;last_type_t&lt;bool, char&gt;, char&gt;);
+static_assert(std::is_same_v&lt;last_type_t&lt;float, int, bool*&gt;, bool*&gt;);
+}}
+
+包索引说明符可以出现在：
+* {{rlp|declarations#说明符|简单类型说明符}}，
+* {{rlp|derived class|基类说明符}}，
+* {{rlp|identifiers#有限定标识|嵌套名说明符}}，或
+* {{rlp|identifiers#无限定标识|显式析构函数调用中的类型}}。
+
+在函数或构造函数的形参列表中，可以使用包索引说明符来建立模板形参推导中的{{rlps|template argument deduction#不推导语境}}。
+
+{{source|1=
+template &lt;typename...&gt;
+struct type_seq {};
+
+template &lt;typename... Ts&gt;
+auto f(Ts...[0] arg, type_seq&lt;Ts...&gt;)
+{
+    return arg;
+}
+
+// OK："Hello" 被隐式转换到 'std::string_view'
+std::same_as&lt;std::string_view&gt; auto a = f("Hello", type_seq&lt;std::string_view&gt;{});
+
+// 错误："Ok" 不能转换为 to 'int'
+std::same_as&lt;int&gt; auto b = f("Ok", type_seq&lt;int, const char*&gt;{});
+}}
+
+===注解===
+在 C++26 之前，{{c|Ts...[N]}} 是声明大小为 {{c|N}} 的未命名数组的函数形参包的有效语法，其中形参类型会被进一步调整为指针。自 C++26 起，{{c|Ts...[1]}} 被解释为包索引说明符，这将使下面的行为变为 #2。要保留第一种行为，函数形参包必须被命名，或者被手动调整为指针类型的包。
+
+{{source|1=
+template &lt;typename... Ts&gt;
+void f(Ts... [1]);
+
+template &lt;typename... Ts&gt;
+void g(Ts... args[1]);
+ 
+template &lt;typename... Ts&gt;
+void h(Ts*...); // 更清晰但更加容忍： Ts... 能含有 cv void 或函数类型
+
+void foo() 
+{
+    f&lt;char, bool&gt;(nullptr, nullptr);
+    // 行为 #1（C++26 前） 
+    //  调用 void 'f&lt;char, bool&gt;(char[1], bool[1])'（即 'f&lt;char, bool&gt;(char[1], bool[1])'）
+    // 行为 #2（C++26 起）
+    //  错误：试图调用 'void f&lt;char, bool&gt;(bool)'
+    //  但提供了 2 个实参，应为 1
+
+    g&lt;char, bool&gt;(nullptr, nullptr);
+    // 调用 'g&lt;char, bool&gt;(char*, bool*)'（即 'g&lt;char, bool&gt;(char[1], bool[1])'）
+ 
+    h&lt;char, bool&gt;(nullptr, nullptr);
+    // 调用 'h&lt;char, bool&gt;(char*, bool*)'
+}
+}}
+
+{{feature test macro|std=C++26|value=202311L|__cpp_pack_indexing|[[#top|包索引]]}}
+
+===示例===
+{{example|code=
+#include &lt;tuple&gt;
+
+template &lt;std::size_t... Indices, typename Decomposable&gt;
+constexpr auto splice(Decomposable d)
+{
+    auto [...elems] = d;
+    return std::make_tuple(elems...[Indices]...);
+}
+
+struct Point
+{
+    int x;
+    int y;
+    int z;
+};
+
+int main() 
+{
+    constexpr Point p { .x = 1, .y = 4, .z = 3 };
+    static_assert(splice&lt;2, 1, 0&gt;(p) == std::make_tuple(3, 4, 1));
+    static_assert(splice&lt;1, 1, 0, 0&gt;(p) == std::make_tuple(4, 4, 1, 1));
+}
+}}
+
+{{langlinks|en|de|es|fr|it|ja|pt|ru}}

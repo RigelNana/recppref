@@ -1,0 +1,158 @@
+{{cpp/ranges/title|unique}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+          std::indirect_equivalence_relation&lt;std::projected&lt;I, Proj&gt;&gt;
+              C = ranges::equal_to &gt;
+constexpr ranges::subrange&lt;I&gt;
+    unique( I first, S last, C comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R, class Proj = std::identity,
+          std::indirect_equivalence_relation&lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt;
+              C = ranges::equal_to &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    unique( R&amp;&amp; r, C comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+@1@ 消除范围 {{range|first|last}} 的每个连续的等价元素组中首个以外的全部元素，并返回子范围 {{range|ret|last}}，其中 {{tt|ret}} 是新范围的尾后迭代器。
+
+@@ 若 {{c|1=std::invoke(comp, std::invoke(proj, *(i - 1)), std::invoke(proj, *i)) == true}} 则认为二个连续元素 {{tt|*(i - 1)}} 与 {{tt|*i}} 等价，其中 {{tt|i}} 是范围 {{range|first + 1|last}} 中的迭代器。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=处理的|sentinel=yes}}
+{{par|r| 要处理的元素范围}}
+{{par|comp| 比较投影后元素的二元谓词}}
+{{par|proj| 应用到元素的投影}}
+{{par end}}
+
+===返回值===
+返回 {{c|{ret, last} }}，其中 {{tt|ret}} 是新范围末尾的尾后迭代器。
+
+===复杂度===
+对于非空范围，准确应用相应的谓词 {{c|comp}} {{c|ranges::distance(first, last) - 1}} 次，并且应用投影 {{c|proj}} 的次数不多于其二倍。
+
+===注解===
+由迁移（通过移动赋值的手段）范围中的元素进行移除，使得未被移除的元素出现在范围起始。保持元素的相对顺序并且不改变容器的''物理''大小。{{range|ret|last}} 中的迭代器（若存在）仍然可解引用，但元素自身拥有未指定值（如{{named req|MoveAssignable}}后条件所要求）。
+
+对 {{tt|ranges::unique}} 的调用有时后随容器的 {{tt|erase}} 成员函数，这擦除未指定值并减少容器的''物理''大小以匹配其新的''逻辑''大小。此二调用一并实现[[enwiki:Erase-remove_idiom|''擦除-移除''手法]]。
+
+===可能的实现===
+{{eq fun|1=
+struct unique_fn
+{
+    template&lt;std::permutable I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_equivalence_relation&lt;std::projected&lt;I, Proj&gt;&gt;
+                 C = ranges::equal_to&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, S last, C comp = {}, Proj proj = {}) const
+    {
+        first = ranges::adjacent_find(first, last, comp, proj);
+        if (first == last)
+            return {first, first};
+        auto i {first};
+        ++first;
+        while (++first != last)
+            if (!std::invoke(comp, std::invoke(proj, *i), std::invoke(proj, *first)))
+                *++i = ranges::iter_move(first);
+        return {++i, first};
+    }
+
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             std::indirect_equivalence_relation&lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt;
+                 C = ranges::equal_to&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, C comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr unique_fn unique {};
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct id {
+    int i;
+    explicit id(int i) : i {i} {}
+};
+
+void print(id i, const auto&amp; v)
+{
+    std::cout &lt;&lt; i.i &lt;&lt; ") ";
+    std::ranges::for_each(v, [](auto const&amp; e) { std::cout &lt;&lt; e &lt;&lt; ' '; });
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    // 含数个重复元素的 vector
+    std::vector&lt;int&gt; v{1, 2, 1, 1, 3, 3, 3, 4, 5, 4};
+
+    print(id {1}, v);
+
+    // 移除连续（相接）的副本
+    const auto ret = std::ranges::unique(v);
+    // v 现在保有 {1 2 1 3 4 5 4 x x x}，其中 'x' 不确定
+    v.erase(ret.begin(), ret.end());
+    print(id {2}, v);
+
+    // sort 后随 unique，移除所有副本
+    std::ranges::sort(v); // {1 1 2 3 4 4 5}
+    print(id {3}, v);
+
+    const auto [first, last] = std::ranges::unique(v.begin(), v.end());
+    // v 现在保有 {1 2 3 4 5 x x}，其中 'x' 不确定
+    v.erase(first, last);
+    print(id {4}, v);
+
+    // 以定制比较与投影 unique
+    std::vector&lt;std::complex&lt;int&gt;&gt; vc{ {1, 1}, {-1, 2}, {-2, 3}, {2, 4}, {-3, 5} };
+    print(id {5}, vc);
+
+    const auto ret2 = std::ranges::unique(vc,
+        [](int x, int y) { return std::abs(x) == std::abs(y); }, // comp
+        [](std::complex&lt;int&gt; z) { return z.real(); }             // proj
+    );
+    vc.erase(ret2.begin(), ret2.end());
+    print(id {6}, vc);
+}
+|output=
+1) 1 2 1 1 3 3 3 4 5 4
+2) 1 2 1 3 4 5 4
+3) 1 1 2 3 4 4 5
+4) 1 2 3 4 5
+5) (1,1) (-1,2) (-2,3) (2,4) (-3,5)
+6) (1,1) (-2,3) (-3,5)
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove}}
+{{dsc inc|cpp/algorithm/dsc unique}}
+{{dsc inc|cpp/container/dsc unique|list}}
+{{dsc inc|cpp/container/dsc unique|forward_list}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

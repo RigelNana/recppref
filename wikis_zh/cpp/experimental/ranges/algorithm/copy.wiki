@@ -1,0 +1,159 @@
+{{cpp/experimental/ranges/title|copy|copy_if}}
+{{cpp/experimental/ranges/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/ranges/algorithm}}
+{{dcl|since=ranges|num=1|1= 
+template&lt; InputIterator I, Sentinel&lt;I&gt; S, WeaklyIncrementable O &gt;
+    requires IndirectlyCopyable&lt;I, O&gt;
+ranges::tagged_pair&lt;tag::in(I), tag::out(O)&gt;
+    copy( I first, S last, O result );
+}}
+{{dcl|since=ranges|num=2|1=
+template&lt; InputRange R, WeaklyIncrementable O &gt;
+    requires IndirectlyCopyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+ranges::tagged_pair&lt;tag::in(ranges::safe_iterator_t&lt;R&gt;), tag::out(O)&gt; 
+    copy( R&amp;&amp; r, O result );
+}}
+{{dcl|since=ranges|num=3|1=
+template&lt; InputIterator I, Sentinel&lt;I&gt; S, WeaklyIncrementable O,
+          class Proj = ranges::identity,
+          IndirectUnaryPredicate&lt;projected&lt;I, Proj&gt;&gt; Pred &gt;
+    requires IndirectlyCopyable&lt;I, O&gt;
+ranges::tagged_pair&lt;tag::in(I), tag::out(O)&gt;
+    copy_if( I first, S last, O result, Pred pred, Proj proj = Proj{} );
+}}
+{{dcl|since=ranges|num=4|1=
+template&lt; InputRange R, WeaklyIncrementable O,
+          class Proj = ranges::identity,
+          IndirectUnaryPredicate&lt;projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+    requires IndirectlyCopyable&lt;iterator_t&lt;R&gt;, O&gt;
+ranges::tagged_pair&lt;tag::in(ranges::safe_iterator_t&lt;R&gt;), tag::out(O)&gt;
+    copy_if( R&amp;&amp; r, O result, Pred pred, Proj proj = Proj{} );
+}}
+{{dcl end}}
+
+复制源范围（{{range|first|last}} 或 {{c|r}}）中的元素到始于 {{c|result}} 的目标范围中，从源范围的首元素开始，后续到末元素。
+
+@1@ 复制范围 {{range|first|last}} 中的所有元素。对每个非负整数 {{tt|n &lt; (last - first)}} 进行 {{c|1=*(result + n) = *(first + n)}}。若 {{c|result}} 在范围 {{range|first|last}} 内则行为未定义。此情况下可用 {{lc|ranges::copy_backward}} 代替。
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同用 {{c|ranges::copy(ranges::begin(rng), ranges::end(rng), result);}}，但不会复制 {{c|result}}。
+@3@ 仅复制那些谓词 {{c|pred}} 在投影 {{c|proj}} 所投影的元素值返回 {{c|true}} 的元素。保持复制后的元素顺序。若源与目标范围重叠则行为未定义。
+@4@ 同 {{v|3}}，但以 {{c|r}} 为源范围，如同用 {{c|ranges::copy_if(ranges::begin(rng), ranges::end(rng), result, pred, proj);}}，但不会复制 {{c|result}}、{{c|pred}} 和 {{c|proj}}。
+
+{{cpp/experimental/ranges/algorithm/tparams}}
+
+===参数===
+{{par begin}}
+{{par | first, last |要复制的元素范围}}
+{{par | rng |要复制的元素范围}}
+{{par | result |目标范围的起始}}
+{{par | pred |要应用到投影后元素的谓词}}
+{{par | proj |要应用到元素的投影}}
+{{par end}}
+
+===返回值===
+含有以下两个成员的 {{tt|tagged_pair}} 对象：
+* 第一成员有标签 {{tt|tag::in}}，为源范围的尾后迭代器（即比较等于哨位 {{c|last}} 的 {{tt|I}} 类型迭代器）。
+* 第二成员有标签 {{tt|tag::out}}，为结果范围的尾后迭代器。
+
+===复杂度===
+@1@ 恰好赋值 {{c|ranges::distance(first, last)}} 次。
+@2@ 恰好赋值 {{c|ranges::distance(rng)}} 次。
+@3@ 恰好应用 {{c|ranges::distance(first, last)}} 次对应的投影和谓词。
+@3@ 恰好应用 {{c|ranges::distance(rng)}} 次对应的投影和谓词。
+
+===可能的实现===
+{{eq fun|1=
+template&lt;InputIterator I, Sentinel&lt;I&gt; S, WeaklyIncrementable O&gt;
+    requires IndirectlyCopyable&lt;I, O&gt;()
+ranges::tagged_pair&lt;tag::in(I), tag::out(O)&gt;
+    copy(I first, S last, O result)
+{
+    for (; first != last; ++first, (void)++result)
+        *result = *first;
+    return {first, result};
+}
+|2=
+template&lt;InputRange R, WeaklyIncrementable O&gt;
+    requires IndirectlyCopyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;()
+ranges::tagged_pair&lt;tag::in(ranges::safe_iterator_t&lt;R&gt;), tag::out(O)&gt;
+    copy(R&amp;&amp; r, O result)
+{
+   return ranges::copy(ranges::begin(r), ranges::end(r), result);
+}
+|3=
+template&lt;InputIterator I, Sentinel&lt;I&gt; S, WeaklyIncrementable O,
+         class Proj = ranges::identity,
+         IndirectUnaryPredicate&lt;projected&lt;I, Proj&gt;&gt; Pred&gt;
+    requires IndirectlyCopyable&lt;I, O&gt;()
+ranges::tagged_pair&lt;tag::in(I), tag::out(O)&gt;
+    copy_if(I first, S last, O result, Pred pred, Proj proj = Proj{})
+{
+    for (; first != last; ++first)
+        if (ranges::invoke(pred, ranges::invoke(proj, *first)))
+        {
+            *result = *first;
+            ++result;
+        }
+    return {first, result};
+}
+|4=
+template&lt;InputRange R, WeaklyIncrementable O,
+         class Proj = ranges::identity,
+         IndirectUnaryPredicate&lt;projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    requires IndirectlyCopyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;()
+ranges::tagged_pair&lt;tag::in(ranges::safe_iterator_t&lt;R&gt;), tag::out(O)&gt;
+    copy_if(R&amp;&amp; r, O result, Pred pred, Proj proj = Proj{})
+{
+    return ranges::copy_if(ranges::begin(r), ranges::end(r), result, pred, proj);
+}
+}}
+
+===示例===
+{{example
+|下列代码用 copy 复制一个 {{tt|vector}} 的内容给另一个，并显示结果 {{tt|vector}}：
+|code=
+#include &lt;experimental/ranges/algorithm&gt;
+#include &lt;experimental/ranges/iterator&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    // 参阅 http://zh.cppreference.com/w/cpp/language/namespace_alias
+    namespace ranges = std::experimental::ranges;
+
+    std::vector&lt;int&gt; from_vector(10);
+    std::iota(from_vector.begin(), from_vector.end(), 0);
+
+    std::vector&lt;int&gt; to_vector;
+    ranges::copy_if(from_vector.begin(), from_vector.end(),
+                    ranges::back_inserter(to_vector),
+                    [](const auto i)
+                    {
+                       return i % 3;
+                    });
+// 或替用的
+//  std::vector&lt;int&gt; to_vector(from_vector.size());
+//  std::copy(from_vector, to_vector.begin());
+
+    std::cout &lt;&lt; "to_vector 包含: ";
+
+    ranges::copy(to_vector, ranges::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+}
+|output=
+to_vector 包含: 1 2 4 5 7 8 
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc copy}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc copy_backward}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc reverse_copy}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc copy_n}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc fill}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc remove_copy}}
+{{dsc end}}
+
+{{langlinks|en}}

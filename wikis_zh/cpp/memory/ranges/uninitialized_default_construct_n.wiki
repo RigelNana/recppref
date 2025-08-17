@@ -1,0 +1,129 @@
+{{cpp/ranges/title|uninitialized_default_construct_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|调用签名}}
+{{dcla|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-iterator I &gt;
+    requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+I uninitialized_default_construct_n( I first,
+                                     std::iter_difference_t&lt;I&gt; count );
+}}
+{{dcl end}}
+
+如同用以下方式在未初始化内存区域 {{counted range|first|count}} 上通过[[cpp/language/default initialization|默认初始化]]构造 {{c/core|std::iter_value_t&lt;I&gt;}} 类型对象：
+{{c multi|
+return ranges::uninitialized_default_construct(std::counted_iterator(first, count),|
+                                               std::default_sentinel).base();
+}}
+
+如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|first|要初始化的元素范围的起始}}
+{{par|count|要构造的元素数}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+与 {{c|count}} 成线性。
+
+===异常===
+构造目标范围中的元素时抛出的任何异常。
+
+===注解===
+如果默认初始化 {{c/core|std::iter_value_t&lt;I&gt;}} 对象时不调用非平凡的默认构造函数，那么实现可以跳过对象构造（而不更改可观察效果），这能由 {{lc|std::is_trivially_default_constructible}} 检测。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的 [[cpp/memory#未初始化内存算法|特化的内存算法]]}}
+
+===可能的实现===
+{{eq fun|1=
+struct uninitialized_default_construct_n_fn
+{
+    template&lt;no-throw-forward-iterator I&gt;
+        requires std::default_initializable&lt;std::iter_value_t&lt;I&gt;&gt;
+    constexpr I operator()(I first, std::iter_difference_t&lt;I&gt; count) const
+    {
+        auto iter = std::counted_iterator(first, count);
+        return ranges::uninitialized_default_construct(iter, std::default_sentinel).base();
+    }
+};
+
+inline constexpr uninitialized_default_construct_n_fn uninitialized_default_construct_n{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    struct S { std::string m{"█▓▒░ █▓▒░ "}; };
+    
+    constexpr int n{4};
+    alignas(alignof(S)) char out[n * sizeof(S)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;S*&gt;(out)};
+        auto last = std::ranges::uninitialized_default_construct_n(first, n);
+        
+        auto count{1};
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; count++ &lt;&lt; ' ' &lt;&lt; it-&gt;m &lt;&lt; '\n';
+        
+        std::ranges::destroy(first, last);
+    }
+    catch (...)
+    {
+        std::cout &lt;&lt; "异常！\n";
+    }
+    
+    // 对于标量类型，uninitialized_default_construct_n
+    // 通常不会以零填充给定的未初始化内存区域。
+    constexpr int sample[]{1, 2, 3, 4, 5, 6};
+    int v[]{1, 2, 3, 4, 5, 6};
+    std::ranges::uninitialized_default_construct_n(std::begin(v), std::size(v));
+    if (std::memcmp(v, sample, sizeof(v)) == 0)
+    {
+        // 可能为未定义行为，等待 CWG 1997 得到解决：
+        // for (const int i : v) { std::cout &lt;&lt; i &lt;&lt; ' '; }
+        for (const int i : sample)
+            std::cout &lt;&lt; i &lt;&lt; ' ';
+    }
+    else
+        std::cout &lt;&lt; "未指定！";
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+1 █▓▒░ █▓▒░
+2 █▓▒░ █▓▒░
+3 █▓▒░ █▓▒░
+4 █▓▒░ █▓▒░
+1 2 3 4 5 6
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可能在 {{c/core|const}} 存储上创建对象|after=保持禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_default_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_default_construct_n}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

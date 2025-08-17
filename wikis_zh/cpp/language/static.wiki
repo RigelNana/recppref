@@ -1,0 +1,175 @@
+{{title|{{tt|static}} 成员}}
+{{cpp/language/classes/navbar}}
+
+在类定义中，关键词 {{ltt|cpp/keywords/static}} 声明不绑定到类实例的成员。
+
+在类定义之外，它有不同含义：见{{rlp|storage duration|存储期}}。
+
+===语法===
+声明说明符中包含关键词 {{c|static}} 的{{rlp|class#成员说明|成员声明}}是静态成员的声明。{{c|static}} 关键词通常会在其他说明符之前出现（此语法经常被非正式地描述为 {{c|static}} {{spar|数据成员}} 或 {{c|static}} {{spar|成员函数}}），但它可以在说明符序列中的任何位置出现。
+
+静态数据成员和静态成员函数的名字不能与所在的类名相同。
+
+===解释===
+类的静态成员不与类的对象关联：它们是具有静态{{rev inl|since=c++11|或线程}}{{rlp|storage_duration|存储期}}的独立变量，或者常规函数。
+
+{{c|static}} 关键词只会用于静态成员在类定义中的声明，而不用于该静态成员的定义：
+
+{{source|1=
+class X { static int n; }; // 声明（用 'static'）
+int X::n = 1;              // 定义（不用 'static'）
+}}
+
+类体内的声明不是定义，且可以将成员声明为（除 {{c|void}} 之外的）{{rlp|incomplete type|不完整类型}}，包括该成员的声明所在的类型：
+
+{{source|
+struct Foo;
+
+struct S
+{
+    static int a[]; // 声明，不完整类型
+    static Foo x;   // 声明，不完整类型
+    static S s;     // 声明，不完整类型（在其自身定义中）
+};
+
+int S::a[10]; // 定义，完整类型
+struct Foo {};
+Foo S::x;     // 定义，完整类型
+S S::s;       // 定义，完整类型
+}}
+
+{{rrev|since=c++11|
+然而，如果声明使用了 {{ltt|cpp/language/constexpr}}{{rev inl|since=c++17| 或 {{ltt|cpp/language/inline}}}} 说明符，那么该成员必须声明为拥有完整类型。
+}}
+
+指代类 {{tt|T}} 的静态成员 {{tt|m}} 有两种可用的形式：限定名 {{tt|T::m}} 以及成员访问表达式 {{tt|E.m}} 或 {{tt|E-&gt;m}}，其中 {{tt|E}} 分别是求值为 {{tt|T}} 或 {{tt|T*}} 的表达式。在同一类作用域中时，不需要限定：
+
+{{source|1=
+struct X
+{
+    static void f(); // 声明
+    static int n;    // 声明
+};
+
+X g() { return X(); } // 某个返回 X 的函数
+
+void f()
+{
+    X::f();  // X::f 是静态成员函数的限定名
+    g().f(); // g().f 是指代静态成员函数的成员访问表达式
+}
+
+int X::n = 7; // 定义
+
+void X::f() // 定义
+{
+    n = 1; // X::n 在此作用域可以只以 n 的形式进行访问
+}
+}}
+
+静态成员遵循{{rlp|access|类成员访问规则（私有、受保护、公开）}}。
+
+====静态成员函数====
+静态成员函数不关联到任何对象。调用时，它们没有 {{c|this}} 指针。
+
+静态成员函数不能是 {{c|virtual}}、{{c|const}} 或 {{c|volatile}} 的，或被{{rlp|member functions#引用限定的成员函数|引用限定}}的。
+
+静态成员函数的地址可以存储在常规的{{rlp|pointer#函数指针|函数指针}}中，但不能存储在{{rlp|pointer#成员函数指针|成员函数指针}}中。
+
+====静态数据成员====
+静态数据成员不关联到任何对象。即使不定义类的任何对象它们也存在。整个程序中只有一个拥有静态{{rlp|storage duration|存储期}}的静态数据成员实例{{rev inl|since=c++11|，除非使用关键词 {{ltt|cpp/keyword/thread_local}}，此时每个线程都有一个具有线程存储期的该对象}}。
+
+静态数据成员不能是 {{c|mutable}} 的。
+
+在命名空间作用域中，如果类自身具有外部连接（即不是{{rlp|namespace#无名命名空间|无名命名空间}}的成员），那么类的静态数据成员也具有{{rlp|storage duration|外部连接}}。局部类（定义于函数内部的类）和无名类，包括无名类的成员类，不能拥有静态数据成员。
+
+{{rrev|since=c++17|
+静态数据成员可以声明为 {{ltt|cpp/language/inline}}。内联静态数据成员可以在类定义中定义，而且可以指定初始化器。它不需要类外定义：
+{{source|1=
+struct X
+{
+    inline static int fully_usable = 1; // 不需要类外定义，可 ODR 式使用
+    inline static const std::string class_name{"X"}; // 类似
+
+    static const int non_addressable = 1; // 相对而言，非内联常量，可以使用其值，但不可 ODR 式使用
+    // static const std::string class_name{"X"}; // 完全禁止这种形式的非整数声明
+};
+}}
+}}
+
+====常量静态成员====
+如果整型或枚举类型的静态数据成员被声明为 {{c|const}}（且非 {{c|volatile}}），那么它能以其中的每个表达式均为{{rlp|constexpr|常量表达式}}的{{rlp|initialization|初始化器}}直接在类定义内初始化：
+
+{{source|1=
+struct X
+{
+    const static int n = 1;
+    const static int m{2}; // C++11 起
+    const static int k;
+};
+const int X::k = 3;
+}}
+
+{{rrev|since=c++11|
+如果声明{{named req|LiteralType}}的静态数据成员为 {{c|constexpr}}，那么它必须以其中的每个表达式均为常量表达式的初始化器直接在类定义内初始化：
+
+{{source|1=
+struct X
+{
+    constexpr static int arr[] = { 1, 2, 3 };        // OK
+    constexpr static std::complex&lt;double&gt; n = {1,2}; // OK
+    constexpr static int k; // 错误：constexpr static 要求初始化器
+};
+}}
+}}
+
+如果 const {{rev inl|since=c++17|非 inline }}静态数据成员{{rev inl|since=c++11|until=c++17|或 constexpr 静态数据成员}}被 {{rlps|definition#ODR 使用}}，那么仍然需要命名空间作用域的定义，但它不能有初始化器。
+
+{{rrev|since=c++17|
+如果静态数据成员被声明为 {{c|constexpr}}，那么它隐含为 {{c|inline}} 且不必在命名空间作用域重声明。这种无初始化器的重声明（之前则需要，如上所示）仍然得到容许，但已被弃用。
+}}
+
+{{source|1=
+struct X
+{
+    static const int n = 1;
+    static constexpr int m = 4;
+};
+
+const int *p = &amp;X::n, *q = &amp;X::m; // 因为X::n 与 X::m 被 ODR 式使用
+const int X::n;             // ……所以需要定义
+constexpr int X::m;         // ……（但 C++17 中的 X::m 不需要）
+}}
+
+===关键词===
+{{ltt|cpp/keyword/static}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=194|std=C++98|before=（静态）成员函数的名字可以与所在类的名字相同|after=添加命名限制&lt;br&gt;（包括{{rlp|member functions#缺陷报告|非静态成员函数}}）}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std | section=11.4.9 | title=Static members | id=class.static}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std | section=11.4.8 | title=Static members | id=class.static}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std | section=12.2.3 | title=Static members | id=class.static}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std | section=9.4 | title=Static members | id=class.static}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std | section=9.4 | title=Static members | id=class.static}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std | section=9.4 | title=Static members | id=class.static}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|storage_duration|{{c|static}} 存储说明符}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

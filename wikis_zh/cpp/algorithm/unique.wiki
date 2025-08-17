@@ -1,0 +1,161 @@
+{{cpp/title|unique}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt &gt;
+ForwardIt unique( ForwardIt first, ForwardIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt unique( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt last );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt, class BinaryPred &gt;
+ForwardIt unique( ForwardIt first, ForwardIt last, BinaryPred p );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt, class BinaryPred &gt;
+ForwardIt unique( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt last, BinaryPred p );
+}}
+{{dcl end}}
+
+从范围 {{range|first|last}} 移除相继等价元素组中首元素以外的所有元素，并返回范围新结尾的尾后迭代器。
+
+@1@ 用 {{c/core|1=operator==}} 比较元素。
+@@ 如果 {{c/core|1=operator==}} 没有建立{{enwiki|equivalence relation|等价关系}}，那么行为未定义。
+
+@3@ 用给定的二元谓词 {{c|p}} 比较元素。
+@@ 如果 {{c|p}} 没有建立等价关系，那么行为未定义。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+===解释===
+移除元素是通过将范围内的元素移动位置，使得不需要被移除的元素会在范围的开头出现的方式实现的。
+* 元素通过{{rev inl|until=c++11|[[cpp/language/copy assignment|复制赋值]]}}{{rev inl|since=c++11|[[cpp/language/move assignment|移动赋值]]}}实现。
+* 移除操作是稳定的：不需要被移除的元素的相对顺序保持不变。
+* 移除操作不会缩短 {{range|first|last}} 的底层序列。给定 {{c|result}} 为返回的迭代器：
+:* {{range|result|last}} 中的所有迭代器仍然[[cpp/iterator#可解性与有效性|可解引用]]。
+{{rrev|since=c++11|
+:* {{range|result|last}} 的所有元素都具有有效但未指定的状态，这是因为移动赋值会通过将原来在该范围内的元素移走的方式来消灭元素。
+}}
+
+===参数===
+{{par begin}}
+{{par range|3=要处理的}}
+{{par exec pol}}
+{{par pred2 eq|p|p1=ForwardIt}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named deref|ForwardIt|MoveAssignable}}
+{{par end}}
+
+===返回值===
+指向范围新结尾的 {{tt|ForwardIt}}。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+@1,2@ 应用 {{mathjax-or|\(\scriptsize max(0,N-1)\)|max(0,N-1)}} 次 {{c/core|1=operator==}} 进行比较。
+@3,4@ 应用 {{mathjax-or|\(\scriptsize max(0,N-1)\)|max(0,N-1)}} 次谓词 {{c|p}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/7f2f4b87910506effb8dffffc60eeb2451573126/libstdc%2B%2B-v3/include/bits/stl_algo.h#L919-L1000 libstdc++]、 [https://github.com/llvm/llvm-project/blob/5ba396011377bdf4086757d56cd48fc7d3c9f2ad/libcxx/include/__algorithm/unique.h libc++] 和 [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L3804-L3848 MSVC STL] 中的实现。
+{{eq impl
+|title1=unique (1)|ver1=1|1=
+template&lt;class ForwardIt&gt;
+ForwardIt unique(ForwardIt first, ForwardIt last)
+{
+    if (first == last)
+        return last;
+    
+    ForwardIt result = first;
+    while (++first != last)
+        if (!(*result == *first) &amp;&amp; ++result != first)
+            *result = std::move(*first);
+    
+    return ++result;
+}
+|title2=unique (3)|ver2=3|2=
+template&lt;class ForwardIt, class BinaryPredicate&gt;
+ForwardIt unique(ForwardIt first, ForwardIt last, BinaryPredicate p)
+{
+    if (first == last)
+        return last;
+    
+    ForwardIt result = first;
+    while (++first != last)
+        if (!p(*result, *first) &amp;&amp; ++result != first)
+            *result = std::move(*first);
+    
+    return ++result;
+}
+}}
+
+===注解===
+调用 {{tt|unique}} 之后通常跟随调用容器的 {{tt|erase}} 成员函数来从容器中实际移除元素。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    // 含有数个重复元素的 vector
+    std::vector&lt;int&gt; v{1, 2, 1, 1, 3, 3, 3, 4, 5, 4};
+    auto print = [&amp;] (int id)
+    {
+        std::cout &lt;&lt; "@" &lt;&lt; id &lt;&lt; ": ";
+        for (int i : v)
+            std::cout &lt;&lt; i &lt;&lt; ' ';
+        std::cout &lt;&lt; '\n';
+    };
+    print(1);
+ 
+    // 移除相继（毗邻）的重复元素
+    auto last = std::unique(v.begin(), v.end());
+    // v 现在保有 {1 2 1 3 4 5 4 x x x}，其中 x 不确定
+    v.erase(last, v.end());
+    print(2);
+ 
+    // sort 后 unique 以移除所有重复
+    std::sort(v.begin(), v.end()); // {1 1 2 3 4 4 5}
+    print(3);
+ 
+    last = std::unique(v.begin(), v.end());
+    // v 现在保有 {1 2 3 4 5 x x}，其中 x 不确定
+    v.erase(last, v.end());
+    print(4);
+}
+|output=
+@1: 1 2 1 1 3 3 3 4 5 4 
+@2: 1 2 1 3 4 5 4 
+@3: 1 1 2 3 4 4 5 
+@4: 1 2 3 4 5
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=202|std=C++98|before=元素用非等价关系进行比较的情况下的行为不明确|after=此时行为未定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/dsc remove}}
+{{dsc inc|cpp/container/dsc unique|list}}
+{{dsc inc|cpp/container/dsc unique|forward_list}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

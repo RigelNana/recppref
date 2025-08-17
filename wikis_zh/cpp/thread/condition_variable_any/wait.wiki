@@ -1,0 +1,88 @@
+{{cpp/thread/condition_variable_any/title|wait}}
+{{cpp/thread/condition_variable_any/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+template&lt; class Lock &gt;
+void wait( Lock&amp; lock );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class Lock, class Predicate &gt;
+void wait( Lock&amp; lock, Predicate pred );
+}}
+{{dcl|num=3|since=c++20|
+template&lt; class Lock, class Predicate &gt;
+bool wait( Lock&amp; lock, std::stop_token stoken, Predicate pred );
+}}
+{{dcl end}}
+
+{{tt|wait}} 导致当前线程阻塞，直至条件变量被通知或发生虚假唤醒。可以提供 {{c|pred}} 以检测虚假唤醒。
+
+@1@ 原子地调用 {{c|lock.unlock()}}，并在 {{c|*this}} 上阻塞调用线程。
+@@ 调用线程会在执行 {{lc|notify_all()}} 或 {{lc|notify_one()}} 时解除阻塞。它也可能因虚假唤醒而解除阻塞。
+@@ 在解除阻塞时调用 {{c|lock.lock()}}（在锁定时可能还会阻塞），然后返回。
+
+@2,3@ 等待特定条件为真，可用于忽略虚假唤醒。
+:@2@ 等价于
+:@@ {{c multi
+|while (!pred())
+|    wait(lock);}}
+:@3@ 在此调用期间注册 {{c|*this}}，使得在给定的 {{c|stoken}} 的关联停止状态上作出停止请求时提醒它；它等价于
+:@@ {{c multi
+|while (!stoken.stop_requested())
+|{
+|    if (pred())
+|        return true;
+|    wait(lock);
+|}
+|return pred();
+}}
+
+在 {{tt|wait}} 返回时，并且调用线程会锁定 {{c|lock}}。如果无法满足此后条件&lt;ref&gt;重新锁定互斥体的过程中抛出异常就会发生这种情况。&lt;/ref&gt;，那么就会调用 {{lc|std::terminate}}。
+
+&lt;references/&gt;
+
+===参数===
+{{par begin}}
+{{par|lock|必须已经由调用线程锁定的锁}}
+{{par|stoken|用于注册中断的停止令牌}}
+{{par|pred|检查是否可以完成等待的谓词}}
+{{par hreq}}
+{{par req named|Lock|BasicLockable}}
+{{par req named|Predicate|FunctionObject}}
+{{par req|{{c|pred()}} 必须为合法的表达式，且其类型与值类别必须符合{{named req|BooleanTestable}}要求。}}
+{{par end}}
+
+===返回值===
+@1-2@ （无）
+@3@ 在返回调用方前 {{c|pred()}} 的最新结果。
+
+===异常===
+@1@ 不抛出
+@2,3@ {{c|pred}} 抛出的任何异常。
+
+===注解===
+重载 {{v|3}} 的返回值指示 {{c|pred}} 是否求值为 {{c|true}}，与是否有请求过停止无关。
+
+{{cpp/thread/condition_variable/single_total_order_note}}
+
+===示例===
+{{include|cpp/thread/condition_variable/example1|condition_variable_any}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++11|before=到 {{c/core|bool}} 的可转换性过于弱而无法反映实现的期待|after=加强要求}}
+{{dr list item|wg=lwg|dr=2135|std=C++11|before=在 {{c|lock.lock()}} 抛出异常时的行为不明确|after=此时会调用 {{lc|std::terminate}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable_any}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_until|condition_variable_any}}
+{{dsc see c|c/thread/cnd_wait}}
+{{dsc end}}
+
+===外部链接===
+{{eli|1=[https://devblogs.microsoft.com/oldnewthing/20180201-00/?p=97946 The Old New Thing] 文章: Spurious wake-ups in Win32 condition variables.}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

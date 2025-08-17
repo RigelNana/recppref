@@ -1,0 +1,79 @@
+{{cpp/filesystem/path/title|lexically_normal|lexically_relative|lexically_proximate}}
+{{cpp/filesystem/path/navbar}}
+{{dcl begin}}
+{{dcl|since=c++17|num=1|1=
+path lexically_normal() const;
+}}
+{{dcl|since=c++17|num=2|1=
+path lexically_relative( const path&amp; base ) const;
+}}
+{{dcl|since=c++17|num=3|1=
+path lexically_proximate( const path&amp; base ) const;
+}}
+{{dcl end}}
+
+@1@ 返回以其通用格式转换成[[cpp/filesystem/path|正规形式]]的 {{c|*this}}。
+@2@ 返回设为相对于 {{c|base}} 的 {{c|*this}}。
+:* 首先，若 {{c|1=root_name() != base.root_name()}} 为 {{c|true}} 或 {{c|1=is_absolute() != base.is_absolute()}} 为 {{c|true}} 或 {{c|(!has_root_directory() &amp;&amp; base.has_root_directory())}} 为 {{c|true}} 或 {{c|relative_path()}} 或 {{c|base.relative_path()}} 中的任何文件名能转译为 {{spar|根名}}，则返回默认构造的 {{tt|path}}。
+:* 否则，首先确定 {{c|*this}} 和 {{c|base}} 的首个不匹配元素，如同以 {{c|auto [a, b] {{=}} mismatch(begin(), end(), base.begin(), base.end())}}，然后
+::* 若 {{c|1=a == end()}} 且 {{c|b {{==}} base.end()}}，则返回 {{c|path(".")}}；
+::* 否则，定义 {{math|N}} 为 {{c|[b, base.end())}} 中既非 {{spar|点}} 亦非 {{spar|点点}} 的非空文件名元素数减去 {{spar|点点}} 文件名元素数。若 {{math|N &lt; 0}} 则返回默认构造的 {{tt|path}}，
+::* 否则，若 {{math|1=N = 0}} 且 {{c|a {{==}} end() {{!!}} a-&gt;empty()}}，则返回 {{c|path(".")}}，
+::* 否则返回由以下方式合成的对象
+:::* 默认构造 {{c|path()}} 后
+:::* 应用 {{math|N}} 次 {{c|operator/{{=}}(path(".."))}}，之后
+:::* 对半开范围 {{range|a|end()}} 中的每个元素应用一次 {{c|1=operator/=}}
+@3@ 若 {{c|lexically_relative(base)}} 的值不是空路径，则返回它。否则返回 {{c|*this}}。
+
+===参数===
+（无）
+
+===返回值===
+@1@ 路径的正规形式。
+@2@ 路径的相对形式。
+@3@ 路径的近似形式。
+
+{{cpp/impldef exception}}
+
+===注解===
+这些转换是纯词法的。它们不检查路径是否存在，不跟随符号链接，且完全不访问文件系统。关于 {{tt|lexically_relative}} 与 {{tt|lexically_proximate}} 跟随符号链接的对应版本，见 {{ltt|cpp/filesystem/relative}} 与 {{ltt|cpp/filesystem/relative|proximate}}。
+
+Windows 上返回路径拥有反斜杠（偏好分隔符）。
+
+POSIX 上相对路径中的文件名均不可接受为 {{spar|根名}} 。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;filesystem&gt;
+#include &lt;iostream&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    assert(fs::path("a/./b/..").lexically_normal() == "a/");
+    assert(fs::path("a/.///b/../").lexically_normal() == "a/");
+    assert(fs::path("/a/d").lexically_relative("/a/b/c") == "../../d");
+    assert(fs::path("/a/b/c").lexically_relative("/a/d") == "../b/c");
+    assert(fs::path("a/b/c").lexically_relative("a") == "b/c");
+    assert(fs::path("a/b/c").lexically_relative("a/b/c/x/y") == "../..");
+    assert(fs::path("a/b/c").lexically_relative("a/b/c") == ".");
+    assert(fs::path("a/b").lexically_relative("c/d") == "../../a/b");
+    assert(fs::path("a/b").lexically_relative("/a/b") == "");
+    assert(fs::path("a/b").lexically_proximate("/a/b") == "a/b");
+}
+}}
+
+=== 缺陷报告 ===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3070|std=c++17|before=亦能为根名的文件名可能导致诧异的结果|after=当作错误情况}}
+{{dr list item|wg=lwg|dr=3096|std=c++17|before=错误地处理了尾随 "/" 和 "/."|after=已更正}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/filesystem/dsc relative}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

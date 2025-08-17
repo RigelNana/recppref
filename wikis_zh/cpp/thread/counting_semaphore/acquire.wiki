@@ -1,0 +1,167 @@
+{{cpp/thread/counting_semaphore/title|acquire}}
+{{cpp/thread/counting_semaphore/navbar}}
+{{dcl begin}}
+{{dcl|since=c++20|
+void acquire();
+}}
+{{dcl end}}
+
+原子地，若内部计数器大于 {{c|0}} 则尝试将它减少 {{c|1}}；否则阻塞直至它大于 {{c|0}} 且能成功减少内部计数器。
+
+===前条件===
+（无）
+
+===参数===
+（无）
+
+===异常===
+可能抛出 {{lc|std::system_error}}。
+
+===示例===
+{{example
+|此示例可视化数个随机化线程的并发作业，不多于 N 个线程函数活跃，而其他则在信号量上等待（N 为信号量 {{tt|''desired''}} 值）。
+|code=
+#include &lt;array&gt;
+#include &lt;chrono&gt;
+#include &lt;cstddef&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;new&gt;
+#include &lt;random&gt;
+#include &lt;semaphore&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+using namespace std::literals;
+
+constexpr std::size_t max_threads{10U}; // 更改并查看效果
+constexpr std::ptrdiff_t max_sema_threads{3}; // 对二元信号量为 {1}
+std::counting_semaphore semaphore{max_sema_threads};
+constexpr auto time_tick{10ms};
+
+unsigned rnd()
+{
+    static std::uniform_int_distribution&lt;unsigned&gt; distribution{2U, 9U}; // [延迟]
+    static std::random_device engine;
+    static std::mt19937 noise{engine()};
+    return distribution(noise);
+}
+
+class alignas(std::hardware_destructive_interference_size) Guide
+{
+    inline static std::mutex cout_mutex;
+    inline static std::chrono::time_point&lt;std::chrono::high_resolution_clock&gt; started_at;
+    unsigned delay{rnd()}, occupy{rnd()}, wait_on_sema{};
+
+public:
+    static void start_time() { started_at = std::chrono::high_resolution_clock::now(); }
+
+    void initial_delay() { std::this_thread::sleep_for(delay * time_tick); }
+
+    void occupy_sema()
+    {
+        wait_on_sema =
+            static_cast&lt;unsigned&gt;(std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(
+                std::chrono::high_resolution_clock::now() - started_at -
+                delay * time_tick).count() / time_tick.count());
+        std::this_thread::sleep_for(occupy * time_tick);
+    }
+
+    void visualize(unsigned id, unsigned x_scale = 2) const
+    {
+        auto cout_n = [=](auto str, unsigned n)
+        {
+            for (n *= x_scale; n-- &gt; 0; std::cout &lt;&lt; str)
+                ;
+        };
+        std::lock_guard lk{cout_mutex};
+        std::cout &lt;&lt; '#' &lt;&lt; std::setw(2) &lt;&lt; id &lt;&lt; ' ';
+        cout_n("░", delay);
+        cout_n("▒", wait_on_sema);
+        cout_n("█", occupy);
+        std::cout &lt;&lt; '\n';
+    }
+
+    static void show_info()
+    {
+        std::cout &lt;&lt; "\n线程数: " &lt;&lt; max_threads &lt;&lt; ", 吞吐量: " &lt;&lt; max_sema_threads
+                  &lt;&lt; " │ 凡例: 初始延迟 ░░ │ 等待状态 ▒▒ │ 信号量占据 ██ \n"
+                  &lt;&lt; std::endl;
+    }
+};
+
+std::array&lt;Guide, max_threads&gt; guides;
+
+void workerThread(unsigned id)
+{
+    guides[id].initial_delay(); // 模拟获取信号量前的某些工作
+    semaphore.acquire();        // 等待直至空信号量槽位可用
+    guides[id].occupy_sema();   // 模拟获取信号量时的某些工作
+    semaphore.release();
+    guides[id].visualize(id);
+}
+
+int main()
+{
+    std::vector&lt;std::jthread&gt; threads;
+    threads.reserve(max_threads);
+
+    Guide::show_info();
+    Guide::start_time();
+
+    for (auto id{0U}; id != max_threads; ++id)
+        threads.push_back(std::jthread(workerThread, id));
+}
+|p=true
+|output=
+缺省情况: max_threads{10U}, max_sema_threads{3}
+
+线程数: 10, 吞吐量: 3 │ 凡例: 初始延迟 ░░ │ 等待状态 ▒▒ │ 信号量占据 ██
+
+# 1 ░░░░██████
+# 2 ░░░░████████
+# 5 ░░░░░░██████████
+# 8 ░░░░░░░░░░░░████████████
+# 9 ░░░░░░░░░░░░██████████████
+# 7 ░░░░░░░░░░░░▒▒▒▒████████████████
+# 4 ░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒████████
+# 6 ░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒██████████████████
+# 3 ░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒████████████
+# 0 ░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒██████████████
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+“每人都有”的情况（没有等等状态！）: max_threads{10U}, max_sema_threads{10}
+
+线程数: 10, 吞吐量: 10 │ 凡例: 初始延迟 ░░ │ 等待状态 ▒▒ │ 信号量占据 ██
+
+# 4 ░░░░██████
+# 5 ░░░░░░████
+# 3 ░░░░██████████
+# 1 ░░░░██████████
+# 8 ░░░░░░░░████████████
+# 6 ░░░░░░░░░░░░░░░░██████
+# 7 ░░░░░░░░░░░░░░░░██████
+# 9 ░░░░░░░░░░░░░░░░██████████
+# 0 ░░░░░░░░░░░░██████████████████
+# 2 ░░░░░░░░░░░░░░░░░░████████████
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+二元信号量的情况: max_threads{10U}, max_sema_threads{1}
+
+线程数: 10, 吞吐量: 1 │ 凡例: 初始延迟 ░░ │ 等待状态 ▒▒ │ 信号量占据 ██
+
+# 6 ░░░░████
+# 5 ░░░░▒▒▒▒████
+# 4 ░░░░░░░░░░▒▒██████████
+# 7 ░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒████████████████
+# 2 ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒██████
+# 3 ░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒████████████████
+# 0 ░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒████████████
+# 1 ░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒████████
+# 8 ░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒██████
+# 9 ░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒██████████████
+
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

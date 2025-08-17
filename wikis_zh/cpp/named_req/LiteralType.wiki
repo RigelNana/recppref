@@ -1,0 +1,103 @@
+{{cpp/named req/title|LiteralType|notes={{mark since c++11}}}}
+{{cpp/named req/navbar}}
+
+指明一个类型为''字面类型''。字面类型是 [[cpp/language/constexpr#constexpr 变量|{{tt|constexpr}} 变量]]拥有的类型，且能通过 [[cpp/language/constexpr#constexpr 函数|{{tt|constexpr}} 函数]]构造、操作及返回它们。
+
+{{cpp/named req/core cat note}}
+
+===要求===
+字面类型是下列之一：
+{{rrev|since=c++14|
+* 可有 cv 限定的 {{c/core|void}}（这样 {{c/core|constexpr}} 函数可以返回 void）；
+}}
+* [[cpp/named req/ScalarType|标量类型]]；
+* [[cpp/language/reference|引用类型]]；
+* 字面类型的[[cpp/language/array|数组]]；
+* 可有 cv 限定的类类型，并拥有下列全部性质：
+:* 拥有{{rev inl|until=c++20|平凡}}{{rev inl|since=c++20| {{c/core|constexpr}} }}[[cpp/language/destructor|析构函数]]，
+:* 其所有非静态非可变数据成员和基类都是非 volatile 字面类型，并且
+:* 是以下之一：
+{{rrev|since=c++17|
+::* [[cpp/language/lambda|lambda 类型]]
+}}
+::* [[cpp/language/aggregate initialization#定义|聚合]]联合体类型，它
+:::* 没有[[cpp/language/union#联合体式的类|变体成员]]，或者
+:::* 至少有一个具有无 volatile 限定的字面类型的变体成员
+::* 非联合体[[cpp/language/aggregate initialization#定义|聚合]]类型，它的每个[[cpp/language/union#匿名联合体|匿名联合体]]成员
+:::* 没有[[cpp/language/union#联合体式的类|变体成员]]，或者
+:::* 至少有一个具有无 volatile 限定的字面类型的变体成员
+::* 拥有至少一个 {{c/core|constexpr}} 构造函数（可以是模板）且非复制或移动构造函数的类型
+
+===注解===
+字面类型的构造函数可以都被弃置、不可访问或不参与重载决议。
+
+{{source|1=
+struct A { constexpr A(int) = delete; char c; }; // A 是字面类型
+constexpr A v = std::bit_cast&lt;A&gt;('0'); // C++20 起 OK
+                                       // v 拥有字面类型因此可以是 constexpr 的
+}}
+
+===示例===
+{{example
+|扩展字符串字面量的字面类型：
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+class conststr // conststr 是字面类型
+{
+    const char* p;
+    std::size_t sz;
+public:
+    template&lt;std::size_t N&gt;
+    constexpr conststr(const char(&amp;a)[N]) : p(a), sz(N - 1) {}
+
+    constexpr char operator[](std::size_t n) const
+    {
+        return n &lt; sz ? p[n] : throw std::out_of_range("");
+    }
+
+    constexpr std::size_t size() const { return sz; }
+};
+
+constexpr std::size_t count_lower(conststr s)
+{
+    std::size_t c{};
+    for (std::size_t n{}; n != s.size(); ++n)
+        if ('a' &lt;= s[n] &amp;&amp; s[n] &lt;= 'z')
+            ++c;
+    return c;
+}
+
+// 要求编译时常量 N 的输出函数，测试需要
+template&lt;int N&gt;
+struct constN
+{
+    constN() { std::cout &lt;&lt; N &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "\"Hello, world!\" 中小写字母的个数是 ";
+    constN&lt;count_lower("Hello, world!")&gt;(); // 字符串字面量被隐式转换成 conststr
+}
+|output=
+"Hello, world!" 中小写字母的个数是 9
+}}
+
+
+===缺陷报告 ===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1453|std=C++11|before=字面类可以有 volatile 数据成员|after=已禁止}}
+{{dr list item|wg=cwg|dr=1951|std=C++11&lt;br&gt;C++14|before=未指明有 cv 限定的 {{c/core|void}}（C++14）&lt;br&gt;和类类型（C++11）是不是字面类型|after=它们是}}
+{{dr list item|wg=cwg|dr=2096|std=C++11|before=联合体类型只有在所有非静态数据&lt;br&gt;成员都是字面类型时才是字面类型|after=只需要有一个非静态&lt;br&gt;数据成员是字面类型}}
+{{dr list item|wg=cwg|dr=2598|std=C++11|before=联合体类型只有在至少有一个&lt;br&gt;非静态数据成员时才是字面类型|after=也可以没有静态数据成员}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_literal_type}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

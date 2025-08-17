@@ -1,0 +1,129 @@
+{{title|operator&gt;&gt;{{small|(std::basic_istream)}}}}
+{{cpp/io/basic_istream/navbar}}
+{{dcl begin}}
+{{dcl header|istream}}
+{{dcl|num=1|
+template&lt; class CharT, class Traits &gt;
+basic_istream&lt;CharT, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;CharT, Traits&gt;&amp; st, CharT&amp; ch );
+
+template&lt; class Traits &gt;
+basic_istream&lt;char, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;char, Traits&gt;&amp; st, signed char&amp; ch );
+
+template&lt; class Traits &gt;
+basic_istream&lt;char, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;char, Traits&gt;&amp; st, unsigned char&amp; ch );
+}}
+{{dcl rev begin|num=2}}
+{{dcl|until=c++20|
+template&lt; class CharT, class Traits&gt;
+basic_istream&lt;CharT, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;CharT, Traits&gt;&amp; st, CharT* s );
+
+template&lt; class Traits &gt;
+basic_istream&lt;char, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;char, Traits&gt;&amp; st, signed char* s );
+
+template&lt; class Traits &gt;
+basic_istream&lt;char, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;char, Traits&gt;&amp; st, unsigned char* s );
+}}
+{{dcl|since=c++20|
+template&lt; class CharT, class Traits, std::size_t N &gt;
+basic_istream&lt;CharT, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;CharT, Traits&gt;&amp; st, CharT (&amp;s)[N] );
+
+template&lt; class Traits, std::size_t N &gt;
+basic_istream&lt;char, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;char, Traits&gt;&amp; st, signed char (&amp;s)[N] );
+
+template&lt; class Traits, std::size_t N &gt;
+basic_istream&lt;char, Traits&gt;&amp;
+    operator&gt;&gt;( basic_istream&lt;char, Traits&gt;&amp; st, unsigned char (&amp;s)[N] );
+}}
+{{dcl rev end}}
+{{dcl|num=3|since=c++11|
+template&lt; class Istream, class T &gt;
+Istream&amp;&amp;
+    operator&gt;&gt;( Istream&amp;&amp; st, T&amp;&amp; value );
+}}
+{{dcl end}}
+
+@1,2@ 进行字符输入操作。
+
+@1@ 表现为{{named req|FormattedInputFunction}}。在构造并检查 sentry 对象（可能跳过前导空白符）后，提取一个字符并将它存储到 {{tt|ch}}。如果没有字符可用，那么设置 {{ltt|cpp/io/ios_base/iostate|failbit}}（在{{named req|FormattedInputFunction}}所要求的设置 {{ltt|cpp/io/ios_base/iostate|eofbit}} 外）。
+
+@2@ 表现为{{named req|FormattedInputFunction}}。在构造并检查 sentry 对象（可能跳过前导空白符）后，提取后续字符，并将它们存储到 {{tt|s}} {{rev inl|until=c++20|指向其首元素的字符数组}}的相继位置。满足下列任意条件时停止提取：
+* 找到了空白字符（以 {{ltt|cpp/locale/ctype|ctype&lt;CharT&gt;}} 刻面确定）。不提取该空白字符。
+{{rrev multi|until1=c++20|rev1=
+* 如果 {{c|st.width()}} 大于零，已存储了 {{c|st.width() - 1}} 个字符。
+|rev2=
+* 已经存储了 {{c|n - 1}} 个字符，其中 {{c|n}} 定义如下：
+:* 如果 {{c|st.width()}} 大于零，则为 {{c|std::min(std::size_t(st.width()), N)}}；
+:* 否则 {{c|n}} 为 {{c|N}}。
+}}
+* 输入序列中出现文件尾（也会设置 {{ltt|cpp/io/ios_base/iostate|eofbit}}）。
+在任何情况下，将额外的空字符值 {{c|CharT()}} 存储到输出结尾。如果没有提取任何字符，那么就会设置 {{ltt|cpp/io/ios_base/iostate|failbit}}（仍写入空字符到输出的首位置）。最后调用 {{c|st.width(0)}} 取消 {{lc|std::setw}} 的效果，如果存在。
+
+@3@ 给定到输入流对象的右值引用，调用适合的提取运算符（等价于 {{c|st &gt;&gt; std::forward&lt;T&gt;(value)}}）。{{cpp/enable_if|表达式 {{c|st &gt;&gt; std::forward&lt;T&gt;(value)}} 良构且 {{tt|Istream}} 是公开且无歧义派生自 {{lc|std::ios_base}} 的类类型}}。
+
+===注解===
+提取作为流的最后一个字符的单个字符不会设置 {{tt|eofbit}}：这与其他有格式输入函数不同，例如以 {{c|operator&gt;&gt;}} 提取最后的整数，但此行为匹配 {{lc|std::scanf}} 用 {{c|"%c"}} 格式指定符的行为。
+
+===参数===
+{{par begin}}
+{{par|st|要被提取数据的输入流}}
+{{par|ch|用来存储提取出的字符的到字符的引用}}
+{{par|s|{{rev inl|until=c++20|指针，指向}}用来存储提取出的字符的字符数组}}
+{{par end}}
+
+===返回值===
+@1,2@ {{c|st}}
+@3@ {{c|std::move(st)}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+int main()
+{
+    std::string input = "n greetings";
+    std::istringstream stream(input);
+    
+    char c;
+    const int MAX = 6;
+    char cstr[MAX];
+    
+    stream &gt;&gt; c &gt;&gt; std::setw(MAX) &gt;&gt; cstr;
+    std::cout &lt;&lt; "c = " &lt;&lt; c &lt;&lt; '\n'
+              &lt;&lt; "cstr = " &lt;&lt; cstr &lt;&lt; '\n';
+    
+    double f;
+    std::istringstream("1.23") &gt;&gt; f; // 从右值流提取
+    std::cout &lt;&lt; "f = " &lt;&lt; f &lt;&lt; '\n';
+}
+|output=
+c = n
+cstr = greet
+f = 1.23
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=13|std=C++98|before={{c|n}} 的定义提到了不存在的名字 {{c|eos}}|after=改成 {{c|CharT()}}}}
+{{dr list item|wg=lwg|dr=68|std=C++98|before=重载 (2) 不会将空字符存储到输出的末尾|after=存储一个空字符}}
+{{dr list item|wg=lwg|dr=1203|std=C++11|before=右值流的重载返回到基类的左值引用|after=返回到派生类的右值引用}}
+{{dr list item|wg=lwg|dr=2328|std=C++11|before=右值流的重载要求另一参数是左值|after=使之接受右值}}
+{{dr list item|wg=lwg|dr=2534|std=C++11|before=右值流的重没有被制约|after=已制约}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_istream/dsc operator_gtgt}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

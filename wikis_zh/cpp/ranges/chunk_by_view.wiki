@@ -1,0 +1,130 @@
+{{cpp/ranges/view title|chunk_by}}
+{{cpp/ranges/chunk_by_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::forward_range V, std::indirect_binary_predicate&lt;iterator_t&lt;V&gt;,
+          ranges::iterator_t&lt;V&gt;&gt; Pred &gt;
+    requires ranges::view&lt;V&gt; &amp;&amp; std::is_object_v&lt;Pred&gt;
+class chunk_by_view
+    : public ranges::view_interface&lt;chunk_by_view&lt;V, Pred&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /* 未指明 */ chunk_by = /* 未指明 */ ;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R, class Pred &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto chunk_by( R&amp;&amp; r, Pred&amp;&amp; pred );
+}}
+{{dcl|since=c++23|1=
+template&lt; class Pred &gt;
+constexpr /*range adaptor closure*/ chunk_by( Pred&amp;&amp; pred );
+}}
+{{dcl end}}
+
+@1@ {{tt|chunk_by_view}} 是范围适配器，它接收一个 {{lconcept|view}} 和一个可调用对象 {{c|pred}}（二元谓词），并在每对 {{c|pred}} 返回 {{c|false}} 的相邻元素之间拆分底层视图，以此生成子范围（区块）的 {{lconcept|view}}。每对这种相邻元素的第一个元素属于上一个区块，第二个元素属于下一个区块。
+
+@2@ 名字 {{c|views::chunk_by}} 代表一个{{named req|RangeAdaptorObject|范围适配器对象}}。给定子表达式 {{c|e}} 和 {{c|f}}，表达式 {{c|views::chunk_by(e, f)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|chunk_by_view(e, f)}}。
+
+{{tt|chunk_by_view}} 总是实现 {{lconcept|forward_range}}，并且在 {{lconcept|view}} 实现 {{lconcept|bidirectional_range}} 和 {{lconcept|common_range}} 时也实现它们。
+{{tt|chunk_by_view}} 永不实现 {{lconcept|borrowed_range}} 和 {{lconcept|sized_range}}。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员名称|定义}}
+{{dsc expos mem obj|base_|id=base|spec={{tt|V}}|底层 {{lconcept|view}}}}
+{{dsc expos mem obj|pred_|id=pred|spec={{lti|cpp/ranges/copyable_wrapper|movable-box}}{{tti|&lt;Pred&gt;}}|包装分割 {{tti|base_}} 元素的谓词的对象}}
+{{dsc expos mem obj|begin_|id=begin|spec={{rlpi|non-propagating-cache|non-propagating-cache}}{{tti|&lt;iterator&gt;}}|缓存指向首个元素的迭代器的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc pred|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|chunk_by_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|chunk_by_view}}
+{{dsc expos mem fun|cpp/ranges/chunk_by_view/helpers#find_next|title=''find_next''|返回下一个子范围起始的迭代器}}
+{{dsc expos mem fun|cpp/ranges/chunk_by_view/helpers#find_prev|title=''find_prev''|返回上一个子范围起始的迭代器}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid|operator[]=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/chunk_by_view/iterator|迭代器类型}}
+{{dsc end}}
+
+===注解===
+为了提供 {{lconcept|range}} 概念所需的均摊常数时间复杂度，{{rltf|begin}} 的结果会缓存在 {{tt|chunk_by_view}} 对象中。如果在第一次调用 {{rltf|begin}} 后修改了底层范围，那么后续使用 {{tt|chunk_by_view}} 对象时可能会出现不直观的行为。
+
+{{feature test macro|__cpp_lib_ranges_chunk_by|std=C++23|value=202202L|{{tt|std::ranges::chunk_by_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+void print_chunks(auto view, std::string_view separator = ", ")
+{
+    for (auto const subrange : view)
+    {
+        std::cout &lt;&lt; '[';
+        for (std::string_view prefix; auto const&amp; elem : subrange)
+            std::cout &lt;&lt; prefix &lt;&lt; elem, prefix = separator;
+        std::cout &lt;&lt; "] ";
+    }
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::initializer_list v1 = {1, 2, 3, 1, 2, 3, 3, 3, 1, 2, 3};
+    auto fn1 = std::ranges::less{};
+    auto view1 = v1 {{!}} std::views::chunk_by(fn1);
+    print_chunks(view1);
+
+    std::initializer_list v2 = {1, 2, 3, 4, 4, 0, 2, 3, 3, 3, 2, 1};
+    auto fn2 = std::ranges::not_equal_to{};
+    auto view2 = v2 {{!}} std::views::chunk_by(fn2);
+    print_chunks(view2);
+
+    std::string_view v3 = "__cpp_lib_ranges_chunk_by";
+    auto fn3 = [](auto x, auto y) { return not(x == '_' or y == '_'); };
+    auto view3 = v3 {{!}} std::views::chunk_by(fn3);
+    print_chunks(view3, "");
+
+    std::string_view v4 = "\u007a\u00df\u6c34\u{1f34c}"; // "zß水🍌"
+    auto fn4 = [](auto, auto ß) { return 128 == ((128 + 64) &amp; ß); };
+    auto view4 = v4 {{!}} std::views::chunk_by(fn4);
+    print_chunks(view4, "");
+}
+}
+|output=
+[1, 2, 3] [1, 2, 3] [3] [3] [1, 2, 3] 
+[1, 2, 3, 4] [4, 0, 2, 3] [3] [3, 2, 1] 
+[_] [_] [cpp] [_] [lib] [_] [ranges] [_] [chunk] [_] [by]
+[z] [ß] [水] [🍌] 
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Chunk by view|id=range.chunk.by|section=26.7.30}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc chunk_view}}
+{{dsc inc|cpp/ranges/dsc slide_view}}
+{{dsc inc|cpp/ranges/dsc stride_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

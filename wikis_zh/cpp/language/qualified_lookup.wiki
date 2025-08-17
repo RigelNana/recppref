@@ -1,0 +1,265 @@
+{{title|有限定的名字查找}}
+{{cpp/language/basics/navbar}}
+出现在作用域解析操作符 {{ttb|::}} 右边的名字是''限定''名（参阅{{rlp|identifiers#有限定的标识符|有限定的标识符}}）。
+限定名可能代表的是：
+* 类的成员（包括静态和非静态函数、类型和模板等）
+* 命名空间的成员（包括其他的命名空间）
+* 枚举项
+
+如果 {{ttb|::}} 左边为空，那么查找过程只会考虑[[#命名空间的成员|全局命名空间作用域]]中的声明。这使得即使被局部声明隐藏的名字也能够被访问：
+{{source|1=
+#include &lt;iostream&gt;
+ 
+namespace M {
+    const char* fail = "失败\n";
+}
+ 
+using M::fail;
+ 
+namespace N {
+    const char* ok = "成功\n";
+}
+ 
+using namespace N;
+
+int main()
+{
+    struct std {};
+    
+    std::cout &lt;&lt; ::fail;   // 错误：对 'std' 的无限定查找找到结构体
+    ::std::cout &lt;&lt; ::ok; // 正确：::std 找到命名空间 std
+}
+}}
+
+只有完成了对 {{ttb|::}} 左边的名字的查找（除非左边用到了 {{rlp|decltype}} 表达式或为空），才能对它右边的名字进行名字查找。该左侧查找可以是有限定或无限定的，取决于这个名字左边是否有另一个 {{ttb|::}}，但它只会考虑命名空间、类类型、枚举和能特化为类型的模板。如果左边的名字指定的不是命名空间、类、枚举或待决类型，那么程序非良构：
+{{source|1=
+struct A
+{
+    static int n;
+};
+
+int main()
+{
+    int A;
+    A::n = 42; // 正确：对 :: 左边的 A 的无限定查找忽略变量
+    A b;       // 错误：对 A 的无限定查找找到了变量 A
+}
+ 
+template&lt;int&gt;
+struct B : A {};
+ 
+namespace N
+{
+    template&lt;int&gt;
+    void B();
+ 
+    int f()
+    {
+        return B&lt;0&gt;::n; // 错误：N::B&lt;0&gt; 不是类型
+    }
+}
+}}
+
+当限定名是{{rlp|declarations|声明符}}时，对同一声明符中随该限定名之后，而非在它之前的名字的{{rlp|unqualified lookup|无限定查找}}，是在成员的所在类或命名空间的作用域中进行的：
+{{source|1=
+class X {};
+ 
+constexpr int number = 100;
+ 
+struct C
+{
+    class X {};
+    static const int number = 50;
+    static X arr[number];
+};
+ 
+X C::arr[number], brr[number];    // 错误：对 X 的查找找到 ::X 而不是 C::X
+C::X C::arr[number], brr[number]; // OK ：arr 的大小是 50，brr 的大小是 100
+}}
+
+如果 {{ttb|::}} 后随字符 {{ttb|~}} 再跟着一个标识符（也就是说指定了析构函数或伪析构函数），那么该标识符将在与 {{ttb|::}} 左边的名字相同的作用域中查找。
+{{source|1=
+struct C { typedef int I; };
+ 
+typedef int I1, I2;
+ 
+extern int *p, *q;
+ 
+struct A { ~A(); };
+ 
+typedef A AB;
+ 
+int main()
+{
+    p-&gt;C::I::~I(); // ~ 之后的名字 I 在 :: 前面的 I 的同一个作用域中查找
+                   //（也就是说，在 C 的作用域中查找，因此查找结果是 C::I）
+    
+    q-&gt;I1::~I2();  // 名字 I2 在 I1 的同一个作用域中查找，
+                   // 也就是说从当前的作用域中查找，因此查找结果是 ::I2
+    
+    AB x;
+    x.AB::~AB();   // ~ 之后的名字 AB 在 :: 前面的 AB 的同一个作用域中查找
+                   // 也就是说从当前的作用域中查找，因此查找结果是 ::AB
+}
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+====枚举项====
+如果对左边的名字的查找结果是{{rlp|enum|枚举}}（无论是有作用域还是无作用域），那么右边名字的查找结果必须是属于该枚举的一个枚举项，否则程序非良构。
+}}
+{{rev end}}
+
+====类成员====
+如果对左边的名字的查找结果是某个类、结构体或联合体的名字，那么 {{ttb|::}} 右边的名字在该类、结构体或联合体的作用域中进行查找（因此可能找到该类或它的基类的成员的声明），但有以下例外情况：
+* 析构函数按如上所述进行查找（即在 {{ttb|::}} 左边的名字的作用域中查找）。
+* {{rlp|cast operator|用户定义转换}}函数名中的转换类型标识首先在该类类型的作用域中查找。如果没有找到，那么就在当前作用域中查找该名字。{{mark unreviewed dr|cwg|1111}}{{mark unreviewed dr|cwg|2385}}
+* 模板实参中使用的名字，在当前作用域中查找（而非在模板名的作用域中查找）。
+* {{rlp|namespace|using 声明}}中的名字，还考虑在当前作用域中声明的变量、数据成员、函数或枚举项所隐藏的类或枚举名。
+{{todo|上述内容的小示例}}
+
+如果 {{ttb|::}} 右边所指名的是和它左边相同的类，那么右边的名字表示的是该类的{{rlp|constructor|构造函数}}。这种限定名只能用在构造函数的声明以及引入{{rlp|using declaration#继承构造函数|继承构造函数}}的 {{rlp|using declaration|using 声明}}中。在所有忽略函数名的查找过程中（即在查找 {{ttb|::}} 左边的名字，或查找{{rlp|elaborated type specifier|详述类型说明符}}或{{rlp|derived class|基类说明符}}中的名字时），将同样的语法解释成注入类名：
+{{source|1=
+struct A { A(); };
+
+struct B : A { B(); };
+
+A::A() {} // A::A 指定的是构造函数，用于声明
+B::B() {} // B::B 指定的是构造函数，用于声明
+
+B::A ba;  // B::A（在 B 的作用域中查找）指定的是类型 A
+A::A a;   // 错误：A::A 不是类型
+
+struct A::A a2; // 正确：详述类型说明符中的查找是忽略函数的，
+                // 因此 A::A 在 A 的作用域中查找，于是指定的是类 A
+                // （也就是它的注入类名）
+}}
+
+有限定名字查找可以用来访问被嵌套声明或被派生类隐藏了的类成员。对有限定的成员函数的调用绝不会是虚调用：
+{{source|1=
+struct B { virtual void foo(); };
+
+struct D : B { void foo() override; };
+
+int main()
+{
+    D x;
+    B&amp; b = x;
+    
+    b.foo();    // 调用 D::foo（虚调用派发）
+    b.B::foo(); // 调用 B::foo（静态调用派发）
+}
+}}
+
+====命名空间的成员====
+如果 {{ttb|::}} 左边的名字代表的是命名空间，或者 {{ttb|::}} 左边为空（这种情况代表全局命名空间），那么 {{ttb|::}} 右边的名字就在这个命名空间的作用域中进行查找，但有以下例外：
+* 在模板实参中使用的名字在当前作用域中查找
+{{source|1=
+namespace N
+{
+    template&lt;typename T&gt;
+    struct foo {};
+ 
+    struct X {};
+}
+ 
+N::foo&lt;X&gt; x; // 错误：X 的查找结果是 ::X 而不是 N::X
+}}
+
+在{{rlp|namespace|命名空间}} {{tt|N}} 中进行有限定查找时，首先要考虑处于 {{tt|N}} 之中的所有声明，以及处于 {{tt|N}} 的{{rlp|namespace#内联命名空间|内联命名空间成员}}（并且传递性地包括它们的内联命名空间成员）之中的所有声明。如果这个集合中没有找到任何声明，那么再考虑在 {{tt|N}} 和 {{tt|N}} 的所有传递性的内联命名空间成员中发现的所有{{rlp|namespace#using 指令|using 指令}}所指名的命名空间之中的声明。这条规则是递归实施的：
+
+{{source|1=
+int x;
+ 
+namespace Y
+{
+    void f(float);
+    void h(int);
+}
+ 
+namespace Z
+{
+    void h(double);
+}
+ 
+namespace A
+{
+    using namespace Y;
+    void f(int);
+    void g(int);
+    int i;
+}
+ 
+namespace B
+{
+    using namespace Z;
+    void f(char);
+    int i;
+}
+ 
+namespace AB
+{
+    using namespace A;
+    using namespace B;
+    void g();
+}
+ 
+void h()
+{
+    AB::g();  // 在 AB 中查找，找到了 AB::g 并且选择了 AB::g(void)
+              // （没有在 A 和 B 中查找）
+    
+    AB::f(1); // 首先在 AB 中查找，没有找到 f
+              // 然后在 A 和 B 中查找
+              // 找到了 A::f 和 B::f（但没有在 Y 中查找，因此不考虑 Y::f）
+              // 重载决议选中 A::f(int)
+    
+    AB::x++;  // 首先在 AB 中查找，没有找到 x
+              // 然后在 A 和 B 中查找。没有找到 x
+              // 然后在 Y 和 Z 中查找。还是没有找到 x：这是一个错误
+    
+    AB::i++;  // 在 AB 中查找，没有找到 i
+              // 然后在 A 和 B 中查找。找到了 A::i 和 B::i：这是一个错误
+    
+    AB::h(16.8); // 首先在 AB 中查找：没有找到 h
+                 // 然后在 A 和 B 中查找。没有找到 h
+                 // 然后在 Y 和 Z 中查找。
+                 // 找到了 Y::h 和 Z::h。重载决议选中 Z::h(double)
+}
+}}
+
+同一个声明可以被多次找到：
+{{source|1=
+namespace A { int a; }
+ 
+namespace B { using namespace A; }
+ 
+namespace D { using A::a; }
+ 
+namespace BD
+{
+    using namespace B;
+    using namespace D;
+}
+ 
+void g()
+{
+    BD::a++; // OK ： 通过 B 和 D 找到同一个 A::a
+}
+}}
+{{todo|N4861 6.5.3.2[namespace.qual] 中的剩余内容，尝试缩短示例}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=215|std=C++98|before={{tt|::}} 左边的名字必须是类名或命名空间名，所以它不能是模板形参|after=该名字必须指定类，命名空间或待决类型}}
+{{dr list item|wg=cwg|dr=318|std=C++98|before=如果 {{tt|::}} 两侧指名了相同的类，那么该限定名总会指名该类的构造函数|after=只有在可行时才会指名构造函数&lt;br&gt;（例如不在详述类型说明符中）}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|unqualified lookup|无限定名字查找}} 
+* {{rlp|scope|作用域}} 
+* {{rlp|adl|实参依赖查找}} 
+* {{rlp|function template|模板实参推导}}
+* {{rlp|overload resolution|重载决议}}
+
+{{langlinks|en|es|ja|ru}}

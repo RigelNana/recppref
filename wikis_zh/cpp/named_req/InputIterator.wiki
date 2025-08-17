@@ -1,0 +1,126 @@
+{{cpp/named req/title|InputIterator}}
+{{cpp/named req/navbar}}
+
+{{named req|InputIterator}}是能从所指向元素进行读取的{{named req|Iterator}}。{{named req/core|InputIterator}}只会保证单趟算法的有效性：一旦自增{{named req/core|InputIterator}} {{c|i}}，那么所有它之前的值的副本都有可能会失效。
+
+===要求===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|X}}|输入迭代器类型}}
+{{dsc|{{tt|T}}|{{tt|X}} 的[[cpp/iterator#类型与可写性|值类型]]（即 {{c/core|std::iterator_traits&lt;X&gt;::value_type}}）}}
+{{dsc|{{tt|R}}|{{c/core|std::iterator_traits&lt;X&gt;::reference}}}}
+{{dsc hitem|值|定义}}
+{{dsc|{{c|i}}, {{c|j}}|{{tt|X}} 或 {{c/core|const X}} 类型的值}}
+{{dsc|{{c|r}}|{{tt|X&amp;}} 类型的值}}
+{{dsc hitem|其他|定义}}
+{{dsc|{{tt|m}}|标识符，可能指代数据成员或成员函数}}
+{{dsc end}}
+
+
+在满足以下所有条件时，{{tt|X}} 是{{named req/core|InputIterator}}：
+* {{tt|X}} 满足{{named req|Iterator}}
+* {{tt|X}} 满足{{named req|EqualityComparable}}
+* 下列所有表达式都良构，并且具有指定的语义：
+{|table class="wikitable"
+|-
+!表达式
+!类型
+!colspan=2|语义
+|-
+|rowspan=2|{{c|1=i != j}}
+|rowspan=2|{{rev begin}}
+{{rev|until=c++20|满足{{named req|BooleanTestable}}的类型}}
+{{rev|since=c++20|实现了 {{lconcept|boolean-testable}} 的类型}}
+{{rev end}}
+|style="word-break: keep-all;"|前条件{{nbsp}}
+|{{c|i}} 和 {{c|j}} 都在 {{c|1===}} 的[[#相等性定义域|定义域]]中。
+|-
+|效果
+|等价于 {{c|1=!(i == j)}}。
+|-
+|-
+|rowspan=2|{{c|*i}}
+|rowspan=2|{{tt|R}}，可转换到 {{tt|T}}
+|前条件
+|{{c|i}} [[cpp/iterator#可解性与有效性|可解引用]]。
+|-
+|效果
+|
+* 表达式 {{c|(void)*i, *i}} 等价于 {{c|*i}}。
+* 如果 {{c|i}} 和 {{c|j}} 都在 {{c|1===}} 的定义域中，并且 {{c|1=i == j}}，那么 {{c|*i}} 等价于 {{c|*j}}。
+|-
+|rowspan=2|{{c|i-&gt;m}}
+|rowspan=2|
+|前条件
+|{{c|i}} 可解引用。
+|-
+|效果
+|等价于 {{c|(*i).m}}。
+|-
+|rowspan=2|{{c|++r}}
+|rowspan=2|{{tt|X&amp;}}
+|前条件
+|{{c|r}} 可解引用。
+|-
+|后条件
+|
+* {{c|r}} 可解引用或 {{c|r}} 是尾后迭代器。
+* {{c|r}} 先前的值的所有副本都不再需要可解引用或在 {{c|1===}} 的定义域中。
+|-
+|{{c|(void)r++}}
+|
+|效果
+|等价于 {{c|(void)++r}}。
+|-
+|{{c|*r++}}
+|可转换到 {{tt|T}}
+|效果
+|等价于 {{c|1=T x = *r; ++r; return x;}}。
+|}
+
+===相等性定义域===
+术语 ''{{c|1===}} 的定义域''{{sep}}在通常的数学逻辑下表示（要求）可以通过 {{c|1===}}进行比较的值的集合。该集合在不同的情况下可能会有所不同。
+
+每个算法都会对它使用的迭代器值进行额外的相等性定义域要求。这些要求可以从算法对 {{c|1===}} 和 {{c|1=!=}} 的使用来推断。
+
+===注解===
+对于不是{{named req|ForwardIterator|向前迭代器}}的输入迭代器 {{tt|X}}，{{c/core|std::iterator_traits&lt;X&gt;::reference}} 不一定是引用类型：解引用输入迭代器可以返回一个代理对象，或以值返回 {{c/core|std::iterator_traits&lt;X&gt;::value_type}} 本身（如 {{ltt std|cpp/iterator/istreambuf_iterator}} 的情况）。
+
+{{rrev|since=c++20|
+===概念===
+为了定义 {{lc|std::iterator_traits}}，定义了以下仅用于阐述的概念：
+
+{{dcl begin}}
+{{dcl|1=
+template&lt;class I&gt;
+concept __LegacyInputIterator&lt;!-- 标准中称为 cpp17-input-iterator --&gt; =
+__LegacyIterator&lt;I&gt; &amp;&amp; std::equality_comparable&lt;I&gt; &amp;&amp; requires(I i)
+{
+    typename std::incrementable_traits&lt;I&gt;::difference_type;
+    typename std::indirectly_readable_traits&lt;I&gt;::value_type;
+    typename std::common_reference_t&lt;std::iter_reference_t&lt;I&gt;&amp;&amp;,
+                                     typename std::indirectly_readable_traits&lt;I&gt;::value_type&amp;&gt;;
+    *i++;
+    typename std::common_reference_t&lt;decltype(*i++)&amp;&amp;,
+                                     typename std::indirectly_readable_traits&lt;I&gt;::value_type&amp;&gt;;
+    requires std::signed_integral&lt;typename std::incrementable_traits&lt;I&gt;::difference_type&gt;;
+};
+}}
+{{dcl end}}
+
+其中仅用于阐述的概念 {{tt|__LegacyIterator}} 在 {{rlp|Iterator#概念|LegacyIterator}} 描述。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=98|std=C++98|before=要求 {{c|*i++}} 的类型是 {{tt|T}}|after=可以是任意可转换到 {{tt|T}} 的类型}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++98|before=到 {{c/core|bool}} 的按语境可转换性过于弱而无法反映实现的期待|after=加强要求}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc input_iterator}}
+{{see_also_iterator_library}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

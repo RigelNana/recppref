@@ -1,0 +1,179 @@
+{{cpp/title|replace_copy|replace_copy_if}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+&lt;!-- P2248R8 does NOT update replace_copy --&gt;
+{{dcla|num=1|constexpr=c++20|
+template&lt; class InputIt, class OutputIt, class T &gt;
+OutputIt replace_copy( InputIt first, InputIt last, OutputIt d_first,
+                       const T&amp; old_value, const T&amp; new_value );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class T &gt;
+ForwardIt2 replace_copy
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      const T&amp; old_value, const T&amp; new_value );
+}}
+{{dcl rev begin|num=3}}
+{{dcla|anchor=版本_3|constexpr=c++20|until=c++26|
+template&lt; class InputIt, class OutputIt, class UnaryPred, class T &gt;
+OutputIt replace_copy_if
+    ( InputIt first, InputIt last, OutputIt d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class InputIt, class OutputIt, class UnaryPred,
+          class T = typename std::iterator_traits
+                        &lt;OutputIt&gt;::value_type &gt;
+constexpr OutputIt replace_copy_if
+    ( InputIt first, InputIt last, OutputIt d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=4}}
+{{dcl|since=c++17|until=c++26|
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2,
+          class UnaryPred, class T &gt;
+ForwardIt2 replace_copy_if
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2,
+          class UnaryPred, class T = typename std::iterator_traits
+                                         &lt;ForwardIt2&gt;::value_type &gt;
+ForwardIt2 replace_copy_if
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      UnaryPred p, const T&amp; new_value );
+}}
+{{dcl end}}
+
+复制来自范围 {{range|first|last}} 的元素到始于 {{c|d_first}} 的范围，复制过程中以 {{c|new_value}} 替换所有满足特定判别标准的元素。
+
+@1@ 替换所有等于（用 {{c/core|1=operator==}} 比较）{{c|old_value}} 的元素。
+
+@3@ 替换所有谓词 {{c|p}} 对其满足 {{c|true}} 的元素。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+如果表达式 {{c|*first}} 或 {{c|new_value}} 的结果不[[cpp/iterator#类型与可写性|可写入]] {{c|d_first}}，那么程序非良构。
+
+如果源范围与目标范围重叠，那么行为未定义。
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的|range=源}}
+{{par|d_first|目标范围的起始}}
+{{par|old_value|要被替换的元素值}}
+{{par exec pol}}
+{{par pred1|p|如果应该替换元素|p1=InputIt}}
+{{par|new_value|用作替换者的元素值}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===返回值===
+指向最后复制元素后一元素的迭代器。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+@1,2@ 应用 {{mathjax-or|\(\scriptsize N\)|N}} 次 {{c/core|1=operator==}} 进行比较。
+@3,4@ 应用 {{mathjax-or|\(\scriptsize N\)|N}} 次谓词 {{c|p}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=replace_copy (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt, class T&gt;
+OutputIt replace_copy(InputIt first, InputIt last, OutputIt d_first,
+                      const T&amp; old_value, const T&amp; new_value)
+{
+    for (; first != last; ++first)
+        *d_first++ = (*first == old_value) ? new_value : *first;
+    return d_first;
+}
+|title2=replace_copy_if (3)|ver2=3|2=
+template&lt;class InputIt, class OutputIt, class UnaryPred,
+         class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type&gt;
+OutputIt replace_copy_if(InputIt first, InputIt last, OutputIt d_first,
+                         UnaryPred p, const T&amp; new_value)
+{
+    for (; first != last; ++first)
+        *d_first++ = p(*first) ? new_value : *first;
+    return d_first;
+}
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|3,4}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+void println(const auto&amp; seq)
+{
+    for (const auto&amp; e : seq)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::vector&lt;short&gt; src{3, 1, 4, 1, 5, 9, 2, 6, 5};
+    println(src);
+    std::vector&lt;int&gt; dst(src.size());
+    std::replace_copy_if(src.cbegin(), src.cend(),
+                         dst.begin(),
+                         [](short n){ return n &gt; 5; }, 0);
+    println(dst);
+
+    std::vector&lt;std::complex&lt;double&gt;&gt; src2{&lt;!----&gt;{1, 3}, {2, 4}, {3, 5}&lt;!----&gt;},
+                                      dst2(src2.size());
+    println(src2);
+    #ifdef __cpp_lib_algorithm_default_value_type
+        std::replace_copy_if(src2.cbegin(), src2.cend(), dst2.begin(),
+            [](std::complex&lt;double&gt; z){ return std::abs(z) &lt; 5; },
+            {4, 2}); // 可以这样做，因为 T 是被推导的。
+    #else
+        std::replace_copy_if(src2.cbegin(), src2.cend(), dst2.begin(),
+            [](std::complex&lt;double&gt; z){ return std::abs(z) &lt; 5; },
+            std::complex&lt;double&gt;{4, 2});
+    #endif
+    println(dst2);
+}
+|output=
+3 1 4 1 5 9 2 6 5 
+3 1 4 1 5 0 2 0 5 
+(1,3) (2,4) (3,5) 
+(4,2) (4,2) (3,5)
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=283|std=C++98|before={{tt|T}} 需要是{{named req|CopyAssignable}}的（对于 {{tt|replace_copy}} 还需要是&lt;br&gt;{{named req|EqualityComparable}}的），但是 {{tt|InputIt}} 的值类型不一定是 {{tt|T}}|after=移除该要求}}
+{{dr list item|wg=lwg|dr=337|std=C++98|before=对于 {{tt|replace_copy_if}}，{{tt|InputIt}} 只需要&lt;br&gt;满足 {{named req|Iterator}} 的要求&lt;ref&gt;实际上 C++ 标准中的缺陷是模板类型形参 {{tt|InputIterator}} 被误标为 {{tt|Iterator}}。由于 C++ 标准规定算法库函数模板的名字以 {{tt|Iterator}} 的模板形参的类型要求需要与对应的迭代器类别的类型要求一致，迭代器模板类型形参的误标会影响到该模板形参的类型要求。&lt;/ref&gt;|after=改成&lt;br&gt;{{named req|InputIterator}}}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc replace}}
+{{dsc inc|cpp/algorithm/dsc remove}}
+{{dsc inc|cpp/algorithm/ranges/dsc replace_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

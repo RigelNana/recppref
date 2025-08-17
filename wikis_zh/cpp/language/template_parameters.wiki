@@ -1,0 +1,802 @@
+{{title|模板形参与模板实参}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+===模板形参===
+每个{{rlp|templates|模板}}都会由一个或多个模板形参参数化，它们在模板声明语法中的{{spar sep|形参列表}}中指定：
+
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|声明}}}}
+{{sdsc|num=2|notes={{mark since c++20}}|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|requires}} {{spar|约束}} {{spar|声明}}}}
+{{sdsc end}}
+
+{{spar|形参列表}} 中的每个形参可以是：
+* 非类型模板形参；
+* 类型模板形参；
+* 模板模板形参。
+
+====非类型模板形参====
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|类型}} {{spar optional|名字}}}}
+{{sdsc|num=2|{{spar|类型}} {{spar optional|名字}} {{ttb|{{=}}}} {{spar|默认值}}}}
+{{sdsc|num=3|{{spar|类型}} {{ttb|...}} {{spar optional|名字}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+@1@ 非类型模板形参。
+@2@ 带有默认模板实参的非类型模板形参。
+@3@ 非类型模板{{rlp|parameter pack|形参包}}。
+
+{{par begin}}
+{{par|{{spar|类型}}|以下类型之一：
+* 结构化类型（见下文）
+{{rev begin}}
+{{rev|since=c++17|
+* 包含{{rlp|auto|占位符类型}}的类型
+}}
+{{rev|since=c++20|
+* {{rlp|class template argument deduction|被推导类类型的占位符}}
+}}
+{{rev end}}}}
+{{par|{{spar|名字}}|非类型模板形参的名字}}
+{{par|{{spar|默认值}}|[[#默认模板实参|默认模板实参]]}}
+{{par end}}
+
+''结构化类型''是下列类型之一（可以有 cv 限定，忽略限定符）：
+* （到对象或函数的）{{rlp|reference#左值引用|左值引用类型}}；
+* {{rlp|type|整数类型}}；
+* （指向对象或函数的）{{rlp|pointer|指针类型}}；
+* （指向成员对象或成员函数的）{{rlp|pointer#成员指针|成员指针类型}}；
+* {{rlp|enum|枚举类型}}；
+{{rrev|since=c++11|
+* {{lc|std::nullptr_t}}；
+}}
+{{rrev|since=c++20|
+* {{rlp|type|浮点数类型}}；
+* 其 lambda 表达式无捕获的 {{rlp|lambda#闭包类型|lambda 闭包类型}}；
+* 拥有下列属性的非闭包[[cpp/named req/LiteralType|字面类类型]]：
+:* 所有基类与非静态数据成员都是公开且非 mutable 的，且
+:* 所有基类与非静态数据成员的类型都是结构化类型或它的（可能多维的）数组。
+}}
+
+数组与函数类型可以写在模板声明中，但它们会被自动替换为适合的对象指针和函数指针。
+
+在类模板体内使用的非类型模板形参的名字是不可修改的{{rlp|value category|纯右值}}，除非它的类型是左值引用类型{{rev inl|since=c++20|或类类型}}。
+
+形式为 {{c|class Foo}} 的模板形参不是类型为 {{tt|Foo}} 的无名非类型模板形参，虽然 {{c|class Foo}} 还能是{{rlp|elaborated type specifier|详述类型说明符}}且 {{c|class Foo x;}} 声明 {{c|x}} 为 {{tt|Foo}} 类型的对象。
+
+{{anchor|模板形参对象}}
+{{rrev|since=c++20|1=
+指名类类型 {{tt|T}} 的某个非类型模板形参的{{rlp|identifiers|标识符}}代表一个 {{c/core|const T}} 类型的静态存储期对象，该对象被称为 ''模板形参对象''，它与对应模板实参转换到模板形参的类型之后的值[[#模板实参等价性|模板实参等价]]。任何两个模板形参对象都不模板实参等价。
+
+{{source|1=
+struct A
+{
+    friend bool operator==(const A&amp;, const A&amp;) = default;
+};
+
+template&lt;A a&gt;
+void f()
+{
+    &amp;a;                       // OK
+    const A&amp; ra = a, &amp;rb = a; // 都绑定到同一个模板形参对象
+    assert(&amp;ra == &amp;rb);       // 通过
+}
+}}
+}}
+
+====类型模板形参====
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|类型形参关键词}} {{spar optional|名字}}}}
+{{sdsc|num=2|{{spar|类型形参关键词}} {{spar optional|名字}} {{ttb|{{=}}}} {{spar|默认值}}}}
+{{sdsc|num=3|{{spar|类型形参关键词}} {{ttb|...}} {{spar optional|名字}}|notes={{mark since c++11}}}}
+{{sdsc|num=4|{{spar|类型约束}} {{spar optional|名字}}|notes={{mark since c++20}}}}
+{{sdsc|num=5|{{spar|类型约束}} {{spar optional|名字}} {{ttb|{{=}}}} {{spar|默认值}}|notes={{mark since c++20}}}}
+{{sdsc|num=6|{{spar|类型约束}} {{ttb|...}} {{spar optional|名字}}|notes={{mark since c++20}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类型形参关键词}}|{{ttb|typename}} 或 {{ttb|class}} 之一。这两个关键词在类型模板形参声明中没有区别}}
+{{par|{{spar|类型约束}}|{{rlp|constraints|概念}}的名字或概念名后随模板实参列表（在角括号中）。两种方式种的概念名都可以有限定}}
+{{par|{{spar|名字}}|类型模板形参的名字}}
+{{par|{{spar|默认值}}|[[#默认模板实参|默认模板实参]]}}
+{{par end}}
+
+@1@ 没有默认类型的类型模板形参。
+{{source|
+template&lt;class T&gt;
+class My_vector { /* ... */ };
+}}
+@2@ 有默认类型的类型模板形参。
+{{source|1=
+template&lt;class T = void&gt;
+struct My_op_functor { /* ... */ };
+}}
+@3@ 类型模板{{rlp|parameter pack|形参包}}。
+{{source|1=
+template&lt;typename... Ts&gt;
+class My_tuple { /* ... */ };
+}}
+@4@ 没有默认实参的受约束类型模板形参。
+{{source|1=
+template &lt;My_concept T&gt;
+class My_constrained_vector { /* ... */ };
+}}
+@5@ 有默认实参的受约束类型模板形参。
+{{source|1=
+template &lt;My_concept T = void&gt;
+class My_constrained_op_functor { /* ... */ };
+}}
+@6@ 受约束的类型模板{{rlp|parameter pack|形参包}}。
+{{source|1=
+template&lt;My_concept... Ts&gt;
+class My_constrained_tuple { /* ... */ };
+}}
+
+形参的名字是可选的：
+{{source|1=
+// 对上面所示模板的声明：
+template&lt;class&gt;
+class My_vector;
+template&lt;class = void&gt;
+struct My_op_functor;
+template&lt;typename...&gt;
+class My_tuple;
+}}
+
+在模板声明体内，类型形参的名字是 typedef 名字，它是当模板被实例化时所提供的类型的别名。
+
+{{rrev|since=c++20|{{anchor|受约束的模板形参}}
+对于每个受约束形参 {{tt|P}}，它的{{spar|类型约束}} {{tt|Q}} 指定了概念 {{tt|C}}，那么根据以下规则引入一个{{rlp|constraints|约束表达式}} {{tt|E}}：
+* 如果 {{tt|Q}} 是 {{tt|C}}（没有实参列表），
+:* 如果 {{tt|P}} 不是形参包，那么 {{tt|E}} 是 {{tt|C&amp;lt;P&gt;}}
+:* 否则，{{tt|P}} 是形参包，那么 {{tt|E}} 是折叠表达式 {{tt|(C&amp;lt;P&gt; &amp;&amp; ...)}}
+* 如果 {{tt|Q}} 是 {{tt|C&amp;lt;A1,A2...,AN&gt;}}，那么 {{tt|E}} 分别是 {{tt|C&amp;lt;P,A1,A2,...AN&gt;}} 或 {{tt|(C&amp;lt;P,A1,A2,...AN&gt; &amp;&amp; ...)}}。
+
+{{source|1=
+template&lt;typename T&gt;
+concept C1 = true;
+template&lt;typename... Ts&gt; // 变参概念
+concept C2 = true;
+template&lt;typename T, typename U&gt;
+concept C3 = true;
+
+template&lt;C1 T&gt;         struct s1; // 约束表达式是 C1&lt;T&gt;
+template&lt;C1... T&gt;      struct s2; // 约束表达式是 (C1&lt;T&gt; &amp;&amp; ...)
+template&lt;C2... T&gt;      struct s3; // 约束表达式是 (C2&lt;T&gt; &amp;&amp; ...)
+template&lt;C3&lt;int&gt; T&gt;    struct s4; // 约束表达式是 C3&lt;T, int&gt;
+template&lt;C3&lt;int&gt;... T&gt; struct s5; // 约束表达式是 (C3&lt;T, int&gt; &amp;&amp; ...)
+}}}}
+
+====模板模板形参====
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|类型形参关键词}} {{spar optional|名字}}}}
+{{sdsc|num=2|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|类型形参关键词}} {{spar optional|名字}} {{ttb|{{=}}}} {{spar|默认值}}}}
+{{sdsc|num=3|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|类型形参关键词}} {{ttb|...}} {{spar optional|名字}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类型形参关键词}}|{{ttb|class}} {{rev inl|since=c++17|或 {{ttb|typename}} 之一}}}}
+{{par end}}
+
+@1@ 可以有名字的模板模板形参。
+@2@ 有默认模板且可以有名字的模板模板形参。
+@3@ 可以有名字的模板模板{{rlp|parameter pack|形参包}}。
+
+在模板声明体内，此形参的名字是一个模板名（且需要实参以实例化）。
+
+{{source|1=
+template&lt;typename T&gt;
+class my_array {};
+
+// 两个类型模板形参和一个模板模板形参：
+template&lt;typename K, typename V, template&lt;typename&gt; typename C = my_array&gt;
+class Map
+{
+    C&lt;K&gt; key;
+    C&lt;V&gt; value;
+};
+}}
+
+====模板形参的名字决议====
+模板形参的名字不能在它的作用域（包括内嵌作用域）内重声明。模板形参的名字不能与模板的名字相同。
+{{source|1=
+template&lt;class T, int N&gt;
+class Y
+{
+    int T;      // 错误：重声明模板形参
+    void f()
+    {
+        char T; // 错误：重声明模板形参
+    }
+};
+
+template&lt;class X&gt;
+class X; // 错误：重声明模板形参
+}}
+
+在某个类模板定义外的出现的类模板成员定义中，类模板成员名会隐藏任何外围类模板的模板形参名，但如果该成员是类或函数模板就不会隐藏该成员的模板形参。
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    struct B {};
+    typedef void C;
+    void f();
+    
+    template&lt;class U&gt;
+    void g(U);
+};
+
+template&lt;class B&gt;
+void A&lt;B&gt;::f()
+{
+    B b; // A 的 B，不是模板形参
+}
+
+template&lt;class B&gt;
+template&lt;class C&gt;
+void A&lt;B&gt;::g(C)
+{
+    B b; // A 的 B，不是模板形参
+    C c; // 模板形参 C，不是 A 的 C
+}
+}}
+
+在包含某个类模板的定义的命名空间外出现的该类模板的成员定义中，模板形参名隐藏此命名空间的成员名。
+{{source|1=
+namespace N
+{
+    class C {};
+    
+    template&lt;class T&gt;
+    class B
+    {
+        void f(T);
+    };
+}
+
+template&lt;class C&gt;
+void N::B&lt;C&gt;::f(C)
+{
+    C b; // C 是模板形参，不是 N::C
+}
+}}
+
+在类模板定义中，或类模板某个成员的位于模板定义外的定义中，对于每个非{{rlp|dependent name#待决类型|待决}}基类，如果基类名或基类成员名与模板形参名相同，那么该基类名或成员名隐藏模板形参名。
+{{source|1=
+struct A
+{
+    struct B {};
+    int C;
+    int Y;
+};
+
+template&lt;class B, class C&gt;
+struct X : A
+{
+    B b; // A 的 B
+    C b; // 错误：A 的 C 不是类型名
+};
+}}
+
+===模板实参===
+为使模板被实例化，它的每个模板形参（类型、非类型或模板）都必须被一个对应的模板实参替换。对于{{rlp|class template|类模板}}，实参可以被显式提供{{rev inl|since=c++17|，或{{rlp|class template argument deduction|从初始化式推导}}，}}或为默认。对于{{rlp|function template|函数模板}}，实参可以被显式提供，或{{rlp|template argument deduction|从语境推导}}，或为默认。
+
+如果实参可以同时被解释为{{rlp|type#类型的命名|类型标识}}和表达式，那么它始终会被解释为类型标识，即使它对应的是非类型模板形参：
+{{source|1=
+template&lt;class T&gt;
+void f(); // #1
+
+template&lt;int I&gt;
+void f(); // #2
+
+void g()
+{
+    f&lt;int()&gt;(); // "int()" 既是类型又是表达式，
+                // 因为它被解释成类型，所以调用 #1
+}
+}}
+
+====非类型模板实参====
+{{rev begin}}
+{{rev|until=c++11|
+可以用在非类型模板形参上的模板实参，可以是任何{{rlp|constant expression#明显常量求值的表达式|明显常量求值的表达式}}。
+}}
+{{rev|since=c++11|
+可以用在非类型模板形参上的模板实参，可以是任何{{rlp|initialization#初始化式|初始化式子句}}。如果此初始化式子句是表达式，则它必须是{{rlp|constant expression#常量求值的表达式|明显常量求值的表达式}}。
+}}
+{{rev end}}
+
+给定[[#非类型模板形参|非类型模板形参声明]]的{{spar sep|类型}}为 {{tt|T}}，提供给该形参的模板实参为 {{c|E}}。
+
+{{rev begin}}
+{{rev|since=c++26|
+虚设声明 {{c|1=T x = E;}} 必须满足对具有{{rlps|storage duration#静态存储期}}的 {{rlp|constexpr#constexpr 变量|{{c/core|constexpr}} 变量}}的定义的语义约束。
+}}
+{{rev|since=c++17|
+如果 {{tt|T}} 包含占位符类型，或者是{{rlp|class template argument deduction|被推导类类型的占位符}}，那么模板形参的类型是对虚设声明 {{c|1=T x = E;}} 中的变量 {{c|x}} 所推导的类型，其中 {{c|E}} 是为该形参所提供的模板实参。
+
+如果被推导的类型不是[[#非类型模板形参|结构化类型]]，那么程序非良构。
+
+对于类型中使用了占位符类型的非类型模板形参包，每个模板实参的类型会独立进行推导，而且不需要互相匹配。
+}}
+{{rev end}}
+
+{{source|1=
+template&lt;auto n&gt;
+struct B { /* ... */ };
+
+B&lt;5&gt; b1;   // OK：非类型模板形参的类型是 int
+B&lt;'a'&gt; b2; // OK：非类型模板形参的类型是 char
+B&lt;2.5&gt; b3; // 错误（C++20 前）：非类型模板形参的类型不能是 double
+
+// C++20 的推导类类型占位符，在调用处推导类模板实参
+template&lt;std::array arr&gt;
+void f();
+
+f&lt;std::array&lt;double, 8&gt;{}&gt;();
+
+template&lt;auto...&gt;
+struct C {};
+
+C&lt;'C', 0, 2L, nullptr&gt; x; // OK
+}}
+
+{{rev inl|since=c++17|（可能推导的）}}{{tt|T}} 类型的非类型模板形参 {{c|P}} 的值，按如下方式从它的模板实参 {{c|A}} 确定：
+{{rev begin}}
+{{rev|until=c++11|
+* 如果 {{c|A}} 是 {{tt|T}} 类型的{{rlps|constant expression#经转换常量表达式}}，那么 {{c|P}} 的值为（转换后的）{{c|A}}。
+* 否则，程序非良构。
+}}
+{{rev|since=c++11|until=c++20|
+* 如果 {{c|A}} 是表达式：
+:* 如果 {{c|A}} 是 {{tt|T}} 类型的{{rlps|constant expression#经转换常量表达式}}，那么 {{c|P}} 的值为（转换后的）{{c|A}}。
+:* 否则，程序非良构。
+* 否则（{{c|A}} 是花括号包围的初始化式列表），引入一个临时变量 {{c|1=constexpr T v = A;}}。{{c|P}} 的值为 {{c|v}} 的值。
+:* {{c|v}} 的{{rlp|lifetime|生存期}}在其初始化后立即结束。
+}}
+{{rev|since=c++20|
+* 如果 {{tt|T}} 不是类类型且 {{c|A}} 是表达式：
+:* 如果 {{c|A}} 是 {{tt|T}} 类型的{{rlps|constant expression#经转换常量表达式}}，那么 {{c|P}} 的值为（转换后的）{{c|A}}。
+:* 否则，程序非良构。
+* 否则（{{tt|T}} 是类类型，或 {{c|A}} 是花括号包围的初始化式列表），引入一个临时变量 {{c|1=constexpr T v = A;}}。
+:* 如果 {{tt|T}} 是类类型，那么存在一个[[#模板形参对象|模板形参对象]]（其亦由 {{c|P}} 所代表）。{{c|P}} 从某个未指明的与 {{c|v}} [[#模板实参等价性|模板实参等价]]的初始化式进行复制初始化。
+::* {{c|v}} 的{{rlp|lifetime|生存期}}在它和 {{c|P}} 初始化后立即结束。
+::* 如果 {{c|P}} 的初始化满足以下任一条件，则程序非良构：
+:::* 此初始化非良构。
+:::* 此初始化中所虚构的声明符-初始化式序列的{{rlp|expressions#全表达式|全表达式}}，当作为{{rlp|constant expression#明显常量求值的表达式|明显常量求值的表达式}}解释时并不是常量表达式。
+:::* 此初始化会导致 {{c|P}} 与 {{c|v}} 并不[[#模板实参等价性|模板实参等价]]。
+:* 否则，{{c|P}} 的值为 {{c|v}} 的值。
+}}
+{{rev end}}
+
+{{source|1=
+template&lt;int i&gt;
+struct C { /* ... */ };
+
+C&lt;{42}&gt; c1; // OK
+
+template&lt;auto n&gt;
+struct B { /* ... */ };
+
+struct J1
+{
+    J1* self = this;
+};
+
+B&lt;J1{}&gt; j1; // 错误：模板形参对象的初始化不是常量表达式
+
+struct J2
+{
+    J2 *self = this;
+    constexpr J2() {}
+    constexpr J2(const J2&amp;) {}
+};
+
+B&lt;J2{}&gt; j2; // 错误：模板形参对象与引入的临时量并不模板实参等价
+}}
+
+{{rev begin}}
+{{rev|until=c++17|
+在实例化拥有非类型模板形参的模板时应用下列限制：
+* 对于整型和算术类型，实例化时所提供的模板实参必须是模板形参类型的{{rlp|constant expression|经转换常量表达式}}（因此适用某些隐式转换）。
+* 对于对象指针，模板实参必须指定某个具有静态{{rlp|storage duration|存储期}}和（内部或外部）{{rlp|storage duration#连接|连接}}的完整对象的地址，或者是求值为适当的空指针{{rev inl|since=c++11|或 {{lc|std::nullptr_t}} }}值的常量表达式。
+* 对于函数指针，合法的实参是指向具有连接的函数的指针（或求值为空指针值的常量表达式）。
+* 对于左值引用形参，实例化时所提供的实参不能是临时量、无名左值或无连接的具名左值（换言之，实参必须具有连接）。
+* 对于成员指针，实参必须是表示成 {{c|&amp;Class::Member}} 的成员指针，或求值为空指针值{{rev inl|since=c++11|或 {{lc|std::nullptr_t}} }}值的常量表达式。
+
+特别是，这意味着字符串字面量、数组元素的地址和非静态成员的地址，不能被用作模板实参，来实例化它对应的非类型模板形参是对象指针的模板形参的模板。
+}}
+{{rev|since=c++17|
+引用或指针类型的非类型模板形参{{rev inl|since=c++20|以及类类型的非类型模板形参和它的子对象之中的引用或指针类型的非静态数据成员}}，它们不能指代下列对象或者是下列对象的地址：
+* 临时对象（包括在{{rlp|reference initialization|引用初始化}}期间创建的对象）；
+* {{rlp|string literal|字符串字面量}}；
+* {{rlpt|typeid}} 的结果；
+* 预定义变量 {{c|__func__}}；
+* 或{{rev inl|since=c++20|以上之一的}}子对象（包括非静态类成员、基类子对象或数组元素）。
+}}
+{{rev end}}
+
+{{source|1=
+template&lt;const int* pci&gt;
+struct X {};
+
+int ai[10];
+X&lt;ai&gt; xi; // OK：数组到指针转换和 cv 限定转换
+
+struct Y {};
+
+template&lt;const Y&amp; b&gt;
+struct Z {};
+
+Y y;
+Z&lt;y&gt; z;   // OK：没有转换
+
+template&lt;int (&amp;pa)[5]&gt;
+struct W {};
+
+int b[5];
+W&lt;b&gt; w;   // OK：没有转换
+
+void f(char);
+void f(int);
+
+template&lt;void (*pf)(int)&gt;
+struct A {};
+
+A&lt;&amp;f&gt; a;  // OK：重载决议选择 f(int)
+}}
+
+{{source|1=
+template&lt;class T, const char* p&gt;
+class X {};
+
+X&lt;int, "Studebaker"&gt; x1; // 错误：将字符串字面量用作模板实参
+
+template&lt;int* p&gt;
+class X {};
+
+int a[10];
+
+struct S
+{
+    int m;
+    static int s;
+} s;
+
+X&lt;&amp;a[2]&gt; x3; // 错误（C++20 前）：数组元素的地址
+X&lt;&amp;s.m&gt; x4;  // 错误（C++20 前）：非静态成员的地址
+X&lt;&amp;s.s&gt; x5;  // OK：静态成员的地址
+X&lt;&amp;S::s&gt; x6; // OK：静态成员的地址
+
+template&lt;const int&amp; CRI&gt;
+struct B {};
+
+B&lt;1&gt; b2;     // 错误：模板实参要求临时量
+int c = 1;
+B&lt;c&gt; b1;     // OK
+}}
+
+====类型模板实参====
+类型模板形参的模板实参必须是{{rlp|type#类型的命名|类型标识}}，它可以指名不完整类型：
+{{source|
+template&lt;typename T&gt;
+class X {}; // 类模板
+
+struct A;            // 不完整类型
+typedef struct {} B; // 无名类型的类型别名
+
+int main()
+{
+    X&lt;A&gt; x1;  // OK：'A' 指名类型
+    X&lt;A*&gt; x2; // OK：'A*' 指名类型
+    X&lt;B&gt; x3;  // OK：'B' 指名类型
+}
+}}
+
+====模板模板实参====
+模板模板形参的模板实参是必须是一个{{rlp|identifiers#在表达式中|标识表达式}}，它指名一个类模板或模板别名。
+
+当实参是类模板时，进行形参匹配时只考虑它的主模板。即使存在部分特化，它们也只会在基于此模板模板形参的特化恰好要被实例化时才会被考虑。
+
+{{source|1=
+template&lt;typename T&gt; // 主模板
+class A { int x; };
+
+template&lt;typename T&gt; // 部分特化
+class A&lt;T*&gt; { long x; };
+
+// 带有模板模板形参 V 的类模板
+template&lt;template&lt;typename&gt; class V&gt;
+class C
+{
+    V&lt;int&gt; y;  // 使用主模板
+    V&lt;int*&gt; z; // 使用部分特化
+};
+
+C&lt;A&gt; c; // c.y.x 的类型是 int，c.z.x 的类型是 long
+}}
+
+为匹配模板模板实参 {{tt|A}} 与模板模板形参 {{tt|P}}，{{tt|P}} 必须至少和 {{tt|A}} 一样特殊。{{rev inl|since=c++11|如果 {{tt|P}} 的形参列表包含一个{{rlp|parameter pack|形参包}}，那么来自 {{tt|A}} 的模板形参列表中的零或更多模板形参（或形参包）和它匹配。}}
+
+正式来说，给定以下对两个函数模板的重写，根据{{rlp|function template|函数模板}}的偏序规则，如果对应于模板模板形参 {{tt|P}} 的函数模板，至少与对应于模板模板实参 {{tt|A}} 的函数模板同样特殊，那么 {{tt|P}} 至少和 {{tt|A}} 一样特殊。给定一个虚设的类模板 {{tt|X}}，它拥有 {{tt|A}} 的模板形参列表（包含默认实参）：
+* 两个函数模板各自分别拥有与 {{tt|P}} 或 {{tt|A}} 相同的各个模板形参。
+* 每个函数模板均拥有单个函数形参，它的类型是以对应于各自函数模板的模板形参的模板实参对 {{tt|X}} 的特化，其中对于函数模板的模板形参列表中的每个模板形参 {{tt|PP}}，构成一个对应的模板实参 {{tt|AA}}。{{rev inl|since=c++11|如果 {{tt|PP}} 声明参数包，那么 {{tt|AA}} 是包展开 {{tt|PP...}}；否则，}} {{tt|AA}} 是标识表达式 {{tt|PP}}。
+
+如果重写生成了非法类型，那么 {{tt|P}} 并不会至少与 {{tt|A}} 同样特殊。
+
+{{source|1=
+template&lt;typename T&gt;
+struct eval;                     // 主模板 
+
+template&lt;template&lt;typename, typename...&gt; class TT, typename T1, typename... Rest&gt;
+struct eval&lt;TT&lt;T1, Rest...&gt;&gt; {}; // eval 的部分特化
+
+template&lt;typename T1&gt; struct A;
+template&lt;typename T1, typename T2&gt; struct B;
+template&lt;int N&gt; struct C;
+template&lt;typename T1, int N&gt; struct D;
+template&lt;typename T1, typename T2, int N = 17&gt; struct E;
+
+eval&lt;A&lt;int&gt;&gt; eA;        // OK：匹配 eval 的部分特化
+eval&lt;B&lt;int, float&gt;&gt; eB; // OK：匹配 eval 的部分特化
+eval&lt;C&lt;17&gt;&gt; eC;         // 错误：C 在部分特化中不匹配 TT，因为 TT 的首个形参是类型模板形参
+                        // 而 17 不指名类型
+eval&lt;D&lt;int, 17&gt;&gt; eD;    // 错误：D 在部分特化中不匹配 TT，
+                        // 因为 TT 的第二个形参是类型形参包，而 17 不指名类型
+eval&lt;E&lt;int, float&gt;&gt; eE; // 错误：E 在部分特化中不匹配 TT
+                        // 因为 E 的第三个（默认）形参是非类型形参
+}}
+
+在采纳 {{stddoc|p0552r0}} 前，{{tt|A}} 中的每个模板形参必须精确匹配 {{tt|P}} 中的对应模板形参。这使得很多合理的模板实参无法被接受。
+
+虽然很早就有人指出来了这个问题（[https://wg21.cmeerw.net/cwg/issue150 CWG#150]），但解决它的时候作出的更改只能应用到 C++17 草案中，因此该解决方案事实上成为了 C++17 的特性。许多编译器默认禁用了该方案：
+* [https://gcc.gnu.org/gcc-7/changes.html#cxx GCC] 在 C++17 以前的语言模式中默认禁用了该方案，只有通过设置编译器参数才能在这些模式中启用该方案。
+* [https://clang.llvm.org/cxx_status.html#p0522 Clang] 在所有语言模式中默认禁用了该方案，只有通过设置编译器参数才能启用该方案。
+* [https://docs.microsoft.com/en-us/cpp/overview/visual-cpp-language-conformance Microsoft Visual Studio] 把该方案视为一个通常 C++17 特性，并只在 C++17 及以后的语言模式中启用它（即在默认的语言模式——C++14 模式中不支持该方案）
+
+{{source|1=
+template&lt;class T&gt; class A { /* ... */ };
+template&lt;class T, class U = T&gt; class B { /* ... */ };
+template&lt;class... Types&gt; class C { /* ... */ };
+
+template&lt;template&lt;class&gt; class P&gt; class X { /* ... */ };
+X&lt;A&gt; xa; // OK
+X&lt;B&gt; xb; // 在 P0552R0 后 OK；之前是错误的：非严格匹配
+X&lt;C&gt; xc; // 在 P0552R0 后 OK；之前是错误的：非严格匹配
+
+template&lt;template&lt;class...&gt; class Q&gt; class Y { /* ... */ };
+Y&lt;A&gt; ya; // OK
+Y&lt;B&gt; yb; // OK
+Y&lt;C&gt; yc; // OK
+
+template&lt;auto n&gt; class D { /* ... */ };   // 注意：C++17
+template&lt;template&lt;int&gt; class R&gt; class Z { /* ... */ };
+Z&lt;D&gt; zd; // 在 P0552R0 后 OK：模板形参比模板实参更特殊
+
+template&lt;int&gt; struct SI { /* ... */ };
+template&lt;template&lt;auto&gt; class&gt; void FA(); // 注意：C++17
+FA&lt;SI&gt;(); // 错误
+}}
+
+====默认模板实参====
+默认模板实参在形参列表中在 {{c|{{=}}}} 号之后指定。可以为任何种类的模板形参（类型、非类型或模板）指定默认实参{{rev inl|since=c++11|，但不能对形参包指定}}。
+
+如果为主类模板{{rev inl|since=c++14|、主变量模板}}或别名模版的模板形参指定默认实参，那么它后面的所有模板形参都必须有默认实参{{rev inl|since=c++11|，但最后一个可以是模板形参包}}。在函数模板中，对跟在默认实参之后的形参没有限制{{rev inl|since=c++11|，而只有在类型形参具有默认实参，或可以从函数实参推导时，才能跟在形参包之后}}。
+
+以下情况不允许默认形参：
+* 在{{rlp|class template|类模板}}的成员的类外定义中（必须在类体内的声明中提供它们）。注意非模板类的{{rlp|member template|成员模板}}可以在它的类外定义中使用默认形参（见 [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=53856 GCC 漏洞 53856]）
+* 在{{rlp|friend#模板友元|友元类模板}}声明中
+{{rrev|until=c++11| {{mark unreviewed dr|CWG}}&lt;!-- CWG #226 ，但编译器不应用之于其 C++03 模式 --&gt;
+* 在任何{{rlp|function template|函数模板}}声明或定义中
+}}
+
+{{rrev|since=c++11|
+在友元函数模板的声明上，仅当声明是定义，且此翻译单元不出现此函数的其他声明时，才允许默认模板实参。
+}}
+
+各个声明中所出现的默认模板实参，以类似默认函数实参的方式合并：
+{{source|1=
+template&lt;typename T1, typename T2 = int&gt; class A;
+template&lt;typename T1 = int, typename T2&gt; class A;
+
+// 如上与如下相同：
+template&lt;typename T1 = int, typename T2 = int&gt; class A;
+}}
+但在同一作用域中不能两次为同一形参指定默认实参：
+{{source|1=
+template&lt;typename T = int&gt; class X;
+template&lt;typename T = int&gt; class X {}; // 错误
+}}
+
+当解析非类型模板形参的默认模板实参时，第一个非嵌套的 {{c|&gt;}} 被当做模板形参列表的结尾而非大于运算符：
+
+{{source|1=
+template&lt;int i = 3 &gt; 4&gt;   // 语法错误
+class X { /* ... */ };
+
+template&lt;int i = (3 &gt; 4)&gt; // OK
+class Y { /* ... */ };
+}}
+
+模板模板形参的模板形参列表可拥有它自己的默认实参，它只会在模板模板实参自身处于作用域中时有效：
+
+{{source|1=
+// 类模板，带有默认实参的类型模板形参
+template&lt;typename T = float&gt;
+struct B {};
+
+// 模板模板形参 T 有形参列表，
+// 它由一个带默认实参的类型模板形参组成
+template&lt;template&lt;typename = float&gt; typename T&gt;
+struct A
+{
+    void f();
+    void g();
+};
+
+// 类体外的成员函数模板定义
+
+template&lt;template&lt;typename TT&gt; class T&gt;
+void A&lt;T&gt;::f()
+{
+    T&lt;&gt; t; // 错误：TT 在作用域中没有默认实参
+}
+
+template&lt;template&lt;typename TT = char&gt; class T&gt;
+void A&lt;T&gt;::g()
+{
+    T&lt;&gt; t; // OK：t 是 T&lt;char&gt;
+}
+}}
+
+默认模板形参中所用的名字的{{rlp|access|成员访问}}，在声明中，而非在使用点检查：
+{{source|1=
+class B {};
+
+template&lt;typename T&gt;
+class C
+{
+protected:
+    typedef T TT;
+};
+
+template&lt;typename U, typename V = typename U::TT&gt;
+class D: public U {};
+
+D&lt;C&lt;B&gt;&gt;* d; // 错误：C::TT 是受保护的
+}}
+
+{{rrev|since=c++14|{{mark unreviewed dr|CWG|2008}}
+默认模板实参在需要该默认实参的值时被隐式实例化，除非模板用于指名函数：
+{{source|1=
+template&lt;typename T, typename U = int&gt;
+struct S {};
+
+S&lt;bool&gt;* p; // 默认模板实参 U 在此点实例化
+            // p 的类型是 S&lt;bool, int&gt;*
+}}
+}}
+
+====模板实参等价性====
+模板实参等价性用来确定两个{{rlp|templates#模板标识|模板标识}}是否相同。
+
+如果两个值拥有相同的类型，且满足以下条件之一，那么它们''模板实参等价''：
+* 它们拥有整数或枚举类型且它们的值相同。
+* 它们拥有指针类型且它们拥有同一指针值。
+* 它们拥有成员指针类型且它们指代同一类成员或都是空成员指针值。
+* 它们拥有左值引用类型且它们指代同一对象或函数。
+{{rrev|since=c++11|
+* 它们拥有 {{lc|std::nullptr_t}} 类型。
+}}
+{{rrev|since=c++20|
+* 它们拥有浮点数类型且它们的值相同。
+* 它们拥有数组类型（此情况下数组必须是某类/联合体的成员对象）且它们对应的元素模板实参等价。
+* 它们拥有联合体类型且它们均无活跃成员，或它们拥有相同的活跃成员且它们的活跃成员模板实参等价。
+* 它们拥有 lambda 闭包类型。
+* 它们拥有非联合类类型且它们对应的直接子对象和引用成员模板实参等价。
+}}
+
+===注解===
+{{rrev|since=c++20|
+模板形参中，对类型和非类型形参都可以使用类型约束，这取决于是否有 {{c/core|auto}}。
+
+{{source|1=
+template&lt;typename&gt;
+concept C = true;
+
+template&lt;C,     // 类型形参
+         C auto // 非类型形参
+        &gt;
+struct S{};
+
+S&lt;int, 0&gt; s;
+}}
+
+}}
+
+{{ftm begin|core=1|std=1|comment=1|sort=1}}
+{{ftm|value=201606L|std=C++17|__cpp_nontype_template_parameter_auto|声明带有 {{tt|auto}} 的[[#非类型模板形参|非类型模板形参]]}}
+{{ftm|value=201611L|std=c++17|__cpp_template_template_args|[[#模板模板实参|模板模板实参]]的匹配|dr=yes}}
+{{ftm|value=201411L|std=C++17|__cpp_nontype_template_args|rowspan="2"|允许所有[[#非类型模板实参|非类型模板实参]]的常量求值}}
+{{ftm|value=201911L|std=C++20|-|[[#非类型模板形参|非类型模板形参]]中的类类型和浮点数类型}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+
+// 简单的非类型模板形参
+template&lt;int N&gt;
+struct S { int a[N]; };
+
+template&lt;const char*&gt;
+struct S2 {};
+
+// 复杂的非类型形参的例子
+template
+&lt;
+    char c,             // 整型类型
+    int (&amp;ra)[5],       // 到（数组类型）对象的左值引用
+    int (*pf)(int),     // 函数指针
+    int (S&lt;10&gt;::*a)[10] // 指向（int[10] 类型的）成员对象的指针
+&gt;
+struct Complicated
+{
+    // 调用编译时所选择的函数
+    // 并在编译时将它的结果存储在数组中
+    void foo(char base)
+    {
+        ra[4] = pf(c - base);
+    }
+};
+
+//  S2&lt;"fail"&gt; s2;        // 错误：不能用字符串字面量
+    char okay[] = "okay"; // 有连接的静态对象
+//  S2&lt;&amp;okay[0] &gt; s3;    // 错误：数组元素无连接
+    S2&lt;okay&gt; s4;          // 能用
+
+int a[5];
+int f(int n) { return n; }
+ 
+// C++20：非类型模板形参可以具有字面量类类型
+template&lt;std::array arr&gt;
+constexpr
+auto sum() { return std::accumulate(arr.cbegin(), arr.cend(), 0); }
+ 
+// C++20：可以在调用处推导出类模板实参
+static_assert(sum&lt;std::array&lt;double, 8&gt;{3, 1, 4, 1, 5, 9, 2, 6}&gt;() == 31.0);
+// C++20：非类型模板形参的实参推导和类模板实参推导
+static_assert(sum&lt;std::array{2, 7, 1, 8, 2, 8}&gt;() == 28);
+
+int main()
+{
+    S&lt;10&gt; s; // s.a 是含有 10 个 int 的数组
+    s.a[9] = 4;
+
+    Complicated&lt;'2', a, f, &amp;S&lt;10&gt;::a&gt; c;
+    c.foo('0');
+
+    std::cout &lt;&lt; s.a[9] &lt;&lt; a[4] &lt;&lt; '\n';
+}
+|output=
+42
+}}
+{{todo|更多示例}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=150|paper=P0522R0|std=C++98|before=模板模板实参必须准确匹配模板模板形参的形参列表|after=模板形参可以比模板实参更特殊}}
+{{dr list item|wg=cwg|dr=184|std=C++98|before=未指明模板模板形参中的模板形参是否可以有默认实参|after=添加相应说明}}
+{{dr list item|wg=cwg|dr=354|std=C++98|before=非类型模板实参不能是空指针值|after=可以是空指针值}}
+{{dr list item|wg=cwg|dr=1398|std=C++11|before=非类型模板实参不能具有 {{tt|std::nullptr_t}} 类型|after=可以具有该类型}}
+{{dr list item|wg=cwg|dr=1570|std=C++98|before=非类型模板实参可以表示子对象的地址|after=只能表示完整对象的地址}}
+{{dr list item|wg=cwg|dr=1922|std=C++98|before=不明确名字是注入类名的类模板是否可以使用之前的声明中的默认模板实参|after=可以使用}}
+{{dr list item|wg=cwg|dr=2032|std=C++14|before=对于变量模板，有默认实参的模板形参后的模板形参没有任何限制|after=应用与类模板和别名模板相同的限制}}
+{{dr list item|wg=cwg|dr=2542|std=C++20|before=不明确闭包类型是不是结构化类型|after=不是结构化类型}}
+{{dr list item|wg=cwg|dr=2845|std=C++20|before=闭包类型不是结构化类型|after=无捕获时是结构化类型}}
+{{dr list item|paper=P2308R1|std=C++11&lt;br&gt;C++20|before=1. 非类型模板实参不允许列表初始化（C++11）&lt;br&gt;2. 不明确类类型的非类型模板形参如何初始化（C++20）|after=1. 允许&lt;br&gt;2. 使之明确}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

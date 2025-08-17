@@ -1,0 +1,216 @@
+{{cpp/title|async}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|future}}
+{{dcl|num=1|since=c++11|
+template&lt; class F, class... Args &gt;
+std::future&lt;/* 见下文 */&gt; async( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class F, class... Args &gt;
+std::future&lt;/* 见下文 */&gt; async( std::launch policy,
+                                 F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+函数模板 {{tt|std::async}} 异步地运行函数 {{c|f}}（有可能在可能是线程池一部分的分离线程中），并返回最终将保有该函数调用结果的 {{lc|std::future}}。
+@1@ 表现如同以 {{c|std::launch::async {{!}} std::launch::deferred}} 作为 {{c|policy}} 调用 {{v|2}}。
+@2@ 按照特定的启动策略 {{c|policy}}（见[[#启动策略|下文]]），以参数 {{c|args}} 调用函数 {{c|f}}。
+
+{{tt|std::async}} 的返回类型为 {{c/core|std::future&lt;V&gt;}}，其中 {{c|V}} 为：
+{{rrev multi|until1=c++17
+|rev1=
+{{cc multi
+|typename std::result_of&lt;typename std::decay&lt;F&gt;::type(
+|                        typename std::decay&lt;Args&gt;::type...)&gt;::type}}
+|rev2=
+{{c/core|std::invoke_result_t&lt;std::decay_t&lt;F&gt;, std::decay_t&lt;Args&gt;...&gt;}}
+}}
+
+
+{{rrev multi|until1=c++20
+|rev1=
+如果满足以下任意条件，那么程序非良构：
+* {{tt|F}} 不{{named req|MoveConstructible}}。
+* {{tt|Args}} 中的任何类型不{{named req|MoveConstructible}}。
+* {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{nbspt|7}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}} 不是合法的表达式。
+|rev2=
+如果以下任意值是 {{c|false}}，那么程序非良构：
+* {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}}
+* {{c|(std::is_constructible_v&lt;std::decay_t&lt;Args&gt;, Args&gt; &amp;&amp; ...)}}
+* {{c|std::is_invocable_v&lt;std::decay_t&lt;F&gt;, std::decay_t&lt;Args&gt;...&gt;}}
+}}
+
+对 {{tt|std::async}} 的调用[[cpp/atomic/memory_order|同步于]]对 {{c|f}} 的调用，且 {{c|f}} 的完成[[cpp/language/eval order|按顺序早于]]令共享状态就绪。
+
+===参数===
+{{par begin}}
+{{par|f|要调用的{{named req|Callable}}对象}}
+{{par|args|要传递给 {{c|f}} 的形参}}
+{{par|policy|位掩码值，每个单独位控制允许的执行方法}}
+{{par end}}
+
+===返回值===
+指代此次调用 {{tt|std::async}} 所创建的共享状态的 {{lc|std::future}}。
+
+===启动策略===
+====异步调用====
+如果有设置''异步''{{sep}}标志，即 {{c|1=(policy &amp; std::launch::async) != 0}}，那么 {{tt|std::async}} 会如同在一个以 {{lc|std::thread}} 对象表示的新执行线程中调用
+{{rrev multi|until1=c++23
+|rev1=
+{{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{c/core| }}{{c/core| }}{{c/core| }}{{c/core| }}{{c/core| }}{{c/core| }}{{c/core| }}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}}
+|rev2=
+{{c multi
+|std::invoke(auto(std::forward&lt;F&gt;(f)),
+|            auto(std::forward&lt;Args&gt;(args))...)}}
+}}
+
+
+{{rrev multi|until1=c++23
+|rev1={{lti|cpp/standard library/decay-copy}} 的调用在当前线程求值。
+|rev2={{c/core|auto}} 产生的值在当前线程[[cpp/language/implicit conversion#临时量实质化|实质化]]。
+}}
+如果 {{c|f}} 返回值或抛出异常，那么它们会存储到 {{tt|std::async}} 返回给调用方的 {{lc|std::future}} 的共享状态中。
+
+====推迟调用====
+如果有设置''推迟''{{sep}}标志（即 {{c|1=(policy &amp; std::launch::deferred) != 0}}），那么 {{tt|std::async}} 会将
+{{rrev multi|until1=c++23
+|rev1={{box|{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f))}}}} 和 {{box|{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...}}}}
+|rev2={{c|auto(std::forward&lt;F&gt;(f))}} 和 {{c|auto(std::forward&lt;Args&gt;(args))...}}
+}}
+存储到共享状态中。
+
+进行''惰性求值''：
+* 在 {{tt|std::async}} 返回给调用方的 {{lc|std::future}} 上首次调用非定时等待函数时会在调用等待函数的线程（不一定是最初调用 {{tt|std::async}} 的线程）中求值 {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(std::move(g), std::move(xyz))}}}}，其中
+{{rrev multi|until1=c++23|rev1=
+:* {{c|g}} 是存储的 {{box|{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f))}}}} 的值，并且
+:* {{c|xyz}} 是存储的 {{box|{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...}}}} 的副本。
+|rev2=
+:* {{c|g}} 是存储的 {{c|auto(std::forward&lt;F&gt;(f))}} 的值，并且
+:* {{c|xyz}} 是存储的 {{c|auto(std::forward&lt;Args&gt;(args))...}} 的副本。
+}}
+* 将结果或异常置于关联到该 {{lc|std::future}} 的共享状态，然后才令它就绪。对同一 {{lc|std::future}} 的所有后续访问都会立即返回结果。
+
+====其他策略====
+如果 {{c|policy}} 中没有设置 {{lc|std::launch::async}}，{{lc|std::launch::deferred}} 或任何由实现定义的其他策略标志，那么行为未定义。
+
+===策略选择===
+如果 {{c|policy}} 中设置了多个标志，那么由实现定义选择哪个策略。对于默认情况（{{c|policy}} 中同时设置了 {{lc|std::launch::async}} 和 {{lc|std::launch::deferred}} 两个标志），标准建议（但不要求）利用现有的并发资源，并且推迟另外的任务。
+
+如果选择了 {{lc|std::launch::async}} 策略，那么：
+* 对于共享该 {{tt|std::async}} 创建的共享状态的某个异步返回对象，对它的等待函数的调用会阻塞，直到关联的线程如同以结束执行或超时的方式完成。
+* 关联线程的完成''同步于''{{sep}}首个在共享状态上等待的函数的成功返回和最后一个释放共享状态的函数的返回，两者中的先到来的一方。
+
+===异常===
+可能会抛出以下异常：
+* 如果无法分配内部数据结构所用的内存，那么就会抛出 {{lc|std::bad_alloc}}。
+* 如果 {{c|1=policy == std::launch::async}} 且实现无法开始新线程，那么就会抛出以 {{lc|std::errc::resource_unavailable_try_again}} 为错误条件的 {{lc|std::system_error}}。
+** 此时如果 {{c|policy}} 是 {{c|std::launch::async {{!}} std::launch::deferred}} 或者设置了额外位，那么就会回退到推迟调用或其他由实现定义的策略。
+
+===注解===
+实现可以通过在默认运行策略中启用额外（实现定义的）位，扩展 {{tt|std::async}} 重载 {{v|1}} 的行为。
+
+由实现定义的启动策略的例子是同步策略（在 {{tt|std::async}} 调用内立即执行）和任务策略（类似 {{tt|std::async}}，但不清理线程局域对象）。
+
+如果从 {{tt|std::async}} 获得的 {{lc|std::future}} 没有被移动或绑定到引用，那么在完整表达式结尾， {{lc|std::future}} 的析构函数将阻塞到异步计算完成，实质上令如下代码同步：
+{{source|
+std::async(std::launch::async, []{ f(); }); // 临时量的析构函数等待 f()
+std::async(std::launch::async, []{ g(); }); // f() 完成前不开始
+}}
+注意：以调用 {{tt|std::async}} 以外的方式获得的 {{lc|std::future}} 的析构函数不会阻塞。
+
+===示例===
+{{example|
+|code= 
+#include &lt;algorithm&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;numeric&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+std::mutex m;
+
+struct X
+{
+    void foo(int i, const std::string&amp; str)
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        std::cout &lt;&lt; str &lt;&lt; ' ' &lt;&lt; i &lt;&lt; '\n';
+    }
+    
+    void bar(const std::string&amp; str)
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        std::cout &lt;&lt; str &lt;&lt; '\n';
+    }
+    
+    int operator()(int i)
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        std::cout &lt;&lt; i &lt;&lt; '\n';
+        return i + 10;
+    }
+};
+
+template&lt;typename RandomIt&gt;
+int parallel_sum(RandomIt beg, RandomIt end)
+{
+    auto len = end - beg;
+    if (len &lt; 1000)
+        return std::accumulate(beg, end, 0);
+    
+    RandomIt mid = beg + len / 2;
+    auto handle = std::async(std::launch::async,
+                             parallel_sum&lt;RandomIt&gt;, mid, end);
+    int sum = parallel_sum(beg, mid);
+    return sum + handle.get();
+}
+ 
+int main()
+{
+    std::vector&lt;int&gt; v(10000, 1);
+    std::cout &lt;&lt; "和为 " &lt;&lt; parallel_sum(v.begin(), v.end()) &lt;&lt; '\n';
+    
+    X x;
+    // 以默认策略调用 x.foo(42, "Hello") ：
+    // 可能同时打印 "Hello 42" 或延迟执行
+    auto a1 = std::async(&amp;X::foo, &amp;x, 42, "Hello");
+    // 以 deferred 策略调用 x.bar("world!")
+    // 调用 a2.get() 或 a2.wait() 时打印 "world!"
+    auto a2 = std::async(std::launch::deferred, &amp;X::bar, x, "world!");
+    // 以 async 策略调用 X()(43) ：
+    // 同时打印 "43"
+    auto a3 = std::async(std::launch::async, X(), 43);
+    a2.wait();                     // 打印 "world!"
+    std::cout &lt;&lt; a3.get() &lt;&lt; '\n'; // 打印 "53"
+} // 若 a1 在此点未完成，则 a1 的析构函数在此打印 "Hello 42"
+|p=true
+|output=
+和为 10000
+43
+world!
+53
+Hello 42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2021|std=C++11|before=返回类型不正确， deferred 的情况下参数的值类别不明|after=更正返回类型，明确使用右值}}
+{{dr list item|wg=lwg|dr=2078|std=C++11|before=不明确 {{c|policy}} 在除 {{lc|std::launch::async}} 外还指定了&lt;br&gt;其他启动策略时是否会抛出 {{lc|std::system_error}}|after=仅限&lt;br&gt;{{c|1=policy == std::launch::async}}}}
+{{dr list item|wg=lwg|dr=2100|std=C++11|before=使用 {{lc|std::launch::async}} 策略时计时等待函数不能超时|after=可以超时}}
+{{dr list item|wg=lwg|dr=2120|std=C++11|before=未设置标准或实现定义的策略的情况下行为不明|after=行为未定义}}
+{{dr list item|wg=lwg|dr=2186|std=C++11|before=不明确如何处理惰性求值返回的值和抛出的异常|after=会将它们存储到共享状态中}}
+{{dr list item|wg=lwg|dr=2752|std=C++11|before={{tt|std::async}} 在无法分配内部数据结构所用的&lt;br&gt;内存时不一定会抛出 {{lc|std::bad_alloc}}|after=会抛出}}
+{{dr list item|wg=lwg|dr=3476|std=C++20|before={{tt|F}} 和实参类型（在退化后）被直接要求必须可移动构造|after=移除这些要求&lt;ref&gt;{{lc|std::is_constructible_v}} 已间接要求了可移动构造性。&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc future}}
+{{dsc see cpp|cpp/execution|执行支持库|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

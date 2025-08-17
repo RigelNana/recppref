@@ -1,0 +1,93 @@
+{{cpp/title|three_way_comparable|three_way_comparable_with}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|compare}}
+{{dcl|since=c++20|num=1|1=
+template&lt; class T, class Cat = std::partial_ordering &gt;
+concept three_way_comparable =
+    __WeaklyEqualityComparableWith&lt;T, T&gt; &amp;&amp;
+    __PartiallyOrderedWith&lt;T, T&gt; &amp;&amp;
+    requires(const std::remove_reference_t&lt;T&gt;&amp; a,
+             const std::remove_reference_t&lt;T&gt;&amp; b) {
+        { a &lt;=&gt; b } -&gt; __ComparesAs&lt;Cat&gt;;
+    };
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class T, class U, class Cat = std::partial_ordering &gt;
+concept three_way_comparable_with =
+    std::three_way_comparable&lt;T, Cat&gt; &amp;&amp;
+    std::three_way_comparable&lt;U, Cat&gt; &amp;&amp;
+    __ComparisonCommonTypeWith&lt;T, U&gt; &amp;&amp;
+    std::three_way_comparable&lt;
+        std::common_reference_t&lt;
+            const std::remove_reference_t&lt;T&gt;&amp;,
+            const std::remove_reference_t&lt;U&gt;&amp;&gt;, Cat&gt; &amp;&amp;
+    __WeaklyEqualityComparableWith&lt;T, U&gt; &amp;&amp;
+    __PartiallyOrderedWith&lt;T, U&gt; &amp;&amp;
+    requires(const std::remove_reference_t&lt;T&gt;&amp; t,
+             const std::remove_reference_t&lt;U&gt;&amp; u) {
+        { t &lt;=&gt; u } -&gt; __ComparesAs&lt;Cat&gt;;
+        { u &lt;=&gt; t } -&gt; __ComparesAs&lt;Cat&gt;;
+    };
+}}
+{{dcl|notes={{mark expos}}|num=3|1=
+template&lt; class T, class Cat &gt;
+concept __ComparesAs =
+    std::same_as&lt;std::common_comparison_category_t&lt;T, Cat&gt;, Cat&gt;;
+}}
+{{dcl end}}
+
+@1@ 概念 {{tt|std::three_way_comparable}} 指定三路比较运算符 {{tt|1=&lt;=&gt;}} 在 {{tt|T}} 上生成与 {{tt|Cat}} 所蕴含的比较类别一致的结果。
+
+@2@ 概念 {{tt|three_way_comparable_with&lt;T, U, Cat&gt;}} 指定三路比较运算符 {{tt|1=&lt;=&gt;}} 在（可能混合的） {{tt|T}} 与 {{tt|U}} 操作数上生成与 {{tt|Cat}} 所蕴含的比较类别一致的结果。比较混合的操作数生成的结果等价于比较转换到其公共类型的操作数。
+
+{{ltt|cpp/concepts/equality_comparable|''__WeaklyEqualityComparableWith''}}、{{ltt|cpp/concepts/totally_ordered|''__PartiallyOrderedWith''}} 和 {{ltt|cpp/concepts/equality_comparable|''__ComparisonCommonTypeWith''}} 是仅用于阐释的概念。参见 {{lconcept|equality_comparable}} 和 {{lconcept|totally_ordered}} 的说明。
+
+===语义要求===
+这些概念仅若其所蕴含的概念均被实现才得到实现。
+
+@1@ {{tt|T}} 与 {{tt|Cat}} 实现 {{c|std::three_way_comparable&lt;T, Cat&gt;}}，仅若给定 {{c|const std::remove_reference_t&lt;T&gt;}} 类型左值 {{tt|a}} 与 {{tt|b}}，下列为真：
+* {{c|1=(a &lt;=&gt; b == 0) == bool(a == b)}}，
+* {{c|1=(a &lt;=&gt; b != 0) == bool(a != b)}}，
+* {{c|1=((a &lt;=&gt; b) &lt;=&gt; 0)}} 与 {{c|1=(0 &lt;=&gt; (b &lt;=&gt; a))}} 相等，
+* {{c|1=bool(a &gt; b) == bool(b &lt; a)}}，
+* {{c|1=bool(a &gt;= b) == !bool(a &lt; b)}}，
+* {{c|1=bool(a &lt;= b) == !bool(b &lt; a)}}，
+* {{c|1=(a &lt;=&gt; b &lt; 0) == bool(a &lt; b)}}，
+* {{c|1=(a &lt;=&gt; b &gt; 0) == bool(a &gt; b)}}，
+* {{c|1=(a &lt;=&gt; b &lt;= 0) == bool(a &lt;= b)}}，且
+* {{c|1=(a &lt;=&gt; b &gt;= 0) == bool(a &gt;= b)}}；而
+* 若 {{tt|Cat}} 可转换为 {{lc|std::strong_ordering}}，则 {{tt|T}} 实现 {{lconcept|totally_ordered}}。
+
+@2@ {{tt|T}}、{{tt|U}} 及 {{tt|Cat}} 实现 {{c|std::three_way_comparable_with&lt;T, U, Cat&gt;}} 仅若给定
+* {{tt|t}} 和 {{tt|t2}} 分别为指代不同的相等对象的 {{c|const std::remove_reference_t&lt;T&gt;}} 和 {{c|std::remove_reference_t&lt;T&gt;}} 类型的左值，
+* {{tt|u}} 和 {{tt|u2}} 分别为指代不同的相等对象的 {{c|const std::remove_reference_t&lt;U&gt;}} 和 {{c|std::remove_reference_t&lt;U&gt;}} 类型的左值。
+令 {{tt|C}} 为 {{c|std::common_reference_t&lt;const std::remove_reference_t&lt;T&gt;&amp;, const std::remove_reference_t&lt;U&gt;&amp;&gt;}}，并给定表达式 {{tt|E}} 和类型 {{tt|C}}，令 {{c|CONVERT_TO&lt;C&gt;(E)}} 为：
+{{rrev multi|rev1=
+* {{c|static_cast&lt;C&gt;(std::as_const(E))}}.
+|since2=c++23|rev2=
+* {{c|static_cast&lt;const C&amp;&gt;(std::as_const(E))}} 若这是合法表达式，
+* 否则为 {{c|static_cast&lt;const C&amp;&gt;(std::move(E))}}。
+}}
+下列为真：
+* {{c|1=t &lt;=&gt; u}} 与 {{c|1=u &lt;=&gt; t}} 拥有相同定义域，
+* {{c|1=((t &lt;=&gt; u) &lt;=&gt; 0)}} 与 {{c|1=(0 &lt;=&gt; (u &lt;=&gt; t))}} 相等，
+* {{c|1=(t &lt;=&gt; u == 0) == bool(t == u)}}，
+* {{c|1=(t &lt;=&gt; u != 0) == bool(t != u)}}，
+* {{c|1=Cat(t &lt;=&gt; u) == Cat(C(t) &lt;=&gt; C(u))}}，
+* {{c|1=(t &lt;=&gt; u &lt; 0) == bool(t &lt; u)}}，
+* {{c|1=(t &lt;=&gt; u &gt; 0) == bool(t &gt; u)}}，
+* {{c|1=(t &lt;=&gt; u &lt;= 0) == bool(t &lt;= u)}}，且
+* {{c|1=(t &lt;=&gt; u &gt;= 0) == bool(t &gt;= u)}}；而
+* 若 {{tt|Cat}} 可转换为 {{lc|std::strong_ordering}}，则 {{tt|T}} 与 {{tt|U}} 实现 {{c|std::totally_ordered_with&lt;T, U&gt;}}。
+
+{{cpp/concepts/equality preservation}}
+{{cpp/concepts/implicit expression variations}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/concepts/dsc equality_comparable}}
+{{dsc inc|cpp/concepts/dsc totally_ordered}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

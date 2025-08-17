@@ -1,0 +1,96 @@
+{{cpp/language/attributes/title|carries_dependency|notes={{mark since c++11}}{{mark until c++26|removed=yes}}}}
+{{cpp/language/attributes/navbar}}
+
+指示释放消费 {{lc|std::memory_order}} 中的依赖链传进和传出该函数，这允许编译器跳过不必要的内存栅栏指令。
+
+===语法===
+{{sdsc begin}}
+{{sdsc||1=
+{{ttb|{{c/core|[[carries_dependency]]}}}} 
+}}
+{{sdsc end}}
+
+===解释===
+此属性可在两种情形中出现：
+
+@1@ 它可应用于函数或 lambda 表达式的形参声明，该情况下它指示从该形参的初始化向该对象的左值到右值转换中携带依赖。
+@2@ 它可应用于函数声明整体，该情况下它指示从返回值向函数调用表达式的求值中携带依赖。
+
+此属性必须出现在任意翻译单元中某个函数或其形参之一的首个声明上。若另一翻译单元中的该函数或其形参的首个声明上未使用该属性，则程序非良构；不要求诊断。
+
+===示例===
+{{example
+|从 [https://stackoverflow.com/a/6411703 SO] 几乎未修改采纳于此。
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+
+void print(int* val)
+{
+    std::cout &lt;&lt; *val &lt;&lt; std::endl;
+}
+
+void print2(int* val [[carries_dependency]])
+{
+    std::cout &lt;&lt; *val &lt;&lt; std::endl;
+}
+
+int main()
+{
+    int x{42};
+    std::atomic&lt;int*&gt; p = &amp;x;
+    int* local = p.load(std::memory_order_consume);
+
+    if (local)
+    {
+        // 依赖是明确的，因而编译器已知 local 被解引用，
+        // 且它必须保证保留依赖链，以避免（某些架构上的）一个内存栅栏。
+        std::cout &lt;&lt; *local &lt;&lt; std::endl;
+    }
+
+    if (local)
+    {
+        // print 的定义不透明（假定它未被内联），因而编译器必须发出一个内存栅栏
+        // 以确保在 print 中读取 *p 返回正确值。
+        print(local);
+    }
+
+    if (local)
+    {
+        // 编译器可以假定，虽然 print2 也不透明，但指令流中仍保留了
+        // 从形参到解引用值的依赖，且不需要（某些架构上的）内存栅栏。
+        // 显然，print2 的定义必须确实保留这项依赖，因而此属性也会影响
+        // 为 print2 所生成的代码。
+        print2(local);
+    }
+}
+|p=true
+|output=
+42
+42
+42
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.12.4|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.12.3|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.6.3|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.6.4|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.6.4|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc kill_dependency}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

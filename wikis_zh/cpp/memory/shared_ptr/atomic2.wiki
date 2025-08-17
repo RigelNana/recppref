@@ -1,0 +1,209 @@
+{{cpp/title|atomic{{petty|&lt;std::shared_ptr&gt;}}}}
+{{cpp/memory/shared_ptr/navbar}}
+{{ddcl|header=memory|since=c++20|1=
+template&lt; class T &gt;
+struct std::atomic&lt;std::shared_ptr&lt;T&gt;&gt;;
+}}
+
+{{lc|std::atomic}} 对 {{c|std::shared_ptr&lt;T&gt;}} 的部分模板特化允许用户原子地操纵 {{tt|shared_ptr}} 对象。
+
+若多个执行线程不同步地同时访问同一 {{lc|std::shared_ptr}} 对象，且任何这些访问使用了 {{lc|shared_ptr}} 的非 const 成员函数，则将出现数据竞争，除非通过 {{lc|std::atomic&lt;std::shared_ptr&gt;&gt;}} 的实例进行所有访问（或通过从 C++20 起弃用的[[cpp/memory/shared_ptr/atomic|孤立函数]]对 std::shared_ptr 进行原子访问）。
+
+关联 {{tt|use_count}} 的自增保证是原子操作的一部分。关联 {{tt|use_count}} 的自减后序于原子操作，但不要求是原子操作的一部分，除非是在覆写失败的 CAS 中的 {{tt|expected}} 时对 {{tt|use_count}} 的更改。任何关联的删除和解分配都后序于原子更新步骤，且不是原子操作的一部分。
+
+注意 {{tt|shared_ptr}} 的控制块是线程安全的：多个线程能同时用可变操作，例如 {{c|1=operator=}} 或 {{c|reset}}，访问不同的非原子 {{lc|std::shared_ptr}} 对象，即使这些实例互为副本，且于内部共享同一控制块也是如此。
+
+类型 {{tt|T}} 可为不完整类型。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|value_type}}|{{c|std::shared_ptr&lt;T&gt;}}}}
+{{dsc end}}
+
+===成员函数===
+此特化提供所有非特化的 {{lc|std::atomic}} 的成员函数，不提供附加成员函数。
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}atomic|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+constexpr atomic() noexcept = default;
+}}
+{{dcl|num=2|1=
+constexpr atomic( std::nullptr_t ) noexcept : atomic() {}
+}}
+{{dcl|num=3|1=
+atomic( std::shared_ptr&lt;T&gt; desired ) noexcept;
+}}
+{{dcl|num=4|1=
+atomic( const atomic&amp; ) = delete;
+}}
+{{dcl end}}
+@1,2@ 初始化底层 {{c|shared_ptr&lt;T&gt;}} 为空值。
+@3@ 初始化底层 {{c|shared_ptr&lt;T&gt;}} 为 {{c|desired}} 的副本。同任何 {{lc|std::atomic}} 类型一样，初始化不是原子操作。
+@4@ 原子类型不可复制/移动构造。
+}}
+
+{{member|1={{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}operator=|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+void operator=( const atomic&amp; ) = delete;
+}}
+{{dcl|num=2|1=
+void operator=( std::shared_ptr&lt;T&gt; desired ) noexcept;
+}}
+{{dcl|num=3|1=
+void operator=( std::nullptr_t ) noexcept;
+}}
+{{dcl end}}
+@1@ 原子类型不可复制/移动构造。
+@2@ 值赋值，等价于 {{c|store(desired)}}。
+@3@ 重置原子共享指针为空指针值。等价于 {{c|store(nullptr);}}。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}is_lock_free|2=
+{{dcl begin}}
+{{dcl|1=
+bool is_lock_free() const noexcept;
+}}
+{{dcl end}}
+若此类型所有对象上的原子操作为免锁则返回 {{c|true}}，否则返回 {{c|false}}。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}store|2=
+{{dcl begin}}
+{{dcl|1=
+void store( std::shared_ptr&lt;T&gt; desired,
+            std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl end}}
+如同用 {{c|p.swap(desired)}}，原子地以 {{c|desired}} 的值替换 {{c|*this}} 的值，其中 {{c|p}} 是底层的 {{lc|std::shared_ptr&lt;T&gt;}}。按照 {{c|order}} 排序内存。若 {{c|order}} 是 {{lc|std::memory_order_consume}}、{{lc|std::memory_order_acquire}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}load|2=
+{{dcl begin}}
+{{dcl|1=
+std::shared_ptr&lt;T&gt; load( std::memory_order order = std::memory_order_seq_cst ) const noexcept;
+}}
+{{dcl end}}
+原子地返回底层共享指针的副本。按照 {{c|order}} 排序内存。若 {{c|order}} 是 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}operator std::shared_ptr&lt;T&gt;|2=
+{{dcl begin}}
+{{dcl|1=
+operator std::shared_ptr&lt;T&gt;() const noexcept;
+}}
+{{dcl end}}
+等价于 {{c|return load();}}。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}exchange|2=
+{{dcl begin}}
+{{dcl|1=
+std::shared_ptr&lt;T&gt; exchange( std::shared_ptr&lt;T&gt; desired,
+                             std::memory_order order = std::memory_order_seq_cst ) noexcept;
+
+}}
+{{dcl end}}
+如同用 {{c|p.swap(desired)}}，原子地以 {{c|desired}} 替换底层 {{c|std::shared_ptr&lt;T&gt;}}，其中 {{c|p}} 为底层 {{lc|std::shared_ptr&lt;T&gt;}}，并返回该 {{c|p}} 的值的副本。按照 {{c|order}} 排序内存。这是原子读修改写操作。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}compare_exchange_weak, compare_exchange_strong|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+bool compare_exchange_strong( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt; desired,
+                              std::memory_order success, std::memory_order failure ) noexcept;
+}}
+{{dcl|num=2|1=
+bool compare_exchange_weak( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt; desired,
+                            std::memory_order success, std::memory_order failure ) noexcept;
+}}
+{{dcl|num=3|1=
+bool compare_exchange_strong( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt; desired,
+                              std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=4|1=
+bool compare_exchange_weak( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt; desired,
+                            std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl end}}
+@1@ 若底层 {{c|std::shared_ptr&lt;T&gt;}} 存储与 {{c|expected}} 相同的 {{c|T*}} 并与之共享所有权，或若底层指针和 {{c|expected}} 均为空，则从 {{c|desired}} 赋值给底层 {{c|std::shared_ptr&lt;T&gt;}} 并返回 {{c|true}}，按照 {{c|success}} 排序内存；否则从底层 {{c|std::shared_ptr&lt;T&gt;}} 赋值给 {{c|expected}} 并返回 {{c|false}}，按照 {{c|failure}} 排序内存。若 {{c|failure}} 为 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。成功时，操作为 {{c|*this}} 上的读修改写操作，而且在原子更新后不访问 {{c|expected}}。失败时，操作为 {{c|*this}} 上的原子加载操作，并更新 {{c|expected}} 为从原子对象读取的既存值。这个对 {{c|expected}} 的 {{tt|use_count}} 的更新是原子操作的一部分，尽管不要求写入自身（以及任何后继的解分配/析构）是其一部分。
+@2@ 同 {{v|1}}，但允许虚假地失败。
+@3@ 等价于：{{c|return compare_exchange_strong(expected, desired, order, fail_order);}}，其中 {{tt|fail_order}} 与 {{tt|order}} 相同，除了 {{lc|std:memory_order_acq_rel}} 被替换为 {{lc|std::memory_order_acquire}}，而 {{lc|std::memory_order_release}} 被替换为 {{lc|std::memory_order_relaxed}}。
+@4@ 等价于：{{c|return compare_exchange_weak(expected, desired, order, fail_order);}}，其中 {{tt|fail_order}} 与 {{tt|order}} 相同，除了 {{lc|std::memory_order_acq_rel}} 被替换为 {{lc|std::memory_order_acquire}} 而 {{lc|std::memory_order_release}} 被替换为 {{lc|std::memory_order_relaxed}}。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}wait|2=
+{{dcl begin}}
+{{dcl|1=
+void wait( std::shared_ptr&lt;T&gt; old,
+           std::memory_order order = std::memory_order_seq_cst ) const noexcept;
+}}
+{{dcl end}}
+
+进行原子等待操作。
+
+比较 {{c|load(order)}} 与 {{c|old}}，而若它们等价则阻塞直至 {{c|*this}} 被 {{tt|notify_one()}} 或 {{tt|notify_all()}} 提醒。重复此操作直至 {{c|load(order)}} 更改。此函数保证仅若值更改才返回，即使底层实现虚假地除阻也是如此。
+
+按照 {{c|order}} 排序内存。若 {{c|order}} 为 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。
+
+注意：若两个 {{tt|shared_ptr}} 存储同一指针，且要么共享所有权要么都为空，则它们等价。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}notify_one|2=
+{{dcl begin}}
+{{dcl|1=
+void notify_one() noexcept;
+}}
+{{dcl end}}
+
+进行原子提醒操作。
+
+若有一个线程在 {{c|*this}} 上的原子等待操作（即 {{tt|wait()}}）中阻塞，则除阻至少一个这种线程，否则不做任何事。
+}}
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}notify_all|2=
+{{dcl begin}}
+{{dcl|1=
+void notify_all() noexcept;
+}}
+{{dcl end}}
+
+进行原子提醒操作。
+
+除阻所有在 {{c|*this}} 上的原子等待操作（即 {{tt|wait()}}）中阻塞的线程，若存在；否则不做任何事。
+}}
+
+===成员常量===
+此特化亦提供标准 {{lc|std::atomic}} 仅有的成员常量 {{tt|is_always_lock_free}}。
+
+{{member|{{small|atomic&lt;shared_ptr&lt;T&gt;&gt;::}}is_always_lock_free|2=
+{{dcl begin}}
+{{dcl|1=
+static constexpr bool is_always_lock_free = /* 由实现定义 */;
+}}
+{{dcl end}}
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_atomic_shared_ptr|{{ttt|std::atomic&lt;std::shared_ptr&gt;}}|value=201711L|std=C++20}}
+
+===示例===
+{{example
+|code=
+|output=
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3661|std=C++20|before={{tt|atomic&lt;shared_ptr&lt;T&gt;&gt;}} 不可从 {{c|nullptr}} 常量初始化|after=使之可常量初始化}}
+{{dr list item|wg=lwg|dr=3893|std=C++20|before={{wg21|LWG3661}} 使得 {{tt|atomic&lt;shared_ptr&lt;T&gt;&gt;}} 不能从 {{tt|nullptr_t}} 赋值|after=恢复为可赋值}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

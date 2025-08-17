@@ -1,0 +1,99 @@
+{{cpp/title|asctime}}
+{{cpp/chrono/c/navbar}}
+{{ddcl|header=ctime|
+char* asctime( const std::tm* time_ptr );
+}}
+
+将给定日历时间 {{lc|std::tm}} 转换为拥有下列固定 25 字符形式的文本表示：{{c|Www Mmm dd hh:mm:ss yyyy\n}}。
+*{{tt|Www}} ——周内日期的三字母英文缩写，来自 {{c|time_ptr-&gt;tm_wday}}，为 {{tt|Mon}}、{{tt|Tue}}、{{tt|Wed}}、{{tt|Thu}}、{{tt|Fri}}、{{tt|Sat}}、{{tt|Sun}} 之一。
+*{{tt|Mmm}} ——月名的三字母英文缩写，来自 {{c|time_ptr-&gt;tm_mon}}，为 {{tt|Jan}}、{{tt|Feb}}、{{tt|Mar}}、{{tt|Apr}}、{{tt|May}}、{{tt|Jun}}、{{tt|Jul}}、{{tt|Aug}}、{{tt|Sep}}、{{tt|Oct}}、{{tt|Nov}}、{{tt|Dec}} 之一。
+*{{tt|dd}} —— 2 位月内日期，来自 {{c|timeptr-&gt;tm_mday}}，如同 {{lc|sprintf}} 用 {{c|%2d}} 打印
+*{{tt|hh}} —— 2 位小时，来自 {{c|timeptr-&gt;tm_hour}}，如同 {{lc|sprintf}} 用 {{c|%.2d}} 打印
+*{{tt|mm}} —— 2 位分，来自 {{c|timeptr-&gt;tm_min}}，如同 {{lc|sprintf}} 用 {{c|%.2d}} 打印
+*{{tt|ss}} —— 2 位秒，来自 {{c|timeptr-&gt;tm_sec}}，如同 {{lc|sprintf}} 用 {{c|%.2d}} 打印
+*{{tt|yyyy}} —— 4 位年，来自 {{c|timeptr-&gt;tm_year + 1900}}，如同 {{lc|sprintf}} 用 {{c|%4d}} 打印
+
+若 {{c|*time_ptr}} 的任何成员在其正常范围外，则行为未定义。
+
+若 {{c|time_ptr-&gt;tm_year}} 所指示的日历年份多于 4 位数字或小于 1000 年，则行为未定义。
+
+函数不支持本地化，而且不能移除换行符。
+
+函数修改静态存储，而且不是线程安全的。
+
+===参数===
+{{par begin}}
+{{par | time_ptr |指向 {{lc|std::tm}} 对象的指针，指定要打印的时间}}
+{{par end}}
+
+===返回值===
+指向静态的空终止字符串的指针，该字符串保有日期和时间的文本表示。字符串可能在 {{tt|std::asctime}} 与 {{lc|std::ctime}} 之间共享，而且可能在每次调用任何这些函数时被重写。
+
+===注解===
+此函数返回指向静态数据的指针，且非线程安全。POSIX 标记此函数为过时，并推荐使用依赖本地环境的 {{lc|std::strftime}} 替代。在 {{lc|std::locale}}{{tt|("C")}} 中，{{lc|std::strftime}} 格式字符串 {{c|"%c\n"}} 与 {{tt|std::asctime}} 的输出严格匹配，但在其他本地环境中，格式字符串 {{c|"%a %b %e %H:%M:%S %Y\n"}} 则可能更接近但仍不总是严格匹配。
+
+POSIX 限制了仅当输出字符串将长于 25 字符时、{{tt|timeptr-&gt;tm_wday}} 或 {{tt|timeptr-&gt;tm_mon}} 不在预期范围时，或 {{tt|timeptr-&gt;tm_year}} 超过 {{c|INT_MAX-1990}} 时是未定义行为。
+
+一些实现把 {{c|1=timeptr-&gt;tm_mday==0}} 处理成上个月最后一天的含义。
+
+===示例===
+{{example
+|code=
+#include &lt;ctime&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    const std::time_t now = std::time(nullptr);
+
+    for (const char* localeName : {"C", "en_US.utf8", "de_DE.utf8", "ja_JP.utf8"})
+    {
+        std::cout &lt;&lt; "locale " &lt;&lt; localeName &lt;&lt; ":\n" &lt;&lt; std::left;
+        std::locale::global(std::locale(localeName));
+
+        std::cout &lt;&lt; std::setw(40) &lt;&lt; "    asctime" &lt;&lt; std::asctime(std::localtime(&amp;now));
+
+        // 用于比较的 strftime 输出:
+        char buf[64];
+        if (strftime(buf, sizeof buf, "%c\n", std::localtime(&amp;now)))
+            std::cout &lt;&lt; std::setw(40) &lt;&lt; "    strftime %c" &lt;&lt; buf;
+
+        if (strftime(buf, sizeof buf, "%a %b %e %H:%M:%S %Y\n", std::localtime(&amp;now)))
+            std::cout &lt;&lt; std::setw(40) &lt;&lt; "    strftime %a %b %e %H:%M:%S %Y" &lt;&lt; buf;
+
+        std::cout &lt;&lt; '\n';
+    }
+}
+|p=true
+|output=
+locale C:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         Wed Nov  4 00:45:01 2020
+    strftime %a %b %e %H:%M:%S %Y       Wed Nov  4 00:45:01 2020
+
+locale en_US.utf8:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         Wed 04 Nov 2020 12:45:01 AM UTC
+    strftime %a %b %e %H:%M:%S %Y       Wed Nov  4 00:45:01 2020
+
+locale de_DE.utf8:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         Mi 04 Nov 2020 00:45:01 UTC
+    strftime %a %b %e %H:%M:%S %Y       Mi Nov  4 00:45:01 2020
+
+locale ja_JP.utf8:
+    asctime                             Wed Nov  4 00:45:01 2020
+    strftime %c                         2020年11月04日 00時45分01秒
+    strftime %a %b %e %H:%M:%S %Y       水 11月  4 00:45:01 2020
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/c/dsc ctime}}
+{{dsc inc|cpp/chrono/c/dsc strftime}}
+{{dsc inc|cpp/io/manip/dsc put_time}}
+{{dsc see c|c/chrono/asctime}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru|tr}}

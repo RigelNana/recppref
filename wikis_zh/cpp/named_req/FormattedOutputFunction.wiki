@@ -1,0 +1,60 @@
+{{cpp/named req/title|FormattedOutputFunction}}
+{{cpp/named req/navbar}}
+
+===要求===
+{{named req|FormattedOutputFunction}}是进行下列操作的流输出函数：
+
+* 构造一个具有自动存储期的 {{l2tt|cpp/io/basic_ostream/sentry}} 类型的对象，这会进行下列操作：
+:* 如果输入流已经设置了 {{ltt|cpp/io/ios_base/iostate|eofbit}} 或 {{ltt|cpp/io/ios_base/iostate|badbit}}，那么会一并设置 {{tt|failbit}}，且如果此输入流的[[cpp/io/basic_ios/exceptions|异常掩码]]中启用了 {{tt|failbit}} 上的异常（{{c|1=(exceptions() &amp; failbit) != 0}}），那么就会抛出 {{l2tt|cpp/io/ios_base/failure}}。
+:* 冲洗它所 tie() 的输出流的缓冲区，如果适用。
+* 通过调用 {{tt|sentry::operator bool()}} 检查哨兵的状态，这等价于 {{l2tt|cpp/io/basic_ios/good}}。
+* 如果哨兵返回 {{c|false}}，或哨兵的构造函数抛出了异常，那么就不会进行输出。
+* 如果哨兵返回 {{c|true}}，那么如同以调用 {{c|rdbuf()-&gt;sputc()}} 试图通过插入字符到输出流来进行想要的输出。也有可能会使用 {{lc|std::basic_ostream}} 的其他公开成员，但不会调用 {{c|rdbuf()}} 的除了 {{ltt|cpp/io/basic_streambuf/overflow|overflow()}}，{{ltt|cpp/io/basic_streambuf/sputn|xsputn()}} 和 {{ltt|cpp/io/basic_streambuf/pubsync|sync()}} 以外的其他虚成员。
+:* 如果无法生成输出，那么就会设置 {{tt|failbit}}。如果此流的[[cpp/io/basic_ios/exceptions|异常掩码]]中启用了 {{tt|failbit}} 上的异常（{{c|1=(exceptions() &amp; failbit) != 0}}），那么就会抛出 {{l2tt|cpp/io/ios_base/failure}}。
+:* 如果输出中抛出了异常，那么就会设置输出流中的 {{tt|badbit}}。如果此流的[[cpp/io/basic_ios/exceptions|异常掩码]]中启用了 {{tt|badbit}} 上的异常（{{c|1=(exceptions() &amp; badbit) != 0}}），那么还会重抛该异常。
+:* 如果没有抛出异常，那么返回 {{c|*this}}。
+* 任何事件中，无论是因异常终止还是返回，都会在离开此函数前调用哨兵的析构函数。
+
+===填充===
+{{rrev multi|until1=c++14
+|rev1=
+有格式输出函数根据 {{ltt|cpp/locale/num_put/put|std::num_put::do_put()}} 阶段 3 的规则决定如何填充。
+|rev2=
+流 {{c|os}} 的有格式输出函数通过以下方式决定如何填充。
+
+给定一个 {{tt|CharT}} 字符序列 {{c|seq}}（其中 {{tt|CharT}} 是 {{c|os}} 的[[cpp/string|字符容器类型]]），如果 {{c|seq}} 的长度小于 {{c|os.width()}}，那么添加足够数量的 {{c|os.fill()}} 副本到这个序列以确保填充到 {{c|os.width()}} 个字符的宽度。
+
+如果 {{c|1=(os.flags() &amp; std::ios_base::adjustfield) == std::ios_base::left}} 是 {{c|true}}，那么会在字符序列后面填充；否则会在字符序列前面填充。
+}}
+
+===标准库===
+下列标准库函数是{{named req|FormattedOutputFunction}}。
+
+* {{l2tt|cpp/io/basic_ostream/operator ltlt|operator&lt;&lt;{{dsc small|(std::basic_ostream&amp;, int / long / double / void* / bool)}}}}
+* {{ltt|cpp/io/basic_ostream/operator ltlt2|operator&lt;&lt;{{dsc small|(std::basic_ostream&amp;, char)}}}}
+* {{ltt|cpp/io/basic_ostream/operator ltlt2|operator&lt;&lt;{{dsc small|(std::basic_ostream&amp;, char*)}}}}
+* {{ltt|cpp/utility/bitset/operator ltltgtgt2|operator&lt;&lt;{{dsc small|(std::basic_ostream&amp;, const std::bitset&amp;)}}}}
+* {{ltt|cpp/string/basic_string/operator ltltgtgt|operator&lt;&lt;{{dsc small|(std::basic_ostream&amp;, const std::basic_string&amp;)}}}}
+* {{tt|operator&lt;&lt;}}，在 {{lc|std::put_money}} 的返回值上调用时。
+
+{{rrev|since=c++17|
+* {{ltt|cpp/string/basic_string_view/operator ltlt|operator&lt;&lt;{{dsc small|(std::basic_ostream&amp;, std::basic_string_view)}}}}
+}}
+
+{{rrev|since=c++23|
+* {{ltt|cpp/io/basic_ostream/print|print{{dsc small|(std::ostream&amp;, std::format_string&lt;Args...&gt;, Args&amp;&amp;...)}}}},
+* {{ltt|cpp/io/basic_ostream/println|println{{dsc small|(std::ostream&amp;, std::format_string&lt;Args...&gt;, Args&amp;&amp;...)}}}},
+* {{ltt|cpp/io/basic_ostream/vprint_unicode|vprint_unicode{{dsc small|(std::ostream&amp;, std::string_view, std::format_args)}}}},
+* {{ltt|cpp/io/basic_ostream/vprint_nonunicode|vprint_nonunicode{{dsc small|(std::ostream&amp;, std::string_view, std::format_args)}}}},
+: 但是（给定输出流对象 {{c|os}}）：
+:* 任何从 {{lc|std::vformat}} 抛出的异常，不管 {{c|os.exceptions()}} 是什么值都会传播，而且也不会设置 {{c|os}} 的错误状态中的 {{lc|std::ios_base::badbit}}；
+:* 如果插入到 {{c|os}} 失败，那么就会调用 {{c|os.setstate(std::ios_base::badbit)}}（它可能会抛出 {{lc|std::ios_base::failure|}}）。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=160|std=C++98|before=确定是否需要重抛异常的流程中提到了不存在的函数 {{c|exception()}}|after=改成 {{ltt|cpp/io/basic_ios/exceptions|exceptions()}}}}
+{{dr list item|wg=lwg|dr=165|std=C++98|before=能在 {{c|rdbuf()}} 上调用的虚成员只有 {{tt|overflow()}}|after=也可以调用 {{tt|xsputn()}} 和 {{tt|sync()}}}}
+{{dr list end}}
+
+{{langlinks|en|ja}}

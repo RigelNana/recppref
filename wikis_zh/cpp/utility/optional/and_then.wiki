@@ -1,0 +1,130 @@
+{{cpp/utility/optional/title|and_then}}
+{{cpp/utility/optional/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) &amp;;
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) const&amp;;
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) &amp;&amp;;
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class F &gt;
+constexpr auto and_then( F&amp;&amp; f ) const&amp;&amp;;
+}}
+{{dcl end}}
+
+如果 {{c|*this}} 含值则以所含值为实参调用 {{c|f}} 并返回该调用的结果；否则，返回空 {{tt|std::optional}}。
+
+返回类型（见后述）必须为 {{lc|std::optional}} 的特化（这与 {{rlpt|transform|transform()}} 不同）。否则程序非良构。
+
+@1@ 等价于&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, T&amp;&gt;&gt;{};}}
+
+@2@ 等价于&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, const T&amp;&gt;&gt;{};}}
+
+@3@ 等价于&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), std::move(value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, T&gt;&gt;{};}}
+
+@4@ 等价于&lt;br&gt;{{source|if (*this)
+    return std::invoke(std::forward&lt;F&gt;(f), std::move(value());
+else
+    return std::remove_cvref_t&lt;std::invoke_result_t&lt;F, const T&gt;&gt;{};}}
+
+===参数===
+{{par begin}}
+{{par|f|适合的函数或{{named req|Callable}}对象，返回 {{lc|std::optional}}}}
+{{par end}}
+
+===返回值===
+{{tt|f}} 的结果或空 {{lc|std::optional}}，如上所述。
+
+===注解===
+有些语言称此操作为''拉平映射（flatmap）''。
+
+{{feature test macro|__cpp_lib_optional|std=C++23|value=202110L|{{lc|std::optional}} 的{{rlp|/#单子式操作|单子式操作}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;charconv&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;optional&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+std::optional&lt;int&gt; to_int(std::string_view sv)
+{
+    int r{};
+    auto [ptr, ec]{std::from_chars(sv.data(), sv.data() + sv.size(), r)};
+    if (ec == std::errc())
+        return r;
+    else
+        return std::nullopt;
+}
+
+int main()
+{
+    using namespace std::literals;
+
+    const std::vector&lt;std::optional&lt;std::string&gt;&gt; v
+    {
+        "1234", "15 foo", "bar", "42", "5000000000", " 5", std::nullopt, "-43"
+    };
+
+    for (auto&amp;&amp; x : v {{!}} std::views::transform(
+        [](auto&amp;&amp; o)
+        {
+            // 调试打印输入的 optional&lt;string&gt; 的内容
+            std::cout &lt;&lt; std::left &lt;&lt; std::setw(13)
+                      &lt;&lt; std::quoted(o.value_or("nullopt")) &lt;&lt; " -&gt; ";
+
+            return o
+                // 若 optional 为 nullopt 则转换它为持有 "" 字符串的 optional
+                .or_else([]{ return std::optional{""s}; })
+                // 拉平映射 string 为 int （失败时产生空的 optional）
+                .and_then(to_int)
+                // 映射 int 为 int + 1
+                .transform([](int n) { return n + 1; })
+                // 转换回 string
+                .transform([](int n) { return std::to_string(n); })
+                // 以 and_then 替换，并用 "NaN" 变换并忽略所有剩余的空 optional
+                // and_then and ignored by transforms with "NaN"
+                .value_or("NaN"s);
+        }))
+        std::cout &lt;&lt; x &lt;&lt; '\n';
+}
+|output=
+"1234"        -&gt; 1235
+"15 foo"      -&gt; 16
+"bar"         -&gt; NaN
+"42"          -&gt; 43
+"5000000000"  -&gt; NaN
+" 5"          -&gt; NaN
+"nullopt"     -&gt; NaN
+"-43"         -&gt; -42
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/optional/dsc value_or}}
+{{dsc inc|cpp/utility/optional/dsc transform}}
+{{dsc inc|cpp/utility/optional/dsc or_else}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,84 @@
+{{cpp/title|mblen}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cstdlib|
+int mblen( const char* s, std::size_t n );
+}}
+
+确定多字节字符的字节大小，其首字节为 {{c|s}} 所指向。
+
+若 {{c|s}} 是空指针，则重置全局转换状态并确定是否使用迁移序列。
+
+此函数等价于调用 {{c|std::mbtowc((wchar_t*)0, s, n)}}，但它不影响 {{lc|std::mbtowc}} 的转换状态。
+
+===注解===
+每次对 {{tt|mblen}} 的调用更新内部全局转换状态（{{lc|std::mbstate_t}} 类型的静态对象，只为此函数所知）。若多字节编码使用迁移状态，则必须留意以避免回撤或多次扫描。任何情况下，多线程不应无同步地调用 {{tt|mblen}}：可用 {{lc|std::mbrlen}} 代替。
+
+===参数===
+{{par begin}}
+{{par|s|指向多字节字符的指针}}
+{{par|n|{{c|s}} 中能被检验的字节数限制}}
+{{par end}}
+
+===返回值===
+若 {{c|s}} 不是空指针，则返回多字节字符所含的字节数，或若 {{c|s}} 所指的首字节不组成合法多字节字符则返回 {{c|-1}}，或若 {{c|s}} 指向空字符 {{c|'\0'}} 则返回 {{c|0}}。
+
+若 {{c|s}} 是空指针，则重置内部转换状态为初始迁移状态，并若当前多字节编码非状态依赖（不使用迁移序列）则返回 {{c|0}}，或者若当前多字节编码为状态依赖（使用迁移序列）则返回非零。
+
+===示例===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;string_view&gt;
+
+// 多字节字符串中的字符数是 mblen() 的和
+// 注意：更简单的手段是 std::mbstowcs(NULL, s.c_str(), s.size())
+std::size_t strlen_mb(const std::string_view s)
+{
+    std::mblen(nullptr, 0); // 重置转换状态
+    std::size_t result = 0;
+    const char* ptr = s.data();
+    for (const char* const end = ptr + s.size(); ptr &lt; end; ++result)
+    {
+        const int next = std::mblen(ptr, end - ptr);
+        if (next == -1)
+            throw std::runtime_error("strlen_mb(): 转换错误");
+        ptr += next;
+    }
+    return result;
+}
+
+void dump_bytes(const std::string_view str)
+{
+    std::cout &lt;&lt; std::hex &lt;&lt; std::uppercase &lt;&lt; std::setfill('0');
+    for (unsigned char c : str)
+        std::cout &lt;&lt; std::setw(2) &lt;&lt; static_cast&lt;int&gt;(c) &lt;&lt; ' ';
+    std::cout &lt;&lt; std::dec &lt;&lt; '\n';
+}
+
+int main()
+{
+    // 允许 mblen() 以 UTF-8 多字节编码工作
+    std::setlocale(LC_ALL, "en_US.utf8");
+    // UTF-8 窄多字节编码
+    const std::string_view str = "z\u00df\u6c34\U0001f34c"; // 或 u8"zß水🍌"
+    std::cout &lt;&lt; std::quoted(str) &lt;&lt; " 有 " &lt;&lt; strlen_mb(str)
+              &lt;&lt; " 个字符，但有 " &lt;&lt; str.size() &lt;&lt; " 个字节: ";
+    dump_bytes(str);
+}
+|p=true
+|output=
+"zß水🍌" 有 4 个字符，但有 10 个字节: 7A C3 9F E6 B0 B4 F0 9F 8D 8C
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbtowc}}
+{{dsc inc|cpp/string/multibyte/dsc mbrlen}}
+{{dsc see c|c/string/multibyte/mblen}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

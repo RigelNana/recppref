@@ -1,0 +1,135 @@
+{{cpp/ranges/iota_view/title|iota_view}}
+{{cpp/ranges/iota_view/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+iota_view() requires std::default_initializable&lt;W&gt; = default;
+}}
+{{dcl|num=2|since=c++20|
+constexpr explicit iota_view( W value );
+}}
+{{dcla|num=3|since=c++20|
+constexpr explicit iota_view( std::type_identity_t&lt;W&gt; value,
+                              std::type_identity_t&lt;Bound&gt; bound );
+}}
+{{dcla|num=4|since=c++20|
+constexpr explicit iota_view( /*iterator*/ first, /* 见下文 */ last );
+}}
+{{dcl end}}
+
+构造 {{rlpt|/|iota_view}}。
+
+{|class="wikitable" style="text-align: center;"
+!rowspan=2|{{nbsp}}重载{{nbsp}}
+!colspan=2|{{rlps|/#数据成员}}
+|-
+!{{ttni|value_}}
+!{{ttni|bound_}}
+|-
+|{{v|1}}
+|[[cpp/language/value initialization|值初始化]]
+|rowspan=2|[[cpp/language/value initialization|值初始化]]
+|-
+|{{v|2}}
+|rowspan=2|以 {{c|value}} 初始化
+|-
+|{{v|3}}
+|{{nbsp}}以 {{c|bound}} 初始化{{nbsp}}
+|-
+|{{v|4}}
+|{{nbsp}}以 {{box|{{c/core|first.}}{{rlpsi|iterator#value_}}}} 初始化{{nbsp}}
+|见下文
+|}
+
+@2,3@ 如果满足以下任意条件，那么行为未定义：
+* {{c|Bound()}} 从 {{c|value}} 不可及，除非 {{tt|Bound}} 表示 {{lc|std::unreachable_sentinel_t}}。
+* {{tt|W}} 与 {{tt|Bound}} 实现了 {{lconcept|totally_ordered_with}}，并且 {{c|1=bool(value &lt;= bound)}} 是 {{c|false}}。
+
+@4@ 如果满足以下任意条件，那么行为未定义：
+* {{c|Bound()}} 从 {{c|value}} 不可及，除非 {{tt|Bound}} 表示 {{lc|std::unreachable_sentinel_t}}。
+* {{tt|W}} 与 {{tt|Bound}} 实现了 {{lconcept|totally_ordered_with}}，并且 {{box|{{c/core|bool(first.}}{{rlpsi|iterator#value_}}{{nbspt}}{{c/core|1=&lt;= bound)}}}} 是 {{c|false}}。
+@@ {{c|last}} 的类型和 {{rlpsi|/#bound_}} 的初始化方式由 {{tt|Bound}} 表示的类型确定：
+{|class="wikitable" style="text-align: center;"
+!{{ttn|Bound}} 表示的类型
+!{{nbsp}}{{normal|{{c|last}}}} 的类型{{nbsp}}
+!{{normal|{{rlpsi|/#bound_}}}}
+|-
+|{{tt|W}}
+|{{rlpi|iterator}}
+|{{nbsp}}以 {{box|{{c/core|last.}}{{rlpsi|iterator#value_}}}} 初始化{{nbsp}}
+|-
+|{{nbsp}}{{lc|std::unreachable_sentinel_t}}{{nbsp}}
+|{{tt|Bound}}
+|以 {{c|last}} 初始化
+|-
+|其他类型
+|{{rlpi|sentinel}}
+|以 {{box|{{c/core|last.}}{{rlpsi|sentinel#bound_}}}} 初始化
+|}
+
+===参数===
+{{par begin}}
+{{par|value|起始值}}
+{{par|bound|边界}}
+{{par|first|代表起始值的迭代器}}
+{{par|last|代表边界的迭代器或哨位}}
+{{par end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    const auto l = {1, 2, 3, 4};
+
+    auto i1 = std::ranges::iota_view&lt;int, int&gt;(); // 重载 (1)
+    assert(i1.empty() and i1.size() == 0);
+
+    auto i2 = std::ranges::iota_view(1); // 重载 (2)
+    assert(not i2.empty() and i2.front() == 1);
+    for (std::cout &lt;&lt; "1) "; auto e : i2 {{!}} std::views::take(3))
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto i3 = std::ranges::iota_view(std::begin(l)); // 重载 (2)
+    assert(not i3.empty() and i3.front() == l.begin());
+    for (std::cout &lt;&lt; "2) "; auto e : i3 {{!}} std::views::take(4))
+        std::cout &lt;&lt; *e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto i4 = std::ranges::iota_view(1, 8); // 重载 (3)
+    assert(not i4.empty() and i4.front() == 1 and i4.back() == 7);
+    for (std::cout &lt;&lt; "3) "; auto e : i4)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto i5 = std::ranges::iota_view(l.begin(), l.end()); // 重载 (4)
+    for (std::cout &lt;&lt; "4) "; auto e : i5)
+        std::cout &lt;&lt; *e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto i6 = std::ranges::iota_view(l.begin(), std::unreachable_sentinel); // (4)
+    for (std::cout &lt;&lt; "5) "; auto e : i6 {{!}} std::views::take(3))
+        std::cout &lt;&lt; *e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1) 1 2 3
+2) 1 2 3 4
+3) 1 2 3 4 5 6 7
+4) 1 2 3 4
+5) 1 2 3
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3523|std=C++20|before=重载 {{v|4}} 可能使用错误的哨位类型|after=已更正}}
+{{dr list item|paper=P2711R1|std=C++20|before=重载 {{v|3,4}} 不是显式的|after=改成显式的}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

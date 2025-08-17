@@ -1,0 +1,179 @@
+{{cpp/ranges/view title|filter}}
+{{cpp/ranges/filter_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::input_range V,
+          std::indirect_unary_predicate&lt;ranges::iterator_t&lt;V&gt;&gt; Pred &gt;
+    requires ranges::view&lt;V&gt; &amp;&amp; std::is_object_v&lt;Pred&gt;
+class filter_view
+    : public ranges::view_interface&lt;filter_view&lt;V, Pred&gt;&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    inline constexpr /* 未指定 */ filter = /* 未指定 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R, class Pred &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto filter( R&amp;&amp; r, Pred&amp;&amp; pred );
+}}
+{{dcl|since=c++20|1=
+template&lt; class Pred &gt;
+constexpr /* 范围适配器闭包 */ filter( Pred&amp;&amp; pred );
+}}
+{{dcl end}}
+
+@1@ 表示排除了不能满足谓词的元素的底层序列的 {{lconcept|view}} 的范围适配器。
+@2@ {{named req|RangeAdaptorObject}}。对任何适合的子表达式 {{c|e}} 和 {{c|p}}，表达式 {{c|views::filter(e, p)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|filter_view(e, p)}}&lt;!-- LWG 3524 --&gt;。
+
+{{tt|filter_view}} 在底层 {{lconcept|view}} {{tt|V}} 实现 {{lconcept|bidirectional_range}}、{{lconcept|forward_range}}、{{lconcept|input_range}} 及 {{lconcept|common_range}} 时分别实现相应的概念。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|base_|id=base|private=yes|spec={{tt|V}}|底层视图}}
+{{dsc expos mem obj|pred_|id=pred|private=yes|spec={{rev inl|until=c++23|{{rlpi|copyable_wrapper|copyable-box&lt;!--P2325R3--&gt;}}{{tt|&lt;Pred&gt;}}}}{{rev inl|since=c++23|{{rlpi|copyable_wrapper|movable-box}}{{tt|&lt;Pred&gt;}}}}|包装用于过滤 {{tti|base_}} 中的元素的谓词}}
+{{dsc expos mem obj|begin_|id=begin|private=yes|maybe=(仅当 {{tt|V}} 满足 {{lconcept|forward_range}} 时提供)|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}|缓存一个指向 {{tti|base_}} 的首个满足 {{tti|pred_}} 的元素的迭代器的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|{{PAGENAME}}#ctor|构造 {{tt|filter_view}}}}
+{{dsc mem fun|{{PAGENAME}}#base|title=base|返回底层视图 {{tt|V}}}}
+{{dsc mem fun|{{PAGENAME}}#pred|title=pred|返回到存储于 {{tt|filter_view}} 内的谓词的引用}}
+{{dsc mem fun|{{PAGENAME}}#begin|title=begin|返回 {{tt|filter_view}} 的起始迭代器}}
+{{dsc mem fun|{{PAGENAME}}#end|title=end|返回 {{tt|filter_view}} 的哨位}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid|operator[]=invalid}}
+{{dsc end}}
+
+{{anchor|ctor}}
+{{member|{{small|std::ranges::filter_view::}}filter_view|2=
+{{dcl begin}}
+{{dcl|since=c++20|num=1|1=
+filter_view() requires std::default_initializable&lt;V&gt; &amp;&amp;
+                       std::default_initializable&lt;Pred&gt; = default;&lt;!-- P2325R3 --&gt;
+}}
+{{dcl|since=c++20|num=2|
+constexpr explicit filter_view( V base, Pred pred );
+}}
+{{dcl end}}
+
+@1@ 经由默认成员初始化式（{{c|1== V()}}）值初始化 {{tti|base_}}，并默认初始化 {{tti|pred_}}（这会值初始化它包含的 {{tt|Pred}}）。
+@2@ 以 {{c|std::move(base)}} 初始化 {{tti|base_}} 并以 {{c|std::move(pred)}} 初始化 {{tti|pred_}}。
+
+===参数===
+{{par begin}}
+{{par|base|要过滤的范围}}
+{{par|pred|滤出元素的谓词}}
+{{par end}}
+}}
+
+{{anchor|base}}
+{{member|{{small|std::ranges::filter_view::}}base|2=
+{{dcl begin}}
+{{dcl|since=c++20|num=1|
+constexpr V base() const&amp; requires std::copy_constructible&lt;V&gt;;
+}}
+{{dcl|since=c++20|num=2|
+constexpr V base() &amp;&amp;;
+}}
+{{dcl end}}
+
+@1@ 等价于 {{c|return base_;}}。
+@2@ 等价于 {{c|return std::move(base_);}}。
+}}
+
+{{anchor|pred}}
+{{member|{{small|std::ranges::filter_view::}}pred|2=
+{{ddcl|since=c++20|1=
+constexpr const Pred&amp; pred() const;
+}}
+
+返回到包含的 {{tt|Pred}} 对象的引用。如果 {{tti|pred_}} 没有包含值，那么行为未定义。
+}}
+
+{{anchor|begin}}
+{{member|{{small|std::ranges::filter_view::}}begin|2=
+{{ddcl|notes={{mark expos}}|
+constexpr /*iterator*/ begin();
+}}
+
+为提供 {{lconcept|range}} 概念所要求的均摊常数时间复杂度，此函数在 {{tt|filter_view}} 对象内缓存结果以用于后继调用。等价于
+{{source|1=
+if constexpr (!ranges::forward_range&lt;V&gt;)
+    return /*iterator*/{*this, ranges::find_if(base_, std::ref(*pred_))};
+else
+{
+    if (!begin_.has_value())
+        begin_ = ranges::find_if(base_, std::ref(*pred_)); // 缓存
+    return /*iterator*/{*this, begin_.value())};
+}
+}}
+如果 {{tti|pred_}} 没有包含值，那么行为未定义。
+}}
+
+{{anchor|end}}
+{{member|{{small|std::ranges::filter_view::}}end|2=
+{{ddcl|since=c++20|1=
+constexpr auto end();
+}}
+
+返回指向末尾的迭代器。等价于：
+{{source|1=
+if constexpr (ranges::common_range&lt;V&gt;)
+    return /*iterator*/{*this, ranges::end(base_)};
+else
+    return /*sentinel*/{*this};
+}}
+}}
+
+===推导指引===
+{{ddcl|since=c++20|1=
+template&lt; class R, class Pred &gt;
+filter_view( R&amp;&amp;, Pred ) -&gt; filter_view&lt;views::all_t&lt;R&gt;, Pred&gt;;
+}}
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem class|cpp/ranges/filter_view/iterator|{{tt|filter_view}} 的迭代器类型}}
+{{dsc expos mem class|cpp/ranges/filter_view/sentinel|底层视图非 {{lconcept|common_range}} 时的 {{tt|filter_view}} 的哨位类型}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto even = [](int i){ return 0 == i % 2; };
+    auto square = [](int i){ return i * i; };
+ 
+    for (int i : std::views::iota(0, 6) 
+               {{!}} std::views::filter(even) 
+               {{!}} std::views::transform(square))
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+0 4 16
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3714|paper=P2711R1|std=C++20|before=多参数构造函数不是显式的|after=改成显式的}}
+{{dr list item|paper=P2325R3|std=C++20|before=如果 {{tt|Pred}} 不 {{lconcept|default_initializable}}，&lt;br&gt;那么默认构造函数构造不含 {{tt|Pred}} 的 {{tt|filter_view}}|after={{tt|filter_view}} 也不&lt;br&gt;{{lconcept|default_initializable}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc take_while_view}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,70 @@
+{{cpp/title|mbsrtowcs}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cwchar|
+std::size_t mbsrtowcs( wchar_t* dst,
+                       const char** src,
+                       std::size_t len,
+                       std::mbstate_t* ps );
+}}
+
+转换始于 {{c|*ps}} 所描述的转换状态，来自首元素为 {{c|*src}} 所指向的数组的空终止多字节字符序列，到其宽字符表示。若 {{c|dst}} 非空，则存储转换后的字符于 {{c|dst}} 所指向的 {{tt|wchar_t}} 数组的相继元素。不写入多于 {{c|len}} 个宽字符到目标数组。
+
+如同以调用 {{lc|std::mbrtowc}} 转换每个多字节字符。若满足下列条件则转换终止：
+* 转换并存储了多字节空字符。设置 {{c|*src}} 为空指针并令 {{tt|*ps}} 表示初始迁移状态。
+* 遇到任何非法多字节字符（按照当前 C 本地环境）。设置 {{c|*src}} 指向首个未转换的多字节字符的起始。
+* 将存储的下个宽字符将超出 {{c|len}}。设置 {{c|*src}} 指向首个未转换的多字节字符的起始。若 {{c|dst}} 为空指针则不检查此条件。
+
+===参数===
+{{par begin}}
+{{par|dst|指向将存储结果的宽字符数组的指针}}
+{{par|src|指向空终止多字节字符串首元素的指针}}
+{{par|len|{{c|dst}} 所指向的字符数组中可用的宽字符数}}
+{{par|ps|指向转换状态对象的指针}}
+{{par end}}
+
+===返回值===
+成功时返回写入字符数组的宽字符数，排除终止的 {{c|L'\0'}}。若 {{c|dst}} 为空指针，则返回给定无限定长度则本会写入的宽字符数。
+
+转换错误时（若遇到非法多字节字符）返回 {{c|static_cast&lt;std::size_t&gt;(-1)}}，存储 {{lc|EILSEQ}} 于 {{lc|errno}}，并令 {{c|*ps}} 留在未指定状态。
+
+===注解===
+此函数移动 {{c|src}} 指针指向被转换的多字节字符串结尾。若 {{c|dst}} 为空指针则这不发生。
+
+===示例===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cwchar&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+void print_as_wide(const char* mbstr)
+{
+    std::mbstate_t state = std::mbstate_t();
+    std::size_t len = 1 + std::mbsrtowcs(nullptr, &amp;mbstr, 0, &amp;state);
+    std::vector&lt;wchar_t&gt; wstr(len);
+    std::mbsrtowcs(&amp;wstr[0], &amp;mbstr, wstr.size(), &amp;state);
+    std::wcout &lt;&lt; "宽字符串: " &lt;&lt; &amp;wstr[0] &lt;&lt; '\n'
+               &lt;&lt; "其包括 '\\0' 的长度为: " &lt;&lt; wstr.size() &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    const char* mbstr = u8"z\u00df\u6c34\U0001f34c"; // 或 u8"zß水🍌"
+    print_as_wide(mbstr);
+}
+|output=
+宽字符串: zß水🍌
+其包括 '\\0' 的长度为: 5
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbrtowc}}
+{{dsc inc|cpp/string/multibyte/dsc wcsrtombs}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in}}
+{{dsc see c|c/string/multibyte/mbsrtowcs}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,81 @@
+{{cpp/thread/jthread/title|get_stop_source}}
+{{cpp/thread/jthread/navbar}}
+{{ddcl|since=c++20|
+std::stop_source get_stop_source() noexcept;
+}}
+
+返回 {{lc|std::stop_source}}，它与 {{tt|jthread}} 对象内部所保有者相同的共享停止状态关联。
+
+===参数===
+（无）
+
+===返回值===
+与 {{tt|jthread}} 对象内部保有的共享停止状态关联的 {{lc|std::stop_source}} 类型的值。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string_view&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+int main()
+{
+    std::cout &lt;&lt; std::boolalpha;
+    auto print = [](std::string_view name, const std::stop_source&amp; source)
+    {
+        std::cout &lt;&lt; name &lt;&lt; ": stop_possible = " &lt;&lt; source.stop_possible();
+        std::cout &lt;&lt; ", stop_requested = " &lt;&lt; source.stop_requested() &lt;&lt; '\n';
+    };
+
+    // 工作线程
+    auto worker = std::jthread([](std::stop_token stoken)
+    {
+        for (int i = 10; i; --i)
+        {
+            std::this_thread::sleep_for(300ms);
+            if (stoken.stop_requested())
+            {
+                std::cout &lt;&lt; "  困倦工人已被请求停止\n";
+                return;
+            }
+            std::cout &lt;&lt; "  困倦工人回去睡觉\n";
+        }
+    });
+
+    std::stop_source stop_source = worker.get_stop_source();
+    print("stop_source", stop_source);
+
+    std::cout &lt;&lt; "\n将信号源传递给其他线程：\n";
+    auto stopper = std::thread(
+        [](std::stop_source source)
+        {
+            std::this_thread::sleep_for(500ms);
+            std::cout &lt;&lt; "通过信号源请求工人停止\n";
+            source.request_stop();
+        },
+        stop_source);
+    stopper.join();
+    std::this_thread::sleep_for(200ms);
+    std::cout &lt;&lt; '\n';
+
+    print("stop_source", stop_source);
+}
+|p=true
+|output=
+stop_source: stop_possible = true, stop_requested = false
+
+将信号源传递给其他线程：
+  困倦工人回去睡觉
+通过信号源请求工人停止
+  困倦工人已被请求停止
+
+stop_source: stop_possible = true, stop_requested = true
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

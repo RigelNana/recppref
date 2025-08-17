@@ -1,0 +1,221 @@
+{{cpp/title|adjacent_difference}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt &gt;
+OutputIt adjacent_difference( InputIt first, InputIt last,
+                              OutputIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt2 adjacent_difference( ExecutionPolicy&amp;&amp; policy,
+                                ForwardIt1 first, ForwardIt1 last,
+                                ForwardIt2 d_first );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class BinaryOp &gt;
+OutputIt adjacent_difference( InputIt first, InputIt last, 
+                              OutputIt d_first, BinaryOp op );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class BinaryOp &gt;
+ForwardIt2 adjacent_difference( ExecutionPolicy&amp;&amp; policy,
+                                ForwardIt1 first, ForwardIt1 last, 
+                                ForwardIt2 d_first, BinaryOp op );
+}}
+{{dcl end}}
+
+令 {{tt|T}} 为 {{c|decltype(first)}} 的值类型。
+
+@1@ 如果 {{range|first|last}} 为空，那么什么也不做。
+@@ 否则按顺序进行以下操作：
+# 创建 {{tt|T}} 类型累加器 {{c|acc}}，以 {{c|*first}} 初始化。
+# 将 {{c|acc}} 赋给 {{c|*d_first}}。
+# 对于 {{range|++first|last}} 中的每个迭代器 {{c|iter}}，依次按顺序进行以下操作：
+::@a@ 创建 {{tt|T}} 类型对象 {{c|val}}，以 {{c|*iter}} 初始化。
+::@b@ 计算 {{rev inl|until=c++20|{{c|val - acc}}}}{{rev inl|since=c++20|{{c|val - std::move(acc)}}}}。
+::@c@ 将计算结果赋给 {{c|*++d_first}}。
+::@d@ 从 {{c|val}} {{rev inl|until=c++20|复制}}{{rev inl|since=c++20|移动}}赋值到 {{c|acc}}。
+
+@2@ 如果 {{range|first|last}} 为空，那么什么也不做。
+@@ 否则按顺序进行以下操作：
+# 将 {{c|*first}} 赋给 {{c|*d_first}}。
+# 对于 {{range|1|std::distance(first, last)}} 中的所有整数 {{c|i}}，按顺序进行以下操作：
+::@a@ 计算 {{c|curr - prev}}，其中 {{c|curr}} 是 {{c|first}} 的下 {{c|i}} 个迭代器，{{c|prev}} 是 {{c|first}} 的下 {{c|i - 1}} 个迭代器。
+::@b@ 将计算结果赋给 {{c|*dest}}，其中 {{c|dest}} 是 {{c|d_first}} 的下 {{c|i}} 个迭代器。
+
+@3@ 同 {{v|1}}，但计算的是 {{rev inl|until=c++20|{{c|op(val, acc)}}}}{{rev inl|since=c++20|{{c|op(val, std::move(acc))}}}}。
+
+@4@ 同 {{v|2}}，但计算的是 {{c|op(curr, prev)}}。
+
+给定 {{c|binary_op}} 为实际的二元运算：
+
+* 如果满足以下任意条件，那么程序非良构：
+:* 对于重载 {{v|1,3}}：
+::* {{tt|T}} 不可从 {{c|*first}} 构造。
+::* {{c|acc}} 不[[cpp/iterator#类型与可写性|可写入]] {{c|d_first}}。
+::* {{rev inl|until=c++20|{{c|binary_op(val, acc)}}}}{{rev inl|since=c++20|{{c|binary_op(val, std::move(acc))}}}} 的结果不可写入 {{c|d_first}}。
+:* 对于重载 {{v|2,4}}：
+::* {{c|*first}} 不可写入 {{c|d_first}}。
+::* {{c|binary_op(*first, *first)}} 的结果不可写入 {{c|d_first}}。
+
+* 给定 {{c|d_last}} 为要[[#返回值|返回]]的迭代器，如果满足以下任意条件，那么行为未定义：
+{{rrev|since=c++20|
+:* 对于重载 {{v|1,3}}，{{tt|T}} 不{{named req|MoveAssignable}}。
+}}
+:* 对于重载 {{v|2,4}}，{{range|first|last}} 和 {{range|d_first|d_last}} 有重叠。
+:* {{c|binary_op}} 会修改 {{range|first|last}} 或 {{range|d_first|d_last}} 的元素。
+:* {{c|binary_op}} 会使 {{closed range|first|last}} 或 {{closed range|d_first|d_last}} 中的迭代器或子范围失效。
+
+===参数===
+{{par begin}}
+{{par range}}
+{{par|d_first|目标范围的起始}}
+{{par exec pol}}
+{{par op2|op|t1=iterator_traits&lt;InputIt&gt;::value_type|rp=OutputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===返回值===
+指向最后被写入元素后一位置的迭代器，或者在 {{range|first|last}} 为空时返回 {{c|d_first}}。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+
+@1,2@ 应用 {{mathjax-or|\(\scriptsize N-1\)|N-1}} 次 {{c/core|operator-}}。
+
+@3,4@ 应用 {{mathjax-or|\(\scriptsize N-1\)|N-1}} 次二元函数 {{c|op}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=adjacent_difference (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt&gt;
+constexpr // C++20 起
+OutputIt adjacent_difference(InputIt first, InputIt last, OutputIt d_first)
+{
+    if (first == last)
+        return d_first;
+    
+    typedef typename std::iterator_traits&lt;InputIt&gt;::value_type value_t;
+    value_t acc = *first;
+    *d_first = acc;
+    
+    while (++first != last)
+    {
+        value_t val = *first;
+        *++d_first = val - std::move(acc); // C++20 起有 std::move
+        acc = std::move(val);
+    }
+    
+    return ++d_first;
+}
+|title2=adjacent_difference (3)|ver2=3|2=
+template&lt;class InputIt, class OutputIt, class BinaryOp&gt;
+constexpr // C++20 起
+OutputIt adjacent_difference(InputIt first, InputIt last, 
+                             OutputIt d_first, BinaryOp op)
+{
+    if (first == last)
+        return d_first;
+    
+    typedef typename std::iterator_traits&lt;InputIt&gt;::value_type value_t;
+    value_t acc = *first;
+    *d_first = acc;
+    
+    while (++first != last)
+    {
+        value_t val = *first;
+        *++d_first = op(val, std::move(acc)); // C++20 起有 std::move
+        acc = std::move(val);
+    }
+    
+    return ++d_first;
+}
+}}
+
+===注解===
+{{c|acc}} 通过 {{lwg|539}} 的解决方案引入。使用 {{c|acc}} 而不是直接将结果相减的原因是后者的语义在以下类型不匹配时难以理解：
+* {{tt|InputIt}} 的值类型
+* {{tt|OutputIt}} 的可写入类型
+* {{c/core|operator-}} 或 {{c|op}} 的形参类型
+* {{c/core|operator-}} 或 {{c|op}} 的返回类型
+
+{{c|acc}} 用来作为缓存遍历过的值的中间对象：
+* 它的类型是 {{tt|InputIt}} 的值类型
+* 写入 {{c|d_first}} 的值（即 {{c/core|operator+}} 或 {{c|op}} 的返回值）会赋给它
+* 它的值会传递给 {{c/core|operator+}} 或 {{c|op}}
+
+{{source|1=
+char i_array[4] = {100, 100, 100, 100};
+int  o_array[4];
+
+// OK：在需要时进行转换
+// 1. 创建 char 类型（值类型）的 “acc”
+// 2. 将 “acc” 赋给 “o_array” 的首个元素
+// 3. 将 char 实参用于 long 乘法（char -&gt; long）
+// 4. 将 long 类型的积赋到输出范围中（long -&gt; int）
+// 5. 将 “i_array” 的下个值赋给 “acc”
+// 6. 回到第 3 步，处理输入序列的剩余元素
+std::adjacent_difference(i_array, i_array + 4, o_array, std::multiplies&lt;long&gt;{});
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+void println(auto comment, const auto&amp; sequence)
+{
+    std::cout &lt;&lt; comment;
+    for (const auto&amp; n : sequence)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    // 默认实现——两个相邻项之间的差
+    std::vector v{4, 6, 9, 13, 18, 19, 19, 15, 10};
+    println("一开始，v = ", v);
+    std::adjacent_difference(v.begin(), v.end(), v.begin());
+    println("修改后，v = ", v);
+    
+    // 斐波那契
+    std::array&lt;int, 10&gt; a {1};
+    adjacent_difference(begin(a), std::prev(end(a)), std::next(begin(a)), std::plus&lt;&gt;{});
+    println("斐波那契，a = ", a);
+}
+|output=
+一开始，v = 4 6 9 13 18 19 19 15 10 
+修改后，v = 4 2 3 4 5 1 0 -4 -5 
+斐波那契，a = 1 1 2 3 5 8 13 21 34 55 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op}} 不能有任何副作用|after=它不能修改涉及到的范围}}
+{{dr list item|wg=lwg|dr=539|std=C++98|before=缺失了需要保证对结果的求值和赋值合法的条件要求|after=已补充}}
+{{dr list item|wg=lwg|dr=3058|std=C++17|before=对于重载 {{v|2,4}}，每次调用 {{c/core|operator-}} 或 {{c|op}} 都会&lt;br&gt;创建临时对象存储结果，然后将该对象赋到输出范围中|after=直接将结果赋到输出范围中|}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc partial_sum}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

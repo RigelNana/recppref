@@ -1,0 +1,68 @@
+{{cpp/title|is_within_lifetime}}
+{{cpp/utility/navbar}}
+{{ddcl|header=type_traits|since=c++26|
+template&lt; class T &gt;
+consteval bool is_within_lifetime( const T* ptr ) noexcept;
+}}
+
+判断指针 {{c|ptr}} 指向的对象是否在它的[[cpp/language/lifetime|生存期]]内。
+
+在对表达式 {{c|E}} 作为核心常量求值的过程中，对 {{tt|std::is_within_lifetime}} 的调用非良构，除非 {{c|ptr}} 指向的对象满足以下任一条件：
+* 该对象{{ls|cpp/language/constant expression#可用于常量表达式}}。
+* 该对象的完整对象的生存期在 {{c|E}} 之中开始。
+
+===参数===
+{{par begin}}
+{{par|p|要检测的指针}}
+{{par end}}
+ 
+===返回值===
+在 {{c|ptr}} 指向的对象在它的生存期内的情况下返回 {{c|true}}；否则返回 {{c|false}}。
+
+===注解===
+{{feature test macro|__cpp_lib_is_within_lifetime|std=C++26|value=202306L|检查某个联合体选项是否活跃}}
+
+===示例===
+{{example|{{tt|std::is_within_lifetime}} 可以用来检查联合体成员是否活跃：
+|code=
+#include &lt;type_traits&gt;
+
+// 一个只占据一个字节的可选布尔类型，假设 sizeof(bool) == sizeof(char)
+struct optional_bool
+{
+    union { bool b; char c; };
+    
+    // 假设 true 和 false 的值表示都不与 2 的值表示相同
+    constexpr optional_bool() : c(2) {}
+    constexpr optional_bool(bool b) : b(b) {}
+    
+    constexpr auto has_value() const -&gt; bool
+    {
+        if consteval
+        {
+            return std::is_within_lifetime(&amp;b); // 在常量求值时不能从 c 读取
+        }
+        else
+        {
+            return c != 2; // 在运行时必须从 c 读取
+        }
+    }
+    
+    constexpr auto operator*() -&gt; bool&amp;
+    {
+        return b;
+    }
+};
+
+int main()
+{
+    constexpr optional_bool disengaged;
+    constexpr optional_bool engaged(true);
+    
+    static_assert(!disengaged.has_value());
+    static_assert(engaged.has_value());
+    static_assert(*engaged);
+}
+}}
+
+{{langlinks|ar|en|ru}}

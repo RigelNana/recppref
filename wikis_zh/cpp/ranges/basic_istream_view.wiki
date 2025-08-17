@@ -1,0 +1,150 @@
+{{cpp/ranges/title|{{small|views::}}istream|basic_istream_view|istream_view|wistream_view}}
+{{cpp/ranges/basic_istream_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::movable Val, class CharT,
+          class Traits = std::char_traits&lt;CharT&gt; &gt;
+    requires std::default_initializable&lt;Val&gt; &amp;&amp;
+             /*stream-extractable*/&lt;Val, CharT, Traits&gt;
+class basic_istream_view
+    : public ranges::view_interface&lt;basic_istream_view&lt;Val, CharT, Traits&gt;&gt;
+}}
+
+{{dcl h|辅助模板}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class Val &gt;
+using istream_view = ranges::basic_istream_view&lt;Val, char&gt;;
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class Val &gt;
+using wistream_view = ranges::basic_istream_view&lt;Val, wchar_t&gt;;
+}}
+
+{{dcl h|定制点对象}}
+{{dcl|num=4|since=c++20|1=
+namespace views {
+    template&lt; class T &gt;
+    constexpr /* 未指定 */ istream = /* 未指定 */;
+}
+}}
+
+{{dcl h|辅助概念}}
+{{dcla|num=5|expos=yes|1=
+template&lt; class Val, class CharT, class Traits &gt;
+concept /*stream-extractable*/ =
+    requires(std::basic_istream&lt;CharT, Traits&gt;&amp; is, Val&amp; t) {
+        is &gt;&gt; t;
+    };
+}}
+{{dcl end}}
+
+@1@ 范围工厂，通过重复调用 {{c|operator&gt;&gt;}} 生成元素序列。
+
+@2,3@ 针对字符类型 {{c/core|char}} 与 {{c/core|wchar_t}} 的便利别名模板。
+
+@4@ 对任何适合的子表达式 {{c|e}}，{{c|views::istream&lt;T&gt;(e)}} {{ls|cpp/language/expressions#表达式等价}}于 {{c|ranges::basic_istream_view&lt;T, typename U::char_type, typename U::traits_type&gt;(e)}}，其中 {{tt|U}} 是 {{c/core|std::remove_reference_t&lt;decltype(e)&gt;}}。
+@@ 如果 {{tt|U}} 并非公开且无歧义地派生自 {{c/core|std::basic_istream&lt;typename U::char_type, typename U::traits_type&gt;}}，那么程序非良构，这可能导致[[cpp/language/sfinae|代换失败]]。
+
+@5@ 仅用于阐述的概念 {{c|/*stream-extractable*/&lt;Val, CharT, Traits&gt;}}，当可以从 {{c/core|std::basic_istream&lt;CharT, Traits&gt;}} 的左值提取 {{tt|Val}} 的左值时，得以满足。
+
+{{tt|basic_istream_view}} 的迭代器类型为仅移动：它不满足{{named req|Iterator}}要求，从而不能为 C++20 前的{{lt|cpp/algorithm|算法}}所用。
+
+{{cpp/ranges/cpo|views|istream|tmpl=yes}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem obj|spec={{c/core|std::basic_istream&lt;CharT, Traits&gt;*}}|stream_|id=stream|指向输入流的指针}}
+{{dsc expos mem obj|spec={{tt|Val}}|value_|id=value|存储的值}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|{{PAGENAME}}#ctor|构造 {{ttt|basic_istream_view}}}}
+{{dsc mem fun|{{PAGENAME}}#begin|title=begin|返回迭代器}}
+{{dsc mem fun|{{PAGENAME}}#end|title=end|返回 {{lc|std::default_sentinel}}}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|data=invalid|empty=invalid|size=invalid|front=invalid|back=invalid|operator bool=invalid|operator[]=invalid}}
+
+{{rrev|until=c++23|
+虽然 {{tt|basic_istream_view}} 派生自 {{lc|ranges::view_interface|std::ranges::view_interface}}，但它无法使用任何继承的成员函数。
+}}
+
+{{anchor|ctor}}
+{{member|{{small|std::ranges::basic_istream_view::}}basic_istream_view|
+{{ddcl|since=c++20|1=
+constexpr explicit
+    basic_istream_view( std::basic_istream&lt;CharT, Traits&gt;&amp; stream );
+}}
+
+{{anchor|begin}}
+以 {{c|std::addressof(stream)}} 初始化 {{lsi|#stream_}}{{sep}}，并值初始化 {{lsi|#value_}}{{sep}}。
+}}
+{{member|{{small|std::ranges::basic_istream_view::}}begin|
+{{ddcl|since=c++20|
+constexpr auto begin();
+}}
+
+等价于 {{box|{{c/core|*}}{{lsi|#stream_}}{{nbspt}}{{c/core|&gt;&gt;}}{{nbspt}}{{lsi|#value_}}{{sep}}{{c/core|; return}}{{nbspt}}{{rli|iterator}}{{sep}}{{c/core|{*this};}}}}。
+}}
+
+{{anchor|end}}
+{{member|{{small|std::ranges::basic_istream_view::}}end|
+{{ddcl|since=c++20|
+constexpr std::default_sentinel_t end() const noexcept;
+}}
+
+返回 {{c|std::default_sentinel}}。
+}}
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem class|cpp/ranges/basic_istream_view/iterator|{{tt|basic_istream_view}} 的迭代器类型}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;ranges&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    auto words = std::istringstream{"today is yesterday’s tomorrow"};
+    for (const auto&amp; s : std::views::istream&lt;std::string&gt;(words))
+        std::cout &lt;&lt; std::quoted(s, '/') &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    auto floats = std::istringstream{"1.1  2.2\t3.3\v4.4\f55\n66\r7.7  8.8"};
+    std::ranges::copy
+    (
+        std::views::istream&lt;float&gt;(floats),
+        std::ostream_iterator&lt;float&gt;{std::cout, ", "}
+    );
+    std::cout &lt;&lt; '\n';
+}
+|output=
+/today/ /is/ /yesterday’s/ /tomorrow/
+1.1, 2.2, 3.3, 4.4, 55, 66, 7.7, 8.8,
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3568|std=C++20|before=P2325R3 意外地使存储的值默认初始化|after=还原为值初始化}}
+{{dr list item|paper=P2325R3|std=C++20|before=因为 {{lconcept|view}} 必须为 {{lconcept|default_initializable}} 提供了默认构造函数|after=与该要求一同移除}}
+{{dr list item|paper=P2432R1|std=C++20|before={{tt|ranges::istream_view}} 曾为函数模板并且不遵循命名约定|after=使之为别名模板；添加了定制点对象}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc istream_iterator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

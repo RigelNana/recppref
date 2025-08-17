@@ -1,0 +1,125 @@
+{{cpp/title|noop_coroutine}}
+{{cpp/coroutine/navbar}}
+{{ddcl|header=coroutine|since=c++20|
+std::noop_coroutine_handle noop_coroutine() noexcept;
+}}
+
+返回指代无操作协程的协程柄。
+
+若已有无操作协程的协程状态，则 {{tt|noop_coroutine}} 的后续调用，是返回先前获得的协程柄，还是指代新的无操作协程的协程状态的协程柄是未指明的。
+
+===参数===
+（无）
+
+===返回值===
+指代无操作协程的 {{lc|std::noop_coroutine_handle}}。
+
+===注解===
+比较从不同的 {{tt|noop_coroutine}} 调用获得的返回值，结果可能相等也可能不相等。
+
+{{tt|noop_coroutine}} 可以仅返回指代协程状态对象的 {{tt|noop_coroutine_handle}} 而无需开始协程。
+
+===示例===
+{{example
+|code=
+#include &lt;coroutine&gt;
+#include &lt;iostream&gt;
+#include &lt;utility&gt;
+
+template&lt;class T&gt;
+struct task
+{
+    struct promise_type
+    {
+        auto get_return_object()
+        {
+            return task(std::coroutine_handle&lt;promise_type&gt;::from_promise(*this));
+        }
+        std::suspend_always initial_suspend() { return {}; }
+        struct final_awaiter
+        {
+            bool await_ready() noexcept { return false; }
+            void await_resume() noexcept {}
+            std::coroutine_handle&lt;&gt;
+                await_suspend(std::coroutine_handle&lt;promise_type&gt; h) noexcept
+            {
+                // 在当前协程（以 'h' 指代）执行即将结束时调用 final_awaiter::await_suspend。
+                // 若当前协程被另一协程经由 co_await get_task() 恢复，则存储到该协程的柄
+                // 为 h.promise().previous。该情况下，返回柄以恢复先前的协程。
+                // 否则返回 noop_coroutine()，其恢复不做任何事。
+
+                if (auto previous = h.promise().previous; previous)
+                    return previous;
+                else
+                    return std::noop_coroutine();
+            }
+        };
+        final_awaiter final_suspend() noexcept { return {}; }
+        void unhandled_exception() { throw; }
+        void return_value(T value) { result = std::move(value); }
+
+        T result;
+        std::coroutine_handle&lt;&gt; previous;
+    };
+
+    task(std::coroutine_handle&lt;promise_type&gt; h) : coro(h) {}
+    task(task&amp;&amp; t) = delete;
+    ~task() { coro.destroy(); }
+
+    struct awaiter
+    {
+        bool await_ready() { return false; }
+        T await_resume() { return std::move(coro.promise().result); }
+        auto await_suspend(std::coroutine_handle&lt;&gt; h)
+        {
+            coro.promise().previous = h;
+            return coro;
+        }
+        std::coroutine_handle&lt;promise_type&gt; coro;
+    };
+    awaiter operator co_await() { return awaiter{coro}; }
+    T operator()()
+    {
+        coro.resume();
+        return std::move(coro.promise().result);
+    }
+
+private:
+    std::coroutine_handle&lt;promise_type&gt; coro;
+};
+
+task&lt;int&gt; get_random()
+{
+    std::cout &lt;&lt; "in get_random()\n";
+    co_return 4;
+}
+
+task&lt;int&gt; test()
+{
+    task&lt;int&gt; v = get_random();
+    task&lt;int&gt; u = get_random();
+    std::cout &lt;&lt; "in test()\n";
+    int x = (co_await v + co_await u);
+    co_return x;
+}
+
+int main()
+{
+    task&lt;int&gt; t = test();
+    int result = t();
+    std::cout &lt;&lt; result &lt;&lt; '\n';
+}
+|output=
+in test()
+in get_random()
+in get_random()
+8
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/coroutine/dsc noop_coroutine_promise}}
+{{dsc inc|cpp/coroutine/dsc noop_coroutine_handle}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

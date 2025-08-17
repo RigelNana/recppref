@@ -1,0 +1,98 @@
+{{cpp/thread/jthread/title|request_stop}}
+{{cpp/thread/jthread/navbar}}
+{{ddcl|since=c++20|
+bool request_stop() noexcept;
+}}
+
+若内部停止状态尚未被请求停止，则对它发出停止请求。
+
+确定是原子地作出的，而若请求了停止，则原子地更新共享状态以避免竞争条件，使得：
+* 能在同一共享状态的 {{lc|std::stop_token}} 与 {{lc|std::stop_source}} 上同时调用 {{c|stop_requested()}} 与 {{c|stop_possible()}} 
+* 能从多个线程在同一 {{tt|jthread}} 对象或与同一停止状态关联的其他 {{lc|std::stop_source}} 对象上并发调用 {{c|request_stop()}}，而将只有一个线程实际进行停止请求
+然而，见注解节。
+
+===参数===
+（无）
+
+===返回值===
+若调用做出停止请求则为 {{c|true}}，否则为 {{c|false}}。
+
+===后条件===
+对于由 {{c|get_stop_token()}} 取得的 {{lc|std::stop_token}} 或由 {{c|get_stop_source()}} 取得的 {{lc|std::stop_source}}，{{c|stop_requested()}} 为 {{c|true}}。
+
+===注解===
+若 {{c|request_stop()}} 发出停止请求（即返回 {{c|true}}），则将在发出 {{c|request_stop()}} 的同一线程上同步调用对同一共享停止状态注册的任何 {{lc|std::stop_callbacks}}。若任何回调的调用经由异常退出，则调用 {{lc|std::terminate}}。
+
+若已作出停止请求，则此函数返回 {{c|false}}。然而不保证正好对同一停止状态（成功）请求停止的另一线程或 {{lc|std::stop_source}} 对象不仍然在调用 {{lc|std::stop_callback}} 函数的中间。
+
+若 {{c|request_stop()}} 发出停止请求（即返回 {{c|true}}），则提醒所有用与 {{tt|jthread}} 的内部停止状态关联的 {{tt|stop_token}} 的可中断等待注册的、基类型为 {{lc|std::condition_variable_any}} 的条件变量。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+// 用于简便展示哪个线程打印了什么内容的辅助函数
+void print(auto txt)
+{
+    std::cout &lt;&lt; std::this_thread::get_id() &lt;&lt; ' ' &lt;&lt; txt;
+}
+
+int main()
+{
+    // 嗜睡的工作线程
+    std::jthread sleepy_worker(
+        [](std::stop_token stoken)
+        {
+            for (int i = 10; i; --i)
+            {
+                std::this_thread::sleep_for(300ms);
+                if (stoken.stop_requested())
+                {
+                    print("嗜睡工人已被请求停止\n");
+                    return;
+                }
+                print("嗜睡工人回去睡觉\n");
+            }
+        });
+
+    // 等待工作线程
+    // 条件变量将被停止请求唤醒。
+    std::jthread waiting_worker(
+        [](std::stop_token stoken)
+        {
+            std::mutex mutex;
+            std::unique_lock lock(mutex);
+            std::condition_variable_any().wait(lock, stoken, []{ return false; });
+            print("等待工人已被请求停止\n");
+            return;
+        });
+
+    // 此线程睡眠，让其他线程有时间互旋
+    std::this_thread::sleep_for(400ms);
+
+    // 可以显式调用 std::jthread::request_stop():
+    print("请求嗜睡工人停止\n");
+    sleepy_worker.request_stop();
+    sleepy_worker.join();
+    print("嗜睡工人已合并\n");
+
+    // 或使用 RAII 自动调用:
+    // waiting_worker 的析构函数会自动调用 request_stop() 并合并线程。
+}
+|p=true
+|output=
+140287602706176 嗜睡工人回去睡觉
+140287623300928 请求嗜睡工人停止
+140287602706176 嗜睡工人已被请求停止
+140287623300928 嗜睡工人已合并
+140287594313472 等待工人已被请求停止
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

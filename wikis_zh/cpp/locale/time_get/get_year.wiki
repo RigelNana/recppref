@@ -1,0 +1,112 @@
+{{cpp/locale/time_get/title|get_year|do_get_year}}
+{{cpp/locale/time_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type do_get_year( iter_type s, iter_type end, std::ios_base&amp; str,
+                       std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual iter_type do_get_year( iter_type s, iter_type end, std::ios_base&amp; str,
+                               std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl end}}
+
+@1@ 公开成员函数，调用最终派生类的受保护虚成员函数 {{tt|do_get_year}}。
+@2@ 读取来自序列 {{range|beg|end}} 的相继字符，用某个由实现定义的格式解析出年份。可能会因为本地环境接受两位的年份，由实现定义它们属于哪个世纪由实现定义。
+
+将解析出的的年份存储到 {{lc|std::tm}} 结构体域 {{c|t-&gt;tm_year}}。
+
+如果在读到合法年份前抵达尾迭代器，那么函数会设置 {{c|err}} 中的 {{lc|std::ios_base::eofbit}}。如果遇到解析错误，那么函数会设置 {{c|err}} 中的 {{lc|std::ios_base::failbit}}。
+
+===参数===
+{{par begin}}
+{{par|beg|指代要解析的序列起始的迭代器}}
+{{par|end|要解析的序列的尾后一位置迭代器}}
+{{par|str|此函数在需要时用以获得本地环境平面的流对象，例如用 {{lc|std::ctype}} 跳过空白符或用 {{lc|std::collate}} 比较字符串}}
+{{par|err|此函数所修改以指示错误的流错误标志对象}}
+{{par|t|指向 {{lc|std::tm}} 对象的指针，该对象将保有此函数调用结果}}
+{{par end}}
+
+===返回值===
+指向 {{range|beg|end}} 中辨识为合法年一部分的末字符后一位置的迭代器。
+
+===注解===
+对于两位输入值，许多实现会按与为 {{lc|std::get_time}}、{{lc|std::time_get::get()}} 和 POSIX 函数 {{tt|strptime()}} 所用的转换指定符 {{c|'%y'}} 相同的规则进行解析：期待两位整数，范围 {{closed range|69|99}} 中的值会产生值 1969 到 1999，范围 {{closed range|00|68}} 会产生 2000-2068。四位输入典型地保持原状接受。
+
+如果遇到解析错误，那么此函数的大多数实现保留 {{c|*t}} 不修改。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+
+void try_get_year(const std::string&amp; s)
+{
+    std::cout &lt;&lt; "在本地环境 " &lt;&lt; std::locale().name()
+              &lt;&lt; " 中从 '" &lt;&lt; s &lt;&lt; "' 解析年份\n";
+    std::istringstream str(s);
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    
+    std::tm t;
+    std::time_get&lt;char&gt; const&amp; facet = std::use_facet&lt;std::time_get&lt;char&gt;&gt;(str.getloc());
+    std::istreambuf_iterator&lt;char&gt; ret = facet.get_year({str}, {}, str, err, &amp;t);
+    str.setstate(err);
+    std::istreambuf_iterator&lt;char&gt; last{};
+    
+    if (str)
+    {
+        std::cout &lt;&lt; "解析成功，年份是 " &lt;&lt; 1900 + t.tm_year;
+        
+        if (ret != last)
+        {
+            std::cout &lt;&lt; "，剩余内容：";
+            std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+        }
+        else
+            std::cout &lt;&lt; "，输入已全部消耗";
+    }
+    else
+    {
+        std::cout &lt;&lt; "解析失败。尚未解析的字符串：";
+        std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+    }
+    
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    try_get_year("13");
+    try_get_year("2013");
+
+    std::locale::global(std::locale("ja_JP.utf8"));
+    try_get_year("2013年");
+}
+|p=true
+|output=&lt;!--使用 LLVM libc++ 生成--&gt;
+在本地环境 en_US.utf8 中从 '13' 解析年份
+解析成功，年份是 2013，输入已全部消耗
+在本地环境 en_US.utf8 中从 '2013' 解析年份
+解析成功，年份是 2013，输入已全部消耗
+在本地环境 ja_JP.utf8 中从 '2013年' 解析年份
+解析成功，年份是 2013，剩余内容：年
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=248|std=C++98|before=在抵达尾迭代器时不会设置 {{tt|eofbit}}|after=在没有读取到合法月名的情况下会设置 {{tt|eofbit}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc get_time}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

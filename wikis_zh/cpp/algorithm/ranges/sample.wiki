@@ -1,0 +1,166 @@
+{{cpp/ranges/title|sample}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O, class Gen &gt;
+requires (std::forward_iterator&lt;I&gt; {{!!}} std::random_access_iterator&lt;O&gt;) &amp;&amp;
+          std::indirectly_copyable&lt;I, O&gt; &amp;&amp;
+          std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+O sample( I first, S last, O out, std::iter_difference_t&lt;I&gt; n, Gen&amp;&amp; gen );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O, class Gen &gt;
+requires (ranges::forward_range&lt;R&gt; {{!!}} std::random_access_iterator&lt;O&gt;) &amp;&amp;
+          std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt; &amp;&amp;
+          std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+O sample( R&amp;&amp; r, O out, ranges::range_difference_t&lt;R&gt; n, Gen&amp;&amp; gen );
+}}
+{{dcl end}}
+
+@1@ 从序列 {{range|first|last}} 选择 {{c|1= M = min(n, last - first)}} 个元素（无替代）使得每个可能的''样本''拥有相等的出现概率，并将那些选择的元素写到始于 {{c|out}} 的范围中。
+
+@@ 仅若 {{tt|I}} 实现 {{c|std::forward_iterator}} 算法才''稳定''（保持被选择元素的相对顺序）。
+
+@@ 若 {{c|out}} 在 {{range|first|last}} 中则行为未定义。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=从中采样的范围（''总体''）|sentinel=yes}}
+{{par|r|从中采样的范围（''总体''）}}
+{{par|out|用以写入样本的输出迭代器}}
+{{par|n|要抽取的样本数}}
+{{par|gen|用作随机性源的随机数生成器}}
+{{par end}}
+
+===返回值===
+等于 {{tt|out + M}} 的迭代器，即结果采样范围的末尾。
+
+===复杂度===
+''线性''： 𝓞{{tt|(last - first)}}。
+
+===注解===
+此函数可能实现''选择抽样''或{{enwiki|reservoir sampling|蓄水池抽样}}。
+
+===可能的实现===
+{{eq fun|1=
+struct sample_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+             std::weakly_incrementable O, class Gen&gt;
+    requires (std::forward_iterator&lt;I&gt; or
+              std::random_access_iterator&lt;O&gt;) &amp;&amp;
+              std::indirectly_copyable&lt;I, O&gt; &amp;&amp;
+              std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    O operator()(I first, S last, O out, std::iter_difference_t&lt;I&gt; n, Gen&amp;&amp; gen) const
+    {
+        using diff_t = std::iter_difference_t&lt;I&gt;;
+        using distrib_t = std::uniform_int_distribution&lt;diff_t&gt;;
+        using param_t = typename distrib_t::param_type;
+        distrib_t D{};
+
+        if constexpr (std::forward_iterator&lt;I&gt;)
+        {
+            // 此分支保持样本元素“稳定性”
+            auto rest{ranges::distance(first, last)};
+            for (n = ranges::min(n, rest); n != 0; ++first)
+                if (D(gen, param_t(0, --rest)) &lt; n)
+                {
+                    *out++ = *first;
+                    --n;
+                }
+            return out;
+        }
+        else
+        {
+            // D 为 random_access_iterator
+            diff_t sample_size{};
+            // 复制 [first, first + M) 元素到“随机访问”输出
+            for (; first != last &amp;&amp; sample_size != n; ++first)
+                out[sample_size++] = *first;
+            // 以随机选择的值重写某些复制的元素
+            for (auto pop_size{sample_size}; first != last; ++first, ++pop_size)
+            {
+                const auto i{D(gen, param_t{0, pop_size})};
+                if (i &lt; n)
+                    out[i] = *first;
+            }
+            return out + sample_size;
+        }
+    }
+
+    template&lt;ranges::input_range R, std::weakly_incrementable O, class Gen&gt;
+    requires (ranges::forward_range&lt;R&gt; or std::random_access_iterator&lt;O&gt;) &amp;&amp;
+              std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt; &amp;&amp;
+              std::uniform_random_bit_generator&lt;std::remove_reference_t&lt;Gen&gt;&gt;
+    O operator()(R&amp;&amp; r, O out, ranges::range_difference_t&lt;R&gt; n, Gen&amp;&amp; gen) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(out), n,
+                       std::forward&lt;Gen&gt;(gen));
+    }
+};
+
+inline constexpr sample_fn sample {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+void print(auto const&amp; rem, auto const&amp; v)
+{
+    std::cout &lt;&lt; rem &lt;&lt; " = [" &lt;&lt; std::size(v) &lt;&lt; "] { ";
+    for (auto const&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; "}\n";
+}
+
+int main()
+{
+    const auto in = {1, 2, 3, 4, 5, 6};
+    print("in", in);
+
+    std::vector&lt;int&gt; out;
+    const int max = in.size() + 2;
+    auto gen = std::mt19937{std::random_device{}()};
+
+    for (int n{}; n != max; ++n)
+    {
+        out.clear();
+        std::ranges::sample(in, std::back_inserter(out), n, gen);
+        std::cout &lt;&lt; "n = " &lt;&lt; n;
+        print(", out", out);
+    }
+}
+|p=true
+|output=
+in = [6] { 1 2 3 4 5 6 }
+n = 0, out = [0] { }
+n = 1, out = [1] { 5 }
+n = 2, out = [2] { 4 5 }
+n = 3, out = [3] { 2 3 5 }
+n = 4, out = [4] { 2 4 5 6 }
+n = 5, out = [5] { 1 2 3 5 6 }
+n = 6, out = [6] { 1 2 3 4 5 6 }
+n = 7, out = [6] { 1 2 3 4 5 6 }
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc shuffle}}
+{{dsc inc|cpp/algorithm/dsc sample}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|en}}

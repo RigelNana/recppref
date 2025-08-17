@@ -1,0 +1,111 @@
+{{cpp/title|lock_guard}}
+{{cpp/thread/lock_guard/navbar}}
+{{ddcl|header=mutex|since=c++11|1=
+template&lt; class Mutex &gt;
+class lock_guard;
+}}
+
+类 {{tt|lock_guard}} 是互斥体包装器，为在作用域块期间占有互斥体提供便利的 [[cpp/language/raii|RAII 风格]]机制。
+
+当创建 {{tt|lock_guard}} 对象时，它尝试接收给定互斥体的所有权。当控制离开创建 {{tt|lock_guard}} 对象的作用域时，销毁 {{tt|lock_guard}} 并释放互斥体。
+
+{{tt|lock_guard}} 类不可复制。
+
+===模板形参===
+{{par begin}}
+{{par|Mutex|要锁定的互斥体。类型必须满足{{named req|BasicLockable}}要求}}
+{{par end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|mutex_type}}|Mutex}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/lock_guard/dsc constructor}}
+{{dsc inc|cpp/thread/lock_guard/dsc destructor}}
+{{dsc inc|cpp/thread/lock_guard/dsc operator{{=}}}}
+{{dsc end}}
+
+===注解===
+一种常见的新手错误是“忘记”给 {{tt|lock_guard}} 变量命名，例如 {{c|std::lock_guard(mtx);}}（它默认构造了一个名为 {{tt|mtx}} 的 {{tt|lock_guard}} 变量），或者 {{c|std::lock_guard{mtx};}}（它构造了一个纯右值对象并立即销毁），而并未真正为作用域的剩余部分构造持有互斥体的锁。
+
+{{rrev|since=c++17|
+{{ltt|cpp/thread/scoped_lock|std::scoped_lock}} 给出 {{tt|lock_guard}} 的一种替代，用避免死锁的算法提供锁定多个互斥体的能力。
+}}
+
+===示例===
+{{example
+|演示两个线程安全和不安全地增加一个 volatile 变量
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string_view&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+
+volatile int g_i = 0;
+std::mutex g_i_mutex;  // 保护 g_i
+
+void safe_increment(int iterations)
+{
+    const std::lock_guard&lt;std::mutex&gt; lock(g_i_mutex);
+    while (iterations-- &gt; 0)
+        g_i = g_i + 1;
+    std::cout &lt;&lt; "线程 #" &lt;&lt; std::this_thread::get_id() &lt;&lt; ", g_i: " &lt;&lt; g_i &lt;&lt; '\n';
+
+    // g_i_mutex 在锁离开作用域时自动释放
+}
+
+void unsafe_increment(int iterations)
+{
+    while (iterations-- &gt; 0)
+        g_i = g_i + 1;
+    std::osyncstream(std::cout) &lt;&lt; "线程 #" &lt;&lt; std::this_thread::get_id()
+                                &lt;&lt; ", g_i: " &lt;&lt; g_i &lt;&lt; '\n';
+}
+
+int main()
+{
+    auto test = [](std::string_view fun_name, auto fun)
+    {
+        g_i = 0;
+        std::cout &lt;&lt; fun_name &lt;&lt; ":\n前, g_i: " &lt;&lt; g_i &lt;&lt; '\n';
+        {
+            std::jthread t1(fun, 1'000'000);
+            std::jthread t2(fun, 1'000'000);
+        }
+        std::cout &lt;&lt; "后, g_i: " &lt;&lt; g_i &lt;&lt; "\n\n";
+    };
+    test("safe_increment", safe_increment);
+    test("unsafe_increment", unsafe_increment);
+}
+|p=true
+|output=
+safe_increment:
+前, g_i: 0
+线程 #140121493231360, g_i: 1000000
+线程 #140121484838656, g_i: 2000000
+后, g_i: 2000000
+
+unsafe_increment:
+前, g_i: 0
+线程 #140121484838656, g_i: 1028945
+线程 #140121493231360, g_i: 1034337
+后, g_i: 1034337
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2981|std=C++17|before=曾提供来自 {{tt|lock_guard&lt;Mutex&gt;}} 的冗余推导指引| after=已移除}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc scoped_lock}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

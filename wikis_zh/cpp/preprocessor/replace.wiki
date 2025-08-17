@@ -1,0 +1,208 @@
+{{title|文本替换宏}}
+{{cpp/preprocessor/navbar}}
+预处理器支持文本宏替换。也支持函数式文本宏替换。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|#define}} {{spar optional|标识符 替换列表}}}}
+{{sdsc|num=2|{{ttb|#define}} {{spar sep|标识符}}{{ttb|(}}{{spar sep|形参}}{{ttb|)}} {{spar optional|替换列表}}}}
+{{sdsc|num=3|{{ttb|#define}} {{spar sep|标识符}}{{ttb|(}}{{spar sep|形参}}{{ttb|, ...)}} {{spar optional|替换列表}}|notes={{mark since c++11}}}}
+{{sdsc|num=4|{{ttb|#define}} {{spar sep|标识符}}{{ttb|(...)}} {{spar optional|替换列表}}|notes={{mark since c++11}}}}
+{{sdsc|num=5|{{ttb|#undef}} {{spar|标识符}}}}
+{{sdsc end}}
+
+===解释===
+{{anchor|define 指令}}
+===={{c/core|#define}} 指令====
+{{c/core|#define}} 指令将{{spar sep|标识符}}定义为宏，即指示编译器以将在它之后出现的所有{{spar sep|标识符}}都替换为{{spar|替换列表}}，而它也可以被进一步处理。如果该标识符已被定义为任何类型的宏，那么除非这些定义都相同，否则程序非良构。
+
+=====对象式宏=====
+对象式宏以{{spar sep|替换列表}}替换每次出现的被定义{{spar|标识符}}。{{c/core|#define}} 指令的版本 (1) 准确表现如此。
+
+=====函数式宏=====
+函数式宏以{{spar sep|替换列表}}替换每次出现的被定义{{spar|标识符}}，可选地接受一定量的实参，它们随即替换掉{{spar sep|替换列表}}中出现的任何对应的{{spar|形参}}。
+
+函数式宏语法类似函数调用语法：每个宏名实例后随一个 {{c|(}} 作为下个预处理记号，所引入的记号序列将被替换为{{spar|替换列表}}。该序列以匹配的 {{c|)}} 记号终止，跳过中间的匹配左右括号对。
+
+对于版本 (2)，实参数量必须与宏定义中的形参数量相同。对于版本 (3,4)，实参数量必须{{rev inl|until=c++20|多于}}{{rev inl|since=c++20|不少于}}形参数量（不计 {{ttb|...}}）。否则程序非良构。如果标识符未使用函数写法，即它自身之后没有括号，那么它完全不被替换。
+
+{{c/core|#define}} 指令的版本 (2) 定义简单函数式宏。
+
+{{c/core|#define}} 指令的版本 (3) 定义有可变数量实参的函数式宏。额外的实参（是谓''可变实参''）可用 {{tt|__VA_ARGS__}} 标识符访问，它会被与要被替换的标识符一起提供的实参替换。
+
+{{c/core|#define}} 指令的版本 (4) 定义有可变数量实参的函数式宏，但无常规实参。额外的实参（是谓''可变实参''）只能用 {{tt|__VA_ARGS__}} 标识符访问，它会被与要被替换的标识符一起提供的实参替换。
+
+{{rrev|since=c++20|
+对于版本 (3,4)，{{spar sep|替换列表}}可以含有记号序列“{{ttb|__VA_OPT__(}}{{spar optional|内容}}{{ttb|)}}”，如果 {{tt|__VA_ARGS__}} 非空，那么它会被{{spar sep|内容}}替换，否则不展开成任何内容。
+
+{{source|1=
+#define F(...) f(0 __VA_OPT__(,) __VA_ARGS__)
+F(a, b, c) // 替换为 f(0, a, b, c)
+F()        // 替换为 f(0)
+
+#define G(X, ...) f(0, X __VA_OPT__(,) __VA_ARGS__)
+G(a, b, c) // 替换为 f(0, a, b, c)
+G(a, )     // 替换为 f(0, a)
+G(a)       // 替换为 f(0, a)
+
+#define SDEF(sname, ...) S sname __VA_OPT__(= { __VA_ARGS__ })
+SDEF(foo);       // 替换为 S foo;
+SDEF(bar, 1, 2); // 替换为 S bar = { 1, 2 };
+}}
+}}
+
+注意：如果函数式宏的实参中包含不为匹配的左右括号对所保护的逗号（最常出现于模板实参列表中，如 {{c|assert(std::is_same_v&lt;int, int&gt;);}} 或 {{c|BOOST_FOREACH(std::pair&lt;int, int&gt; p, m)}}），那么逗号被解释成宏实参分隔符，并造成由于实参数量不匹配所致的编译失败。
+
+=====扫描与替换=====
+* 扫描中跟踪所替换的宏。如果扫描找到了与这种宏相匹配的文本，那么就会将它标记为“将被忽略”（所有扫描都将忽略它）。这就避免了发生递归。
+* 如果扫描遭到了函数式宏，那么它的实参在放入{{spar sep|替换列表}}之前会先被扫描。但 {{c/core|#}} 和 {{c/core|##}} 运算符接受不经扫描的实参。
+* 宏替换之后，扫描所产生的文本。
+
+注意，定义伪递归的宏是可能的：
+{{example|code=
+#define EMPTY
+#define SCAN(x)     x
+#define EXAMPLE_()  EXAMPLE
+#define EXAMPLE(n)  EXAMPLE_ EMPTY()(n-1) (n)
+EXAMPLE(5)
+SCAN(EXAMPLE(5))
+|output=
+EXAMPLE_ ()(5 -1) (5)
+EXAMPLE_ ()(5 -1 -1) (5 -1) (5)
+}}
+
+====保留宏名====
+[[cpp/standard library#包含标头|包含标准库标头]]的翻译单元不可 {{c/core|#define}} 或 {{c/core|#undef}} 在任何[[cpp/header|标准库标头]]中声明的名字。
+
+使用标准库任何部分的翻译单元不可 {{c/core|#define}} 或 {{c/core|#undef}} 词法上等同于下列内容的名称：
+* [[cpp/keyword|关键字]]
+{{rrev|since=c++11|
+* [[cpp/keyword|有特殊含义的标识符]]
+* [[cpp/language/attributes#标准属性|任何标准属性记号]]{{rev inl|since=c++20|，但可定义 {{ltt|cpp/language/attributes/likely}} 与 {{ltt|cpp/language/attributes/likely|unlikely}} 为函数式宏。}}
+}}
+
+否则，行为未定义。
+
+{{anchor|井号运算符}}
+===={{c/core|#}} 与 {{c/core|##}} 运算符====
+函数式宏中，如果{{spar sep|替换列表}}中一个标识符前有 {{c/core|#}} 运算符，那么该标识符在运行形参替换的基础上以引号包围，实际上创建一个字符串字面量。另外，预处理器为内嵌的字符串字面量（如果存在）外围的引号添加反斜杠以进行转义，并按需要双写字符串中的反斜杠。移除所有前导和尾随空白符，并将文本中间（除内嵌字符串字面量中间外）的任何空白符序列缩减成单个空格。此操作被称为“字符串化”，如果字符串化的结果不是合法的字符串字面量，那么行为未定义。
+
+{{rrev|since=c++11|
+{{c/core|#}} 出现于 {{tt|__VA_ARGS__}} 之前时，展开后的 {{tt|__VA_ARGS__}} 整体被包在引号中：
+{{source|1=
+#define showlist(...) puts(#__VA_ARGS__)
+showlist();            // 展开成 puts("")
+showlist(1, "x", int); // 展开成 puts("1, \"x\", int")
+}}
+}}
+
+如果{{spar sep|替换列表}}中任何两个相继标识符之间有 {{c/core|##}} 运算符，那么这两个标识符（首先未被宏展开）在运行形参替换的基础上将结果进行拼接。此操作被称为“拼接”或“记号粘贴”。只有一同组成合法记号的记号才可以粘贴：如组成更长标识符的标识符、组成数字的数字位，或组成 {{tt|1=+=}} 的运算符 {{tt|+}} 和 {{tt|1==}}。不能通过粘贴 {{tt|/}} 和 {{tt|*}} 来创建注释，这是因为注释在考虑文本宏替换前就已经被移除了。如果连接的结果不是合法记号，那么行为未定义。
+
+注意：一些编译器提供了一项扩展，允许 {{c/core|##}} 在逗号后及 {{tt|__VA_ARGS__}} 前出现，此情况下 {{c/core|##}} 在存在可变实参时不做任何事，但在不存在可变实参时移除逗号：这使得可以定义如 {{c|fprintf (stderr, format, ##__VA_ARGS__)}} 这样的宏。{{rev inl|since=c++20|也可以通过标准方式使用 {{tt|__VA_OPT__}} 实现，例如 {{c|fprintf (stderr, format __VA_OPT__(, ) __VA_ARGS__)}}。}}
+
+{{anchor|undef 指令}}
+===={{c/core|#undef}} 指令====
+{{c/core|#undef}} 指令取消定义{{spar|标识符}}，即取消 {{c/core|#define}} 指令所作的{{spar sep|标识符}}定义。如果标识符未关联到宏，那么忽略该指令。
+
+===预定义宏===
+下列宏名已在每个翻译单元中预定义：
+{{dsc begin}}
+{{dsc macro const|__cplusplus|nolink=true|代表所用的 C++ 标准版本，展开成以下值之一：
+* {{c|199711L}}{{mark until c++11}}
+* {{c|201103L}}{{mark c++11}}
+* {{c|201402L}}{{mark c++14}}
+* {{c|201703L}}{{mark c++17}}
+* {{c|202002L}}{{mark c++20}}
+* {{c|202302L}}{{mark c++23}}}}
+{{dsc macro const|__STDC_HOSTED__|nolink=true|在实现有宿主（在操作系统下运行）的情况下展开成整数常量 {{c|1}}，在实现自立（不在操作系统下运行）的情况下展开成 {{c|0}}|notes={{mark c++11}}}}
+{{dsc macro const|__FILE__|nolink=true|展开成当前文件名，作为字符串字面量，可用 {{rlpt|line|#line}} 指令更改}}
+{{dsc macro const|__LINE__|nolink=true|展开成当前[[cpp/language/translation phases#阶段 2|物理源码行]]的行号，整数常量，可用 {{rlpt|line|#line}} 指令更改}}
+{{dsc macro const|__DATE__|nolink=true|展开成翻译日期，形式为 {{c|"Mmm dd yyyy"}} 的字符串。{{c|"dd"}} 的首字符在月中日期数小于 10 时是空格。月份名如同以 {{c|std::asctime()}} 生成}}
+{{dsc macro const|__TIME__|nolink=true|展开成翻译时间，形式为 {{c|"hh:mm:ss"}} 的字符串字面量}}
+{{dsc macro const|__STDCPP_DEFAULT_NEW_ALIGNMENT__|nolink=true|展开成 {{lc|std::size_t}} 字面量，其值为对不具对齐的 {{lc|operator new}} 的调用所保证的对齐（更大的对齐将传递给具对齐重载，如 {{c|operator new(std::size_t, std::align_val_t)}}）|notes={{mark c++17}}}}
+{{dsc macro const|__STDCPP_­BFLOAT16_­T__&lt;br&gt;__STDCPP_­FLOAT16_­T__&lt;br&gt;__STDCPP_FLOAT32_T__&lt;br&gt;__STDCPP_FLOAT64_T__&lt;br&gt;__STDCPP_FLOAT128_T__|nolink=true|当且仅当实现支持对应的[[cpp/types/floating-point|扩展浮点数类型]]时展开成 {{c|1}}|notes={{mark c++23}}}}
+{{dsc macro const|__STDC_EMBED_NOT_FOUND__&lt;br&gt;__STDC_EMBED_FOUND__&lt;br&gt;__STDC_EMBED_EMPTY__|nolink=true|分别展开成 {{c|0}}、{{c|1}} 和 {{c|2}}|notes={{mark c++26}}}}
+{{dsc end}}
+
+实现可能会预定义下列其他的宏名：
+{{dsc begin}}
+{{dsc macro const|__STDC__|nolink=true|存在时值由实现定义，典型地用于指示 C 遵从性}}
+{{dsc macro const|__STDC_VERSION__|nolink=true|存在时值由实现定义|notes={{mark c++11}}}}
+{{dsc macro const|__STDC_ISO_10646__|nolink=true|{{rrev multi|since2=c++23|rev1=如果 {{c/core|wchar_t}} 使用 Unicode，那么展开成 {{c|yyyymmL}} 形式的整数常量，日期指示所支持的 Unicode 的最近版本|rev2=存在时值由实现定义}}|notes={{mark c++11}}}}
+{{dsc macro const|__STDC_MB_MIGHT_NEQ_WC__|nolink=true|在 {{c|1='x' == L'x'}} 对于某些基本字符集成员 {{tt|x}} 可能为假时展开成 {{c|1}}，如在基于 EBCDIC 并且为 {{c/core|wchar_t}} 使用 Unicode 的系统上。|notes={{mark c++11}}&lt;!-- 经由 CWG630 --&gt;}}
+{{dsc macro const|__STDCPP_THREADS__|nolink=true|在程序能拥有多于一个执行线程时展开成 {{c|1}}|notes={{mark c++11}}}}
+{{dsc break}}
+{{dsc macro const|__STDCPP_STRICT_POINTER_SAFETY__|nolink=true|notes={{mark c++11}}{{mark until c++23|removed=yes}}|在实现支持严格 {{lc|std::pointer_safety}} 时展开成 {{c|1}}}}
+{{dsc end}}
+
+这些宏的值（除了 {{tt|__FILE__}} 和 {{tt|__LINE__}}）在整个翻译单元保持为常量。试图重定义或取消定义这些宏会导致未定义行为。
+
+{{rrev|since=c++20|
+====语言功能特性检测宏====
+标准定义一组对应于 C++11 或之后引入的 C++ 语言功能特性的预处理器宏。它们被用来以简单且可移植的方式检测所说的特性是否存在。
+
+详见[[cpp/feature_test|功能特性测试]]。
+}}
+
+
+{{rrev|since=c++11|
+===注解===
+[[cpp/language/function#func|函数局部的预定义变量 {{c|__func__}}]] 不是预定义宏，但它通常会与 {{c|__FILE__}} 和 {{c|__LINE__}} 一起使用，例如 {{lc|assert}}。
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+// 制造函数工厂并使用它
+#define FUNCTION(name, a) int fun_##name() { return a; }
+
+FUNCTION(abcd, 12)
+FUNCTION(fff, 2)
+FUNCTION(qqq, 23)
+
+#undef FUNCTION
+#define FUNCTION 34
+#define OUTPUT(a) std::cout &lt;&lt; "输出: " #a &lt;&lt; '\n'
+
+// 在后面的宏定义中使用之前的宏
+#define WORD "Hello "
+#define OUTER(...) WORD #__VA_ARGS__
+
+int main()
+{
+    std::cout &lt;&lt; "abcd: " &lt;&lt; fun_abcd() &lt;&lt; '\n';
+    std::cout &lt;&lt; "fff: " &lt;&lt; fun_fff() &lt;&lt; '\n';
+    std::cout &lt;&lt; "qqq: " &lt;&lt; fun_qqq() &lt;&lt; '\n';
+
+    std::cout &lt;&lt; FUNCTION &lt;&lt; '\n';
+    OUTPUT(million); // 注意这里没有引号
+    
+    std::cout &lt;&lt; OUTER(World) &lt;&lt; '\n';
+    std::cout &lt;&lt; OUTER(WORD World) &lt;&lt; '\n';
+}
+|output=
+abcd: 12
+fff: 2
+qqq: 23
+34
+输出: million
+Hello World
+Hello WORD World
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2908|std=C++98|before=不明确 {{tt|__LINE__}} 会展开成当前物理行号还是当前逻辑行号|after=会展开成当前物理行号}}
+{{dr list item|wg=lwg|dr=294|std=C++98|before=包含了某个标准库标头的翻译单元可以包含定义了在另一个标准库标头中声明的名字的宏|after=已禁止}}
+{{dr list item|paper=P2621R2|std=C++23|before=不允许通过拼接记号来组成通用字符名|after=允许}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see cpp|cpp/symbol index/macro|宏符号索引|nomono=true}}
+{{dsc see c|c/preprocessor/replace|文本替换宏|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

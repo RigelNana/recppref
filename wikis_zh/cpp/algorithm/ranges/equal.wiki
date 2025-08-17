@@ -1,0 +1,153 @@
+{{cpp/ranges/title|equal}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr bool
+    equal( I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = {},
+           Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                    Pred, Proj1, Proj2&gt;
+constexpr bool
+    equal( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ 若范围 {{range|first1|last1}} 的投影值等于范围 {{range|first2|last2}} 的投影值则返回 {{c|true}}，否则返回 {{c|false}}。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+若两个范围拥有相同数量的元素，且每对投影元素都满足 {{c|pred}}，即 {{c|std::invoke(pred, std::invoke(proj1, *first1), std::invoke(proj2, *first2))}} 对范围中的所有对应元素对都返回 {{c|true}}，则认为它们相等。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|要比较的|sentinel=yes|range=第一}}
+{{par|r1|要比较的第一元素范围}}
+{{par range|first2|last2|要比较的|sentinel=yes|range=第二}}
+{{par|r2|要比较的第二元素范围}}
+{{par|pred|应用到投影后元素的二元谓词}}
+{{par|proj1|应用到第一元素范围的投影}}
+{{par|proj2|应用到第二元素范围的投影}}
+{{par end}}
+
+===返回值===
+若范围 {{range|first1|last1}} 的长度不等于范围 {{range|first2|last2}} 的长度，则返回 {{c|false}}。
+
+若两个范围中的元素在投影后相等，则返回 {{c|true}}。
+
+否则返回 {{c|false}}。
+
+===注解===
+不应使用 {{tt|ranges::equal}} 对由 {{lc|std::unordered_set}}、{{lc|std::unordered_multiset}}、{{lc|std::unordered_map}} 或 {{lc|std::unordered_multimap}} 的迭代器组成的范围进行比较，因为即使两个容器存储相同元素，元素在容器中的存储顺序亦可以相异。
+
+比较整个容器或字符串视图是否相等时，通常偏好对应类型的 {{c/core|1=operator==}}。
+
+{{tt|ranges::equal}} 不保证是短路的。例如，如果两个范围的首对元素不相等，剩余元素也可能被被比较。在用 {{lc|std::memcmp}} 或实现特有的向量化算法比较范围时可能发生非短路比较。
+
+===复杂度===
+至多应用 {{c|min(last1 - first1, last2 - first2)}} 次谓词和对应的投影。
+
+然而，若 {{c|S1}} 与 {{c|S2}} 均分别与其迭代器实现 {{lc|std::sized_sentinel_for}}，且 {{c|last1 - first1 !{{=}} last2 - first2}}，则不应用谓词（无需查看任何元素即可检测出大小不合）。
+
+===可能的实现===
+{{eq fun
+|1=
+struct equal_fn
+{
+  template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+           std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+           class Pred = ranges::equal_to,
+           class Proj1 = std::identity, class Proj2 = std::identity&gt;
+  requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+  constexpr bool
+      operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                 Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+  {
+      if constexpr (std::sized_sentinel_for&lt;S1, I1&gt; and std::sized_sentinel_for&lt;S2, I2&gt;)
+          if (std::ranges::distance(first1, last1) != std::ranges::distance(first2, last2))
+              return false;
+
+      for (; first1 != last1; ++first1, (void)++first2)
+          if (!std::invoke(pred, std::invoke(proj1, *first1), std::invoke(proj2, *first2)))
+              return false;
+      return true;
+  }
+
+  template&lt;ranges::input_range R1, ranges::input_range R2,
+           class Pred = ranges::equal_to,
+           class Proj1 = std::identity, class Proj2 = std::identity&gt;
+  requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                      Pred, Proj1, Proj2&gt;
+  constexpr bool
+      operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+  {
+      return (*this)(ranges::begin(r1), ranges::end(r1),
+                     ranges::begin(r2), ranges::end(r2),
+                     std::ref(pred), std::ref(proj1), std::ref(proj2));
+  }
+};
+
+inline constexpr equal_fn equal;
+}}
+
+===示例===
+{{example
+ | 下列代码用 {{tt|equal()}} 测试字符串是否为回文
+ | code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+constexpr bool is_palindrome(const std::string_view s)
+{
+    namespace views = std::views;
+    auto forward = s {{!}} views::take(s.size() / 2);
+    auto backward = s {{!}} views::reverse {{!}} views::take(s.size() / 2);
+    return std::ranges::equal(forward, backward);
+}
+
+void test(const std::string_view s)
+{
+    std::cout &lt;&lt; std::quoted(s) &lt;&lt; " is "
+              &lt;&lt; (is_palindrome(s) ? "" : "not ")
+              &lt;&lt; "a palindrome\n";
+}
+
+int main()
+{
+    test("radar");
+    test("hello");
+    static_assert(is_palindrome("ABBA") and not is_palindrome("AC/DC"));
+}
+|output=
+"radar" is a palindrome
+"hello" is not a palindrome
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc lexicographical_compare}}
+{{dsc inc|cpp/algorithm/ranges/dsc mismatch}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal_range}}
+{{dsc inc|cpp/utility/functional/dsc equal_to}}
+{{dsc inc|cpp/algorithm/dsc equal}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

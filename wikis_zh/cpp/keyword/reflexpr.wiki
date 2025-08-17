@@ -1,0 +1,88 @@
+{{cpp/keyword/title|{{tt|reflexpr}} {{mark since reflection ts}}}}
+{{cpp/keyword/navbar}}
+
+{{fmbox|class=noprint|style=font-size: 0.8em|text='''实验性特性''' 此页面上描述的功能是反射技术规范 ISO/IEC TS 23619 的一部分 {{mark since reflection ts}}。}}
+
+===用法===
+# 获取{{rlp|class|类}}类型的成员列表，或者{{rlp|enum|枚举}}类型的枚举列表。
+# 获得类型或成员的名称。
+# 检测成员是否是{{rlp|static|静态}}的，亦可以获取成员是否是 {{rlp|constexpr}} 的。
+# 检测成员函数是否为{{rlp|virtual|虚}}, 以及其访问级别是 {{rlp|public}}、{{rlp|protected}} 还是 {{rlp|private}}。
+# 获取类型定义时在源代码中的的''行号''和''列号''。
+
+===示例===
+{{example
+|{{ttb|reflexpr}} 可以通过''元对象类型''来获取对象的元数据。注意，使用 {{tt|std::reflect::get_data_members_t}} 可以让程序员就如同使用 {{lc|std::tuple}} 一般访问任何类。
+|code=
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int b;
+    std::string s;
+    std::vector&lt;std::string&gt; v;
+};
+
+// 反射 TS
+#include &lt;experimental/reflect&gt;
+using meta_S = reflexpr(S);
+using mem = std::reflect::get_data_members_t&lt;meta_S&gt;;
+using meta = std::reflect::get_data_members_t&lt;mem&gt;;
+static_assert(std::reflect::is_public_v&lt;meta&gt;); // 成功
+
+int main() {}
+}}
+
+{{example
+|通过 {{ttb|reflexpr}}，我们也可以获取名称信息:
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+// 反射 TS
+#include &lt;experimental/reflect&gt;
+
+template &lt;typename Tp&gt;
+constexpr std::string_view nameof()
+{
+    using TpInfo = reflexpr(Tp);
+    using aliased_Info = std::experimental::reflect::get_aliased_t&lt;TpInfo&gt;;
+    return std::experimental::reflect::get_name_v&lt;aliased_Info&gt;;
+}
+
+int main()
+{
+    std::cout &lt;&lt; nameof&lt;std::string&gt;() &lt;&lt; '\n';
+    static_assert(nameof&lt;std::string&gt;() == "basic_string"); // 成功
+}
+}}
+
+{{example
+|这是在[[cpp/experimental/reflect|反射 TS]]中获取类型所在命名空间的示例。 
+|code=
+namespace Foo
+{
+    struct FooFoo
+    {
+        int FooFooFoo;
+    };
+}
+namespace Bar
+{
+    using BarBar = ::Foo::FooFoo;
+}
+using BarBarInfo = reflexpr(::Bar::BarBar);
+using BarBarScope = ::std::experimental::reflect::get_scope_t&lt;BarBarInfo&gt;; // Bar，而非 Foo
+
+struct Spam
+{
+    int SpamSpam;
+};
+struct Grok
+{
+    using GrokGrok = Spam::SpamSpam;
+};
+using GrokGrokInfo = reflexpr(::Grok::GrokGrok);
+using GrokGrokScope = std::experimental::reflect::get_scope_t&lt;GrokGrokInfo&gt;; // Grok，而非 Spam
+}}

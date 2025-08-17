@@ -1,0 +1,118 @@
+{{cpp/title|call_once}}
+{{cpp/thread/navbar}}
+{{ddcl|header=mutex|since=c++11|
+template&lt; class Callable, class... Args &gt;
+void call_once( std::once_flag&amp; flag, Callable&amp;&amp; f, Args&amp;&amp;... args );
+}}
+
+准确执行一次{{named req|Callable}}对象 {{c|f}}，即使同时从多个线程调用。
+
+详细地说：
+
+* 如果在调用 {{tt|std::call_once}} 的时刻，{{c|flag}} 指示 {{c|f}} 已经调用过，那么 {{tt|std::call_once}} 会立即返回（称这种对 {{tt|std::call_once}} 的调用为''消极''）。
+
+* 否则，{{tt|std::call_once}} 会调用 {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(std::forward&lt;Callable&gt;(f), std::forward&lt;Args&gt;(args)...)}}}}。与 {{lc|std::thread}} 的构造函数或 {{lc|std::async}} 不同，不会移动或复制实参，因为不需要转移它们到另一执行线程（称这种对 {{tt|std::call_once}} 的调用为''积极''）。
+
+:* 如果该调用抛出了异常，那么将异常传播给 {{tt|std::call_once}} 的调用方，并且不翻转 {{c|flag}}，这样还可以尝试后续调用（称这种对 {{tt|std::call_once}} 的调用为''异常''）。
+:* 如果该调用正常返回（称这种对 {{tt|std::call_once}} 的调用为''返回''），那么翻转 {{c|flag}}，并保证以同一 {{c|flag}} 对 {{tt|std::call_once}} 的其他调用为''消极''。
+
+同一 {{c|flag}} 上的所有''积极''{{sep}}调用组成单独全序，它们由零或多个''异常''{{sep}}调用后随一个''返回''{{sep}}调用组成。该顺序中，每个''积极''{{sep}}调用的结尾同步于下个''积极''{{sep}}调用。
+
+从''返回''{{sep}}调用的返回同步于同一 {{c|flag}} 上的所有''消极''{{sep}}调用：这表示保证所有对 {{tt|std::call_once}} 的同时调用都观察到''积极''{{sep}}调用所做的任何副效应，而无需额外同步。
+
+===参数===
+{{par begin}}
+{{par|flag|对象，对于它只有一个函数得到执行}}
+{{par|f|要调用的{{named req|Callable}}对象}}
+{{par|args...|要传递给函数的实参}}
+{{par end}}
+
+===返回值===
+（无）
+
+===异常===
+* 如果有任何条件阻止对 {{tt|std::call_once}} 的调用按规定执行，那么就会抛出 {{lc|std::system_error}}。
+* {{c|f}} 抛出的任何异常。
+
+===注解===
+如果对 {{tt|std::call_once}} 进行并发调用时分别传递不同的函数 {{c|f}}，那么哪个 {{c|f}} 将被执行是未指明的。被选中的函数会在与之对应的 {{tt|std::call_once}} 的被调用线程中执行。
+
+由于[[cpp/language/storage_duration#静态局部变量|函数局域静态对象]]的初始化在多线程调用下也保证只触发一次，这可能比使用 {{tt|std::call_once}} 的等价代码更为高效。
+
+此函数在 POSIX 中的等价物为 [https://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_once.html {{tt|pthread_once}}]。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+std::once_flag flag1, flag2;
+
+void simple_do_once()
+{
+    std::call_once(flag1, [](){ std::cout &lt;&lt; "简单样例：调用一次\n"; });
+}
+
+void may_throw_function(bool do_throw)
+{
+    if (do_throw)
+    {
+        std::cout &lt;&lt; "抛出：call_once 会重试\n"; // 这会出现不止一次
+        throw std::exception();
+    }
+    std::cout &lt;&lt; "没有抛出，call_once 不会再重试\n"; // 保证一次
+}
+
+void do_once(bool do_throw)
+{
+    try
+    {
+        std::call_once(flag2, may_throw_function, do_throw);
+    }
+    catch (...) {}
+}
+
+int main()
+{
+    std::thread st1(simple_do_once);
+    std::thread st2(simple_do_once);
+    std::thread st3(simple_do_once);
+    std::thread st4(simple_do_once);
+    st1.join();
+    st2.join();
+    st3.join();
+    st4.join();
+    
+    std::thread t1(do_once, true);
+    std::thread t2(do_once, true);
+    std::thread t3(do_once, false);
+    std::thread t4(do_once, true);
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+}
+|p=true
+|output=
+简单样例：调用一次
+抛出：call_once 会重试
+抛出：call_once 会重试
+抛出：call_once 会重试
+没有抛出，call_once 不会再重试
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2080|std=C++11|before=在 {{c|f}} 无效时会抛出 {{lc|std::invalid_argument}}，但是没有指定在什么情况下 {{c|f}} 会失效|after=移除此错误条件}}
+{{dr list item|wg=lwg|dr=2442|std=C++11|before=在调用前会复制和/或移动参数|after=不进行复制/移动}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc once_flag}}
+{{dsc see c|c/thread/call_once}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

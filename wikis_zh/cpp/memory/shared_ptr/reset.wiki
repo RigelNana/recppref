@@ -1,0 +1,168 @@
+{{cpp/memory/shared_ptr/title|reset}}
+{{cpp/memory/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+void reset() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class Y &gt; 
+void reset( Y* ptr );
+}}
+{{dcl|num=3|since=c++11|
+template&lt; class Y, class Deleter &gt; 
+void reset( Y* ptr, Deleter d );
+}}
+{{dcl|num=4|since=c++11|
+template&lt; class Y, class Deleter, class Alloc &gt; 
+void reset( Y* ptr, Deleter d, Alloc alloc );
+}}
+{{dcl end}}
+
+以 {{c|ptr}} 所指向的对象替换被管理对象。能提供可选的删除器 {{c|d}}，之后在无 {{tt|shared_ptr}} 对象占有该对象时以之销毁新对象。默认以 {{ltt|cpp/language/delete}} 表达式为删除器。始终选择对应提供类型的恰当 {{ltt|cpp/language/delete}} 表达式，这是函数以使用分离的形参 {{tt|Y}} 的模板实现的理由。
+
+若 {{c|*this}} 已拥有某个对象，且它是最后一个拥有该对象的 {{tt|shared_ptr}}，则通过所拥有的删除器销毁此对象。
+
+若 {{c|ptr}} 所指向的对象已被占有，则函数通常会导致未定义行为。
+
+@1@ 释放被管理对象的所有权，若存在。调用后，{{c|*this}} 不管理对象。等价于 {{c|shared_ptr().swap(*this);}}。
+
+@2-4@ 以 {{c|ptr}} 所指向对象替换被管理对象。{{tt|Y}} 必须是完整类型且可隐式转换为 {{tt|T}}。另外：
+
+:@2@ 以 delete 表达式为删除器。合法的 delete 表达式必须可用，即 {{c|delete ptr}} 必须良构，拥有良好定义行为且不抛任何异常。等价于 {{c|shared_ptr&lt;T&gt;(ptr).swap(*this);}}。
+
+:@3@ 以指定的删除器 {{c|d}} 为删除器。{{tt|Deleter}} 必须对 {{tt|T}} 类型可调用，即 {{c|d(ptr)}} 必须良构，拥有良好定义行为且不抛任何异常。{{tt|Deleter}} 必须{{named req|CopyConstructible}}，且其复制构造函数和析构函数必须不抛异常。等价于 {{c|shared_ptr&lt;T&gt;(ptr, d).swap(*this);}}。
+
+:@4@ 同 {{v|3}}，但额外地用 {{c|alloc}} 的副本分配内部使用的数据。{{tt|Alloc}} 必须是{{named req|Allocator}}。复制构造函数和析构函数必须不抛异常。等价于 {{c|shared_ptr&lt;T&gt;(ptr, d, alloc).swap(*this);}}。
+
+===参数===
+{{par begin}}
+{{par|ptr|指向要取得所有权的对象的指针}}
+{{par|d|为删除对象而存储的删除器}}
+{{par|alloc|进行内部分配所用的分配器}}
+{{par end}} 
+
+===返回值===
+（无）
+
+===异常===
+@2@ 若无法获得要求的额外内存则为 {{lc|std::bad_alloc}}。可能因其他错误抛出实现定义的异常。若出现异常则调用 {{c|delete ptr}}。
+
+@3,4@ 若无法获得要求的额外内存则为 {{lc|std::bad_alloc}}。可能因其他错误抛出实现定义的异常。若出现异常则调用 {{c|d(ptr)}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo
+{
+    Foo(int n = 0) noexcept : bar(n)
+    {
+        std::cout &lt;&lt; "Foo::Foo(), bar = " &lt;&lt; bar &lt;&lt; " @ " &lt;&lt; this &lt;&lt; '\n';
+    }
+    ~Foo()
+    {
+        std::cout &lt;&lt; "Foo::~Foo(), bar = " &lt;&lt; bar &lt;&lt; " @ " &lt;&lt; this &lt;&lt; '\n';
+    }
+    int getBar() const noexcept { return bar; }
+private:
+    int bar;
+};
+
+int main()
+{
+    std::cout &lt;&lt; "1) 独占所有权\n";
+    {
+        std::shared_ptr&lt;Foo&gt; sptr = std::make_shared&lt;Foo&gt;(100);
+
+        std::cout &lt;&lt; "Foo::bar = " &lt;&lt; sptr-&gt;getBar() &lt;&lt; ", use_count() = "
+                  &lt;&lt; sptr.use_count() &lt;&lt; '\n';
+
+        // 重置 shared_ptr 而不给它新的 Foo 实例。
+        // 此调用后原实例将被销毁。
+        std::cout &lt;&lt; "调用 sptr.reset()...\n";
+        sptr.reset(); // 此处调用 Foo 的析构函数
+        std::cout &lt;&lt; "调用 reset() 后: use_count() = " &lt;&lt; sptr.use_count()
+                  &lt;&lt; ", sptr = " &lt;&lt; sptr &lt;&lt; '\n';
+    }   // 不调用 Foo 的析构函数，已在早前的 reset() 中调用
+
+    std::cout &lt;&lt; "\n2) 独占所有权\n";
+    {
+        std::shared_ptr&lt;Foo&gt; sptr = std::make_shared&lt;Foo&gt;(200);
+
+        std::cout &lt;&lt; "Foo::bar = " &lt;&lt; sptr-&gt;getBar() &lt;&lt; ", use_count() = "
+                  &lt;&lt; sptr.use_count() &lt;&lt; '\n';
+
+        // 重置 shared_ptr，传给它 Foo 的新实例。
+        // 此调用后原实例将被销毁。
+        std::cout &lt;&lt; "调用 sptr.reset()...\n";
+        sptr.reset(new Foo{222});
+        std::cout &lt;&lt; "调用 reset() 后: use_count() = " &lt;&lt; sptr.use_count()
+                  &lt;&lt; ", sptr = " &lt;&lt; sptr &lt;&lt; "\n离开作用域...\n";
+    }   // 调用 Foo 的析构函数。
+
+    std::cout &lt;&lt; "\n3) 多重所有权\n";
+    {
+        std::shared_ptr&lt;Foo&gt; sptr1 = std::make_shared&lt;Foo&gt;(300);
+        std::shared_ptr&lt;Foo&gt; sptr2 = sptr1;
+        std::shared_ptr&lt;Foo&gt; sptr3 = sptr2;
+
+        std::cout &lt;&lt; "Foo::bar = " &lt;&lt; sptr1-&gt;getBar() &lt;&lt; ", use_count() = "
+                  &lt;&lt; sptr1.use_count() &lt;&lt; '\n';
+
+        // 重置 shared_ptr sptr1，传给它 Foo 的新实例。
+        // 原实例仍在 sptr2 和 sptr3 之间共享。
+        std::cout &lt;&lt; "调用 sptr1.reset()...\n";
+        sptr1.reset(new Foo{333});
+
+        std::cout &lt;&lt; "调用 reset() 后:\n"
+                  &lt;&lt; "sptr1.use_count() = " &lt;&lt; sptr1.use_count()
+                  &lt;&lt; ", sptr1 @ " &lt;&lt; sptr1 &lt;&lt; '\n'
+                  &lt;&lt; "sptr2.use_count() = " &lt;&lt; sptr2.use_count()
+                  &lt;&lt; ", sptr2 @ " &lt;&lt; sptr2 &lt;&lt; '\n'
+                  &lt;&lt; "sptr3.use_count() = " &lt;&lt; sptr3.use_count()
+                  &lt;&lt; ", sptr3 @ " &lt;&lt; sptr3 &lt;&lt; '\n'
+                  &lt;&lt; "离开作用域...\n";
+    }   // 调用两个析构函数: 1) sptr1 所拥有的 Foo，
+        // 2) sptr2/sptr3 所共享的 Foo。
+}
+|p=true
+|output=
+1) 独占所有权
+Foo::Foo(), bar = 100 @ 0x23c5040
+Foo::bar = 100, use_count() = 1
+调用 sptr.reset()...
+Foo::~Foo(), bar = 100 @ 0x23c5040
+调用 reset() 后: use_count() = 0, sptr = 0
+
+2) 独占所有权
+Foo::Foo(), bar = 200 @ 0x23c5040
+Foo::bar = 200, use_count() = 1
+调用 sptr.reset()...
+Foo::Foo(), bar = 222 @ 0x23c5050
+Foo::~Foo(), bar = 200 @ 0x23c5040
+调用 reset() 后: use_count() = 1, sptr = 0x23c5050
+离开作用域...
+Foo::~Foo(), bar = 222 @ 0x23c5050
+
+3) 多重所有权
+Foo::Foo(), bar = 300 @ 0x23c5080
+Foo::bar = 300, use_count() = 3
+调用 sptr1.reset()...
+Foo::Foo(), bar = 333 @ 0x23c5050
+调用 reset() 后:
+sptr1.use_count() = 1, sptr1 @ 0x23c5050
+sptr2.use_count() = 2, sptr2 @ 0x23c5080
+sptr3.use_count() = 2, sptr3 @ 0x23c5080
+离开作用域...
+Foo::~Foo(), bar = 300 @ 0x23c5080
+Foo::~Foo(), bar = 333 @ 0x23c5050
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

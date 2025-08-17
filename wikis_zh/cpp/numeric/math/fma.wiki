@@ -1,0 +1,137 @@
+{{cpp/title|fma|fmaf|fmal}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+float       fma ( float x, float y, float z );
+double      fma ( double x, double y, double z );
+long double fma ( long double x, long double y, long double z );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            fma ( /* floating-point-type */ x,
+                  /* floating-point-type */ y,
+                  /* floating-point-type */ z );
+}}
+{{dcla|anchor=no|num=2|since=c++11|constexpr=c++23|
+float       fmaf( float x, float y, float z );
+}}
+{{dcla|anchor=no|num=3|since=c++11|constexpr=c++23|
+long double fmal( long double x, long double y, long double z );
+}}
+{{dcl|num=4|since=c++11|
+#define FP_FAST_FMA  /* 由实现定义 */
+}}
+{{dcl|num=5|since=c++11|
+#define FP_FAST_FMAF /* 由实现定义 */
+}}
+{{dcl|num=6|since=c++11|
+#define FP_FAST_FMAL /* 由实现定义 */
+}}
+{{dcl h|[[#注解|额外重载]]}}
+{{dcl header|cmath}}
+{{dcla|anchor=no|num=A|since=c++11|constexpr=c++23|
+template&lt; class Arithmetic1, class Arithmetic2, class Arithmetic3 &gt;
+/* common-floating-point-type */
+    fma( Arithmetic1 x, Arithmetic2 y, Arithmetic3 z );
+}}
+{{dcl end}}
+
+@1-3@ 如同用无限精度计算 {{c|x * y + z}}，并且只会舍入一次到结果类型。{{rev inl|since=c++23|标准库提供所有以无 cv 限定的浮点数类型作为参数 {{c|x}}、{{c|y}} 和 {{c|z}} 的类型的 {{tt|std::fma}} 重载。}}
+@4-6@ 如果定义了宏常量 {{c|FP_FAST_FMAF}}、{{c|FP_FAST_FMA}} 或 {{c|FP_FAST_FMAL}}，那么函数 {{tt|std::fma}} 分别（在精度更高的基础上）求值快于 {{c/core|float}}、{{c/core|double}} 和 {{c/core|long double}} 参数的表达式 {{c|x * y + z}}。这些宏在有定义时求值为整数 {{c|1}}。
+@A@ 为算术类型的所有其他组合提供额外重载。
+
+===参数===
+{{par begin}}
+{{par|x, y, z|浮点数或整数}}
+{{par end}}
+
+===返回值===
+在成功时返回 {{c|x * y + z}} 的值，如同计算为无限精度再舍入一次以适合目标类型（或者说是作为单次三元浮点数运算计算）。
+
+如果出现上溢导致的值域错误，那么返回 {{lc|HUGE_VAL|±HUGE_VAL}}、{{tt|±HUGE_VALF}} 或 {{tt|±HUGE_VALL}}。
+
+如果出现下溢导致的值域错误，那么返回（舍入后的）正确结果。
+
+===错误处理===
+报告 {{lc|math_errhandling}} 中指定的错误。
+
+如果实现支持 IEEE 浮点数算术（IEC 60559），那么
+* 如果 {{c|x}} 为零而 {{c|y}} 是无穷大或 {{c|x}} 是无穷大而 {{c|y}} 为零，那么
+** 如果 {{c|z}} 非 NaN，那么返回 NaN 并引发 {{lc|FE_INVALID}}
+** 如果 {{c|z}} 是 NaN，那么返回 NaN 并可能引发 {{lc|FE_INVALID}}
+* 如果 {{c|x * y}} 是准确的无穷大且 {{c|z}} 是带相反符号的无穷大，那么返回 NaN 并引发 {{lc|FE_INVALID}}
+* 如果 {{c|x}} 或 {{c|y}} 是 NaN，那么返回 NaN
+* 如果 {{c|z}} 是 NaN，且 {{c|x * y}} 不是 0*Inf 或 Inf*0，那么返回 NaN（而不引发 {{lc|FE_INVALID}}）
+
+===注解===
+此运算经常在硬件中实现为{{enwiki|Multiply%E2%80%93accumulate operation|融合乘加}} CPU 指令。如果硬件支持，那么期待定义相应的 {{c|FP_FAST_FMA?}} 宏，但多数实现即使在不定义这些宏时也利用该 CPU 指令。
+
+POSIX [https://pubs.opengroup.org/onlinepubs/9699919799/functions/fma.html ({{tt|fma}}, {{tt|fmaf}}, {{tt|fmal}})] 另外规定被指定为返回 {{lc|FE_INVALID}} 的情形是定义域错误。
+
+由于 {{tt|std::fma}} 无限的中间精度，它是其他正确舍入数学运算，如 {{lc|std::sqrt}} 或甚至除法（在 CPU 不支持的平台上，例如 {{enwiki|Itanium}}）的常用构建块。
+
+同所有浮点数表达式，表达式 {{c|x * y + z}} 可编译为融合乘加，除非 [[cpp/preprocessor/impl|#pragma]] {{c|STDC FP_CONTRACT}} 是关闭状态。
+
+{{cpp/numeric/math/additional overload note|fma}}
+
+===示例===
+{{example
+|code=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+ 
+#ifndef __GNUC__
+#pragma STDC FENV_ACCESS ON
+#endif
+ 
+int main()
+{
+    // 演示 fma 与内建运算符间的差别
+    const double in = 0.1;
+    std::cout &lt;&lt; "0.1 double 是 " &lt;&lt; std::setprecision(23) &lt;&lt; in
+              &lt;&lt; "（" &lt;&lt; std::hexfloat &lt;&lt; in &lt;&lt; std::defaultfloat &lt;&lt; "）\n"
+              &lt;&lt; "0.1*10 是 1.0000000000000000555112（0x8.0000000000002p-3），"
+              &lt;&lt; "或在舍入到 double 后是 1.0\n";
+    
+    const double expr_result = 0.1 * 10 - 1;
+    const double fma_result = std::fma(0.1, 10, -1);
+    std::cout &lt;&lt; "0.1 * 10 - 1 = " &lt;&lt; expr_result
+              &lt;&lt; "：在中间舍入步骤后减去 1\n"
+              &lt;&lt; "fma(0.1, 10, -1) = " &lt;&lt; std::setprecision(6) &lt;&lt; fma_result &lt;&lt; "（"
+              &lt;&lt; std::hexfloat &lt;&lt; fma_result &lt;&lt; std::defaultfloat &lt;&lt; "）\n\n";
+    
+    // fma 用于 double-double 算术
+    const double high = 0.1 * 10;
+    const double low = std::fma(0.1, 10, -high);
+    std::cout &lt;&lt; "在 double-double 算术中，0.1 * 10 可以表示为 "
+              &lt;&lt; high &lt;&lt; " + " &lt;&lt; low &lt;&lt; "\n\n";
+    
+    // 错误处理
+    std::feclearexcept(FE_ALL_EXCEPT);
+    std::cout &lt;&lt; "fma(+Inf, 10, -Inf) = " &lt;&lt; std::fma(INFINITY, 10, -INFINITY) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    发生 FE_INVALID\n";
+}
+|p=true
+|output=
+0.1 double 是 0.10000000000000000555112（0x1.999999999999ap-4）
+0.1*10 是 1.0000000000000000555112（0x8.0000000000002p-3），或在舍入到 double 后是 1.0
+0.1 * 10 - 1 = 0：在中间舍入步骤后减去 1
+fma(0.1, 10, -1) = 5.55112e-17（0x1p-54）
+
+在 double-double 算术中，0.1 * 10 可以表示为 1 + 5.55112e-17
+
+fma(+Inf, 10, -Inf) = -nan
+    发生 FE_INVALID
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc remainder}}
+{{dsc inc|cpp/numeric/math/dsc remquo}}
+{{dsc see c|c/numeric/math/fma}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

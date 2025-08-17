@@ -1,0 +1,128 @@
+{{cpp/title|atomic_thread_fence}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|since=c++11|1=
+extern "C" void atomic_thread_fence( std::memory_order order ) noexcept;
+}}
+{{dcl end}}
+
+建立以 {{tt|order}} 指示的非原子和宽松原子访问的[[cpp/atomic/memory_order|内存同步定序]]，而无需关联的原子操作。但需要至少一个原子操作来建立同步，如下所述。
+
+====栅栏-原子同步====
+线程 A 中的释放栅栏 F 同步于线程 B 中的原子[[cpp/atomic/memory_order|获得操作(acquire operation)]] Y，若
+
+* 存在原子存储 X（带任何内存定序）
+* Y 读取 X 所写入的值（或会为 [[cpp/atomic/memory_order|X 所引领的释放序列]]所写入的值，若 X 是释放操作）
+* F 在线程 A 中先序于 X
+
+此情况下，所有线程 A 中[[cpp/atomic/memory_order|先序于]] F 的非原子和宽松原子存储将[[cpp/atomic/memory_order|先发生于]]线程 B 中所有 Y 后的，来自同一位置的非原子和宽松原子加载。
+
+====原子-栅栏同步====
+线程 A 中的原子[[cpp/atomic/memory_order|释放操作(release operation)]] X 同步于线程 B 中的获得栅栏 F，若
+
+* 存在原子读取 Y （带任何内存定序）
+* Y 读取 X （或 [[cpp/atomic/memory_order|X 所引领的释放序列]]）所写入的值
+* Y 在线程 B 中先序于 F
+
+此情况下，线程 A 中所有[[cpp/atomic/memory_order|先序于]] X 的非原子和宽松原子存储，将[[cpp/atomic/memory_order|先发生于]]线程 B 中所有 F 后的，来自同一位置的非原子和宽松原子加载。
+
+====栅栏-栅栏同步====
+线程 A 中的释放栅栏 FA 同步于线程 B 中的获得栅栏 FB，若
+
+* 存在原子对象 M ，
+* 线程 A 中存在修改 M 的原子写入 X（带任何内存定序）
+* 线程 A 中 FA 先序于 X
+* 线程 B 中存在原子读取 Y（带任何内存定序）
+* Y 读取 X 所写入的值（或会为 [[cpp/atomic/memory_order|X 所引领的释放序列]]所写入的值，若 X 是释放操作）
+* 线程 B 中 Y 先序于 FB
+
+此情况下，线程 A 中所有[[cpp/atomic/memory_order|先序于]] FA 的非原子和宽松原子存储，将[[cpp/atomic/memory_order|先发生于]]线程 B 中所有 FB 后的，来自同一位置的非原子和宽松原子加载。
+
+===参数===
+{{par begin}}
+{{par | order |此栅栏所执行的内存定序}}
+{{par end}} 
+
+===返回值===
+（无）
+
+===注解===
+在 x86（包括 x86-64）上，除了 {{c|std::atomic_thread_fence(std::memory_order_seq_cst)}} 之外，{{tt|atomic_thread_fence}} 函数不会发出 CPU 指令，而仅会影响编译时代码移动。
+
+{{tt|atomic_thread_fence}} 强加的同步制约强于带同一 {{lc|std::memory_order}} 的原子存储操作。在原子存储释放操作阻止所有前驱写入被移动到存储释放之后的同时，带 {{c|std::memory_order_release}} 定序的 {{tt|atomic_thread_fence}} 还阻止所有前驱写入被移动到后继存储之后。
+
+栅栏-栅栏同步能用于添加同步到数个宽松原子操作的序列，例如
+{{source|1=
+// 全局
+std::string computation(int);
+void print(std::string);
+
+std::atomic&lt;int&gt; arr[3] = {-1, -1, -1};
+std::string data[1000] // 非原子数据
+
+// 线程 A，计算 3 个值
+void ThreadA( int v0, int v1, int v2 )
+{
+//  assert(0 &lt;= v0, v1, v2 &lt; 1000);
+    data[v0] = computation(v0);
+    data[v1] = computation(v1);
+    data[v2] = computation(v2);
+    std::atomic_thread_fence(std::memory_order_release);
+    std::atomic_store_explicit(&amp;arr[0], v0, std::memory_order_relaxed);
+    std::atomic_store_explicit(&amp;arr[1], v1, std::memory_order_relaxed);
+    std::atomic_store_explicit(&amp;arr[2], v2, std::memory_order_relaxed);
+}
+
+// 线程 B，打印已经计算的 0 与 3 之间的值。
+void ThreadB()
+{
+    int v0 = std::atomic_load_explicit(&amp;arr[0], std::memory_order_relaxed);
+    int v1 = std::atomic_load_explicit(&amp;arr[1], std::memory_order_relaxed);
+    int v2 = std::atomic_load_explicit(&amp;arr[2], std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_acquire);
+//  v0、v1、v2 可能全部或部分结果为 -1。
+//  其他情况下读取非原子数据是安全的，因为栅栏：
+    if (v0 != -1)
+        print(data[v0]);
+    if (v1 != -1)
+        print(data[v1]);
+    if (v2 != -1)
+        print(data[v2]);
+}
+}}
+
+===示例===
+扫描邮箱数组，并只处理我们打算处理的一个，而无不必要的同步。
+此示例使用原子栅栏同步。
+{{source|1=
+const int num_mailboxes = 32;
+std::atomic&lt;int&gt; mailbox_receiver[num_mailboxes];
+std::string mailbox_data[num_mailboxes];
+
+// 写者线程更新非原子共享数据
+// 然后更新 mailbox_receiver[i] 如下
+mailbox_data[i] = ...;
+std::atomic_store_explicit(&amp;mailbox_receiver[i], receiver_id, std::memory_order_release);
+
+// 读者线程需要检查所有 mailbox[i]，但只需与一个同步
+for (int i = 0; i &lt; num_mailboxes; ++i)
+    if (std::atomic_load_explicit(&amp;mailbox_receiver[i],
+        std::memory_order_relaxed) == my_id)
+    {
+        // 恰与一个写者同步
+        std::atomic_thread_fence(std::memory_order_acquire);
+        // 保证观测到 atomic_store_explicit()
+        // 之前写者线程所做的任何事
+        do_work(mailbox_data[i]);
+    }
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc memory_order}}
+{{dsc inc|cpp/atomic/dsc atomic_signal_fence}}
+{{dsc see c|c/atomic/atomic_thread_fence}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

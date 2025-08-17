@@ -1,0 +1,809 @@
+{{title|模板实参推导}}
+{{cpp/language/templates/navbar}}
+
+为了实例化一个{{rlp|function template|函数模板}}需要知晓每个模板实参，但并非每个模板实参都必须予以指定。编译器会尽可能从函数实参推导缺失的模板实参。这会在尝试调用函数、取函数模板地址时，和某些{{lsd|#其他语境}}中发生：
+{{source|1=
+template&lt;typename To, typename From&gt;
+To convert(From f);
+
+void g(double d)
+{
+    int i = convert&lt;int&gt;(d);    // 调用 convert&lt;int, double&gt;(double)
+    char c = convert&lt;char&gt;(d);  // 调用 convert&lt;char, double&gt;(double)
+    int(*ptr)(float) = convert; // 实例化 convert&lt;int, float&gt;(float)
+                                // 并将它的地址储存在 ptr
+}
+}}
+
+运算符模板依赖此机制运行，因为除了将它重写为函数调用表达式之外，不存在为运算符指定模板实参的语法：
+{{source|1=
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::cout &lt;&lt; "Hello, world" &lt;&lt; std::endl;
+    // operator&lt;&lt; 通过 ADL 查找为 std::operator&lt;&lt;，
+    // 然后两次都推导为 operator&lt;&lt;&lt;char, std::char_traits&lt;char&gt;&gt;
+    // std::endl 被推导为 &amp;std::endl&lt;char, std::char_traits&lt;char&gt;&gt;
+}
+}}
+
+模板实参推导在函数模板{{rlp|lookup|名字查找}}（可能涉及{{rlp|adl|实参依赖查找}}）之后，在{{rlps|function template#模板实参代换}}（可能涉及 {{rlp|sfinae|SFINAE}}）和{{rlp|overload resolution|重载决议}}之前进行。
+
+{{rrev|since=c++17|
+当将类模板名用作正在构造的对象的类型时，也会进行模板实参推导：
+{{source|1=
+std::pair p(2, 4.5);
+std::tuple t(4, 3, 2.5);
+std::copy_n(vi1, 3, std::back_insert_iterator(vi2));
+std::for_each(vi.begin(), vi.end(), Foo([&amp;](int i) {...}));
+auto lck = std::lock_guard(foo.mtx);
+std::lock_guard lck2(foo.mtx, ul);
+}}
+类模板的模板实参推导在声明和显式转型表达式中发生；细节见{{rlp|class template argument deduction|类模板实参推导}}。
+}}
+
+===从函数调用推导===
+模板实参推导试图确定模板实参（类型模板形参 {{ttb|T}}i 的类型，模板模板形参 {{ttb|TT}}i 的模板，和非类型模板形参 {{ttb|I}}i 的值），它们在经过以下列出的调整之后可以代换到各个函数形参 {{ttb|P}} 中，以产生''推导''的类型 {{ttb|A}}，它与函数实参 {{ttb|A}} 类型相同。
+
+如果有多个形参，那么分别推导每一对 {{ttb|P}}/{{ttb|A}}，然后合并各个推导的模板实参。如果推导失败，或任何一对 {{ttb|P}}/{{ttb|A}} 或有歧义，或如果不同对推导出的模板实参不同，或如果还遗留有任何模板实参既没有被推导也没有被显式指定，那么编译失败。
+
+{{rrev|since=c++11|
+如果 {{ttb|P}} 在移除引用和 cv 限定符后得到 {{c|std::initializer_list&lt;P'&gt;}} 且 {{ttb|A}} 是{{rlp|list initialization|花括号初始化器列表}}，那么对该初始化器列表中的每个元素进行推导，以 {{ttb|P'}} 为形参，并以列表元素 {{ttb|A'}} 为实参：
+{{source|1=
+template&lt;class T&gt;
+void f(std::initializer_list&lt;T&gt;);
+
+f({1, 2, 3});  // P = std::initializer_list&lt;T&gt;, A = {1, 2, 3}
+               // P'1 = T，A'1 = 1：推导出 T = int
+               // P'2 = T，A'2 = 2：推导出 T = int
+               // P'3 = T，A'3 = 3：推导出 T = int
+               // OK：推导出 T = int
+
+f({1, "abc"}); // P = std::initializer_list&lt;T&gt;，A = {1, "abc"}
+               // P'1 = T，A'1 = 1：推导出 T = int
+               // P'2 = T，A'2 = "abc"：推导出 T = const char*
+               // 错误：推导失败，T 有歧义
+}}
+
+如果 {{ttb|P}} 在移除引用和 cv 限定符后得到 {{ttb|P'}}[{{tt|N}}] 且 {{ttb|A}} 是非空花括号初始化器列表，那么按上述方法进行推导，但如果 {{tt|N}} 是非类型模板形参，那么它会从初始化器列表的长度被推导：&lt;!-- CWG 1591 --&gt;
+{{source|1=
+template&lt;class T, int N&gt;
+void h(T const(&amp;)[N]);
+h({1, 2, 3}); // 推导出 T = int，推导出 N = 3
+
+template&lt;class T&gt;
+void j(T const(&amp;)[3]);
+j({42}); // 推导出 T = int，数组边界不是形参，未予考虑
+
+struct Aggr
+{
+    int i;
+    int j;
+};
+
+template&lt;int N&gt;
+void k(Aggr const(&amp;)[N]);
+k({1, 2, 3});       // 错误：推导失败，没有从 int 到 Aggr 的转换
+k({{1}, {2}, {3}}); // OK：推导出 N = 3
+
+template&lt;int M, int N&gt;
+void m(int const(&amp;)[M][N]);
+m({{1, 2}, {3, 4}}); // 推导出 M = 2，推导出 N = 2
+
+template&lt;class T, int N&gt;
+void n(T const(&amp;)[N], T);
+n({{1}, {2}, {3}}, Aggr()); // 推导出 T = Aggr，推导出 N = 3
+}}
+
+如果{{rlp|parameter pack|形参包}}作为最后的 {{ttb|P}} 出现，那么对调用的每个剩余实参类型 {{ttb|A}} 与类型 {{ttb|P}} 匹配。每个匹配为包展开中的下个位置推导模板实参：
+{{source|1=
+template&lt;class... Types&gt;
+void f(Types&amp;...);
+
+void h(int x, float&amp; y)
+{
+    const int z = x;
+    f(x, y, z); // P = Types&amp;..., A1 = x：推导出 Types... 的第一成员 = int
+                // P = Types&amp;..., A2 = y：推导出 Types... 的第二成员 = float
+                // P = Types&amp;..., A3 = z：推导出 Types... 的第三成员 = const int
+                // 调用 f&lt;int, float, const int&gt;
+}
+}}
+}}
+
+如果 {{ttb|P}} 是函数类型、函数指针类型或成员函数指针类型，且 {{ttb|A}} 是不含函数模板的{{rlp|overloaded address|重载函数集}}，那么尝试以每个重载推导各模板实参。如果只有一个成功，那么使用成功的推导。如果没有或有多个成功，那么模板形参是不推导语境（见下文）：
+{{source|1=
+template&lt;class T&gt;
+int f(T(*p)(T));
+
+int g(int);
+int g(char);
+
+f(g); // P = T(*)(T)，A = 重载集
+      // P = T(*)(T)，A1 = int(int)：推导出 T = int
+      // P = T(*)(T)，A2 = int(char)：无法推导 T
+      // 只有一个重载有效，推导成功
+}}
+
+推导开始前，对 {{ttb|P}} 和 {{ttb|A}} 进行下列调整：
+@1@ 如果 {{ttb|P}} 不是引用类型，
+:@a@ 如果 {{ttb|A}} 是数组类型，那么以从数组到指针转换获得的指针类型替换 {{ttb|A}}；
+:@b@ 否则，如果 {{ttb|A}} 是函数类型，那么以从函数到指针转换获得的指针类型替换 {{ttb|A}}；
+:@c@ 否则，如果 {{ttb|A}} 是有 cv 限定的类型，那么推导时会忽略顶层 cv 限定符：
+{{source|1=
+template&lt;class T&gt;
+void f(T);
+
+int a[3];
+f(a); // P = T，A = int[3]，调整为 int*：推导出 T = int*
+
+void b(int);
+f(b); // P = T，A = void(int)，调整为 void(*)(int)：推导出 T = void(*)(int)
+
+const int c = 13;
+f(c); // P = T，A = const int，调整为 int：推导出 T = int
+}}
+@2@ 如果 {{ttb|P}} 是有 cv 限定的类型，那么推导时会忽略顶层 cv 限定符。
+@3@ 如果 {{ttb|P}} 是引用类型，那么用 {{ttb|P}} 所引用的类型推导。
+@4@ 如果 {{ttb|P}} 是到无 cv 限定模板形参的右值引用（也就是{{rlps|reference#转发引用}}）且对应函数的调用实参是左值，那么将到 {{ttb|A}} 的左值引用类型用于 {{ttb|A}} 的位置进行推导（注意：这是 {{lc|std::forward}} 的行动基础。{{rev inl|since=c++17|注意：{{rlp|class template argument deduction|类模板实参推导}}中，类模板的模板形参不可能是转发引用}}。）：
+{{source|1=
+template&lt;class T&gt;
+int f(T&amp;&amp;);       // P 是到无 cv 限定类型 T 的右值引用（转发引用）
+
+template&lt;class T&gt;
+int g(const T&amp;&amp;); // P 是到有 cv 限定 T 的右值引用（非特殊）
+
+int main()
+{
+    int i;
+    int n1 = f(i); // 实参是左值：调用 f&lt;int&amp;&gt;(int&amp;) （特殊情况）
+    int n2 = f(0); // 实参不是左值：调用 f&lt;int&gt;(int&amp;&amp;)
+
+//  int n3 = g(i); // 错误：推导出 g&lt;int&gt;(const int&amp;&amp;)，它不能绑定右值引用到左值
+}
+}}
+
+在进行这些变换之后，按以下步骤进行推导处理（参阅{{lsd|#从类型推导}}一节）并试图找到能让推导的 {{ttb|A}}（即在上面列出的调整和推导的模板形参替换后的 {{ttb|P}}）等同于''变换''后的 {{ttb|A}}（即上面列出的调整后的 {{ttb|A}}）的模板实参。
+
+如果来自 {{ttb|P}} 和 {{ttb|A}} 的通常推导失败，那么额外考虑下列代用者：
+@1@ 如果 {{ttb|P}} 是引用类型，那么推导的 {{ttb|A}}（即引用所指涉的类型）可以比变换的 {{ttb|A}} 更受 cv 限定：
+{{source|1=
+template&lt;typename T&gt;
+void f(const T&amp; t);
+
+bool a = false;
+f(a); // P = const T&amp;，调整为 const T，A = bool：
+      // 推导出 T = bool，推导出 A = const bool
+      // 推导出的 A 比（原来的）A 更受 cv 限定
+}}
+@2@ 变换后的 {{ttb|A}} 可以具有另一指针或成员指针类型，并可以通过{{rlps|implicit conversion#限定转换}}{{rev inl|since=c++17|或函数指针转换}}转换到推导出的 {{ttb|A}}：
+{{source|1=
+template&lt;typename T&gt;
+void f(const T*);
+
+int* p;
+f(p); // P = const T*，A = int*：
+      // 推导出 T = int，推导出 A = const int*
+      // 应用限定转换（从 int* 到 const int*）
+}}
+@3@ 如果 {{ttb|P}} 是类且 {{ttb|P}} 的形式为 ''{{rlp|templates#模板标识|简单模板标识}}''，那么变换后的 {{ttb|A}} 可以是推导出的 {{ttb|A}} 的派生类。类似地，如果 {{ttb|P}} 是指向 ''简单模板标识'' 形式的类的指针，那么变换后的 {{ttb|A}} 可以是推导出的 {{ttb|A}} 所指向的派生类的指针：
+{{source|1=
+template&lt;class T&gt;
+struct B {};
+
+template&lt;class T&gt;
+struct D : public B&lt;T&gt; {};
+
+template&lt;class T&gt;
+void f(B&lt;T&gt;&amp;) {}
+
+void f()
+{
+    D&lt;int&gt; d;
+    f(d); // P = B&lt;T&gt;&amp;，调整为 P = B&lt;T&gt;（简单模板标识），A = D&lt;int&gt;：
+          // 推导出 T = int，推导出 A = B&lt;int&gt;
+          // （原来的）A 派生自推导出的 A 
+}
+}}
+
+====不推导语境====
+下列情况下，用来组成 {{ttb|P}} 的类型、模板和非类型值不会参与模板实参推导，而改为''使用''可以在别处推导出或显式指定的模板实参。如果模板形参只在不推导语境使用且没有被显式指定，那么模板实参推导失败。
+
+@1@ 用{{rlp|identifiers#有限定的标识符|有限定标识}}指定的类型的 {{spar|嵌套名说明符}}（作用域解析运算符 {{c|::}} 左侧的所有内容）：
+{{source|1=
+// 恒等模板，常用于从推导中排除特定实参
+// （即 C++20 中新增的 std::type_identity ）
+template&lt;typename T&gt;
+struct identity { typedef T type; };
+
+template&lt;typename T&gt;
+void bad(std::vector&lt;T&gt; x, T value = 1);
+
+template&lt;typename T&gt;
+void good(std::vector&lt;T&gt; x, typename identity&lt;T&gt;::type value = 1);
+
+std::vector&lt;std::complex&lt;double&gt;&gt; x;
+
+bad(x, 1.2);  // P1 = std::vector&lt;T&gt;，A1 = std::vector&lt;std::complex&lt;double&gt;&gt;
+              // P1/A1：推导出 T = std::complex&lt;double&gt;
+              // P2 = T，A2 = double
+              // P2/A2：推导出 T = double
+              // 错误：推导失败，T 有歧义
+
+good(x, 1.2); // P1 = std::vector&lt;T&gt;，A1 = std::vector&lt;std::complex&lt;double&gt;&gt;
+              // P1/A1：推导出 T = std::complex&lt;double&gt;
+              // P2 = identity&lt;T&gt;::type，A2 = double
+              // P2/A2：使用 P1/A1 推导出的 T，因为 T 在 P2 中的 :: 的左侧
+              // OK：T = std::complex&lt;double&gt;
+}}
+
+{{rrev|since=c++26|
+@2@ {{rlp|pack indexing#包索引说明符|包索引说明符}}或{{rlp|pack indexing#包索引表达式|包索引表达式}}：
+{{source|1=
+template&lt;typename... Ts&gt;
+void f(Ts...[0], std::tuple&lt;Ts...&gt;);
+
+f(3, std::tuple(5, 'A'));
+// P2 = std::tuple&lt;Ts...&gt;, A2 = std::tuple&lt;int, char&gt;
+// P2/A2: 推导出 Ts... 的第一个成员 = int
+// P2/A2: 推导出 Ts... 的第二个成员 = char
+// P1 = Ts...[0], A1 = int: Ts...[0] 是不推导语境
+}}
+}}
+
+{{rrev|since=c++11|&lt;!-- CWG 1387 ---&gt;
+@3@ {{rlp|decltype}} 说明符的表达式：
+{{source|1=
+template&lt;typename T&gt;
+void f(decltype(*std::declval&lt;T&gt;()) arg);
+
+int n;
+f&lt;int*&gt;(n); // P = decltype(*declval&lt;T&gt;())，A = int：T 处于不推导语境
+}}
+}}
+
+@4@ 非类型模板实参或数组边界，其中子表达式引用一个模板形参：
+{{source|1=
+template&lt;std::size_t N&gt;
+void f(std::array&lt;int, 2 * N&gt; a);
+
+std::array&lt;int, 10&gt; a;
+f(a); // P = std::array&lt;int, 2 * N&gt;，A = std::array&lt;int, 10&gt;：
+      // 2 * N 处于不推导语境，无法推导出 N
+      // 注意：f(std::array&lt;int, N&gt; a) 可以推导出 N
+}}
+
+@5@ 用于函数形参的形参类型中拥有默认实参的模板形参，且该函数形参在正在进行实参推导的调用中：
+{{source|1=
+template&lt;typename T, typename F&gt;
+void f(const std::vector&lt;T&gt;&amp; v, const F&amp; comp = std::less&lt;T&gt;());
+
+std::vector&lt;std::string&gt; v(3);
+f(v); // P1 = const std::vector&lt;T&gt;&amp;，A1 = std::vector&lt;std::string&gt; 左值
+      // P1/A1 推导出 T = std::string
+      // P2 = const F&amp;，A2 = std::less&lt;std::string&gt; 右值
+      // P2 在用于函数形参 comp 的形参类型（const F&amp;）的 F（模板形参）的不推导语境，
+      // 该函数形参拥有调用 f(v) 中正在使用的默认实参
+}}
+
+@6@ 形参 {{ttb|P}}，其所对应的实参 {{ttb|A}} 是一个函数，没有函数或有多个函数与 {{ttb|P}} 匹配的重载集，或包含一个或多个函数模板的重载集：
+{{source|1=
+template&lt;typename T&gt;
+void out(const T&amp; value) { std::cout &lt;&lt; value; }
+
+out("123");     // P = const T&amp;，A = const char[4] 左值：推导出 T = char[4]
+out(std::endl); // P = const T&amp;，A = 函数模板：T 处于不推导语境
+}}
+
+@7@ 形参 {{ttb|P}}，其所对应的实参 {{ttb|A}} 是花括号初始化器列表，但 {{ttb|P}} 不是 {{lc|std::initializer_list}}、到（可以有 cv 限定的）这种类型的引用，或者到数组的引用&lt;!-- CWG 1591 --&gt;：
+{{source|1=
+template&lt;class T&gt;
+void g1(std::vector&lt;T&gt;);
+
+template&lt;class T&gt;
+void g2(std::vector&lt;T&gt;, T x);
+
+g1({1, 2, 3});     // P = std::vector&lt;T&gt;，A = {1, 2, 3}：T 在不推导语境中
+                   // 错误：T 没有被显式指定或从另一对 P/A 推导出
+
+g2({1, 2, 3}, 10); // P1 = std::vector&lt;T&gt;，A1 = {1, 2, 3}：T 在不推导语境中
+                   // P2 = T，A2 = int：推导出 T = int
+}}
+
+{{rrev|since=c++11|1=
+@8@ 作为形参包且没有在形参列表尾部出现的形参 {{ttb|P}}：
+{{source|1=
+template&lt;class... Ts, class T&gt;
+void f1(T n, Ts... args);
+
+template&lt;class... Ts, class T&gt;
+void f2(Ts... args, T n);
+
+f1(1, 2, 3, 4); // P1 = T，A1 = 1：推导出 T = int
+                // P2 = Ts...，A2 = 2，A3 = 3，A4 = 4：推导出 Ts = [int, int, int]
+
+f2(1, 2, 3, 4); // P1 = Ts...：Ts 在不推导语境
+}}
+
+@9@ 在形参 {{ttb|P}} 中出现的模板形参列表，且它包含不在模板形参列表最尾端的包展开：
+{{source|1=
+template&lt;int...&gt;
+struct T {};
+
+template&lt;int... Ts1, int N, int... Ts2&gt;
+void good(const T&lt;N, Ts1...&gt;&amp; arg1, const T&lt;N, Ts2...&gt;&amp;);
+
+template&lt;int... Ts1, int N, int... Ts2&gt;
+void bad(const T&lt;Ts1..., N&gt;&amp; arg1, const T&lt;Ts2..., N&gt;&amp;);
+
+T&lt;1, 2&gt; t1;
+T&lt;1, -1, 0&gt; t2;
+
+good(t1, t2); // P1 = const T&lt;N, Ts1...&gt;&amp;，A1 = T&lt;1, 2&gt;：
+              // 推导出 N = 1 以及 Ts1 = [2]
+              // P2 = const T&lt;N, Ts2...&gt;&amp;，A2 = T&lt;1, -1, 0&gt;：
+              // 推导出 N = 1 以及 Ts2 = [-1, 0]
+
+bad(t1, t2);  // P1 = const T&lt;Ts1..., N&gt;&amp;，A1 = T&lt;1, 2&gt;：
+              // &lt;Ts1..., N&gt; 处于不推导语境
+              // P2 = const T&lt;Ts2..., N&gt;&amp;，A2 = T&lt;1, -1, 0&gt;：
+              // &lt;Ts2..., N&gt; 处于不推导语境
+}}
+}}
+
+@10@ 数组（不考虑到数组的引用或数组的指针）类型 {{ttb|P}} 中的第一维数组边界：
+{{source|1=
+template&lt;int i&gt;
+void f1(int a[10][i]);
+
+template&lt;int i&gt;
+void f2(int a[i][20]);    // P = int[i][20]，数组类型
+
+template&lt;int i&gt;
+void f3(int (&amp;a)[i][20]); // P = int(&amp;)[i][20]，到数组的引用
+
+void g()
+{
+    int a[10][20];
+    f1(a);     // OK：推导出 i = 20
+    f1&lt;20&gt;(a); // OK
+    f2(a);     // 错误：i 处于不推导语境
+    f2&lt;10&gt;(a); // OK
+    f3(a);     // OK：推导出 i = 10
+    f3&lt;10&gt;(a); // OK
+}
+}}
+
+在任何情况下，如果类型名的任何部分不会被推导，那么整个类型处于不推导语境。然而复合类型可以同时包含推导和不推导的类型名。例如在 {{c|A&lt;T&gt;::B&lt;T2&gt;}} 中，{{tt|T}} 因为规则 #1（嵌套类型说明符）而不会被推导，且 {{tt|T2}} 因为它是同一类型名的一部分也不会被推导，但在 {{c|void(*f)(typename A&lt;T&gt;::B, A&lt;T&gt;)}} 中，在 {{c|A&lt;T&gt;}} 中的 {{tt|T}} 会被推导时 {{c|A&lt;T&gt;::B}} 中的 {{tt|T}} 也（因为相同规则）不会被推导。
+
+====从类型推导====
+给定依赖一或多个类型模板形参 {{ttb|T}}i、模板模板形参 {{ttb|TT}}i 或非类型模板形参 {{ttb|I}}i 的模板形参 {{ttb|P}} 及其对应实参 {{ttb|A}}，如果 {{ttb|P}} 拥有下列形式之一就会进行推导：
+{{todo|尽可能列出带微示例的表格}}
+* {{tt|''cv''}}{{mark optional}} {{tt|T}}；
+* {{tt|T*}}；
+* {{tt|T&amp;}}；
+{{rrev|since=c++11|
+* {{tt|T&amp;&amp;}}；
+}}
+* {{tt|T}}{{mark optional}} {{tt|[}}{{tt|I}}{{mark optional}}{{tt|]}}；
+{{rrev multi
+|rev1=
+* {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}}；
+|since2=c++17&lt;!-- CWG2355 --&gt;|rev2=
+* {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}} {{tt|noexcept(}}{{tt|I}}{{mark optional}}{{tt|)}}；
+}}
+* {{tt|T}}{{mark optional}} {{tt|U}}{{mark optional}}{{tt|::*}}；
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;T&gt;}}；
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;I&gt;}}；
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;TU&gt;}}；
+* {{tt|TT}}{{mark optional}}{{tt|&amp;lt;&gt;}}。
+
+在以上的形式中，
+* {{tt|T}}{{mark optional}} 或 {{tt|U}}{{mark optional}} 表示递归地满足这些规则的、在 {{tt|P}} 或 {{tt|A}} 的非推导语境中的，或是与 {{tt|P}} 及 {{tt|A}} 中的同一非待决类型的类型或 {{spar|形参类型列表}}。
+* {{tt|TT}}{{mark optional}} 或 {{tt|TU}}{{mark optional}} 表示类模板或模板模板形参。
+* {{tt|I}}{{mark optional}} 表示作为 {{tt|I}}、在 {{tt|P}} 或 {{tt|A}} 中为值待决，或在 {{tt|P}} 与 {{tt|A}} 中有相同常量值的表达式。
+{{rrev|since=c++17|
+* {{tt|noexcept(}}{{tt|I}}{{mark optional}}{{tt|)}} 表示{{rlp|noexcept_spec|异常说明}}，其中可能为隐式的 {{c/core|noexcept}} 说明符的操作数满足上述对 {{tt|I}}{{mark optional}} 的规则。
+}}
+
+如果 {{ttb|P}} 具有包含模板形参列表 {{ttb|&lt;T&gt;}} 或 {{ttb|&lt;&lt;nowiki/&gt;I&gt;}} 的形式之一，那么将该模板形参列表的每个元素 {{ttb|P}}i 与其 {{ttb|A}} 的对应模板实参 {{ttb|A}}i 进行匹配。如果最后一个 {{ttb|P}}i 是包展开，那么将其模式与 {{ttb|A}} 的模板实参列表中的每个剩余实参进行比较。其他情况下不推导的尾随参数包会被推导为空形参包。
+
+如果 {{ttb|P}} 具有包含函数形参列表 {{ttb|(T)}} 的形式，那么将来自该列表的每个形参 {{ttb|P}}i 与来自 {{ttb|A}} 的函数形参列表的对应实参 {{ttb|A}}i 进行比较。如果最后一个 {{ttb|P}}i 是包展开，那么将其声明符和 {{ttb|A}} 的形参类型列表中的每个剩余的 {{ttb|A}}i 进行比较。
+
+形式可以嵌套，并可以递归地处理：
+* {{c|X&lt;int&gt;(*)(char[6])}} 是 {{tt|T*}} 的样例，其中 {{tt|T}} 为 {{c|X&lt;int&gt;(char[6])}}；
+{{rrev multi
+|rev1=
+* {{c|X&lt;int&gt;(char[6])}} 是 {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}} 的样例，其中 {{tt|T}} 为 {{c|X&lt;int&gt;}} 而 {{tt|U}} 为 {{c|char[6]}}；
+|since2=c++17|rev2=
+* {{c|X&lt;int&gt;(char[6])}} 是 {{tt|T}}{{mark optional}} {{tt|(}}{{tt|U}}{{mark optional}}{{tt|)}} {{tt|noexcept(}}{{tt|I}}{{mark optional}}{{tt|)}} 的样例，其中 {{tt|T}} 为 {{c|X&lt;int&gt;}}，{{tt|U}} 为 {{c|char[6]}}，而隐式 {{c/core|noexcept}} 说明符中的 {{tt|I}} 为 {{c|false}}；
+}}
+* {{c|X&lt;int&gt;}} 是 {{tt|TT}}{{mark optional}}{{tt|&amp;lt;T&gt;}} 的样例，其中 {{tt|TT}} 为 {{tt|X}} 而 {{tt|T}} 为 {{c/core|int}}，而
+* {{c|char[6]}} 是 {{tt|T}}{{mark optional}} {{tt|[}}{{tt|I}}{{mark optional}}{{tt|]}} 的样例，其中 {{tt|T}} 为 {{c/core|char}} 而 {{tt|I}} 为 {{c|std::size_t(6)}}。
+
+{{rrev multi|
+|until1=c++17|rev1=
+不能从非类型模板实参推导类型模板实参：
+{{source|1=
+template&lt;typename T, T i&gt;
+void f(double a[10][i]);
+
+double v[10][20];
+f(v); // P = double[10][i]，A = double[10][20]:
+      // i 能被推导为等于 20
+      // 但不能从 i 的类型推导 T
+}}
+|rev2=
+当从表达式推导对应于某个以待决类型声明的非类型模板形参 P 的实参的值时，从该值的类型推导 P 的类型中的模板形参。
+{{source|1=
+template&lt;long n&gt;
+struct A {};
+
+template&lt;class T&gt;
+struct C;
+
+template&lt;class T, T n&gt;
+struct C&lt;A&lt;n&gt;&gt; { using Q = T; };
+
+typedef long R;
+
+typedef C&lt;A&lt;2&gt;&gt;::Q R; // OK：从类型 A&lt;2&gt; 中的模板实参值推导出 T = long
+ 
+template&lt;auto X&gt;
+class bar{};
+
+template&lt;class T, T n&gt;
+void f(bar&lt;n&gt; x);
+
+f(bar&lt;3&gt;{}); // OK：从类型 bar&lt;3&gt; 中的模板实参值推导出 T = int（以及 n = 3）
+}}
+
+类型 {{tt|t[N]}} 中 {{tt|N}} 的类型是 {{lc|std::size_t}}。
+{{source|1=
+template&lt;class T, T i&gt;
+void f(int (&amp;a)[i]);
+
+int v[10];
+f(v); // OK：T 是 std::size_t
+}}
+
+函数类型的 {{c|noexcept(B)}} 说明符中 {{tt|B}} 的类型是 {{c/core|bool}}。
+{{source|1=
+template&lt;bool&gt;
+struct A {};
+
+template&lt;auto&gt;
+struct B;
+template&lt;auto X, void (*F)() noexcept(X)&gt;
+struct B&lt;F&gt; { A&lt;X&gt; ax; };
+
+void f_nothrow() noexcept;
+B&lt;f_nothrow&gt; bn; // OK：推导 X 为 true 并推导 X 的类型为 bool。
+}}
+}}
+
+如果在形参列表中使用某个非类型模板形参并推导了它对应的模板实参，那么推导出的模板实参类型（如同在它的外围模板形参列表中指定，这表示引用被保留）必须与该非类型模板形参的类型严格匹配，但 cv 限定符被丢弃，且不包括从数组边界推导的模板实参——此时允许任何包括 {{c/core|bool}} 在内（虽然它总是变为 {{c|true}}）的整数类型：
+{{source|1=
+template&lt;int i&gt;
+class A {};
+
+template&lt;short s&gt;
+void f(A&lt;s&gt;); // 非类型模板形参的类型是 short
+
+void k1()
+{
+    A&lt;1&gt; a;  // a 的非类型模板形参的类型是 int
+
+    f(a);    // P = A&lt;(short)s&gt;, A = A&lt;(int)1&gt;
+             // 错误：推导出的非类型模板形参拥有与对应模板实参不同的类型
+
+    f&lt;1&gt;(a); // OK：不推导模板实参，这会调用 f&lt;(short)1&gt;(A&lt;(short)1&gt;)
+}
+
+template&lt;int&amp;&gt;
+struct X;
+
+template&lt;int&amp; R&gt;
+void k2(X&lt;R&gt;&amp;);
+
+int n;
+void g(X&lt;n&gt; &amp;x)
+{
+    k2(x); // P = X&lt;R&gt;，A = X&lt;n&gt;
+           // struct X 的模板声明中形参类型是 int&amp;
+           // 实参类型是 int&amp;
+           // OK（因 CWG 2091）：推导出 R 以指代 n
+}
+}}
+
+类型模板形参不能从函数默认实参的类型推导：
+{{source|1=
+template&lt;typename T&gt;
+void f(T = 5, T = 7);
+
+void g()
+{
+    f(1);     // OK：调用 f&lt;int&gt;(1, 7)
+    f();      // 错误：无法推导出 T
+    f&lt;int&gt;(); // OK：调用 f&lt;int&gt;(5, 7)
+}
+}}
+
+模板模板形参的推导可以使用函数调用中所用的模板特化中所使用的类型：
+{{source|1=
+template&lt;template&lt;typename&gt; class X&gt;
+struct A {}; // A 是一个拥有模板模板形参的模板
+
+template&lt;template&lt;typename&gt; class TT&gt;
+void f(A&lt;TT&gt;) {}
+
+template&lt;class T&gt;
+struct B {};
+
+A&lt;B&gt; ab;
+f(ab); // P = A&lt;TT&gt;，A = A&lt;B&gt;：推导出 TT = B，调用 f(A&lt;B&gt;)
+}}
+
+===其他语境===
+除了函数调用和运算符表达式以外，以下场合也使用模板实参推导：
+
+{{rrev|since=c++11|
+====auto 类型推导====
+当变量{{rlp|declarations|声明}}需要从变量的初始化器推导 '''{{rlp|auto|auto 说明符}}'''的含义时会用到模板实参推导。
+
+通过以下方式获得形参 {{ttb|P}}：在变量的被声明类型 {{tt|T}}（包含 {{c/core|auto}}）中，{{c/core|auto}} 的每次出现都被替换成一个虚构的类型模板形参 {{tt|U}}，或在它的初始化是复制列表初始化时替换成 {{tt|std::initializer_list&amp;lt;U&gt;}}。实参 {{ttb|A}} 是初始化器表达式。按上文所述的规则从 {{ttb|P}} 和 {{ttb|A}} 推导出 {{tt|U}} 后，将推导出的 {{tt|U}} 替换到 {{tt|P}} 中以获取实际的变量类型：
+{{source|1=
+const auto&amp; x = 1 + 2; // P = const U&amp;，A = 1 + 2：
+                       // 与调用 f(1 + 2) 的规则相同，其中 f 是
+                       // template&lt;class U&gt; void f(const U&amp; u)
+                       // 推导出 U = int，x 的类型是 const int&amp;
+
+auto l = {13}; // P = std::initializer_list&lt;U&gt;，A = {13}：
+               // 推导出 U = int，l 的类型是 std::initializer_list&lt;int&gt;
+}}
+在直接列表初始化（但不是复制列表初始化）中，当从花括号初始化器列表推导 {{rlp|auto}} 的含义时，花括号初始化器列表必须只含一个元素，而 auto 的类型将是该元素的类型：
+{{source|1=
+auto x1 = {3}; // x1 是 std::initializer_list&lt;int&gt;
+auto x2{1, 2}; // 错误：不止单个元素
+auto x3{3};    // x3 是 int
+               //（N3922 之前，x2 和 x3 都是 std::initializer_list&lt;int&gt;）
+}}
+}}
+
+{{rrev|since=c++14|
+====返回 auto 的函数====
+当从 return 语句推导函数返回类型中的 {{rlp|auto}} 说明符的含义时，将模板实参推导用于{{rlp|functions|函数}}的声明。
+
+对于返回 auto 的函数，通过以下方式获得形参 {{ttb|P}}：在被声明函数的返回类型 {{tt|T}}（包含 {{c/core|auto}}）中，{{c/core|auto}} 的每次出现都会被替换成一个虚构的类型模板实参 {{tt|U}}。实参 {{ttb|A}} 是 {{rlp|return}} 语句的表达式，而如果 return 语句没有操作数，那么 {{ttb|A}} 是 {{c|void()}}。按上文所述的规则从 {{ttb|P}} 和 {{ttb|A}} 推导出 {{tt|U}} 后，将推导出的 {{tt|U}} 替换到 {{tt|T}} 中以获取实际的返回类型：
+{{source|1=
+auto f() { return 42; } // P = auto，A = 42：
+                        // 推导出 U = int，f 的返回类型是 int
+}}
+
+如果这种函数拥有多个返回语句，那么就会对每个返回语句进行推导。所有结果类型必须相同，并成为该函数的实际返回类型。
+
+如果这种函数没有返回语句，那么推导时 {{ttb|A}} 是 {{c|void()}}。
+
+注意：变量和函数声明中的 {{c|decltype(auto)}} 占位符的含义不使用模板实参推导。
+}}
+
+====重载决议====
+从候选模板函数生成特化时，在{{rlp|overload resolution|重载决议}}期间使用模板实参推导：
+其 {{ttb|P}} 和 {{ttb|A}} 和常规函数调用相同。
+{{source|1=
+std::string s;
+std::getline(std::cin, s);
+
+// "std::getline" 指名 4 个函数模板，
+// 其中 2 个是候选函数（形参数正确）
+
+// 第 1 个候选模板：
+// P1 = std::basic_istream&lt;CharT, Traits&gt;&amp;，A1 = std::cin
+// P2 = std::basic_string&lt;CharT, Traits, Allocator&gt;&amp;，A2 = s
+// 推导确定类型模板实参 CharT、Traits 和 Allocator
+// 特化 std::getline&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt;&gt;
+
+// 第 2 个候选模板：
+// P1 = std::basic_istream&lt;CharT, Traits&gt;&amp;&amp;，A1 = std::cin
+// P2 = std::basic_string&lt;CharT, Traits, Allocator&gt;&amp;，A2 = s
+// 推导确定类型模板形参 CharT、Traits 和 Allocator
+// 特化 std::getline&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt;&gt;
+
+// 重载决议将从左值 std::cin 绑定的引用排在高位
+// 并选取两个候选特化的第一个
+}}
+
+如果推导失败，{{mark unreviewed dr|CWG|2052}}或推导成功但产生的特化无效（例如形参既既不是类类型也不是枚举类型的重载运算符），那么重载集不会包含该特化，这类似于 {{rlp|sfinae|SFINAE}}。
+
+====重载集的地址====
+取包含函数模板在内的{{rlp|overloaded address|重载集的地址}}时，使用模板实参推导。
+
+函数模板的函数类型为 {{ttb|P}}。{{rlp|overloaded address|目标类型}}是 {{ttb|A}} 的类型：
+{{source|1=
+std::cout &lt;&lt; std::endl;
+
+// std::endl 指名函数模板
+// endl 的类型 P =
+// std::basic_ostream&lt;CharT, Traits&gt;&amp; (std::basic_ostream&lt;CharT, Traits&gt;&amp;)
+// operator&lt;&lt; 的形参 A =
+// std::basic_ostream&lt;char, std::char_traits&lt;char&gt;&gt;&amp; (*)(
+//     std::basic_ostream&lt;char, std::char_traits&lt;char&gt;&gt;&amp;
+// )
+// （其他 operator&lt;&lt; 的重载不可行）&lt;!-- 描述于{{rlp|overloaded address|重载集的地址}}，函数的类型必须准确匹配目标，不考虑隐式转换。 --&gt;
+// 推导确定类型模板实参 CharT 和 Traits
+}}
+这种情况下的推导适用一条额外的规则：当比较函数形参 {{ttb|P}}i 和 {{ttb|A}}i 时，如果有任何 {{ttb|P}}i 是到无 cv 限定模板形参的右值引用（“转发引用”）且对应的 {{ttb|A}}i 是左值引用，那么会将 {{ttb|P}}i 调整为模板形参类型（T&amp;&amp; 成为 T）。
+
+{{rrev|since=c++14|
+如果函数模板的返回类型是占位符（{{c/core|auto}} 或 {{c|decltype(auto)}}），那么返回类型处于不推导语境，并由实例化决定。
+}}
+
+====偏序====
+在{{rlp|function template|重载的函数模板的偏序}}过程中使用模板实参推导。
+
+{{todo|小示例}} &lt;!-- 不要错失来自 14.8.2.5/8 关于匹配包展开与原为包展开的 Ai ，及 14.8.2.5/10 关于函数形参列表中关于包展开的相同点的图，它将走进偏排序的文本，因为此页面太过拥挤。 --&gt;
+
+====转换函数模板====
+选择{{rlp|cast operator|用户定义转换函数}}模板实参时使用模板实参推导。
+
+{{ttb|A}} 是要求作为转换结果的类型。{{ttb|P}} 是转换函数模板的返回类型。如果 {{ttb|P}} 是引用类型，那么在本节后续部分出现的 {{ttb|P}} 表示的是被引用的类型。
+
+如果 {{ttb|A}} 不是引用类型，那么：
+@a@ 如果返回类型是数组类型，那么 {{ttb|P}} 表示的是从数组到指针转换获得的指针类型；
+@b@ 如果返回类型是函数类型，那么 {{ttb|P}} 表示的是从函数到指针转换获得的函数指针类型；
+@c@ 如果 {{ttb|P}} 有 cv 限定，那么忽略顶层 cv 限定符。
+
+如果 {{ttb|A}} 有 cv 限定，那么忽略顶层 cv 限定符。如果 {{ttb|A}} 是引用类型，那么推导使用被引用的类型。
+
+如果从 {{ttb|P}} 和 {{ttb|A}} 进行的常规推导（如上文所述）失败，那么考虑下列替代方式：
+@a@ 如果 {{ttb|A}} 是引用类型，那么 {{ttb|A}} 可以比推导出的 {{ttb|A}} 有更多的 cv 限定；
+@b@ 如果 {{ttb|A}} 是指针或成员指针类型，那么推导出的 {{ttb|A}} 可以是任意能以限定转换转换到 {{ttb|A}} 的指针：
+{{source|1=
+struct A
+{
+    template&lt;class T&gt;
+    operator T***();
+};
+A a;
+
+const int* const* const* p1 = a;
+
+// P = T***，A = const int* const* const*
+// 对 template&lt;class T&gt; void f(T*** p) 的常规函数调用推导
+// （如同以 const int* const* const* 类型的实参进行调用）失败
+// 转换函数的额外推导确定 T = int
+// （推导出的 A 是 int***，可以转换成 const int* const* const*）
+}}
+
+{{rrev|since=c++17|
+@c@ 如果 {{ttb|A}} 是函数指针类型，那么推导出的 {{ttb|A}} 可以是指向 noexcept 函数的指针，并可以通过函数指针转换转换成 {{ttb|A}}；
+@d@ 如果 {{ttb|A}} 是成员函数指针，那么推导出的 {{ttb|A}} 可以是指向 noexcept 成员函数的指针，并可以通过函数指针转换转换成 {{ttb|A}}。
+}}
+
+关于转换函数模板的其他规则，见{{rlp|member template#转换函数模板|成员模板}}。
+
+====显式实例化====
+{{rlps|function template#显式实例化}}、{{rlp|template specialization|显式特化}}以及声明符标识恰好指代某个函数模板特化的{{rlp|friend#模板友元|友元声明}}（例如 {{c|friend ostream&amp; operator&lt;&lt; &lt;&gt; (...)}}）在还有模板实参没有被显式指定且没有默认值时会用模板实参推导来确定指代哪个模板特化。
+
+{{ttb|P}} 是被认为是潜在匹配的函数模板的类型，而 {{ttb|A}} 是声明中的函数类型。如果（偏序后）没有匹配或多于一个匹配，那么函数声明为非良构：
+{{source|1=
+template&lt;class X&gt;
+void f(X a);        // 第 1 个模板 f
+template&lt;class X&gt;
+void f(X* a);       // 第 2 个模板 f
+template&lt;&gt;
+void f&lt;&gt;(int* a) {} // f 的显式特化
+
+// P1 = void(X)， A1 = void(int*)：推导出 X = int*，f&lt;int*&gt;(int*)
+// P2 = void(X*)，A2 = void(int*)：推导出 X = int， f&lt;int&gt;(int*)
+// 向偏序提交 f&lt;int*&gt;(int*) 与 f&lt;int&gt;(int*)
+// 它选择 f&lt;int&gt;(int*) 为更特殊的模板
+}}
+
+这种情况下的推导适用一条额外的规则：当比较函数形参 {{ttb|P}}i 和 {{ttb|A}}i 时，如果有任何 {{ttb|P}}i 是到无 cv 限定模板形参的右值引用（“转发引用”）且对应的 {{ttb|A}}i 是左值引用，那么将 {{ttb|P}}i 调整为模板形参类型（T&amp;&amp; 成为 T）。
+
+====解分配函数模板====
+确定[[cpp/memory/new/operator delete|解分配函数]]模板特化是否与给定的 {{tt|operator new}} 布置形式相匹配时使用模板实参推导。
+
+{{ttb|P}} 是被认为是潜在匹配的函数模板的类型，而 {{ttb|A}} 是应当与考虑中的布置 operator new 相匹配的解分配函数的函数类型。如果（在重载决议后）没有匹配或多于一个匹配，那么不调用布置解分配函数（可能发生内存泄漏）：
+{{source|1=
+struct X
+{
+    X() { throw std::runtime_error(""); }
+    
+    static void* operator new(std::size_t sz, bool b) { return ::operator new(sz); }
+    static void* operator new(std::size_t sz, double f) { return ::operator new(sz); }
+    
+    template&lt;typename T&gt;
+    static void operator delete(void* ptr, T arg)
+    {
+        ::operator delete(ptr);
+    }
+};
+
+int main()
+{
+    try
+    {
+        X* p1 = new (true) X; // 当 X() 抛出异常时，查找 operator delete
+                              // P1 = void(void*, T)，A1 = void(void*, bool)：
+                              // 推导出 T = bool
+                              // P2 = void(void*, T)，A2 = void(void*, double)：
+                              // 推导出 T = double
+                              // 重载决议挑选 operator delete&lt;bool&gt;
+    }
+    catch(const std::exception&amp;) {}
+    
+    try
+    {
+        X* p1 = new (13.2) X; // 同样的查找，挑选 operator delete&lt;double&gt;
+    }
+    catch(const std::exception&amp;) {}
+}
+}}
+
+===别名模版===
+{{rev inl|since=c++20|除了{{rlp|class template argument deduction#别名模板的推导|类模板实参推导}}之外，}}{{rlp|type alias|别名模版}}始终不会进行推导：
+{{source|1=
+template&lt;class T&gt;
+struct Alloc {};
+
+template&lt;class T&gt;
+using Vec = vector&lt;T, Alloc&lt;T&gt;&gt;;
+Vec&lt;int&gt; v;
+
+template&lt;template&lt;class, class&gt; class TT&gt;
+void g(TT&lt;int, Alloc&lt;int&gt;&gt;);
+g(v); // OK：推导出 TT = vector
+
+template&lt;template&lt;class&gt; class TT&gt;
+void f(TT&lt;int&gt;);
+f(v); // 错误：TT 无法被推导为 "Vec"，因为 Vec 是别名模版
+}}
+
+===隐式转换===
+类型推导不会考虑（除了以上列出的类型调整之外的）隐式转换：这是其后进行的{{rlp|overload resolution|重载决议}}的工作。
+
+{{mark unreviewed dr|CWG|1391}}然而，如果对所有参与模板实参推导的形参进行的推导均成功，并且所有不推导的模板实参均被显式指定或有默认值，那么将剩余的各函数形参与对应的函数实参比较。对于具有在替换任何显式指定的模板实参之前未待决的类型的每个剩余形参 {{ttb|P}}，如果对应的实参 {{ttb|A}} 无法隐式转换成 {{ttb|P}}，那么推导失败。
+
+其中没有模板形参会参与模板实参推导的具有待决类型的形参，以及由于替换显式指定的模板实参而成为非待决的形参，将在重载决议期间检查：
+{{source|1=
+template&lt;class T&gt;
+struct Z { typedef typename T::x xx; };
+
+template&lt;class T&gt;
+typename Z&lt;T&gt;::xx f(void*, T); // #1
+
+template&lt;class T&gt;
+void f(int, T);                // #2
+
+struct A {} a;
+
+int main()
+{
+    f(1, a); // 对于 #1，推导确定 T = struct A，但剩余实参 1
+             // 不能隐式转换成其形参 void*：推导失败
+             // 不要求返回类型的实例化
+             // 对于 #2，推导确定 T = struct A，且剩余实参 1
+             // 能隐式转换成其形参 int：推导成功
+             // 函数调用编译为到 #2 的调用（推导失败是 SFINAE）
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=70|std=C++98|before=未指明数组边界是否会被推导|after=指定为不推导}}
+{{dr list item|wg=cwg|dr=300|std=C++98|before=形式为 {{tt|类型(*)(T)/T(*)()/T(*)(T)}} 的函数形参会&lt;br&gt;参与推导，函数指针可以匹配这些形参，但函数引用不能|after=将这些形式改为 {{tt|类型(T)/T()/T(T)}}&lt;br&gt;使得函数引用也可以匹配它们}}
+{{dr list item|wg=cwg|dr=322|std=C++98|before=引用类型的类型形参在推导前不会调整到被引用类型|after=添加对应调整}}
+{{dr list item|wg=cwg|dr=976|std=C++98|before=在推导转换函数模板时无法将返回类型 {{tt|const T&amp;}} 与结果类型 {{tt|T}} 匹配|after=修改规则以使之匹配}}
+{{dr list item|wg=cwg|dr=1387|std=C++11|before=decltype 说明符的表达式不是不推导语境|after=它是不推导语境}}
+{{dr list item|wg=cwg|dr=1391|std=C++98|before=未指明推导所不涉及的实参隐式转换的效果|after=指定为如上文所述}}
+{{dr list item|wg=cwg|dr=1591|std=C++11|before=不能从 ''花括号初始化器列表'' 推导数组边界和元素类型|after=允许推导}}
+{{dr list item|wg=cwg|dr=2052|std=C++98|before=以非类非枚举实参推导运算符是硬错误|after=如果有其他重载则为软错误}}
+{{dr list item|wg=cwg|dr=2091|std=C++98|before=推导引用非类型形参不可用，因为类型不能匹配实参|after=避免类型不匹配}}
+{{dr list item|paper=N3922|std=C++11|before={{c/core|auto}} 的直接列表初始化推导出 {{lc|std::initializer_list}}|after=对多于一个元素为非良构，&lt;br&gt;对单个元素推导出元素类型}}
+{{dr list item|wg=cwg|dr=2355|std=C++17|before=函数类型的 {{c/core|noexcept}} 说明符中的值曾为不可推导|after=使之可推导}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

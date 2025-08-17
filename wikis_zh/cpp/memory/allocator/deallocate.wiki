@@ -1,0 +1,85 @@
+{{cpp/memory/allocator/title|deallocate}}
+{{cpp/memory/allocator/navbar}}
+{{ddcl|notes={{mark constexpr since c++20}}|
+void deallocate( T* p, std::size_t n );
+}}
+
+解分配指针 {{c|p}} 所引用的存储，指针必须是通过先前调用 {{lc|allocate()}}{{rev inl|since=c++23| 或 {{rlpt|allocate_at_least|allocate_at_least()}}}} 获得的指针。 
+
+实参 {{c|n}} 必须等于对原先生成 {{c|p}} 的 {{lc|allocate()}} 调用的首个实参{{rev inl|since=c++23|，或若 {{c|p}} 由返回 {{c|{p, count}&lt;!----&gt;}} 的调用 {{c|allocate_at_least(m)}} 获得，则在范围 {{closed range|m|count}} 中}}；否则行为未定义。
+
+调用 {{c|::operator delete(void*)}} {{rev inl|since=c++17|或 {{c|::operator delete(void*, std::align_val_t)}} }}，但何时及如何调用是未指定的。
+{{rrev|since=c++20|
+在常量表达式的求值中，此函数必须解分配在同一表达式的求值内分配的存储。
+}}
+
+===参数===
+{{par begin}}
+{{par|p|从 {{lc|allocate()}}{{rev inl|since=c++23| 或 {{rlpt|allocate_at_least|allocate_at_least()}}}} 获得的指针}}
+{{par|n|先前传递给 {{lc|allocate()}} 的对象数{{rev inl|since=c++23|，或在经由 {{rlpt|allocate_at_least|allocate_at_least()}} 请求和实际分配的对象数之间的数（可以等于任一边界）}}}}
+{{par end}}
+
+===返回值===
+（无）
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+class S
+{
+    inline static int n{1};
+    int m{};
+    void pre() const { std::cout &lt;&lt; "#" &lt;&lt; m &lt;&lt; std::string(m, ' '); }
+public:
+    S(int x) : m{n++} { pre(); std::cout &lt;&lt; "S::S(" &lt;&lt; x &lt;&lt; ");\n"; }
+    ~S() { pre(); std::cout &lt;&lt; "S::~S();\n"; }
+    void id() const { pre(); std::cout &lt;&lt; "S::id();\n"; }
+};
+
+int main()
+{
+    constexpr std::size_t n{4};
+    std::allocator&lt;S&gt; allocator;
+    try
+    {
+        S* s = allocator.allocate(n); // 可能抛出
+        for (std::size_t i{}; i != n; ++i)
+        {
+        //  allocator.construct(&amp;s[i], i+42); // C++20 中移除
+            std::construct_at(&amp;s[i], i+42);   // C++20 起
+        }
+        std::for_each_n(s, n, [](const auto&amp; e) { e.id(); });
+        std::destroy_n(s, n);
+        allocator.deallocate(s, n);
+    }
+    catch(std::bad_array_new_length const&amp; ex) { std::cout &lt;&lt; ex.what() &lt;&lt; '\n'; }
+    catch(std::bad_alloc const&amp; ex) { std::cout &lt;&lt; ex.what() &lt;&lt; '\n'; }
+}
+|output=
+#1 S::S(42);
+#2  S::S(43);
+#3   S::S(44);
+#4    S::S(45);
+#1 S::id();
+#2  S::id();
+#3   S::id();
+#4    S::id();
+#1 S::~S();
+#2  S::~S();
+#3   S::~S();
+#4    S::~S();
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc allocate}}
+{{dsc inc|cpp/memory/allocator/dsc allocate_at_least}}
+{{dsc inc|cpp/memory/allocator_traits/dsc deallocate}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

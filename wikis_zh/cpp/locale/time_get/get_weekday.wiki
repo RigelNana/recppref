@@ -1,0 +1,132 @@
+{{cpp/locale/time_get/title|get_weekday|do_get_weekday}}
+{{cpp/locale/time_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type get_weekday( iter_type beg, iter_type end, std::ios_base&amp; str,
+                       std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual iter_type do_get_weekday( iter_type beg, iter_type end, std::ios_base&amp; str,
+                                  std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl end}}
+
+@1@ 公开成员函数，调用最终派生类的受保护虚成员函数 {{tt|do_get_weekday}}。
+@2@ 从字符序列 {{range|beg|end}} 读取出相继字符，并按与为函数 {{lc|std::get_time}}、{{l2tt|cpp/locale/time_get/get}} 和 POSIX 函数 {{tt|strptime()}} 所用的此本地环境所期待的星期默认格式 {{c|"%a"}} 解析星期名（可能是缩写）。
+
+如果它找到缩写名，那么它会持续读取，直到消耗尽完整名的字符，或找到不是期待的字符，后一情况下即使首段字符是合法缩写解析也会失败。
+
+将解析出的的星期名存储到 {{lc|std::tm}} 域 {{c|t-&gt;tm_wday}}。
+
+如果在读到合法星期名前抵达尾迭代器，那么函数会设置 {{c|err}} 中的 {{lc|std::ios_base::eofbit}}。如果遇到解析错误，那么函数会设置 {{c|err}} 中的 {{lc|std::ios_base::failbit}}。
+
+===参数===
+{{par begin}}
+{{par|beg|指代要解析的序列起始的迭代器}}
+{{par|end|要解析的序列的尾后一位置迭代器}}
+{{par|str|此函数在需要时用以获得本地环境平面的流对象，例如用 {{lc|std::ctype}} 跳过空白符或用 {{lc|std::collate}} 比较字符串}}
+{{par|err|此函数所修改以指示错误的流错误标志对象}}
+{{par|t|指向 {{lc|std::tm}} 对象的指针，该对象将保有此函数调用结果}}
+{{par end}}
+
+===返回值===
+指向 {{range|beg|end}} 中辨识为合法星期名一部分的末字符后一位置的迭代器。
+
+===注解===
+此函数通常不区别大小写。
+
+如果遇到解析错误，那么此函数的大多数实现保留 {{c|*t}} 不修改。
+
+===示例===
+{{example
+|code=
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+#include &lt;string_view&gt;
+
+void try_get_wday(const std::string&amp; s)
+{
+    std::cout &lt;&lt; "在本地环境 " &lt;&lt; std::locale().name()
+              &lt;&lt; " 中从 '" &lt;&lt; s &lt;&lt; "' 解析星期名\n";
+    std::istringstream str{s.data()};
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    
+    std::tm t;
+    std::time_get&lt;char&gt; const&amp; facet = std::use_facet&lt;std::time_get&lt;char&gt;&gt;(str.getloc());
+    std::istreambuf_iterator&lt;char&gt; ret = facet.get_weekday({str}, {}, str, err, &amp;t);
+    str.setstate(err);
+    std::istreambuf_iterator&lt;char&gt; last{};
+    
+    if (str)
+    {
+        std::cout &lt;&lt; "解析成功，星期序数是 " &lt;&lt; t.tm_wday;
+        
+        if (ret != last)
+        {
+            std::cout &lt;&lt; "，剩余内容：";
+            std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+        }
+        else
+            std::cout &lt;&lt; "，输入已全部消耗";
+    }
+    else
+    {
+        std::cout &lt;&lt; "解析失败。尚未解析的字符串：";
+        std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+    }
+    
+    std::cout &lt;&lt; '\n';
+}
+
+void demo(std::string_view locale_name, std::initializer_list&lt;std::string_view&gt;&amp;&amp; data)
+{
+    try
+    {
+        std::locale::global(std::locale(locale_name.data()));
+    }
+    catch (std::runtime_error const&amp; ex)
+    {
+        std::cout &lt;&lt; "无法设置本地环境: " &lt;&lt; locale_name &lt;&lt; "\n"
+                     "异常: " &lt;&lt; ex.what() &lt;&lt; '\n';
+        return;
+    }
+
+    for (std::string_view const weekday : data)
+        try_get_wday(weekday);
+}
+
+int main()
+{
+    demo("lt_LT.utf8", {"Št", "Šeštadienis"});
+    demo("en_US.utf8", {"SATELLITE"});
+    demo("ja_JP.utf8", {"土曜日"});
+}
+|p=true
+|output=
+在本地环境 lt_LT.utf8 中从 'Št' 解析星期名
+解析成功，星期序数是 6，输入已全部消耗
+在本地环境 lt_LT.utf8 中从 'Šeštadienis' 解析星期名
+解析成功，星期序数是 6，输入已全部消耗
+在本地环境 en_US.utf8 中从 'SATELLITE' 解析星期名
+解析成功，星期序数是 6，剩余内容：ELLITE
+在本地环境 ja_JP.utf8 中从 '土曜日' 解析星期名
+解析成功，星期序数是 6，输入已全部消耗
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=248|std=C++98|before=在抵达尾迭代器时不会设置 {{tt|eofbit}}|after=在没有读取到合法星期名的情况下会设置 {{tt|eofbit}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc get_time}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

@@ -1,0 +1,150 @@
+{{cpp/title|philox_engine}}
+{{cpp/numeric/random/philox_engine/navbar}}
+{{dcl begin}}
+{{dcl header|random}}
+{{dcl|since=c++26|
+template&lt;
+    class UIntType, std::size_t w, std::size_t n, std::size_t r,
+    UIntType... consts
+&gt;
+class philox_engine;
+}}
+{{dcl end}}
+
+{{tt|std::philox_engine}} 是一个基于计数器的随机数生成引擎。
+
+===模板形参===
+{{par begin}}
+{{cpp/numeric/random/param list|UIntType}}
+{{par|w|状态序列按位计的字大小}}
+{{par|n|状态序列字数}}
+{{par|r|状态更新轮数}}
+{{par|consts|生成随机数时用到的乘数和轮次常量序列}}
+{{par end}}
+
+如果以下值中有 {{c|false}}，那么程序非良构：
+* {{c|1=sizeof...(consts) == n}}
+* {{c|1=n == 2 {{!!}} n == 4}}
+* {{c|0 &lt; r}}
+* {{c|1=0 &lt; w &amp;&amp; w &lt;= std::numeric_limits&lt;UIntType&gt;::digits}}
+
+===生成器属性===
+在以下描述中，以 {{mathjax-or|\(\scriptsize Q_i \)|Q{{su|b=i}}}} 表示序列 {{c|Q}} 的第 {{c|i}} 个元素，其中下标从零开始。
+
+{{tt|philox_engine}} 的状态的{{rlp|/#随机数引擎|大小}}是 {{mathjax-or|\(\scriptsize O(n)\)|O(n)}}，它包含以下四个部分：
+* 包含 {{c|n}} 个整数值的序列 {{c|X}}，其中每个值都在 {{range/core|{{c|0}}|{{box|{{math|{{tt|2}}{{su|p={{tt|w}}}}}}}}}} 中。
+:* 此序列用来表示一个 {{mathjax-or|\(\scriptsize n \cdot w \)|n⋅w}} 位的无符号整数计数器 {{mathjax-or|1=\(\scriptsize Z=\sum_{j=0}^{n-1} X \cdot 2^{wj} \)|2=Z=∑{{su|p=n-1|b=j=0}}X⋅2{{su|p=wj}}}}。
+* 包含 {{c|n / 2}} 个 {{tt|UIntType}} 类型键的序列 {{c|K}}。
+* 包含 {{c|n}} 个 {{tt|UIntType}} 类型生成值的缓冲区 {{c|Y}}。
+* 缓冲区 {{c|Y}} 中的索引 {{c|j}}。
+
+{{tt|philox_engine}} 的{{rlp|/#随机数引擎|变换算法}}（{{mathjax-or|\(\scriptsize TA(x_i)\)|TA(x{{su|b=i}})}}）定义如下：
+* 如果 {{c|j}} 不是 {{c|n - 1}}，那么使 {{c|j}} 增加 {{c|1}}。&lt;ref&gt;这种情况下在下次调用生成算法时会返回缓冲区中的下一个生成值。&lt;/ref&gt;
+* 如果 {{c|j}} 是 {{c|n - 1}}，那么进行一下操作&lt;ref&gt;这种情况下会刷新缓冲区，并且在下次调用生成算法时会返回新缓冲区中的第一个值。&lt;/ref&gt;
+# 生成包含 {{c|n}} 个随机值的新序列（见下文），并将这些值存储在 {{c|Y}} 中。
+# 使计数器 {{c|Z}} 增加 {{c|1}}。
+# 重置 {{c|j}} 为 {{c|0}}。
+
+{{tt|philox_engine}} 的{{rlp|/#随机数引擎|生成算法}}是 {{mathjax-or|1=\(\scriptsize GA(X_i)=Y_j \)|2=GA(X{{su|b=i}})=Y{{su|b=j}}}}。
+
+&lt;references/&gt;
+
+====生成随机值====
+随机数通过以下参数生成：
+* 状态更新轮数 {{c|r}}
+* 当前计数器序列 {{c|X}}
+* 键序列 {{c|K}}
+* 乘数序列 {{c|M}}
+* 轮次常量序列 {{c|C}}
+
+序列 {{c|M}} 和 {{c|C}} 以形参包 {{c|consts}} 中的值组成，各 {{mathjax-or|\(\scriptsize M_k \)|M{{su|b=k}}}} 和 {{mathjax-or|\(\scriptsize C_k \)|C{{su|b=k}}}} 常量以 {{tt|[}}{{mathjax-or|\(\scriptsize M_0 \)|M{{su|b=0}}}}{{tt|,}}{{nbspt}}{{mathjax-or|\(\scriptsize C_0 \)|C{{su|b=0}}}}{{tt|,}}{{nbspt}}{{mathjax-or|\(\scriptsize M_1 \)|M{{su|b=1}}}}{{tt|,}}{{nbspt}}{{mathjax-or|\(\scriptsize C_1 \)|C{{su|b=1}}}}{{tt|,... , ...,}}{{nbspt}}{{mathjax-or|\(\scriptsize M_{n/2-1} \)|M{{su|b=n/2-1}}}}{{tt|,}}{{nbspt}}{{mathjax-or|\(\scriptsize C_{n/2-1} \)|C{{su|b=n/2-1}}}}{{tt|]}} 的形式表示。
+
+随机数按以下流程生成：
+# 以 {{c|X}} 中的元素初始化输出序列 {{c|S}}。
+# 将 {{c|S}} 中的元素更新 {{c|r}} 轮。
+# 以 {{c|S}} 中的值替换缓冲区 {{c|Y}} 中的值。
+
+====更新输出序列====
+在每轮更新中，都会以 {{c|S}} 中的元素按以下顺序初始化中间序列 {{c|V}} 中的元素：
+{|class="wikitable" style="text-align: center;"
+!{{nbsp}}{{c|n}}{{nbsp}}
+!{{nbsp}}{{mathjax-or|\(\scriptsize V_{0} \)|V{{su|b=0}}}}{{nbsp}}
+!{{nbsp}}{{mathjax-or|\(\scriptsize V_{1} \)|V{{su|b=1}}}}{{nbsp}}
+!{{nbsp}}{{mathjax-or|\(\scriptsize V_{2} \)|V{{su|b=2}}}}{{nbsp}}
+!{{nbsp}}{{mathjax-or|\(\scriptsize V_{3} \)|V{{su|b=3}}}}{{nbsp}}
+|-
+|{{c|2}}
+|{{mathjax-or|\(\scriptsize S_0 \)|S{{su|b=0}}}}
+|{{mathjax-or|\(\scriptsize S_1 \)|S{{su|b=1}}}}
+|colspan=2 {{n/a}}
+|-
+|{{c|4}}
+|{{mathjax-or|\(\scriptsize S_2 \)|S{{su|b=2}}}}
+|{{mathjax-or|\(\scriptsize S_1 \)|S{{su|b=1}}}}
+|{{mathjax-or|\(\scriptsize S_0 \)|S{{su|b=0}}}}
+|{{mathjax-or|\(\scriptsize S_3 \)|S{{su|b=3}}}}
+|}
+
+给定以下操作表示：
+* {{mathjax-or|\(\scriptsize \mathsf{xor}\)|xor}}，内建的[[cpp/language/operator arithmetic#逐位逻辑运算符|逐位异或]]。
+* {{mathjax-or|\(\scriptsize \mathsf{mullo} \)|mullo}}，它计算模乘法结果的低半区的值，定义为 {{mathjax-or|1=\(\scriptsize \mathsf{mullo}(a,b,w)=(a \cdot b) \mod 2^w \)|2=mullo(a,b,w)=(a⋅b) mod 2{{su|p=w}}}}。
+* {{mathjax-or|\(\scriptsize \mathsf{mulhi} \)|mulhi}}，它计算乘法结果的高半区的值，定义为 {{mathjax-or|1=\(\scriptsize \mathsf{mulhi}(a,b,w)=\left\lfloor (a \cdot b)/2^w \right\rfloor \)|2=mulhi(a,b,w)=⌊(a⋅b)/2{{su|p=w}}⌋}}.
+
+设 {{c|q}} 为当前轮数（从零开始），对 {{range|0|n / 2}} 中的每个整数 {{c|k}}，通过以下方法更新 {{c|S}} 中的元素：
+* {{mathjax-or|1=\(\scriptsize X_{2 \cdot k}=\mathsf{mulhi}(V_{2 \cdot k},M_k,w)\ \mathsf{xor}\ ((K_k+q \cdot C_k) \mod 2^w)\ \mathsf{xor}\ V_{2 \cdot k+1} \)|2=X{{su|b=2⋅k}}=mulhi(V{{su|b=2⋅k}},M{{su|b=k}},w) xor ((K{{su|b=k}}+q⋅C{{su|b=k}}) mod 2{{su|p=w}}) xor V{{su|b=2⋅k+1}}}}
+* {{mathjax-or|1=\(\scriptsize X_{2 \cdot k+1}=\mathsf{mullo}(V_{2 \cdot k},M_k,w) \)|2=X{{su|b=2⋅k+1}}=mullo(V{{su|b=2⋅k}},M{{su|b=k}},w)}}
+
+===预定义特化===
+下列特化定义了两种常用参数集的随机数引擎：
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc hitem|类型|定义}}
+{{dsc inc|cpp/numeric/random/dsc philox4x32}}
+{{dsc inc|cpp/numeric/random/dsc philox4x64}}
+{{dsc end}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|result_type}}|{{tt|UIntType}}}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc mem sconst|nolink=true|{{dsc small|constexpr {{lc|std::size_t}}}} word_size|{{c|w}}}}
+{{dsc mem sconst|nolink=true|{{dsc small|constexpr {{lc|std::size_t}}}} word_count|{{c|n}}}}
+{{dsc mem sconst|nolink=true|{{dsc small|constexpr {{lc|std::size_t}}}} round_count|{{c|r}}}}
+{{dsc mem sconst|nolink=true|{{dsc small|constexpr {{c/core|std::array&lt;result_type, word_count / 2&gt;}}}} multipliers|[[#生成随机值|乘数序列]] {{c|M}}}}
+{{dsc mem sconst|nolink=true|{{dsc small|constexpr {{c/core|std::array&lt;result_type, word_count / 2&gt;}}}} round_consts|[[#生成随机值|轮次常量序列]] {{c|C}}}}
+{{dsc mem sconst|nolink=true|{{dsc small|constexpr {{lc|std::uint_least32_t}}}} default_seed|{{c|20111115u}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc h2|构造与播种}}
+{{dsc inc|cpp/numeric/random/engine/dsc constructor|philox_engine}}
+{{dsc inc|cpp/numeric/random/engine/dsc seed|philox_engine}}
+{{dsc inc|cpp/numeric/random/philox_engine/dsc set_counter}}
+
+{{dsc h2|生成}}
+{{dsc inc|cpp/numeric/random/engine/dsc operator()|philox_engine}}
+{{dsc inc|cpp/numeric/random/engine/dsc discard|philox_engine}}
+
+{{dsc h2|特征}}
+{{dsc inc|cpp/numeric/random/engine/dsc min|philox_engine}}
+{{dsc inc|cpp/numeric/random/engine/dsc max|philox_engine}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/random/engine/dsc operator cmp|philox_engine|since=c++26}}
+{{dsc inc|cpp/numeric/random/engine/dsc operator ltltgtgt|philox_engine|since=c++26}}
+{{dsc end}}
+
+===注解===
+{{feature test macro|__cpp_lib_philox_engine|{{tt|std::philox_engine}}|value=202406L|std=C++26}}
+
+===示例===
+{{example}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

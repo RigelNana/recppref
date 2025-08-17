@@ -1,0 +1,135 @@
+{{cpp/title|format_to_n|format_to_n_result}}
+{{cpp/utility/format/navbar}}
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 std::format_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 std::wformat_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 const std::locale&amp; loc,
+                 std::format_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class OutputIt, class... Args &gt;
+std::format_to_n_result&lt;OutputIt&gt;
+    format_to_n( OutputIt out, std::iter_difference_t&lt;OutputIt&gt; n,
+                 const std::locale&amp; loc,
+                 std::wformat_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl h|Helper types}}
+{{dcl|num=5|since=c++20|1=
+template&lt; class OutputIt &gt;
+struct format_to_n_result {
+    OutputIt out;
+    std::iter_difference_t&lt;OutputIt&gt; size;
+};
+}}
+{{dcl end}}
+
+按照格式字符串 {{c|fmt}} 格式化 {{c|args}}，并将结果写入到输出迭代器 {{c|out}}。至多写 {{c|n}} 个字符。 {{c|loc}} 若存在则用于本地环境特定的格式化。
+
+令 {{tt|CharT}} 对于重载 {{v|1,3}} 为 {{c/core|char}}，对于重载 {{tt|wchar_t}} 为 {{v|2,4}}。
+
+{{cpp/enable if|plural=true| {{tt|OutputIt}} 满足概念 {{c|std::output_iterator&lt;const CharT&amp;&gt;}} }}。若 {{tt|OutputIt}} 不实现（满足其语义要求）概念 {{c|std::output_iterator&lt;const CharT&amp;&gt;}}，或若对 {{tt|Args}} 中任何 {{tt|Ti}}，{{c|std::formatter&lt;Ti, CharT&gt;}} 不满足{{named req|Formatter}}要求，则其行为未定义。
+
+@5@ {{tt|std::format_to_n_result}} 无基类或 {{c|out}}、{{tt|size}} 及隐式声明的特殊成员函数以外的成员。
+
+===参数===
+{{par begin}}
+{{par|out|指向输出缓冲区的迭代器}}
+{{par|n|写入输出缓冲区的最大字符数}}
+{{par|fmt|{{include|cpp/utility/format/format string|const}} }}
+{{par|args...|要格式化的实参}}
+{{par|loc|用于本地环境特定的格式化的 {{lc|std::locale}} }}
+{{par end}}
+
+===返回值===
+{{tt|format_to_n_result}}，其 {{c|out}} 成员为指向输出范围末尾后一位置的迭代器，而 {{tt|size}} 成员为总（不截断）的输出大小。
+
+===异常===
+传播格式化器或迭代器操作所抛的任何异常。
+
+===注解===
+GCC-13.3 之前的 libstdc++ 实现在报告正确的 {{c|format_to_n_result::out}} 值时存在 [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=110990 bug]。
+
+===示例===
+{{example
+|Godbolt Compiler Explorer: [https://godbolt.org/z/s7a5d76ET clang (trunk) + libc++], [https://godbolt.org/z/bdvxnPb1T GCC (trunk) + libstdc++].
+|code=
+#include &lt;format&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    char buffer[64];
+
+    for (std::size_t max_chars_to_write : {std::size(buffer) - 1, 23uz, 21uz})
+    {
+        const std::format_to_n_result result =
+            std::format_to_n(
+                buffer, max_chars_to_write,
+                "Hubble's H{2} {3} {0}{4}{1} km/sec/Mpc.", // 格式化之外有 24 个字节
+                71,       // {0}, 占据 2 个字节
+                8,        // {1}, 占据 1 个字节
+                "\u2080", // {2}, 占据 3 个字节, '₀' (SUBSCRIPT ZERO)
+                "\u2245", // {3}, 占据 3 个字节, '≅' (APPROXIMATELY EQUAL TO)
+                "\u00B1"  // {4}, 占据 2 个字节, '±' (PLUS-MINUS SIGN)
+                ); // 24 + 2 + 1 + 3 + 3 + 2 == 35, 没有末尾 '\0'
+
+        *result.out = '\0'; // 向缓冲区添加终止符
+
+        const std::string_view str(buffer, result.out);
+
+        std::cout &lt;&lt; "'\\0' 前的缓冲区: " &lt;&lt; std::quoted(str) &lt;&lt; '\n'
+                  &lt;&lt; "最大写入字符数: " &lt;&lt; max_chars_to_write &lt;&lt; '\n'
+                  &lt;&lt; "result.out 偏移量: " &lt;&lt; result.out - buffer &lt;&lt; '\n'
+                  &lt;&lt; "未截断的输出大小: " &lt;&lt; result.size &lt;&lt; "\n\n";
+    }
+}
+|output=
+'\0' 前的缓冲区: "Hubble's H₀ ≅ 71±8 km/sec/Mpc."
+最大写入字符数: 63
+result.out 偏移量: 35
+未截断的输出大小: 35
+
+'\0' 前的缓冲区: "Hubble's H₀ ≅ 71±8"
+最大写入字符数: 23
+result.out 偏移量: 23
+未截断的输出大小: 35
+
+'\0' 前的缓冲区: "Hubble's H₀ ≅ 71�"
+最大写入字符数: 21
+result.out 偏移量: 21
+未截断的输出大小: 35
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2216R3|std=C++20|before=对非法格式字符串抛出 {{lc|std::format_error}} |after=非法格式字符串导致编译时错误}}
+{{dr list item|paper=P2418R2|std=C++20|before=无法格式化既非 const 可用也不可复制的对象（如生成器式对象）|after=允许格式化这些对象}}
+{{dr_p2508}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc format}}
+{{dsc inc|cpp/utility/format/dsc format_to}}
+{{dsc inc|cpp/utility/format/dsc formatted_size}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

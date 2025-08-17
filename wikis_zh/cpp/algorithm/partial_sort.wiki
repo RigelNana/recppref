@@ -1,0 +1,210 @@
+{{cpp/title|partial_sort}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class RandomIt &gt;
+void partial_sort( RandomIt first, RandomIt middle, RandomIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt &gt;
+void partial_sort( ExecutionPolicy&amp;&amp; policy,
+                   RandomIt first, RandomIt middle, RandomIt last );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class RandomIt, class Compare &gt;
+void partial_sort( RandomIt first, RandomIt middle, RandomIt last,
+                   Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt, class Compare &gt;
+void partial_sort( ExecutionPolicy&amp;&amp; policy,
+                   RandomIt first, RandomIt middle, RandomIt last,
+                   Compare comp );
+}}
+{{dcl end}}
+
+重排元素，使得范围 {{range|first|middle}} 含有范围 {{range|first|last}} 中已排序的 {{c|middle - first}} 个最小元素。
+
+不保证保持相等元素间的顺序。未指定范围 {{range|middle|last}} 中剩余元素的顺序。
+
+@1@ 按 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行{{rlp|/#要求|排序}}。
+
+@3@ 按 {{c|comp}} 进行排序。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+如果满足以下任意条件，那么行为未定义：
+* {{range|first|middle}} 或 {{range|middle|last}} 不是[[cpp/iterator#范围|有效范围]]。
+{{rev begin}}
+{{rev|until=c++11|
+* {{c|*first}} 的类型不{{named req|Swappable}}。
+}}
+{{rev|since=c++11|
+* {{tt|RandomIt}} 不{{named req|ValueSwappable}}。
+* {{c|*first}} 的类型不{{named req|MoveConstructible}}。
+* {{c|*first}} 的类型不{{named req|MoveAssignable}}。
+}}
+{{rev end}}
+
+===参数===
+{{par begin}}
+{{par range|3=要重排的}}
+{{par|middle|范围 {{range|first|middle}} 将容纳排序后元素}}
+{{par exec pol}}
+{{par cmp ord|comp|p1=RandomIt}}
+{{par hreq}}
+{{par req named|RandomIt|RandomAccessIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize M\)|M}} 为 {{c|middle - first}}，{{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|last - first}}：
+@1,2@ 应用大约 {{mathjax-or|\(\scriptsize N \cdot \log(M)\)|N·log(M)}} 次 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行比较。
+@3,4@ 应用大约 {{mathjax-or|\(\scriptsize N \cdot \log(M)\)|N·log(M)}} 次比较函数 {{c|comp}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L1915 libstdc++] 和 [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L5025 libc++] 中的实现。
+{{eq impl
+|title1=partial_sort (1)|ver1=1|1=
+template&lt;typename RandomIt&gt;
+constexpr //&lt; C++20 起
+void partial_sort(RandomIt first, RandomIt middle, RandomIt last)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::value_type VT;
+    std::partial_sort(first, middle, last, std::less&lt;VT&gt;());
+}
+|title2=partial_sort (3)|ver2=3|2=
+namespace impl
+{
+    template&lt;typename RandomIt, typename Compare&gt;
+    constexpr //&lt; C++20 起
+    void sift_down(RandomIt first, RandomIt last, const Compare&amp; comp)
+    {
+        // 筛出 “first” 位置的元素
+        const auto length = static_cast&lt;std::size_t&gt;(last - first);
+        std::size_t current = 0;
+        std::size_t next = 2;
+        while (next &lt; length)
+        {
+            if (comp(*(first + next), *(first + (next - 1))))
+                --next;
+            if (!comp(*(first + current), *(first + next)))
+                return;
+            std::iter_swap(first + current, first + next);
+            current = next;
+            next = 2 * current + 2;
+        }
+        --next;
+        if (next &lt; length &amp;&amp; comp(*(first + current), *(first + next)))
+            std::iter_swap(first + current, first + next);
+    }
+    
+    template&lt;typename RandomIt, typename Compare&gt;
+    constexpr //&lt; C++20 起
+    void heap_select(RandomIt first, RandomIt middle, RandomIt last, const Compare&amp; comp)
+    {
+        std::make_heap(first, middle, comp);
+        for (auto i = middle; i != last; ++i)
+        {
+            if (comp(*i, *first))
+            {
+                std::iter_swap(first, i);
+                sift_down(first, middle, comp);
+            }
+        }
+    }
+} // namespace impl
+
+template&lt;typename RandomIt, typename Compare&gt;
+constexpr //&lt; C++20 起
+void partial_sort(RandomIt first, RandomIt middle, RandomIt last, Compare comp)
+{
+    impl::heap_select(first, middle, last, comp);
+    std::sort_heap(first, middle, comp);
+}
+}}
+
+===注解===
+====算法====
+典型采用''堆选取''{{sep}}算法来选择最小元素，并采用''堆排序''{{sep}}算法以升序对从堆中选取的元素进行排序。
+
+使用堆来进行元素的选取（见 {{enwiki|Heap (data structure)#Applications|堆}}）。例如，当以 {{c/core|operator&lt;}} 为比较函数时，使用''最大堆''{{sep}}来选取 {{c|middle − first}} 个最小元素。
+
+选择完成后用{{enwiki|Heapsort|堆排序}}对所选取的 {{range|first|middle}} 个元素进行排序（见 {{lc|std::sort_heap}}）。
+
+====预期用途====
+{{tt|std::partial_sort}} 算法预期被用于''少量常数个数的'' {{range|first|middle}} 选取元素。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+
+void print(const auto&amp; s, int middle)
+{
+    for (int a : s)
+        std::cout &lt;&lt; a &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    if (middle &gt; 0)
+    {
+        while (middle-- &gt; 0)
+            std::cout &lt;&lt; "--";
+        std::cout &lt;&lt; '^';
+    }
+    else if (middle &lt; 0)
+    {
+        for (auto i = s.size() + middle; --i; std::cout &lt;&lt; "  ")
+        {}
+        
+        for (std::cout &lt;&lt; '^'; middle++ &lt; 0; std::cout &lt;&lt; "--")
+        {}
+    }
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    std::array&lt;int, 10&gt; s{5, 7, 4, 2, 8, 6, 1, 9, 0, 3};
+    print(s, 0);
+    std::partial_sort(s.begin(), s.begin() + 3, s.end());
+    print(s, 3);
+    std::partial_sort(s.rbegin(), s.rbegin() + 4, s.rend());
+    print(s, -4);
+    std::partial_sort(s.rbegin(), s.rbegin() + 5, s.rend(), std::greater{});
+    print(s, -5);
+}
+|p=true
+|output=
+5 7 4 2 8 6 1 9 0 3
+
+0 1 2 7 8 6 5 9 4 3
+------^
+4 5 6 7 8 9 3 2 1 0
+          ^--------
+4 3 2 1 0 5 6 7 8 9
+        ^----------
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P0896R4|std=C++98|before={{range|first|middle}} 和 {{range|middle|last}} 不需要有效|after=其中之一无效时行为未定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc nth_element}}
+{{dsc inc|cpp/algorithm/dsc partial_sort_copy}}
+{{dsc inc|cpp/algorithm/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/dsc sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

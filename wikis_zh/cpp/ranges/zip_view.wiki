@@ -1,0 +1,136 @@
+{{cpp/ranges/view title|zip}}
+{{cpp/ranges/zip_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|
+template&lt; ranges::input_range... Views &gt;
+    requires (ranges::view&lt;Views&gt; &amp;&amp; ...) &amp;&amp; (sizeof...(Views) &gt; 0)
+class zip_view
+    : public ranges::view_interface&lt;zip_view&lt;Views...&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /* 未指明 */ zip = /* 未指明 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|
+template&lt; ranges::viewable_range... Rs &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto zip( Rs&amp;&amp;... rs );
+}}
+{{dcl end}}
+
+@1@ {{tt|zip_view}} 是范围适配器，接收一或多个 {{lconcept|view}} 并产生一个 {{lconcept|view}}，其第 {{tti|i}} 个元素是所有视图的第 {{tti|i}} 个元素组成的元组式值。所产生视图的大小为所有适配视图的最小大小。
+
+@2@ {{tt|views::zip}} 是定制点对象。&lt;br&gt;
+无实参调用时 {{c|views::zip()}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|auto(views::empty&lt;std::tuple&lt;&gt;&gt;)}}。&lt;br&gt;
+否则，{{c|views::zip(rs...)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|ranges::zip_view&lt;views::all_t&lt;decltype((rs))&gt;...&gt;(rs...)}}。
+
+{{tt|zip_view}} 始终实现 {{lconcept|input_range}}，并且若所有适配的 {{lconcept|view}} 类型均实现 {{lconcept|forward_range}}、{{lconcept|bidirectional_range}}、{{lconcept|random_access_range}} 或 {{lconcept|sized_range}} 时实现对应的概念。
+
+以下情况下，{{tt|zip_view}} 实现 {{lconcept|common_range}}：
+* {{c|sizeof...(Views)}} 等于 {{c|1}}，且适配的唯一视图类型实现 {{lconcept|common_range}}，或
+* 至少一个适配的视图类型不实现 {{lconcept|bidirectional_range}}，且每个适配的视图类型均实现 {{lconcept|common_range}}，或
+* 每个适配的视图类型均实现 {{lconcept|random_access_range}} 与 {{lconcept|sized_range}}。
+
+{{cpp/ranges/cpo|views|zip}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|说明}}
+{{dsc expos mem obj|spec={{c/core|std::tuple&lt;Views...&gt;}}|views_|id=views|所有适配的视图对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|zip_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|zip_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|zip_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|zip_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=yes|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/zip_view/iterator|迭代器类型}}
+{{dsc expos mem tclass|cpp/ranges/zip_view/sentinel|当 {{tt|zip_view}} 不是 {{lconcept|common_range}} 时使用的哨位类型}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++23|1=
+template&lt; class... Views &gt;
+constexpr bool enable_borrowed_range&lt;ranges::zip_view&lt;Views...&gt;&gt; =
+    (ranges::enable_borrowed_range&lt;Views&gt; &amp;&amp; ...);
+}}
+{{ltt|cpp/ranges/borrowed_range|ranges::enable_borrowed_range}} 的这个特化使 {{ttt|zip_view}} 在每个底层视图都满足 {{lconcept|borrowed_range}} 时也满足它。
+
+===注解===
+{{feature test macro|__cpp_lib_ranges_zip|std=C++23|value=202110L|{{c/core|ranges::zip_view}},&lt;br&gt;{{c/core|ranges::zip_transform_view}},&lt;br&gt;{{c/core|ranges::adjacent_view}},&lt;br&gt;{{c/core|ranges::adjacent_transform_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+#include &lt;vector&gt;
+
+void print(auto const rem, auto const&amp; range)
+{
+    for (std::cout &lt;&lt; rem; auto const&amp; elem : range)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    auto x = std::vector{1, 2, 3, 4};
+    auto y = std::list&lt;std::string&gt;{"α", "β", "γ", "δ", "ε"};
+    auto z = std::array{'A', 'B', 'C', 'D', 'E', 'F'};
+
+    print("源视图:", "");
+    print("x: ", x);
+    print("y: ", y);
+    print("z: ", z);
+
+    print("\nzip(x,y,z):", "");
+
+    for (std::tuple&lt;int&amp;, std::string&amp;, char&amp;&gt; elem : std::views::zip(x, y, z))
+    {
+        std::cout &lt;&lt; std::get&lt;0&gt;(elem) &lt;&lt; ' '
+                  &lt;&lt; std::get&lt;1&gt;(elem) &lt;&lt; ' '
+                  &lt;&lt; std::get&lt;2&gt;(elem) &lt;&lt; '\n';
+
+        std::get&lt;char&amp;&gt;(elem) += ('a' - 'A'); // 修改 z 的元素
+    }
+
+    print("\n修改后, z: ", z);
+}
+|output=
+源视图:
+x: 1 2 3 4
+y: α β γ δ ε
+z: A B C D E F
+
+zip(x,y,z):
+1 α A
+2 β B
+3 γ C
+4 δ D
+
+修改后, z: a b c d E F
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc zip_transform_view}}
+{{dsc inc|cpp/ranges/dsc elements_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

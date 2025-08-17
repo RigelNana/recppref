@@ -1,0 +1,110 @@
+{{cpp/locale/time_get/title|get|do_get}}
+{{cpp/locale/time_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|since=c++11|1=
+public:
+iter_type get( iter_type beg, iter_type end, std::ios_base&amp; str,
+               std::ios_base::iostate&amp; err, std::tm* t,
+               const char_type* fmtbeg, const char_type* fmtend ) const;
+}}
+{{dcl|num=2|since=c++11|1=
+protected:
+virtual iter_type do_get( iter_type beg, iter_type end, std::ios_base&amp; str,
+                          std::ios_base::iostate&amp; err, std::tm *t,
+                          char format, char modifier ) const;
+}}
+{{dcl end}}
+
+@1@ 按照字符序列 {{c|[fmtbeg, fmtend)}} 中提供的格式，从输入字符序列 {{c|[beg, end)}} 分析日期和时间。期待格式遵循描述于下的格式，尽管能通过覆写 {{tt|do_get}} 定制每个格式指定符的实际处理。{{tt|get}} 函数进行下列处理：
+首先，通过执行 {{c|1=err = std::ios_base::goodbit}} 清除 {{c|err}} 中的错误位。然后进入循环，凡在任何下列条件变为真时循环终止（以此顺序检查）：
+:@a@ 已从格式字符串读取全部字符（{{c|fmtbeg {{==}} fmtend}}）
+:@b@ 有分析错误（{{c|err !{{=}} std::ios_base::goodbit}}）
+:@c@ 已从输入序列读取全部字符（{{c|beg {{==}} end}}）。若此条件终止循环，则函数于 {{c|err}} 中一同设置 {{tt|eofbit}} 和 {{tt|failbit}}。
+
+::循环体中，发生下列步骤：
+:@a@ 若格式字符串中的下个字符为 {{c|'%'}}，后随一或二个组成合法 {{lc|std::get_time}} 转换说明的字符（见下方），则将这些字符用于调用 {{c|do_get(beg, end, str, err, t, format, modifier)}}，其中 {{c|format}} 为主转换说明符字符，而 {{c|modifier}} 为可选的修饰符（若存在，则出现于 {{tt|%}} 和格式字符间）。若无修饰符，则使用值 {{c|'\0'}}。若格式字符串有歧义，或过早结束而无以确定 {{c|'%'}} 后的转换说明符，则在 {{c|err}} 中设置 {{tt|eofbit}} 并终止循环。若调用 {{tt|do_get}} 后 {{c|err}} 中未设置错误位，则函数增加 {{c|fmtbeg}} 到指向紧跟转换说明符之后，并持续循环。
+:@b@ 若下个字符为流 {{c|str}} 中提供的本地环境所指示的空白（即 {{c|std::isspace(*fmtbeg, str.getloc()) {{==}} true}}），则函数保持自增 {{c|fmtbeg}} 直至它变为等于 {{c|fmtend}} 或指向非空白字符。
+:@c@ 若格式字符串中的下个字符按照大小写无关比较，等价于输入流中的下个字符，则函数令二个序列一同前进一个字符 {{c|++fmtbeg, ++beg;}} 并持续循环。否则它设置 {{c|err}} 中的 {{tt|failbit}}。
+
+@2@ 从输入序列 {{c|[beg, end)}} 分析一个格式说明符并按照它更新 {{c|t}} 所指向的 {{lc|std::tm}} 结构体。
+
+::首先，通过执行 {{c|1=err = std::ios_base::goodbit}} 清除 {{c|err}} 中所有错误位。然后从 {{c|[beg, end)}} 读取 {{c|'%'}}、{{c|modifier}}（若非 {{c|'\0'}}）及 {{c|format}} 所组成的 {{lc|std::time_get}} 格式说明符所期待的字符。若字符不组成合法转换指定符，则设置 {{c|err}} 中的 {{tt|failbit}}。若读取一个字符后抵达输入流尾，则设置 {{c|err}} 中的 {{tt|eofbit}}。若成功分析输入字符串，则更新 {{c|*t}} 的对应域。
+
+::对于复合转换说明符，如 {{c|'%x'}} 或 {{c|'%c'}}，或使用修饰符 {{c|'E'}} 和 {{c|'O'}} 的指令，函数可能无法确定存储于 {{c|*t}} 的某些值。该情况下设置 {{c|err}} 中的 {{tt|eofbit}}，并将这些域留在未指定状态。
+
+===参数===
+{{par begin}}
+{{par|beg|指代要分析的序列起始的迭代器}}
+{{par|end|要分析的序列的尾后一位置迭代器}}
+{{par|str|此函数在需要时用以获得本地环境刻面的流对象，例如用 {{lc|std::ctype}} 跳过空白符或用 {{lc|std::collate}} 比较字符串}}
+{{par|err|此函数所修改以指示错误的流错误标志对象}}
+{{par|t|指向 {{lc|std::tm}} 对象的指针，该对象将保有此函数调用结果}}
+{{par|fmtbeg|指向指定转换格式（见下文）的 {{tt|char_type}} 字符序列首字符的指针}}
+{{par|fmtend|指定转换格式的 {{tt|char_type}} 字符序列的末字符后一位置指针}}
+{{par|format|指名转换指定符的字符}}
+{{par|modifier|可出现于 {{tt|%}} 和转换说明符间的可选修饰符}}
+{{par end}}
+&lt;br&gt;
+{{cpp/locale/time_get/time_get format}}
+
+===返回值===
+指向 {{c|[beg, end)}} 中成功分析的末字符后一位置的迭代器。
+
+===注解===
+格式字符串中非空白非 {{c|'%'}} 字符的大小写无关比较，不要求，但典型地使用 {{c|str}} 所提供的本地环境的 {{lc|std::collate}} 刻面。
+
+若遇到分析错误，则此函数的多数实现完全不接触 {{c|*t}}。
+
+这些函数是否清零 {{c|*t}} 中其所不直接设置的域由实现定义：可移植程序应在调用 {{tt|get()}} 前初始化每个域为零。
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+
+int main()
+{
+    std::istringstream ss("2026-März-12 23:45:56");
+    ss.imbue(std::locale("de_DE.utf8"));
+    
+    auto&amp; f = std::use_facet&lt;std::time_get&lt;char&gt;&gt;(ss.getloc());
+    std::tm t{};
+    std::string s = "%Y-%b-%d %H:%M:%S";
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    auto ret = f.get({ss}, {}, ss, err, &amp;t, &amp;s[0], &amp;s[0] + s.size());
+    ss.setstate(err);
+    std::istreambuf_iterator&lt;char&gt; last{};
+    
+    if (ss)
+    {
+        std::cout &lt;&lt; "成功解析为 " &lt;&lt; std::put_time(&amp;t, "%c") &lt;&lt; '\n';
+        if (ret != last)
+        {
+            std::cout &lt;&lt; "剩余内容：";
+            std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+        }
+        else
+           std::cout &lt;&lt; "输入已完全消耗。";
+    }
+    else
+    {
+        std::cout &lt;&lt; "解析失败。\n未解析的字符串：";
+        std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+    }
+    std::cout &lt;&lt; '\n';
+}
+|output=
+成功解析为 Sun Mar 12 23:45:56 2026
+输入已完全消耗。
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc get_time}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

@@ -1,0 +1,73 @@
+{{cpp/ranges/title | dangling}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header | ranges}}
+{{dcl | since = c++20 |
+struct dangling;
+}}
+{{dcl end}}
+
+{{tt|dangling}} 是占位类型兼空类类型，与模板别名 {{ltt|cpp/ranges/borrowed_iterator_t|ranges::borrowed_iterator_t}} 及 {{ltt|cpp/ranges/borrowed_iterator_t|ranges::borrowed_subrange_t}} 一同使用。
+
+某些通常返回 {{lconcept|range}} 的迭代器或子范围的[[cpp/algorithm/ranges|受约束算法]]，在接收不实现 {{lconcept|borrowed_range}} 的特定的右值 {{tt|range}} 实参时，将取而代之地返回 {{tt|dangling}} 以避免潜在返回悬垂的结果。
+
+===成员函数===
+{{member | {{small|std::ranges::dangling::}}dangling | 2=
+{{dcl begin}}
+{{dcl | num=1 |1=
+constexpr dangling() noexcept = default;
+}}
+{{dcl | num=2 |
+template&lt;class... Args&gt;
+constexpr dangling(Args&amp;&amp;...) noexcept { }
+}}
+{{dcl end}}
+
+@1@ {{tt|dangling}} 可平凡默认构造。
+@2@ {{tt|dangling}} 能从任意数量及任意非 void 类型的实参构造。构造自身无任何副作用。
+换言之，在良构的非聚合初始化中以 {{tt|dangling}} 替换类型（例如迭代器类型）后，所得的初始化亦为良构。
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;type_traits&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    auto get_array_by_value = [] { return std::array{0, 1, 0, 1}; };
+    auto dangling_iter = std::ranges::max_element(get_array_by_value());
+    static_assert(std::is_same_v&lt;std::ranges::dangling, decltype(dangling_iter)&gt;);
+//  std::cout &lt;&lt; *dangling_iter &lt;&lt; '\n'; // 编译错误：没有匹配的 'operator*'
+                                         // （操作数类型为 'std::ranges::dangling'）
+    
+    auto get_persistent_array = []() -&gt; const std::array&lt;int, 4&gt;&amp; {
+        static constexpr std::array a{0, 1, 0, 1};
+        return a;
+    };
+    auto valid_iter = std::ranges::max_element(get_persistent_array());
+    static_assert(!std::is_same_v&lt;std::ranges::dangling, decltype(valid_iter)&gt;);
+    std::cout &lt;&lt; *valid_iter &lt;&lt; ' '; // 1
+
+
+    auto get_string_view = [] { return std::string_view{"alpha"}; };
+    auto valid_iter2 = std::ranges::min_element(get_string_view());
+        // OK: std::basic_string_view 实现 borrowed_range
+    static_assert(!std::is_same_v&lt;std::ranges::dangling, decltype(valid_iter2)&gt;);
+    std::cout &lt;&lt; '\'' &lt;&lt; *valid_iter2 &lt;&lt; '\'' &lt;&lt; '\n'; // 'a'
+}
+| output=1 'a'
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/ranges/dsc borrowed_iterator_t}}
+{{dsc inc | cpp/ranges/dsc borrowed_range}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

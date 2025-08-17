@@ -1,0 +1,114 @@
+{{cpp/title|transform_inclusive_scan}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcl|num=1|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt,
+          class BinaryOp, class UnaryOp &gt;
+OutputIt transform_inclusive_scan
+    ( InputIt first, InputIt last, OutputIt d_first,
+      BinaryOp binary_op, UnaryOp unary_op );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2,
+          class BinaryOp, class UnaryOp &gt;
+ForwardIt2 transform_inclusive_scan
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      BinaryOp binary_op, UnaryOp unary_op );
+}}
+{{dcl|num=3|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt,
+          class BinaryOp, class UnaryOp, class T &gt;
+OutputIt transform_inclusive_scan
+    ( InputIt first, InputIt last, OutputIt d_first,
+      BinaryOp binary_op, UnaryOp unary_op, T init );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2,
+          class BinaryOp, class UnaryOp, class T &gt;
+ForwardIt2 transform_inclusive_scan
+    ( ExecutionPolicy&amp;&amp; policy,
+      ForwardIt1 first, ForwardIt1 last, ForwardIt2 d_first,
+      BinaryOp binary_op, UnaryOp unary_op, T init );
+}}
+{{dcl end}}
+
+@1@ 用 {{c|op}} 计算包含性前缀和。
+@@ 对于 {{range|0|std::distance(first, last)}} 中的所有整数 {{c|i}}，按顺序进行以下操作：
+# 创建一个序列，它按顺序包含依次将 {{range|first|iter}} 中的所有元素通过 {{c|unary_op}} 变换得到的值，其中 {{c|iter}} 是 {{c|first}} 的下 {{c|i}} 个迭代器。
+# 计算该序列在 {{c|binary_op}} 下的广义非交换和。
+# 将计算结果赋给 {{c|*dest}}，其中 {{c|dest}} 是 {{c|d_first}} 的下 {{c|i}} 个迭代器。
+
+@3@ 同 {{v|1}}，但创建的每个序列以 {{c|init}} 开始，然后按顺序后随 {{closed range|first|iter}} 中的所有元素。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+一个元素序列在二元运算 {{c|binary_op}} 上的''广义非交换和''{{sep}}定义如下：
+* 如果序列只有一个元素，那么和就是该元素的值。
+* 否则，依次进行以下操作：
+# 从序列中选择两个相邻元素 {{c|elem1}} 和 {{c|elem2}}。
+# 计算 {{c|binary_op(elem1, elem2)}}，并将序列中的这两个元素替换成计算结果。
+# 重复以上两步，直到组里只剩一个元素。
+
+
+如果 {{c|binary_op}} 不可结合（例如浮点加法），那么结果不确定。
+
+对于重载 {{v|1,2}}，如果 {{c|binary_op(unary_op(*first), unary_op(*first))}} 不可转换到 {{c/core|decltype(first)}} 的[[cpp/iterator#类型与可写性|值类型]]，那么程序非良构。
+
+对于重载 {{v|3,4}}，如果以下任何值不可转换到 {{tt|T}}，那么程序非良构：
+* {{c|binary_op(init, init)}}
+* {{c|binary_op(init, unary_op(*first))}}
+* {{c|binary_op(unary_op(*first), unary_op(*first))}}
+
+* 如果满足以下任意条件，那么行为未定义：
+:* 对于重载 {{v|1,2}}，{{c/core|decltype(first)}} 的值类型不{{named req|MoveConstructible}}。
+:* 对于重载 {{v|3,4}}，{{tt|T}} 不{{named req|MoveConstructible}}。
+:* {{c|unary_op}} 或 {{c|binary_op}} 会修改 {{range|first|last}} 的元素。
+:* {{c|unary_op}} 或 {{c|binary_op}} 会使 {{closed range|first|last}} 中的迭代器或子范围失效。
+
+===参数===
+{{par begin}}
+{{par range|3=要求和的}}
+{{par|d_first|目标范围起始；可以等于 {{c|first}}}}
+{{par exec pol}}
+{{par|init|初值}}
+{{par|unary_op|一元{{named req|FunctionObject|函数对象}}，将要被应用到输入范围中的每个元素。返回类型必须可接受为 {{c|binary_op}} 的输入。}}
+{{par|binary_op|二元{{named req|FunctionObject|函数对象}}，将应用于 {{c|unary_op}} 的结果、其他 {{c|binary_op}} 的结果，还有 {{c|init}}，若提供它。}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===返回值===
+指向最后被写入元素后一位置的迭代器。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+
+@1-4@ 分别应用 {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} 次 {{c|unary_op}} 和 {{c|binary_op}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===注解===
+不会对 {{c|init}} 应用 {{c|unary_op}}。
+
+与 {{lc|std::transform_exclusive_scan}} 不同，参数 {{c|init}} 在最后出现，因为它对此函数是可选的。
+
+===示例===
+{{cpp/algorithm/transform scan example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc partial_sum}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/algorithm/dsc inclusive_scan}}
+{{dsc inc|cpp/algorithm/dsc transform_exclusive_scan}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

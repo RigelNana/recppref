@@ -1,0 +1,97 @@
+{{cpp/title|to_address}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class Ptr &gt;
+constexpr auto to_address( const Ptr&amp; p ) noexcept;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T &gt;
+constexpr T* to_address( T* p ) noexcept;
+}}
+{{dcl end}}
+
+获得 {{c|p}} 所指向的地址，而不形成到被指向者的引用：
+
+@1@ [[cpp/named_req/Allocator#缀饰指针|缀饰指针]]重载：若表达式 {{c|std::pointer_traits&lt;Ptr&gt;::to_address(p)}} 为良构，则返回该表达式的结果。否则，返回 {{c|std::to_address(p.operator-&gt;())}}。
+@2@ 裸指针重载：若 {{tt|T}} 为函数类型，则程序非良构，否则返回未修改的 {{c|p}}。
+
+===参数===
+{{par begin}}
+{{par|p|缀饰或裸指针}}
+{{par end}}
+
+===返回值===
+表示与 {{c|p}} 所表示者相同地址的裸指针。
+
+===可能的实现===
+{{eq fun|1=
+template&lt;class T&gt;
+constexpr T* to_address(T* p) noexcept
+{
+    static_assert(!std::is_function_v&lt;T&gt;);
+    return p;
+}
+
+template&lt;class T&gt;
+constexpr auto to_address(const T&amp; p) noexcept
+{
+    if constexpr (requires{ std::pointer_traits&lt;T&gt;::to_address(p); })
+        return std::pointer_traits&lt;T&gt;::to_address(p);
+    else
+        return std::to_address(p.operator-&gt;());
+}
+}}
+
+===注解===
+即使在 {{c|p}} 引用的存储中无已构造的对象时，也能使用 {{tt|std::to_address}}，该情况下不能用 {{c|std::addressof(*p)}}，因为无可绑定 {{c|std::addressof}} 参数的合法对象&lt;!-- 或 fancy_pointer::operator* 的返回值 --&gt;。
+
+{{tt|std::to_address}} 的缀饰指针重载审查 {{c|std::pointer_traits&lt;Ptr&gt;}} 特化。若该特化自身的实例化非良构（往往是因为无法定义 {{tt|element_type}}），则在其立即语境之外导致硬错误并使得程序非良构。
+
+{{tt|std::to_address}} 还可以对满足 {{lc|std::contiguous_iterator}} 的迭代器使用。
+
+{{feature test macro|__cpp_lib_to_address|将指针转换为裸指针的工具 ({{tt|std::to_address}})|value=201711L|std=C++20}}
+
+===示例===
+{{example|code=
+#include &lt;memory&gt;
+
+template&lt;class A&gt;
+auto allocator_new(A&amp; a)
+{
+    auto p = a.allocate(1);
+    try
+    {
+        std::allocator_traits&lt;A&gt;::construct(a, std::to_address(p));
+    }
+    catch (...)
+    {
+        a.deallocate(p, 1);
+        throw;
+    }
+    return p;
+}
+
+template&lt;class A&gt;
+void allocator_delete(A&amp; a, typename std::allocator_traits&lt;A&gt;::pointer p)
+{
+    std::allocator_traits&lt;A&gt;::destroy(a, std::to_address(p));
+    a.deallocate(p, 1);
+}
+
+int main()
+{
+    std::allocator&lt;int&gt; a;
+    auto p = allocator_new(a);
+    allocator_delete(a, p);
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc pointer_traits}}
+{{dsc inc|cpp/memory/pointer_traits/dsc to_address}}
+{{dsc end}}
+
+{{langlinks|ar|de|en|es|fr|it|ja|pl|pt|ru}}

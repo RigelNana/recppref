@@ -1,0 +1,68 @@
+{{cpp/title|tmpfile}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+std::FILE* tmpfile();
+}}
+
+创建并打开具有自动生成的独有文件名的临时文件。
+
+该文件作为二进制文件为更新而打开（如同以 {{tt|"wb+"}} 模式通过 {{lc|std::fopen}}）。在程序的生存期内至少可以打开 {{lc|TMP_MAX}} 个文件（此极限可能与 {{lc|std::tmpnam}} 共享，并可能进一步由 {{lc|FOPEN_MAX}} 所限制）。
+
+若程序关闭了文件，例如通过执行 {{lc|std::fclose}}，则自动删除文件。
+
+若程序正常退出（通过调用 {{lc|std::exit}}、从 {{c|main}} 返回等，则亦自动删除所有通过调用 {{tt|std::tmpfile}} 打开的文件。
+
+若程序非正常退出，则是否删除这些临时文件是实现定义的。
+
+===参数===
+（无）
+
+===返回值===
+关联的文件流，或若出现错误则为空指针。
+
+===注解===
+一些实现（如旧版 Linux）上，此函数确实从文件系统上创建、打开并立即删除该文件：只要被删除文件的文件开启描述符为程序所管理，该文件就会存在，但只要它被删除，其名就不会出现于任何目录中，从而再无其他进程能打开它。一旦文件描述符被关闭，或一旦程序终止（正常或异常），该文件所占有的空间将被文件系统回收。新版 Linux（3.11 或更新，取决于文件系统）上，这种不可见临时文件的创建是单步完成的，通过 [https://man7.org/linux/man-pages/man2/open.2.html {{tt|open()}}] 系统调用中的特殊标记。
+
+一些实现（如 Windows ）上要求提升的权限，因为该函数可能在系统目录中创建临时文件。
+
+===示例===
+{{example
+|code=
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+#include &lt;filesystem&gt;
+#include &lt;iostream&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    std::cout &lt;&lt; "TMP_MAX = " &lt;&lt; TMP_MAX &lt;&lt; '\n'
+              &lt;&lt; "FOPEN_MAX = " &lt;&lt; FOPEN_MAX &lt;&lt; '\n';
+    std::FILE* tmpf = std::tmpfile();
+    std::fputs("Hello, world", tmpf);
+    std::rewind(tmpf);
+    char buf[6];
+    std::fgets(buf, sizeof buf, tmpf);
+    std::cout &lt;&lt; buf &lt;&lt; '\n';
+
+    // 显示临时文件名的 Linux 特定方法
+    std::cout &lt;&lt; fs::read_symlink(
+                     fs::path("/proc/self/fd") / std::to_string(fileno(tmpf))
+                 ) &lt;&lt; '\n';
+}
+|p=true
+|output=
+TMP_MAX = 238328
+FOPEN_MAX = 16
+Hello
+"/tmp/tmpfBlY1lI (deleted)"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc tmpnam}}
+{{dsc inc|cpp/filesystem/dsc temp_directory_path}}
+{{dsc see c|c/io/tmpfile}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

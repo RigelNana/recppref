@@ -1,0 +1,103 @@
+{{cpp/atomic/atomic/title|fetch_add}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl h|{{tt|atomic&lt;}}''整数类型''{{sep}}{{tt|&gt;}} 特化{{rev inl|since=c++20|和 {{tt|atomic&lt;}}''浮点类型''{{sep}}{{tt|&gt;}} 特化}}才有的成员}}
+{{dcl|num=1|since=c++11|1=
+T fetch_add( T arg, std::memory_order order =
+                        std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=2|since=c++11|1=
+T fetch_add( T arg, std::memory_order order =
+                        std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl h|{{tt|atomic&lt;T*&gt;}} 部分特化才有的成员}}
+{{dcl|num=3|since=c++11|1=
+T* fetch_add( std::ptrdiff_t arg, 
+              std::memory_order order =
+                  std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=4|since=c++11|1=
+T* fetch_add( std::ptrdiff_t arg, 
+              std::memory_order order =
+                  std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl end}}
+
+以值和 {{c|arg}} 的算术加法结果原子地替换当前值。运算是读-修改-写操作。按照 {{c|order}} 的值影响内存。
+
+@1,2@ 对于有符号整数类型，定义算术使用补码表示进行。没有未定义的结果。
+{{rrev|since=c++20|
+对于浮点类型，生效的[[cpp/numeric/fenv|浮点环境]]可能异于调用方线程的浮点环境。操作不必遵循对应的 {{lc|std::numeric_limits}} 特征，但鼓励这么做。如果结果不是它的类型所能表示的值，那么结果未指定，但该操作没有未定义行为。
+}}
+
+@3,4@ 结果可能是未定义的地址，但该运算无未定义行为。
+@@ 如果 {{tt|T}} 不是完整对象类型，那么程序非良构。
+
+
+{{rrev|since=c++20|
+重载 {{v|2}} 或 {{v|4}} 在参与重载决议且 {{c|std::atomic&lt;T&gt;::is_always_lock_free}} 是 {{c|false}} 时被弃用。
+}}
+
+===参数===
+{{par begin}}
+{{par|arg|算术加法的另一实参}}
+{{par|order|强制的内存定序约束}}
+{{par end}}
+
+===返回值===
+{{c|*this}} 的{{ls|cpp/atomic/memory order#修改顺序}}中，紧接此函数生效之前的值。
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+std::atomic&lt;long long&gt; data{10};
+std::array&lt;long long, 5&gt; return_values{};
+
+void do_work(int thread_num)
+{
+    long long val = data.fetch_add(1, std::memory_order_relaxed);
+    return_values[thread_num] = val;
+}
+
+int main()
+{
+    {
+        std::jthread th0{do_work, 0};
+        std::jthread th1{do_work, 1};
+        std::jthread th2{do_work, 2};
+        std::jthread th3{do_work, 3};
+        std::jthread th4{do_work, 4};
+    }
+    
+    std::cout &lt;&lt; "结果：" &lt;&lt; data &lt;&lt; '\n';
+    
+    for (long long val : return_values)
+        std::cout &lt;&lt; "看到返回值：" &lt;&lt; val &lt;&lt; std::endl;
+}
+|p=true
+|output=
+结果：15
+看到返回值：11
+看到返回值：10
+看到返回值：14
+看到返回值：12
+看到返回值：13
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P0558R1|std=c++11|before=允许进行指向（可有 cv 限定的）{{c/core|void}} 或函数的指针运算|after=使之非良构}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_fetch_add}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

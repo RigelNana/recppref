@@ -1,0 +1,110 @@
+{{cpp/thread/jthread/title|get_stop_token}}
+{{cpp/thread/jthread/navbar}}
+{{ddcl|since=c++20|
+std::stop_token get_stop_token() const noexcept;
+}}
+
+返回 {{lc|std::stop_token}}，它与 {{tt|jthread}} 对象内部保有的同一共享停止状态关联。
+
+===参数===
+（无）
+
+===返回值===
+与 {{tt|jthread}} 对象内部保有的共享停止状态关联的 {{lc|std::stop_token}} 类型的值。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string_view&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+void print(std::string_view name, const std::stop_token&amp; token)
+{
+    std::cout &lt;&lt; name &lt;&lt; ": stop_possible = " &lt;&lt; token.stop_possible();
+    std::cout &lt;&lt; ", stop_requested = " &lt;&lt; token.stop_requested() &lt;&lt; '\n';
+}
+
+void finite_sleepy(std::stop_token stoken)
+{
+    for (int i = 10; i; --i)
+    {
+        std::this_thread::sleep_for(300ms);
+        if (stoken.stop_requested())
+        {
+            std::cout &lt;&lt; "  困倦工人已被请求停止\n";
+            return;
+        }
+
+        std::cout &lt;&lt; "  困倦工人回去睡觉\n";
+    }
+}
+
+void infinite_sleepy()
+{
+    for (int i = 5; i; --i)
+    {
+        std::this_thread::sleep_for(300ms);
+        std::cout &lt;&lt; "  按要求持续运行\n";
+    }
+}
+
+
+int main()
+{
+    std::cout &lt;&lt; std::boolalpha;
+
+    // 监听停止请求的工作线程
+    std::jthread stop_worker(finite_sleepy);
+
+    // 仅在完成时停止的工作线程
+    std::jthread inf_worker(infinite_sleepy);
+
+    std::stop_token def_token;
+    std::stop_token stop_token = stop_worker.get_stop_token();
+    std::stop_token inf_token = inf_worker.get_stop_token();
+    print("def_token ", def_token);
+    print("stop_token", stop_token);
+    print("inf_token ", inf_token);
+
+    std::cout &lt;&lt; "\n请求并接合 stop_worker:\n";
+    stop_worker.request_stop();
+    stop_worker.join();
+
+    std::cout &lt;&lt; "\n请求并接合 inf_worker:\n";
+    inf_worker.request_stop();
+    inf_worker.join();
+    std::cout &lt;&lt; '\n';
+
+    print("def_token ", def_token);
+    print("stop_token", stop_token);
+    print("inf_token ", inf_token);
+}
+|p=true
+|output=
+def_token : stop_possible = false, stop_requested = false
+stop_token: stop_possible = true, stop_requested = false
+inf_token : stop_possible = true, stop_requested = false
+
+请求并接合:
+  按要求持续运行
+  困倦工人已被请求停止
+
+请求并接合:
+  按要求持续运行
+  按要求持续运行
+  按要求持续运行
+  按要求持续运行
+
+def_token : stop_possible = false, stop_requested = false
+stop_token: stop_possible = true, stop_requested = true
+inf_token : stop_possible = true, stop_requested = true
+}}
+
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru|zh}}

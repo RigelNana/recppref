@@ -1,0 +1,263 @@
+{{title|定义与 ODR （单一定义规则）}}
+{{cpp/language/basics/navbar}}
+''定义''是完全定义了声明中所引入的实体的{{rlp|declarations|声明}}。除了以下情况外的声明都是定义：
+
+* 无函数体的函数声明：
+{{source|int f(int); // 声明但不定义 f}}
+* 带有{{rlp|storage duration|存储类说明符}} {{c/core|extern}} 或者{{rlp|language linkage|语言链接}}说明符（例如 {{c/core|extern "C"}}）而无初始化器的所有声明：
+{{source|1=
+extern const int a;     // 声明但不定义 a
+extern const int b = 1; // 定义 b
+}}
+* 在类定义中的{{rev inl|since=c++17|非 inline}} {{rlp|static|静态数据成员}}的声明：
+{{source|
+struct S
+{
+    int n;               // 定义 S::n
+    static int i;        // 声明但不定义 S::i
+    inline static int x; // 定义 S::x
+};                       // 定义 S
+
+int S::i;                // 定义 S::i
+}}
+{{rrev|since=c++17|
+* {{mark deprecated}} 已经在类中用 {{rlpt|constexpr}} 说明符定义过的静态数据成员，在命名空间作用域中的声明：
+{{source|1=
+struct S
+{
+    static constexpr int x = 42; // 隐含 inline，定义 S::x
+};
+
+constexpr int S::x; // 声明 S::x，不是重复定义
+}}
+}}
+* （通过{{rlps|class#前置声明}}或通过在其他声明中使用详细类型说明符）对类名字进行的声明：
+{{source|
+struct S;             // 声明但不定义 S
+
+class Y f(class T p); // 声明但不定义 Y 和 T（以及 f 和 p）
+}}
+{{rrev|since=c++11|
+* 枚举的{{rlp|enum|笼统声明}}：
+{{source|
+enum Color : int; // 声明但不定义 Color
+}}
+}}
+* {{rlp|template parameters|模板形参}}的声明：
+{{source|
+template&lt;typename T&gt; // 声明但不定义 T
+}}
+* 并非定义的函数声明中的形参声明：
+{{source|
+int f(int x); // 声明但不定义 f 和 x
+
+int f(int x)  // 定义 f 和 x
+{
+    return x + a;
+}
+}}
+* {{rlp|typedef}} 声明：
+{{source|1=
+typedef S S2; // 声明但不定义 S2（S 可以是不完整类型）
+}}
+{{rrev|since=c++11|
+* {{rlp|type alias|别名声明}}：
+{{source|1=
+using S2 = S; // 声明但不定义 S2（S 可以是不完整类型）
+}}
+}}
+* {{rlp|using declaration|using 声明}}：
+{{source|1=
+using N::d; // 声明但不定义 d
+}}
+{{rev begin}}
+{{rev|since=c++17|
+* {{rlp|class template argument deduction#用户定义的推导指引|推导指引}}的声明（不定义任何实体）
+}}
+{{rev|since=c++11|
+* {{rlp|static_assert}} 声明（不定义任何实体）
+* {{rlp|declarations|特性声明}}（不定义任何实体）
+}}
+{{rev end}}
+* {{rlp|declarations|空声明}}（不定义任何实体）
+* {{rlp|namespace#using 指令|using 指令}}（不定义任何实体）
+{{rrev|since=c++11|
+* {{rlp|class template#类模板实例化|显式实例化声明}}（“extern 模板”）：
+{{source|1=
+extern template
+f&lt;int, char&gt;; // 声明但不定义 f&lt;int, char&gt;
+}}
+}}
+* 不是定义的{{rlp|template specialization|显式特化}}声明：
+{{source|1=
+template&lt;&gt;
+struct A&lt;int&gt;; // 声明但不定义 A&lt;int&gt;
+}}
+
+{{rlp|asm|asm 声明}}不定义任何实体，但它被归类为定义。
+
+如果必要，编译器就会隐式定义{{rlp|default constructor|默认构造函数}}、{{rlp|copy constructor|复制构造函数}}、{{rlp|move constructor|移动构造函数}}、{{rlp|copy assignment|复制赋值运算符}}、{{rlp|move assignment|移动赋值运算符}}和{{rlp|destructor|析构函数}}。
+
+如果任何对象的定义导致出现具有{{rlp|incomplete type|不完整类型}}或{{rlp|abstract class|抽象类类型}}的对象，那么程序非良构。
+
+{{anchor|ODR}}
+===单一定义规则（ODR）===
+任何变量、函数、类类型、枚举类型{{rev inl|since=c++20|、{{rlp|constraints|概念}}}}或模板，在每个翻译单元中都只允许有一个定义（其中部分可以有多个声明，但只允许有一个定义）。
+
+在整个程序（包括所有的标准或用户定义的程序库）中，被 ''ODR 使用''（见下文）的非{{rlp|inline|内联}}函数或变量只允许有且仅有一个定义。不要求编译器诊断这条规则是否被违反，但违反它的程序的行为是未定义的。
+
+对于内联函数{{rev inl|since=c++17|或内联变量}}来说，在 ''ODR 使用''{{sep}}了它的每个翻译单元中都需要一个定义。
+
+在以需要将类作为{{rlp|incomplete type|完整类型}}的方式予以使用的每个翻译单元中，要求有且仅有该类的一个定义。
+
+以下各种实体：类类型、枚举类型、内联函数{{rev inl|since=c++17|、内联变量}}、{{rlps|templates#模板化实体}}（模板和模板成员，但不含全{{rlp|template specialization|特化}}），在程序中可以出现多个定义，只要满足下列条件：
+* 每个定义在不同的翻译单元出现。
+{{rrev|since=c++20|
+* 定义不{{rlp|modules|附着到具名模块}}。
+}}
+* 每个定义都由相同的{{rlps|translation phases#记号}}序列构成（典型情况下是在同一个标头中）。
+* 除以下情况外，每个定义内进行的名字查找（在重载决议后）都找到相同实体：
+:* 具有内部链接或无链接的常量可以指代不同的对象，只要不 ODR 使用它们并在它们在各个定义中都具有相同的值。
+{{rrev|since=c++11|
+:* 不在默认实参{{rev inl|since=c++20|或默认模板实参}}中的 lambda 表达式由定义它们的记号序列被唯一标识。
+}}
+* 被重载的运算符（包括转换，分配和解分配函数），在各个定义中都代表相同的函数（除非它们代表的是在这个定义中所定义的函数）。
+* 每个定义中对应的实体具有相同的语言链接（比如包含文件时并未处于某个 {{c/core|extern "C"}} 块之中）。
+* 如果一个 {{tt|const}} 对象在其中一个定义中被{{rlp|constant initialization|常量初始化}}，那么它在每个定义中都会被常量初始化。
+* 以上规则同样适用于各个定义中使用的所有默认实参。
+* 如果该定义是带有隐式声明的构造函数的类定义，那么在每个 ODR 使用它的翻译单元中必须为基类和成员调用相同的构造函数。
+{{rrev|since=c++20|
+* 如果该定义是带有预置的{{rlp|default comparisons|三路比较}}的类定义，那么在每个 ODR 使用它的翻译单元中必须为基类和成员调用相同的比较运算符。
+}}
+* 如果该定义是模板定义，那么所有这些要求一同适用于定义点的各个名字和实例化点的各个待决名。
+
+如果满足了所有这些要求，那么程序的行为如同在整个程序中只有一个定义。否则程序非良构，不要求诊断。
+
+注意：在 C 中，类型没有全程序范围的 ODR，而同一变量的 extern 声明甚至可以在不同翻译单元中具有不同的类型，[[c/language/type#兼容类型|只要它们是兼容的类型即可]]。在 C++ 中，用于同一个类型的声明的源代码记号必须与上述相同：如果一个 .cpp 文件定义了 {{c|struct S { int x; };}} 而另一个 .cpp 文件定义了 {{c|struct S { int y; };}}，那么将它们链接到一起的程序的行为未定义。{{rlp|namespace|无名命名空间}}通常被用来解决这种问题。
+
+====指名实体====
+标识表达式表示的变量也会被该表达式''指名''。
+
+函数在下列情况被表达式或转换''指名''：
+* 函数的名字在表达式或转换中出现（这包括具名函数，被重载的运算符，{{rlp|cast operator|用户定义的转换}}，用户定义的布置形式的 [[cpp/memory/new/operator new|new 运算符]]，以及非默认的初始化等情况），如果重载决议选择它，那么它被该表达式或转换指名，除非它是无限定的纯虚成员函数或指向纯虚函数的成员指针。
+* 类的[[cpp/memory/new/operator new|分配]]或[[cpp/memory/new/operator delete|解分配]]函数，由在表达式中出现的 {{rlp|new|new 表达式}}所指名。
+* 类的解分配函数，由在表达式中出现的 {{rlp|delete|delete 表达式}}所指名。
+* 即便发生了{{rlp|copy elision|复制消除}}，仍认为选择用于复制或移动对象的构造函数被该表达式或转换指名。{{rev inl|since=c++17|在某些语境中使用纯右值不会复制或移动对象，见{{rlp|copy elision#复制消除|复制消除}}。}}
+
+如果潜在求值的表达式或转换指名函数，那么 ODR 使用它。
+{{rrev|since=c++11|&lt;!-- P0859R0 --&gt;
+指名 constexpr 函数的潜在常量求值的表达式或转换使它{{rlp|constant expression#常量求值所需要的函数与变量|需要用于常量求值}}，这会触发预置函数的定义或函数模板特化的实例化，即使该表达式不被求值。
+}}
+
+====潜在结果====
+表达式 {{c|E}} 的''潜在结果''{{sep}}集合是 {{c|E}} 中所出现的标识表达式的（可能为空的）集合。组合起来有：
+* 当 {{c|E}} 是{{rlp|expressions#初等表达式|标识表达式}}时，表达式 {{c|E}} 就是它唯一的潜在结果。
+* 当 {{c|E}} 是下标表达式（{{c|E1[E2]}}）且其中操作数之一是数组时，集合包含该操作数的潜在结果。
+* 当 {{c|E}} 是形式为 {{c|E1.E2}} 或 {{c|E1.template E2}} 的指名非静态数据成员的类成员访问表达式时，集合包含 {{tt|E1}} 的潜在结果。
+* 当 {{c|E}} 是指名静态数据成员的类成员访问表达式时，集合包含表示该成员的标识表达式。
+* 当 {{c|E}} 是形式为 {{c|E1.*E2}} 或 {{c|E1.*template E2}} 成员指针访问表达式，且它的第二个操作数是常量表达式时，集合包含 {{c|E1}} 的潜在结果。
+* 当 {{c|E}} 是带有括号的表达式（{{c|(E1)}}）时，集合包含 {{c|E1}} 的潜在结果。
+* 当 {{c|E}} 是泛左值条件表达式（{{c|E1 ? E2 : E3}} 且 {{c|E2}} 和 {{c|E3}} 都是泛左值）时，集合包含 {{c|E2}} 和 {{c|E3}} 的潜在结果的并集。
+* 当 {{tt|E}} 是逗号表达式（{{c|E1, E2}}）时，集合包含 {{c|E2}} 的潜在结果。
+* 否则，集合为空。
+
+{{anchor|ODR 使用}}
+====ODR 使用（非正式定义）====
+一个对象在它的值被读取（除非它是编译时常量）或写入，或取它的地址，或者被引用绑定时，这个对象被 ODR 使用。
+
+使用“所引用的对象在编译期未知”的引用时，这个引用被 ODR 使用。
+
+一个函数在被调用或取它的地址时，被 ODR 使用。
+
+如果一个实体被 ODR 使用，那么程序中必须有它的定义；否则通常会有链接时错误。
+
+{{source|1=
+struct S
+{
+    static const int x = 0; // 静态数据成员
+    // 如果 ODR 使用它，就需要一个类外的定义
+};
+
+const int&amp; f(const int&amp; r);
+
+int n = b ? (1, S::x) // S::x 在此处未被 ODR 使用
+          : f(S::x);  // S::x 在此处被 ODR 使用：需要一个定义
+}}
+
+====ODR 使用（正式定义）====
+{{rlps|expressions#潜在求值表达式}} {{c|ex}} 中的变量 {{c|x}} 被 ODR 使用，除非同时满足以下两条：
+在 {{tt|P}} 点出现的某个{{rlps|expressions#潜在求值表达式}} {{c|expr}} 会 ODR 使用它指名的变量 {{c|x}}，除非满足以下任意条件：
+* {{c|x}} 是在 {{tt|P}} 点{{rlps|constant expression#可用于常量表达式}}的引用。
+* {{rev inl|until=c++26|{{c|x}} 不是引用，且 }}{{c|expr}} 是表达式 {{c|E}} 的某个潜在结果，并且满足以下任意条件：
+** {{c|E}} 是{{rlps|expressions#弃值表达式}}，并且没有对它应用左值到右值转换。
+** {{c|x}} 是在 {{tt|P}} 点可用于常量表达式的{{rev inl|since=c++26|非 volatile 且}}不含可变子对象的对象，并且满足以下任意条件：
+{{rrev|since=c++26|
+::* {{c|E}} 是指名了某个引用类型的{{rlp|data members|非静态数据成员}}的{{rlp|operator member access|类成员访问表达式}}，并且它的对象表达式具有非 volatile 限定类型。
+}}
+::* {{c|E}} 具有非 volatile 限定的非类类型，并且对它应用左值到右值转换。
+{{source|1=
+struct S { static const int x = 1; }; // 对 S::x 应用左值到右值转换产生常量表达式
+
+int f()
+{ 
+    S::x;        // 弃值表达式不会 ODR 使用 S::x
+    
+    return S::x; // 实施了左值到右值转换的表达式不会 ODR 使用 S::x
+}
+}}
+
+如果 {{c|this}} 作为潜在求值表达式（包括非静态成员函数调用表达式中隐含的 {{c|this}}）出现，那么 {{c|*this}} 被 ODR 使用。
+
+{{rrev|since=c++17|
+如果{{rlp|structured binding|结构化绑定}}作为潜在求值表达式出现，那么它被 ODR 使用。&lt;!---P0588R1--&gt;
+}}
+
+以下情况下函数被 ODR 使用：
+* 如果函数被潜在求值的表达式或转换指名（见后述），那么它被 ODR 使用。
+* 如果{{rlp|virtual|虚成员函数}}不是纯虚成员函数，那么它被 ODR 使用（需要虚函数的地址来构建虚表）。
+* 类的非布置式分配或解分配函数，为这个类的构造函数的定义所 ODR 使用。
+* 类的非布置式解分配函数，为这个类的析构函数的定义所 ODR 使用，或由虚析构函数的定义点所进行的查找所选择时被 ODR 使用。
+* 作为另一个类 {{tt|U}} 的成员或基类的类 {{tt|T}} 的赋值运算符，由 {{tt|U}} 的隐式定义的复制赋值或移动赋值函数所 ODR 使用。
+* 类的构造函数（包括默认构造函数），由选择了它的{{rlp|initialization|初始化}}所 ODR 使用。
+* 类的析构函数，当它被{{rlp|destructor#潜在调用的析构函数|潜在调用}}时即被 ODR 使用。
+
+{{todo|列出所有 ODR 使用产生差异的情形}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=261|std=C++98|before=多态类的解分配函数即使在程序中没有相关的 new&lt;br&gt;或 delete 表达式的时候也有可能会被 ODR 使用|after=补充 ODR 使用的场景，&lt;br&gt;覆盖构造函数和析构函数}}
+{{dr list item|wg=cwg|dr=678|std=C++98|before=一个实体可以有多个语言链接不同的定义|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=1472|std=C++98|before=满足在常量表达式中出现的条件的引用变量即使在立即&lt;br&gt;被应用左值到右值转换的情况下也会被 ODR 使用|after=此时它们不会被 ODR 使用}}
+{{dr list item|wg=cwg|dr=1614|std=C++98|before=取纯虚函数地址会 ODR 使用它|after=不 ODR 使用该函数}}
+{{dr list item|wg=cwg|dr=1741|std=C++98|before=潜在求值表达式中被立即从左值转换到右值的常量对象会被 ODR 使用|after=它们不会被 ODR 使用}}
+{{dr list item|wg=cwg|dr=1926|std=C++98|before=数组下标表达式不传播潜在结果|after=它们会传播}}
+{{dr list item|wg=cwg|dr=2242|std=C++98|before=不明确 {{tt|const}} 对象只在它一部分的定义中&lt;br&gt;以常量被初始化时是否违反了 ODR|after=不违反 ODR；此时该对象&lt;br&gt;会以常量被初始化}}
+{{dr list item|wg=cwg|dr=2300|std=C++11|before=不同编译单元中 lambda 表达式的闭包类型永不相同|after=在单一定义规则下可以相同}}
+{{dr list item|wg=cwg|dr=2353|std=C++98|before=静态数据成员不是访问它的成员访问表达式的潜在结果|after=它是}}
+{{dr list item|wg=cwg|dr=2433|std=C++14|before=程序中变量模板不能有多个定义|after=可以有}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=6.3|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.3|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.2|title=One definition rule|id=basic.def.odr}}
+{{ref std end}}
+
+{{langlinks|de|en|es|ja|ru}}

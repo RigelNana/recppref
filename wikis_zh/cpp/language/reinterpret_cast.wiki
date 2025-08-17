@@ -1,0 +1,221 @@
+{{title|reinterpret_cast 转换}}
+{{cpp/language/expressions/navbar}}
+
+通过重新解释底层位模式在类型间转换。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|reinterpret_cast&lt;}} {{spar|目标类型}} {{ttb|&gt;(}} {{spar|表达式}} {{ttb|)}}}}
+{{sdsc end}}
+
+返回{{spar sep|目标类型}}类型的值。
+
+===解释===
+与 {{c/core|static_cast}} 不同，但与 {{c/core|const_cast}} 类似，{{c/core|reinterpret_cast}} 表达式不会编译成任何 CPU 指令（除非在整数和指针间转换，或在指针表示依赖它的类型的不明架构上）。它纯粹是编译时指令，指示编译器将{{spar sep|表达式}}视为如同具有{{spar sep|目标类型}}类型一样处理。
+
+只有下列转换在不{{rlps|const_cast#移除常量性}}（或易变性）的场合才能用 {{c/core|reinterpret_cast}} 执行。
+
+@1@ 整数、枚举、指针或成员指针类型的表达式可以转换到它自身的类型。产生的值与{{spar sep|表达式}}的相同。
+@2@ 指针能转换到大小足以保有它的类型的所有值的任何整数类型（例如转换到 {{lc|std::uintptr_t}}）。
+@3@ 任何整数类型或枚举类型的值都可以转换到指针类型。指针转换到有足够大小的整数再转换回同一指针类型后保证拥有它原来的值，除此以外的情况结果指针无法安全地解引用（不保证相反方向的往返转换；相同的指针可以拥有多种整数表示）。不保证空指针常量 {{lc|NULL}} 或整数零生成目标类型的空指针值；此时应该用 {{rlpt|static_cast}} 或{{rlp|implicit conversion|隐式转换}}。
+
+{{rrev|since=c++11|
+@4@ 任何 {{lc|std::nullptr_t}} 类型的值，包含 {{c|nullptr}}，都可以转换到任何整数类型，如同它是 {{c|(void*)0}} 一样。但没有值能转换到 {{lc|std::nullptr_t}}，甚至 {{c|nullptr}} 也不行：此时应该用 {{c/core|static_cast}}。
+}}
+@5@ 任何对象指针类型 {{tt|T1*}} 都可以转换到指向对象指针类型 {{tt|''cv'' T2*}}。这严格等价于 {{box|{{c/core|static_cast&lt;}}''cv''{{c/core| T2*&gt;(static_cast&lt;}}''cv''{{c/core| void*&gt;(}}{{spar|表达式}}{{tt|))}}}}（这意味着，如果 {{tt|T2}} 的对齐要求不比 {{tt|T1}} 的更严格，那么指针的值不会改变，且将结果指针转换回原类型将生成它原来的值）。任何情况下，只有在解引用后的值具有[[#类型可访问性|类型可访问性]]时，结果指针才可以安全地解引用。{{mark unreviewed dr|cwg}}&lt;!-- cwg1412 --&gt;
+@6@ {{tt|T1}} 类型的{{rev inl|until=c++11|{{rlp|value category#左值|左值}}}}{{rev inl|since=c++11|{{rlp|value category#泛左值|泛左值}}}}表达式可转换成到另一个类型 {{tt|T2}} 的引用。结果与 {{c|*reinterpret_cast&lt;T2*&gt;(p)}} 的结果相同，其中 {{c|p}} 是类型为“指向 {{tt|T1}} 的指针”的指向{{spar sep|表达式}}所代表的对象或函数的指针。不{{rev inl|since=c++17|实质化或}}创建临时量，不进行复制，不调用构造函数或转换函数。结果引用只有在具有[[#类型可访问性|类型可访问性]]时才可以安全访问。
+@7@ 任何函数指针都可以转换成指向不同函数类型的指针。转换后的结果未指定，但将这种指针转换回指向原函数类型的指针将生成指向原函数的指针值。只有在转换后的函数类型与原本的函数类型具有[[#调用兼容性|调用兼容性]]时才可以安全调用。
+@8@ 一些实现上（特别是在任何 POSIX 兼容的系统上，即基于 [https://pubs.opengroup.org/onlinepubs/9699919799/functions/dlsym.html {{tt|dlsym}}] 的要求），函数指针可以转换成 {{c/core|void*}} 或任何其他对象指针，反之亦然。如果实现支持双向的转换，那么转换回原类型将生成原值，否则结果指针不能安全地解引用或调用。
+@9@ 任何指针类型的空指针值都可以转换到任何其他指针类型，并产生该类型的空指针值。注意不能用 {{c/core|reinterpret_cast}} 将空指针常量 {{c|nullptr}} 或任何其他 {{lc|std::nullptr_t}} 类型的值转换成指针：此时应该使用隐式转换或 {{c/core|static_cast}}。
+@10@ 成员函数指针可以转换成指向不同类型的不同成员函数的指针。转换回原类型将生成原值，否则结果指针不能安全使用。
+@11@ 指向某类 {{tt|T1}} 的成员对象的指针可以转换成指向另一个类 {{tt|T2}} 的另一个成员对象的指针。如果 {{tt|T2}} 的对齐不比 {{tt|T1}} 更严格，那么转换回原类型 {{tt|T1}} 将生成原值，否则不能安全地使用结果指针。
+
+{{cpp/language/cast return}}
+
+===类型别名化===
+====类型可访问性====
+如果类型 {{tt|T_ref}} 与以下类型之一{{rlp|implicit conversion#相似类型|相似}}，那么{{rlps|type#动态类型}}是 {{tt|T_obj}} 的对象对 {{tt|T_ref}} 类型{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}具有''类型可访问性''（即可以通过该值访问对象）。
+* {{c/core|char}}、{{c/core|unsigned char}}{{rev inl|since=c++17| 或 {{lc|std::byte}}}}：这容许将任何对象的{{rlp|object#对象|对象表示}}作为字节数组加以检验。
+* {{tt|T_obj}}
+* {{tt|T_obj}} 对应的有符号或无符号类型
+
+如果程序试图通过不具有类型可访问性的{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}读取或修改某个对象存储的值，那么行为未定义。
+
+此规则允许进行基于类型的别名分析，即编译器假设通过某类型的泛左值读取的值，不会被通过不同类型的泛左值的写入所修改（依据上述例外情况）。
+
+注意，许多 C++ 编译器作为非标准语言扩展放松此规则，以允许通过{{rlp|union|联合体}}的不活跃成员的进行类型错误的访问（这种访问在 C 中有良好定义）。
+
+====调用兼容性====
+如果满足以下任意条件，那么类型 {{tt|T_call}} 与函数类型 {{tt|T_func}} 具有''调用兼容性''：
+* {{tt|T_call}} 和 {{tt|T_func}} 是相同类型。
+{{rrev|since=c++17|
+* {{tt|T_func*}} 可以通过{{rlps|implicit conversion#函数指针转换}}转换到 {{tt|T_call*}}。
+}}
+
+如果函数通过某个表达式调用，并且该表达式的{{rlps|function#函数类型}}与函数定义的类型不具有调用兼容性，那么行为未定义。
+
+===注解===
+假设符合对齐要求，那么 {{c/core|reinterpret_cast}} 在处理{{rlp|static_cast#指针可以互相转换|''指针可以互相转换''}}{{sep}}对象的少数受限情况外，不会更改{{rlp|pointer#指针|指针的值}}：
+{{source|1=
+struct S1 { int a; } s1;
+struct S2 { int a; private: int b; } s2; // 非标准布局
+union U { int a; double b; } u = {0};
+int arr[2];
+
+int* p1 = reinterpret_cast&lt;int*&gt;(&amp;s1); // p1 的值是“指向 s1.a 的指针”
+                                       // 因为 s1.a 与 s1 的指针可以互相转换
+
+int* p2 = reinterpret_cast&lt;int*&gt;(&amp;s2); // reinterpret_cast 不会更改 p2 的值，
+                                       // 它是“指向 s2 的指针” 
+
+int* p3 = reinterpret_cast&lt;int*&gt;(&amp;u);  // p3 的值是“指向 u.a 的指针”：
+                                       // u.a 与 u 的指针可以互相转换
+
+double* p4 = reinterpret_cast&lt;double*&gt;(p3); // p4 的指针是“指向 u.b 的指针”：
+                                            // u.a 与 u.b 的指针可以互相转换，
+                                            // 因为它们都和 u 指针可以互相转换
+
+int* p5 = reinterpret_cast&lt;int*&gt;(&amp;arr); // reinterpret_cast 不会更改 p5 的值，
+                                        // 它是“指向 arr 的指针”
+}}
+
+在实际上不代表适当类型的对象的泛左值（例如通过 {{c/core|reinterpret_cast}} 所获得）上进行代表非静态数据成员或非静态成员函数的成员访问将导致未定义行为：
+
+{{source|1=
+struct S { int x; };
+struct T { int x; int f(); };
+struct S1 : S {};    // 标准布局
+struct ST : S, T {}; // 非标准布局
+ 
+S s = {};
+auto p = reinterpret_cast&lt;T*&gt;(&amp;s); // p 的值是“指向 s 的指针”
+auto i = p-&gt;x; // 类成员访问表达式是未定义行为：s 不是 T 对象
+p-&gt;x = 1; // 未定义行为
+p-&gt;f();   // 未定义行为
+ 
+S1 s1 = {};
+auto p1 = reinterpret_cast&lt;S*&gt;(&amp;s1); // p1 的值是“指向 S 的 s1 子对象的指针”
+auto i = p1-&gt;x; // OK
+p1-&gt;x = 1;      // OK
+ 
+ST st = {};
+auto p2 = reinterpret_cast&lt;S*&gt;(&amp;st); // p2 的值是“指向 st 的指针”
+auto i = p2-&gt;x; // 未定义行为
+p2-&gt;x = 1;      // 未定义行为
+}}
+
+许多编译器在这种情况下发布“严格别名化”警告，即使在技术上这种构造所违背的并不是称为“严格别名化规则”段落的规则。
+
+严格别名化及其相关规则的目的，是启用基于类型的别名分析，如果程序能合法地创建一种情形，使得两个指向无关类型的指针（例如 {{c/core|int*}} 和 {{c/core|float*}}）能同时存在并可以一起用来加载或存储同一内存（见[https://web.archive.org/web/20201128194944/http://www.open-std.org/pipermail/ub/2016-February/000565.html 此 SG12 reflector 上的邮件]），那么别名分析会普遍无效。因此任何看起来能够创建这种情形的技巧都必然导致未定义行为。
+
+当需要将对象的字节解释为不同类型的值时，可以使用 {{lc|std::memcpy}} {{rev inl|since=c++20|或 {{ltt std|cpp/numeric/bit_cast}}}}：
+
+{{source|1=
+double d = 0.1;
+std::int64_t n;
+static_assert(sizeof n == sizeof d);
+// n = *reinterpret_cast&lt;std::int64_t*&gt;(&amp;d); // 未定义行为
+std::memcpy(&amp;n, &amp;d, sizeof d);               // OK
+n = std::bit_cast&lt;std::int64_t&gt;(d);          // 同样 OK
+}}
+
+{{rrev|since=c++11|
+如果实现提供了 {{lc|std::intptr_t}} 和/或 {{lc|std::uintptr_t}}，那么从指向对象类型或 ''cv'' {{c/core|void}} 的指针到这些类型的转换始终有良好的定义。然而对于函数指针并没有这种保证。
+}}
+
+在 C 中，聚合复制和赋值将聚合体对象作为整体访问。但 C++ 中始终通过成员函数调用进行这种操作，这会访问单独的子对象而非整个对象（或在联合体的情况下，复制对象表示，即经由 {{c/core|unsigned char}}）。这些条例最终经由 {{cwg|2051}} 移除。
+
+===关键词===
+{{ltt|cpp/keyword/reinterpret_cast}}
+
+===示例===
+{{example
+|演示 {{c/core|reinterpret_cast}} 的一些用法：
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+int f() { return 42; }
+
+int main()
+{
+    int i = 7;
+    
+    // 指针到整数并转回
+    std::uintptr_t v1 = reinterpret_cast&lt;std::uintptr_t&gt;(&amp;i); // 不能误用 static_cast
+    std::cout &lt;&lt; "&amp;i 的值是 " &lt;&lt; std::showbase &lt;&lt; std::hex &lt;&lt; v1 &lt;&lt; '\n';
+    int* p1 = reinterpret_cast&lt;int*&gt;(v1);
+    assert(p1 == &amp;i);
+    
+    // 到另一函数指针并转回
+    void(*fp1)() = reinterpret_cast&lt;void(*)()&gt;(f);
+    // fp1(); 未定义行为
+    int(*fp2)() = reinterpret_cast&lt;int(*)()&gt;(fp1);
+    std::cout &lt;&lt; std::dec &lt;&lt; fp2() &lt;&lt; '\n'; // 安全
+    
+    // 通过指针的类型别名化
+    char* p2 = reinterpret_cast&lt;char*&gt;(&amp;i);
+    std::cout &lt;&lt; (p2[0] == '\x7' ? "本系统是小端的\n"
+                                 : "本系统是大端的\n");
+    
+    // 通过引用的类型别名化
+    reinterpret_cast&lt;unsigned int&amp;&gt;(i) = 42;
+    std::cout &lt;&lt; i &lt;&lt; '\n';
+
+    [[maybe_unused]] const int &amp;const_iref = i;
+    // int &amp;iref = reinterpret_cast&lt;int&amp;&gt;(const_iref); // 编译错误——不能去除 const
+    // 必须用 const_cast 代替：int &amp;iref = const_cast&lt;int&amp;&gt;(const_iref);
+}
+|p=true
+|output=
+&amp;i 的值是 0x7fff352c3580
+42
+本系统是小端的
+42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=195|std=C++98|before=不允许函数指针和对象指针间的转换|after=改为条件性支持}}
+{{dr list item|wg=cwg|dr=658|std=C++98|before=未指明（除转换回自身原本类型以外）指针间转换的结果|after=指明被指向类型满足对齐要求时的转换结果}}
+{{dr list item|wg=cwg|dr=799|std=C++98|before=不明确 {{c/core|reinterpret_cast}} 能进行哪种恒等转换|after=使之明确}}
+{{dr list item|wg=cwg|dr=1268|std=C++11|before={{c/core|reinterpret_cast}} 只能将左值转换到引用类型|after=亡值也可以}}
+{{dr list item|wg=cwg|dr=2780|std=C++98|before={{c/core|reinterpret_cast}} 不能将函数左值转换到其他引用类型|after=可以转换}}
+{{dr list item|wg=cwg|dr=2939|std=C++17|before={{c/core|reinterpret_cast}} 可将纯右值转换为右值引用类型|after=禁止}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.6.1.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.9|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.10|title=Reinterpret cast|id=expr.reinterpret.cast}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc const_cast}}
+{{dsc inc|cpp/language/dsc static_cast}}
+{{dsc inc|cpp/language/dsc dynamic_cast}}
+{{dsc inc|cpp/language/dsc explicit_cast}}
+{{dsc inc|cpp/language/dsc implicit_cast}}
+{{dsc inc|cpp/numeric/dsc bit_cast}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

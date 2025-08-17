@@ -1,0 +1,149 @@
+{{cpp/ranges/view title|slide}}
+{{cpp/ranges/slide_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::forward_range V &gt;
+    requires ranges::view&lt;V&gt;
+class slide_view
+    : public ranges::view_interface&lt;slide_view&lt;V&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /* 未指明 */ slide = /* 未指明 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R &gt;
+constexpr ranges::view auto slide( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl|since=c++23|1=
+template&lt; class DifferenceType &gt;
+constexpr /* 范围适配器对象 */ slide( DifferenceType&amp;&amp; n );
+}}
+{{dcl h|辅助概念}}
+{{dcla|anchor=slide-caches-nothing|num=3|notes={{mark expos}}|1=
+template&lt; class V &gt;
+concept /*slide-caches-nothing*/ =
+    ranges::random_access_range&lt;V&gt; &amp;&amp; ranges::sized_range&lt;V&gt;;
+}}
+{{dcla|anchor=slide-caches-last|num=4|notes={{mark expos}}|1=
+template&lt; class V &gt;
+concept /*slide-caches-last*/ =
+    !/*slide-caches-nothing*/&lt;V&gt; &amp;&amp;
+    ranges::bidirectional_range&lt;V&gt; &amp;&amp; ranges::common_range&lt;V&gt;;
+}}
+{{dcla|anchor=slide-caches-first|num=5|notes={{mark expos}}|1=
+template&lt; class V &gt;
+concept /*slide-caches-first*/ =
+    !/*slide-caches-nothing*/&lt;V&gt; &amp;&amp; !/*slide-caches-last*/&lt;V&gt;;
+}}
+{{dcl end}}
+
+@1@ {{tt|slide_view}} 为接受一个 {{lconcept|view}} 与数值 {{c|n}} 并产生新视图的范围适配器。其生成的视图的 第 {{tt|''m''}} 个元素（“窗口”）为原视图中 {{closed_range/core|{{tti|m}}|{{tti|m + n - 1}}}} 元素的视图。
+
+@@ 令 {{c|s}} 为原视图的大小，其生成的视图大小为：
+* 如果 {{c|1=s &gt;= n}}，则为 {{c|s - n + 1}}。
+* 否则为 {{c|0}}，而生成的视图结果为空。
+
+@2@ 名字 {{c|views::slide}} 代表一个{{named req|RangeAdaptorObject}}。给定子表达式 {{c|e}} 与 {{c|n}}，{{c|views::slide(e, n)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|slide_view(e, n)}}。
+&lt;!-- @3-5@ --&gt;
+
+如果 {{c|n}} 不大于 {{c|0}}，其行为未定义。
+
+{{tt|slide_view}} 始终实现 {{lconcept|forward_range}}，并且如果被适配的 {{lconcept|view}} 类型实现 {{lconcept|bidirectional_range}}、{{lconcept|random_access_range}} 或 {{lconcept|sized_range}} 则它也实现对应的概念。 
+&lt;!-- {{tt|slide_view}} models {{lconcept|common_range}} if --&gt;
+&lt;!-- {{cpp/ranges/cpo|views|slide}} --&gt;
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|说明}}
+{{dsc expos mem obj|base_|id=base|spec={{tt|V}}|底层视图}}
+{{dsc expos mem obj|n_|id=n|spec={{c/core|ranges::range_difference_t&lt;V&gt;}}|“窗口”大小}}
+{{dsc expos mem obj|cached_begin_|id=cached_begin|maybe=(仅当 {{tt|V}} 实现 {{lsi|#slide-caches-first}} 时提供)|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}|缓存调用 {{rlpf|slide_view/begin|begin}} 的结果的对象}}
+{{dsc expos mem obj|cached_end_|id=cached_end|maybe=(仅当 {{tt|V}} 实现 {{lsi|#slide-caches-last}} 时提供)|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}|缓存调用 {{rlpf|slide_view/end|end}} 的结果的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|slide_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc reserve_hint|slide_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/slide_view/iterator|notes={{mark c++23}}|迭代器类型}}
+{{dsc expos mem tclass|cpp/ranges/slide_view/sentinel|notes={{mark c++23}}|仅当 {{tt|slide_view}} 不为 {{lconcept|common_range}} 时使用的哨位类型}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++23|1=
+template&lt; class V &gt;
+constexpr bool ranges::enable_borrowed_range&lt;slide_view&lt;V&gt;&gt; =
+    ranges::enable_borrowed_range&lt;V&gt;;
+}}
+{{lc|ranges::enable_borrowed_range}} 的特化使得底层视图满足 {{lconcept|borrowed_range}} 时，{{tt|slide_view}} 同样满足它。
+
+===注解===
+{{cpp/ranges/adjacent vs slide}}
+
+{{feature test macro|__cpp_lib_ranges_slide|std=C++23|value=202202L|{{tt|std::ranges::slide_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+auto print_subrange = [](std::ranges::viewable_range auto&amp;&amp; r)
+{
+    std::cout &lt;&lt; '[';
+    for (char space[]{0,0}; auto elem : r)
+        std::cout &lt;&lt; space &lt;&lt; elem, *space = ' ';
+    std::cout &lt;&lt; "] ";
+};
+
+int main()
+{
+    const auto v = {1, 2, 3, 4, 5, 6};
+    
+    std::cout &lt;&lt; "所有宽度 W 的滑窗:\n";
+    for (const unsigned width : std::views::iota(1U, 1U + v.size()))
+    {
+        auto const windows = v {{!}} std::views::slide(width);
+        std::cout &lt;&lt; "W = " &lt;&lt; width &lt;&lt; ": ";
+        std::ranges::for_each(windows, print_subrange);
+        std::cout &lt;&lt; '\n';
+    }
+}
+|output=
+所有宽度 W 的滑窗:
+W = 1: [1] [2] [3] [4] [5] [6] 
+W = 2: [1 2] [2 3] [3 4] [4 5] [5 6] 
+W = 3: [1 2 3] [2 3 4] [3 4 5] [4 5 6] 
+W = 4: [1 2 3 4] [2 3 4 5] [3 4 5 6] 
+W = 5: [1 2 3 4 5] [2 3 4 5 6] 
+W = 6: [1 2 3 4 5 6]
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Slide view|id=range.slide|section=26.7.29}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc adjacent_view}}
+{{dsc inc|cpp/ranges/dsc chunk_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

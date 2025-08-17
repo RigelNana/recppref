@@ -1,0 +1,165 @@
+{{cpp/title|reverse_iterator}}
+{{cpp/iterator/reverse_iterator/navbar}}
+{{ddcl|header=iterator|
+template&lt; class Iter &gt;
+class reverse_iterator;
+}}
+
+{{tt|std::reverse_iterator}} 是一种迭代器适配器，它反转给定迭代器的方向，该迭代器必须至少是{{named req|BidirectionalIterator}}{{rev inl|since=c++20|或实现 {{lconcept|bidirectional_iterator}}}}。换言之，提供双向迭代器时，{{tt|std::reverse_iterator}} 产生一个新的迭代器，它从底层的双向迭代器所定义的序列的末尾移动到开端。
+
+对于从迭代器 {{c|i}} 构造的逆向迭代器 {{c|r}}，关系 {{c|1=&amp;*r == &amp;*(i - 1)}} 始终是 {{c|true}}（只要 {{c|r}} {{rlp|/#可解性与有效性|可解引用}}）；因此从末尾后一位置迭代器构造的逆向迭代器解引用为序列的最后元素。
+
+这正是[[cpp/container|标准库容器]]的成员函数 {{tt|rbegin()}} 及 {{tt|rend()}} 所返回的迭代器。
+
+{{image|range-rbegin-rend.svg}}
+
+===嵌套类型===
+{{rrev multi|until1=c++20|rev1=
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_category}}|{{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}&lt;ref name="iterator"&gt;在 C++17 前，此定义由作为基的 {{lc|std::iterator}} 特化提供。&lt;/ref&gt;}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::value_type}}&lt;ref name="iterator" /&gt;}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::difference_type}}}}
+{{dsc|{{tt|pointer}}|{{c/core|std::iterator_traits&lt;Iter&gt;::pointer}}}}
+{{dsc|{{tt|reference}}|{{c/core|std::iterator_traits&lt;Iter&gt;::reference}}}}
+{{dsc end}}
+|rev2=
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_concept}}|
+* {{tt|Iter}} 实现了 {{lc|std::random_access_iterator}} 时是 {{lc|std::random_access_iterator_tag}}
+* 否则是 {{lc|std::bidirectional_iterator_tag}}}}
+{{dsc|{{tt|iterator_category}}|
+* {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} 实现了 {{c/core|std::derived_from&lt;std::random_access_iterator_tag&gt;}} 时是 {{lc|std::random_access_iterator_tag}}
+* 否则是 {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iter_value_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iter_difference_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|pointer}}|{{c/core|std::iterator_traits&lt;Iter&gt;::pointer}}}}
+{{dsc|{{tt|reference}}|{{c/core|std::iter_reference_t&lt;Iter&gt;}}}}
+{{dsc end}}
+}}
+&lt;references/&gt;
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc|{{anchor|current}}{{dsc small|{{tt|Iter}}}} {{tt|current}}|底层迭代器&lt;br&gt;{{mark prot mem obj}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc constructor|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator{{=}}|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc base|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator*|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator_at|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator_arith|reverse_iterator}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator_cmp|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator+|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator-|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_move|reverse_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_swap|reverse_iterator}}
+{{dsc inc|cpp/iterator/dsc make_reverse_iterator}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++20|1=
+template&lt; class Iterator1, class Iterator2 &gt;
+    requires (!std::sized_sentinal_for&lt;Iterator1, Iterator2&gt;)
+inline constexpr bool disable_sized_sentinel_for
+    &lt;std::reverse_iterator&lt;Iterator1&gt;, std::reverse_iterator&lt;Iterator2&gt;&gt; = true;
+}}
+
+如果 {{tt|reverse_iterator}} 的特化的底层迭代器不满足 {{lconcept|sized_sentinel_for}}，那么 {{tt|std::disable_sentinel_for}} 的此部分特化防止这些特化满足该概念。
+
+===可能的实现===
+以下是一种部分实现，它关注于内部迭代器的存储方式，仅当通过 {{c/core|operator*}} 取得了内容时才调用 {{lc|std::prev}}。
+{{eq fun|1=
+template&lt;class It&gt;
+class reverse_iterator
+{
+protected:
+    It current = It();
+public:
+    reverse_iterator() = default;
+    constexpr explicit reverse_iterator(It itr) : current(itr) {}
+    template&lt;class U&gt;
+        requires (!std::is_same_v&lt;U, It&gt; &amp;&amp; std::convertible_to&lt;const U&amp;, It&gt;)
+    constexpr explicit reverse_iterator(const U&amp; other) : current(other.base()) {}
+    
+    constexpr decltype(auto) operator*() const
+    {
+        return *std::prev(current); // &lt;== 返回 prev 的内容
+    }
+    
+    constexpr reverse_iterator&amp; operator++() { --current; return *this; }
+    constexpr reverse_iterator operator++(int) { auto tmp = *this; ++(*this); return tmp; }
+    
+    constexpr reverse_iterator&amp; operator--() { ++current; return *this; }
+    constexpr reverse_iterator operator--(int) { auto tmp = *this; --(*this); return tmp; }
+    
+    constexpr It base() const { return current; }
+    
+    // 这里未列出其他成员函数，友元函数，和成员 typedef。
+};
+}}
+
+===注解===
+{{tt|std::reverse_iterator}} 不可作用于“解引用时返回对 {{c|*this}} 某个成员的引用”的迭代器（是谓“贮藏迭代器”）。贮藏迭代器的一个例子是 [https://github.com/microsoft/STL/blob/ac129e595f762f11551663f1c7fa5f51444a8c6c/stl/inc/filesystem#L1387-L1585 MSVC STL] 的 {{ltt|cpp/filesystem/path#成员类型|std::filesystem::path::iterator}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+
+template&lt;typename T, std::size_t SIZE&gt;
+class Stack
+{
+    T arr[SIZE];
+    std::size_t pos = 0;
+public:
+    T pop()
+    {
+        return arr[--pos];
+    }
+    
+    Stack&amp; push(const T&amp; t)
+    {
+        arr[pos++] = t;
+        return *this;
+    }
+    
+    // 我们希望以后进先出顺序在 Stack 上做循环
+    // 因此我们对既有迭代器使用作为适配器的 std::reverse_iterator
+    // （在这里就是简单的指针：[arr, arr + pos)）
+    auto begin() { return std::reverse_iterator(arr + pos); }
+    auto end() { return std::reverse_iterator(arr); }
+};
+
+int main()
+{
+    Stack&lt;int, 8&gt; s;
+    s.push(5).push(15).push(25).push(35);
+    for (int val : s)
+        std::cout &lt;&lt; val &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+35 25 15 5
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc make_reverse_iterator}}
+{{dsc inc|cpp/iterator/dsc iterator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,122 @@
+{{cpp/thread/shared_mutex/title|lock_shared}}
+{{cpp/thread/shared_mutex/navbar}}
+{{dcl begin}}
+{{dcl|since={{cpp/std|shared_mutex}}|
+void lock_shared();
+}}
+{{dcl end}}
+
+获得互斥体的共享所有权。若另一线程已经持有该互斥体的独占所有权，则对 {{tt|lock_shared}} 的调用将阻塞执行，直到能取得共享所有权。
+
+如果 {{tt|lock_shared}} 被已经以任何模式（独占或共享）占有 {{tt|mutex}} 的线程调用，则行为未定义。
+
+若多于实现定义最大数量的共享所有者已经以共享模式锁定此互斥体，则 {{tt|lock_shared}} 阻塞执行，直至共享所有者的数量减少。所有者的最大数量保证至少为 10000。
+
+同一互斥体上先前的 {{lc|unlock()}} 操作''同步于''（定义于 {{lc|std::memory_order}}）此操作。
+
+===参数===
+（无）
+
+===返回值===
+（无）
+
+===异常===
+出现错误时抛出 {{lc|std::system_error}}，包括妨碍 {{tt|lock}} 满足规定的来自底层系统的错误。在抛出任何异常的情况下，互斥体不被锁定。
+
+===注解===
+通常不直接调用 {{tt|lock_shared()}}：用 {{lc|std::shared_lock}} 管理共享锁定。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+std::mutex stream_mutx;
+void print(auto v)
+{
+    std::unique_lock&lt;std::mutex&gt; lock(stream_mutx);
+    std::cout &lt;&lt; std::this_thread::get_id() &lt;&lt; " 见到: ";
+    for (auto e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    using namespace std::chrono_literals;
+    constexpr int N_READERS = 5;
+    constexpr int LAST = -999;
+
+    std::shared_mutex smtx;
+    int product = 0;
+
+    auto writer = [&amp;smtx, &amp;product](int start, int end)
+    {
+        for (int i = start; i &lt; end; ++i)
+        {
+            auto data = i;            
+            {
+                std::unique_lock&lt;std::shared_mutex&gt; lock(smtx);
+                product = data;
+            } 
+            std::this_thread::sleep_for(3ms);
+        }
+
+        smtx.lock(); // 手动锁定
+        product = LAST;
+        smtx.unlock();
+    };
+
+    auto reader = [&amp;smtx, &amp;product]()
+    {
+        int data = 0;
+        std::vector&lt;int&gt; seen;
+        do
+        {
+            {
+                smtx.lock_shared(); // 使用 std::shared_lock lock(smtx); 更好
+                data = product;
+                smtx.unlock_shared();
+            }                                   
+
+            seen.push_back(data);
+            std::this_thread::sleep_for(2ms);
+        }
+        while (data != LAST);
+
+        print(seen);
+    };
+
+    std::vector&lt;std::thread&gt; threads;
+    threads.emplace_back(writer, 1, 13);
+    threads.emplace_back(writer, 42, 52);
+
+    for (int i = 0; i &lt; N_READERS; ++i)
+        threads.emplace_back(reader);
+
+    for (auto&amp;&amp; t : threads)
+        t.join();
+}
+|p=true
+|output=
+127755840 见到: 43 3 3 4 46 5 6 7 7 8 9 51 10 11 11 12 -999
+144541248 见到: 2 44 3 4 46 5 6 7 7 8 9 51 10 11 11 12 -999
+110970432 见到: 42 2 3 45 4 5 47 6 7 8 8 9 10 11 11 12 -999
+119363136 见到: 42 2 3 4 46 5 6 7 7 8 9 9 10 11 11 12 12 -999
+136148544 见到: 2 44 3 4 46 5 6 48 7 8 9 51 10 11 11 12 12 -999
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/mutex/dsc lock|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock_shared|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock_shared|shared_mutex}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,110 @@
+{{title|MATH_ERRNO, MATH_ERREXCEPT, math_errhandling}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header | cmath}}
+{{dcl | since=c++11 |
+#define MATH_ERRNO        1
+}}
+{{dcl | since=c++11 |
+#define MATH_ERREXCEPT    2
+}}
+{{dcl | since=c++11 |
+#define math_errhandling  /* 由实现定义 */
+}}
+{{dcl end}}
+
+宏常量 {{tt|math_errhandling}} 展开成 {{c/core|int}} 类型的表达式，要么等于 {{tt|MATH_ERRNO}}，要么等于 {{tt|MATH_ERREXCEPT}}，要么等于它们的逐位或（{{c|MATH_ERRNO {{!}} MATH_ERREXCEPT}}）。
+
+{{tt|math_errhandling}} 的值指示浮点数运算符和[[cpp/numeric/math|函数]]所进行的错误处理：
+
+{{dsc begin}}
+{{dsc hitem|常量|解释}}
+{{dsc|{{tt|MATH_ERREXCEPT}}|指示使用浮点数异常：{{c|&lt;cfenv&gt;}} 中至少定义了 {{lc|FE_DIVBYZERO}}、{{lc|FE_INVALID}} 及 {{lc|FE_OVERFLOW}}。}}
+{{dsc|{{tt|MATH_ERRNO}}|指明浮点数运算使用变量 {{lc|errno}} 报告错误。}}
+{{dsc end}}
+
+若实现支持 IEEE 浮点数算术（IEC 60559），则要求 {{c|math_errhandling &amp; MATH_ERREXCEPT}} 非零。
+
+识别下列浮点数错误条件：
+
+{|table class=wikitable
+|-
+!条件||解释||errno||浮点数异常||示例
+|-
+|定义域错误
+|实参在该运算的数学上的定义域之外（[[cpp/numeric/math|每个函数]]的描述列出了要求的定义域错误）
+|{{lc|EDOM}}
+|{{lc|FE_INVALID}}
+|{{c|std::acos(2)}}
+|-
+|极点错误
+|函数的数学结果恰是无限大或未定义
+|{{lc|ERANGE}}
+|{{lc|FE_DIVBYZERO}}
+|{{c|std::log(0.0)}}、{{c|1.0 / 0.0}}
+|-
+|上溢所致的值域错误
+|数学结果有限，但舍入后变为无限，或在向下舍入后变成最大可表示有限值
+|{{lc|ERANGE}}
+|{{lc|FE_OVERFLOW}}
+|{{c|std::pow(DBL_MAX, 2)}}
+|-
+|下溢所致的域错误
+|结果非零，但因为舍入变为零，或变成非正规并有精度损失
+|{{lc|ERANGE}} 或不改变（实现定义）
+|{{lc|FE_UNDERFLOW}} 或无（实现定义）
+|{{c|DBL_TRUE_MIN / 2}}
+|-
+|结果不准确
+|结果必须被舍入到目标类型
+|不改变
+|{{lc|FE_INEXACT}} 或无（未指定）
+|{{c|std::sqrt(2)}}、{{c|1.0 / 10.0}}
+|}
+
+===注解===
+通常，{{lc|FE_INEXACT}} 是否为数学库函数所引发是未指定的，但这可以显式指定于函数的描述（例如 {{lc|std::rint}} vs {{lc|std::nearbyint}}）。
+
+C++11 前，浮点数异常是未指定的，要求对于任何定义域错误有 {{c|EDOM}}，要求对上溢和实现定义的下溢有 {{c|ERANGE}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cerrno&gt;
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout &lt;&lt; "MATH_ERRNO "
+              &lt;&lt; (math_errhandling &amp; MATH_ERRNO ? "已设置" : "未设置") &lt;&lt; '\n'
+              &lt;&lt; "MATH_ERREXCEPT "
+              &lt;&lt; (math_errhandling &amp; MATH_ERREXCEPT ? "已设置" : "未设置") &lt;&lt; '\n';
+    std::feclearexcept(FE_ALL_EXCEPT);
+    errno = 0;
+    std::cout &lt;&lt;  "log(0) = " &lt;&lt; std::log(0) &lt;&lt; '\n';
+    if (errno == ERANGE)
+        std::cout &lt;&lt; "errno = ERANGE (" &lt;&lt; std::strerror(errno) &lt;&lt; ")\n";
+    if (std::fetestexcept(FE_DIVBYZERO))
+        std::cout &lt;&lt; "FE_DIVBYZERO (极点错误) 已报告\n";
+}
+|p=true
+|output=
+MATH_ERRNO 已设置
+MATH_ERREXCEPT 已设置
+log(0) = -inf
+errno = ERANGE (Numerical result out of range)
+FE_DIVBYZERO (极点错误) 已报告
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/fenv/dsc FE_exceptions}}
+{{dsc inc|cpp/error/dsc errno}}
+{{dsc see c|c/numeric/math/math_errhandling}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

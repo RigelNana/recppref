@@ -1,0 +1,171 @@
+{{cpp/ranges/title|uninitialized_move|uninitialized_move_result}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|调用签名}}
+{{dcla|num=1|since=c++20|constexpr=c++26|
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S1,
+          no-throw-forward-iterator O, no-throw-sentinel-for&lt;O&gt; S2 &gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;,
+                                     std::iter_rvalue_reference_t&lt;I&gt;&gt;
+uninitialized_move_result&lt;I, O&gt;
+    uninitialized_move( I ifirst, S1 ilast, O ofirst, S2 olast );
+}}
+{{dcla|num=2|since=c++20|constexpr=c++26|
+template&lt; ranges::input_range IR, no-throw-forward-range OR &gt;
+    requires std::constructible_from
+                 &lt;ranges::range_value_t&lt;OR&gt;,
+                  ranges::range_rvalue_reference_t&lt;IR&gt;&gt;
+uninitialized_move_result&lt;ranges::borrowed_iterator_t&lt;IR&gt;,
+                          ranges::borrowed_iterator_t&lt;OR&gt;&gt;
+    uninitialized_move( IR&amp;&amp; in_range, OR&amp;&amp; out_range );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using uninitialized_move_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+设 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::min(ranges::distance(ifirst, ilast), ranges::distance(ofirst, olast))}}。
+
+@1@ 如同用以下方式将范围 {{range|ifirst|ilast}} 中的 {{mathjax-or|\(\scriptsize N\)|N}} 个元素复制到未初始化内存区域 {{range|ofirst|olast}}（符合条件时使用移动语义）：
+{{box|
+{{c/core|1=for (; ifirst != ilast &amp;&amp; ofirst != olast; ++ofirst, (void)++ifirst)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{lti|cpp/memory/voidify}}{{c/core|(*ofirst))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|std::remove_reference_t&lt;std::iter_reference_t&lt;O&gt;&gt;(ranges::iter_move(ifirst));}}&lt;br&gt;
+{{c/core|return {std::move(ifirst), ofirst};}}
+}}
+@@ 如果在初始化期间抛出异常，那么以未指定顺序销毁 {{range|ofirst|olast}} 中已构造的元素。而且 {{range|ifirst|ilast}} 中已被移动的元素被置于合法但未指定的状态。
+
+@2@ 等价于 {{c multi|return ranges::uninitialized_move(ranges::begin(in_range), ranges::end(in_range),|                                  ranges::begin(out_range), ranges::end(out_range));}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|ifirst|ilast|要移动的|range=输入|sentinel=yes}}
+{{par|in_range|要移动的输入元素 {{lconcept|range}}}}
+{{par range|ofirst|olast|要初始化的|range=输出|sentinel=yes}}
+{{par|out_range|要初始化的输出 {{lconcept|range}}}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+与 {{mathjax-or|\(\scriptsize N\)|N}} 成线性。
+
+===异常===
+构造目标范围中的元素时抛出的任何异常。
+
+===注解===
+如果输出范围的值类型是{{named req|TrivialType}}，那么实现可能提升 {{tt|ranges::uninitialized_move}} 的效率，例如用 {{lc|ranges::copy_n}}。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1,2}}}}
+
+===可能的实现===
+{{eq fun|1=
+struct uninitialized_move_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S1,
+             no-throw-forward-iterator O, no-throw-sentinel-for&lt;O&gt; S2&gt;
+        requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;,
+                                         std::iter_rvalue_reference_t&lt;I&gt;&gt;
+    constexpr ranges::uninitialized_move_result&lt;I, O&gt;
+        operator()(I ifirst, S1 ilast, O ofirst, S2 olast) const
+    {
+        using ValueType = std::remove_reference_t&lt;std::iter_reference_t&lt;O&gt;&gt;;
+        O current{ofirst};
+        try
+        {
+            for (; !(ifirst == ilast or current == olast); ++ifirst, ++current)
+                ::new (const_cast&lt;void*&gt;(static_cast&lt;const volatile void*&gt;
+                    (std::addressof(*current)))) std::remove_reference_t&lt;
+                        std::iter_reference_t&lt;O&gt;&gt;(ranges::iter_move(ifirst));
+            return {std::move(ifirst), std::move(current)};
+        }
+        catch (...) // 回滚：析构已构造的元素
+        {
+            for (; ofirst != current; ++ofirst)
+                ranges::destroy_at(std::addressof(*ofirst));
+            throw;
+        }
+    }
+    
+    template&lt;ranges::input_range IR, no-throw-forward-range OR&gt;
+        requires std::constructible_from&lt;ranges::range_value_t&lt;OR&gt;,
+                                         ranges::range_rvalue_reference_t&lt;IR&gt;&gt;
+    constexpr ranges::uninitialized_move_result&lt;ranges::borrowed_iterator_t&lt;IR&gt;,
+                                                ranges::borrowed_iterator_t&lt;OR&gt;&gt;
+        operator()(IR&amp;&amp; in_range, OR&amp;&amp; out_range) const
+    {
+        return (*this)(ranges::begin(in_range), ranges::end(in_range),
+                       ranges::begin(out_range), ranges::end(out_range));
+    }
+};
+
+inline constexpr uninitialized_move_fn uninitialized_move{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+void print(auto rem, auto first, auto last)
+{
+    for (std::cout &lt;&lt; rem; first != last; ++first)
+        std::cout &lt;&lt; std::quoted(*first) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string in[]{"Home", "World"};
+    print("起初, in：", std::begin(in), std::end(in));
+    
+    if (constexpr auto sz = std::size(in);
+        void* out = std::aligned_alloc(alignof(std::string), sizeof(std::string) * sz))
+    {
+        try
+        {
+            auto first{static_cast&lt;std::string*&gt;(out)};
+            auto last{first + sz};
+            std::ranges::uninitialized_move(std::begin(in), std::end(in), first, last);
+            
+            print("移动后, in：", std::begin(in), std::end(in));
+            print("移动后, out：", first, last);
+            
+            std::ranges::destroy(first, last);
+        }
+        catch (...)
+        {
+            std::cout &lt;&lt; "异常！\n";
+        }
+        std::free(out);
+    }
+}
+|p=true&lt;!-- 移动结果不确定 --&gt;
+|output=
+起初, in："Home" "World"
+移动后, in："" ""
+移动后, out："Home" "World"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可能在 {{c/core|const}} 存储上创建对象|after=保持禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_move_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_move}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

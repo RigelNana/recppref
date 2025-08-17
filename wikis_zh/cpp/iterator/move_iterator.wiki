@@ -1,0 +1,147 @@
+{{cpp/title|move_iterator}}
+{{cpp/iterator/move_iterator/navbar}}
+{{ddcl|header=iterator|since=c++11|
+template&lt; class Iter &gt;
+class move_iterator;
+}}
+
+{{tt|std::move_iterator}} 是一种迭代器适配器，表现与它的底层迭代器（必须至少是一个{{named req|InputIterator}}{{rev inl|since=c++20|或实现 {{lconcept|input_iterator}} }}）严格相同，但解引用会将底层迭代器返回的值转换为右值。如果此迭代器用作输入迭代器，那么效果是值被移动，而非复制。
+
+===嵌套类型===
+{{rrev multi|until1=c++20|rev1=
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_category}}|{{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::value_type}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iterator_traits&lt;Iter&gt;::difference_type}}}}
+{{dsc|{{tt|pointer}}|{{tt|Iter}}}}
+{{dsc|{{tt|reference}}|
+* {{c/core|std::iterator_traits&lt;Iter&gt;::reference}} 是引用类型时是它的右值引用版本
+* 否则是 {{c/core|std::iterator_traits&lt;Iter&gt;::reference}}}}
+{{dsc end}}
+|rev2=
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|iterator_type}}|{{tt|Iter}}}}
+{{dsc|{{tt|iterator_category}}&lt;br&gt;{{mark cond present}}|
+* {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} 无效或表示的不是类型时未定义
+* {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}} 实现了 {{c/core|std::derived_from&lt;std::random_access_iterator_tag&gt;}} 时是 {{lc|std::random_access_iterator_tag}}
+* 否则是 {{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}}}
+{{dsc|{{tt|iterator_concept}}|{{rrev multi|until1=c++23
+|rev1={{lc|std::input_iterator_tag}}
+|rev2=
+* {{tt|Iter}} 实现了 {{lc|std::random_access_iterator}} 时是 {{lc|std::random_access_iterator_tag}}
+* {{tt|Iter}} 仅实现了 {{lc|std::bidirectional_iterator}} 时是 {{lc|std::bidirectional_iterator_tag}}
+* {{tt|Iter}} 仅实现了s {{lc|std::forward_iterator}} 时是 {{lc|std::forward_iterator_tag}}
+* 否则是 {{lc|std::input_iterator_tag}}}}}}
+{{dsc|{{tt|value_type}}|{{c/core|std::iter_value_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::iter_difference_t&lt;Iter&gt;}}}}
+{{dsc|{{tt|pointer}}|{{tt|Iter}}}}
+{{dsc|{{tt|reference}}|{{c/core|std::iter_rvalue_reference_t&lt;Iter&gt;}}}}
+{{dsc end}}
+}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|spec={{tt|Iter}}|current|id=current|底层迭代器}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc constructor|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator{{=}}|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc base|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator*|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator at|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator arith|move_iterator}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator cmp|move_iterator}}
+{{dsc inc|cpp/iterator/move_iterator/dsc operator_cmp2}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator+|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator-|move_iterator}}
+{{dsc inc|cpp/iterator/move_iterator/dsc operator-2}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_move|move_iterator}}
+{{dsc inc|cpp/iterator/adaptor/dsc iter_swap|move_iterator}}
+{{dsc inc|cpp/iterator/dsc make_move_iterator}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++20|1=
+template&lt; class Iterator1, class Iterator2 &gt;
+    requires (!std::sized_sentinel_for&lt;Iterator1, Iterator2&gt;)
+constexpr bool disable_sized_sentinel_for
+    &lt;std::move_iterator&lt;Iterator1&gt;, std::move_iterator&lt;Iterator2&gt;&gt; = true;
+}}
+
+这个 {{tt|std::disable_sized_sentinel_for}} 特化，当底层迭代器不满足 {{lconcept|sized_sentinel_for}} 时，防止 {{tt|move_iterator}} 的特化满足这个概念。
+
+===注解===
+{{feature test macro|__cpp_lib_move_iterator_concept|使 {{c/core|std::move_iterator&lt;T*&gt;}} 为随机访问迭代器|value=202207L|std=C++23}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+void print(const std::string_view rem, const auto&amp; v)
+{
+    std::cout &lt;&lt; rem;
+    for (const auto&amp; s : v)
+        std::cout &lt;&lt; std::quoted(s) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    std::vector&lt;std::string&gt; v{"this", "_", "is", "_", "an", "_", "example"};
+    print("vector 的旧内容：", v);
+    std::string concat;
+    for (auto begin = std::make_move_iterator(v.begin()),
+              end = std::make_move_iterator(v.end());
+         begin != end; ++begin)
+    {
+        std::string temp{*begin}; // 将 *begin 的内容移动到 temp
+        concat += temp;
+    }
+    
+    // 从 C++17 起引入了类模板实参推导，可以直接使用 std::move_iterator 的构造函数：
+    // std::string concat = std::accumulate(std::move_iterator(v.begin()),
+    //                                      std::move_iterator(v.end()),
+    //                                      std::string());
+    
+    print("vector 的新内容：", v);
+    print("拼接成字符串：", std::ranges::single_view(concat));
+}
+|p=true
+|output=
+vector 的旧内容："this" "_" "is" "_" "an" "_" "example"
+vector 的新内容："" "" "" "" "" "" ""
+拼接成字符串："this_is_an_example"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2106|std=C++11|before=解引用底层迭代器返回纯右值时解引用 {{tt|move_iterator}} 会返回悬垂引用|after=改为返回对象}}
+{{dr list item|wg=lwg|dr=3736|std=C++20|before={{tt|move_iterator}} 缺失了 {{tt|disable_sized_sentinel_for}} 特化|after=已添加}}
+{{dr list item|paper=P2259R1|std=C++20|before={{c/core|std::iterator_traits&lt;Iter&gt;::iterator_category}}&lt;br&gt;未定义时也会定义成员 {{tt|iterator_category}}|after=不会定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc make_move_iterator}}
+{{dsc inc|cpp/iterator/dsc move_sentinel}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,58 @@
+{{cpp/chrono/year_month_day/title|1=ok}}
+{{cpp/chrono/year_month_day/navbar}}
+{{dcl begin}}
+{{dcl|since=c++20|1=
+constexpr bool ok() const noexcept;
+}}
+{{dcl end}}
+检查此 {{tt|year_month_day}} 对象是否表示合法的日历日期。
+
+=== 返回值 ===
+若此 {{tt|year_month_day}} 对象表示合法的日历日期，即存储的 {{tt|year}}、{{tt|month}} 和 {{tt|day}} 值均合法，且存储的 {{tt|day}} 值在给定年和月的日数内，则为 {{c|true}}。否则为 {{c|false}}。
+
+=== 可能的实现 ===
+{{eq fun|1=
+constexpr bool std::chrono::year_month_day::ok() const noexcept
+{
+    return year().ok() &amp;&amp; month().ok() &amp;&amp; day().ok() &amp;&amp;
+        day() &lt;= (year()/month()/std::chrono::last).day();
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+
+int main()
+{
+    constexpr auto ymd1 {std::chrono::day(1)/std::chrono::July/2020};
+    static_assert(ymd1.ok());
+
+    constexpr auto ymd2 {std::chrono::year(2020)/7/42};
+    static_assert(not ymd2.ok());
+
+    constexpr auto ymd3 {std::chrono::February/29/2020}; // ok, 闰年
+    static_assert(ymd3.ok());
+
+    constexpr auto ymd4 = ymd3 + std::chrono::years{1}; // 不好，不是闰年
+    static_assert(ymd4 == std::chrono::February/29/2021 and not ymd4.ok());
+
+    // 为了修正错误日期，我们可能需要跳到当月最后一天:
+    if constexpr (!ymd4.ok())
+    {
+        constexpr auto ymd = ymd4.year()/ymd4.month()/std::chrono::last;
+        static_assert(ymd == std::chrono::February/28/2021 and ymd.ok());
+    }
+
+    // 或者可能需要使其溢出到下个月:
+    if constexpr (!ymd4.ok())
+    {
+        constexpr auto st = std::chrono::sys_time&lt;std::chrono::days&gt;{ymd4};
+        constexpr auto ymd = std::chrono::year_month_day{st};
+        static_assert(ymd == std::chrono::March/1/2021 and ymd.ok());
+    }
+}
+}}
+
+{{langlinks|en|es|ja|ru}}

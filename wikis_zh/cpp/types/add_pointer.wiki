@@ -1,0 +1,113 @@
+{{cpp/title|add_pointer}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|1=
+template&lt; class T &gt;
+struct add_pointer;
+}}
+{{dcl end}}
+
+如果 {{tt|T}} 是[[cpp/meta#定义|可引用类型]]或（可有 cv 限定的） {{c/core|void}}，那么提供的成员 typedef {{tt|type}} 是 {{c/core|typename std::remove_reference&lt;T&gt;::type*}}。 
+
+否则，提供的成员 typedef {{tt|type}} 是 {{tt|T}}。
+
+{{cpp/types/nospec}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|名字|定义}}
+{{dsc|{{tt|type}}|按以上方式确定}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|since=c++14|1=
+template&lt; class T &gt;
+using add_pointer_t = typename add_pointer&lt;T&gt;::type;
+}}
+{{dcl end}}
+
+===可能的实现===
+{{eq fun
+|1=
+namespace detail
+{
+    template&lt;class T&gt;
+    struct type_identity { using type = T; }; // 或者使用 std::type_identity（C++20 起）
+    
+    template&lt;class T&gt;
+    auto try_add_pointer(int)
+      -&gt; type_identity&lt;typename std::remove_reference&lt;T&gt;::type*&gt;; // 通常情况
+    
+    template&lt;class T&gt;
+    auto try_add_pointer(...)
+      -&gt; type_identity&lt;T&gt;; // 特殊情况（不能组成 std::remove_reference&lt;T&gt;::type*）
+} // namespace detail
+ 
+template&lt;class T&gt;
+struct add_pointer : decltype(detail::try_add_pointer&lt;T&gt;(0)) {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+template&lt;typename F, typename Class&gt;
+void ptr_to_member_func_cvref_test(F Class::*)
+{
+    // F 是一个“糟糕的函数类型”
+    using FF = std::add_pointer_t&lt;F&gt;;
+    static_assert(std::is_same_v&lt;F, FF&gt;, "FF 应该正好是 F");
+}
+
+struct S
+{
+    void f_ref() &amp; {}
+    void f_const() const {}
+};
+
+int main()
+{
+    int i = 123;
+    int&amp; ri = i;
+    typedef std::add_pointer&lt;decltype(i)&gt;::type IntPtr;
+    typedef std::add_pointer&lt;decltype(ri)&gt;::type IntPtr2;
+    IntPtr pi = &amp;i;
+    std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n';
+    std::cout &lt;&lt; "*pi = " &lt;&lt; *pi &lt;&lt; '\n';
+    
+    static_assert(std::is_pointer_v&lt;IntPtr&gt;, "IntPtr 应该是指针");
+    static_assert(std::is_same_v&lt;IntPtr, int*&gt;, "IntPtr 应该是指向 int 的指针");
+    static_assert(std::is_same_v&lt;IntPtr2, IntPtr&gt;, "IntPtr2 应该等于 IntPtr");
+    
+    typedef std::remove_pointer&lt;IntPtr&gt;::type IntAgain;
+    IntAgain j = i;
+    std::cout &lt;&lt; "j = " &lt;&lt; j &lt;&lt; '\n';
+    
+    static_assert(!std::is_pointer_v&lt;IntAgain&gt;, "IntAgain 不应该是指针");
+    static_assert(std::is_same_v&lt;IntAgain, int&gt;, "IntAgain 应该等于 int");
+    
+    ptr_to_member_func_cvref_test(&amp;S::f_ref);
+    ptr_to_member_func_cvref_test(&amp;S::f_const);
+}
+|output=
+i = 123
+*pi = 123
+j = 123
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2101|std=c++11|before=在 {{tt|T}} 是有 {{spar sep|cv限定符}}或{{spar sep|引用限定符}}的{{ls|cpp/language/function#函数类型}}时程序非良构|after=此时产生的类型是 {{tt|T}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_pointer}}
+{{dsc inc|cpp/types/dsc remove_pointer}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

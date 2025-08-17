@@ -1,0 +1,176 @@
+{{cpp/title|range_formatter}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|since=c++23|1=
+template&lt; class T, class CharT = char &gt;
+    requires std::same_as&lt;std::remove_cvref_t&lt;T&gt;, T&gt; &amp;&amp; std::formattable&lt;T, CharT&gt;
+class range_formatter;
+}}
+{{dcl end}}
+
+{{tt|std::range_formatter}} 是用于实现范围 {{lc|std::formatter}} 特化的辅助类模板。
+
+===范围格式说明===
+{{spar|范围格式说明}} 的语法是：
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|范围填充与对齐}} {{spar optional|宽度}} {{ttb|n}}{{mark optional}} {{spar optional|范围类型}} {{spar optional|范围底层说明}}
+}}
+{{sdsc end}}
+
+{{spar|范围填充与对齐}} 与 {{spar|填充与对齐}} 的判读方式相同，但 {{spar|范围填充与对齐}} 中的 {{spar|填充}} 是除 {{ttb|{}}、{{ttb|}&lt;!----&gt;}} 和 {{ttb|:}} 外的任意字符。
+
+{{spar|宽度}} 在{{rlp|spec#宽度与精度|标准格式宽度说明}}中描述。
+
+{{ttb|n}} 选项导致格式化范围时没有开闭括号。
+{{source|1=
+assert(std::format("{}", views::iota(1, 5)) == "[1, 2, 3, 4]");
+assert(std::format("{:n}", views::iota(1, 5)) == "1, 2, 3, 4");
+}}
+
+{{spar|范围底层说明}}（其语法等价于 {{tt|:}} {{spar|格式说明}}）中的 {{spar|格式说明}}，如果有，由范围元素格式化器 {{tt|std::formatter&lt;T, CharT&gt;}} 判读。
+{{source|1=
+std::array ints{12, 10, 15, 14};
+assert(std::format("{}", ints) == "[12, 10, 15, 14]");
+assert(std::format("{::X}", ints) == "[C, A, F, E]");
+assert(std::format("{:n:_^4}", ints) == "_12_, _10_, _15_, _14_");
+}}
+
+{{spar|范围类型}} 改变格式化范围的方式，某些选项仅对特定实参类型有效。
+
+可用的范围表示类型有：
+* {{ttb|m}}：指示开括号应为 {{c|"{"}}，闭括号应为 {{c|"}"}}，分隔符应为 {{c|", "}}，且每个范围元素应当如同以 {{ttb|m}} 作为（[[cpp/utility/format/tuple_formatter#格式说明|{{spar|元组格式说明}}]] 中的）{{spar|元组类型}} 来格式化。
+
+:* 如果选择 {{ttb|m}} 为 {{spar|范围类型}}，则除非 {{tt|T}} 是以下各项的特化，否则程序非良构：
+::* {{lc|std::pair}}，或者
+::* {{lc|std::tuple}} 且满足 {{c|1=std::tuple_size_v&lt;T&gt; == 2}} 为 {{c|true}}。
+{{source|1=
+std::array char_pairs
+{
+    std::pair{'A', 5}, std::pair{'B', 10}, std::pair{'C', 12}
+};
+assert(std::format("{}", char_pairs) == "[('A', 5), ('B', 10), ('C', 12)]");
+assert(std::format("{:m}", char_pairs) == "{'A': 5, 'B': 10, 'C': 12}");
+}}
+
+* {{ttb|s}}：指示范围应当被格式化为字符串。
+* {{ttb|?s}}：指示范围应当被格式化为{{rlp|spec#格式化经转义字符和字符串|有转义字符串}}。
+
+:* 如果选择 {{ttb|s}} 或 {{ttb|?s}} 为 {{spar|范围类型}}，则 {{ttb|n}} 选项和 {{spar|范围底层说明}} 都不能出现于格式说明符中，并且
+:* 除非 {{tt|T}} 为 {{tt|CharT}} 否则程序非良构。
+{{source|1=
+std::array star{'S', 'T', 'A', 'R'};
+assert(std::format("{}", star) == "['S', 'T', 'A', 'R']");
+assert(std::format("{:s}", star) == "STAR");
+assert(std::format("{:?s}", star) == "\"STAR\"");
+}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员名字|定义}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::formatter&lt;T, CharT&gt;}}|underlying_|用于元素的底层格式化器}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::basic_string_view&lt;CharT&gt;}}|separator_|表示范围格式化结果的分隔符的字符串。默认分隔符为 {{c|", "}}。}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::basic_string_view&lt;CharT&gt;}}|opening-bracket_|表示范围格式化结果的开括号的字符串。默认开括号为 {{c|"["}}。}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::basic_string_view&lt;CharT&gt;}}|closing-bracket_|表示范围格式化结果的闭括号的字符串。默认闭括号为 {{c|"]"}}。}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem fun|set_separator|nolink=true|设置范围格式化结果所用的分隔符}}
+{{dsc mem fun|set_brackets|nolink=true|设置范围格式化结果所用的开括号和闭括号}}
+{{dsc mem fun|underlying|nolink=true|返回底层格式化器}}
+{{dsc mem fun|parse|nolink=true|按 {{spar|范围格式说明}} 的说明解析格式说明符}}
+{{dsc mem fun|format|nolink=true|按 {{spar|范围格式说明}} 写入范围的已格式化输出}}
+{{dsc end}}
+
+{{member|1={{small|std::range_formatter::}}set_separator|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_separator( std::basic_string_view&lt;CharT&gt; sep ) noexcept;
+}}
+{{dcl end}}
+
+赋值 {{c|sep}} 为 {{tti|separator_}}。
+}}
+
+{{member|1={{small|std::range_formatter::}}set_brackets|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_brackets( std::basic_string_view&lt;CharT&gt; opening,
+                             std::basic_string_view&lt;CharT&gt; closing ) noexcept;
+}}
+{{dcl end}}
+
+分别赋值 {{c|opening}} 和 {{c|closing}} 为 {{tti|opening-bracket_}} 和 {{tti|closing-bracket_}}。
+}}
+
+{{member|1={{small|std::range_formatter::}}underlying|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+constexpr std::formatter&lt;T, CharT&gt;&amp; underlying();
+}}
+{{dcl|num=2|1=
+constexpr const std::formatter&lt;T, CharT&gt;&amp; underlying() const;
+}}
+{{dcl end}}
+
+返回 {{box|{{tti|underlying_}}}}（底层格式化器）。
+}}
+
+{{member|1={{small|std::range_formatter::}}parse|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; class ParseContext &gt;
+constexpr auto parse( ParseContext&amp; ctx ) -&gt; ParseContext::iterator;
+}}
+{{dcl end}}
+
+将各个格式说明符解析为 {{spar|范围格式说明}} 并将解析的说明符存储到当前对象中。
+
+调用 {{box|{{tti|underlying_}}{{c/core|.parse(ctx)}}}} 来解析 {{spar|范围格式说明}} 中的 {{spar|格式说明}}，或者若没有前者则使用空 {{spar|格式说明}}。
+
+如果有 {{spar|范围类型}} 或 {{ttb|n}} 选项，那么按需要修改 {{tti|opening-bracket_}}、{{tti|closing-bracket_}} 和 {{tti|separator_}} 的值。
+
+它在以下情况下调用 {{box|{{tti|underlying_}}{{c/core|.set_debug_format()}}}}：
+* {{spar|范围类型}} 不是 {{ttb|s}} 也不是 {{ttb|?s}}，
+* {{box|{{tti|underlying_}}{{c/core|.set_debug_format()}}}} 是有效表达式，且
+* 没有 {{spar|范围底层说明}}。
+
+返回 {{spar|范围格式说明}} 的尾后迭代器。
+}}
+
+{{member|1={{small|std::range_formatter::}}format|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; ranges::input_range R, class FormatContext &gt;
+  requires std::formattable&lt;ranges::range_reference_t&lt;R&gt;, CharT&gt; &amp;&amp;
+           std::same_as&lt;std::remove_cvref_t&lt;ranges::range_reference_t&lt;R&gt;&gt;, T&gt;
+auto format( R&amp;&amp; r, FormatContext&amp; ctx ) const -&gt; FormatContext::iterator;
+}}
+{{dcl end}}
+
+如果 {{spar|范围类型}} 为 {{ttb|s}} 或 {{ttb|?s}}，那么它将已格式化的 {{c|std::basic_string&lt;CharT&gt;(std::from_range, r)}} 分别作为字符串和有转义字符串写入 {{c|ctx.out()}}。
+
+否则，它根据 {{spar|范围格式说明}} 将以下内容依序写入 {{c|ctx.out()}}：
+* {{box|{{tti|opening-bracket_}}}}，
+* 对范围 {{c|r}} 中的每个可格式化元素 {{c|e}}：
+:* 通过 {{tti|underlying_}} 写入 {{c|e}} 的结果，和
+:* {{box|{{tti|separator_}}}}，除非 {{c|e}} 是 {{c|r}} 的最末元素，以及
+* {{box|{{tti|closing-bracket_}}}}。
+
+返回输出范围的尾后迭代器。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3892|std=c++23|before=嵌套范围的格式化不正确|after=已修正}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc formatter}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

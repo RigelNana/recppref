@@ -1,0 +1,170 @@
+{{cpp/title|copy|copy_if}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt &gt;
+OutputIt copy( InputIt first, InputIt last,
+               OutputIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt2 copy( ExecutionPolicy&amp;&amp; policy,
+                 ForwardIt1 first, ForwardIt1 last,
+                 ForwardIt2 d_first );
+}}
+{{dcla|num=3|since=c++11|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class UnaryPred &gt;
+OutputIt copy_if( InputIt first, InputIt last,
+                  OutputIt d_first, UnaryPred pred );
+}}
+{{dcl|num=4|since=c++17|1=
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class UnaryPred &gt;
+ForwardIt2 copy_if( ExecutionPolicy&amp;&amp; policy,
+                    ForwardIt1 first, ForwardIt1 last,
+                    ForwardIt2 d_first, UnaryPred pred );
+}}
+{{dcl end}}
+
+复制范围 {{range|first|last}} 中的元素到从 {{c|d_first}} 开始的另一范围（复制目标范围）。
+
+@1@ 按从 {{c|first}} 到 {{c|last}} 的顺序复制 {{range|first|last}} 中的所有元素。
+@@ 如果 {{c|d_first}} 在 {{range|first|last}} 中，那么行为未定义。此时可以用 {{lc|std::copy_backward}} 代替。
+
+@2@ 复制各元素，但按照 {{c|policy}} 执行。{{cpp/algorithm/parallel overload precondition}}
+@@ 如果 {{range|first|last}} 与复制目标范围重叠，那么行为未定义。
+
+@3@ 仅复制谓词 {{c|pred}} 对其返回 {{c|true}} 的元素。此复制算法是稳定的：保持被复制元素的相对顺序。
+@@ 如果 {{range|first|last}} 与复制目标范围重叠，那么行为未定义。
+
+@4@ 同 {{v|3}}，但按照 {{c|policy}} 执行。{{cpp/algorithm/parallel overload precondition}}
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的|range=源}}
+{{par|d_first|目标范围的起始}}
+{{par exec pol}}
+{{par pred1|pred|value=true|对所要求的元素|p1=InputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par req named|UnaryPred|Predicate}}
+{{par end}}
+
+===返回值===
+指向目标范围中最后复制元素的下个元素的输出迭代器。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+@1,2@ 赋值 {{mathjax-or|\(\scriptsize N\)|N}} 次。
+@3,4@ 应用 {{mathjax-or|\(\scriptsize N\)|N}} 次谓词 {{c|pred}}，并且赋值最多 {{mathjax-or|\(\scriptsize N\)|N}} 次。
+
+对于带 {{tt|ExecutionPolicy}} 的重载，如果 {{tt|ForwardIt1}} 的值类型不{{named req|MoveConstructible}}，那么就会有性能开销。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=copy (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt&gt;
+OutputIt copy(InputIt first, InputIt last,
+              OutputIt d_first)
+{
+    for (; first != last; (void)++first, (void)++d_first)
+        *d_first = *first;
+    
+    return d_first;
+}
+|title2=copy_if (3)|ver2=3|2=
+template&lt;class InputIt, class OutputIt, class UnaryPred&gt;
+OutputIt copy_if(InputIt first, InputIt last,
+                 OutputIt d_first, UnaryPred pred)
+{
+    for (; first != last; ++first)
+        if (pred(*first))
+        {
+            *d_first = *first;
+            ++d_first;
+        }
+    
+    return d_first;
+}
+}}
+
+===注解===
+实践中，如果值类型{{named req|TriviallyCopyable}}，而迭代器类型满足{{named req|ContiguousIterator}}，那么 {{tt|std::copy}} 的实现会避免多次赋值并使用大批量复制函数，如 {{lc|std::memmove}}。
+
+复制重叠的范围时，{{tt|std::copy}} 在复制到左侧（目标范围起始在源范围之外）时适合，而 {{tt|std::copy_backward}} 在复制到右侧（目标范围结尾在源范围之外）时适合。
+
+===示例===
+{{example
+|下列代码用 {{tt|std::copy}} 复制一个 {{lc|std::vector}} 的内容到另一个，并显示结果 {{lc|std::vector}}。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; from_vector(10);
+    std::iota(from_vector.begin(), from_vector.end(), 0);
+    std::vector&lt;int&gt; to_vector;
+    std::copy(from_vector.begin(), from_vector.end(), std::back_inserter(to_vector));
+
+// 或者可以使用另一种方式，
+//  std::vector&lt;int&gt; to_vector(from_vector.size());
+//  std::copy(from_vector.begin(), from_vector.end(), to_vector.begin());
+// 任一方式都等价于
+//  std::vector&lt;int&gt; to_vector = from_vector;
+
+    std::cout &lt;&lt; "to_vector 包含：";
+    std::copy(to_vector.begin(), to_vector.end(),
+              std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "to_vector 中的奇数有：";
+    std::copy_if(to_vector.begin(), to_vector.end(),
+                 std::ostream_iterator&lt;int&gt;(std::cout, " "),
+                 [](int x) { return x % 2 != 0; });
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "to_vector 中 3 的倍数有：";
+    to_vector.clear();
+    std::copy_if(from_vector.begin(), from_vector.end(),
+                 std::back_inserter(to_vector),
+                 [](int x) { return x % 3 == 0; });
+
+    for (int x : to_vector)
+        std::cout &lt;&lt; x &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+to_vector 包含：0 1 2 3 4 5 6 7 8 9
+to_vector 中的奇数有：1 3 5 7 9
+to_vector 中 3 的倍数有：0 3 6 9
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2039|std=C++11|before=未指定 {{tt|std::copy_if}} 的返回值|after=已指定}}
+{{dr list item|wg=lwg|dr=2044|std=C++11|before=未定义 {{tt|std::copy_if}} 的稳定性|after=已定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/dsc reverse_copy}}
+{{dsc inc|cpp/algorithm/dsc copy_n}}
+{{dsc inc|cpp/algorithm/dsc fill}}
+{{dsc inc|cpp/algorithm/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,123 @@
+{{title|{{tt|inline}} 说明符}}
+{{cpp/language/declarations/navbar}}
+
+{{c/core|inline}} 说明符，在函数的 {{rlp|declarations#说明符|声明说明符序列}} 中使用时，将函数声明为一个 ''内联函数''。
+
+整个定义都在 {{rlp|classes|class/struct/union 的定义}}内的函数，{{rev inl|since=c++20|若非被附着到{{rlp|modules#模块声明|具名模块}}，}}都是隐式的内联函数，无论它是成员函数还是非成员 {{c/core|friend}} 函数。
+
+{{rev begin}}
+{{rev|since=c++11|
+首个声明有 {{c/core|constexpr}}{{rev inl|since=c++20| 或 {{c/core|consteval}}}} 的函数是隐式的内联函数。
+
+弃置的函数是隐式的内联函数：它的（弃置）定义可以在多于一个翻译单元中出现。
+}}
+{{rev|since=c++17|
+{{c/core|inline}} 说明符，在具有静态存储期的变量（静态类成员或命名空间作用域变量）的 {{rlp|declarations#说明符|声明说明符序列}} 中使用时，将变量声明为''内联变量''。
+
+首个声明有 {{c/core|constexpr}} 的静态成员变量（但不是命名空间作用域变量）是隐式的内联变量。
+}}
+{{rev end}}
+
+===解释===
+内联函数{{rev inl|since=c++17|或内联变量}}具有下列性质：
+
+* 内联函数{{rev inl|since=c++17|或变量}}的定义必须在访问它的翻译单元中可达（不一定要在访问点前）。
+* 带{{rlps|storage duration#外部链接}}的内联函数{{rev inl|since=c++17|或变量}}（例如不声明为 {{c/core|static}}）拥有下列额外属性：
+:* 内联函数{{rev inl|since=c++17|或变量}}在程序中可以有{{rlp|definition#单一定义规则（ODR）|多于一次定义}}，只要每个定义都出现在不同翻译单元中（对于非静态的内联函数{{rev inl|since=c++17|和变量}}）且所有定义等同即可。例如，内联函数{{rev inl|since=c++17|或内联变量}}可以在被多个源文件包含的头文件中定义。
+:* 它必须在每个翻译单元中都被声明为 {{c/core|inline}}。
+:* 它在每个翻译单元中都拥有相同的地址。
+
+在内联函数中，
+* 所有函数定义中的函数局部静态对象在所有翻译单元间共享（它们都指代相同的在某一个翻译单元中定义的对象）。
+* 所有函数定义中所定义的类型同样在所有翻译单元中相同。
+
+{{rrev|since=c++17|
+命名空间作用域的内联 const 变量默认具有{{rlps|storage duration#外部链接}}（这点与非内联非 volatile 的有 const 限定的变量不同）。
+}}
+
+{{c/core|inline}} 关键词的本意是作为给优化器的指示器，以指示优先采用{{enwiki|inline expansion|函数的内联替换}}而非进行函数调用，即并不执行将控制转移到函数体内的函数调用 CPU 指令，而是代之以执行函数体的一份副本而无需生成调用。这会避免函数调用的开销（传递实参及返回结果），但它可能导致更大的可执行文件，因为函数体必须被复制多次。
+
+因为内联替换在标准语义中不可观察，编译器拥有对任何未标记为 {{c/core|inline}} 的函数使用内联替换的自由，和对任何标记为 {{c/core|inline}} 的函数生成函数调用的自由。这些优化选择不改变上述关于多个定义和共享静态变量的规则。
+
+{{rrev|since=c++17|
+由于关键词 {{c/core|inline}} 对于函数的含义从 C++98 起已经变为“容许多次定义”而不是“优先内联”，因此这个含义也扩展到了变量。
+}}
+
+===注解===
+如果具有外部链接的内联函数{{rev inl|since=c++17|或变量}}在不同翻译单元中的定义不同，那么程序非良构，不要求诊断。
+
+{{c/core|inline}} 说明符不能用于块作用域内（函数内部）的函数{{rev inl|since=c++17|或变量}}声明。
+
+{{c/core|inline}} 说明符不能重声明在翻译单元中已定义为非内联的函数{{rev inl|since=c++17|或变量}}。
+
+隐式生成的成员函数和任何在它的首条声明中声明为预置的成员函数，与任何其他在类定义内定义的函数一样是内联的。
+
+如果一个内联函数在不同翻译单元中被声明，那么它的{{rlp|default arguments|默认实参}}的积累集合必须在每个翻译单元的末尾相同。
+
+在 C 中，内联函数不必在每个翻译单元声明为 {{c/core|inline}}（最多一个可以是非 {{c/core|inline}} 或 {{c/core|extern inline}}），函数定义不必相同（但如果程序依赖于调用的是哪个函数则行为未指明），且函数局部的静态变量在同一函数的不同定义间不同。
+
+{{rrev|since=c++17|
+关于内联静态成员的额外规则见{{rlp|static|静态数据成员}}。
+
+内联变量消除了将 C++ 代码打包为只有头文件的库的主要障碍。
+}}
+{{feature test macro|std=C++17|value=201606L|__cpp_inline_variables|内联变量}}
+
+===关键词===
+{{ltt|cpp/keyword/inline}}
+
+===示例===
+头文件 "example.h"：
+{{source|1=
+#ifndef EXAMPLE_H
+#define EXAMPLE_H
+
+#include &lt;atomic&gt;
+
+// 被多个源文件包含的函数必须是 inline 的
+inline int sum(int a, int b) 
+{
+    return a + b;
+}
+
+// 拥有外部链接的包含于多个源文件的变量必须是 inline 的
+inline std::atomic&lt;int&gt; counter(0);
+
+#endif
+}}
+源文件 #1：
+{{source|
+#include "example.h"
+
+int a()
+{
+    ++counter;
+    return sum(1, 2);
+}
+}}
+源文件 #2：
+{{source|
+#include "example.h"
+
+int b()
+{
+    ++counter;
+    return sum(3, 4);
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=281|std=C++98|before=友元函数声明可以在函数本身不是内联函数的情况下使用 inline 说明符|after=禁止在此类情况下使用}}
+{{dr list item|wg=cwg|dr=317|std=C++98|before=即使一个函数已经有非内联定义，在（相同翻译单元内）&lt;br&gt;该定义之后依然可以声明该函数为内联函数|after=此时程序非良构}}
+{{dr list item|wg=cwg|dr=765|std=C++98|before=在内联函数内定义的类型在不同的翻译单元可能不同|after=这些类型在所有翻译单元一致}}
+{{dr list item|wg=cwg|dr=1823|std=C++98|before=内联函数的所有定义中的字符串字面量在所有翻译单元间共享|after=由于一致性与实现移除该要求}}
+{{dr list item|wg=cwg|dr=2531|std=C++17|before=静态数据成员在它的首个声明没有 {{c/core|constexpr}} 时也可能会隐式内联|after=此时不会隐式内联}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/inline}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

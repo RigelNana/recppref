@@ -1,0 +1,87 @@
+{{cpp/thread/unique_lock/title|try_lock}}
+{{cpp/thread/unique_lock/navbar}}
+{{dcl begin}}
+{{dcl|since=c++11|1=
+bool try_lock();
+}}
+{{dcl end}}
+
+尝试锁定关联互斥体而不阻塞。相当于调用 {{c|mutex()-&gt;try_lock()}}。
+
+若无关联互斥体或关联互斥体已被此 {{tt|std::unique_lock}} 锁定则抛出 {{lc|std::system_error}}。
+
+===参数===
+（无）
+
+===返回值===
+若成功得到互斥体的所有权则为 {{c|true}}，否则为 {{c|false}}。
+
+===异常===
+* {{c|mutex()-&gt;try_lock()}} 可能抛出的任何异常（{{named req|Mutex}}类型在 {{tt|try_lock}} 中不抛异常，但自定义的{{named req|Lockable|可锁}}可以）。
+
+* 若无关联互斥体，则为以 {{lc|std::errc::operation_not_permitted}} 为错误码的 {{lc|std::system_error}}。
+
+* 若关联互斥体已被此 {{tt|std::unique_lock}} 锁定，则为以 {{lc|std::errc::resource_deadlock_would_occur}} 为错误码的 {{lc|std::system_error}}。
+
+===示例===
+{{example
+|以下示例尝试获取一个互斥体，将之锁定并解锁。
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+using namespace std::chrono_literals;
+
+int main()
+{
+    std::mutex counter_mutex;
+    std::vector&lt;std::thread&gt; threads;
+    using Id = int;
+
+    auto worker_task = [&amp;](Id id, std::chrono::seconds wait, std::chrono::seconds acquire)
+    {
+        // 获取锁之前等待几秒钟。
+        std::this_thread::sleep_for(wait);
+
+        std::unique_lock&lt;std::mutex&gt; lock(counter_mutex, std::defer_lock);
+        if (lock.try_lock())
+            std::cout &lt;&lt; '#' &lt;&lt; id &lt;&lt; ", 已获得锁。\n";
+        else
+        {
+            std::cout &lt;&lt; '#' &lt;&lt; id &lt;&lt; ", 获得锁失败。\n";
+            return;
+        }
+
+        // 将锁保留一段时间。
+        std::this_thread::sleep_for(acquire);
+
+        std::cout &lt;&lt; '#' &lt;&lt; id &lt;&lt; ", 释放锁（通过析构函数）。\n";
+    };
+
+    threads.emplace_back(worker_task, Id{0}, 0s, 2s);
+    threads.emplace_back(worker_task, Id{1}, 1s, 0s);
+    threads.emplace_back(worker_task, Id{2}, 3s, 0s);
+
+    for (auto&amp; thread : threads)
+        thread.join();
+}
+|output=
+#0, 已获得锁。
+#1, 获得锁失败。
+#0, 释放锁（通过析构函数）。
+#2, 已获得锁。
+#2, 释放锁（通过析构函数）。
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/unique_lock/dsc lock}}
+{{dsc inc|cpp/thread/unique_lock/dsc try_lock_for}}
+{{dsc inc|cpp/thread/unique_lock/dsc try_lock_until}}
+{{dsc inc|cpp/thread/unique_lock/dsc unlock}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,110 @@
+{{cpp/title|weak_ptr}}
+{{cpp/memory/weak_ptr/navbar}}
+{{ddcl|header=memory|since=c++11|1=
+template&lt; class T &gt; class weak_ptr;
+}}
+
+{{tt|std::weak_ptr}} 是一种智能指针，它持有被 {{lc|std::shared_ptr}} 管理的对象的非拥有性「弱」引用。在访问引用的对象前必须先转换为 {{lc|std::shared_ptr}}。
+
+{{tt|std::weak_ptr}} 实现临时所有权：当某个对象只有存在时才需要被访问，且随时可能被他人删除时，可以使用 {{tt|std::weak_ptr}} 来跟踪该对象，需要获得临时所有权时，将其转换为 {{lc|std::shared_ptr}}。如果此时销毁了原始 {{lc|std::shared_ptr}}，则对象的生命周期将被延长，直到临时 {{lc|std::shared_ptr}} 也被销毁为止。
+
+{{tt|std::weak_ptr}} 的另一用法是打断被 {{lc|std::shared_ptr}} 管理的对象组成的环状引用。若这种环被孤立（例如无指向环中的外部共享指针），则 {{tt|shared_ptr}} 引用计数无法抵达零，而内存被泄露。可通过[[cpp/memory/weak_ptr/~weak_ptr#示例|令环中的指针之一为弱指针]]来避免这种情况。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|element_type}}|{{rrev multi
+|rev1=
+{{c/core|T}}
+|since2=c++17|rev2=
+{{c/core|std::remove_extent_t&lt;T&gt;}}
+}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/weak_ptr/dsc destructor}}
+{{dsc inc|cpp/memory/weak_ptr/dsc operator{{=}}}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/memory/weak_ptr/dsc reset}}
+{{dsc inc|cpp/memory/weak_ptr/dsc swap}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/memory/weak_ptr/dsc use_count}}
+{{dsc inc|cpp/memory/weak_ptr/dsc expired}}
+{{dsc inc|cpp/memory/weak_ptr/dsc lock}}
+{{dsc inc|cpp/memory/weak_ptr/dsc owner_before}}
+{{dsc inc|cpp/memory/weak_ptr/dsc owner_hash}}
+{{dsc inc|cpp/memory/weak_ptr/dsc owner_equal}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc swap2}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc atomic2}}
+{{dsc end}}
+
+==={{rl|deduction_guides|推导指引}}{{mark since c++17}}===
+
+===注解===
+同 {{lc|std::shared_ptr}}，{{tt|weak_ptr}} 的典型实现存储两个指针：
+* 指向控制块的指针；和
+* 用于构造它的 {{tt|shared_ptr}} 存储的指针。
+
+需要独立的存储一个指针确保 {{tt|shared_ptr}} 和 {{tt|weak_ptr}} 间的来回转换，即对于别名使用的 {{tt|shared_ptr}} 也正确。不可能不经将 {{tt|weak_ptr}} 锁入 {{tt|shared_ptr}} 就访问它存储的指针。
+
+{{feature test macro|__cpp_lib_smart_ptr_owner_equality|使得 {{tt|std::weak_ptr}} 可以作为{{ls|cpp/container#无序关联容器}}的键|std=C++26|value=202306L}}
+
+===示例===
+{{example
+|演示如何通过锁来保证指针的有效性
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+std::weak_ptr&lt;int&gt; gw;
+
+void observe()
+{
+    std::cout &lt;&lt; "gw.use_count() == " &lt;&lt; gw.use_count() &lt;&lt; ": ";
+    // 使用之前必须制作一个 shared_ptr 副本
+    if (std::shared_ptr&lt;int&gt; spt = gw.lock())
+        std::cout &lt;&lt; "*spt == " &lt;&lt; *spt &lt;&lt; '\n';
+    else
+        std::cout &lt;&lt; "gw 已过期\n";
+}
+ 
+int main()
+{
+    {
+        auto sp = std::make_shared&lt;int&gt;(42);
+	gw = sp;
+ 
+	observe();
+    }
+ 
+    observe();
+}
+ | output=
+gw.use_count() == 1: *spt == 42
+gw.use_count() == 0: gw 已过期
+}}
+
+=== 缺陷报告 ===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3001|std=C++17|before=未为数组支持更新 {{tt|element_type}}|after=已更新}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,100 @@
+{{cpp/title|mbrtoc16}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cuchar|since=c++11|
+std::size_t mbrtoc16( char16_t* pc16, const char* s,
+                      std::size_t n, std::mbstate_t* ps );
+}}
+
+转换窄多字节字符到其 UTF-16 字符表示。
+
+若 {{c|s}} 不是空指针，则审查从 {{c|s}} 所指的字节开始的多字节字符串的至多 {{c|n}} 个字节，以检查完成下个多字节字符的字节数（包含任何迁移序列）。若函数确定 {{c|s}} 中下个多字节字符完整且合法，则将它转换到对应的 16 位宽字符，并将它存储于 {{c|*pc16}}（若 {{tt|pc16}} 非空）。
+
+若 {{c|*s}} 中的宽字符对应多 {{c/core|char16_t}} 的序列（例如 UTF-16 中的代理对），则在首次调用此函数后更新 {{c|*ps}}，以令下次到 {{tt|mbrtoc16}} 的调用将写出额外的 {{c/core|char16_t}}，而不考虑 {{c|*s}}。
+
+若 {{c|s}} 是空指针，则忽略 {{c|n}} 与 {{c|pc16}} 的值，而调用等价于 {{c|std::mbrtoc16(NULL, "", 1, ps)}}。
+
+若产生的宽字符是空字符，则转换状态 {{c|*ps}} 表示初始迁移状态。
+
+此函数所用的多字节字符编码为当前活跃的 C 本地环境所指定。
+
+===参数===
+{{par begin}}
+{{par|pc16|指向将写入产生的 16-bit 宽字符的位置的指针}}
+{{par|s|指向用作输入的多字节字符串的指针}}
+{{par|n|能检验的字节数上的限制}}
+{{par|ps|指向转译多字节字符串时所用转换状态对象的指针}}
+{{par end}}
+
+===返回值===
+下列首个能适用者：
+* 若从 {{c|s}} 转换的字符是空字符（并存储于 {{c|*pc16}}，若它非空），则为 {{c|0}}。
+* 成功从 {{c|s}} 转换的多字节字符的字节数 {{closed range|1|n}}。
+* 若下个 {{c/core|char16_t}} 组成多 {{c/core|char16_t}} 字符，并已写入 {{c|*pc16}}，则为 {{c|-3}}。此情况下不从输入处理字节。
+* 若接下来 {{c|n}} 个字符组成不完整，但到此还合法的多字节字符，则为 {{c|-2}}。不写入 {{c|*pc16}}。
+* 若出现编码错误则为 {{c|-1}}。不写入 {{c|*pc16}}，存储值 {{c|EILSEQ}} 于 {{lc|errno}}，且 {{c|*ps}} 状态未指定。
+
+===示例===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cstring&gt;
+#include &lt;cuchar&gt;
+#include &lt;cwchar&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+
+    std::string str{"z\u00df\u6c34\U0001F34C"}; // 或 u8"zß水🍌"
+
+    std::cout &lt;&lt; "处理 " &lt;&lt; str.size() &lt;&lt; " 个字节: [ " &lt;&lt; std::uppercase;
+              &lt;&lt; std::setfill('0') &lt;&lt; std::hex;
+    for (int n{}; unsigned char c : str)
+        std::cout &lt;&lt; (n++ ? " " : "") &lt;&lt; +c;
+    std::cout &lt;&lt; "]\n";
+
+    std::mbstate_t state{}; // 零初始化到初始状态
+    char16_t c16{};
+    const char* ptr{&amp;str[0]}, *end{&amp;str[0] + str.size()};
+
+    while (std::size_t rc{std::mbrtoc16(&amp;c16, ptr, end - ptr + 1, &amp;state)})
+    {
+        std::cout &lt;&lt; "下一个 UTF-16 字符: " &lt;&lt; std::setw(4)
+                  &lt;&lt; static_cast&lt;unsigned short&gt;(c16) &lt;&lt; " 来自 ";
+        if (rc == std::size_t(-3))
+            std::cout &lt;&lt; "前一个代理对\n";
+        else if (rc == std::size_t(-2))
+            continue;
+        else if (rc == (std::size_t) - 1)
+            break;
+        else
+        {
+            std::cout &lt;&lt; std::dec &lt;&lt; rc &lt;&lt; " 个字节 [";
+            for (std::size_t n{}; n != rc; ++n)
+                std::cout &lt;&lt; (n ? " " : "") &lt;&lt; std::hex
+                          &lt;&lt; +static_cast&lt;unsigned char&gt;(ptr[n]);
+            std::cout &lt;&lt; "]\n";
+            ptr += rc;
+        }
+    }
+}
+|output=
+处理 10 个字节: [7A C3 9F E6 B0 B4 F0 9F 8D 8C]
+下一个 UTF-16 字符: 007A 来自 1 个字节 [7A]
+下一个 UTF-16 字符: 00DF 来自 2 个字节 [C3 9F]
+下一个 UTF-16 字符: 6C34 来自 3 个字节 [E6 B0 B4]
+下一个 UTF-16 字符: D83C 来自 4 个字节 [F0 9F 8D 8C]
+下一个 UTF-16 字符: DF4C 来自前一个代理对
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc c16rtomb}}
+{{dsc inc|cpp/string/multibyte/dsc mbrtoc8}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in|mem=std::codecvt&lt;char16_t, char, std::mbstate_t&gt;}}
+{{dsc see c|c/string/multibyte/mbrtoc16}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

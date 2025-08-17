@@ -1,0 +1,164 @@
+{{cpp/title|static_pointer_cast|dynamic_pointer_cast|const_pointer_cast|reinterpret_pointer_cast}}
+{{cpp/memory/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcla|num=1|since=c++11|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; static_pointer_cast( const std::shared_ptr&lt;U&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; static_pointer_cast( std::shared_ptr&lt;U&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=3|since=c++11|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; dynamic_pointer_cast( const std::shared_ptr&lt;U&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; dynamic_pointer_cast( std::shared_ptr&lt;U&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=5|since=c++11|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; const_pointer_cast( const std::shared_ptr&lt;U&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=6|since=c++20|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; const_pointer_cast( std::shared_ptr&lt;U&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=7|since=c++17|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; reinterpret_pointer_cast( const std::shared_ptr&lt;U&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=8|since=c++20|1=
+template&lt; class T, class U &gt;
+std::shared_ptr&lt;T&gt; reinterpret_pointer_cast( std::shared_ptr&lt;U&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcl end}}
+创建 {{lc|std::shared_ptr}} 的新实例，其存储指针从 {{c|r}} 的存储指针用转型表达式获得。
+
+若 {{c|r}} 为空，则新的 {{tt|shared_ptr}} 亦然（但其存储指针不必为空）。否则，新的 {{tt|shared_ptr}} 将与 {{c|r}} 的初始值共享所有权，但若 {{tt|dynamic_pointer_cast}} 所进行的 {{tt|dynamic_cast}} 返回空指针，则它为空。
+
+令 {{tt|Y}} 为 {{c|typename std::shared_ptr&lt;T&gt;::element_type}}，则将分别通过求值下列表达式，获得所得 {{lc|std::shared_ptr}} 的存储指针：
+
+@1,2@ {{c|static_cast&lt;Y*&gt;(r.get())}}
+@3,4@ {{c|dynamic_cast&lt;Y*&gt;(r.get())}}。若 {{tt|dynamic_cast}} 的结果是空指针值，则返回的 {{tt|shared_ptr}} 将为空。
+@5,6@ {{c|const_cast&lt;Y*&gt;(r.get())}}
+@7,8@ {{c|reinterpret_cast&lt;Y*&gt;(r.get())}}
+
+除非从 {{tt|U*}} 到 {{tt|T*}} 的对应转型良构，否则这些函数的行为未定义：
+
+@1,2@ 若非 {{c|static_cast&lt;T*&gt;((U*)nullptr)}} 良构则行为未定义。
+@3,4@ 若非 {{c|dynamic_cast&lt;T*&gt;((U*)nullptr)}} 良构则行为未定义。
+@5,6@ 若非 {{c|const_cast&lt;T*&gt;((U*)nullptr)}} 良构则行为未定义。
+@7,8@ 若非 {{c|reinterpret_cast&lt;T*&gt;((U*)nullptr)}} 良构则行为未定义。
+
+{{rrev|since=c++20|
+调用右值重载 {{v|2,4,6,8}} 后，{{c|r}} 为空且 {{c|1=r.get() == nullptr}}，但对于 {{tt|dynamic_pointer_cast}} {{v|4}}，若 {{c|dynamic_cast}} 失败则不修改 {{c|r}}。
+}}
+
+===参数===
+{{par begin}}
+{{par|r|要转换的指针}}
+{{par end}}
+
+===注解===
+表达式 {{c|std::shared_ptr&lt;T&gt;(static_cast&lt;T*&gt;(r.get()))}}、{{c|std::shared_ptr&lt;T&gt;(dynamic_cast&lt;T*&gt;(r.get()))}} 及 {{c|std::shared_ptr&lt;T&gt;(const_cast&lt;T*&gt;(r.get()))}} 看起来可能拥有相同效果，但它们全都很可能导致未定义行为，试图二次删除同一对象！
+
+===可能的实现===
+{{eq impl
+|title1=static_pointer_cast|ver1=1|1=
+template&lt;class T, class U&gt;
+std::shared_ptr&lt;T&gt; static_pointer_cast(const std::shared_ptr&lt;U&gt;&amp; r) noexcept
+{
+    auto p = static_cast&lt;typename std::shared_ptr&lt;T&gt;::element_type*&gt;(r.get());
+    return std::shared_ptr&lt;T&gt;{r, p};
+}
+|title2=dynamic_pointer_cast|ver2=3|2=
+template&lt;class T, class U&gt;
+std::shared_ptr&lt;T&gt; dynamic_pointer_cast(const std::shared_ptr&lt;U&gt;&amp; r) noexcept
+{
+    if (auto p = dynamic_cast&lt;typename std::shared_ptr&lt;T&gt;::element_type*&gt;(r.get()))
+        return std::shared_ptr&lt;T&gt;{r, p};
+    else
+        return std::shared_ptr&lt;T&gt;{};
+}
+|title3=const_pointer_cast|ver3=5|3=
+template&lt;class T, class U&gt;
+std::shared_ptr&lt;T&gt; const_pointer_cast(const std::shared_ptr&lt;U&gt;&amp; r) noexcept
+{
+    auto p = const_cast&lt;typename std::shared_ptr&lt;T&gt;::element_type*&gt;(r.get());
+    return std::shared_ptr&lt;T&gt;{r, p};
+}
+|title4=reinterpret_pointer_cast|ver4=7|4=
+template&lt;class T, class U&gt;
+std::shared_ptr&lt;T&gt; reinterpret_pointer_cast(const std::shared_ptr&lt;U&gt;&amp; r) noexcept
+{
+    auto p = reinterpret_cast&lt;typename std::shared_ptr&lt;T&gt;::element_type*&gt;(r.get());
+    return std::shared_ptr&lt;T&gt;{r, p};
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+ 
+class Base
+{
+public:
+    int a;
+    virtual void f() const { std::cout &lt;&lt; "我是基类!\n"; }
+    virtual ~Base() {}
+};
+ 
+class Derived : public Base
+{
+public:
+    void f() const override { std::cout &lt;&lt; "我是派生类!\n"; }
+    ~Derived() {}
+};
+
+int main()
+{
+    auto basePtr = std::make_shared&lt;Base&gt;();
+    std::cout &lt;&lt; "基类指针说: ";
+    basePtr-&gt;f();
+    
+    auto derivedPtr = std::make_shared&lt;Derived&gt;();
+    std::cout &lt;&lt; "派生类指针说: ";
+    derivedPtr-&gt;f();
+    
+    // 沿类层次向上的 static_pointer_cast
+    basePtr = std::static_pointer_cast&lt;Base&gt;(derivedPtr);
+    std::cout &lt;&lt; "指向派生类的基类指针说: ";
+    basePtr-&gt;f();
+    
+    // 沿类层次向下/跨类层次的 dynamic_pointer_cast
+    auto downcastedPtr = std::dynamic_pointer_cast&lt;Derived&gt;(basePtr);
+    if (downcastedPtr)
+    {
+        std::cout &lt;&lt; "向下转型的指针说: ";
+        downcastedPtr-&gt;f();
+    }
+    
+    // 所有指向派生类的指针都共享所有权
+    std::cout &lt;&lt; "指向底层派生类的指针数量: "
+              &lt;&lt; derivedPtr.use_count()
+              &lt;&lt; '\n';
+}
+|output=
+基类指针说: 我是基类!
+派生类指针说: 我是派生类!
+指向派生类的基类指针说: 我是派生类!
+向下转型的指针说: 我是派生类!
+指向底层派生类的指针数量: 3
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

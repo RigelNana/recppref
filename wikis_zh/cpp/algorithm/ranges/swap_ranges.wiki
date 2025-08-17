@@ -1,0 +1,138 @@
+{{cpp/ranges/title|swap_ranges|swap_ranges_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2 &gt;
+requires std::indirectly_swappable&lt;I1, I2&gt;
+constexpr swap_ranges_result&lt;I1, I2&gt;
+    swap_ranges( I1 first1, S1 last1, I2 first2, S2 last2 );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2 &gt;
+requires std::indirectly_swappable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;&gt;
+constexpr swap_ranges_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                             ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+    swap_ranges( R1&amp;&amp; r1, R2&amp;&amp; r2 );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I1, class I2 &gt;
+using swap_ranges_result = ranges::in_in_result&lt;I1, I2&gt;;
+}}
+{{dcl end}}
+
+@1@ 在第一范围 {{range|first1|first1 + M}} 与第二范围 {{range|first2|first2 + M}} 间以 {{c|ranges::iter_swap(first1 + i, first2 + i)}} 交换元素，其中 {{c|1= M = ranges::min(ranges::distance(first1, last1), ranges::distance(first2, last2))}}。
+@@ 范围 {{range|first1|last1}} 与 {{range|first2|last2}} 必须不重叠。
+
+@2@ 同 {{v|1}}，但以 {{tt|r1}} 为第一范围并以 {{c|r2}} 为第二范围，如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，以 {{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|要交换的|range=第一|sentinel=yes}}
+{{par range|first2|last2|要交换的|range=第二|sentinel=yes}}
+{{par|r1|要交换的第一范围}}
+{{par|r2|要交换的第二范围}}
+{{par end}}
+
+===返回值===
+{{c|{first1 + M, first2 + M} }}。
+
+===复杂度===
+恰好 {{c|M}} 次交换。
+
+===注解===
+{{cpp/algorithm/notes swap vectorization}}
+
+===可能的实现===
+{{eq fun|1=
+struct swap_ranges_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2&gt;
+    requires std::indirectly_swappable&lt;I1, I2&gt;
+    constexpr ranges::swap_ranges_result&lt;I1, I2&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2) const
+    {
+        for (; !(first1 == last1 or first2 == last2); ++first1, ++first2)
+            ranges::iter_swap(first1, first2);
+        return {std::move(first1), std::move(first2)};
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2&gt;
+    requires std::indirectly_swappable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;&gt;
+    constexpr ranges::swap_ranges_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                         ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2));
+    }
+};
+
+inline constexpr swap_ranges_fn swap_ranges {};
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+auto print(std::string_view name, auto const&amp; seq, std::string_view term = "\n")
+{
+    std::cout &lt;&lt; name &lt;&lt; " : ";
+    for (const auto&amp; elem : seq)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    std::cout &lt;&lt; term;
+}
+
+int main()
+{
+    std::vector&lt;char&gt; p {'A', 'B', 'C', 'D', 'E'};
+    std::list&lt;char&gt; q {'1', '2', '3', '4', '5', '6'};
+
+    print("p", p);
+    print("q", q, "\n\n");
+
+    // 交换 p[0, 2) 与 q[1, 3):
+    std::ranges::swap_ranges(p.begin(),
+                             p.begin() + 4,
+                             std::ranges::next(q.begin(), 1),
+                             std::ranges::next(q.begin(), 3));
+    print("p", p);
+    print("q", q, "\n\n");
+
+    // 交换 p[0, 5) 与 q[0, 5):
+    std::ranges::swap_ranges(p, q);
+
+    print("p", p);
+    print("q", q);
+}
+| output=
+p : A B C D E
+q : 1 2 3 4 5 6
+
+p : 2 3 C D E
+q : 1 A B 4 5 6
+
+p : 1 A B 4 5
+q : 2 3 C D E 6
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/ranges/dsc iter_swap}}
+{{dsc inc|cpp/utility/ranges/dsc swap}}
+{{dsc inc|cpp/algorithm/dsc swap_ranges}}
+{{dsc inc|cpp/algorithm/dsc iter_swap}}
+{{dsc inc|cpp/algorithm/dsc swap}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

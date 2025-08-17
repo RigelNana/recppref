@@ -1,0 +1,139 @@
+{{cpp/title|disjunction}}
+{{cpp/meta/navbar}}
+{{ddcl|header=type_traits|since=c++17|
+template&lt; class... B &gt;
+struct disjunction;
+}}
+
+组成类型特征 {{tt|B...}} 的{{enwiki|Logical disjunction|逻辑析取}}，相当于在特征序列上实施逻辑或。
+
+特化 {{c|std::disjunction&lt;B1, ..., BN&gt;}} 有一个公开且无歧义的基类，即
+* 若 {{c|1=sizeof...(B) == 0}} ，则为 {{c|std::false_type}} ；否则
+* {{tt|B1, ..., BN}} 中第一个使得 {{c|1=bool(Bi::value) == true}} 的 {{tt|Bi}}，若无这种类型，则为 {{tt|BN}}。
+
+除了 {{tt|disjunction}} 和 {{tt|operator{{=}}}} 以外的基类成员名不会被隐藏，且它们在 {{tt|disjunction}} 中无歧义地可用。
+
+析取是短路的：若存在模板类型实参 {{tt|Bi}} 满足 {{c|1=bool(Bi::value) != false}}，则实例化 {{c|disjunction&lt;B1, ..., BN&gt;::value}} 时不要求 {{tt|j &gt; i}} 的 {{c|Bj::value}} 的实例化。
+
+{{cpp/types/nospec|pv}}
+
+===模板形参===
+{{par begin}}
+{{par|B...|每个要实例化 {{c|Bi::value}} 的模板实参 {{tt|Bi}} 必须可用作基类，且定义了可转换到 {{c/core|bool}} 的成员 {{tt|value}} }}
+{{par end}}
+
+===辅助变量模板===
+{{dcl begin}}
+{{dcl|since=c++17|1=
+template&lt; class... B &gt;
+constexpr bool disjunction_v = disjunction&lt;B...&gt;::value;
+}}
+{{dcl end}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;class...&gt;
+struct disjunction : std::false_type {};
+
+template&lt;class B1&gt;
+struct disjunction&lt;B1&gt; : B1 {};
+
+template&lt;class B1, class... Bn&gt;
+struct disjunction&lt;B1, Bn...&gt;
+    : std::conditional_t&lt;bool(B1::value), B1, disjunction&lt;Bn...&gt;&gt;  {};
+}}
+
+===注解===
+{{tt|disjunction}} 的特化不需要继承自 {{c|std::true_type}} 或 {{c|std::false_type}}：它单纯地继承自首个 {{tt|::value}} 显式转换为 {{c/core|bool}} 后为 {{c|true}} 的 {{tt|B}}，或在它们都转换为 {{c|false}} 时继承自最后的 {{tt|B}}。例如，{{c|std::disjunction&lt;std::integral_constant&lt;int, 2&gt;, std::integral_constant&lt;int, 4&gt;&gt;::value}} 为 {{c|2}}。
+
+{{tt|disjunction}} 的短路实例化使其区别于[[cpp/language/fold|折叠表达式]]：类似 {{c|(... {{!!}} Bs::value)}} 的折叠表达式会实例化 {{tt|Bs}} 中的每个 {{tt|B}}，而 {{c|std::disjunction_v&lt;Bs...&gt;}} 一旦能确定值就停止实例化。若之后的类型实例化代价高昂，或以错误的类型实例化时能导致硬错误，这特别有用。
+
+{{feature test macro|__cpp_lib_logical_traits|std=C++17|value=201510L|[[cpp/meta#特征上的操作|逻辑运算符类型特征]]}}
+
+===示例===
+{{example|code=
+#include &lt;cstdint&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+// 当且仅当 a == b 时，values_equal&lt;a, b, T&gt;::value 为 true。
+template&lt;auto V1, decltype(V1) V2, typename T&gt;
+struct values_equal : std::bool_constant&lt;V1 == V2&gt;
+{
+    using type = T;
+};
+
+// default_type&lt;T&gt;::value 始终为 true
+template&lt;typename T&gt;
+struct default_type : std::true_type
+{
+    using type = T;
+};
+
+// 现在我们可以像 switch 语句一样使用 disjunction：
+template&lt;int I&gt;
+using int_of_size = typename std::disjunction&lt; //
+    values_equal&lt;I, 1, std::int8_t&gt;,           //
+    values_equal&lt;I, 2, std::int16_t&gt;,          //
+    values_equal&lt;I, 4, std::int32_t&gt;,          //
+    values_equal&lt;I, 8, std::int64_t&gt;,          //
+    default_type&lt;void&gt;                         // 必须在最后！
+    &gt;::type;
+
+static_assert(sizeof(int_of_size&lt;1&gt;) == 1);
+static_assert(sizeof(int_of_size&lt;2&gt;) == 2);
+static_assert(sizeof(int_of_size&lt;4&gt;) == 4);
+static_assert(sizeof(int_of_size&lt;8&gt;) == 8);
+static_assert(std::is_same_v&lt;int_of_size&lt;13&gt;, void&gt;);
+
+// 检查 Foo 是否可从 double 构造将导致硬错误
+struct Foo
+{
+    template&lt;class T&gt;
+    struct sfinae_unfriendly_check { static_assert(!std::is_same_v&lt;T, double&gt;); };
+
+    template&lt;class T&gt;
+    Foo(T, sfinae_unfriendly_check&lt;T&gt; = {});
+};
+
+template&lt;class... Ts&gt;
+struct first_constructible
+{
+    template&lt;class T, class...Args&gt;
+    struct is_constructible_x : std::is_constructible&lt;T, Args...&gt;
+    {
+        using type = T;
+    };
+
+    struct fallback
+    {
+        static constexpr bool value = true;
+        using type = void; // 若找不到则用于返回的类型
+    };
+
+    template&lt;class... Args&gt;
+    using with = typename std::disjunction&lt;is_constructible_x&lt;Ts, Args...&gt;...,
+                                           fallback&gt;::type;
+};
+
+// OK，不实例化 is_constructible&lt;Foo, double&gt;
+static_assert(std::is_same_v&lt;first_constructible&lt;std::string, int, Foo&gt;::with&lt;double&gt;,
+                             int&gt;);
+
+static_assert(std::is_same_v&lt;first_constructible&lt;std::string, int&gt;::with&lt;&gt;, std::string&gt;);
+static_assert(std::is_same_v&lt;first_constructible&lt;std::string, int&gt;::with&lt;const char*&gt;,
+                             std::string&gt;);
+static_assert(std::is_same_v&lt;first_constructible&lt;std::string, int&gt;::with&lt;void*&gt;, void&gt;);
+
+int main() {}
+|output=
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc negation}}
+{{dsc inc|cpp/types/dsc conjunction}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

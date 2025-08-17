@@ -1,0 +1,175 @@
+{{cpp/ranges/title|is_permutation}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header | algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Proj1 = std::identity, class Proj2 = std::identity,
+          std::indirect_equivalence_relation&lt;std::projected&lt;I1, Proj1&gt;,
+                                             std::projected&lt;I2, Proj2&gt;&gt;
+                                                 Pred = ranges::equal_to &gt;
+constexpr bool
+    is_permutation( I1 first1, S1 last1, I2 first2, S2 last2,
+                    Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R1, ranges::forward_range R2,
+          class Proj1 = std::identity, class Proj2 = std::identity,
+          std::indirect_equivalence_relation&lt;
+              std::projected&lt;ranges::iterator_t&lt;R1&gt;, Proj1&gt;,
+              std::projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+                  Pred = ranges::equal_to &gt;
+constexpr bool
+    is_permutation( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ 若存在范围 {{range|first1|last1}} 中的元素的{{enwiki|permutation|排列}}使得该范围''等于'' {{range|first2|last2}}（在应用对应的投影 {{c|Proj1}} 和 {{c|Proj2}} 后，并以 {{c|Pred}} 为比较器）则返回 {{c|true}}。否则返回 {{c|false}}。
+
+@2@ 同 {{v|1}}，但以 {{c|r1}} 为第一源范围并以 {{c|r2}} 为第二源范围，如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，以 {{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|3=|range=第一|sentinel=yes}}
+{{par range|first2|last2|3=|range=第二|sentinel=yes}}
+{{par|r1|第一元素 {{lconcept|range}}}}
+{{par|r2|第二元素 {{lconcept|range}}}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj1|应用到第一范围中元素的投影}}
+{{par|proj2|应用到第一范围中元素的投影}}
+{{par end}}
+
+===返回值===
+若范围 {{range|first1|last1}} 为 {{range|first2|last2}} 的重排列则为 {{c|true}}。
+
+===复杂度===
+至多应用 {{mathjax-or|\(\scriptsize \mathcal{O}(N^2)\)|O(N&lt;sup&gt;2&lt;/sup&gt;)}} 次谓词和每个投影，或若序列已经相等则恰好应用 {{mathjax-or|\(\scriptsize N\)|N}} 次，其中 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::distance(first1, last1)}}。
+然而若 {{c|1=ranges::distance(first1, last1) != ranges::distance(first2, last2)}}，则不应用谓词和投影。
+
+===注解===
+''排列'' 关系是{{enwiki|equivalence relation|等价关系}}。
+
+{{tt|ranges::is_permutation}} 可以用于测试，比如检查诸如排序、混洗、划分等重排算法的正确性。若 {{tt|p}} 为原序列而 {{tt|q}} 是“改动后”的序列，则 {{c|1=ranges::is_permutation(p, q) == true}} 表示构成 {{tt|q}} 的元素与 {{tt|p}} 的“相同”（可能经过重排）。
+
+===可能的实现===
+{{eq fun|1=
+struct is_permutation_fn
+{
+    template&lt;std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Proj1 = std::identity, class Proj2 = std::identity,
+             std::indirect_equivalence_relation&lt;std::projected&lt;I1, Proj1&gt;,
+                                                std::projected&lt;I2, Proj2&gt;&gt;
+                                                    Pred = ranges::equal_to&gt;
+    constexpr bool operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        // 跳过公共前缀
+        auto ret = std::ranges::mismatch(first1, last1, first2, last2,
+                                         std::ref(pred), std::ref(proj1), std::ref(proj2));
+        first1 = ret.in1, first2 = ret.in2;
+
+        // 在剩余部分迭代，统计每个来自 [first1, last1) 中的元素在 [first2, last2) 中出现多少次
+        for (auto i {first1}; i != last1; ++i)
+        {
+            const auto i_proj {std::invoke(proj1, *i)};
+            auto i_cmp = [&amp;]&lt;typename T&gt;(T&amp;&amp; t)
+            { 
+                return std::invoke(pred, i_proj, std::forward&lt;T&gt;(t));
+            };
+
+            if (i != ranges::find_if(first1, i, i_cmp, proj1))
+                continue; // 已检查过此 *i
+
+            if (const auto m {ranges::count_if(first2, last2, i_cmp, proj2)};
+                m == 0 or m != ranges::count_if(i, last1, i_cmp, proj1))
+                return false;
+        }
+        return true;
+    }
+
+    template&lt;ranges::forward_range R1, ranges::forward_range R2,
+             class Proj1 = std::identity, class Proj2 = std::identity,
+             std::indirect_equivalence_relation&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R1&gt;, Proj1&gt;,
+                 std::projected&lt;ranges::iterator_t&lt;R2&gt;, Proj2&gt;&gt;
+                     Pred = ranges::equal_to&gt;
+    constexpr bool operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                              Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(pred), std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr is_permutation_fn is_permutation{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+auto&amp; operator&lt;&lt;(auto&amp; os, std::ranges::forward_range auto const&amp; v)
+{
+    os &lt;&lt; "{ ";
+    for (const auto&amp; e : v)
+        os &lt;&lt; e &lt;&lt; ' ';
+    return os &lt;&lt; "}";
+}
+
+int main()
+{
+    static constexpr auto r1 = {1, 2, 3, 4, 5};
+    static constexpr auto r2 = {3, 5, 4, 1, 2};
+    static constexpr auto r3 = {3, 5, 4, 1, 1};
+
+    static_assert(
+        std::ranges::is_permutation(r1, r1) &amp;&amp;
+        std::ranges::is_permutation(r1, r2) &amp;&amp;
+        std::ranges::is_permutation(r2, r1) &amp;&amp;
+        std::ranges::is_permutation(r1.begin(), r1.end(), r2.begin(), r2.end()));
+
+    std::cout
+        &lt;&lt; std::boolalpha
+        &lt;&lt; "is_permutation(" &lt;&lt; r1 &lt;&lt; ", " &lt;&lt; r2 &lt;&lt; "): "
+        &lt;&lt; std::ranges::is_permutation(r1, r2) &lt;&lt; '\n'
+        &lt;&lt; "is_permutation(" &lt;&lt; r1 &lt;&lt; ", " &lt;&lt; r3 &lt;&lt; "): "
+        &lt;&lt; std::ranges::is_permutation(r1, r3) &lt;&lt; '\n'
+
+        &lt;&lt; "is_permutation with custom predicate and projections: "
+        &lt;&lt; std::ranges::is_permutation(
+            std::array{ -14, -11, -13, -15, -12 },  // 第一范围
+            std::array{ 'F', 'E', 'C', 'B', 'D' },  // 第二范围
+            [](int x, int y) { return abs(x) == abs(y); }, // 谓词
+            [](int x) { return x + 10; },           // 第一范围的投影
+            [](char y) { return int(y - 'A'); })    // 第二范围的投影
+        &lt;&lt; '\n';
+}
+|output=
+is_permutation({ 1 2 3 4 5 }, { 3 5 4 1 2 }): true
+is_permutation({ 1 2 3 4 5 }, { 3 5 4 1 1 }): false
+is_permutation with custom predicate and projections: true
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/algorithm/ranges/dsc next_permutation}}
+{{dsc inc | cpp/algorithm/ranges/dsc prev_permutation}}
+{{dsc inc | cpp/algorithm/dsc is_permutation}}
+{{dsc inc | cpp/algorithm/dsc next_permutation}}
+{{dsc inc | cpp/algorithm/dsc prev_permutation}}
+{{dsc inc | cpp/concepts/dsc equivalence_relation}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

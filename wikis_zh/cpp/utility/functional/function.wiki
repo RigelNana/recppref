@@ -1,0 +1,173 @@
+{{cpp/title|function}}
+{{cpp/utility/functional/function/navbar}}
+{{dcl begin}}
+{{dcl header|functional}}
+{{dcl|since=c++11|
+template&lt; class &gt;
+class function; /* 未定义 */
+}}
+{{dcl|since=c++11|
+template&lt; class R, class... Args &gt;
+class function&lt;R(Args...)&gt;;
+}}
+{{dcl end}}
+
+类模板 {{tt|std::function}} 是一种通用多态函数包装器。{{tt|std::function}} 的实例能存储、复制及调用任何{{named req|CopyConstructible}}的{{named req|Callable}}''目标''——函数（通过其指针）、[[cpp/language/lambda|lambda 表达式]]、[[cpp/utility/functional/bind|bind 表达式]]或其他函数对象，以及成员函数指针和数据成员指针。
+
+存储的可调用对象被称为 {{tt|std::function}} 的''目标''。若 {{tt|std::function}} 不含目标，则称它为''空''。调用''空'' {{tt|std::function}} 的''目标''导致抛出 {{lc|std::bad_function_call}} 异常。
+
+{{tt|std::function}} 满足{{named req|CopyConstructible}}和{{named req|CopyAssignable}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|result_type}}|{{tt|R}}}}
+{{dsc|{{tt|argument_type}}&lt;br&gt;{{mark|C++17 中弃用}}{{mark until c++20|removed=yes}}|若 {{c|1=sizeof...(Args)==1}} 且 {{tt|T}} 是 {{tt|Args...}} 中首个且唯一的类型，则为 {{tt|T}}}}
+{{dsc|{{tt|first_argument_type}}&lt;br&gt;{{mark|C++17 中弃用}}{{mark until c++20|removed=yes}}|若 {{c|1=sizeof...(Args)==2}} 且 {{tt|T1}} 是 {{tt|Args...}} 中两个类型的第一个，则为 {{tt|T1}}}}
+{{dsc|{{tt|second_argument_type}}&lt;br&gt;{{mark|C++17 中弃用}}{{mark until c++20|removed=yes}}|若 {{c|1=sizeof...(Args)==2}} 且 {{tt|T2}} 是 {{tt|Args...}} 中两个类型的第二个，则为 {{tt|T2}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/function/dsc constructor}}
+{{dsc inc|cpp/utility/functional/function/dsc destructor}}
+{{dsc inc|cpp/utility/functional/function/dsc operator{{=}}}}
+{{dsc inc|cpp/utility/functional/function/dsc swap}}
+{{dsc inc|cpp/utility/functional/function/dsc assign}}
+{{dsc inc|cpp/utility/functional/function/dsc operator_bool}}
+{{dsc inc|cpp/utility/functional/function/dsc operator()}}
+
+{{dsc h2|目标访问}}
+{{dsc inc|cpp/utility/functional/function/dsc target_type}}
+{{dsc inc|cpp/utility/functional/function/dsc target}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/function/dsc swap2}}
+{{dsc inc|cpp/utility/functional/function/dsc operator_cmp}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/function/dsc uses_allocator}}
+{{dsc end}}
+
+==={{rl|deduction_guides|推导指引}}{{mark since c++17}}===
+
+===注解===
+{{rrev multi
+|rev1=
+当结果类型为引用的 {{tt|std::function}} 从无尾随返回类型的 lambda 表达式初始化时需要留心。由于 {{c/core|auto}} 推导的起效方式，这种 lambda 表达式将始终返回纯右值。故而结果引用将始终绑定到生命期在 {{tt|std::function::operator()}} 返回时结束的临时量。
+|since2=c++23|rev2=
+若一个函数或函数对象（包括无尾随返回类型的 lambda 表达式）返回纯右值，用这样的对象初始化返回值为引用的 {{tt|std::function}}，则程序非良构，因为禁止将返回的引用绑定到临时对象。
+}}
+
+{{source|1=
+std::function&lt;const int&amp;()&gt; F([]{ return 42; }); // C++23 起错误：不能绑定返回的引用到临时对象
+
+int x = F(); // C++23 前为未定义行为：F() 的结果是悬垂引用
+
+std::function&lt;int&amp;()&gt; G([]()-&gt;int&amp; { static int i{0x2A}; return i; }); // OK
+
+std::function&lt;const int&amp;()&gt; H([i{052}]-&gt;const int&amp; { return i; }); // OK
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+ 
+struct Foo
+{
+    Foo(int num) : num_(num) {}
+    void print_add(int i) const { std::cout &lt;&lt; num_+i &lt;&lt; '\n'; }
+    int num_;
+};
+ 
+void print_num(int i)
+{
+    std::cout &lt;&lt; i &lt;&lt; '\n';
+}
+
+struct PrintNum
+{
+    void operator()(int i) const
+    {
+        std::cout &lt;&lt; i &lt;&lt; '\n';
+    }
+};
+ 
+int main()
+{
+    // 存储自由函数
+    std::function&lt;void(int)&gt; f_display = print_num;
+    f_display(-9);
+ 
+    // 存储 lambda
+    std::function&lt;void()&gt; f_display_42 = []() { print_num(42); };
+    f_display_42();
+ 
+    // 存储到 std::bind 调用的结果
+    std::function&lt;void()&gt; f_display_31337 = std::bind(print_num, 31337);
+    f_display_31337();
+ 
+    // 存储到成员函数的调用
+    std::function&lt;void(const Foo&amp;, int)&gt; f_add_display = &amp;Foo::print_add;
+    const Foo foo(314159);
+    f_add_display(foo, 1);
+    f_add_display(314159, 1);
+   
+    // 存储到数据成员访问器的调用
+    std::function&lt;int(Foo const&amp;)&gt; f_num = &amp;Foo::num_;
+    std::cout &lt;&lt; "num_: " &lt;&lt; f_num(foo) &lt;&lt; '\n';
+    
+    // 存储到成员函数及对象的调用
+    using std::placeholders::_1;
+    std::function&lt;void(int)&gt; f_add_display2 = std::bind( &amp;Foo::print_add, foo, _1 );
+    f_add_display2(2);
+ 
+    // 存储到成员函数和对象指针的调用
+    std::function&lt;void(int)&gt; f_add_display3 = std::bind( &amp;Foo::print_add, &amp;foo, _1 );
+    f_add_display3(3);
+
+    // 存储到函数对象的调用
+    std::function&lt;void(int)&gt; f_display_obj = PrintNum();
+    f_display_obj(18);
+
+    auto factorial = [](int n)
+    {
+        // 存储 lambda 对象以模拟“递归 lambda ”，注意额外开销
+        std::function&lt;int(int)&gt; fac = [&amp;](int n){ return (n &lt; 2) ? 1 : n * fac(n - 1); };
+        // 请注意 "auto fac = [&amp;](int n){...};" 无法递归调用
+        return fac(n);
+    };
+    for (int i{5}; i != 8; ++i)
+        std::cout &lt;&lt; i &lt;&lt; "! = " &lt;&lt; factorial(i) &lt;&lt; ";  ";
+    std::cout &lt;&lt; '\n';
+}
+|p = true|output=
+-9
+42
+31337
+314160
+314160
+num_: 314159
+314161
+314162
+18
+5! = 120;  6! = 720;  7! = 5040;
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc move_only_function}}
+{{dsc inc|cpp/utility/functional/dsc copyable_function}}
+{{dsc inc|cpp/utility/functional/dsc function_ref}}
+{{dsc inc|cpp/utility/functional/dsc bad_function_call}}
+{{dsc inc|cpp/utility/functional/dsc mem_fn}}
+{{dsc|{{ltt|cpp/language/typeid|'''typeid'''}}|查询类型信息，返回表现该类型的 {{lc|std::type_info}} 对象}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

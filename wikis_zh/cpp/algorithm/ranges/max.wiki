@@ -1,0 +1,146 @@
+{{cpp/ranges/title|max}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr const T&amp;
+    max( const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; std::copyable T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr T
+    max( std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; ranges::input_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;,
+                                           ranges::range_value_t&lt;R&gt;*&gt;
+constexpr ranges::range_value_t&lt;R&gt;
+    max( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+返回给定的投影值的较大者。
+
+@1@ 返回 {{c|a}} 与 {{c|b}} 的较大者。
+@2@ 返回 initializer_list {{c|r}} 中的首个最大值。
+@3@ 返回范围 {{c|r}} 中的首个最大值。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par | a, b  | 要比较的值}}
+{{par | r     | 要比较的值的范围}}
+{{par | comp  | 应用到投影后元素的比较}}
+{{par | proj  | 应用到元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ {{c|a}} 与 {{c|b}} 的较大值，按照其各自的投影值。若它们等价则返回 {{c|a}}。
+
+@2-3@ {{c|r}} 中按照投影的最大值。若数个值等价于最大值，则返回最左者。若范围为空（由 {{c|ranges::distance(r)}} 确定）则行为未定义。
+
+===复杂度===
+@1@ 准确比较一次。
+
+@2,3@ 准确比较 {{c|ranges::distance(r) - 1}} 次。
+
+===可能的实现===
+{{eq fun
+|1=
+struct max_fn
+{
+    template&lt;class T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr
+    const T&amp; operator()(const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {}) const
+    {
+        return std::invoke(comp, std::invoke(proj, a), std::invoke(proj, b)) ? b : a;
+    }
+
+    template&lt;std::copyable T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr
+    T operator()(std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return *ranges::max_element(r, std::ref(comp), std::ref(proj));
+    }
+
+    template&lt;ranges::input_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                  std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;,
+                                               ranges::range_value_t&lt;R&gt;*&gt;
+    constexpr
+    ranges::range_value_t&lt;R&gt; operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        using V = ranges::range_value_t&lt;R&gt;;
+        if constexpr (ranges::forward_range&lt;R&gt;)
+            return
+                static_cast&lt;V&gt;(*ranges::max_element(r, std::ref(comp), std::ref(proj)));
+        else
+        {
+            auto i = ranges::begin(r);
+            auto s = ranges::end(r);
+            V m(*i);
+            while (++i != s)
+                if (std::invoke(comp, std::invoke(proj, m), std::invoke(proj, *i)))
+                    m = *i;
+            return m;
+        }
+    }
+};
+
+inline constexpr max_fn max;
+}}
+
+===注解===
+{{cpp/algorithm/minmax_danger_note|ranges::max}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+static_assert(std::ranges::max({0B10, 0X10, 010, 10}) == 16); // 重载 (2)
+
+int main()
+{
+    namespace ranges = std::ranges;
+    using namespace std::string_view_literals;
+
+    std::cout &lt;&lt; "larger of 1 and 9999: " &lt;&lt; ranges::max(1, 9999) &lt;&lt; '\n'
+              &lt;&lt; "larger of 'a', and 'b': '" &lt;&lt; ranges::max('a', 'b') &lt;&lt; "'\n"
+              &lt;&lt; "longest of \"foo\", \"bar\", and \"hello\": \""
+              &lt;&lt; ranges::max({"foo"sv, "bar"sv, "hello"sv}, {},
+                             &amp;std::string_view::size) &lt;&lt; "\"\n";
+}
+|output=
+larger of 1 and 9999: 9999
+larger of 'a', and 'b': 'b'
+longest of "foo", "bar", and "hello": "hello"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/algorithm/ranges/dsc min}}
+{{dsc inc | cpp/algorithm/ranges/dsc minmax}}
+{{dsc inc | cpp/algorithm/ranges/dsc max_element}}
+{{dsc inc | cpp/algorithm/ranges/dsc clamp}}
+{{dsc inc | cpp/algorithm/dsc max}}
+{{dsc end}}
+
+{{langlinks|de|en|fr|it|ja|pt|ru|zh}}

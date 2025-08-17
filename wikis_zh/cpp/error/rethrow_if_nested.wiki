@@ -1,0 +1,68 @@
+{{cpp/title|rethrow_if_nested}}
+{{cpp/error/navbar}}
+{{ddcla|header=exception|since=c++11|constexpr=c++26|
+template&lt; class E &gt;
+void rethrow_if_nested( const E&amp; e );
+}}
+
+若 {{tt|E}} 不是多态类类型，或若 {{lc|std::nested_exception}} 是 {{tt|E}} 的不可访问或有歧义基类，则无效果。
+
+否则，进行
+
+{{source|1=
+if (auto p = dynamic_cast&lt;const std::nested_exception*&gt;(std::addressof(e)))
+    p-&gt;rethrow_nested();
+}}
+
+===参数===
+{{par begin}}
+{{par|e|要重抛的异常对象}}
+{{par end}}
+
+===注解===
+于许多相关函数不同，这个函数''并非'' 用于以 {{c|std::exception_ptr}} 来调用，而是以实际的异常引用调用。
+
+{{ftm begin}}
+{{ftm|__cpp_lib_constexpr_exceptions|value=202411L|std=C++26|{{c/core|constexpr}} 的异常类型}}
+{{ftm end}}
+
+===可能的实现===
+{{eq fun |1=
+namespace details
+{
+    template&lt;class E&gt;
+    struct can_dynamic_cast
+        : std::integral_constant&lt;bool,
+              std::is_polymorphic&lt;E&gt;::value &amp;&amp;
+              (!std::is_base_of&lt;std::nested_exception, E&gt;::value {{!!}} 
+                std::is_convertible&lt;E*, std::nested_exception*&gt;::value)
+          &gt; {};
+
+    template&lt;class T&gt;
+    void rethrow_if_nested_impl(const T&amp; e, std::true_type)
+    {
+        if (auto nep = dynamic_cast&lt;const std::nested_exception*&gt;(std::addressof(e)))
+            nep-&gt;rethrow_nested();
+    }
+
+    template&lt;class T&gt;
+    void rethrow_if_nested_impl(const T&amp;, std::false_type) {}
+}
+
+template&lt;class T&gt;
+void rethrow_if_nested(const T&amp; t)
+{
+    details::rethrow_if_nested_impl(t, details::can_dynamic_cast&lt;T&gt;());
+}
+}}
+
+===示例===
+{{include|cpp/error/example_nested_exception}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/error/dsc nested_exception}}
+{{dsc inc|cpp/error/dsc throw_with_nested}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

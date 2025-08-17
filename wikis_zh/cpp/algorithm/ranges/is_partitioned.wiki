@@ -1,0 +1,119 @@
+{{cpp/ranges/title|is_partitioned}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+constexpr bool
+    is_partitioned( I first, S last, Pred pred, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R, class Proj = std::identity,
+          std::indirect_unary_predicate&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+constexpr bool
+    is_partitioned( R&amp;&amp; r, Pred pred, Proj proj = {} );
+}}
+{{dcl end}}
+
+@1@ 若范围 {{range|first|last}} 中在投影后满足谓词 {{c|pred}} 的所有元素都处于不满足的所有元素之前出现则返回 {{c|true}}。若范围 {{range|first|last}} 为空则亦返回 {{c|true}}。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的|sentinel=yes}}
+{{par|r|要检验的元素范围}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj|应用到谓词的投影}}
+{{par end}}
+
+===返回值===
+若 {{range|first|last}} 为空或为 {{c|pred}} 所划分则为 {{c|true}}。否则为 {{c|false}}。
+
+===复杂度===
+至多应用 {{c|ranges::distance(first, last)}} 次 {{c|pred}} 和 {{c|proj}}。
+
+===可能的实现===
+{{eq fun|1=
+struct is_partitioned_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    constexpr bool operator()(I first, S last, Pred pred, Proj proj = {}) const
+    {
+        for (; first != last; ++first)
+            if (!std::invoke(pred, std::invoke(proj, *first)))
+                break;
+
+        for (; first != last; ++first)
+            if (std::invoke(pred, std::invoke(proj, *first)))
+                return false;
+
+        return true;
+    }
+
+    template&lt;ranges::input_range R, class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    constexpr bool operator()(R&amp;&amp; r, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::ref(pred), std::ref(proj));
+    }
+};
+
+inline constexpr auto is_partitioned = is_partitioned_fn();
+}}
+
+===示例===
+{{example
+ |
+ | code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;utility&gt;
+
+int main()
+{
+    std::array&lt;int, 9&gt; v;
+
+    auto print = [&amp;v](bool o)
+    {
+        for (int x : v)
+            std::cout &lt;&lt; x &lt;&lt; ' ';
+        std::cout &lt;&lt; (o ? "=&gt; " : "=&gt; not ") &lt;&lt; "partitioned\n";
+    };
+
+    auto is_even = [](int i) { return i % 2 == 0; };
+
+    std::iota(v.begin(), v.end(), 1); // 或 std::ranges::iota(v, 1);
+    print(std::ranges::is_partitioned(v, is_even));
+
+    std::ranges::partition(v, is_even);
+    print(std::ranges::is_partitioned(std::as_const(v), is_even));
+
+    std::ranges::reverse(v);
+    print(std::ranges::is_partitioned(v.cbegin(), v.cend(), is_even));
+    print(std::ranges::is_partitioned(v.crbegin(), v.crend(), is_even));
+}
+|output=
+1 2 3 4 5 6 7 8 9 =&gt; not partitioned
+2 4 6 8 5 3 7 1 9 =&gt; partitioned
+9 1 7 3 5 8 6 4 2 =&gt; not partitioned
+9 1 7 3 5 8 6 4 2 =&gt; partitioned
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition_point}}
+{{dsc inc|cpp/algorithm/dsc is_partitioned}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

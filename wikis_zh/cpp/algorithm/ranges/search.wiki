@@ -1,0 +1,187 @@
+{{cpp/ranges/title|search}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr ranges::subrange&lt;I1&gt;
+    search( I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = {},
+            Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R1, ranges::forward_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity,
+          class Proj2 = std::identity&gt;
+requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                    ranges::iterator_t&lt;R2&gt;, Pred, Proj1, Proj2&gt;
+constexpr ranges::borrowed_subrange_t&lt;R1&gt;
+    search( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ 在范围 {{range|first1|last1}} 中搜索元素序列 {{range|first2|last2}} 的''首次''出现。在分别用 {{c|proj1}} 与 {{c|proj2}} 投影后用二元谓词 {{c|pred}} 比较元素。
+
+@2@ 同 {{v|1}}，但以 {{tt|r1}} 为第一范围并以 {{c|r2}} 为第二范围，如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，以 {{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|要检验的（又称''草堆''）}}
+{{par range|first2|last2|要搜索的（又称''针''）}}
+{{par|r1|要检验的元素范围（又称''草堆''）}}
+{{par|r2|要搜索的元素范围（又称''针''）}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj1|应用到第一范围中元素的投影}}
+{{par|proj2|应用到第二范围中元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 返回作为序列 {{range|first2|last2}}（又称''针''），在分别应用 {{c|proj1}} 与 {{c|proj2}} 到两个序列的元素，再应用二元谓词 {{c|pred}} 比较投影后元素之后，于范围 {{range|first1|last1}}（又称''草堆''）中首次出现的 {{c|ranges::subrange}} 值。
+若找不到这种序列，则返回 {{c|ranges::subrange{last1, last1} }}。
+若待搜索范围（又称''针''）为空，即 {{c|1=first2 == last2}} ，则返回 {{c|ranges::subrange{first1, first1} }}。
+@2@ 同 {{v|1}}，但返回类型为 {{c|ranges::borrowed_subrange_t&lt;R1&gt;}}。
+
+===复杂度===
+至多应用 {{tt|S*N}} 次对应的谓词和各自的投影，其中&lt;br&gt;
+{{v|1}} {{c|1=S = ranges::distance(first2, last2)}} 而 {{c|1=N = ranges::distance(first1, last1)}}；&lt;br&gt;
+{{v|2}} {{c|1=S = ranges::distance(r2)}} 而 {{c|1=N = ranges::distance(r1)}}。
+
+===可能的实现===
+{{eq fun| 1=
+struct search_fn
+{
+    template&lt;std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr ranges::subrange&lt;I1&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        for (;; ++first1)
+        {
+            I1 it1 = first1;
+            for (I2 it2 = first2;; ++it1, ++it2)
+            {
+                if (it2 == last2)
+                    return {first1, it1};
+                if (it1 == last1)
+                    return {it1, it1};
+                if (!std::invoke(pred, std::invoke(proj1, *it1), std::invoke(proj2, *it2)))
+                    break;
+            }
+        }
+    }
+
+    template&lt;ranges::forward_range R1, ranges::forward_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                        ranges::iterator_t&lt;R2&gt;, Pred, Proj1, Proj2&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R1&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(pred), std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr search_fn search {};
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;cctype&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string_view&gt;
+
+using namespace std::literals;
+
+void print(int id, const auto&amp; haystack, const auto&amp; needle, const auto&amp; found)
+{
+    std::cout &lt;&lt; id &lt;&lt; ") search(\"" &lt;&lt; haystack &lt;&lt; "\", \"" &lt;&lt; needle &lt;&lt; "\"); ";
+    const auto first = std::distance(haystack.begin(), found.begin());
+    const auto last = std::distance(haystack.begin(), found.end());
+    if (found.empty())
+        std::cout &lt;&lt; "not found;";
+    else
+    {
+        std::cout &lt;&lt; "found: \"";
+        for (const auto x : found)
+            std::cout &lt;&lt; x;
+        std::cout &lt;&lt; "\";";
+    }
+    std::cout &lt;&lt; " subrange: {" &lt;&lt; first &lt;&lt; ", " &lt;&lt; last &lt;&lt; "}\n";
+}
+
+int main()
+{
+    constexpr auto haystack {"abcd abcd"sv};
+    constexpr auto needle {"bcd"sv};
+
+    // 搜索使用迭代器对 begin()/end()：
+    constexpr auto found1 = std::ranges::search(
+        haystack.begin(), haystack.end(),
+        needle.begin(), needle.end());
+    print(1, haystack, needle, found1);
+
+    // 搜索使用范围 r1、 r2：
+    constexpr auto found2 = std::ranges::search(haystack, needle);
+    print(2, haystack, needle, found2);
+
+    // ‘针’范围为空：
+    constexpr auto none {""sv};
+    constexpr auto found3 = std::ranges::search(haystack, none);
+    print(3, haystack, none, found3);
+
+    // 不会找到‘针’范围：
+    constexpr auto awl {"efg"sv};
+    constexpr auto found4 = std::ranges::search(haystack, awl);
+    print(4, haystack, awl, found4);
+
+    // 搜索使用定制比较器与投影：
+    constexpr auto bodkin {"234"sv};
+    auto found5 = std::ranges::search(haystack, bodkin,
+        [](const int x, const int y) { return x == y; }, // pred
+        [](const int x) { return std::toupper(x); }, // proj1
+        [](const int y) { return y + 'A' - '1'; } // proj2
+        );
+    print(5, haystack, bodkin, found5);
+}
+| output=
+1). search("abcd abcd", "bcd"); found: "bcd"; subrange: {1, 4}
+2). search("abcd abcd", "bcd"); found: "bcd"; subrange: {1, 4}
+3). search("abcd abcd", ""); not found; subrange: {0, 0}
+4). search("abcd abcd", "efg"); not found; subrange: {9, 9}
+5). search("abcd abcd", "234"); found: "bcd"; subrange: {1, 4}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_end}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_first_of}}
+{{dsc inc|cpp/algorithm/ranges/dsc contains}}
+{{dsc inc|cpp/algorithm/ranges/dsc includes}}
+{{dsc inc|cpp/algorithm/ranges/dsc mismatch}}
+{{dsc inc|cpp/algorithm/ranges/dsc search_n}}
+{{dsc inc|cpp/algorithm/dsc search}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

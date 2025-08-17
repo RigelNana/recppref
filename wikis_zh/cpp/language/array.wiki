@@ -1,0 +1,241 @@
+{{title|数组声明}}
+{{cpp/language/declarations/navbar}}
+
+声明数组类型的对象。
+
+===语法===
+数组声明是简单声明，它的{{rlp|declarations|声明符}}拥有如下形式：
+
+{{sdsc begin}}
+{{sdsc|1=
+{{spar|非指针声明符}} {{ttb|[}}{{spar optional|表达式}}{{ttb|]}} {{spar optional|属性}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|非指针声明符}}|任意有效的 {{spar|声明符}}，但在以 {{tt|*}}、{{tt|&amp;}} 或 {{tt|&amp;&amp;}} 起始时必须用括号环绕（否则会将整个声明符当作一个{{rlp|pointer|指针声明符}}或{{rlp|reference|引用声明符}}）。}}
+{{par|{{spar|表达式}}|求值为大于零的值的{{rev inl|until=c++14|{{rlp|constant expression#整数常量表达式|整数常量表达式}}}}{{rev inl|since=c++14| {{lc|std::size_t}} 类型的{{rlp|constant expression|经转换常量表达式}}}}}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}列表}}
+{{par end}}
+
+形式为 {{c|T a[N];}} 的声明，将 {{c|a}} 声明为由 {{c|N}} 个连续分配的 {{tt|T}} 类型对象所组成的数组{{rlp|object|对象}}。数组元素拥有编号 {{c|0}}、…、{{c|N - 1}}，且可通过{{rlp|operator member access#内建的下标运算符|下标运算符 []}} 访问，如 {{c|a[0]}}、…、{{c|a[N - 1]}}。
+
+数组可由任何（除 {{c/core|void}} 外的）{{rlp|types|基础类型}}、{{rlp|pointer|指针}}、{{rlp|pointer|成员指针}}、{{rlp|classes|类}}、{{rlp|enum|枚举}}，或从其他已知边界数组类型（这种情况下称数组是多维的）构成。换言之，只有除了未知边界数组以外的对象类型能成为数组类型的元素类型。拥有不完整元素类型的数组类型也是不完整类型。
+
+{{rrev|since=c++11|
+在数组的指针或引用的声明中，可以将{{rev inl|since=c++20|可能{{rlp|constraints|受约束}}的}} {{rlpt|auto}} 说明符作为数组元素类型，这会从初始化器{{rev inl|since=c++14|或函数实参}}推导元素类型，例如 {{c|a}} 是 {{c/core|int[42]}} 类型左值时 {{c|1=auto (*p)[42] = &amp;a;}} 合法。
+}}
+
+不存在引用的数组或函数的数组。
+
+对数组类型（通过 typedef 或模板操作）应用 {{rlp|cv|cv 限定符}}会将限定符应用到它的元素类型，但元素是有 cv 限定类型的任何数组类型都会被认为拥有相同的 cv 限定性。
+
+{{source|1=
+// a 与 b 拥有相同的 const 限定类型“含有 5 个 const char 元素的数组”
+
+typedef const char CC;
+CC a[5] = {}; 
+
+typedef char CA[5];
+const CA b = {};
+}}
+
+在用于 {{rlp|new|new[] 表达式}}时，数组的大小可以为零；这种数组没有元素：
+
+{{source|1=
+int* p = new int[0]; // 访问 p[0] 或 *p 是未定义的
+delete[] p; // 仍然需要清理
+}} 
+
+====赋值====
+数组类型的对象不能作为整体修改：虽然它们是{{rlp|value category#左值|左值}}（即能取数组地址），但它们不能出现在赋值运算符的左侧：
+
+{{source|1=
+int a[3] = {1, 2, 3}, b[3] = {4, 5, 6};
+int (*p)[3] = &amp;a; // OK：能取地址
+a = b;            // 错误：a 是数组
+
+struct { int c[3]; } s1, s2 = {3, 4, 5};
+s1 = s2; // OK：隐式定义的复制赋值运算符可对数组类型的数据成员赋值
+}}
+
+====数组到指针的退化====
+存在从数组类型的左值和右值到指针类型的右值的{{rlp|implicit conversion|隐式转换}}：它构造一个指向数组首元素的指针。凡在数组出现于不期待数组而期待指针的语境中时，均使用这个转换：
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+
+void g(int (&amp;a)[3])
+{
+    std::cout &lt;&lt; a[0] &lt;&lt; '\n';
+}
+
+void f(int* p)
+{
+    std::cout &lt;&lt; *p &lt;&lt; '\n';
+}
+
+int main()
+{
+    int a[3] = {1, 2, 3};
+    int* p = a;
+
+    std::cout &lt;&lt; sizeof a &lt;&lt; '\n'  // 打印数组的大小
+              &lt;&lt; sizeof p &lt;&lt; '\n'; // 打印指针的大小
+
+    // 在可接受数组而不可接受指针的地方，只能使用数组
+    g(a); // OK：函数以引用接受数组
+//  g(p); // 错误
+
+    for(int n: a)              // OK：数组可用于范围 for 循环
+        std::cout &lt;&lt; n &lt;&lt; ' '; // 打印数组的各个元素
+//  for(int n: p)              // 错误
+//      std::cout &lt;&lt; n &lt;&lt; ' ';
+
+    std::iota(std::begin(a), std::end(a), 7); // OK：begin 与 end 接受数组
+//  std::iota(std::begin(p), std::end(p), 7); // 错误
+
+    // 在可接受指针而不可接受数组处的地方，两者都可以使用
+    f(a); // OK：函数接受指针
+    f(p); // OK：函数接受指针
+
+    std::cout &lt;&lt; *a &lt;&lt; '\n' // 打印首元素
+              &lt;&lt; *p &lt;&lt; '\n' // 相同
+              &lt;&lt; *(a + 1) &lt;&lt; ' ' &lt;&lt; a[1] &lt;&lt; '\n'  // 打印第二元素
+              &lt;&lt; *(p + 1) &lt;&lt; ' ' &lt;&lt; p[1] &lt;&lt; '\n'; // 相同
+}
+}}
+
+====多维数组====
+当数组的元素类型是另一数组时，称该数组是多维的：
+
+{{source|1=
+// 含有 2 个【含有 3 个 int 元素的数组】元素的数组
+int a[2][3] = {{1, 2, 3},
+               {4, 5, 6}}; // 可视作 2 × 3 矩阵，布局以行为主
+}}
+
+注意，应用数组到指针退化时，多维数组转换成指向它的首元素的指针（例如，指向它的首行或首平面的指针）：数组到指针退化仅应用一次。
+
+{{source|1=
+int a[2];            // 含有 2 个 int 元素的数组
+int* p1 = a;         // 退化到指向 a 的首元素的指针
+
+int b[2][3];         // 含有 2 个【含有 3 个 int 元素的数组】元素的数组
+// int** p2 = b;     // 错误：b 不退化到 int**
+int (*p2)[3] = b;    // b 退化到指向 b 的首个 3 元素行的指针
+
+int c[2][3][4];      // 含有 2 个【含有 3 个【含有 4 个 int 元素的数组】元素的数组】元素的数组
+// int*** p3 = c;    // 错误：c 不退化到 int***
+int (*p3)[3][4] = c; // c 退化到指向 c 首个 3 × 4 元素平面的指针
+}}
+
+====未知边界数组====
+如果在数组声明中省略 {{spar|表达式}}，则声明的类型是“T 的未知边界数组”，这是一种{{rlp|type#不完整类型|不完整类型}}，除非在声明时带有{{rlp|aggregate initialization|聚合初始化器}}：
+{{source|1=
+extern int x[];      // x 的类型是“边界未知的含有 int 元素的数组”
+int a[] = {1, 2, 3}; // a 的类型是“含有 3 个 int 元素的数组”
+}}
+
+因为数组元素不能具有未知边界数组类型，所以多维数组只能在第一个维度中有未知边界：
+{{source|1=
+extern int a[][2]; // OK：边界未知的含有【含有 2 个 int 元素的数组】元素的数组
+extern int b[2][]; // 错误：数组有不完整类型
+}}
+
+当有数组边界被省略时，如果之前的实体声明中有指定该边界，那么被省略的边界被视为与先前声明（也包含类中的静态数据成员定义）的该边界相同：
+{{source|1=
+extern int x[10];
+struct S
+{
+    static int y[10];
+};
+
+int x[];               // OK：边界是 10
+int S::y[];            // OK：边界是 10
+
+void f()
+{
+    extern int x[];
+    int i = sizeof(x); // 错误：对象类型不完整
+}
+}}
+
+可以构成到未知边界数组的引用和指针{{rev inl|until=c++20|，但不能从已知边界的数组或指向已知边界数组的指针对它进行初始化或赋值}}。注意在 C 编程语言中，指向未知边界数组的指针与指向已知边界数组的指针兼容，从而可以双向转换和赋值。
+{{source|1=
+extern int a1[];
+int (&amp;r1)[] = a1;  // OK
+int (*p1)[] = &amp;a1; // OK
+int (*q)[2] = &amp;a1; // 错误（但 C 中 OK）
+
+int a2[] = {1, 2, 3};
+int (&amp;r2)[] = a2;  // OK（C++20起）
+int (*p2)[] = &amp;a2; // OK（C++20起）
+}}
+
+指向未知边界数组的指针不能参与{{rlp|operator arithmetic#加法性运算符|指针算术}}且不能用在{{rlp|operator member access#内建的下标运算符|下标运算符}}的左侧，但可以解引用。
+
+====数组右值====
+尽管数组无法从函数按值返回，且不能作为大多数转型表达式的目标，数组{{rlp|value category|纯右值}}依然可以通过使用类型别名构成，并用{{rlp|explicit cast|花括号初始化的函数式转型}}来构造数组的临时量。
+{{rrev|since=c++17|
+与类的纯右值类似，数组的纯右值由{{rlp|implicit conversion#临时量实质化|临时量实质化}}在求值时转换成亡值。
+}}
+
+可以通过访问类右值的数组成员，{{lc|std::move}} 或其他返回右值引用的转型或函数调用来直接构成数组的{{rlp|value category|亡值}}。
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+void f(int (&amp;&amp;x)[2][3])
+{
+    std::cout &lt;&lt; sizeof x &lt;&lt; '\n';
+}
+
+struct X
+{
+    int i[2][3];
+} x;
+
+template&lt;typename T&gt;
+using identity = T;
+
+int main()
+{
+    std::cout &lt;&lt; sizeof X().i &lt;&lt; '\n';           // 数组的大小
+    f(X().i);                                    // OK：绑定到亡值
+//  f(x.i);                                      // 错误：不能绑定到左值
+
+    int a[2][3];
+    f(std::move(a));                             // OK：绑定到亡值
+
+    using arr_t = int[2][3];
+    f(arr_t{});                                  // OK：绑定到纯右值
+    f(identity&lt;int[][3]&gt;{{1, 2, 3}, {4, 5, 6}}); // OK：绑定到纯右值
+
+}
+|output=
+24
+24
+24
+24
+24
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=393|std=C++98|before=未知边界的数组或引用不能作为函数形参|after=可以}}
+{{dr list item|wg=cwg|dr=619|std=C++98|before=数组边界在省略时不能从之前的声明中推断|after=可以推断}}
+{{dr list item|wg=cwg|dr=2099|std=C++98|before=数组静态数据成员的边界即使提供了初始化器也不能省略|after=可以省略}}
+{{dr list item|wg=cwg|dr=2397|std=C++11|before={{c/core|auto}} 不能用作元素类型|after=可以}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/array|数组声明|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

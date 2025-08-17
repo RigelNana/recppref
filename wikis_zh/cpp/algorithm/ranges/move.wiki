@@ -1,0 +1,122 @@
+{{cpp/ranges/title|move|move_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O &gt;
+requires std::indirectly_movable&lt;I, O&gt;
+constexpr move_result&lt;I, O&gt;
+    move( I first, S last, O result );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O &gt;
+requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr move_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    move( R&amp;&amp; r, O result );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I, class O &gt;
+using move_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ 将由 {{range|first|last}} 定义的范围中的各元素赋值到始于 {{c|result}} 的另一范围。
+若 {{c|result}} 在范围 {{range|first|last}} 内则行为未定义。此情况下可能可以用 {{lc|ranges::move_backward}} 代替。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{tt|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+''被移动''范围中的元素将仍然含有适当类型的合法值，但不必为与移动前相同的值。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要移动的|sentinel=yes}}
+{{par|r|要移动的元素范围}}
+{{par|result|目标范围的起始}}
+{{par end}}
+
+===返回值===
+{{c|{last, result + N} }}，其中
+@1@ {{c|1=N = ranges::distance(first, last)}}；
+@2@ {{c|1=N = ranges::distance(r)}}。
+
+===复杂度===
+准确 {{c|N}} 次赋值。
+
+===注解===
+移动重叠的范围时，{{tt|ranges::move}} 适合向左移动（目标范围的起始在源范围外），而 {{lc|ranges::move_backward}} 适合向右移动（目标范围的末尾在源范围外）。
+
+===可能的实现===
+{{eq fun|1=
+struct move_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O&gt;
+    requires std::indirectly_movable&lt;I, O&gt;
+    constexpr ranges::move_result&lt;I, O&gt;
+        operator()(I first, S last, O result) const
+    {
+        for (; first != last; ++first, ++result)
+            *result = ranges::iter_move(first);
+        return {std::move(first), std::move(result)};
+    }
+    template&lt;ranges::input_range R, std::weakly_incrementable O&gt;
+    requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::move_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, O result) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr move_fn move {};
+}}
+
+===示例===
+{{example|以下代码从一个容器移动线程对象（它们自身''不可复制''）到另一容器。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;list&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+using namespace std::literals::chrono_literals;
+
+void f(std::chrono::milliseconds n)
+{
+    std::this_thread::sleep_for(n);
+    std::cout &lt;&lt; "thread with n=" &lt;&lt; n.count() &lt;&lt; "ms ended" &lt;&lt; std::endl;
+}
+
+int main()
+{
+    std::vector&lt;std::jthread&gt; v;
+    v.emplace_back(f, 400ms);
+    v.emplace_back(f, 600ms);
+    v.emplace_back(f, 800ms);
+
+    std::list&lt;std::jthread&gt; l;
+
+    // std::ranges::copy() 不能编译，因为 std::jthread 不可复制
+    std::ranges::move(v, std::back_inserter(l));
+}
+|output=
+thread with n=400ms ended
+thread with n=600ms ended
+thread with n=800ms ended
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

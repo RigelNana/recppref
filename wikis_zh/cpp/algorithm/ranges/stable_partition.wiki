@@ -1,0 +1,168 @@
+{{cpp/ranges/title|stable_partition}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcla|anchor=no|num=1|since=c++20|constexpr=c++26|1=
+template&lt; std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+requires std::permutable&lt;I&gt;
+ranges::subrange&lt;I&gt;
+    stable_partition( I first, S last, Pred pred, Proj proj = {} );
+}}
+{{dcla|anchor=no|num=2|since=c++20|constexpr=c++26|1=
+template&lt; ranges::bidirectional_range R, class Proj = std::identity,
+          std::indirect_unary_predicate&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+ranges::borrowed_subrange_t&lt;R&gt;
+    stable_partition( R&amp;&amp; r, Pred pred, Proj proj = {} );
+}}
+{{dcl end}}
+
+@1@ 重排序范围 {{range|first|last}} 中的元素，使得谓词 {{c|pred}} 对 {{c|proj}} 投影后返回 {{c|true}} 的所有元素处于谓词 {{c|pred}} 对 {{c|proj}} 投影后返回 {{c|false}} 的所有元素之前。算法是''稳定''的，即''保持''元素的相对顺序。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要重排|sentinel=yes}}
+{{par|r|要重排的元素范围}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 等于 {{c|{pivot, last}&lt;!----&gt;}} 的对象，其中 {{tt|pivot}} 是指向第二组首个元素的迭代器。
+@2@ 若 {{c|r}} 为左值或拥有 {{lconcept|borrowed_range}} 类型则同 {{v|1}}。否则返回 {{lc|std::ranges::dangling}}.
+
+===复杂度===
+给定 {{c|1= N = ranges::distance(first, last)}}，复杂度最坏为交换 {{mathjax-or|\(\scriptsize N\cdot\log{(N)}\)|N·log(N)}} 次，而在使用额外内存时仅交换 {{mathjax-or|\(\scriptsize \mathcal{O}(N)\)|𝓞(N)}} 次。恰好应用谓词 {{c|pred}} 和投影 {{c|proj}} {{mathjax-or|\(\scriptsize N\)|N}} 次。
+
+===注解===
+此函数尝试分配临时缓冲区。若分配失败，则选择效率较低的算法。
+
+{{feature test macro|__cpp_lib_constexpr_algorithms|{{c/core|constexpr}} 稳定排序|value=202306L|std=C++26}}
+
+===可能的实现===
+此实现不使用额外内存缓冲区，而这样可能较为低效。参阅 [https://github.com/microsoft/STL/blob/e745bad3b1d05b5b19ec652d68abb37865ffa454/stl/inc/algorithm#L5358-L5555 MSVC STL] 与 [https://github.com/gcc-mirror/gcc/blob/master/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L2365-L2394 libstdc++] 中的实现。
+{{eq fun|1=
+struct stable_partition_fn
+{
+    template&lt;std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    requires std::permutable&lt;I&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, S last, Pred pred, Proj proj = {}) const
+    {
+        first = ranges::find_if_not(first, last, pred, proj);
+        I mid = first;
+        while (mid != last)
+        {
+            mid = ranges::find_if(mid, last, pred, proj);
+            if (mid == last)
+                break;
+            I last2 = ranges::find_if_not(mid, last, pred, proj);
+            ranges::rotate(first, mid, last2);
+            first = ranges::next(first, ranges::distance(mid, last2));
+            mid = last2;
+        }
+        return {std::move(first), std::move(mid)};
+    }
+
+    template&lt;ranges::bidirectional_range R, class Proj = std::identity,
+             std::indirect_unary_predicate&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(pred), std::move(proj));
+    }
+};
+
+inline constexpr stable_partition_fn stable_partition {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+namespace rng = std::ranges;
+
+template&lt;std::permutable I, std::sentinel_for&lt;I&gt; S&gt;
+constexpr void stable_sort(I first, S last)
+{
+    if (first == last)
+        return;
+
+    auto pivot = *rng::next(first, rng::distance(first, last) / 2, last);
+    auto left = [pivot](const auto&amp; em) { return em &lt; pivot; };
+    auto tail1 = rng::stable_partition(first, last, left);
+    auto right = [pivot](const auto&amp; em) { return !(pivot &lt; em); };
+    auto tail2 = rng::stable_partition(tail1, right);
+
+    stable_sort(first, tail1.begin());
+    stable_sort(tail2.begin(), tail2.end());
+}
+
+void print(const auto rem, auto first, auto last, bool end = true)
+{
+    std::cout &lt;&lt; rem;
+    for (; first != last; ++first)
+        std::cout &lt;&lt; *first &lt;&lt; ' ';
+    std::cout &lt;&lt; (end ? "\n" : "");
+}
+
+int main()
+{
+    const auto original = {9, 6, 5, 2, 3, 1, 7, 8};
+
+    std::vector&lt;int&gt; vi {};
+    auto even = [](int x) { return 0 == (x % 2); };
+
+    print("Original vector:\t", original.begin(), original.end(), "\n");
+
+    vi = original;
+    const auto ret1 = rng::stable_partition(vi, even);
+    print("Stable partitioned:\t", vi.begin(), ret1.begin(), 0);
+    print("│ ", ret1.begin(), ret1.end());
+
+    vi = original;
+    const auto ret2 = rng::partition(vi, even);
+    print("Partitioned:\t\t", vi.begin(), ret2.begin(), 0);
+    print("│ ", ret2.begin(), ret2.end());
+
+
+    vi = {16, 30, 44, 30, 15, 24, 10, 18, 12, 35};
+    print("Unsorted vector: ", vi.begin(), vi.end());
+
+    stable_sort(rng::begin(vi), rng::end(vi));
+    print("Sorted vector:   ", vi.begin(), vi.end());
+}
+|p=true &lt;!-- the order of elements after applying the `partition` (as opposed to `stable_partition`) is not (fully) specified --&gt;
+|output=
+Original vector:        9 6 5 2 3 1 7 8
+Stable partitioned:     6 2 8 │ 9 5 3 1 7
+Partitioned:            8 6 2 │ 5 3 1 7 9
+Unsorted vector: 16 30 44 30 15 24 10 18 12 35
+Sorted vector:   10 12 15 16 18 24 30 30 35 44
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_partitioned}}
+{{dsc inc|cpp/algorithm/dsc stable_partition}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

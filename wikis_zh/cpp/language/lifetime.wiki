@@ -1,0 +1,353 @@
+{{title|生存期}}
+{{cpp/language/basics/navbar}}
+每个{{rlp|object|对象}}和{{rlp|reference|引用}}都有''生存期''，这是一项运行时性质：每个对象或引用在程序执行时都存在一个时刻开始它的生存期，也都存在一个时刻结束它的生存期。
+
+对象的生存期在以下时刻开始：
+* 获得拥有它的类型的正确大小与对齐的存储，并且
+* 完成它的初始化（如果存在）（包括不经由构造函数或经由{{rlps|default constructor#平凡默认构造函数}}的{{rlp|default initialization|默认初始化}}），除非
+:* 如果该对象是{{rlp|union#成员生存期|联合体成员}}或它的子对象，那么它的生存期在该联合体成员是联合体中的被初始化成员，或它被设为活跃才会开始，或者
+:* 如果该对象内嵌于联合体对象，那么它的生存期在平凡特殊成员函数赋值或构造含有它的联合体对象时开始，或者
+:* 数组对象的生存期可以因为该对象被 {{lc|std::allocator::allocate}} 分配而开始。
+
+某些操作在给定的存储区域中{{rlp|object#对象创建|隐式创建}}具有{{rlps|type#隐式生存期类型}}的对象，并开始它的生存期。如果隐式创建的对象的子对象不拥有隐式生存期类型，那么它的生存期不会隐式开始。
+
+对象的生存期在以下时刻结束：
+* 如果该对象是非类类型，那么在销毁该对象时（可能经由伪析构函数调用销毁），或者
+* 如果该对象是类类型，那么在{{rlp|destructor|析构函数}}调用开始时，或者
+* 该对象所占据的存储被释放，或被不内嵌于它的对象所[[#存储的重用|重用]]时。
+
+对象的生存期与它的存储的生存期相同，或者内嵌于其中，参见{{rlp|storage duration|存储期}}。
+
+{{rlp|reference|引用}}的生存期，从它的初始化完成之时开始，并与标量对象以相同的方式结束。
+
+注意：被引用对象的生存期可能在引用的生存期结束之前就会结束，这会造成{{rlps|reference#悬垂引用}}。
+
+非静态数据成员和基类子对象的生存期按照{{rlp|initializer list#初始化顺序|类初始化顺序}}开始和结束。
+
+===临时对象的生存期===
+在下列情况中{{rev inl|since=c++17|进行纯右值的{{rlp|implicit conversion#临时量实质化|实质化}}，从而能将它作为泛左值使用，即}}创建临时对象：
+* {{rlp|reference initialization|绑定引用到纯右值}}
+{{rrev|since=c++11|
+* 以{{rlp|initialization|花括号包围的初始化器列表}}来{{rlp|list initialization|初始化}} {{c/core|std::initializer_list&lt;T&gt;}} 类型的对象时
+}}
+{{rev begin}}
+{{rev|until=c++17|
+* 函数返回纯右值
+* 创建纯右值的{{rlp|expressions#转换|类型转换}}（{{rlp|explicit cast|包括}} {{c|T(a, b, c)}} 和 {{c|T{}&lt;!----&gt;}}）
+{{rrev|since=c++11|
+* {{rlp|lambda|lambda 表达式}}
+}}
+* 要求对初始化器进行类型转换的{{rlp|copy initialization|复制初始化}}，
+* {{rlp|reference initialization|将引用绑定}}到不同但可以转换的类型，或绑定到位域。
+}}
+{{rev|since=c++17|
+* 对类类型的纯右值进行{{rlp|operator member access#内建的成员访问运算符|成员访问}}时
+* 对数组纯右值进行{{rlp|array#数组到指针退化|数组向指针}}转换或者{{rlp|operator member access#内建的下标运算符|下标运算}}时
+* 对 {{rlpt|sizeof}} 和 {{rlpt|typeid}} 的不求值操作数
+* 纯右值被用作{{rlps|expressions#弃值表达式}}时
+}}
+
+临时对象的实质化通常会尽可能地被推迟，以免创建不必要的临时对象：参见{{rlp|copy elision|复制消除}}。
+{{rev end}}
+
+
+{{rrev|since=c++17|
+在向某个{{rlp|expressions#潜在求值表达式|潜在求值}}的函数调用传递或从此类调用返回 {{tt|T}} 类型对象时，如果 {{tt|T}} 是以下类型之一，那么允许实现创建临时对象以持有函数形参或结果对象：
+{{rrev|since=c++26|
+* {{rlps|type#标量类型}}
+}}
+* 满足以下所有条件的类类型：
+** {{tt|T}} 至少有一个合格的{{rlp|copy constructor#合格的复制构造函数|复制构造函数}}或{{rlp|move constructor#合格的移动构造函数|移动构造函数}}。
+** {{tt|T}} 的每个合格的复制/移动构造函数都是平凡的。
+** {{tt|T}} 的{{rlp|destructor|析构函数}}是平凡或被弃置的。
+
+{{rev begin}}
+{{rev|until=c++26|
+分别从函数实参或返回值构造该临时对象，并以如同使用合格且平凡的构造函数复制该临时量（即使该构造函数不可访问或者不会在复制或移动对象时由重载决议选择）的方式分别初始化函数形参或返回对象。
+}}
+{{rev|since=c++26|
+按以下方式创建临时对象：
+* 第一个临时对象分别从函数实参或返回值构造。
+* 后续的每个临时对象都会从上一个临时对象初始化。如果 {{tt|T}} 是标量类型，那么会使用{{rlp|direct initialization|直接初始化}}；否则会使用合格且平凡的构造函数。
+* 函数形参或返回对象会从最后一个临时对象初始化。如果 {{tt|T}} 是标量类型，那么会使用直接初始化；否则会使用合格且平凡的构造函数。
+
+在所有情况下都会使用该合格的构造函数构造类类型临时对象，即使它不可访问或者不会在复制或移动对象时由重载决议选择。
+}}
+{{rev end}}
+
+提供该自由度允许将寄存器中的对象传递给函数或从函数返回。
+}}
+
+所有临时对象的销毁都是在（词法上）包含创建它的位置的{{rlps|expressions#完整表达式}}的求值过程的最后一步进行的，而如果创建了多个临时对象，则它们以被创建的相反顺序销毁。即便求值过程以抛出异常而终止也是如此。
+
+对此有以下例外情况：
+* 可以通过绑定到引用来延长临时对象的生存期，细节见{{rlp|reference initialization#临时量生存期|引用初始化}}。
+* 在对数组的某个元素使用含有默认实参的默认或复制构造函数进行初始化时，对该默认实参求值所创建或复制的临时对象的生存期将在该数组的下一个元素的初始化开始之前终止。
+{{rev begin}}
+{{rev|since=c++17|
+* {{rlp|structured binding|结构化绑定}}声明中创建的临时对象（由其中的具名变量对应的初始化器引入）的生存期会被延长到该结构化绑定声明的末尾。
+}}
+{{rev|since=c++23|
+* 在{{rlp|range-for|范围 {{c/core|for}}}} 语句的{{spar sep|范围初始化器}}中创建的临时对象本来会在该{{spar sep|范围初始化器}}的末尾销毁，但它们的生存期会被延长到循环体的末尾。
+}}
+{{rev end}}
+
+===存储的重用===
+如果对象{{rlp|destructor#平凡析构函数|可以平凡析构}}，程序不必调用该对象的析构函数就能终止它的生存期（需要注意程序的正确行为可能会依赖该析构函数）。然而如果程序显式终止了作为变量的非可平凡析构对象的生存期的话，它必须确保在可能隐式地调用析构函数（即对于自动对象是由于退出作用域或发生异常{{rev inl|since=c++11|，对于线程局部对象是由于线程退出}}，或对于静态对象是由于程序退出）前，原位构造（比如使用布置 {{c/core|new}}）一个新的同类型对象；否则行为未定义。
+
+{{source|1=
+class T {}; // 平凡
+
+struct B
+{
+    ~B() {} // 非平凡
+};
+
+void x()
+{
+    long long n; // 自动、平凡
+    new (&amp;n) double(3.14); // 以不同的类型进行重用没有问题
+} // OK
+
+void h()
+{
+    B b; // 自动的非可平凡析构对象
+    b.~B(); // 生存期结束（不需要，因为没有副作用）
+    new (&amp;b) T; // 类型错误：直到析构函数被调用之前都没问题
+} // 调用了析构函数：未定义行为
+}}
+
+重用某个具有静态{{rev inl|since=c++11|、线程局部}}或者自动存储期的 const 完整对象所占据的存储是未定义行为，因为这种对象可能在只读内存中存储。
+
+{{source|1=
+struct B
+{
+    B(); // 非平凡
+    ~B(); // 非平凡
+};
+const B b; // const 静态对象
+
+void h()
+{
+    b.~B(); // b 的生存期结束
+    new (const_cast&lt;B*&gt;(&amp;b)) const B; // 未定义行为：试图重用 const 对象
+}
+}}
+
+在求值 {{rlp|new|{{c/core|new}} 表达式}}时，在从[[cpp/memory/new/operator new|分配函数]]返回时即视为重用了存储，重用发生在求值该 {{c/core|new}} 表达式的{{spar sep|初始化器}}之前：
+
+{{source|
+struct S
+{
+    int m;
+};
+
+void f()
+{
+    S x{1};
+    new(&amp;x) S(x.m); // 未定义行为：存储已重用
+}
+}}
+
+一旦在某个对象所曾占据的地址上创建了新的对象，所有原对象的指针、引用及名字都会自动代表新的对象，而且一旦新对象的生存期开始，它们就可以用于操作这个新对象，但只有在新对象能够透明替换旧对象时才可以。
+
+如果符合以下所有条件，对象 {{c|y}} {{i|能够透明替换}}对象 {{c|x}}：
+* {{c|y}} 的存储与 {{c|x}} 所占据的存储位置严格重叠
+* {{c|y}} 与 {{c|x}} 拥有相同类型（忽略顶层 cv 限定符）
+* {{c|x}} 不是完整的 const 对象
+* {{c|x}} 与 {{c|y}} 都不是基类子对象{{rev inl|since=c++20|或以 {{attr|no_unique_address}} 声明的成员子对象}}
+* 要么
+:* {{c|x}} 与 {{c|y}} 都是完整对象，或
+:* {{c|x}} 与 {{c|y}} 分别是对象 {{c|ox}} 与 {{c|oy}} 的直接子对象，而 {{c|oy}} 能够透明替换 {{c|ox}}。
+
+{{source|1=
+struct C
+{
+    int i;
+    void f();
+    const C&amp; operator=(const C&amp;);
+};
+
+const C&amp; C::operator=(const C&amp; other)
+{
+    if (this != &amp;other)
+    {
+        this-&gt;~C();          // *this 的生存期结束
+        new (this) C(other); // 创建了 C 类型的新对象
+        f();                 // 定义明确
+    }
+    return *this;
+}
+
+C c1;
+C c2;
+c1 = c2; // 定义明确
+c1.f();  // 定义明确；c1 代表 C 类型的一个新对象
+}}
+
+{{rrev|since=c++17|
+即使不能满足以上所列出的各项条件，还可以通过采用指针优化屏障 {{lc|std::launder}} 来获得指向新对象的有效指针：
+{{source|1=
+struct A
+{ 
+    virtual int transmogrify();
+};
+ 
+struct B : A
+{
+    int transmogrify() override { ::new(this) A; return 2; }
+};
+ 
+inline int A::transmogrify() { ::new(this) B; return 1; }
+
+void test()
+{
+    A i;
+    int n = i.transmogrify();
+    // int m = i.transmogrify(); // 未定义行为：新的 A 对象是基类子对象，而旧的是完整对象
+    int m = std::launder(&amp;i)-&gt;transmogrify(); // OK
+    assert(m + n == 3);
+}
+}}
+}}
+
+相似地，在类成员或数组元素的存储中创建对象时，只有满足以下条件，所创建的对象才是包含原对象的对象的子对象（成员或元素）：
+* 包含对象的生存期已经开始且尚未结束
+* 新对象的存储与原对象的存储严格重合
+* 新对象和原对象（忽略 cv 限定性）具有相同的类型。
+
+{{rrev|since=c++17|
+否则不使用 {{lc|std::launder}} 就不能以原对象的名字访问新对象：
+{{todo|合适的示例}}
+}}
+
+====提供存储====
+一种特殊情况是，满足以下条件的情况下可以在含有 {{c/core|unsigned char}} {{rev inl|since=c++17|或 {{ltt std|cpp/types/byte}}}} 的数组中创建对象（这种情况下称这个数组为对象''提供存储''）：
+* 数组的生存期已经开始且尚未结束
+* 新对象的存储完全适于数组之内
+* 不存在满足这些约束的，内嵌于该数组的数组对象。
+
+如果该数组的这个部分之前曾为另一个对象提供存储，那个对象的生存期就会因为它的存储被重用而结束，不过数组自身的生存期并未结束（它自身的存储并不会被重用）。
+{{source|1=
+template&lt;typename... T&gt;
+struct AlignedUnion
+{
+    alignas(T...) unsigned char data[max(sizeof(T)...)];
+};
+
+int f()
+{
+    AlignedUnion&lt;int, char&gt; au;
+    int *p = new (au.data) int;     // OK：au.data 提供存储
+    char *c = new (au.data) char(); // OK：*p 的生存期结束
+    char *d = new (au.data + 1) char();
+    return *c + *d; // OK
+}
+}}
+
+===在生存期外进行访问===
+在对象的生存期开始之前但在它将要占据的存储已经分配之后，或者在对象的生存期已经结束之后但它曾占据的存储被重用或释放之前，这个对象若非正在构造或析构中（此时适用另外一组规则），则对代表这个对象的泛左值表达式的以下这些用法是未定义的：
+# 左值向右值转换（比如对接受值的函数进行函数调用）
+# 访问它的非静态数据成员或调用它的非静态成员函数。
+# 绑定引用到它的某个虚基类子对象。
+# {{rlpt|dynamic_cast}} 或 {{rlpt|typeid}} 表达式。
+
+以上规则也适用于指针（绑定引用到虚基类改为隐式转换为指向虚基类的指针），并有两条额外的规则：
+# 对指向没有对象的存储的指针进行 {{rlpt|static_cast}} 时只能强制转换到（可有 cv 限定的）{{c/core|void*}}。
+# 已转型到可能有 cv 限定的 {{c/core|void*}} 的指向无对象存储的指针，只能被 {{rlpt|static_cast}} 到指向可有 cv 限定的 {{c/core|char}}，或可有 cv 限定的 {{c/core|unsigned char}}{{rev inl|since=c++17|，或可有 cv 限定的 {{lc|std::byte}}}} 的指针。
+
+在构造和析构的过程中，通常允许调用非静态成员函数，访问非静态数据成员，以及使用 {{rlpt|typeid}} 和 {{rlpt|dynamic_cast}}。然而，因为生存期尚未开始（在构造期间）或已结束（在析构期间），所以只允许特定的一些操作。其他限制条件参见{{rlp|virtual#在构造与析构期间|在构造和析构过程中调用虚函数}}。
+
+===注解===
+在{{cwg|2256}} 解决前，非类对象（存储期的终止）和类对象（按构造顺序的逆序）的生存期终止规则存在差别：
+{{source|1=
+struct A
+{
+    int* p;
+    ~A() { std::cout &lt;&lt; *p; } // CWG2256 起是未定义行为： n 不活到 a 的生存期之后
+                              // CWG2256 前有恰当定义：打印 123
+};
+
+void f()
+{
+    A a;
+    int n = 123; // 假如 n 不活到 a 的生存期之后，那么就能把这条语句优化掉（死存储）
+    a.p = &amp;n;
+}
+}}
+
+在 [https://wg21.link/p1971r0#RU007 RU007] 解决前，const 限定类型或引用类型的非静态数据成员无法使含有它的对象能够透明替换，这使得 {{lc|std::vector}} 与 {{lc|std::deque}} 难以实现：
+{{source|1=
+struct X { const int n; };
+union U { X x; float f; };
+
+void tong()
+{
+    U u = { {1} };
+    u.f = 5.f;                          // OK：创建 'u' 的新子对象
+    X *p = new (&amp;u.x) X {2};            // OK：创建 'u' 的新子对象
+    assert(p-&gt;n == 2);                  // OK
+    assert(u.x.n == 2);                 // RU007 前未定义：
+                                        // 'u.x' 不指名新子对象
+    assert(*std::launder(&amp;u.x.n) == 2); // 即使在 RU007 前也 OK
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=119|std=C++98|before=带有不平凡的构造函数的类类型的对象的生存期只能在构造函数完成时开始|after=也能在其他初始化完成时开始}}
+{{dr list item|wg=cwg|dr=201|std=C++98|before=要求默认构造函数的默认实参中的临时对象的生存期在数组初始化完成时结束|after=生存期在下个元素初始化之前结束&lt;br&gt;（同时解决了 {{cwg|124}}）}}
+{{dr list item|wg=cwg|dr=274|std=C++98|before=指代生存期外对象的左值只有在最终转换到无 cv 限定的 {{c/core|char&amp;}}&lt;br&gt;或 {{c/core|unsigned char&amp;}} 时才能作为 {{c/core|static_cast}} 的操作数|after=也可以转换到有 cv 限定的&lt;br&gt;{{c/core|char&amp;}} 和 {{c/core|unsigned char&amp;}}}}
+{{dr list item|wg=cwg|dr=597|std=C++98|before=以下行为未定义：&lt;br&gt;1. 将指向生存期外对象的指针隐式转换成指向它的非虚基类的指针&lt;br&gt;2. 将指代生存期外对象的左值绑定到它的非虚基类的引用&lt;br&gt;3. 将指代生存期外对象的左值作为 {{c/core|static_cast}} 的操作数（部分情况例外）|after=改为具有良好定义}}
+{{dr list item|wg=cwg|dr=2012|std=C++98|before=引用的生存期被指定为与存储期匹配，这要求&lt;br&gt;extern 引用在它的初始化器运行前已存活|after=生存期在初始化时开始}}
+{{dr list item|wg=cwg|dr=2107|std=C++98|before={{cwg|124}} 的解决方案未应用到复制构造函数|after=已应用}}
+{{dr list item|wg=cwg|dr=2256|std=C++98|before=可平凡析构对象的生存期与其他对象不一致|after=使之一致}}
+{{dr list item|wg=cwg|dr=2470|std=C++98|before=可以有多于一个数组为同一对象提供存储|after=只有一个会提供}}
+{{dr list item|wg=cwg|dr=2489|std=C++98|before={{c/core|char[]}} 不能提供存储，但是可以在它的存储中隐式创建对象|after=不能在 {{c/core|char[]}} 的存储中隐式创建对象}}
+{{dr list item|wg=cwg|dr=2527|std=C++98|before=如果有析构函数因为重用存储而没有被调用，&lt;br&gt;并且程序依赖它的副作用，那么行为未定义|after=此时行为具有良好定义}}
+{{dr list item|wg=cwg|dr=2721|std=C++98|before=对于布置 {{c/core|new}} 的存储重用的准确时间点不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=2849|std=C++23|before=范围 {{c/core|for}} 循环的临时对象生存期延长会将函数形参对象视为临时对象|after=不会视为临时对象}}
+{{dr list item|wg=cwg|dr=2854|std=C++98|before=异常对象是临时对象|after=不是临时对象}}
+{{dr list item|wg=cwg|dr=2867|std=C++17|before=不会延长在结构化绑定声明中创建的临时对象的生存期|after=延长到声明末尾}}
+{{dr list item|paper=P0137R1|std=C++98|before=在 {{c/core|unsigned char}} 数组中创建对象会重用它的存储|after=它的存储不会被重用}}
+{{dr list item|paper=P0593R6|std=C++98|before=伪析构函数调用无效果|after=它会销毁对象}}
+{{dr list item|paper=P1971R0|std=C++98|before=const 限定类型或引用类型的非静态数据成员使包含它的对象不能为可透明替换|after=移除限制}}
+{{dr list item|paper=P2103R0|std=C++98|before=可透明替换性不要求保持原结构|after=要求}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=6.7.3|title=Object lifetime|id=basic.life}}
+{{ref std|section=11.9.5|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.7.3|title=Object lifetime|id=basic.life}}
+{{ref std|section=11.10.4|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=15.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=3.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.8|title=Object lifetime|id=basic.life}}
+{{ref std|section=12.7|title=Construction and destruction|id=class.cdtor}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/lifetime|生存期|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

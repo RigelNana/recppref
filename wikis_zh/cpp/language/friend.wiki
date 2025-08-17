@@ -1,0 +1,442 @@
+{{title|友元声明}}
+{{cpp/language/classes/navbar}}
+友元声明在{{rlp|class|类体}}内出现，并向一个函数或另一个类授予对包含友元声明的类的私有及受保护成员的访问权。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|friend}} {{spar|函数声明}}}}
+{{sdsc|num=2|{{ttb|friend}} {{spar|函数定义}}}}
+{{sdsc|num=3|notes={{mark until c++26}}|{{ttb|friend}} {{spar|详述类型说明符}} {{ttb|;}}}}
+{{sdsc|num=4|notes={{mark since c++11}}&lt;br&gt;{{mark until c++26}}|
+{{ttb|friend}} {{spar|简单类型说明符}} {{ttb|;}}
+{{ttb|friend}} {{spar|typename说明符}} {{ttb|;}}
+}}
+{{sdsc|num=5|notes={{mark since c++26}}|{{ttb|friend}} {{spar|友元类型说明符列表}} {{ttb|;}}}}
+{{sdsc end}}
+
+@1,2@ 函数友元声明。
+
+@3-5@ 类友元声明。
+
+{{par begin}}
+{{par|{{spar|函数声明}}|{{rlp|function|函数声明}}}}
+{{par|{{spar|函数定义}}|{{rlps|function#函数定义}}}}
+{{par|{{spar|详述类型说明符}}|{{rlp|elaborated type specifier|详述类型说明符}}}}
+{{par|{{spar|简单类型说明符}}|{{rlp|declarations#说明符|简单类型说明符}}}}
+{{par|{{spar|typename说明符}}|关键词 {{c/core|typename}} 后随有限定标识符或有限定{{rlp|templates#模板标识|简单模板标识}}}}
+{{par|{{spar|友元类型说明符列表}}|逗号分隔的包含{{spar|简单类型说明符}}、{{spar sep|详述类型说明符}}和{{spar sep|typename说明符}}的非空列表，每个说明符都可后随一个省略号（{{tt|...}}）}}
+{{par end}}
+
+===描述===
+@1@ 指明一个或多个函数作为此类的友元：
+{{source|
+class Y
+{
+    int data; // 私有成员
+    
+    // 非成员函数的运算符 operator&lt;&lt; 将拥有对 Y 的私有成员的访问权
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; out, const Y&amp; o);
+    friend char* X::foo(int); // 其他类的成员也可以是友元
+    friend X::X(char), X::~X(); // 构造函数与析构函数也可以是友元
+};
+
+// 友元声明不声明成员函数
+// 此 operator&lt;&lt; 作为非成员仍需定义
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; out, const Y&amp; y)
+{
+    return out &lt;&lt; y.data; // 可访问私有成员 Y::data
+}
+}}
+
+@2@ （只允许在非{{rlp|class#局部类|局部}}类的定义中使用）定义一个非成员函数，同时让它成为此类的友元。这种非成员函数始终是{{rlp|inline|内联函数}}{{rev inl|since=c++20|，除非它附着到一个{{rlp|modules|具名模块}}}}。
+{{source|1=
+class X
+{
+    int a;
+    
+    friend void friend_set(X&amp; p, int i)
+    {
+        p.a = i; // 这是非成员函数
+    }
+public:
+    void member_set(int i)
+    {
+        a = i; // 这是成员函数
+    }
+};
+}}
+
+@3,4@ 指定一个类作为此类的友元。这意味着该友元的各成员声明和定义可以访问此类的私有与受保护成员，而且该友元关系也能被此类的私有或受保护成员继承到其派生类。
+
+:@3@ 类以{{spar|详述类说明符}}（见{{rlp|elaborated type specifier|详述类型说明符}}）指名。不需要提前声明用于此友元声明的类名。
+
+:@4@ 类以{{spar sep|简单类型说明符}}或{{spar sep|typename说明符}}指名，如果指名的不是类类型，那么忽略该友元声明。此声明不会前置声明新类型。
+
+@5@ 指定{{spar sep|友元类型说明符列表}}中的所有类作为此类的友元。这意味着这些友元的各成员声明和定义可以访问此类的私有与受保护成员，而且这些友元关系也能被此类的私有或受保护成员继承到其派生类。如果指名的某个类型不是类类型，那么在该友元声明中忽略它。
+
+@@ {{spar sep|友元类型说明符列表}}中的每个说明符在没有后随省略号的情况下指名一个类，否则适用{{rlp|parameter pack#友元声明|包展开}}。
+{{source|1=
+class Y {};
+
+class A
+{
+    int data; // 私有数据成员
+    
+    class B {}; // 私有嵌套类型
+    
+    enum { a = 100 }; // 私有枚举项
+    
+    friend class X; // 友元类的前置声明（详述类型说明符）
+    friend Y; // 友元类声明（简单类型说明符）（C++11 起）
+    
+    // C++26 起以上两个友元声明可以合并：
+    // friend class X, Y;
+};
+
+class X : A::B // OK：友元能访问 A::B
+{
+    A::B mx; // OK：友元的成员能访问 A::B
+    
+    class Y
+    {
+        A::B my; // OK：友元的嵌套成员能访问 A::B
+    };
+    
+    int v[A::a]; // OK：友元的成员能访问 A::a
+};
+}}
+
+===模板友元===
+{{rlp|function template|函数模板}}与{{rlp|class template|类模板}}声明，都可带 {{tt|friend}} 说明符出现于任何非局部类或类模板内（尽管只有函数模板能在授予友元关系的类或类模板内进行定义）。这种情况下，该模板的每个特化都成为友元，不管是被隐式实例化、部分特化或显式特化。
+
+{{source|
+class A
+{
+    template&lt;typename T&gt;
+    friend class B; // 每个 B&lt;T&gt; 都是 A 的友元
+    
+    template&lt;typename T&gt;
+    friend void f(T) {} // 每个 f&lt;T&gt; 都是 A 的友元
+};
+}}
+
+友元声明不能指代部分特化，但能指代全特化：
+
+{{source|
+template&lt;class T&gt;
+class A {};      // 主模板
+
+template&lt;class T&gt;
+class A&lt;T*&gt; {};  // 部分特化
+
+template&lt;&gt;
+class A&lt;int&gt; {}; // 全特化
+
+class X
+{
+    template&lt;class T&gt;
+    friend class A&lt;T*&gt;;  // 错误！
+    
+    friend class A&lt;int&gt;; // OK
+};
+}}
+
+当友元声明指代函数模板的全特化时，不能使用关键词 {{c/core|inline}}{{rev inl|since=c++11|、{{c/core|constexpr}}}}{{rev inl|since=c++20|、{{c/core|consteval}}}} 和默认实参：
+
+{{source|1=
+template&lt;class T&gt;
+void f(int);
+
+template&lt;&gt;
+void f&lt;int&gt;(int);
+
+class X
+{
+    friend void f&lt;int&gt;(int x = 1); // 错误：不允许默认实参
+};
+}}
+
+&lt;!-- 基于 CWG 1862 后的 [temp.friend]p4 用语 --&gt;
+模板友元声明可以指名类模板 A 的成员，它可以是成员函数或成员类型（类型必须用{{rlp|elaborated_type_specifier|详述类型说明符}}）。这种声明只有在它的 {{spar|嵌套名说明符}} 中的最后组分（最后的 {{ttb|::}} 左边的名字）是一个指名该类模板的 {{spar|简单模板标识}}（模板名后随角括号包围的实参列表）时才是良构的。这种模板友元声明的模板形参必须能从该 {{spar|简单模板标识}} 推导。
+
+此时 A 的所有特化的成员，以及 A 的所有部分特化的成员都会成为友元。这不并涉及对主模板 A 和 A 的部分特化的实例化：只要求从该特化推导 A 的模板形参成功，以及将推导出的模板实参替换到友元声明中所产生的声明，是该特化的成员的合法声明：
+
+{{source|
+// 主模板
+template&lt;class T&gt;
+struct A
+{ 
+    struct B {};
+    
+    void f();
+    
+    struct D { void g(); };
+    
+    T h();
+    
+    template&lt;T U&gt;
+    T i();
+};
+
+// 全特化
+template&lt;&gt;
+struct A&lt;int&gt;
+{
+    struct B {};
+    
+    int f();
+    
+    struct D { void g(); };
+    
+    template&lt;int U&gt;
+    int i();
+};
+
+// 另一全特化
+template&lt;&gt;
+struct A&lt;float*&gt;
+{
+    int *h();
+};
+
+// 非模板类向类模板 A 的成员授予友元关系
+class X
+{
+    template&lt;class T&gt;
+    friend struct A&lt;T&gt;::B; // 所有的 A&lt;T&gt;::B 都是友元，包括 A&lt;int&gt;::B
+    
+    template&lt;class T&gt;
+    friend void A&lt;T&gt;::f(); // A&lt;int&gt;::f() 不是友元，因为其签名不匹配，
+                           // 但比如 A&lt;char&gt;::f() 则是友元
+
+//  template&lt;class T&gt;
+//  friend void A&lt;T&gt;::D::g(); // 非良构：嵌套名说明符的最后部分，
+//                            // A&lt;T&gt;::D:: 中 的 D，不是简单模板标识
+    
+    template&lt;class T&gt;
+    friend int* A&lt;T*&gt;::h(); // 所有的 A&lt;T*&gt;::h 都是友元：A&lt;float*&gt;::h()、A&lt;int*&gt;::h() 等
+    
+    template&lt;class T&gt; 
+    template&lt;T U&gt;       // A&lt;T&gt;::i() 的所有实例化和 A&lt;int&gt;::i() 都是友元，
+    friend T A&lt;T&gt;::i(); // 从而这些函数模板的所有特化都是
+};
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+只有在模板友元声明是定义，且此翻译单元不出现此函数模板的其他声明时，该声明中才允许使用{{rlp|template parameters#默认模板实参|默认模板实参}}。
+}}
+{{rev end}}
+
+===模板友元运算符===
+模板友元的一种常见使用场合是作用于类模板上的非成员运算符重载的声明，例如针对某个用户定义的 {{c|Foo&lt;T&gt;}} 的 {{c|operator&lt;&lt;(std::ostream&amp;, const Foo&lt;T&gt;&amp;)}}。
+
+这种运算符可以在类体内定义，效果是对每个 {{tt|T}} 生成独立的非模板 {{tt|operator&lt;&lt;}}，并使该非模板 {{tt|operator&lt;&lt;}} 作为它的 {{tt|Foo&lt;T&gt;}} 的友元：
+
+{{example|code=
+#include &lt;iostream&gt;
+
+template&lt;typename T&gt;
+class Foo
+{
+public:
+    Foo(const T&amp; val) : data(val) {}
+private:
+    T data;
+    
+    // 为这个 T 生成非模板 operator&lt;&lt; 
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const Foo&amp; obj)
+    {
+        return os &lt;&lt; obj.data;
+    }
+};
+
+int main()
+{
+    Foo&lt;double&gt; obj(1.23);
+    std::cout &lt;&lt; obj &lt;&lt; '\n';
+}
+|output=1.23
+}}
+
+否则，函数模板需要在类体之前已声明为模板，这种情况下 {{tt|Foo&lt;T&gt;}} 内的友元声明可以涉指 {{tt|operator&lt;&lt;}} 对其 {{tt|T}} 的全特化：
+
+{{example|code=
+#include &lt;iostream&gt;
+
+template&lt;typename T&gt;
+class Foo; // 前置声明，以确保函数声明可行
+
+template&lt;typename T&gt; // 声明
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp;, const Foo&lt;T&gt;&amp;);
+
+template&lt;typename T&gt;
+class Foo
+{
+public:
+    Foo(const T&amp; val) : data(val) {}
+private:
+    T data;
+    
+    // 涉指对于这个特定的 T 的全特化 
+    friend std::ostream&amp; operator&lt;&lt; &lt;&gt; (std::ostream&amp;, const Foo&amp;);
+    
+    // 注意：这依赖于声明中的模板实参推导
+    // 也可以通过 operator&lt;&lt; &lt;T&gt; 指定模板实参
+};
+
+// 定义
+template&lt;typename T&gt;
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const Foo&lt;T&gt;&amp; obj)
+{
+    return os &lt;&lt; obj.data;
+}
+
+int main()
+{
+    Foo&lt;double&gt; obj(1.23);
+    std::cout &lt;&lt; obj &lt;&lt; '\n';
+}
+}}
+
+===链接===
+友元函数声明中不允许使用{{rlp|storage duration|存储类说明符}}。
+
+{{rrev|since=c++20|
+如果在友元声明中首次声明并定义了一个函数或函数模板，并且外围类在某条{{rlp|modules#导出声明和定义|导出声明}}中定义，那么它的名字具有与外围类的名字相同的链接。
+}}
+
+{{rev inl|since=c++20|否则，}}如果在友元声明中声明了一个函数或函数模板，并且{{rlp|conflicting declarations#Corresponding declarations|对应的非友元声明}}可及，那么它的名字与先前声明的名字具有相同的链接。
+
+否则，友元声明引入的名字的链接与通常情况下一样。
+
+===注解===
+友元关系不传递（你朋友的朋友不是你的朋友）。
+
+友元关系不继承（你朋友的孩子不是你的朋友，你的朋友不是你孩子的朋友）。
+
+{{rlp|access|访问说明符}}对于友元声明的含义没有影响（它们可以在 {{tt|private:}} 或 {{tt|public:}} 区间出现，且没有区别）。
+
+友元类声明不能定义新的类（{{c|friend class X {};}} 是错的）。
+
+当局部类将一个无限定的函数或类声明为其友元时，只{{rlp|lookup|查找}}在其最内层非类作用域中的函数与类，而非全局函数：
+{{source|
+class F {};
+
+int f();
+
+int main()
+{
+    extern int g();
+    
+    class Local // main() 函数中的局部类
+    {
+        friend int f(); // 错误，main() 中没有声明该函数
+        friend int g(); // OK，main() 中有 g 的声明
+        friend class F; // 令局部 F（随后定义）为友元
+        friend class ::F; // 令全局 F 为友元
+    };
+    
+    class F {}; // 局部 F
+}
+}}
+
+首次在类或类模板 {{tt|X}} 中的友元声明中被声明的名字会成为 {{tt|X}} 的最内层外围命名空间的成员，但它对于查找不可见（除了考虑 {{tt|X}} 的{{rlp|adl|实参依赖查找}}），除非在命名空间作用域中提供与之匹配的声明——细节见{{rlps|namespace#命名空间}}。
+
+{{feature test macro|__cpp_variadic_friend|可变参数友元声明|value=202403L|std=C++26}}
+
+===关键词===
+{{ltt|cpp/keyword/friend}}
+
+===示例===
+{{example
+|流插入与提取运算符往往声明为非成员友元：
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+class MyClass
+{
+    int i;                   // 友元能够访问非公开的非静态
+    static inline int id{6}; // 和静态（可能内联的）成员
+
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; out, const MyClass&amp;);
+    friend std::istream&amp; operator&gt;&gt;(std::istream&amp; in, MyClass&amp;);
+    friend void change_id(int);
+public:
+    MyClass(int i = 0) : i(i) {}
+};
+
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; out, const MyClass&amp; mc)
+{
+    return out &lt;&lt; "MyClass::id = " &lt;&lt; MyClass::id &lt;&lt; "; i = " &lt;&lt; mc.i;
+}
+
+std::istream&amp; operator&gt;&gt;(std::istream&amp; in, MyClass&amp; mc)
+{
+    return in &gt;&gt; mc.i;
+}
+
+void change_id(int id) { MyClass::id = id; }
+
+int main()
+{
+    MyClass mc(7);
+    std::cout &lt;&lt; mc &lt;&lt; '\n';
+//  mc.i = 333*2;  // 错误: i 是私有成员
+    std::istringstream("100") &gt;&gt; mc;
+    std::cout &lt;&lt; mc &lt;&lt; '\n';
+//  MyClass::id = 222*3;  // 错误: id 是私有成员
+    change_id(9);
+    std::cout &lt;&lt; mc &lt;&lt; '\n';
+}
+|output=
+MyClass::id = 6; i = 7
+MyClass::id = 6; i = 100
+MyClass::id = 9; i = 100
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=45|std=C++98|before={{tt|T}} 的友元类的嵌套类的成员对 {{tt|T}} 没有特殊访问权|after=嵌套类拥有和外围类相同的访问权}}
+{{dr list item|wg=cwg|dr=500|std=C++98|before={{tt|T}} 的友元类不能继承自 {{tt|T}} 的私有与受保护成员，但其嵌套类可以|after=都可以继承自此类成员}}
+{{dr list item|wg=cwg|dr=1439|std=C++98|before=关于非局部类的友元声明没有覆盖到模板声明|after=已覆盖}}
+{{dr list item|wg=cwg|dr=1477|std=C++98|before=首次在类或类模板中的友元声明中被声明的名字在与之匹配的&lt;br&gt;声明在其他命名空间作用域提供的情况下对于查找不可见|after=此时它们对于查找可见}}
+{{dr list item|wg=cwg|dr=1804|std=C++98|before=当类模板的成员是友元时，类模板的部分特化的特化&lt;br&gt;的对应成员不是授予友元关系的类的友元|after=这些成员也是友元}}
+{{dr list item|wg=cwg|dr=2379|std=C++11|before=指代模板函数的全特化友元声明可以声明为 constexpr|after=已禁止}}
+{{dr list item|wg=cwg|dr=2588|std=C++98|before=由友元声明引入的名字的链接不明确|after=使之明确}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=11.8.4|title=Friends|id=class.friend}}
+{{ref std|section=13.7.5|title=Friends|id=temp.friend}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11.9.3|title=Friends|id=class.friend}}
+{{ref std|section=13.7.4|title=Friends|id=temp.friend}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=14.3|title=Friends|id=class.friend}}
+{{ref std|section=17.5.4|title=Friends|id=temp.friend}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=11.3|title=Friends|id=class.friend}}
+{{ref std|section=14.5.4|title=Friends|id=temp.friend}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=11.3|title=Friends|id=class.friend}}
+{{ref std|section=14.5.4|title=Friends|id=temp.friend}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=11.3|title=Friends|id=class.friend}}
+{{ref std|section=14.5.3|title=Friends|id=temp.friend}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc class}}
+{{dsc inc|cpp/language/dsc access}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

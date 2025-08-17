@@ -1,0 +1,77 @@
+{{cpp/io/basic_ios/title|copyfmt}}
+{{cpp/io/basic_ios/navbar}}
+{{ddcl| 
+basic_ios&amp; copyfmt( const basic_ios&amp; other );
+}}
+
+如果 {{c|other}} 与 {{c|*this}} 指代同一对象，那么没有效果。否则复制流 {{c|other}} 的状态到 {{c|*this}} 中。以下列序列进行：
+
+@1@ 传递 {{ltt|cpp/io/ios_base/event|erase_event}} 为参数，调用 {{lc|register_callback()}} 注册的每个回调。
+
+@2@ 从 {{c|other}} 复制除了 {{lc|rdstate()}}、异常掩码和 {{lc|rdbuf()}} 外的所有成员对象到 {{c|*this}}。特别是要复制本地环境，格式化标志，数组 {{lc|std::ios_base::iword}} 和 {{lc|std::ios_base::pword}} 的内容（而不是 {{tt|iword}} 和 {{tt|pword}} 指针本身），回调，以及所捆绑的流。
+
+@3@ 传递 {{ltt|cpp/io/ios_base/event|copyfmt_event}} 为参数，调用 {{lc|register_callback()}} 注册的每个回调。
+
+@4@ 从 {{c|other}} 复制异常掩码到 {{c|*this}}，如同通过调用 {{c|exceptions(other.exceptions())}}。
+
+===参数===
+{{par begin}}
+{{par|other|用作源的另一个流}}
+{{par end}}
+
+===返回值===
+{{c|*this}}
+
+===注解===
+通过回调的第二趟可用于深复制 {{lc|std::ios_base::pword}} 中的指针所指向的用户定义对象。
+
+{{tt|copyfmt()}} 可用于保存和恢复流状态。Boost 为相同目的提供更加细粒度的 [http://www.boost.org/doc/libs/release/libs/io/doc/ios_state.html IO 状态保存] 库。
+
+===示例===
+{{example
+|令 {{lc|std::ofstream}} 对象 "out" 表现准确地类似 {{lc|std::cout}}，包括格式化、{{rlpt|tie|tie()}} 到 {{lc|std::cin}} 等。
+|code=
+#include &lt;bitset&gt;
+#include &lt;climits&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    std::ofstream out;
+
+    out.copyfmt(std::cout); // 复制 rdstate 和 rdbuf 外的所有内容
+    out.clear(std::cout.rdstate()); // 复制 rdstate
+    out.basic_ios&lt;char&gt;::rdbuf(std::cout.rdbuf()); // 共享缓冲
+    
+    out &lt;&lt; "Hello, world\n";
+    
+    auto bin = [](std::ios_base::fmtflags f)
+    {
+        return std::bitset&lt;sizeof(std::ios_base::fmtflags) * CHAR_BIT&gt;
+            {static_cast&lt;unsigned long long&gt;(f)};
+    };
+    std::ofstream out2;
+    std::cout &lt;&lt; "1) out2.flags()：" &lt;&lt; bin(out2.flags()) &lt;&lt; '\n';
+    std::cout &lt;&lt; "2) cout.flags()：" &lt;&lt; bin(std::cout.flags()) &lt;&lt; '\n';
+    std::cout.setf(std::ios::hex {{!}} std::ios::fixed {{!}} std::ios::boolalpha);
+    std::cout &lt;&lt; "3) cout.flags()：" &lt;&lt; bin(std::cout.flags()) &lt;&lt; '\n';
+    out2.copyfmt(std::cout); // 复制 rdstate 和 rdbuf 外的所有内容
+    std::cout &lt;&lt; "4) out2.flags()：" &lt;&lt; bin(out2.flags()) &lt;&lt; '\n';
+}
+|p=true
+|output=
+Hello, world
+1) out2.flags()：00000000000000000001000000000010
+2) cout.flags()：00000000000000000001000000000010
+3) cout.flags()：00000000000000000001000000001111
+4) out2.flags()：00000000000000000001000000001111
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=256|std=C++98|before=第3步会调用注册过的事件类型是 {{tt|copy_event}} 的回调，但该事件类型未定义|after=改成 {{ltt|cpp/io/ios_base/event|copyfmt_event}}}}
+{{dr list item|wg=lwg|dr=292|std=C++98|before=即使 {{c|other}} 与 {{c|*this}} 指代同一对象，依然会复制成员对象和调用已注册的回调|after=此时什么也不做}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

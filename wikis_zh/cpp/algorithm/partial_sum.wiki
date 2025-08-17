@@ -1,0 +1,191 @@
+{{cpp/title|partial_sum}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt &gt;
+OutputIt partial_sum( InputIt first, InputIt last,
+                      OutputIt d_first );
+}}
+{{dcla|num=2|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class BinaryOp &gt;
+OutputIt partial_sum( InputIt first, InputIt last,
+                      OutputIt d_first, BinaryOp op );
+}}
+{{dcl end}}
+
+@1@ 如果 {{range|first|last}} 为空，那么什么也不做。
+@@ 否则按顺序进行以下操作：
+# 创建累加器 {{c|acc}}，它的类型是 {{tt|InputIt}} 的[[cpp/iterator#类型与可写性|值类型]]，以 {{c|*first}} 初始化。
+# 将 {{c|acc}} 赋给 {{c|*d_first}}。
+# 对于 {{range|1|std::distance(first, last)}} 中的所有整数 {{c|i}}，按顺序进行以下操作：
+::@a@ 计算 {{rev inl|until=c++20|{{c|acc + *iter}}}}{{rev inl|since=c++20|{{c|std::move(acc) + *iter}}}}，其中 {{c|iter}} 是 {{c|first}} 的下 {{c|i}} 个迭代器。
+::@b@ 将计算结果赋给 {{c|acc}}。
+::@c@ 将 {{c|acc}}&lt;ref&gt;实际上要赋的值是上一步中赋值的结果。我们在这里假设结果就是 {{c|acc}}。&lt;/ref&gt; 赋给 {{c|*dest}}，其中 {{c|dest}} 是 {{c|d_first}} 的下 {{c|i}} 个迭代器。
+
+@2@ 同 {{v|1}}，但计算的是 {{rev inl|until=c++20|{{c|op(acc, *iter)}}}}{{rev inl|since=c++20|{{c|op(std::move(acc), *iter)}}}}。
+
+给定 {{c|binary_op}} 为实际的二元运算：
+
+* 如果满足以下任意条件，那么程序非良构：
+:* {{tt|InputIt}} 的值类型不可从 {{c|*first}} 构造。
+:* {{c|acc}} 不[[cpp/iterator#类型与可写性|可写入]] {{c|d_first}}。
+:* {{rev inl|until=c++20|{{c|binary_op(acc, *iter)}}}}{{rev inl|since=c++20|{{c|binary_op(std::move(acc), *iter)}}}} 的结果不可转换到 {{tt|InputIt}} 的值类型。
+
+* 给定 {{c|d_last}} 为要[[#返回值|返回]]的迭代器，如果满足以下任意条件，那么行为未定义：
+:* {{c|binary_op}} 会修改 {{range|first|last}} 或 {{range|d_first|d_last}} 的元素。
+:* {{c|binary_op}} 会使 {{closed range|first|last}} 或 {{closed range|d_first|d_last}} 中的迭代器或子范围失效。
+
+
+&lt;references/&gt;
+
+===参数===
+{{par begin}}
+{{par range|3=要求和的}}
+{{par|d_first|目标范围起始；可以等于 {{c|first}}}}
+{{par op2|op|t1=std::iterator_traits&lt;InputIt&gt;::value_type|p2=InputIt|rp=InputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par end}}
+
+===返回值===
+返回指向最后被写入元素后一元素的迭代器，或者在 {{range|first|last}} 为空时返回 {{c|d_first}}。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+
+@1@ 应用 {{mathjax-or|\(\scriptsize N-1\)|N-1}} 次 {{c/core|operator+}}。
+
+@2@ 应用 {{mathjax-or|\(\scriptsize N-1\)|N-1}} 次二元函数 {{c|op}}。
+
+===可能的实现===
+{{eq impl
+|title1=partial_sum (1)|ver1=1|1=
+template&lt;class InputIt, class OutputIt&gt;
+constexpr // C++20 起
+OutputIt partial_sum(InputIt first, InputIt last, OutputIt d_first)
+{
+    if (first == last)
+        return d_first;
+    
+    typename std::iterator_traits&lt;InputIt&gt;::value_type sum = *first;
+    *d_first = sum;
+    
+    while (++first != last)
+    {
+        sum = std::move(sum) + *first; // C++20 起有 std::move
+        *++d_first = sum;
+    }
+    
+    return ++d_first;
+    
+    // 或 C++14 起：
+    // return std::partial_sum(first, last, d_first, std::plus&lt;&gt;());
+}
+|title2=partial_sum (2)|ver2=2|2=
+template&lt;class InputIt, class OutputIt, class BinaryOp&gt;
+constexpr // C++20 起
+OutputIt partial_sum(InputIt first, InputIt last, 
+                     OutputIt d_first, BinaryOp op)
+{
+    if (first == last)
+        return d_first;
+    
+    typename std::iterator_traits&lt;InputIt&gt;::value_type acc = *first;
+    *d_first = acc;
+    
+    while (++first != last)
+    {
+        acc = op(std::move(acc), *first); // C++20 起有 std::move
+        *++d_first = acc;
+    }
+    
+    return ++d_first;
+}
+}}
+
+===注解===
+{{c|acc}} 是由 {{lwg|539}} 的解决方案引入的。使用 {{c|acc}} 而不是直接将结果相加（即 {{c|1=*(d_first + 2) = (*first + *(first + 1)) + *(first + 2);}}）的原因是后者的语义在以下类型不匹配时难以理解：
+* {{tt|InputIt}} 的值类型
+* {{tt|OutputIt}} 的可写入类型
+* {{c/core|operator+}} 或 {{c|op}} 的形参类型
+* {{c/core|operator+}} 或 {{c|op}} 的返回类型
+
+{{c|acc}} 用来作为存储及提供每步计算所需值的中间对象：
+* 它的类型是 {{tt|InputIt}} 的值类型
+* 它会被写入 {{c|d_first}}
+* 它的值会传递给 {{c/core|operator+}} 或 {{c|op}}
+* 它存储 {{c/core|operator+}} 或 {{c|op}} 的返回值
+
+{{source|1=
+enum not_int { x = 1, y = 2 };
+ 
+char i_array[4] = {100, 100, 100, 100};
+not_int e_array[4] = {x, x, y, y};
+int  o_array[4];
+ 
+// OK：使用 operator+(char, char) 并且会将 char 值赋给 int 数组
+std::partial_sum(i_array, i_array + 4, o_array);
+ 
+// 错误：不能将 not_int 值赋给 int 数组
+std::partial_sum(e_array, e_array + 4, o_array);
+ 
+// OK：在需要时进行转换
+// 1. 创建 char 类型的 “acc”（值类型）
+// 2. 将 char 实参用于 long 乘法（char -&gt; long）
+// 3. 将 long 积赋给 “acc”（long -&gt; char）
+// 4. 将 “acc” 赋给 “o_array” 的一个元素（char -&gt; int）
+// 5. 回到第 2 步，处理输入序列的剩余元素
+std::partial_sum(i_array, i_array + 4, o_array, std::multiplies&lt;long&gt;{});
+}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v(10, 2); // v = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+    
+    std::cout &lt;&lt; "前 " &lt;&lt; v.size() &lt;&lt; " 个偶数是：";
+    // 将结果写入流 cout
+    std::partial_sum(v.cbegin(), v.cend(), 
+                     std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+    
+    // 将结果写回 vector v
+    std::partial_sum(v.cbegin(), v.cend(),
+                     v.begin(), std::multiplies&lt;int&gt;());
+    
+    std::cout &lt;&lt; "2 的前 " &lt;&lt; v.size() &lt;&lt; " 个幂是：";
+    for (int n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+前 10 个偶数是：2 4 6 8 10 12 14 16 18 20 
+2 的前 10 个幂是：2 4 8 16 32 64 128 256 512 1024 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op}} 不能有任何副作用|after=它不能修改涉及到的范围}}
+{{dr list item|wg=lwg|dr=539|std=C++98|before=缺失了需要保证对结果的求值和赋值合法的条件要求|after=已补充}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_difference}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc inclusive_scan}}
+{{dsc inc|cpp/algorithm/dsc exclusive_scan}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

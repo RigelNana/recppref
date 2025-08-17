@@ -1,0 +1,220 @@
+{{cpp/ranges/title|search_n}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl rev begin|num=1}}
+{{dcl|since=c++20|until=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class T,
+          class Pred = ranges::equal_to, class Proj = std::identity &gt;
+requires std::indirectly_comparable&lt;I, const T*, Pred, Proj&gt;
+constexpr ranges::subrange&lt;I&gt;
+    search_n( I first, S last, std::iter_difference_t&lt;I&gt; count,
+              const T&amp; value, Pred pred = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Pred = ranges::equal_to, class Proj = std::identity,
+          class T = std::projected_value_t&lt;I, Proj&gt; &gt;
+requires std::indirectly_comparable&lt;I, const T*, Pred, Proj&gt;
+constexpr ranges::subrange&lt;I&gt;
+    search_n( I first, S last, std::iter_difference_t&lt;I&gt; count,
+              const T&amp; value, Pred pred = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++20|until=c++26|1=
+template&lt; ranges::forward_range R, class T,
+          class Pred = ranges::equal_to, class Proj = std::identity &gt;
+requires std::indirectly_comparable
+    &lt;ranges::iterator_t&lt;R&gt;, const T*, Pred, Proj&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    search_n( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; count,
+              const T&amp; value, Pred pred = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::forward_range R,
+          class Pred = ranges::equal_to, class Proj = std::identity,
+          class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt; &gt;
+requires std::indirectly_comparable
+    &lt;ranges::iterator_t&lt;R&gt;, const T*, Pred, Proj&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    search_n( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; count,
+              const T&amp; value, Pred pred = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+@1@ 在范围 {{range|first|last}} 中搜索首个 {{c|count}} 个元素的连续序列，其投影后的值按照二元谓词 {{c|pred}} 均等于给定的值 {{c|value}}。
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的（又称''草堆''）|sentinel=yes}}
+{{par|r|要检验的元素范围（又称''草堆''）}}
+{{par|count|要搜索的序列长度}}
+{{par|value|要搜索的值（又称''针''）}}
+{{par|pred|比较投影后元素与 {{tt|value}} 的二元谓词}}
+{{par|proj|应用到要检验的范围的元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 返回含有范围 {{range|first|last}} 中指代找到的序列的一对迭代器的 {{c|std::ranges::subrange}}。
+若找不到这种序列，则返回 {{c|std::ranges::subrange{last, last} }}。
+若 {{c|1=count ≤ 0}} 则返回 {{c|std::ranges::subrange{first, first} }}。
+@2@ 同 {{v|1}}，但返回类型为 {{c|ranges::borrowed_subrange_t&lt;R&gt;}}。
+
+===复杂度===
+线性：至多应用 {{c|ranges::distance(first, last)}} 次谓词与投影。
+
+===注解===
+若迭代器实现了 {{c|std::random_access_iterator}} 则实现可以提升''平均''搜索效率。
+
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]]}}
+
+===可能的实现===
+{{eq fun|1=
+struct search_n_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Pred = ranges::equal_to, class Proj = std::identity,
+             class T = std::projected_value_t&lt;I, Proj&gt;&gt;
+    requires std::indirectly_comparable&lt;I, const T*, Pred, Proj&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, S last, std::iter_difference_t&lt;I&gt; count,
+                   const T&amp; value, Pred pred = {}, Proj proj = {}) const
+    {
+        if (count &lt;= 0)
+            return {first, first};
+        for (; first != last; ++first)
+            if (std::invoke(pred, std::invoke(proj, *first), value))
+            {
+                I start = first;
+                std::iter_difference_t&lt;I&gt; n{1};
+                for (;;)
+                {
+                    if (n++ == count)
+                        return {start, std::next(first)}; // 找到
+                    if (++first == last)
+                        return {first, first}; // 找不到
+                    if (!std::invoke(pred, std::invoke(proj, *first), value))
+                        break; // 不等于 value
+                }
+            }
+        return {first, first};
+    }
+    
+    template&lt;ranges::forward_range R,
+             class Pred = ranges::equal_to, class Proj = std::identity,
+             class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt;
+    requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R&gt;, const T*, Pred, Proj&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; count,
+                   const T&amp; value, Pred pred = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r),
+                       std::move(count), value,
+                       std::move(pred), std::move(proj));
+    }
+};
+
+inline constexpr search_n_fn search_n {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    namespace ranges = std::ranges;
+
+    static constexpr auto nums = {1, 2, 2, 3, 4, 1, 2, 2, 2, 1};
+    constexpr int count{3};
+    constexpr int value{2};
+    typedef int count_t, value_t;
+    
+    constexpr auto result1 = ranges::search_n
+    (
+        nums.begin(), nums.end(), count, value
+    );
+    static_assert // 找到
+    (
+        result1.size() == count &amp;&amp;
+        std::distance(nums.begin(), result1.begin()) == 6 &amp;&amp;
+        std::distance(nums.begin(), result1.end()) == 9
+    );
+    
+    constexpr auto result2 = ranges::search_n(nums, count, value);
+    static_assert // 找到
+    (
+        result2.size() == count &amp;&amp;
+        std::distance(nums.begin(), result2.begin()) == 6 &amp;&amp;
+        std::distance(nums.begin(), result2.end()) == 9
+    );
+    
+    constexpr auto result3 = ranges::search_n(nums, count, value_t{5});
+    static_assert // 找不到
+    (
+        result3.size() == 0 &amp;&amp;
+        result3.begin() == result3.end() &amp;&amp;
+        result3.end() == nums.end()
+    );
+
+    constexpr auto result4 = ranges::search_n(nums, count_t{0}, value_t{1});
+    static_assert // 找不到
+    (
+        result4.size() == 0 &amp;&amp;
+        result4.begin() == result4.end() &amp;&amp;
+        result4.end() == nums.begin()
+    );
+    
+    constexpr char symbol{'B'};
+    auto to_ascii = [](const int z) -&gt; char { return 'A' + z - 1; };
+    auto is_equ = [](const char x, const char y) { return x == y; };
+    
+    std::cout &lt;&lt; "找到了子序列 " &lt;&lt; std::string(count, symbol) &lt;&lt; " 于 ";
+    std::ranges::transform(nums, std::ostream_iterator&lt;char&gt;(std::cout, ""), to_ascii);
+    std::cout &lt;&lt; '\n';
+    
+    auto result5 = ranges::search_n(nums, count, symbol, is_equ, to_ascii);
+    if (not result5.empty())
+        std::cout &lt;&lt; "找到其位置在 "
+                  &lt;&lt; ranges::distance(nums.begin(), result5.begin()) &lt;&lt; '\n';
+
+    std::vector&lt;std::complex&lt;double&gt;&gt; nums2{&lt;!----&gt;{4, 2}, {4, 2}, {1, 3}&lt;!----&gt;};
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto it = ranges::search_n(nums2, 2, {4, 2});
+    #else
+        auto it = ranges::search_n(nums2, 2, std::complex&lt;double&gt;{4, 2});
+    #endif
+    assert(it.size() == 2);
+}
+|output=
+找到了子序列 BBB 于 ABBCDABBBA
+找到其位置在 6
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_end}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_first_of}}
+{{dsc inc|cpp/algorithm/ranges/dsc includes}}
+{{dsc inc|cpp/algorithm/ranges/dsc mismatch}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/dsc search_n}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

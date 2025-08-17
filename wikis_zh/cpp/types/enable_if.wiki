@@ -1,0 +1,219 @@
+{{cpp/title|enable_if}}
+{{cpp/meta/navbar}}
+{{ddcl|header=type_traits|since=c++11|1=
+template&lt; bool B, class T = void &gt;
+struct enable_if;
+}}
+
+若 {{tt|B}} 为 {{c|true}}，则 {{tt|std::enable_if}} 拥有等同于 {{tt|T}} 的公开成员 typedef {{tt|type}}；否则，无成员 typedef。
+
+此元函数是在 C++20 的[[cpp/language/constraints|概念]]可用前，活用 [[cpp/language/sfinae|SFINAE]] 的便利方法，尤其是基于类型特征从[[cpp/language/overload_resolution|候选集]]中条件性地移除函数，并对不同类型特征提供分离的函数重载与特化。
+
+{{tt|std::enable_if}} 有多种用法，包括：
+* 用作额外的函数实参（不适用于大多数运算符重载）
+* 用作返回类型（不适用于构造函数与析构函数）
+* 用作类模板或函数模板形参。
+
+{{cpp/types/nospec}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|type}}|为 {{tt|T}} 或无此成员，取决于 {{tt|B}} 的值}}
+{{dsc end}}
+
+===辅助类型===
+{{ddcl|since=c++14|1=
+template&lt; bool B, class T = void &gt;
+using enable_if_t = typename enable_if&lt;B,T&gt;::type;
+}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;bool B, class T = void&gt;
+struct enable_if {};
+
+template&lt;class T&gt;
+struct enable_if&lt;true, T&gt; { typedef T type; };
+}}
+
+===注解===
+一种常见错误是声明两个仅在默认模板实参上有别的函数模板。这样做是无效的，因为这些函数声明被当做同一函数模板的再声明（[[cpp/language/function_template#函数模板重载|函数模板等价性]]中并不计入默认模板实参）。
+
+{{source|1=
+/* 错误 */
+
+struct T
+{
+    enum { int_t, float_t } type;
+
+    template&lt;typename Integer,
+             typename = std::enable_if_t&lt;std::is_integral&lt;Integer&gt;::value&gt;&gt;
+    T(Integer) : type(int_t) {}
+
+    template&lt;typename Floating,
+             typename = std::enable_if_t&lt;std::is_floating_point&lt;Floating&gt;::value&gt;&gt;
+    T(Floating) : type(float_t) {} // 错误：被当做重复定义
+};
+
+/* 正确 */
+
+struct T
+{
+    enum { int_t, float_t } type;
+
+    template&lt;typename Integer,
+             std::enable_if_t&lt;std::is_integral&lt;Integer&gt;::value, bool&gt; = true&gt;
+    T(Integer) : type(int_t) {}
+
+    template&lt;typename Floating,
+             std::enable_if_t&lt;std::is_floating_point&lt;Floating&gt;::value, bool&gt; = true&gt;
+    T(Floating) : type(float_t) {} // OK
+};
+}}
+
+于命名空间函数模板作用域的模板非类型形参中使用 {{tt|enable_if}} 时需留意。某些 ABI 规范，如 Itanium ABI，名字重整中并不包含非类型模板形参的实例化依赖部分。这表示两个不同的函数模板特化可能最后得到相同的重整名，并且错误地相互链接。例如：
+
+{{source |1=
+// 第一个翻译单元
+
+struct X
+{
+    enum { value1 = true, value2 = true };
+};
+
+template&lt;class T, std::enable_if_t&lt;T::value1, int&gt; = 0&gt;
+void func() {} // #1
+
+template void func&lt;X&gt;(); // #2
+
+// 第二个翻译单元
+
+struct X
+{
+    enum { value1 = true, value2 = true };
+};
+
+template&lt;class T, std::enable_if_t&lt;T::value2, int&gt; = 0&gt;
+void func() {} // #3
+
+template void func&lt;X&gt;(); //#4
+}}
+
+函数模板 #1 与 #3 拥有不同签名，且为不同的模板。不过 #2 与 #4 尽管是不同函数模板的实例化，却[https://github.com/itanium-cxx-abi/cxx-abi/issues/20 在 Itanium C++ ABI 中]拥有相同的重整名（{{tt|_Z4funcI1XLi0EEvv}}），这表示链接器会错误地认为它们是同一实体。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;new&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+namespace detail
+{ 
+    void* voidify(const volatile void* ptr) noexcept { return const_cast&lt;void*&gt;(ptr); } 
+}
+
+// #1，经由返回类型启用
+template&lt;class T&gt;
+typename std::enable_if&lt;std::is_trivially_default_constructible&lt;T&gt;::value&gt;::type 
+    construct(T*) 
+{
+    std::cout &lt;&lt; "默认构造可平凡默认构造的 T\n";
+}
+
+// 同上
+template&lt;class T&gt;
+typename std::enable_if&lt;!std::is_trivially_default_constructible&lt;T&gt;::value&gt;::type 
+    construct(T* p) 
+{
+    std::cout &lt;&lt; "默认构造不可平凡默认构造的 T\n";
+    ::new(detail::voidify(p)) T;
+}
+
+// #2
+template&lt;class T, class... Args&gt;
+std::enable_if_t&lt;std::is_constructible&lt;T, Args&amp;&amp;...&gt;::value&gt; // 使用辅助类型
+    construct(T* p, Args&amp;&amp;... args) 
+{
+    std::cout &lt;&lt; "带操作构造 T\n";
+    ::new(detail::voidify(p)) T(static_cast&lt;Args&amp;&amp;&gt;(args)...);
+}
+
+// #3，经由形参启用
+template&lt;class T&gt;
+void destroy(
+    T*, 
+    typename std::enable_if&lt;
+        std::is_trivially_destructible&lt;T&gt;::value
+    &gt;::type* = 0)
+{
+    std::cout &lt;&lt; "销毁可平凡析构的 T\n";
+}
+
+// #4，经由非类型模板形参启用
+template&lt;class T,
+         typename std::enable_if&lt;
+             !std::is_trivially_destructible&lt;T&gt;{} &amp;&amp;
+             (std::is_class&lt;T&gt;{} {{!!}} std::is_union&lt;T&gt;{}),
+             bool&gt;::type = true&gt;
+void destroy(T* t)
+{
+    std::cout &lt;&lt; "销毁不可平凡析构的 T\n";
+    t-&gt;~T();
+}
+
+// #5，经由类型模板形参启用
+template&lt;class T,
+	 typename = std::enable_if_t&lt;std::is_array&lt;T&gt;::value&gt;&gt;
+void destroy(T* t) // 注：不修改函数签名
+{
+    for (std::size_t i = 0; i &lt; std::extent&lt;T&gt;::value; ++i)
+        destroy((*t)[i]);
+}
+
+/*
+template&lt;class T,
+	typename = std::enable_if_t&lt;std::is_void&lt;T&gt;::value&gt; &gt;
+void destroy(T* t){} // 错误：函数签名与 #5 相同
+*/
+
+// 经由模板形参启用 A 的偏特化
+template&lt;class T, class Enable = void&gt;
+class A {}; // 主模板
+
+template&lt;class T&gt;
+class A&lt;T, typename std::enable_if&lt;std::is_floating_point&lt;T&gt;::value&gt;::type&gt;
+}; // 浮点类型的特化
+
+int main()
+{
+    union { int i; char s[sizeof(std::string)]; } u;
+
+    construct(reinterpret_cast&lt;int*&gt;(&amp;u));
+    destroy(reinterpret_cast&lt;int*&gt;(&amp;u));
+
+    construct(reinterpret_cast&lt;std::string*&gt;(&amp;u),"Hello");
+    destroy(reinterpret_cast&lt;std::string*&gt;(&amp;u));
+
+    A&lt;int&gt;{}; // OK：匹配主模板
+    A&lt;double&gt;{}; // OK：匹配偏特化
+}
+|output=
+默认构造可平凡默认构造的 T
+销毁可平凡析构的 T
+带操作构造 T
+销毁不可平凡析构的 T
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc void_t}}
+{{dsc end}}
+* {{ltt|cpp/language/static_assert}}
+* [[cpp/language/sfinae|SFINAE]]
+* [[cpp/language/constraints|Constraints and Concepts]]
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

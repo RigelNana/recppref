@@ -1,0 +1,136 @@
+{{cpp/title|mem_fn}}
+{{cpp/utility/functional/navbar}}
+{{ddcl|header=functional|since=c++11|notes={{mark constexpr since c++20}}|1=
+template&lt; class M, class T &gt;
+/* 未指定 */ mem_fn( M T::* pm ) noexcept;
+}}
+
+函数模板 {{tt|std::mem_fn}} 生成成员指针的包装器对象，它可以存储、复制及调用[[cpp/language/pointer#成员指针|成员指针]]。指向对象的引用和指针（包括智能指针）都可以在调用 {{tt|std::mem_fn}} 时使用。
+
+===参数===
+{{par begin}}
+{{par|pm|要包装的成员指针}}
+{{par end}}
+
+===返回值===
+{{tt|std::mem_fn}} 返回未指定类型的调用包装器 {{c|fn}}，该类型拥有下列成员：
+
+{{member|{{small|std::mem_fn}} ''返回类型''|2=
+{{rrev|until=c++20|
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|result_type}}{{mark deprecated c++17}}|如果 {{c|pm}} 是成员函数指针，那么定义为 {{c|pm}} 的返回类型，对成员对象指针则不定义}}
+{{dsc|{{tt|argument_type}}{{mark deprecated c++17}}|如果 {{c|pm}} 是指向不接受实参的成员函数的指针，那么定义为 {{tt|T*}}，可有 cv 限定}}
+{{dsc|{{tt|first_argument_type}}{{mark deprecated c++17}}|如果 {{c|pm}} 是指向接收一个实参的成员函数的指针，那么定义为 {{tt|T*}}}}
+{{dsc|{{tt|second_argument_type}}{{mark deprecated c++17}}|如果 {{c|pm}} 是指向接收一个 {{tt|T1}} 类型实参的成员函数的指针，那么定义为 {{tt|T1}}}}
+{{dsc end}}
+}}
+
+===成员函数===
+{{dcl begin}}
+{{dcla|constexpr=c++20|1=
+template&lt;class... Args&gt;
+/* 见下文 */ operator()(Args&amp;&amp;... args) /* cv引用限定符 */
+    noexcept(/* 见下文 */);
+}}
+{{dcl end}}
+
+表达式 {{c|fn(args)}} 等价于 {{box|{{rlpi|/|INVOKE}}{{c/core|(pmd, args)}}}}，其中 {{c|pmd}} 是 {{c|fn}} 持有的{{named req|Callable}}对象，它具有 {{tt|M T::*}} 类型并以 {{c|pm}} 直接非列表初始化。
+
+从而 {{c/core|operator()}} 的返回类型是 {{c/core|std::result_of&lt;decltype(pm)(Args&amp;&amp;...)&gt;::type}}{{rev inl|since=c++17|，或等价地为 {{c/core|std::invoke_result_t&lt;decltype(pm), Args&amp;&amp;...&gt;}}，而 {{c/core|noexcept}} 说明符中的值等于 {{c|std::is_nothrow_invocable_v&lt;decltype(pm), Args&amp;&amp;...&gt;)}}}}。
+
+如同用 {{c|std::forward&lt;Args&gt;(args)...}} 完美转发 {{c|args}} 中的每个实参。
+}}
+
+===示例===
+{{example
+|用 {{tt|std::mem_fn}} 来存储并执行成员函数和成员对象：
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+ 
+struct Foo
+{
+    void display_greeting()
+    {
+        std::cout &lt;&lt; "你好。\n";
+    }
+    
+    void display_number(int i)
+    {
+        std::cout &lt;&lt; "数字：" &lt;&lt; i &lt;&lt; '\n';
+    }
+    
+    int add_xy(int x, int y)
+    {
+        return data + x + y;
+    }
+    
+    template&lt;typename... Args&gt; int add_many(Args... args)
+    {
+        return data + (args + ...);
+    }
+    
+    auto add_them(auto... args) // 需要 C++20
+    {
+        return data + (args + ...);
+    }
+    
+    int data = 7;
+};
+ 
+int main()
+{
+    auto f = Foo{};
+    
+    auto greet = std::mem_fn(&amp;Foo::display_greeting);
+    greet(f);
+    
+    auto print_num = std::mem_fn(&amp;Foo::display_number);
+    print_num(f, 42);
+    
+    auto access_data = std::mem_fn(&amp;Foo::data);
+    std::cout &lt;&lt; "data：" &lt;&lt; access_data(f) &lt;&lt; '\n';
+    
+    auto add_xy = std::mem_fn(&amp;Foo::add_xy);
+    std::cout &lt;&lt; "add_xy：" &lt;&lt; add_xy(f, 1, 2) &lt;&lt; '\n';
+    
+    // 用于智能指针
+    auto u = std::make_unique&lt;Foo&gt;();
+    std::cout &lt;&lt; "access_data(u)：" &lt;&lt; access_data(u) &lt;&lt; '\n';
+    std::cout &lt;&lt; "add_xy(u, 1, 2)：" &lt;&lt; add_xy(u, 1, 2) &lt;&lt; '\n';
+    
+    // 用于带形参包的成员函数模板
+    auto add_many = std::mem_fn(&amp;Foo::add_many&lt;short, int, long&gt;);
+    std::cout &lt;&lt; "add_many(u, ...)：" &lt;&lt; add_many(u, 1, 2, 3) &lt;&lt; '\n';
+
+    auto add_them = std::mem_fn(&amp;Foo::add_them&lt;short, int, float, double&gt;);
+    std::cout &lt;&lt; "add_them(u, ...)：" &lt;&lt; add_them(u, 5, 7, 10.0f, 13.0) &lt;&lt; '\n';
+}
+|output=
+你好。
+数字：42
+data：7
+add_xy：10
+access_data(u)：7
+add_xy(u, 1, 2)：10
+add_many(u, ...)：13
+add_them(u, ...)：42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++11|dr=2048|before=提供了不需要的重载|after=已移除}}
+{{dr list item|wg=lwg|std=C++11|dr=2489|before=未要求 {{c/core|noexcept}}|after=要求}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc function}}
+{{dsc inc|cpp/utility/functional/dsc move_only_function}}
+{{dsc inc|cpp/utility/functional/dsc bind}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

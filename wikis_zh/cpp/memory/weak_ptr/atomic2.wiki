@@ -1,0 +1,174 @@
+{{cpp/title|atomic{{small|&lt;std::weak_ptr&gt;}}}}
+{{cpp/memory/weak_ptr/navbar}}
+{{ddcl|header=memory|since=c++20|
+template&lt; class T &gt; struct std::atomic&lt;std::weak_ptr&lt;T&gt;&gt;;
+}}
+
+{{lc|std::atomic}} 对 {{c|std::weak_ptr&lt;T&gt;}} 的部分模板特化允许用户原子地操纵 {{tt|weak_ptr}} 对象。
+
+若多个执行线程访问同一 {{lc|std::weak_ptr}} 对象而不同步，而这些访问有任何一个使用的是 {{lc|weak_ptr}} 的非 const 成员函数，除非所有这种访问都通过 {{lc|std::atomic&lt;std::weak_ptr&gt;}} 的实例进行，否则将出现数据竞争。
+
+保证关联 {{tt|use_count}} 的自增是原子操作的一部分。要求关联 {{tt|use_count}} 的自减在原子操作之后，但不要求是其一部分，除非是覆写失败的 CAS 中的 {{tt|expected}} 时的 {{tt|use_count}} 更改。任何关联的删除和解分配都后序于原子更新步骤，且不是原子操作的一部分。
+
+注意 {{lc|std::weak_ptr}} 和 {{lc|std::shared_ptr}} 所用的控制块是线程安全的：多个线程能同时用可变操作，例如 {{c|1=operator=}} 或 {{tt|reset}}，访问不同的非原子 {{lc|std::weak_ptr}} 对象，即使在这些实例互为副本，或因其他原因于内部共享同一控制块时也是如此。
+
+类型 {{tt|T}} 可为不完整类型。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|value_type}}|{{c|std::weak_ptr&lt;T&gt;}}}}
+{{dsc end}}
+
+===成员函数===
+此特化亦提供所有非特化 {{lc|std::atomic}} 的成员函数，且不提供额外成员函数。
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}atomic|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+constexpr atomic() noexcept = default;
+}}
+{{dcl|num=2|
+atomic(std::weak_ptr&lt;T&gt; desired) noexcept;
+}}
+{{dcl|num=3|1=
+atomic(const atomic&amp;) = delete;
+}}
+{{dcl end}}
+@1@ 初始化底层 {{tt|weak_ptr&lt;T&gt;}} 为默认构造值。
+@2@ 初始化底层 {{tt|weak_ptr&lt;T&gt;}} 为 {{tt|desired}} 的副本。同任何 {{lc|std::atomic}} 一样，初始化不是原子操作。
+@3@ 原子类型不可复制/移动构造。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}operator{{=}}|2=
+{{dcl begin}}
+{{dcl|num=1|1=
+void operator=(const atomic&amp;) = delete;
+}}
+{{dcl|num=2|1=
+void operator=(std::weak_ptr&lt;T&gt; desired) noexcept;
+}}
+{{dcl end}}
+@1@ 原子类型不可复制/移动赋值。
+@2@ 值赋值，等价于 {{c|store(desired)}}。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}is_lock_free|2=
+{{ddcl|
+bool is_lock_free() const noexcept;
+}}
+若此类型所有对象上的原子操作均为无锁则返回 {{c/core|true}}，否则返回 {{c/core|false}}。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}store|2=
+{{ddcl|1=
+void store(std::weak_ptr&lt;T&gt; desired,
+           std::memory_order order = std::memory_order_seq_cst) noexcept;
+}}
+如同用 {{c|p.swap(desired)}}，原子地以 {{tt|desired}} 的值替换 {{c|*this}} 的值，其中 {{c|p}} 为底层的 {{lc|std::weak_ptr&lt;T&gt;}}。按照 {{tt|order}} 排序内存。若 {{tt|order}} 是 {{lc|std::memory_order_consume}}、{{lc|std::memory_order_acquire}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}load|2=
+{{ddcl|1=
+std::weak_ptr&lt;T&gt; load(std::memory_order order = std::memory_order_seq_cst) const noexcept;
+}}
+原子地返回底层 {{c|std::weak_ptr&lt;T&gt;}} 的副本。按照 {{tt|order}} 排序内存。若 {{tt|order}} 是 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}operator std::weak_ptr&lt;T&gt;|2=
+{{ddcl|
+operator std::weak_ptr&lt;T&gt;() const noexcept;
+}}
+等价于 {{c|return load();}}。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}exchange|2=
+{{ddcl|1=
+std::weak_ptr&lt;T&gt; exchange(std::weak_ptr&lt;T&gt; desired,
+                          std::memory_order order = std::memory_order_seq_cst) noexcept;
+
+}}
+如同用 {{c|p.swap(desired)}}，原子地以 {{tt|desired}} 替换底层 {{c|std::weak_ptr&lt;T&gt;}}，其中 {{c|p}} 为底层 {{lc|std::weak_ptr&lt;T&gt;}}，并返回 {{c|p}} 立即在交换前所拥有的值的副本。按照 {{tt|order}} 排序内存。操作是原子读修改写操作。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}compare_exchange_weak, compare_exchange_strong|2=
+{{dcl begin}}
+{{dcl|num=1|
+bool compare_exchange_strong(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                             std::memory_order success, std::memory_order failure) noexcept;
+}}
+{{dcl|num=2|
+bool compare_exchange_weak(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                           std::memory_order success, std::memory_order failure) noexcept;
+}}
+{{dcl|num=3|1=
+bool compare_exchange_strong(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                             std::memory_order order = std::memory_order_seq_cst) noexcept;
+}}
+{{dcl|num=4|1=
+bool compare_exchange_weak(std::weak_ptr&lt;T&gt;&amp; expected, std::weak_ptr&lt;T&gt; desired,
+                           std::memory_order order = std::memory_order_seq_cst) noexcept;
+}}
+{{dcl end}}
+@1@ 若底层 {{c|std::weak_ptr&lt;T&gt;}} 存储与 {{tt|expected}} 相同的指针值并与之共享所有权，或若底层指针和 {{tt|expected}} 均为空，则从 {{tt|desired}} 赋值给底层 {{c|std::weak_ptr&lt;T&gt;}} 并返回 {{c|true}}，按照 {{tt|success}} 排序内存；否则从底层 {{c|std::weak_ptr&lt;T&gt;}} 赋值给 {{tt|expected}} 并返回 {{c|false}}，按照 {{tt|failure}} 排序内存。若 {{tt|failure}} 为 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。成功时，操作为 {{c|*this}} 上的原子读修改写操作，且在原子更新后不会访问 {{tt|expected}}。失败时，操作是 {{c|*this}} 上的原子加载操作，并以读取自原子对象的既存值更新 {{tt|expected}}。这次对 {{tt|expected}} 的 {{tt|use_count}} 的更新是原子操作，尽管不要求写入自身（和任何后继的解分配/析构）是原子操作。
+@2@ 同 {{v|1}}，但可能虚假地失败。
+@3@ 等价于：{{c|return compare_exchange_strong(expected, desired, order, fail_order);}}，其中 {{tt|fail_order}} 与 {{tt|order}} 相同，但 {{lc|std:memory_order_acq_rel}} 被替换为 {{lc|std::memory_order_acquire}}，而 {{lc|std::memory_order_release}} 被替换为 {{lc|std::memory_order_relaxed}}。
+@4@ 等价于： {{c|return compare_exchange_weak(expected, desired, order, fail_order);}}，其中 {{tt|fail_order}} 与 {{tt|order}} 相同，但 {{lc|std::memory_order_acq_rel}} 被替换为 {{lc|std::memory_order_acquire}}，而 {{lc|std::memory_order_release}} 被替换为 {{lc|std::memory_order_relaxed}}。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}wait|2=
+{{ddcl|1=
+void wait(std::weak_ptr&lt;T&gt; old
+          std::memory_order order = std::memory_order_seq_cst) const noexcept;
+}}
+
+实施原子等待操作。
+
+比较 {{c|load(order)}} 与 {{tt|old}}，且若它们等价则阻塞直至 {{c|*this}} 被 {{tt|notify_one()}} 或 {{tt|notify_all()}} 提醒。重复此操作直至 {{c|load(order)}} 更改。此函数保证仅若值发生更改才返回，即使底层实现虚假地除阻也是如此。
+
+按照 {{tt|order}} 排序内存。若 {{tt|order}} 为 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 则行为未定义。
+
+注解：若两个 {{tt|weak_ptr}} 存储相同指针，且要么共享所有权要么都为空，则它们等价。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}notify_one|2=
+{{ddcl|1=
+void notify_one() noexcept;
+}}
+
+实施原子提醒操作。
+
+若有在 {{c|*this}} 上的原子等待操作（即 {{tt|wait()}}）中阻塞的线程，则除阻至少一个这种线程，否则不做任何事。
+}}
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}notify_all|2=
+{{ddcl|1=
+void notify_all() noexcept;
+}}
+
+实施原子提醒操作。
+
+除阻所有在 {{c|*this}} 上的原子等待操作（即 {{tt|wait()}}）中阻塞的线程，若存在；否则不做任何事。
+}}
+
+===成员常量===
+此特化亦提供唯一的标准 {{lc|std::atomic}} 成员常量 {{tt|is_always_lock_free}}。
+
+{{member|{{small|atomic&lt;weak_ptr&lt;T&gt;&gt;::}}is_always_lock_free|2=
+{{ddcl|1=
+static constexpr bool is_always_lock_free = /* 由实现定义 */;
+}}
+}}
+
+===示例===
+{{example
+|code=
+|output=
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

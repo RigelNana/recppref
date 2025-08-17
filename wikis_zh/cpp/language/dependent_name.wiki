@@ -1,0 +1,665 @@
+{{title|待决名}}
+{{cpp/language/templates/navbar}}
+
+在{{rlp|templates|模板}}（{{rlp|class template|类模板}}和{{rlp|function template|函数模板}}）定义中，某些构造的含义可以在不同的实例化间有所不同。特别是，类型和表达式可能会取决于类型模板形参的类型和非类型模板形参的值。
+{{source|1=
+template&lt;typename T&gt;
+struct X : B&lt;T&gt; // “B&lt;T&gt;” 取决于 T
+{
+    typename T::A* pa; // “T::A” 取决于 T
+                       // （此 “typename” 的使用的目的见下文）
+    void f(B&lt;T&gt;* pb)
+    {
+        static int i = B&lt;T&gt;::i; // “B&lt;T&gt;::i” 取决于 T
+        pb-&gt;j++; // “pb-&gt;j” 取决于 T
+    }
+};
+}}
+对待决名和非待决名的名字{{rlp|lookup|查找}}和绑定有所不同。
+
+===绑定规则===
+非待决名在模板定义点查找并绑定。即使在模板实例化点有更好的匹配，也保持此绑定： 
+{{example
+|code=
+#include &lt;iostream&gt;
+
+void g(double) { std::cout &lt;&lt; "g(double)\n"; }
+
+template&lt;class T&gt;
+struct S
+{
+    void f() const
+    {
+        g(1); // “g” 是非待决名，现在绑定
+    }
+};
+
+void g(int) { std::cout &lt;&lt; "g(int)\n"; }
+
+int main()
+{
+    g(1);  // 调用 g(int)
+
+    S&lt;int&gt; s;
+    s.f(); // 调用 g(double)
+}
+}}
+
+如果非待决名的含义在定义点和模板特化的实例化点间有所改变，那么程序非良构，不要求诊断。在下列情形可能会出现这种情况：
+* 非待决名用到的类型在定义点{{rlp|incomplete type|不完整}}但在实例化点完整
+{{rrev|since=c++17|
+* 模板定义中对名字的查找找到 {{rlp|using declaration|using 声明}}，但实例化中对应作用域找不到任何声明，因为该 using 声明是包展开而对应的包为空
+}}
+* 实例化使用了在定义点尚未定义的默认实参或默认模板实参
+* 实例化点的某个{{rlp|constant expression|常量表达式}}使用了整型或无作用域枚举类型的 const 对象的值{{rev inl|since=c++11|、constexpr 对象的值、引用的值或者 constexpr 函数的定义}}，而该对象{{rev inl|since=c++11|/引用/函数}}在模板的定义点还没有定义
+* 该模板在实例化点使用了非待决的类模板特化{{rev inl|since=c++14|或变量模板特化}}，而它所用的这个模板，或者从某个在定义点处还没有定义的部分特化所实例化，或者指名了某个在定义点处还没有声明的显式特化。
+
+待决名的绑定则延迟到查找发生时。
+
+===查找规则===
+对于模板中所使用的待决名的{{rlp|lookup|查找}}延迟到模板实参已知时，
+* 非实参依赖查找会查找检验从模板定义的语境可见的{{rev inl|until=c++11|具有外部连接的}}函数声明
+* {{rlp|adl|实参依赖查找}}会一并检验从模板定义的语境或从模板实例化的语境可见的{{rev inl|until=c++11|具有外部连接的}}函数声明
+（换言之，在模板定义后添加新函数声明不会令其可见，除非通过实参依赖查找）。
+
+此规则的目的是帮助模板实例化抵御 {{rlp|definition#单一定义规则（ODR）|ODR}} 违规：
+{{source|1=
+// 某个外部库
+namespace E
+{
+    template&lt;typename T&gt;
+    void writeObject(const T&amp; t)
+    {
+        std::cout &lt;&lt; "Value = " &lt;&lt; t &lt;&lt; '\n';
+    }
+}
+
+// 翻译单元 1：
+// 程序员 1 希望允许 E::writeObject 与 vector&lt;int&gt; 一同使用
+namespace P1
+{
+    std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const std::vector&lt;int&gt;&amp; v)
+    {
+        for(int n : v)
+            os &lt;&lt; n &lt;&lt; ' ';
+        return os;
+    }
+    
+    void doSomething()
+    {
+        std::vector&lt;int&gt; v;
+        E::writeObject(v); // 错误：找不到 P1::operator&lt;&lt;
+    }
+}
+
+// 翻译单元 2：
+// 程序员 2 希望允许 E::writeObject 与 vector&lt;int&gt; 一同使用
+namespace P2
+{
+    std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const std::vector&lt;int&gt;&amp; v)
+    {
+        for(int n : v)
+            os &lt;&lt; n &lt;&lt;':';
+        return os &lt;&lt; "[]";
+    }
+    
+    void doSomethingElse()
+    {
+        std::vector&lt;int&gt; v;
+        E::writeObject(v); // 错误：找不到 P2::operator&lt;&lt;
+    }
+}
+}}
+在上例中，假如允许从实例化语境对 {{tt|operator&lt;&lt;}} 进行非实参依赖查找，那么 {{c|E::writeObject&lt;vector&lt;int&gt;&gt;}} 的实例化会拥有两个不同定义：一个使用 {{c|P1::operator&lt;&lt;}}，一个使用 {{c|P2::operator&lt;&lt;}}。连接器可能无法检测这种 ODR 违规，导致两个实例中都使用其中一个或另一个。
+
+为使得实参依赖查找检测用户定义命名空间，要么应当将 {{lc|std::vector}} 替换成用户定义类，要么它的元素类型需要是用户定义类：
+{{source|1=
+namespace P1
+{
+    // 如果 C 是在 P1 命名空间中定义的类
+    std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const std::vector&lt;C&gt;&amp; v)
+    {
+        for(C n : v)
+            os &lt;&lt; n;
+        return os;
+    }
+    
+    void doSomething()
+    {
+        std::vector&lt;C&gt; v;
+        E::writeObject(v); // OK：实例化 writeObject(std::vector&lt;P1::C&gt;)
+                           //     通过 ADL 找到 P1::operator&lt;&lt;
+    }
+}
+}}
+
+注意：由于此规则，实践中不适合为标准库类型重载运算符：
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+// 坏主意：全局命名空间中的运算符，但它的实参处于 std:: 中
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::pair&lt;int, double&gt; p)
+{
+    return os &lt;&lt; p.first &lt;&lt; ',' &lt;&lt; p.second;
+}
+
+int main()
+{
+    typedef std::pair&lt;int, double&gt; elem_t;
+    std::vector&lt;elem_t&gt; v(10);
+    std::cout &lt;&lt; v[0] &lt;&lt; '\n'; // OK，普通查找找到 ::operator&lt;&lt;
+    std::copy(v.begin(), v.end(),
+              std::ostream_iterator&lt;elem_t&gt;(std::cout, " ")); 
+    // 错误：从 std::ostream_iterator 定义点的普通查找和 ADL 只会考虑 std
+    // 命名空间，而且将找到 std::operator&lt;&lt; 的多个重载，因此这种查找会完成。
+    // 之后在查找所找到的集合中，重载决议为 elem_t 寻找 operator&lt;&lt; 会失败。
+}
+}}
+
+注意：在模板定义时，也会发生待决名的有限制的查找（但非绑定），以便将它们与非待决名进行区分，也用于确定它们是当前实例化的成员还是未知特化的成员。此查找所获得的信息可用于检测错误，见下文。
+
+===待决类型===
+下列类型是''待决类型''：
+* 模板形参
+* 未知特化（见下文）的成员
+* 作为未知特化（见下文）的待决成员的嵌套类/枚举
+* 待决类型的 cv 限定版本
+* 从待决类型构成的复合类型
+* 元素类型待决或边界（如果存在）是值待决的数组类型
+{{rrev|since=c++11|
+* 形参包含一个或多个函数{{rlp|parameter pack|形参包}}的函数类型
+}}
+* 异常说明是值待决的函数类型
+* {{rlps|templates#模板标识}}，其中
+:* 模板名是某个模板形参，或者
+:* 有任何模板实参是类型待决或值待决的{{rev inl|since=c++11|，或者是包展开}}（即使用到的模板标识不带实参列表，如{{rlp|injected-class-name|注入类名}}）
+{{rrev|since=c++11|
+* 应用到类型待决表达式的 {{rlpt|decltype}} 的结果
+
+应用到类型待决表达式的 {{c/core|decltype}} 的结果是唯一的待决类型。两个这样的结果只有在它们的表达式{{rlp|function template#函数模板重载|等价}}时才指代同一类型。
+}}
+{{rrev|since=c++26|
+* 应用于类型待决的常量的{{rlps|pack indexing#包索引说明符}}
+
+应用于类型待决的常量表达式的包索引说明符是一种独有的待决类型。仅当两个这种包索引说明符的常量表达式等价时，它们代表相同类型。否则，两个包索引说明符仅当它们的索引具有相同值时代表相同类型。
+}}
+
+注意；当前实例化的 typedef 成员只有在它指代的类型待决时才会是待决的。
+
+===类型待决表达式===
+下列表达式是''类型待决''{{sep}}的：
+* 含有类型待决的子表达式的表达式
+* {{c|this}}，如果它的类是待决类型
+* {{rev inl|since=c++20|不是{{rlp|constraints|概念标识}}的}}{{rlp|identifiers|标识表达式}}，且
+:* 包含某个能被自身的名字查找找到至少一个待决声明的标识符
+:* 包含待决的{{rlps|templates#模板标识}}
+{{rrev|since=c++11|
+:* 包含特殊标识符 {{tt|__func__}}（如果某个外围函数是模板，类模板的非模板成员{{rev inl|since=c++14|，或泛型 lambda}}）
+}}
+:* 包含到某个待决类型的{{rlp|cast operator|转换函数}}名
+:* 包含作为未知特化成员的嵌套名说明符或{{rlp|identifiers|有限定标识}}
+:* 指名当前实例化的某个待决成员，且该成员是“未知边界的数组”类型的静态数据成员
+{{rev begin}}
+{{rev|since=c++14|
+:* 包含某个能被自身的名字查找找到一个或更多的声明为具有{{rlpsd|function#返回类型推导}}的当前实例化的成员函数声明的标识符
+}}
+{{rev|since=c++17|
+:* 包含能被自身的名字查找找到一个初始化器为类型待决的{{rlp|structured binding|结构化绑定声明}}的标识符
+:* 包含能被自身的名字查找找到类型含占位符 {{c/core|auto}} 的非类型模板形参的标识符
+:* 包含能被自身的名字查找找到以包含占位符类型的类型声明且初始化器是类型待决的变量（例如 {{c/core|auto}} 静态数据成员）的标识符，
+}}
+{{rev|since=c++26|
+:* 包含被自身的名字查找找到{{rlp|pack|包}}的标识符
+}}
+{{rev end}}
+* 任何到待决类型的转型表达式
+* 创建待决类型对象的 {{rlp|new|{{c/core|new}} 表达式}}
+* 指代当前实例化的某个类型待决的成员的成员访问表达式
+* 指代未知特化的某个成员的成员访问表达式
+{{rrev|since=c++17|
+* {{rlp|fold|折叠表达式}}
+}}
+{{rrev|since=c++26|
+* 标识表达式为类型待决表达式的{{rlps|pack indexing#包索引表达式}}
+}}
+
+以下表达式始终不是类型待决的，因为这些表达式的类型不可能待决：
+* {{rlps|expressions#字面量}}
+* 伪析构函数调用
+* {{rlpt|sizeof}}
+{{rrev|since=c++11|
+* {{rlpt|sizeof...}}
+* {{rlpt|alignof}}
+* {{rlpt|noexcept}}
+}}
+* {{rlpt|throw}}
+* {{rlpt|typeid}}
+* {{rlpt|delete}}
+{{rrev|since=c++20|
+* {{rlpt|requires}}
+}}
+
+===值待决表达式===
+下列表达式是''值待决''{{sep}}的：
+* 在要求{{rlp|constant expression|常量表达式}}的语境中使用的表达式，其中存在值待决的子表达式
+* 满足以下任意条件的{{rlp|identifiers|标识表达式}}：
+{{rrev|since=c++20|
+:* 它是{{rlp|constraints|概念标识}}，并且存在待决实参。
+}}
+:* 它是类型待决的。
+:* 它是某个非类型模板形参的名字。
+:* 它指名某个作为当前实例化的待决成员的静态数据成员，且未被初始化。
+:* 它指名某个作为当前实例化的待决成员的静态成员函数。
+:* 它是具有{{rev inl|until=c++11|整数或枚举}}{{rev inl|since=c++11|字面}}类型的常量，并从值待决表达式初始化。
+* 它是以下表达式之一，并且操作数是类型待决的表达式：
+:* {{rlpt|sizeof}}
+:* {{rlpt|typeid}}
+{{rrev|since=c++11|
+:* {{rlpt|alignof}}
+}}
+* 它是以下表达式之一，并且操作数是待决的类型标识：
+:* {{rlpt|sizeof}}
+:* {{rlpt|typeid}}
+* 它是以下表达式之一，并且目标类型是待决的或者操作数是类型待决的表达式：
+:* {{rlp|explicit cast|C 风格转型}}
+:* {{rlpt|static_cast}}
+:* {{rlpt|const_cast}}
+:* {{rlpt|reinterpret_cast}}
+:* {{rlpt|dynamic_cast}}
+* {{rlp|explicit cast|函数风格转型}}表达式，其中目标类型是待决的或者圆括号{{rev inl|since=c++11|或花括号}}包围了至少一个值待决的表达式
+{{rev begin}}
+{{rev|since=c++11|
+* {{rlpt|sizeof...}} 表达式{{rev inl|since=c++26|，其中操作数不是{{rlp|structured binding|结构化绑定包}}}}
+}}
+{{rev|since=c++17|
+* {{rlp|fold|折叠表达式}}
+}}
+{{rev end}}
+* 取址表达式，其中实参是指名某个当前实例化的待决成员的{{rlp|identifiers|有限定标识}}
+* 取址表达式，其中实参是求值为核心{{rlp|constant expression|常量表达式}}的，指代某个作为具有静态{{rev inl|since=c++11|或线程}}存储期的对象或成员函数的{{rlps|templates#模板化实体}}。
+
+===待决名===
+{{todo|来自 [temp.dep] 的领句，现在缺失（后随有括号列表的 id 表达式……）}}
+{{todo|重新遣词以令它更清晰（或至少不要那么吓人），并在 ait 时应用 CWG 问题 591}}
+
+===当前实例化===
+在类模板定义内（包含它的成员函数和嵌套类），一些名字可以推导为指代''当前实例化''。这样就可以在定义点，而非在实例化点检测某些错误，并移除对待决名上的 {{c/core|typename}} 及 {{c/core|template}} 消歧义符的要求，见下文。
+
+只有下列名字可以指代当前实例化：
+* 在类模板的定义，类模板的嵌套类，或其成员的定义中：
+** 该类模板或嵌套类的注入类名
+* 在主类模板或其成员的定义中：
+** 该类模板的名字后随主模板的模板实参列表（或等价的别名模板特化），其中每个实参和它对应的形参等价（定义见下文）
+* 在类模板的嵌套类的定义中：
+** 被用作当前实例化成员的该嵌套类的名字
+* 在类模板部分特化或其成员的定义中：
+** 该类模板的名字后随部分特化的模板实参列表，其中每个实参和它对应的形参等价
+* 在{{rlp|templates#模板化实体|模板化函数}}的定义中：
+** {{rlps|class#局部类}}名
+
+模板实参在满足以下条件时和指定的模板形参等价：	
+* 对于{{rlp|template parameters#模板类型形参|类型形参}}，模板形参和模板实参表示的类型相同。
+* 对于{{rlp|template parameters#模板非类型形参|非类型形参}}，模板实参是一个{{rlp|identifiers|标识符}}，该标识符命名一个与模板形参等价的变量。变量在满足以下条件时和指定的模板形参等价：
+:* 变量和模板形参的类型相同（忽略 cv 限定），并且
+:* 变量的初始化器只包含一个标识符，该标识符要么命名指定的模板形参，要么递归地命名另一个与指定的模板形参等价的变量。
+
+{{source|1=
+template&lt;class T&gt;
+class A
+{
+    A* p1;      // A 是当前实例化
+    A&lt;T&gt;* p2;   // A&lt;T&gt; 是当前实例化
+    ::A&lt;T&gt;* p4; // ::A&lt;T&gt; 是当前实例化
+    A&lt;T*&gt; p3;   // A&lt;T*&gt; 不是当前实例化
+    
+    class B
+    {
+        B* p1;                 // B 是当前实例化
+        A&lt;T&gt;::B* p2;           // A&lt;T&gt;::B 是当前实例化
+        typename A&lt;T*&gt;::B* p3; // A&lt;T*&gt;::B 不是当前实例化
+    };
+};
+
+template&lt;class T&gt;
+class A&lt;T*&gt;
+{
+    A&lt;T*&gt;* p1; // A&lt;T*&gt; 是当前实例化
+    A&lt;T&gt;* p2;  // A&lt;T&gt; 不是当前实例化
+};
+
+template&lt;int I&gt;
+struct B
+{
+    static const int my_I = I;
+    static const int my_I2 = I + 0;
+    static const int my_I3 = my_I;	
+    static const long my_I4 = I;
+    static const int my_I5 = (I);
+ 
+    B&lt;my_I&gt;* b1;  // B&lt;my_I&gt; 是当前实例化：
+                  //   my_I 的类型和 I 相同，并且只以 I 初始化
+    B&lt;my_I2&gt;* b2; // B&lt;my_I2&gt; 不是当前实例化：
+                  //   I + 0 不是单独的标识符
+    B&lt;my_I3&gt;* b3; // B&lt;my_I3&gt; 是当前实例化：
+                  //   my_I3 的类型和 I 相同，并且只以 my_I（它和 I 等价）初始化
+    B&lt;my_I4&gt;* b4; // B&lt;my_I4&gt; 不是当前实例化：
+                  //   my_I4 的类型（long）和 I 的类型（int）不同
+    B&lt;my_I5&gt;* b5; // B&lt;my_I5&gt; 不是当前实例化：
+                  //   (I) 不是单独的标识符
+};
+}}
+
+注意，如果嵌套类派生自它的外围类模板，那么基类也可以是当前实例化。是待决类型但不是当前实例化的基类是''待决基类''：
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    typedef int M;
+    
+    struct B
+    {
+        typedef void M;
+        
+        struct C;
+    };
+};
+
+template&lt;class T&gt;
+struct A&lt;T&gt;::B::C : A&lt;T&gt;
+{
+    M m; // OK，A&lt;T&gt;::M
+};
+}}
+
+符合以下情况的名字被归类为当前实例化的成员：
+* 由{{rlp|unqualified lookup|无限定查找}}在当前实例化或它的非待决基类中所找到的未限定名
+* 限定符（{{ttb|::}} 左侧的名字）指名了当前实例化，且查找在当前实例化或其非待决基类中找到的{{rlp|qualified lookup|限定名}}
+* 用于类成员访问表达式的名字（{{c|x.y}} 或 {{c|xp-&gt;y}} 中的 {{c|y}}），其中对象表达式（{{c|x}} 或 {{c|*xp}}）是当前实例化，且查找在当前实例化或它的非待决基类中找到了该名字
+
+{{source|1=
+template&lt;class T&gt;
+class A
+{
+    static const int i = 5;
+    
+    int n1[i];       // i 指代当前实例化的成员
+    int n2[A::i];    // A::i 指代当前实例化的成员
+    int n3[A&lt;T&gt;::i]; // A&lt;T&gt;::i 指代当前实例化的成员
+    
+    int f();
+};
+
+template&lt;class T&gt;
+int A&lt;T&gt;::f()
+{
+    return i; // i 指代当前实例化的成员
+}
+}}
+
+当前实例化的成员可以同时是待决和非待决的。
+
+如果当前实例化的某个成员的查找在实例化点和定义点给出不同结果，那么查找有歧义。但要注意，在成员名被使用时，它不会自动转换成类成员访问表达式，只有显式成员访问表达式才会指示当前实例化的成员：
+{{source|1=
+struct A { int m; };
+struct B { int m; };
+
+template&lt;typename T&gt;
+struct C : A, T
+{
+    int f() { return this-&gt;m; } // 在模板定义语境找到 A::m
+    int g() { return m; }       // 在模板定义语境找到 A::m
+};
+
+template int C&lt;B&gt;::f(); // 错误：找到 A::m 和 B::m
+
+template int C&lt;B&gt;::g(); // OK：没有在模板定义语境中进行向类成员访问语法的变换
+}}
+
+===未知特化===
+在模板定义内，某些名字被推导为属于某个''未知特化''，特别是，
+
+* 在 {{ttb|::}} 左侧出现了并非当前实例化成员的待决类型的名字的{{rlp|qualified lookup|限定名}}
+* 限定符是当前实例化，且无法在当前实例化或它的任何非待决基类中找到，并存在待决基类的{{rlp|qualified lookup|限定名}}
+* 类成员访问表达式中的成员名（{{c|x.y}} 或 {{c|xp-&gt;y}} 中的 {{c|y}}），如果对象表达式（{{c|x}} 或 {{c|*xp}}）的类型是待决类型且非当前实例化
+* 类成员访问表达式中的成员名（{{c|x.y}} 或 {{c|xp-&gt;y}} 中的 {{c|y}}），如果对象表达式（{{c|x}} 或 {{c|*xp}}）的类型是当前实例化，且在当前实例化或任何其非待决基类中找不到该名字，并存在待决基类
+
+{{source|1=
+template&lt;typename T&gt;
+struct Base {};
+
+template&lt;typename T&gt;
+struct Derived : Base&lt;T&gt;
+{
+    void f()
+    {
+        // Derived&lt;T&gt; 指代当前实例化
+        // 当前实例化没有 “unknown_type” 但有一个待决基类（Base&lt;T&gt;）
+        // 因此 “unknown_type” 是未知特化的成员
+        typename Derived&lt;T&gt;::unknown_type z;
+    }
+};
+
+template&lt;&gt;
+struct Base&lt;int&gt; // 它在此特化提供
+{
+    typedef int unknown_type; 
+};
+}}
+
+此分类允许在模板定义（而非实例化）点检测下列错误：
+
+* 如果有模板定义拥有某个{{rlp|qualified lookup|限定名}}，其中的限定符指代当前实例化，且该名字既不是当前实例化的成员也不是未知特化的成员，那么程序非良构（不要求诊断），即使模板永远不会被实例化。
+{{source|1=
+template&lt;class T&gt;
+class A
+{
+    typedef int type;
+    
+    void f()
+    {
+        A&lt;T&gt;::type i; // OK：“type” 是当前实例化的成员
+        typename A&lt;T&gt;::other j; // 错误：
+        
+        // “other” 不是当前实例化的成员，也不是未知特化的成员，
+        // 因为 A&lt;T&gt;（指名当前实例化）没有暗藏有 “other” 的待决基类。
+    }
+};
+}}
+* 如果有模板定义拥有某个成员访问表达式，其对象表达式是当前实例化，但其名字既不是当前实例化的成员也不是未知特化的成员，那么程序非良构，即使模板永远不会被实例化。
+
+未知特化的成员始终是待决的，而且它们与所有待决名一样在实例化点进行查找和绑定（见上文）。
+
+{{anchor|typename 消歧义符}}
+===待决名的 {{c/core|typename}} 消歧义符===
+
+在模板（包括别名模版）的声明或定义中，不是当前实例化的成员且取决于某个模板形参的名字不会被认为是类型，除非使用关键词 {{c/core|typename}} 或它已经被设立为类型名（例如用 typedef 声明或通过用作基类名）。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int p = 1;
+
+template&lt;typename T&gt;
+void foo(const std::vector&lt;T&gt; &amp;v)
+{
+    // std::vector&lt;T&gt;::const_iterator 是待决名，
+    typename std::vector&lt;T&gt;::const_iterator it = v.begin();
+    
+    // 下列内容因为没有 “typename” 而会被解析成
+    // 类型待决的成员变量 “const_iterator” 和某变量 'p” 的乘法。
+    // 因为在此处有一个可见的全局 “p”，所以此模板定义能编译。
+    std::vector&lt;T&gt;::const_iterator* p; 
+    
+    typedef typename std::vector&lt;T&gt;::const_iterator iter_t;
+    iter_t * p2; // iter_t 是待决名，但已知它是类型名
+}
+
+template&lt;typename T&gt;
+struct S
+{
+    typedef int value_t; // 当前实例化的成员
+    
+    void f()
+    {
+        S&lt;T&gt;::value_t n{}; // S&lt;T&gt; 待决，但不需要 “typename”
+        std::cout &lt;&lt; n &lt;&lt; '\n';
+    }
+};
+
+int main()
+{
+    std::vector&lt;int&gt; v;
+    foo(v); // 模板实例化失败：类型 std::vector&lt;int&gt; 中没有
+            // 名字是 “const_iterator” 的成员变量
+    S&lt;int&gt;().f();
+}
+}}
+
+关键词 {{c/core|typename}} 只能以这种方式用于限定名（例如 {{c|T::x}}）之前，但这些名字不必待决。
+
+对前附 {{c/core|typename}} 的标识符使用通常的{{rlp|qualified lookup|有限定名字查找}}。这与用{{rlp|elaborated type specifier|详述类型说明符}}的情况不同，不管限定符如何都不改变查找规则：
+
+{{source|1=
+struct A // A 拥有嵌套变量 X 和嵌套类型 struct X
+{
+    struct X {};
+    int X;
+};
+
+struct B
+{
+    struct X {}; // B 拥有嵌套类型 struct X
+};
+
+template&lt;class T&gt;
+void f(T t)
+{
+    typename T::X x;
+}
+
+void foo()
+{
+    A a;
+    B b;
+    f(b); // OK：实例化 f&lt;B&gt;，T::X 指代 B::X
+    f(a); // 错误：不能实例化 f&lt;A&gt;：因为 A::X 的有限定名字查找找到了数据成员
+}
+}}
+
+关键词 {{c/core|typename}} 即便在模板外也可以使用。
+{{source|1=
+#include &lt;vector&gt;
+
+int main()
+{
+    // 以下两行（在解决 CWG 382 后）都 OK
+    typedef typename std::vector&lt;int&gt;::const_iterator iter_t;
+    typename std::vector&lt;int&gt; v;
+}
+}}
+
+{{rrev|since=c++20|
+某些语境中，只有类型名能合法地出现。在这些语境中，假定待决的限定名指名的就是类型而不必使用 {{c/core|typename}}：
+* 用作以下各项的（顶层）{{spar|声明说明符序列}} 中的{{rlp|declarations#说明符|声明说明符}}的限定名：
+:* 位于命名空间作用域的{{rlpsd|declarations#简单声明}}或{{rlpsd|function#函数声明}}；
+:* {{rlp|class#成员说明|类成员声明}}；
+:* {{rlp|class#成员说明|类成员声明}}（包括友元函数声明）中的{{rlp|function#形参列表|形参声明}}，默认实参之外的部分；
+:* 名字有限定的{{rlp|function|函数或函数模板的声明符}}的{{rlp|function#形参列表|形参声明}}，不包括默认实参；
+:* {{rlp|lambda|lambda 表达式}}的{{rlp|function#形参列表|形参声明}}，默认实参之外的部分；
+:* {{rlps|constraints#requires 表达式}}的形参声明；
+:* {{rlpsd|template parameters#非类型模板形参}}声明中的类型；
+* 在{{rlp|type#类型的命名|类型标识}}中出现的限定名，其中最小的外围类型标识是：
+:* 不对其类型加括号的 {{rlp|new|new 表达式}}中的{{spar|类型}}；
+:* {{rlp|type alias|别名声明}}中的{{spar|类型标识}}；
+:* {{rlp|function|尾随返回类型}}，
+:* {{rlp|template parameters#类型模板形参|类型模板形参的默认实参}}，或
+:* {{rlpt|static_cast}}、{{rlpt|dynamic_cast}}、{{rlpt|const_cast}}，或 {{rlpt|reinterpret_cast}} 的 {{spar|类型标识}}。
+}}
+
+{{anchor|template 消歧义符}}
+===待决名的 {{c/core|template}} 消歧义符===
+与此相似，模板定义中不是当前实例化的成员的待决名同样不被认为是模板名，除非使用消歧义关键词 {{c/core|template}}，或它已被设立为模板名：
+
+{{example|code=
+template&lt;typename T&gt;
+struct S
+{
+    template&lt;typename U&gt;
+    void foo() {}
+};
+
+template&lt;typename T&gt;
+void bar()
+{
+    S&lt;T&gt; s;
+    s.foo&lt;T&gt;();          // 错误：&lt; 被解析为小于运算符
+    s.template foo&lt;T&gt;(); // OK
+}
+}}
+
+关键词 {{c/core|template}} 只能以这种方式用于运算符 {{c|::}}（作用域解析）、{{c|-&gt;}}（通过指针的成员访问）和 {{c|.}}（成员访问）之后，下列表达式都是合法示例：
+
+* {{c|T::template foo&lt;X&gt;();}}
+* {{c|s.template foo&lt;X&gt;();}}
+* {{c|this-&gt;template foo&lt;X&gt;();}}
+* {{c|typename T::template iterator&lt;int&gt;::value_type v;}}
+
+与 {{c/core|typename}} 的情况一样，即使名字并非待决或它的使用并未在模板的作用域中出现，也允许使用 {{c/core|template}} 前缀。
+
+即使 {{ttb|::}} 左侧的名字指代命名空间，也允许使用 {{c/core|template}} 消歧义符：
+{{source|1=
+template&lt;typename&gt;
+struct S {};
+
+::template S&lt;void&gt; q; // 允许，但不需要
+}}
+{{rrev|until=c++23|&lt;!-- P1781R6 --&gt;
+根据{{rlp|unqualified lookup|无限定名字查找}}针对成员访问表达式中的模板名的特殊规则，当非待决的模板名在成员访问表达式中出现时（{{c|-&gt;}} 或 {{c|.}} 后），如果通过表达式语境中的常规名字查找找到了的具有相同名字的{{rev inl|since=c++11|类或别名}}模板，那么就不需要消歧义符。{{rev inl|until=c++11|然而，如果表达式语境中的查找所找到的模板与类语境中所找到的不同，那么程序非良构。}}
+
+{{source|1=
+template&lt;int&gt;
+struct A { int value; };
+
+template&lt;class T&gt;
+void f(T t)
+{
+    t.A&lt;0&gt;::value; // A 的常规查找找到类模板。A&lt;0&gt;::value 指名类 A&lt;0&gt; 的成员
+    // t.A &lt; 0;    // 错误：“&lt;” 被当做模板实参列表的起始
+}
+}}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/template}},
+{{ltt|cpp/keyword/typename}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=206|std=C++98|before=当在非待决名中用到的类型在模板定义处不完整但在&lt;br&gt;模板实例化处完整时，未指明会在哪里应用语义约束|after=该场合下程序非良&lt;br&gt;构，不要求诊断}}
+{{dr list item|wg=cwg|dr=224|std=C++98|before=待决类型的定义曾基于名字的形式而不是查找|after=改进定义}}
+{{dr list item|wg=cwg|dr=382|std=C++98|before={{c/core|typename}} 消歧义符只能在模板作用域中使用|after=也能在模板外使用}}
+{{dr list item|wg=cwg|dr=468|std=C++98|before={{c/core|template}} 消歧义符只能在模板作用域中使用|after=也能在模板外使用}}
+{{dr list item|wg=cwg|dr=502|std=C++98|before=未指明嵌套枚举是否待决|after=和嵌套类一样待决}}
+{{dr list item|wg=cwg|dr=1047|std=C++98|before={{c/core|typeid}} 表达式不是值待决的|after=在操作数类型待决时值待决}}
+{{dr list item|wg=cwg|dr=1160|std=C++98|before=未指明在模板的成员定义中有模板标识与主模板&lt;br&gt;或部分特化匹配时某些名字是否指代当前实例化|after=已指明}}
+{{dr list item|wg=cwg|dr=1413|std=C++98|before=未初始化静态数据成员、静态成员函数和类模板的成员的地址未列为值待决|after=已列入}}
+{{dr list item|wg=cwg|dr=1471|std=C++98|before=当前实例化的非待决基类的嵌套类型是待决的|after=它不是待决的}}
+{{dr list item|wg=cwg|dr=1850|std=C++98|before=含义在定义语境和实例化点之间变更的情况列表不完整|after=使之完整}}
+{{dr list item|wg=cwg|dr=1929|std=C++98|before=不明确是否可以在左侧的名字指代命名空间的 {{tt|::}} 后使用 {{c/core|template}} 消歧义符|after=可以使用}}
+{{dr list item|wg=cwg|dr=2066|std=C++98|before={{c|this}} 不是值待决的|after=它可能值待决}}
+{{dr list item|wg=cwg|dr=2100|std=C++98|before=类模板的静态成员常量地址未列为值待决|after=已列入}}
+{{dr list item|wg=cwg|dr=2109|std=C++98|before=类型待决的标识表达式不一定值待决|after=始终值待决}}
+{{dr list item|wg=cwg|dr=2276|std=C++98|before=异常说明是值待决的函数类型不是待决类型|after=是待决类型}}
+{{dr list item|wg=cwg|dr=2307|std=C++98|before=被圆括号包围的模板非类型形参在作为模板实参时和该模板形参等价|after=不再等价}}
+{{dr list item|wg=cwg|dr=2457|std=C++11|before=带函数形参包的函数类型不是待决类型|after=是待决类型}}
+{{dr list item|wg=cwg|dr=2785|std=C++20|before={{c/core|requires}} 表达式可能会类型待决|after=它们不会类型待决}}
+{{dr list item|wg=cwg|dr=2905|std=C++11|before={{c/core|noexcept}} 表达式只有在它的操作数值待决时才会值待决|after=在操作数涉及模板形参时才会值待决}}
+{{dr list item|wg=cwg|dr=2936|std=C++98|before=模板化函数的局部类名不是当前实例化的一部分|after=是当前实例化的一部分}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

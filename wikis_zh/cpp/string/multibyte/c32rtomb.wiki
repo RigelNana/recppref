@@ -1,0 +1,75 @@
+{{cpp/title|c32rtomb}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cuchar|since=c++11|
+std::size_t c32rtomb( char* s, char32_t c32, std::mbstate_t* ps );
+}}
+
+转换 UTF-32 字符到其窄多字节表示。
+
+若 {{c|s}} 不是空指针，则函数确定存储 {{c|c32}} 的多字节字符表示所需的字节数（包含任何迁移序列，并考虑当前的多字节转换状态 {{c|*ps}}），并存储多字节字符表示于首元素为 {{c|s}} 所指向的字符数组，按需更新 {{c|*ps}}。此函数至多能写 {{lc|MB_CUR_MAX}} 个字符。
+
+若 {{c|s}} 是空指针，则调用等价于对某内部存储 {{tt|buf}} 的 {{c|std::c32rtomb(buf, U'\0', ps)}}。
+
+若 {{c|c32}} 是空宽字符 {{c|U'\0'}}，则存储空字节，前附恢复到初始迁移状态所需的任何迁移序列，并更新转换状态参数 {{c|*ps}} 以表示初始迁移状态。
+
+此函数所用的多字节字符编码为当前活跃的 C 本地环境所指定。
+
+===参数===
+{{par begin}}
+{{par|s|指向将存储多字节字符的窄字符数组的指针}}
+{{par|c32|要转换的 32 位宽字符}}
+{{par|ps|指向转译多字节字符串所用的转换状态对象的指针}}
+{{par end}}
+
+===返回值===
+成功时，返回写入首元素为 {{c|s}} 所指向的字符数组的字节数（包含任何迁移序列）。此值可为 {{c|0}}，例如在处理多 {{c/core|char32_t}} 单元序列中的前导 {{c/core|char32_t}} 单元时（UTF-32 中不出现）。
+
+失败时（若 {{c|c32}} 不是合法的 32 位宽字符），返回 {{c|-1}}，存储 {{lc|EILSEQ}} 于 {{lc|errno}}，并置 {{c|*ps}} 于未指定状态。
+
+===示例===
+{{example
+|code=
+#include &lt;climits&gt;
+#include &lt;clocale&gt;
+#include &lt;cuchar&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+ 
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    std::u32string_view strv = U"zß水🍌"; // 或 z\u00df\u6c34\U0001F34C
+    std::cout &lt;&lt; "处理 " &lt;&lt; strv.size() &lt;&lt; " UTF-32 代码单元: [ ";
+    for (char32_t c : strv)
+        std::cout &lt;&lt; std::showbase &lt;&lt; std::hex &lt;&lt; static_cast&lt;int&gt;(c) &lt;&lt; ' ';
+    std::cout &lt;&lt; "]\n";
+ 
+    std::mbstate_t state{};
+    char out[MB_LEN_MAX]{};
+    for (char32_t c : strv)
+    {
+        std::size_t rc = std::c32rtomb(out, c, &amp;state);
+        std::cout &lt;&lt; static_cast&lt;int&gt;(c) &lt;&lt; " 转换为 [ ";
+        if (rc != (std::size_t) - 1)
+            for (unsigned char c8 : std::string_view{out, rc})
+                std::cout &lt;&lt; +c8 &lt;&lt; ' ';
+        std::cout &lt;&lt; "]\n";
+    }
+}
+|output=
+处理 4 UTF-32 代码单元: [ 0x7a 0xdf 0x6c34 0x1f34c ]
+0x7a 转换为 [ 0x7a ]
+0xdf 转换为 [ 0xc3 0x9f ]
+0x6c34 转换为 [ 0xe6 0xb0 0xb4 ]
+0x1f34c 转换为 [ 0xf0 0x9f 0x8d 0x8c ]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbrtoc32}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out|mem=std::codecvt&lt;char32_t, char, std::mbstate_t&gt;}}
+{{dsc see c|c/string/multibyte/c32rtomb}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

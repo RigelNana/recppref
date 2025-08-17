@@ -1,0 +1,161 @@
+{{cpp/title|lexicographical_compare}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2 &gt;
+bool lexicographical_compare( InputIt1 first1, InputIt1 last1,
+                              InputIt2 first2, InputIt2 last2 );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2 &gt;
+bool lexicographical_compare( ExecutionPolicy&amp;&amp; policy,
+                              ForwardIt1 first1, ForwardIt1 last1,
+                              ForwardIt2 first2, ForwardIt2 last2 );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt1, class InputIt2, class Compare &gt;
+bool lexicographical_compare( InputIt1 first1, InputIt1 last1,
+                              InputIt2 first2, InputIt2 last2,
+                              Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class Compare &gt;
+bool lexicographical_compare( ExecutionPolicy&amp;&amp; policy,
+                              ForwardIt1 first1, ForwardIt1 last1,
+                              ForwardIt2 first2, ForwardIt2 last2,
+                              Compare comp );
+}}
+{{dcl end}}
+
+检查第一个范围 {{range|first1|last1}} 是否按字典序''小于''{{sep}}第二个范围 {{range|first2|last2}}。
+
+@1@ 用 {{c/core|operator&lt;}} 比较元素。
+@3@ 用给定的二元比较函数 {{c|comp}} 比较元素。
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。{{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+字典序比较是拥有下列属性的运算：
+* 逐元素比较两个范围。
+* 首个不匹配元素定义一个范围是否按字典序''小于''{{sep}}或''大于''{{sep}}另一个。
+* 如果一个范围是另一个的前缀，那么较短的范围''小于''{{sep}}另一个。
+* 如果两个范围拥有等价元素和相同长度，那么两个范围按字典序''相等''。
+* 空范围按字典序''小于''{{sep}}任何非空范围。
+* 两个空范围按字典序''相等''。
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|range=第一个|要检验的}}
+{{par range|first2|last2|range=第二个|要检验的}}
+{{par exec pol}}
+{{par cmp|comp|p1=InputIt1|p2=InputIt2}}
+{{par hreq}}
+{{par req named|InputIt1, InputIt2|InputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===返回值===
+第一范围按字典序''小于''{{sep}}第二个时返回 {{c|true}}，否则返回 {{c|false}}。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} 为 {{c|std::distance(first1, last1)}}，{{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} 为 {{c|std::distance(first2, last2)}}：
+
+@1,2@ 最多应用 {{mathjax-or|\(\scriptsize 2\min(N_1,N_2)\)|2min(N{{su|b=1}},N{{su|b=2}})}} 次 {{c/core|operator&lt;}} 进行比较。
+
+@3,4@ 最多应用 {{mathjax-or|\(\scriptsize 2\min(N_1,N_2)\)|2min(N{{su|b=1}},N{{su|b=2}})}} 次比较函数 {{c|comp}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=lexicographical_compare (1)|ver1=1|1=
+template&lt;class InputIt1, class InputIt2&gt;
+bool lexicographical_compare(InputIt1 first1, InputIt1 last1,
+                             InputIt2 first2, InputIt2 last2)
+{
+    for (; (first1 != last1) &amp;&amp; (first2 != last2); ++first1, (void) ++first2)
+    {
+        if (*first1 &lt; *first2)
+            return true;
+        if (*first2 &lt; *first1)
+            return false;
+    }
+    
+    return (first1 == last1) &amp;&amp; (first2 != last2);
+}
+|title2=lexicographical_compare (3)|ver2=3|2=
+template&lt;class InputIt1, class InputIt2, class Compare&gt;
+bool lexicographical_compare(InputIt1 first1, InputIt1 last1,
+                             InputIt2 first2, InputIt2 last2, Compare comp)
+{
+    for (; (first1 != last1) &amp;&amp; (first2 != last2); ++first1, (void) ++first2)
+    {
+        if (comp(*first1, *first2))
+            return true;
+        if (comp(*first2, *first1))
+            return false;
+    }
+    
+    return (first1 == last1) &amp;&amp; (first2 != last2);
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+void print(std::vector&lt;char&gt; const&amp; v, auto suffix)
+{
+    for (char c : v)
+        std::cout &lt;&lt; c &lt;&lt; ' ';
+    std::cout &lt;&lt; suffix;
+}
+
+int main()
+{
+    std::vector&lt;char&gt; v1{'a', 'b', 'c', 'd'};
+    std::vector&lt;char&gt; v2{'a', 'b', 'c', 'd'};
+    
+    for (std::mt19937 g{std::random_device{}()};
+         !std::lexicographical_compare(v1.begin(), v1.end(),
+                                       v2.begin(), v2.end());)
+    {
+        print(v1, "&gt;= ");
+        print(v2, '\n');
+        
+        std::shuffle(v1.begin(), v1.end(), g);
+        std::shuffle(v2.begin(), v2.end(), g);
+    }
+    
+    print(v1, "&lt;  ");
+    print(v2, '\n');
+}
+|p=true
+|output=
+a b c d &gt;= a b c d 
+d a b c &gt;= c b d a 
+b d a c &gt;= a d c b 
+a c d b &lt;  c d a b 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=142|std=C++98|before=最多只能进行 {{mathjax-or|\(\scriptsize \min(N_1,N_2)\)|min(N{{su|b=1}},N{{su|b=2}})}} 次比较，但实际上无法实现（需要两次比较才能确定等价）|after=比较次数上限翻倍}}
+{{dr list item|wg=lwg|dr=1205|std=C++98|before=涉及空范围的字典序比较的结果不明确|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc equal}}
+{{dsc inc|cpp/algorithm/dsc lexicographical_compare_three_way}}
+{{dsc inc|cpp/algorithm/ranges/dsc lexicographical_compare}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

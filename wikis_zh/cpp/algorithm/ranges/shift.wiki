@@ -1,0 +1,164 @@
+{{cpp/ranges/title|shift_left|shift_right}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++23|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr ranges::subrange&lt;I&gt;
+    shift_left( I first, S last, std::iter_difference_t&lt;I&gt; n );
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; ranges::forward_range R &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    shift_left( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr ranges::subrange&lt;I&gt;
+    shift_right( I first, S last, std::iter_difference_t&lt;I&gt; n );
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; ranges::forward_range R &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    shift_right( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl end}}
+
+将范围 {{range|first|last}} 或 {{c|r}} 中的各元素迁移 {{tt|n}} 个位置。若 {{range|first|last}} 不是有效范围则其行为未定义。
+
+@1@ 向范围开端迁移元素：
+* 若 {{c|1=n == 0 {{!!}} n &gt;= last - first}} 则无效果。
+* 若 {{c|1=n &lt; 0}} 则行为未定义。
+* 否则，对于每个 {{range|0|last - first - n}} 中的整数 {{tt|i}}，移动原处于位置 {{c|first + n + i}} 的元素到位置 {{c|first + i}}。以 {{tt|i}} 从 {{c|0}} 开始递增的顺序进行移动。
+
+@3@ 向范围结尾迁移元素：
+* 若 {{c|1=n == 0 {{!!}} n &gt;= last - first}} 则无效果。
+* 若 {{c|1=n &lt; 0}} 则行为未定义。
+* 否则，对于每个 {{range|0|last - first - n}} 中的整数 {{tt|i}}，移动原处于位置 {{c|first + i}} 的元素到位置 {{c|first + n + i}}。若 {{tt|I}} 满足 {{lconcept|bidirectional_iterator}}，则以 {{tt|i}} 从 {{c|last - first - n - 1}} 开始递减的顺序进行移动。
+
+@2,4@ 分别同 {{v|1}} 与 {{v|3}}，但以 {{c|r}} 为范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+在原范围但不在新范围中的元素被置于合法但未指定的状态。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要迁移的|sentinel=yes}}
+{{par|r|要迁移的元素范围}}
+{{par|n|要迁移的位置数}}
+{{par end}}
+
+===返回值===
+@1,2@ {{c|{first, /*NEW_LAST*/}&lt;!----&gt;}}，其中 {{tt|''NEW_LAST''}} 为结果范围的结尾：
+* 若 {{tt|n}} 小于 {{c|last - first}}，则等价于 {{c|first + (last - first - n)}}；
+* 否则等价于 {{c|first}}。
+@3,4@ {{c|{/*NEW_FIRST*/, last}&lt;!----&gt;}}，其中 {{tt|''NEW_FIRST''}} 为结果范围的开始：
+* 若 {{tt|n}} 小于 {{c|last - first}}，则等价于 {{c|first + n}}；
+* 否则等价于 {{c|last}}。
+
+===复杂度===
+@1,2@ 最多赋值 {{c|ranges::distance(first, last) - n}} 次。
+@3,4@ 最多赋值或交换 {{c|ranges::distance(first, last) - n}} 次。
+
+===注解===
+常见实现上，若 {{tt|I}} 满足 {{lconcept|bidirectional_iterator}} 或（更好地）{{lconcept|random_access_iterator}}，则 {{tt|ranges::shift_left}} / {{tt|ranges::shift_right}} 会有更好的性能。
+
+{{cpp/algorithm/notes swap vectorization}}
+
+{{feature test macro|__cpp_lib_shift|std=C++23|value=202202L|[[#Top|{{tt|std::ranges::shift_left}}]] 和[[#Top|{{tt|std::ranges::shift_right}}]]}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int value{0};
+    bool specified_state{true};
+
+    S(int v = 0) : value{v} {}
+    S(S const&amp; rhs) = default;
+    S(S&amp;&amp; rhs) { *this = std::move(rhs); }
+    S&amp; operator=(S const&amp; rhs) = default;
+    S&amp; operator=(S&amp;&amp; rhs)
+    {
+        if (this != &amp;rhs)
+        {
+            value = rhs.value;
+            specified_state = rhs.specified_state;
+            rhs.specified_state = false;
+        }
+        return *this;
+    }
+};
+
+template&lt;typename T&gt;
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::vector&lt;T&gt; const&amp; v)
+{
+    for (const auto&amp; s : v)
+    {
+        if constexpr (std::is_same_v&lt;T, S&gt;)
+            s.specified_state ? os &lt;&lt; s.value &lt;&lt; ' ' : os &lt;&lt; ". ";
+        else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+            os &lt;&lt; (s.empty() ? "." : s) &lt;&lt; ' ';
+        else
+            os &lt;&lt; s &lt;&lt; ' ';
+    }
+    return os;
+}
+
+int main()
+{
+    std::cout &lt;&lt; std::left;
+
+    std::vector&lt;S&gt; a{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;int&gt; b{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;std::string&gt; c{"α", "β", "γ", "δ", "ε", "ζ", "η"};
+
+    std::cout &lt;&lt; "vector&lt;S&gt; \tvector&lt;int&gt; \tvector&lt;string&gt;\n";
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+    std::ranges::shift_left(a, 3);
+    std::ranges::shift_left(b, 3);
+    std::ranges::shift_left(c, 3);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+    std::ranges::shift_right(a, 2);
+    std::ranges::shift_right(b, 2);
+    std::ranges::shift_right(c, 2);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+    std::ranges::shift_left(a, 8); // 无效果: n &gt;= last - first
+    std::ranges::shift_left(b, 8); // 同上
+    std::ranges::shift_left(c, 8); // 同上
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+
+//  std::ranges::shift_left(a, -3); // UB
+}
+|p=true&lt;!--accessing objects after move--&gt;
+|output=
+vector&lt;S&gt;       vector&lt;int&gt;     vector&lt;string&gt;
+1 2 3 4 5 6 7   1 2 3 4 5 6 7   α β γ δ ε ζ η
+4 5 6 7 . . .   4 5 6 7 5 6 7   δ ε ζ η . . .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate}}
+{{dsc inc|cpp/algorithm/dsc shift}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

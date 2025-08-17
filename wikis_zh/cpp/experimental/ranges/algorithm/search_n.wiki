@@ -1,0 +1,88 @@
+{{cpp/experimental/ranges/title|search_n}}
+{{cpp/experimental/ranges/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/ranges/algorithm}}
+{{dcl|since=ranges|num=1|1=
+template&lt; ForwardIterator I, Sentinel&lt;I&gt; S, class T,
+          class Pred = ranges::equal_to&lt;&gt;, class Proj = ranges::identity &gt;
+    requires IndirectlyComparable&lt;I, const T*, Pred, Proj&gt;
+I search_n( I first, S last, ranges::difference_type_t&lt;I&gt; count,
+            const T&amp; value, Pred pred = Pred{}, Proj proj = Proj{} );
+}}
+{{dcl|since=ranges|num=2|1=
+template&lt; ForwardRange R, class T, class Pred = ranges::equal_to&lt;&gt;,
+          class Proj = ranges::identity &gt;
+    requires IndirectlyComparable&lt;ranges::iterator_t&lt;R&gt;, const T*, Pred, Proj&gt;
+ranges::safe_iterator_t&lt;R&gt; search_n( R&amp;&amp; r, 
+                                     ranges::difference_type_t&lt;ranges::iterator_t&lt;R&gt;&gt; count,
+                                     const T&amp; value, Pred pred = Pred{}, Proj proj = Proj{} );
+}}
+{{dcl end}}
+
+@1@ 搜索范围 {{range|first|last}} 中首个 {{c|count}} 元素序列，其投射后的值根据谓词 {{c|pred}} 均等于给定值 {{c|value}}。
+@2@ 与 {{v|1}} 相同，但用 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+===参数===
+{{par begin}}
+{{par|first, last|要检验的元素范围}}
+{{par|r|要检验的元素范围}}
+{{par|count|要搜索的序列长度}}
+{{par|value|要搜索的值}}
+{{par|pred|比较投射后元素和 {{c|value}} 的谓词}}
+{{par|proj|运用于元素的投射}}
+{{par end}}
+
+===返回值===
+指向范围 {{range|first|last}} 中找到的序列的开头的迭代器。如果未找到这种序列，则返回与 {{c|last}} 比较相等的迭代器。
+
+===复杂度===
+最多 {{c|last - first}} 此运用谓词和投射。
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;ForwardIterator I, Sentinel&lt;I&gt; S, class T,
+         class Pred = ranges::equal_to&lt;&gt;, class Proj = ranges::identity&gt;
+    requires IndirectlyComparable&lt;I, const T*, Pred, Proj&gt;
+I search_n(I first, S last, ranges::difference_type_t&lt;I&gt; count,
+           const T&amp; value, Pred pred = Pred{}, Proj proj = Proj{})
+{
+    for (; first != last; ++first)
+    {
+        if (!ranges::invoke(pred, ranges::invoke(proj, *first), value))
+            continue;
+
+        I candidate = first;
+        ranges::difference_type_t&lt;I&gt; cur_count = 0;
+
+        while (true)
+        {
+            ++cur_count;
+            if (cur_count == count)
+                // success
+                return candidate;
+
+            ++first;
+            if (first == last)
+                // exhausted the list
+                return first;
+
+            if (!ranges::invoke(pred, ranges::invoke(proj, *first), value))
+                // too few in a row
+                break;
+        }
+    }
+    return first;
+}
+}}
+
+===示例===
+{{example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc search_n}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc find_end}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc find}}
+{{dsc inc|cpp/experimental/ranges/algorithm/dsc search}}
+{{dsc end}}

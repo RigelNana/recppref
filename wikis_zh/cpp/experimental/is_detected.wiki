@@ -1,0 +1,153 @@
+{{cpp/experimental/title|is_detected|detected_t|detected_or}}
+{{cpp/experimental/lib_extensions_2/navbar}}
+
+{{dcl begin}}
+{{dcl header|experimental/type_traits}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+using is_detected = /* 见下文 */;
+}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+using detected_t = /* 见下文 */;
+}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Default, template&lt;class...&gt; class Op, class... Args &gt;
+using detected_or = /* 见下文 */;
+}}
+
+{{dcl end}}
+
+别名模板 {{tt|detected_or}} 是拥有两个公开成员 typedef {{tt|value_t}} 和 {{tt|type}} 的未指定类类型的别名，它们定义如下：
+
+* 若''模板标识'' {{c|Op&lt;Args...&gt;}} 代表合法类型，则 {{tt|value_t}} 是 {{lc|std::true_type}} 的别名，而 {{tt|type}} 是 {{c|Op&lt;Args...&gt;}} 的别名；
+* 否则，{{tt|value_t}} 是 {{lc|std::false_type}} 的别名而 {{tt|type}} 是 {{tt|Default}} 的别名。
+
+别名模板 {{tt|is_detected}} 等价于 {{c|typename detected_or&lt;std::experimental::nonesuch, Op, Args...&gt;::value_t}}。若''模板标识'' {{c|Op&lt;Args...&gt;}} 代表合法类型，则它是 {{lc|std::true_type}} 的别名；否则它是 {{lc|std::false_type}} 的别名。
+
+别名模版 {{tt|detected_t}} 等价于 {{c|typename detected_or&lt;std::experimental::nonesuch, Op, Args...&gt;::type}}。若''模板标识'' {{c|Op&lt;Args...&gt;}} 代表合法类型，则它是 {{c|Op&lt;Args...&gt;}} 的别名；否则它是类 {{ltt|cpp/experimental/nonesuch|std::experimental::nonesuch}} 的别名。
+
+=== 额外工具 ===
+{{dcl begin}}
+{{dcl rev begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+constexpr bool is_detected_v = is_detected&lt;Op, Args...&gt;::value;
+}}
+{{dcl|since=libfund_ts_3|1=
+template&lt; template&lt;class...&gt; class Op, class... Args &gt;
+constexpr inline bool is_detected_v = is_detected&lt;Op, Args...&gt;::value;
+}}
+{{dcl rev end}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Default, template&lt;class...&gt; class Op, class... Args &gt;
+using detected_or_t = typename detected_or&lt;Default, Op, Args...&gt;::type;
+}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Expected, template&lt;class...&gt; class Op, class... Args &gt;
+using is_detected_exact = std::is_same&lt;Expected, detected_t&lt;Op, Args...&gt;&gt;;
+}}
+{{dcl rev begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class Expected, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr bool is_detected_exact_v =
+    is_detected_exact&lt;Expected, Op, Args...&gt;::value;
+}}
+{{dcl|since=libfund_ts_3|1=
+template&lt; class Expected, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr inline bool is_detected_exact_v =
+    is_detected_exact&lt;Expected, Op, Args...&gt;::value;
+}}
+{{dcl rev end}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class To, template&lt;class...&gt; class Op, class... Args &gt;
+using is_detected_convertible =
+    std::is_convertible&lt;detected_t&lt;Op, Args...&gt;, To&gt;;
+}}
+{{dcl rev begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class To, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr bool is_detected_convertible_v =
+    is_detected_convertible&lt;To, Op, Args...&gt;::value;
+}}
+{{dcl|since=libfund_ts_3|1=
+template&lt; class To, template&lt;class...&gt; class Op, class... Args &gt;
+constexpr inline bool is_detected_convertible_v =
+    is_detected_convertible&lt;To, Op, Args...&gt;::value;
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+别名模版 {{tt|is_detected_exact}} 检查 {{c|detected_t&lt;Op, Args...&gt;}} 是否为 {{tt|Expected}}。
+
+别名模板 {{tt|is_detected_convertible}} 检查 {{c|detected_t&lt;Op, Args...&gt;}} 是否可转换为 {{tt|To}}。
+
+=== 可能的实现 ===
+{{source|1=
+namespace detail
+{
+    template&lt;class Default, class AlwaysVoid, template&lt;class...&gt; class Op, class... Args&gt;
+    struct detector
+    {
+        using value_t = std::false_type;
+        using type = Default;
+    };
+
+    template&lt;class Default, template&lt;class...&gt; class Op, class... Args&gt;
+    struct detector&lt;Default, std::void_t&lt;Op&lt;Args...&gt;&gt;, Op, Args...&gt;
+    {
+        using value_t = std::true_type;
+        using type = Op&lt;Args...&gt;;
+    };
+} // namespace detail
+
+template&lt;template&lt;class...&gt; class Op, class... Args&gt;
+using is_detected = typename detail::detector&lt;nonesuch, void, Op, Args...&gt;::value_t;
+
+template&lt;template&lt;class...&gt; class Op, class... Args&gt;
+using detected_t = typename detail::detector&lt;nonesuch, void, Op, Args...&gt;::type;
+
+template&lt;class Default, template&lt;class...&gt; class Op, class... Args&gt;
+using detected_or = detail::detector&lt;Default, void, Op, Args...&gt;;
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;experimental/type_traits&gt;
+
+template&lt;class T&gt;
+using copy_assign_t = decltype(std::declval&lt;T&amp;&gt;() = std::declval&lt;const T&amp;&gt;());
+
+struct Meow {};
+struct Purr { void operator=(const Purr&amp;) = delete; };
+ 
+static_assert(std::experimental::is_detected&lt;copy_assign_t, Meow&gt;::value,
+              "Meow should be copy assignable!");
+static_assert(!std::experimental::is_detected_v&lt;copy_assign_t, Purr&gt;,
+              "Purr should not be copy assignable!");
+static_assert(std::experimental::is_detected_exact_v&lt;Meow&amp;, copy_assign_t, Meow&gt;,
+              "Copy assignment of Meow should return Meow&amp;!");
+
+template&lt;class T&gt;
+using diff_t = typename T::difference_type;
+
+template&lt;class Ptr&gt;
+using difference_type = std::experimental::detected_or_t&lt;std::ptrdiff_t, diff_t, Ptr&gt;;
+
+struct Woof { using difference_type = int; };
+struct Bark {};
+
+static_assert(std::is_same&lt;difference_type&lt;Woof&gt;, int&gt;::value,
+              "Woof's difference_type should be int!");
+static_assert(std::is_same&lt;difference_type&lt;Bark&gt;, std::ptrdiff_t&gt;::value,
+              "Bark's difference_type should be ptrdiff_t!");
+
+int main() {}
+|output=
+}}
+
+===参阅===
+
+{{langlinks|en}}

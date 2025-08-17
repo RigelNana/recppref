@@ -1,0 +1,114 @@
+{{cpp/title|any_cast}}
+{{cpp/utility/any/navbar}}
+{{dcl begin}}
+{{dcl header|any}}
+{{dcl|since=c++17|num=1|
+template&lt; class T &gt;
+T any_cast( const any&amp; operand );
+}}
+{{dcl|since=c++17|num=2|
+template&lt; class T &gt;
+T any_cast( any&amp; operand );
+}}
+{{dcl|since=c++17|num=3|
+template&lt; class T &gt;
+T any_cast( any&amp;&amp; operand );
+}}
+{{dcla|since=c++17|num=4|
+template&lt; class T &gt;
+const T* any_cast( const any* operand ) noexcept;
+}}
+{{dcl|since=c++17|num=5|
+template&lt; class T &gt;
+T* any_cast( any* operand ) noexcept;
+}}
+{{dcl end}}
+
+进行对所含有对象的类型安全访问。
+
+令 {{tt|U}} 为 {{c/core|std::remove_cv_t&lt;std::remove_reference_t&lt;T&gt;&gt;}}。
+
+@1@ 如果 {{c|is_constructible_v&lt;T, const U&amp;&gt;}} 是 {{c|false}}，那么程序非良构。
+@2@ 如果 {{c|is_constructible_v&lt;T, U&amp;&gt;}} 是 {{c|false}}，那么程序非良构。
+@3@ 如果 {{c|is_constructible_v&lt;T, U&gt;}} 是 {{c|false}}，那么程序非良构。
+@4,5@ 如果 {{c|std::is_void_v&lt;T&gt;}} 是 {{c|true}}，那么程序非良构。
+
+===参数===
+{{par begin}}
+{{par|operand|目标 {{tt|any}} 对象}}
+{{par end}} 
+
+===返回值===
+@1,2@ 返回 {{c|static_cast&lt;T&gt;(*std::any_cast&lt;U&gt;(&amp;operand))}}。
+@3@ 返回 {{c|static_cast&lt;T&gt;(std::move(*std::any_cast&lt;U&gt;(&amp;operand)))}}。
+@4,5@ 如果 {{c|operand}} 不是空指针，且请求的 {{tt|T}} 的 {{ltt|cpp/language/typeid}} 匹配 {{c|operand}} 内容的 {{ltt|cpp/language/typeid}}，那么返回指向所含值的指针，否则返回空指针。
+
+===异常===
+@1-3@ 如果请求的 {{tt|T}} 的 {{ltt|cpp/language/typeid}} 不匹配 {{c|operand}} 内容的 {{ltt|cpp/language/typeid}}，那么就会抛出 {{lc|std::bad_any_cast}}。
+
+===示例===
+{{example
+|code=
+#include &lt;any&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+int main()
+{
+    // 简单示例
+    auto a1 = std::any(12);
+    std::cout &lt;&lt; "1) a1 是 int：" &lt;&lt; std::any_cast&lt;int&gt;(a1) &lt;&lt; '\n';
+    
+    try
+    {
+        auto s = std::any_cast&lt;std::string&gt;(a1); // 抛出
+    }
+    catch (const std::bad_any_cast&amp; e)
+    {
+        std::cout &lt;&lt; "2) " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    
+    // 指针示例
+    if (int* i = std::any_cast&lt;int&gt;(&amp;a1))
+        std::cout &lt;&lt; "3) a1 是 int：" &lt;&lt; *i &lt;&lt; '\n';
+    else if (std::string* s = std::any_cast&lt;std::string&gt;(&amp;a1))
+        std::cout &lt;&lt; "3) a1 是 std::string：" &lt;&lt; *s &lt;&lt; '\n';
+    else
+        std::cout &lt;&lt; "3) a1 是另一类型，或者没有设置\n";
+    
+    // 进阶示例
+    a1 = std::string("hello");
+    auto&amp; ra = std::any_cast&lt;std::string&amp;&gt;(a1); // 引用
+    ra[1] = 'o';
+    
+    std::cout &lt;&lt; "4) a1 是字符串："
+              &lt;&lt; std::any_cast&lt;const std::string &amp;&gt;(a1) &lt;&lt; '\n'; // const 引用
+    
+    auto s1 = std::any_cast&lt;std::string&amp;&amp;&gt;(std::move(a1)); // 右值引用
+    // 注意：“s1” 是移动构造的 std::string：
+    static_assert(std::is_same_v&lt;decltype(s1), std::string&gt;);
+    
+    // 注意：“a1” 中的 std::string 被置于合法但未指定的状态
+    std::cout &lt;&lt; "5) a1.size()："
+              &lt;&lt; std::any_cast&lt;std::string&gt;(&amp;a1)-&gt;size() // 指针
+              &lt;&lt; '\n'
+              &lt;&lt; "6) s1：" &lt;&lt; s1 &lt;&lt; '\n';
+}
+|p=true
+|output=
+1) a1 是 int：12
+2) bad any_cast
+3) a1 是 int：12
+4) a1 是 string：hollo
+5) a1.size()：0
+6) s1：hollo
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3305|std=c++17|before=当 {{tt|T}} 是 {{c/core|void}} 时 {{vl|4,5}} 的行为不明确|after=此时程序非良构}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

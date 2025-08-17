@@ -1,0 +1,490 @@
+{{title|隐式转换}}
+{{cpp/language/expressions/navbar}}
+
+凡是在语境中使用了某种类型 {{tt|T1}} 的表达式，但语境不接受该类型而接受另一类型 {{tt|T2}} 的时候，会进行隐式转换；具体是：
+* 调用以 {{tt|T2}} 为形参声明的函数时，以该表达式作为实参；
+* 运算符期待 {{tt|T2}}，而以该表达式作为操作数；
+* 初始化 {{tt|T2}} 类型的新对象，包括在返回 {{tt|T2}} 的函数中的 {{tt|return}} 语句；
+* 将表达式用于 {{c/core|switch}} 语句（{{tt|T2}} 是整数类型）；
+* 将表达式用于 {{c/core|if}} 语句或循环（{{tt|T2}} 是 {{c/core|bool}}）。
+仅当存在一个从 {{tt|T1}} 到 {{tt|T2}} 的无歧义''隐式转换序列''{{sep}}时，程序良构（能编译）。
+
+如果所调用的函数或运算符存在多个重载，那么将 {{tt|T1}} 到每个可用的 {{tt|T2}} 都构造隐式转化序列之后，会以{{rlp|overload resolution|重载决议}}规则决定编译哪个重载。
+
+注意：算术表达式中，针对二元运算符的操作数上的隐式转换的目标类型，是以一组单独的{{rlp|usual arithmetic conversions|一般算术转换}}的规则所决定的。
+
+===转换顺序===
+隐式转换序列由下列内容依照这个顺序所构成：
+@1@ 零或一个''标准转换序列''；
+@2@ 零或一个''用户定义转换''；
+@3@ 零或一个''标准转换序列''（仅在使用用户定义转换时适用）。
+
+当考虑构造函数或用户定义转换函数的实参时，只允许一个标准转换序列（否则可以将用户定义转换有效地串连起来）。当从一个非类类型转换到另一非类类型时，只允许一个标准转换序列。
+
+标准转换序列由下列内容依照这个顺序所构成：
+@1@ 下列转换中的零或一个：
+* ''左值到右值转换''
+* ''数组到指针转换''
+* ''函数到指针转换''
+@2@ 零或一个''数值提升''{{sep}}或''数值转换''
+
+{{rrev|since=c++17|
+@3@ 零或一个''函数指针转换''
+}}
+@4@ 零或一个''限定转换''
+
+用户定义转换由零或一个非显式单实参{{rlp|converting constructor|转换构造函数}}或非显式{{rlp|cast operator|转换函数}}的调用构成。
+
+当且仅当 {{tt|T2}} 能从表达式 {{c|e}} {{rlp|copy initialization|复制初始化}}，即对于虚设的临时对象 {{c|t}}，声明 {{c|1=T2 t = e;}} 良构（能编译）时，称表达式 {{c|e}} ''可隐式转换到 {{tt|T2}}''。注意这与{{rlp|direct initialization|直接初始化}}（{{c|1=T2 t(e)}}）不同，其中还会额外考虑显式构造函数和转换函数。
+
+====按语境转换====
+{{rrev|since=c++11|
+下列语境中，期待类型 {{c/core|bool}}，且如果声明 {{c|1=bool t(e);}} 良构就会进行隐式转换（即考虑如 {{c|explicit T::operator bool() const;}} 这样的 {{c/core|explicit}}
+转换函数）。称这种表达式 {{c|e}} ''按语境转换到 {{c/core|bool}}''。
+* {{c/core|if}}、{{c/core|while}}、{{c/core|for}} 的控制表达式；
+* 内建逻辑运算符 {{tt|!}}、{{tt|&amp;&amp;}} 和 {{tt|{{!!}}}} 的操作数；
+* 条件运算符 {{tt|?:}} 的首个操作数；
+* {{rlpt|static_assert}} 声明中的谓词；
+* {{rlpt|noexcept spec|noexcept}} 说明符中的表达式；
+{{rrev|since=c++20|
+* {{rlpt|explicit}} 说明符中的表达式。
+}}
+}}
+
+下列语境中，期待某个语境特定的类型 {{tt|T}}，只有满足以下条件才能使用具有类类型 {{tt|E}} 的表达式 {{c|e}}：
+{{rrev multi|until1=c++14|rev1=
+* {{tt|E}} 拥有单个转换到任何可允许类型的{{rev inl|since=c++11|非显式}}{{rlp|cast operator|用户定义转换函数}}。
+|rev2=
+* 可允许类型中恰好有一个类型 {{tt|T}}，使得 {{tt|E}} 拥有非显式转换函数，它的返回类型是（可有 cv 限定的）{{tt|T}} 或到（可有 cv 限定的）{{tt|T}} 的引用的，且
+* {{c|e}} 可隐式转换到 {{tt|T}}。
+}}
+
+称这种表达式 {{c|e}} ''按语境隐式转换''{{sep}}到指定的类型 {{tt|T}}。{{rev inl|since=c++11|注意，其中不考虑显式转换函数，虽然在按语境转换到 {{c/core|bool}} 时会考虑它们。}}
+* {{rlp|delete|delete 表达式}}的实参（{{tt|T}} 是任意对象指针类型）；
+* {{lsd|cpp/language/constant expression#整数常量表达式}}，其中使用了字面类（{{tt|T}} 是任意整数或{{rev inl|since=c++11|无作用域}}枚举类型，所选中的用户定义转换函数必须是 {{rlp|constexpr}}）；
+* {{rlpt|switch}} 语句的控制表达式（{{tt|T}} 是任意整数或枚举类型）。
+
+{{source|1=
+#include &lt;cassert&gt;
+
+template&lt;typename T&gt;
+class zero_init
+{
+    T val;
+public:
+    zero_init() : val(static_cast&lt;T&gt;(0)) {}
+    zero_init(T val) : val(val) {}
+    operator T&amp;() { return val; }
+    operator T() const { return val; }
+};
+
+int main()
+{
+    zero_init&lt;int&gt; i;
+    assert(i == 0);
+    
+    i = 7;
+    assert(i == 7);
+    
+    switch (i) {}     // C++14 前错误（多于一个转换函数）
+                      // C++14 起 OK（两个函数均转换到同一类型 int）
+    switch (i + 0) {} // 始终 OK（隐式转换）
+}
+}}
+
+===值变换===
+值变换是更改表达式{{rlp|value category|值类别}}的转换。每当将表达式用作期待不同值类别的表达式的运算符的操作数时，发生值变换：
+* 对于某个要求纯右值作为它的操作数的运算符，每当泛左值被用作操作数，都会对该表达式应用''左值到右值''，''数组到指针''，或者''函数到指针''{{sep}}标准转换以将它转换成纯右值。
+{{rrev|since=c++17|
+* 除非另有规定，对于某个期待泛左值作为它的操作数的运算符，每当纯右值被用作操作数，都会应用''临时量实质化''{{sep}}将该表达式转换成亡值。
+}}
+
+====左值到右值转换====
+任何非函数、非数组类型 {{tt|T}} 的{{rev inl|until=c++11|{{rlps|value category#左值}}}}{{rev inl|since=c++11|{{rlps|value category#泛左值}}}}都可以转换成{{rev inl|until=c++11|{{rlps|value category#右值}}}}{{rev inl|since=c++11|{{rlps|value category#纯右值}}}}(但并非所有情况下都会进行这样的转换)：
+* 如果 {{tt|T}} 不是类类型，那么{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}的类型是 {{tt|T}} 的无 cv 限定版本。
+* 否则{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}的类型是 {{tt|T}}。
+
+如果程序要求从{{rlps|type#不完整类型}}进行左值到右值转换，那么该程序非良构。
+
+给定该{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}指代的对象为 {{c|obj}}：
+{{rev begin}}
+{{rev|until=c++11|
+* 当左值到右值转换在 {{rlpt|sizeof}} 的操作数内发生时，不会访问 {{c|obj}} 中包含的值，因为该运算符{{rlp|expressions#潜在求值表达式|不会}}对它的操作数求值。
+
+* 转换的结果是该左值表示的对象包含的值。如果 {{c|obj}} 的类型和 {{tt|T}} 中有一个是有符号整数类型，而另一个是对应的无符号整数类型，那么结果是 {{tt|T}} 类型的与 {{c|obj}} 的值表示相同的值。
+}}
+{{rev|since=c++11|
+* 当对表达式 {{c|E}} 应用左值到右值转换时，在以下情况下不会访问被引用的对象中包含的值：
+:* {{c|E}} 不会{{rlp|expressions#潜在求值表达式|被潜在求值}}，或者
+:* 对 {{c|E}} 的求值会导致对 {{c|E}} 的{{rlp|definition#ODR 使用|潜在结果}}集合中的某个成员 {{c|Ex}} 求值，并且 {{c|Ex}} 命名了某个 {{c|Ex}} 自身没有 {{rlps|definition#ODR 使用}}的变量 {{c|x}}。
+
+* 转换的结果根据以下规则确定：
+:* 如果 {{tt|T}} 是（可能有 cv 限定的）{{lc|std::nullptr_t}}，那么结果是{{rlp|pointer#空指针|空指针值}}。因为转换不会访问 {{c|obj}}，所以即使在 {{tt|T}} 有 volatile 限定的情况下也不会有副作用，并且该泛左值可以指代联合体的非活跃成员。
+:* 否则，如果 {{tt|T}} 是类类型，那么：
+{{rev begin}}
+{{rev|until=c++17|
+::* 转换会从该泛左值{{rlp|copy initialization|复制初始化}}一个 {{tt|T}} 类型的{{rlp|lifetime#临时对象的生存期|临时量}}，并且转换结果是此临时量的纯右值。
+}}
+{{rev|since=c++17|
+::* 转换会从该泛左值{{rlp|copy initialization|复制初始化}}一个[[#临时量实质化|结果对象]]。
+}}
+{{rev end}}
+:* 否则，如果 {{c|obj}} 包含的是一个无效指针值，那么行为由实现定义。
+:* 否则，如果 {{c|obj}} 的{{rlp|object#对象表示与值表示|值表示}}中包含的位对于 {{c|obj}} 的类型非法，那么行为未定义。
+:* 否则，{{rev inl|since=c++20|读取 {{c|obj}}，而}}结果是 {{c|obj}} 包含的值。如果 {{c|obj}} 的类型和 {{tt|T}} 中有一个是有符号整数类型，而另一个是对应的无符号整数类型，那么结果是 {{tt|T}} 类型的与 {{c|obj}} 的值表示相同的值。
+}}
+{{rev end}}
+
+这项转换塑造的是从某个内存位置中读取值到 CPU 寄存器之中的动作。
+
+====数组到指针转换====
+“{{tt|T}} 的 {{c|N}} 元素数组”或“{{tt|T}} 的未知边界数组”类型的{{rlps|value category#左值}}或{{rlps|value category#右值}}，可隐式转换成“指向 {{tt|T}} 的指针”类型的{{rlps|value category#纯右值}}。{{rev inl|since=c++17|如果数组是纯右值，那么就会发生{{lsd|#临时量实质化}}。}}产生的指针指向数组首元素（细节参阅{{rlps|array#数组到指针退化}}）。
+
+====函数到指针转换====
+{{anchor|函数到指针}}
+函数类型的{{rlps|value category#左值}}，可隐式转换成{{rlp|pointer#函数指针|指向该函数的指针}}的{{rlps|value category#纯右值}}。这不适用于非静态成员函数，因为不存在指代非静态成员函数的左值。
+
+{{rrev|since=c++17|
+====临时量实质化====
+任何完整类型 {{tt|T}} 的{{rlps|value category#纯右值}}，可转换成同类型 {{tt|T}} 的亡值。此转换以该纯右值初始化一个 T 类型的{{rlp|lifetime#临时对象生存期|临时对象}}（以临时对象作为求值该纯右值的结果对象），并产生一个代表该临时对象的亡值。
+
+如果 {{tt|T}} 是类类型或类类型的数组，那么它必须有可访问且未被弃置的析构函数：
+{{source|1=
+struct S { int m; };
+int k = S().m; // C++17 起成员访问期待泛左值；
+               // S() 纯右值被转换成亡值
+}}
+
+临时量实质化在下例情况下发生：
+* {{rlp|reference initialization|绑定引用}}到纯右值时；
+* {{rlp|operator member access|访问}}类纯右值的{{rlp|data members|数据成员}}时；
+* {{rlp|operator other#内建的函数调用运算符|调用}}类纯右值的{{rlp|member functions|隐式对象成员函数}}时；
+* 进行数组到指针转换（见上文）或在数组纯右值上{{rlp|operator member access#内建的下标运算符|使用下标}}时；
+* 以{{rlp|list initialization|花括号初始化器列表}}初始化 {{c/core|std::initializer_list&lt;T&gt;}} 类型的对象时；
+* 纯右值作为{{rlps|expressions#弃值表达式}}时；
+
+注意临时量实质化在从纯右值初始化同类型对象（由{{rlp|direct initialization|直接初始化}}或{{rlp|copy initialization|复制初始化}}）时'''不会'''发生：这种对象直接从初始化器初始化。这确保了“受保证的复制消除”。
+}}
+
+===整数提升===
+小整数类型（如 {{c/core|char}}）和无作用域枚举类型的{{rlps|value category#纯右值}}可转换成较大整数类型（如 {{c/core|int}}）的纯右值。具体而言，{{rlp|operator arithmetic|算术运算符}}不接受小于 {{c/core|int}} 的类型作为它的实参，而在左值到右值转换后，如果适用就会自动实施整数提升。此转换始终保持原值。
+
+本段中的以下隐式转换被归类为''整数提升''。
+
+注意，对于一个给定的源类型，整数提升的目标类型是唯一的，而所有其他转换都不是提升。例如{{rlp|overload resolution|重载决议}}选择 {{c/core|char}} -&gt; {{c/core|int}}（提升）优先于 {{c/core|char}} -&gt; {{c/core|short}}（转换）。
+
+====从整数类型提升====
+{{c/core|bool}} 类型的纯右值可转换成 {{c/core|int}} 类型的纯右值，值 {{c|false}} 变为 {{c|0}} 而 {{c|true}} 变为 {{c|1}}。
+
+对于 {{c/core|bool}} 以外的整数类型 {{tt|T}} 的纯右值 {{c|val}}：
+@1@ 如果 {{c|val}} 是对{{rlp|bit field|位域}}应用左值到右值转换的结果，那么
+* 在 {{c/core|int}} 可以表示该位域的所有值的情况下，{{c|val}} 可以转换成 {{c/core|int}} 类型的纯右值，
+* 否则在 {{c/core|unsigned int}} 可以表示该位域的所有值的情况下，{{c|val}} 可以转换成 {{c/core|unsigned int}} 类型的纯右值，
+* 否则 {{c|val}} 可以按照第 (3) 项中的规则进行转换。
+@2@ 否则（{{c|val}} 不是从位域转换而来），
+* 如果 {{tt|T}} 是 {{rev inl|since=c++20|{{c/core|char8_t}}，}}{{rev inl|since=c++11|{{c/core|char16_t}}，{{c/core|char32_t}} 或 }}{{c/core|wchar_t}}，那么 {{c|val}} 可以按照第 (3) 项中的规则进行转换；
+* 否则，如果 {{tt|T}} 的{{rlps|usual arithmetic conversions#整数转换等级}}低于 {{c/core|int}} 的整数转换等级，那么
+:* 在 {{c/core|int}} 可以表示 {{tt|T}} 的所有值的情况下，{{c|val}} 可以转换成 {{c/core|int}} 类型的纯右值，
+:* 否则，{{c|val}} 可以转换成 {{c/core|unsigned int}} 类型的纯右值。
+@3@ 在第 (1) 项（无法适配 {{c/core|unsigned int}} 的转换后位域）和第 (2) 项（{{tt|T}} 是指定的字符类型之一）指定的情况下，{{c|val}} 可转换到以下列表中首个可以表示它的所有值的类型：
+* {{c/core|int}}
+* {{c/core|unsigned int}}
+* {{c/core|long}}
+* {{c/core|unsigned long}}
+{{rrev|since=c++11|
+* {{c/core|long long}}
+* {{c/core|unsigned long long}}
+* {{tt|T}} 的底层类型
+}}
+
+====从枚举类型提升====
+底层类型不固定的无作用域{{rlp|enum|枚举}}类型可转换到以下列表中首个可以表示它的所有值的类型：
+* {{c/core|int}}
+* {{c/core|unsigned int}}
+* {{c/core|long}}
+* {{c/core|unsigned long}}
+{{rrev|since=c++11|
+* {{c/core|long long}}
+* {{c/core|unsigned long long}}
+* 满足以下要求的{{rlps|types#扩展整数类型}}：
+:* 该类型的{{rlps|usual arithmetic conversions#整数转换等级}}大于 {{c/core|long long}} 整数转换等级。
+:* 该类型的整数转换等级在扩展整数类型中最低。
+:* 在扩展整数类型中整数转换等级最低的类型有两个时，该类型有符号。
+}}
+
+
+{{rrev|since=c++11|
+底层类型固定的无作用域枚举类型可转换到它的底层类型。进而，当底层类型也适用整数提升时，那么也可以转换到提升后的底层类型。对于{{rlp|overload resolution|重载决议}}，到未提升的底层类型的转换更佳。
+}}
+
+===浮点数提升===
+{{c/core|float}} 类型{{rlps|value category#纯右值}}可转换成 {{c/core|double}} 类型的纯右值。值不会更改。
+
+该转换被称为''浮点数提升''。
+
+===数值转换===
+不同于提升，数值转换可以更改值，而且有潜在的精度损失。
+
+====整数转换====
+整数类型或{{rev inl|since=c++11|无作用域}}枚举类型的{{rlps|value category#纯右值}}都可隐式转换成任何其他整数类型。如果该转换列在“整数类型提升”下，那么它是提升而非转换。
+* 如果目标类型无符号，那么结果值是等于源值{{enwiki|Modular arithmetic|模}} {{math|2{{su|p=n}}}} 的最小无符号值，其中 {{math|n}} 用来表示目标类型的位数。
+:* 即，取决于目标类型更宽或更窄，分别对有符号数进行符号扩展&lt;ref&gt;只有在算术是补码时才会使用，只会对[[cpp/types/integer|定宽整数类型]]要求补码。然而注意目前所有拥有 C++ 编译器的平台都使用补码算术。&lt;/ref&gt;或截断，而对无符号数进行零扩展或截断。
+* 如果目标类型有符号，那么当源整数能以目标类型表示时不会更改它的值。否则结果{{rev inl|until=c++20|由实现定义}}{{rev inl|since=c++20|等于源值模 {{math|2{{su|p=n}}}} 的唯一目标类型值，其中 {{math|n}} 用于表示目标类型的位数}}（注意这与未定义的{{rlp|operator arithmetic#溢出|有符号整数算术溢出}}不同）。
+* 如果源类型是 {{c/core|bool}}，那么值 {{c|false}} 转换成目标类型的零，而值 {{c|true}} 转换成目标类型的一（注意如果目标类型是 {{c/core|int}}，那么这是整数提升，而非整数转换）。
+* 如果目标类型是 {{c/core|bool}}，那么这是[[#布尔转换|布尔转换]]（见下文）。
+&lt;references/&gt;
+
+====浮点数转换====
+{{rev begin}}
+{{rev|until=c++23|
+浮点数类型的{{rlps|value category#纯右值}}可转换成任意其他浮点数类型的纯右值。
+}}
+{{rev|since=c++23|
+浮点数类型的{{rlps|value category#纯右值}}可转换成{{rlps|usual arithmetic conversions#浮点数转换等级}}更高或相等的任意其他浮点数类型的纯右值。
+
+标准浮点数类型的{{rlps|value category#纯右值}}可转换成任意其他标准浮点数类型的纯右值。
+
+可以使用 {{rlpt|static_cast}} 将浮点数类型的纯右值显式转换成任意其他浮点数类型的纯右值。
+}}
+{{rev end}}
+
+如果该转换列在“浮点数提升”下，那么它是提升而非转换。
+* 如果源值能以目标类型精确表示，那么就不会更改它。
+* 如果源值处于目标类型的两个可表示值之间，那么结果是这两个值之一（选择哪个由实现定义，不过如果支持 IEEE，那么舍入默认为[[cpp/numeric/fenv/FE_round|到最接近]]）。
+* 否则，行为未定义。
+
+====浮点数整数转换====
+浮点数类型的{{rlps|value category#纯右值}}可隐式转换成任意整数类型的纯右值。截断小数部分，即舍弃小数部分。
+* 如果结果不能适应到目标类型中，那么行为未定义（即使在目标类型是无符号数时，也不会实施模算术）。
+* 如果目标类型是 {{c/core|bool}}，那么这是布尔转换（见[[#布尔转换|下文]]）。
+
+整数或无作用域枚举类型的纯右值可转换成任意浮点数类型的纯右值。结果会尽可能精确。
+* 如果该值能适应到目标类型中但不能精确表示，那么选择与之最接近的较高值还是最接近的较低值是由实现定义的，不过如果支持 IEEE，那么舍入默认为[[cpp/numeric/fenv/FE_round|到最接近]]。
+* 如果该值不能适应到目标类型中，那么行为未定义。
+* 如果源类型是 {{c/core|bool}}，那么值 {{c|false}} 转换成零，而值 {{c|true}} 转换成一。
+
+====指针转换====
+{{rlp|pointer#空指针|空指针常量}}能转换成任何指针类型，而结果是该类型的空指针值。允许这种转换（称为''空指针转换''）作为单次转换，转换到 cv 限定类型，即不认为它是数值和限定性转换的结合。
+
+指向任何（可有 cv 限定的）对象类型 {{tt|T}} 的指针的{{rlps|value category#纯右值}}，可转换成指向（有相同 cv 限定的）{{c/core|void}} 的指针的纯右值。结果指针与原指针表示内存中的同一位置。
+* 如果原指针是空指针值，那么结果是目标类型的空指针值。
+
+“指向（可有 cv 限定的）{{tt|Derived}} 的指针”类型的纯右值 {{c|ptr}} 可以转换成“指向（可有 cv 限定的）{{tt|Base}} 的指针”类型的纯右值，其中 {{tt|Base}} 是 {{tt|Derived}} 的{{rlp|derived class|基类}}，并且 {{tt|Derived}} 是{{rlp|type#不完整类型|完整}}类类型。如果 {{tt|Base}} 不可访问或有歧义，那么程序非良构。
+* 如果 {{c|ptr}} 是空指针值，那么结果也是空指针值。
+* 否则，如果 {{tt|Base}} 是 {{tt|Derived}} 的{{rlps|derived class#虚基类}}，并且 {{c|ptr}} 没有指向类型与 {{tt|Derived}} [[#相似类型|相似]]且在自己的{{rlp|lifetime|生存期}}内或者正在构造或析构的对象，那么行为未定义。
+* 否则，结果是派生类对象的基类子对象。
+
+====成员指针转换====
+{{rlp|pointer#空指针|空指针常量}}可转换成任何成员指针类型，而结果是该类型的空成员指针值。允许这种转换（称为''空成员指针转换''）作为单次转换，转换到 cv 限定类型，即不认为它是数值和限定性转换的结合。
+
+“指向 {{tt|Base}} 的（可有 cv 限定的）{{tt|T}} 类型成员的指针”类型的{{rlps|value category#纯右值}}可以转换成“指向 {{tt|Derived}} 的（可有 cv 限定的）{{tt|T}} 类型成员的指针”，其中 {{tt|Base}} 是 {{tt|Derived}} 的基类，并且 {{tt|Derived}} 是完整类类型。如果 {{tt|Base}} 是 {{tt|Derived}} 的不可访问、有歧义或虚基类，或是 {{tt|Derived}} 的某个中间虚基类的基类，那么程序非良构。
+* 如果 {{tt|Derived}} 既没有包含该原始成员，也不是包含该原始成员的类的某个基类，那么行为未定义。
+* 否则，能以 {{tt|Derived}} 对象解引用结果指针，而它将访问该 {{tt|Derived}} 对象的 {{tt|Base}} 基类子对象内的成员。
+
+====布尔转换====
+整数、浮点数、无作用域枚举、指针和成员指针类型的{{rlps|value category#纯右值}}，可转换成 {{c/core|bool}} 类型的纯右值。
+
+零值（对于整数、浮点数和无作用域枚举）、空指针值和空成员指针值变为 {{c|false}}。所有其他值变为 {{c|true}}。
+
+{{rrev|since=c++11|
+{{rlp|direct initialization|直接初始化}}的语境中，可以 {{lc|std::nullptr_t}} 类型的纯右值（包括 {{c|nullptr}}）初始化 {{c/core|bool}} 对象。结果是 {{c|false}}。然而不认为它是隐式转换。
+}}
+
+===限定性转换===
+通常来说：
+* 指向{{rlp|cv|有 cv 限定}}的类型 {{tt|T}} 的指针类型的{{rlps|value category#纯右值}}，可转换成指向有更多 cv 限定的同一类型 {{tt|T}} 的指针纯右值（换言之，能添加常性和易变性）。
+* 指向类 {{tt|X}} 中有 cv 限定的类型 {{tt|T}} 的成员指针的纯右值，可转换成指向类 {{tt|X}} 中有{{rlp|cv#转换|更多 cv 限定}}的类型 {{tt|T}} 的成员指针纯右值。
+
+限定性转换的正式定义见[[#合并 cv 限定性|下文]]。
+
+====相似类型====
+非正式地说，忽略顶层 cv 限定性，如果两个类型符合下列条件，那么它们''相似''：
+* 它们是同一类型；或
+* 它们都是指针，且被指向的类型相似；或
+* 它们都是指向相同类的成员指针，且被指向的成员类型相似；或
+* 它们都是数组，且数组元素类型相似。
+
+例如：
+*{{c/core|const int* const *}} 与 {{c/core|int**}} 相似；
+*{{c/core|int (*)(int*)}} 与 {{c/core|int (*)(const int*)}} 不相似；
+*{{c/core|const int (*)(int*)}} 与 {{c/core|int (*)(int*)}} 不相似；
+*{{c/core|int (*)(int* const)}} 与 {{c/core|int (*)(int*)}} 相似（它们是同一类型）；
+*{{c/core|std::pair&lt;int, int&gt;}} 与 {{c/core|std::pair&lt;const int, int&gt;}} 不相似。
+
+正式地说，类型的相似性基于它们的限定性分解进行定义。
+
+类型 {{tt|T}} 的''限定性分解''{{sep}}是包含组分 {{tt|cv_i}} 和 {{tt|P_i}} 的序列，它们对于某些非负 {{c|n}} 可以将 {{tt|T}} 分解为 “{{tt|cv_0 P_0 cv_1 P_1 ... cv_n−1 P_n−1 cv_n U}}”，其中：
+* 每个 {{tt|cv_i}} 都是一个可以包含 {{c/core|const}} 和 {{c/core|volatile}} 的集合。
+* 每个 {{tt|P_i}} 都是以下之一：
+:* “指向【某类型】的指针”。
+:* “指向类 {{tt|C_i}} 的【某类型】成员的指针”。
+:* “包含 {{c|N_i}} 个【某类型】元素的数组”。
+:* “包含【某类型】元素且边界未知的数组”。
+
+如果 {{tt|P_i}} 指代数组，那么应用到元素类型的 cv 限定符 {{tt|cv_i+1}} 也会作为引用到数组的 cv 限定符 {{tt|cv_i}}。
+
+{{source|1=
+// T 是 “指向指向 const int 的指针的指针”，它有 3 个限定性分解：
+// n = 0 -&gt; cv_0 为空，U 是“指向指向 const int 的指针的指针”
+// n = 1 -&gt; cv_0 为空，P_0 是 “指向【某类型】的指针”，
+//          cv_1 为空，U 是 “指向 const int 的指针”
+// n = 2 -&gt; cv_0 为空，P_0 是 “指向【某类型】的指针”，
+//          cv_1 为空，P_1 是 “指向【某类型】的指针”，
+//          cv_2 是 “const"，U 是 “int”
+using T = const int**;
+
+// 将 U 替换为以下类型之一就可以得到一个限定性分解：
+// U = U0 -&gt; n = 0 时的限定性分解：U0
+// U = U1 -&gt; n = 1 时的限定性分解：指向【U1】的指针
+// U = U2 -&gt; n = 2 时的限定性分解：指向【指向【const U2】的指针】的指针
+using U2 = int;
+using U1 = const U2*;
+using U0 = U1*;
+}}
+
+对于类型 {{tt|T1}} 和 {{tt|T2}}，如果它们各自有一个限定性分解，使得这两个限定性分解满足以下所有条件，那么这两个类型''相似''：
+* 它们具有相同的 {{c|n}}。
+* 它们的 {{tt|U}} 指代的类型相同。
+* 所有的 {{c|i}} 对应的每对 {{tt|P_i}} 组分都各自相同{{rev inl|since=c++20|或者一个是“包含 {{c|N_i}} 个【某类型】元素的数组”而另一个是“包含【某类型】元素且边界未知的数组”}}。
+
+{{source|1=
+// n = 2 时的限定性分解：
+// 指向【指向【const int】的 volatile 指针】的指针
+using T1 = const int* volatile *;
+
+// n = 2 时的限定性分解：
+// 指向【指向【int】的指针】的 const 指针
+// const pointer to [pointer to [int]]
+using T2 = int** const;
+
+// 以上两个限定性分解的 cv_0、cv_1 和 cv_2 都不同，
+// 但 n、U、P_0 和 P_1 都相同，因此 T1 和 T2 相似。
+}}
+
+====合并 cv 限定性====
+在以下描述中，以 {{tt|Dn}} 表示类型 {{tt|Tn}} 的最长限定性分解，以 {{tt|cvn_i}} 和 {{tt|Pn_i}} 表示它的组分。
+
+{{rev begin}}
+{{rev|until=c++20|
+在满足以下所有条件时，类型是 {{tt|T1}} 的纯右值表达式可以转换到类型 {{tt|T2}}：
+* {{tt|T1}} 和 {{tt|T2}} 相似。
+* 对于每个非零 {{c|i}}，如果 {{tt|cv1_i}} 中有 {{c/core|const}}，那么 {{tt|cv2_i}} 中也有 {{c/core|const}}，{{c/core|volatile}} 也是类似。
+* 如果 {{tt|cv1_i}} 和 {{tt|cv2_i}} 不同，那么对于 {{range|1|i}} 中的每个 {{c|k}}，{{tt|cv2_k}} 中都有 {{c/core|const}}。
+
+类型 {{tt|T1}} 和 {{tt|T2}} 的 ''限定性组合类型''{{sep}}是一个与 {{tt|T1}} 相似且满足以下所有条件的类型 {{tt|T3}}：
+* {{tt|cv3_0}} 为空。
+* 对于每个非零 {{c|i}}，{{tt|cv3_i}} 是 {{tt|cv1_i}} 和 {{tt|cv2_i}} 的并集。
+* 如果 {{tt|cv3_i}} 与 {{tt|cv1_i}} 或 {{tt|cv2_i}} 不同，那么对于 {{range|1|i}} 中的每个 {{c|k}}，{{tt|cv3_k}} 中都会加上 {{c/core|const}}。
+}}
+{{rev|since=c++20|
+类型 {{tt|T1}} 和 {{tt|T2}} 的''限定性组合类型''{{sep}}是一个与 {{tt|T1}} 相似且 {{tt|D3}} 满足以下所有条件的类型 {{tt|T3}}：
+* 对于每个非零 {{c|i}}，{{tt|cv3_i}} 是 {{tt|cv1_i}} 和 {{tt|cv2_i}} 的并集。
+* 如果 {{tt|P1_i}} 或 {{tt|P2_i}} 是“包含【某类型】元素且边界未知的数组”，那么 {{tt|P3_i}} 是“包含【某类型】元素且边界未知的数组”，否则它是 {{tt|P1_i}}。
+* 如果 {{tt|cv3_i}} 与 {{tt|cv1_i}} 或 {{tt|cv2_i}} 不同，或者 {{tt|P3_i}} 与 {{tt|P1_i}} 或 {{tt|P2_i}} 不同，那么对于 {{range|1|i}} 中的每个 {{c|k}}，{{tt|cv3_k}} 中都会加上 {{c/core|const}}。
+
+如果类型 {{tt|T1}} 和 {{tt|T2}} 的限定性组合类型是无 cv 限定的 {{tt|T2}}，那么类型是 {{tt|T1}} 的纯右值可以转换到 {{tt|T2}}。
+}}
+{{rev end}}
+
+{{source|1=
+// T1 的最长限定性分解（n = 2）：
+// 指向【指向【char】的指针】的指针
+using T1 = char**;
+
+// T2 的最长限定性分解（n = 2）：
+// 指向【指向【const char】的指针】的指针
+using T2 = const char**;
+
+// 确定 D3 的 cv3_i 和 T_i 组分（n = 2）：
+// cv3_1 = 空（空 cv1_1 和空 cv2_1 的并集）
+// cv3_2 = “const”（空 cv1_2 和 “const” cv2_2 的并集）
+// P3_0 = “指向【某类型】的指针”（没有边界未知的数组，因此采用 P1_0）
+// P3_1 = “指向【某类型】的指针”（没有边界未知的数组，因此采用 P1_1）
+// cv_2 以外的组分都相同，但 cv3_2 与 cv1_2 不同，
+// 因此对于 [1, 2) 中的每个 k，都会向 cv3_k 中添加 “const”：cv3_1 会变成 “const”。
+// T3 是“指向指向 const char 的 const 指针的指针”，即 const char* const *。
+using T3 = /* T1 和 T2 的限定性组合类型 */;
+
+int main()
+{
+    const char c = 'c';
+    char* pc;
+    T1 ppc = &amp;pc;
+    T2 pcc = ppc; // 错误：T3 与 无 cv 限定的 T2 不同，无法进行限定性转换。
+    
+    *pcc = &amp;c;
+    *pc = 'C'; // 如果允许上述错误赋值，那么就可以修改 const 对象 “c”，
+}
+}}
+
+注意在 C 编程语言中，只能添加 {{c/core|const}}/{{c/core|volatile}} 到第一级：
+{{source|1=
+char** p = 0;
+char * const* p1 = p;       // C 与 C++ 中 OK
+const char* const * p2 = p; // C 中错误，C++ 中 OK
+}}
+
+{{rrev|since=c++17|
+===函数指针转换===
+* 指向无抛出函数的指针类型的{{rlps|value category#纯右值}}，可转换成指向潜在抛出函数的指针纯右值。
+* 指向无抛出成员函数指针类型的纯右值，可转换成指向潜在抛出成员函数的指针纯右值。
+
+{{source|1=
+void (*p)();
+void (**pp)() noexcept = &amp;p; // 错误：不能转换成指向 noexcept 函数的指针
+
+struct S
+{
+    typedef void (*p)();
+    operator p();
+};
+void (*q)() noexcept = S(); // 错误：不能转换成指向 noexcept 函数的指针
+}}
+}}
+
+===安全 bool 问题===
+在 C++11 前，设计一个能用于布尔语境的类（比如，{{c|if (obj) { ... }&lt;!----&gt;}}）会出现问题：给定一个用户定义转换函数，如 {{c|T::operator bool() const;}}，那么隐式转换序列允许再多一步标准转换序列，也就是 {{c/core|bool}} 结果会转换成 {{c/core|int}}，允许诸如 {{c|obj &lt;&lt; 1;}} 或 {{c|1=int i = obj;}} 这样的代码。
+
+一个早期的解决方案可参见 {{lc|std::basic_ios}}，它最初定义了 {{c/core|operator void*}}，使得如 {{c|if (std::cin) {...}&lt;!----&gt;}} 的代码能编译，因为 {{c/core|void*}} 能转换到 {{c/core|bool}}，但 {{c|1=int n = std::cout;}} 不能，因为 {{c/core|void*}} 不可转换到 {{c/core|int}}。这仍然允许无意义代码能编译，如 {{c|delete std::cout;}}。
+
+许多 C++11 前的第三方库设计带有更为复杂的解决方案，称作[http://en.wikibooks.org/wiki/More_C%2B%2B_Idioms/Safe_bool 安全 Bool 手法]。{{lc|std::basic_ios}} 也通过 {{lwg|468}} 允许该手法，并替换了 {{c/core|operator void*}}（见[[cpp/io/basic_ios/operator bool#注解|此处]]）。
+
+从 C++11 起，{{rlp|explicit|显式 bool 转换}}可以解决安全 bool 问题。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=170|std=C++98|before=成员指针转换在派生类不含原始成员时的行为不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=172|std=C++98|before=枚举类型的提升基于它的底层类型|after=改为基于它的值范围}}
+{{dr list item|wg=cwg|dr=330|paper=N4261|std=C++98|before=从 {{c/core|double * const (*p)[3]}} 到&lt;br&gt;{{c/core|double const * const (*p)[3]}} 的转换非法|after=转换合法}}
+{{dr list item|wg=cwg|dr=519|std=C++98|before=空指针值在转换到其他指针类型后不保证会保留|after=总会保留}}
+{{dr list item|wg=cwg|dr=616|std=C++98|before=任何未初始化对象和拥有非法值的指针对象&lt;br&gt;的左值到右值的转换的行为都未定义|after=允许不定值的 {{c/core|unsigned char}}；&lt;br&gt;使用非法指针的行为由实现定义}}
+{{dr list item|wg=cwg|dr=685|std=C++98|before=提升底层类型固定的枚举类型时不会优先提升到底层类型|after=此时优先提升到底层类型}}
+{{dr list item|wg=cwg|dr=707|std=C++98|before=整数到浮点数转换在所有情况下的行为都有定义|after=在值超出目标类型的值域时行为未定义}}
+{{dr list item|wg=cwg|dr=1423|std=C++11|before={{lc|std::nullptr_t}} 在直接或复制初始化中可转换到 {{c/core|bool}}|after=只允许直接初始化}}
+{{dr list item|wg=cwg|dr=1773|std=C++11|before=对于在潜在求值表达式中出现的名字表达式，即使没有 ODR 使用&lt;br&gt;被命名的对象，该表达式依然有有可能在左值到右值转换中被求值|after=此时不求值该表达式}}
+{{dr list item|wg=cwg|dr=1781|std=C++11|before={{lc|std::nullptr_t}} 到 {{c/core|bool}} 被认为是&lt;br&gt;隐式转换，尽管只对直接初始化合法|after=不再认为它是隐式转换}}
+{{dr list item|wg=cwg|dr=1787|std=C++98|before=读取缓存在寄存器中的中间 {{c/core|unsigned char}} 是未定义行为|after=赋予它良好定义}}
+{{dr list item|wg=cwg|dr=1981|std=C++11|before=按语境转换会考虑显式转换函数|after=不会考虑}}
+{{dr list item|wg=cwg|dr=2140|std=C++11|before=不明确从 {{lc|std::nullptr_t}} 左值进行的&lt;br&gt;左值到右值转换是否会从内存中获取该左值|after=不会从内存中获取}}
+{{dr list item|wg=cwg|dr=2310|std=C++98|before=派生类到基类的指针转换和基类到派生类的&lt;br&gt;成员指针转换不需要派生类是完整类型|after=必须是完整类型}}
+{{dr list item|wg=cwg|dr=2484|std=C++20|before={{c/core|char8_t}} 与 {{c/core|char16_t}} 的整数提升&lt;br&gt;策略不同，但它们都能用这两个策略|after={{c/core|char8_t}} 与 {{c/core|char16_t}}&lt;br&gt;的整数提升方法一致}}
+{{dr list item|wg=cwg|dr=2485|std=C++98|before=涉及位域的整数提升的描述不够好|after=改进描述}}
+{{dr list item|wg=cwg|dr=2813|std=C++23|before=调用类纯右值的显式对象成员函数时会发生临时量实质化|after=不会发生临时量实质化}}
+{{dr list item|wg=cwg|dr=2861|std=C++98|before=指向类型不可访问的对象的指针可以转换成指向基类子对象的指针|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=2879|std=C++17|before=纯右值作为预期泛左值的运算符的操作数&lt;br&gt;时进行临时对象实质化转换|after=某些情况下不进行转换}}
+{{dr list item|wg=cwg|dr=2899|std=C++98|before=可以对指代具有非法值表示的对象的左值应用左值到右值转换|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=2901|std=C++98|before=从指代具有值 {{c|-1}} 的 {{c/core|int}} 类型对象的 {{c/core|unsigned int}}&lt;br&gt;左值进行的左值到右值转换的结果不明确|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+* {{rlpt|const_cast}}
+* {{rlpt|static_cast}}
+* {{rlpt|dynamic_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast|显式转换}}
+* {{rlp|cast operator|用户定义转换}}
+{{dsc begin}}
+{{dsc see c|c/language/conversion|隐式转换|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

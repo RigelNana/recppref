@@ -1,0 +1,127 @@
+{{cpp/locale/time_get/title|get_date|do_get_date}}
+{{cpp/locale/time_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type get_date( iter_type beg, iter_type end, std::ios_base&amp; str,
+                    std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual iter_type do_get_date( iter_type beg, iter_type end, std::ios_base&amp; str,
+                               std::ios_base::iostate&amp; err, std::tm* t ) const;
+}}
+{{dcl end}}
+
+@1@ 公开成员函数，调用最终派生类的受保护虚成员函数 {{tt|do_get_date}}。
+@2@ 从序列 {{range|beg|end}} 读取相继字符，并按与为函数 {{lc|std::get_time}}、{{l2tt|cpp/locale/time_get/get}} 和 POSIX 函数 {{tt|strptime()}} 所用的此本地环境所期待的默认格式解析日历日期值。默认格式如下：
+{|class="wikitable"
+|-style="text-align:center;"
+!{{lc|date_order()}}
+!格式
+|-
+|{{tt|no_order}}
+|{{c|"%m/%d/%y"}}
+|-
+|{{tt|dmy}}
+|{{c|"%d/%m/%y"}}
+|-
+|{{tt|mdy}}
+|{{c|"%m/%d/%y"}}
+|-
+|{{tt|ymd}}
+|{{c|"%y/%m/%d"}}
+|-
+|{{tt|ydm}}
+|{{c|"%y/%d/%m"}}
+|}
+
+@@ 将解析出的日期存储到参数 {{c|t}} 指向的 {{lc|std::tm}} 结构体的对应域中。
+
+@@ 如果在读到合法日期前抵达尾迭代器，那么函数会设置 {{c|err}} 中的 {{lc|std::ios_base::eofbit}}。如果遇到解析错误，那么函数会设置 {{c|err}} 中的 {{lc|std::ios_base::failbit}}。
+
+===参数===
+{{par begin}}
+{{par|beg|指代要解析的序列起始的迭代器}}
+{{par|end|要解析的序列的尾后一位置迭代器}}
+{{par|str|此函数在需要时用以获得本地环境平面的流对象，例如用 {{lc|std::ctype}} 跳过空白符或用 {{lc|std::collate}} 比较字符串}}
+{{par|err|此函数所修改以指示错误的流错误标志对象}}
+{{par|t|指向 {{lc|std::tm}} 对象的指针，该对象将保有此函数调用结果}}
+{{par end}}
+
+===返回值===
+指向 {{range|beg|end}} 中辨识为合法日期一部分的末字符后一位置的迭代器。
+
+===注解===
+对于默认时间格式的字母组分（如果存在），此函数通常不区别大小写。
+
+如果遇到解析错误，那么此函数的大多数实现保留 {{c|*t}} 不修改。
+
+实现可以支持标准所要求之外的其他日期格式。
+
+===示例===
+{{example
+|code=
+#include &lt;ctime&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+
+void try_get_date(const std::string&amp; s)
+{
+    std::cout &lt;&lt; "在本地环境 " &lt;&lt; std::locale().name()
+              &lt;&lt; " 中从 '" &lt;&lt; s &lt;&lt; "' 解析日期\n";
+    std::istringstream str(s);
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    
+    std::tm t;
+    const std::time_get&lt;char&gt;&amp; facet = std::use_facet&lt;std::time_get&lt;char&gt;&gt;(str.getloc());
+    std::istreambuf_iterator&lt;char&gt; ret = facet.get_date({str}, {}, str, err, &amp;t);
+    str.setstate(err);
+    
+    if (str)
+    {
+        std::cout &lt;&lt; "年：" &lt;&lt; t.tm_year + 1900 &lt;&lt; ' '
+                  &lt;&lt; "月：" &lt;&lt; t.tm_mon + 1 &lt;&lt; ' '
+                  &lt;&lt; "日：" &lt;&lt; t.tm_mday &lt;&lt; '\n';
+    }
+    else
+    {
+        std::cout &lt;&lt; "解析失败。尚未解析的字符串：";
+        std::copy(ret, {}, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+        std::cout &lt;&lt; '\n';
+    }
+}
+
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    try_get_date("02/01/2013");
+    try_get_date("02-01-2013");
+    
+    std::locale::global(std::locale("ja_JP.utf8"));
+    try_get_date("2013年02月01日");
+}
+|output=
+在本地环境 en_US.utf8 中从 '02/01/2013' 解析日期
+年：2013 月：2 日：1
+在本地环境 en_US.utf8 中从 '02-01-2013' 解析日期
+解析失败。尚未解析的字符串：-01-2013
+在本地环境 ja_JP.utf8 中从 '2013年02月01日' 解析日期
+年：2013 月：2 日：1
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=248|std=C++98|before=在抵达尾迭代器时不会设置 {{tt|eofbit}}|after=在没有读取到合法日期的情况下会设置 {{tt|eofbit}}}}
+{{dr list item|wg=lwg|dr=461|std=C++98|before={{tt|do_get_date}} 需要解析本地化的日期表示|after=以通过 {{lc|date_order()}} 决定的格式解析}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc get_time}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

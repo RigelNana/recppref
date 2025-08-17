@@ -1,0 +1,78 @@
+{{cpp/ranges/title|contiguous_range}}
+{{cpp/ranges/navbar}}
+
+{{ddcl|header = ranges|since=c++20|1=
+template&lt; class T &gt;
+concept contiguous_range =
+    ranges::random_access_range&lt;T&gt; &amp;&amp;
+    std::contiguous_iterator&lt;ranges::iterator_t&lt;T&gt;&gt; &amp;&amp;
+    requires(T&amp; t) {
+        { ranges::data(t) } -&gt;
+            std::same_as&lt;std::add_pointer_t&lt;ranges::range_reference_t&lt;T&gt;&gt;&gt;;
+    };
+}}
+
+{{tt|contiguous_range}} 概念是 {{lconcept|range}} 的精化，对于实现它的类型，{{lc|ranges::begin}} 返回 {{lconcept|contiguous_iterator}} 的实现，且定制点 {{lc|ranges::data}} 可用。
+
+===语义要求===
+仅若给定表达式 {{tt|e}} 使得 {{c|decltype((e))}} 为 {{c|T&amp;}}，{{c|1=std::to_address(ranges::begin(t)) == ranges::data(t)}} 时，{{tt|T}} 实现 {{tt|contiguous_range}}。
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;deque&gt;
+#include &lt;list&gt;
+#include &lt;mdspan&gt;
+#include &lt;ranges&gt;
+#include &lt;set&gt;
+#include &lt;span&gt;
+#include &lt;string_view&gt;
+#include &lt;valarray&gt;
+#include &lt;vector&gt;
+
+template&lt;typename T&gt;
+concept CR = std::ranges::contiguous_range&lt;T&gt;;
+
+// 作为 ranges::contiguous_range 的 zstring 不必是 ranges::sized_range
+struct zstring
+{
+    struct sentinel
+    {
+        friend constexpr bool operator==(const char* str, sentinel) noexcept
+        { return *str == '\0'; }
+    };
+
+    const char* str;
+
+    const char* begin() const noexcept { return str; }
+    sentinel end() const noexcept { return {}; }
+};
+
+int main()
+{
+    int a[4];
+    static_assert(
+            CR&lt;std::vector&lt;int&gt;&gt; and
+        not CR&lt;std::vector&lt;bool&gt;&gt; and
+        not CR&lt;std::deque&lt;int&gt;&gt; and
+            CR&lt;std::valarray&lt;int&gt;&gt; and
+            CR&lt;decltype(a)&gt; and
+        not CR&lt;std::list&lt;int&gt;&gt; and
+        not CR&lt;std::set&lt;int&gt;&gt; and
+            CR&lt;std::array&lt;std::list&lt;int&gt;,42&gt;&gt; and
+            CR&lt;std::string_view&gt; and
+            CR&lt;zstring&gt; and
+            CR&lt;std::span&lt;const int&gt;&gt; and
+        not CR&lt;std::mdspan&lt;int, std::dims&lt;1&gt;&gt;&gt;
+    );
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc sized_range}}
+{{dsc inc|cpp/ranges/dsc random_access_range}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

@@ -1,0 +1,195 @@
+{{cpp/title|bind}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|functional}}
+{{dcla|num=1|since=c++11|constexpr=c++20|1=
+template&lt; class F, class... Args &gt;
+/* 未指定 */ bind( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcla|num=2|since=c++11|constexpr=c++20|1=
+template&lt; class R, class F, class... Args &gt;
+/* 未指定 */ bind( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+函数模板 {{tt|std::bind}} 生成 {{c|f}} 的转发调用包装器。调用此包装器等价于以一些[[#受绑定参数|绑定]]到 {{c|args}} 的实参调用 {{c|f}}。
+
+如果 {{c|std::is_constructible&lt;std::decay&lt;F&gt;::type, F&gt;::value}} 是 {{c|false}}，或 {{c|std::is_constructible&lt;std::decay&lt;Arg_i&gt;::type, Arg_i&gt;::value}} 对于 {{tt|Args}} 中的某个类型 {{tt|Arg_i}} 是 {{c|false}}，那么程序非良构。
+
+如果 {{c/core|std::decay&lt;F&gt;::type}} 或 {{tt|Args}} 中有任何类型不满足{{named req|MoveConstructible}}或{{named req|Destructible}}，那么行为未定义。
+
+===参数===
+{{par begin}}
+{{par|f|{{named req|Callable}}对象（函数对象、函数指针、函数引用、成员函数指针或数据成员指针）}}
+{{par|args|要绑定实参的列表，未绑定实参会被命名空间 {{tt|std::placeholders}} 的{{rlp|placeholders|占位符}} {{c|_1}}, {{c|_2}}, {{c|_3}}... 替换}}
+{{par end}}
+
+===返回值===
+某个未指定类型 {{tt|T}} 的函数对象 {{c|g}}，其中 {{c|std::is_bind_expression&lt;T&gt;::value}} 是 {{c|true}}。它有下列成员：
+
+{{member|{{small|std::bind}} ''返回类型''|2=
+
+====成员对象====
+{{tt|std::bind}} 的返回类型保有从 {{c|std::forward&lt;F&gt;(f)}} 构造的 {{c|std::decay&lt;F&gt;::type}} 类型的成员对象，和对于 {{c|args...}} 中每个实参的各一个 {{c|std::decay&lt;Arg_i&gt;::type}} 类型的对象，类似地从 {{c|std::forward&lt;Arg_i&gt;(arg_i)}} 构造。
+
+====构造函数====
+如果 {{tt|std::bind}} 的返回类型的所有成员对象（说明如上）都{{named req|CopyConstructible}}，那么它{{named req|CopyConstructible}}，否则它{{named req|MoveConstructible}}。此类型定义了下列成员：
+
+{{rrev|until=c++20|
+====成员类型 {{tt|result_type}}====
+@1@ {{mark deprecated c++17}} 如果 {{tt|F}} 是函数指针或成员函数指针，那么 {{tt|result_type}} 是 {{tt|F}} 的返回类型。如果 {{tt|F}} 是有嵌套 typedef {{tt|result_type}} 的类类型，那么 {{tt|result_type}} 是 {{tt|F::result_type}}。否则不定义 {{tt|result_type}}。
+
+@2@ {{mark deprecated c++17}} {{tt|result_type}} 就是 {{tt|R}}。
+}}
+
+====成员函数 {{tt|operator()}}====
+从函数调用表达式 {{c|g(u1, u2, ... uM)}} 调用 {{c|g}} 时，发生对被存储对象的调用，如同以
+
+@1@ {{box|{{rlpi|/|INVOKE}}{{c/core|(fd, std::forward&lt;V1&gt;(v1), std::forward&lt;V2&gt;(v2), ..., std::forward&lt;VN&gt;(vN))}}}} 或
+@2@ {{box|{{rlpi|/|INVOKE&lt;R&gt;}}{{c/core|(fd, std::forward&lt;V1&gt;(v1), std::forward&lt;V2&gt;(v2), ..., std::forward&lt;VN&gt;(vN))}}}}，
+
+其中 {{c|fd}} 是 {{c|std::decay&lt;F&gt;::type}} 类型的值，按[[#受绑定参数|以下方式]]确定各绑定实参 {{c|v1}}{{tt|, }}{{c|v2}}{{tt|, ..., }}{{c|vN}} 的值和类型。
+
+如果在对 {{c|g()}} 的调用的中提供的一些实参与 {{c|g}} 存储的任何占位符都不匹配，那么求值并丢弃未使用的形参。
+
+当且仅当底层 {{tti|INVOKE}} 操作[[cpp/language/noexcept|不抛出]]{{rev inl|since=c++20|或是[[cpp/language/constant expression|常量子表达式]]}}时，{{c/core|operator()}} 的调用也是这样。{{c/core|operator()}} 只有在 {{tti|INVOKE}} 操作在作为不求值操作数良构时才会参与重载决议。
+
+如果 {{c|g}} 具有 [[cpp/language/cv|volatile]] 限定，那么程序非良构。
+
+如果 {{box|{{rlpi|/|INVOKE}}{{c/core|(fd, w1, w2, ..., wN)}}}} 对于任何可能值 {{c|w1}}{{tt|, }}{{c|w2}}{{tt|, ..., }}{{c|wN}} 都不合法，那么行为未定义。
+}}
+
+===绑定实参===
+对于每个存储的实参 {{c|arg_i}}，通过以下方式确定 {{rlpi|/|INVOKE}} 或 {{rlpi|/|INVOKE&lt;R&gt;}} 操作中的绑定实参 {{c|v_i}}：
+
+====情况 1：引用包装器====
+如果 {{c|arg_i}} 拥有类型 {{c/core|std::reference_wrapper&lt;T&gt;}}（例如，在最初对 {{tt|std::bind}} 的调用中使用了 {{lc|std::ref}} 或 {{lc|std::cref}}），那么 {{c|v_i}} 是 {{c|arg_i.get()}} 且它的类型 {{tt|V_i}} 是 {{tt|T&amp;}}：存储的实参按引用传递到被调用的函数对象中。
+
+====情况 2：绑定表达式====
+如果 {{c|arg_i}} 拥有类型 {{tt|T}} 并且 {{c|std::is_bind_expression&lt;T&gt;::value}} 是 {{c|true}}（例如，将另一 {{tt|std::bind}} 表达式直接传递给最初对 {{tt|std::bind}} 的调用），那么 {{tt|std::bind}} 进行函数组合：不是传递该绑定子表达式将返回的函数对象，而是立即求值该子表达式，并将它的值传递给外层可调用对象。如果绑定子表达式拥有任何占位符实参，那么就与外层绑定（从 {{c|u1}}{{tt|, }}{{c|u2}}{{tt|, ...}} 中选出）共享它们。特别是，{{c|v_i}} 是 {{c|arg_i(std::forward&lt;Uj&gt;(uj)...)}} 而它的类型 {{tt|V_i}} 是 {{rev inl|until=c++17|{{c/core|std::result_of&lt;T}} ''cv''{{sep}}{{c/core|&amp;(Uj&amp;&amp;...)&gt;::type&amp;&amp;}}}}{{rev inl|since=c++17|{{c/core|std::invoke_result_t&lt;T}} ''cv''{{sep}}{{c/core|&amp;, Uj&amp;&amp;...&gt;&amp;&amp;}}}}（cv 限定与 {{c|g}} 的相同）。
+
+====情况 3：占位符====
+如果 {{c|arg_i}} 拥有类型 {{tt|T}} 并且 {{c|std::is_placeholder&lt;T&gt;::value}} 不是 {{c|0}}（意为，某个如 {{tt|std::placeholders::_1, _2, _3, ...}} 的占位符被用作对 {{tt|std::bind}} 初始调用的实参），那么将该占位符所指示的实参（{{c|_1}} 为 {{c|u1}}，{{c|_2}} 为 {{c|u2}} 等）传递给可调用对象：{{c|v_i}} 是 {{c|std::forward&lt;Uj&gt;(uj)}} 而它的类型 {{tt|V_i}} 是 {{c|Uj&amp;&amp;}}。
+
+====情况 4：普通实参====
+否则，{{c|arg_i}} 作为左值实参传递给可调用对象：{{c|v_i}} 单纯地是 {{c|arg_i}} 而它的类型 {{tt|V_i}} 是 {{tt|T}} ''cv''{{sep}}{{tt|&amp;}}，其中 ''cv'' 是与 {{c|g}} 相同的 cv 限定。
+
+===异常===
+只有在从 {{c|std::forward&lt;F&gt;(f)}} 构造 {{c/core|std::decay&lt;F&gt;::type}} 有抛出，或从 {{c|std::forward&lt;Arg_i&gt;(arg_i)}} 构造对应的任何 {{c/core|std::decay&lt;Arg_i&gt;::type}} 有抛出的情况下才会抛出异常，其中 {{tt|Arg_i}} 是 {{tt|Args... args}} 中的第 i 个类型，而 {{c|arg_i}} 是第 i 个实参。
+
+===注解===
+如{{named req|Callable}}中所述，调用指向非静态成员函数指针或指向非静态数据成员指针时，首个实参必须是引用或指针（可以包含智能指针，如 {{lc|std::shared_ptr}} 与 {{lc|std::unique_ptr}}），指向要访问其成员的对象。
+
+绑定实参被复制或移动，而且决不按引用传递，除非以 {{lc|std::ref}} 或 {{lc|std::cref}} 包装。
+
+允许同一绑定表达式中使用重复的占位符（例如多个 {{c|_1}}），但结果只有在对应实参（{{c|u1}}）是左值或不可移动右值时才有良好定义。
+
+===示例===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;random&gt;
+
+void f(int n1, int n2, int n3, const int&amp; n4, int n5)
+{
+    std::cout &lt;&lt; n1 &lt;&lt; ' ' &lt;&lt; n2 &lt;&lt; ' ' &lt;&lt; n3 &lt;&lt; ' ' &lt;&lt; n4 &lt;&lt; ' ' &lt;&lt; n5 &lt;&lt; '\n';
+}
+
+int g(int n1)
+{
+    return n1;
+}
+
+struct Foo
+{
+    void print_sum(int n1, int n2)
+    {
+        std::cout &lt;&lt; n1 + n2 &lt;&lt; '\n';
+    }
+    
+    int data = 10;
+};
+
+int main()
+{
+    using namespace std::placeholders;  // 对于 _1, _2, _3...
+    
+    std::cout &lt;&lt; "1) 实参重排序和按引用传递：";
+    int n = 7;
+    // （_1 与 _2 来自 std::placeholders，并表示将来会传递给 f1 的实参）
+    auto f1 = std::bind(f, _2, 42, _1, std::cref(n), n);
+    n = 10;
+    f1(1, 2, 1001); // 1 为 _1 所绑定，2 为 _2 所绑定，不使用 1001
+                    // 进行对 f(2, 42, 1, n, 7) 的调用
+    
+    std::cout &lt;&lt; "2) 使用 lambda 达成相同效果：";
+    n = 7;
+    auto lambda = [&amp;ncref = n, n](auto a, auto b, auto /* 未使用 */)
+    {
+        f(b, 42, a, ncref, n);
+    };
+    n = 10;
+    lambda(1, 2, 1001); // 等同于调用 f1(1, 2, 1001)
+    
+    std::cout &lt;&lt; "3) 嵌套的绑定子表达式共享占位符：";
+    auto f2 = std::bind(f, _3, std::bind(g, _3), _3, 4, 5);
+    f2(10, 11, 12); // 进行对 f(12, g(12), 12, 4, 5); 的调用
+
+    std::cout &lt;&lt; "4) 以分布绑定随机数生成器：";
+    std::default_random_engine e;
+    std::uniform_int_distribution&lt;&gt; d(0, 10);
+    std::function&lt;int()&gt; rnd = std::bind(d, e); // e 的一个副本存储于 rnd
+    for (int n = 0; n &lt; 10; ++n)
+        std::cout &lt;&lt; rnd() &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "5) 绑定成员函数指针：";
+    Foo foo;
+    auto f3 = std::bind(&amp;Foo::print_sum, &amp;foo, 95, _1);
+    f3(5);
+    
+    std::cout &lt;&lt; "6) 绑定成员函数指针 mem_fn：";
+    auto ptr_to_print_sum = std::mem_fn(&amp;Foo::print_sum);
+    auto f4 = std::bind(ptr_to_print_sum, &amp;foo, 95, _1);
+    f4(5);
+
+    std::cout &lt;&lt; "7) 绑定数据成员指针：";
+    auto f5 = std::bind(&amp;Foo::data, _1);
+    std::cout &lt;&lt; f5(foo) &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "8) 绑定数据成员指针 mem_fn：";
+    auto ptr_to_data = std::mem_fn(&amp;Foo::data);
+    auto f6 = std::bind(ptr_to_data, _1);
+    std::cout &lt;&lt; f6(foo) &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "9) 使用智能指针调用被引用对象的成员：";
+    std::cout &lt;&lt; f6(std::make_shared&lt;Foo&gt;(foo)) &lt;&lt; '\n'
+              &lt;&lt; f6(std::make_unique&lt;Foo&gt;(foo)) &lt;&lt; '\n';
+}
+|output=
+1) 实参重排序和按引用传递：2 42 1 10 7
+2) 使用 lambda 达成相同效果：2 42 1 10 7
+3) 嵌套的绑定子表达式共享占位符：12 12 12 4 5
+4) 以分布绑定随机数生成器：0 1 8 5 5 2 0 7 7 10 
+5) 绑定成员函数指针：100
+6) 绑定成员函数指针 mem_fn：100
+7) 绑定数据成员指针：10
+8) 绑定数据成员指针 mem_fn：10
+9) 使用智能指针调用被引用对象的成员：10 10
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2021|std=C++11|before=1. 绑定实参没有转发到 {{c|fd}}&lt;br&gt;2. 在第2种情况下，{{tt|V_i}} 是&lt;br&gt;{{nbsp|4}}{{c/core|std::result_of&lt;T}} ''cv''{{sep}}{{c/core|(Uj...)&gt;::type}}|after=1. 转发绑定实参数&lt;br&gt;2. 更改成&lt;br&gt;{{nbsp|4}}{{c/core|std::result_of&lt;T}} ''cv''{{sep}}{{c/core|&amp;(Uj&amp;&amp;...)&gt;::type&amp;&amp;}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc bind_front}}
+{{dsc inc|cpp/utility/functional/dsc placeholders}}
+{{dsc inc|cpp/utility/functional/dsc mem_fn}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

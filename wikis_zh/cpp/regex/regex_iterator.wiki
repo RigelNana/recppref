@@ -1,0 +1,117 @@
+{{cpp/title|regex_iterator}}
+{{cpp/regex/regex_iterator/navbar}}
+{{ddcl|header=regex|since=c++11|1=
+template&lt;
+    class BidirIt,
+    class CharT = typename std::iterator_traits&lt;BidirIt&gt;::value_type,
+    class Traits = std::regex_traits&lt;CharT&gt;
+&gt; class regex_iterator
+}}
+
+{{tt|std::regex_iterator}} 是访问底层字符序列中正则表达式的单独匹配的只读{{named req|ForwardIterator}}。它满足{{named req|ForwardIterator}}的要求，但对于可解引用的值 {{c|a}} 和 {{c|b}} 且 {{c|1=a == b}}，{{c|*a}} 和 {{c|*b}} 不会绑定到同一个对象。
+
+在构造和每次自增时，它调用 {{lc|std::regex_search}} 并记忆其结果（即保存 {{c/core|std::match_results&lt;BidirIt&gt;}} 值的副本）。第一个对象可能在构造迭代器或进行首次解引用时读取。其他情况下，解引用只返回最近获得的正则表达式匹配的副本。
+
+默认构造的 {{tt|std::regex_iterator}} 是序列尾迭代器。在抵达最后匹配（{{lc|std::regex_search}} 返回 {{c|false}}）后自增合法的 {{tt|std::regex_iterator}} 时，它变得等于序列尾迭代器。进一步解引用或自增它会引发未定义行为。
+
+典型的 {{tt|std::regex_iterator}} 实现保有底层序列的开始和结束迭代器（两个 {{tt|BidirIt}} 实例）、指向正则表达式的指针（{{c/core|const regex_type*}}）、匹配标志（{{lc|std::regex_constants::match_flag_type}}）和当前匹配（{{c/core|std::match_results&lt;BidirIt&gt;}}）。
+
+===类型要求===
+{{par begin}}
+{{par req named|BidirIt|BidirectionalIterator}}
+{{par end}}
+
+===特化===
+提供对于常用字符序列类型的数个特化：
+{{dsc begin}}
+{{dsc header|regex}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{ttb|std::cregex_iterator}}|{{c/core|std::regex_iterator&lt;const char*&gt;}}}}
+{{dsc|{{ttb|std::wcregex_iterator}}|{{c/core|std::regex_iterator&lt;const wchar_t*&gt;}}}}
+{{dsc|{{ttb|std::sregex_iterator}}|{{c/core|std::regex_iterator&lt;std::string}}{{c/core|::const_iterator&gt;}}}}
+{{dsc|{{ttb|std::wsregex_iterator}}|{{c/core|std::regex_iterator&lt;std::wstring}}{{c/core|::const_iterator&gt;}}}}
+{{dsc end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|{{c/core|std::match_results&lt;BidirIt&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|pointer}}|{{c/core|const value_type*}}}}
+{{dsc|{{tt|reference}}|{{c/core|const value_type&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::forward_iterator_tag}}}}
+{{dsc|{{tt|iterator_concept}} {{mark c++20}}|{{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|regex_type}}|{{c/core|std::basic_regex&lt;CharT, Traits&gt;}}}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|begin|id=begin|spec={{tt|BidiIt}}|private=yes|起始迭代器}}
+{{dsc expos mem obj|end|id=end|spec={{tt|BidiIt}}|private=yes|尾迭代器}}
+{{dsc expos mem obj|pregex|id=pregex|spec={{c/core|const regex_type*}}|private=yes|指向一个正则表达式的指针}}
+{{dsc expos mem obj|flags|id=flags|spec={{c/core|regex_constants::match_flag_type}}|private=yes|标志}}
+{{dsc expos mem obj|match|id=match|spec={{c/core|match_results&lt;BidiIt&gt;}}|private=yes|当前匹配}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/regex/regex_iterator/dsc constructor}}
+{{dsc inc|cpp/regex/regex_iterator/dsc destructor}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator{{=}}}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator cmp}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator*}}
+{{dsc inc|cpp/regex/regex_iterator/dsc operator arith}}
+{{dsc end}}
+
+===注解===
+程序员负责确保传递给迭代器构造函数的 {{lc|std::basic_regex}} 对象活得长于迭代器。因为迭代器存储指向正则表达式的指针，所以在销毁正则表达式后自增迭代器会访问悬垂指针。
+
+如果匹配的正则表达式部分只是[[cpp/regex/ecmascript#断言|断言]]（{{tt|^}}、{{tt|$}}、{{tt|\b}}、{{tt|\B}}），那么在迭代器存储的匹配是零长度匹配，即 {{c|1=match[0].first == match[0].second}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;regex&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    const std::string s = "Quick brown fox.";
+    
+    std::regex words_regex("[^\\s]+");
+    auto words_begin =
+        std::sregex_iterator(s.begin(), s.end(), words_regex);
+    auto words_end = std::sregex_iterator();
+    
+    std::cout &lt;&lt; "找到了 " &lt;&lt; std::distance(words_begin, words_end) &lt;&lt; " 个单词：\n";
+    
+    for (std::sregex_iterator i = words_begin; i != words_end; ++i)
+    {
+        std::smatch match = *i;
+        std::string match_str = match.str();
+        std::cout &lt;&lt; match_str &lt;&lt; '\n';
+    }
+}
+|output=
+找到了 3 个单词：
+Quick
+brown
+fox.
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3698|paper=P2770R0|std=C++20|before={{tt|regex_iterator}} 是贮藏迭代器，但它是 {{lconcept|forward_iterator}}|after=使之为 {{lconcept|input_iterator}}&lt;ref&gt;解决方案没有修改 {{tt|iterator_category}}，因为把它改成 {{lc|std::input_iterator_tag}} 会影响到很多现有代码。&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/regex/dsc match_results}}
+{{dsc inc|cpp/regex/dsc regex_search}}
+{{dsc begin}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

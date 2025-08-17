@@ -1,0 +1,671 @@
+{{cpp/named req/title|UnorderedAssociativeContainer|notes={{mark since c++11}}}}
+{{cpp/named req/navbar}}
+
+'''无序关联容器'''{{sep}}是提供基于键的快速对象查找的{{named req|Container}}。
+最坏情况的复杂度为线性，但平均而言大多数操作则快得多。
+
+无序关联容器基于以下各项参数化：{{tt|Key}}；{{tt|Hash}}，表现为 {{tt|Key}} 上散列函数的{{named req|Hash}}函数对象；{{tt|Pred}}，评估 {{tt|Key}} 间的等价性的{{named req|BinaryPredicate}}。
+{{lc|std::unordered_map}} 与 {{lc|std::unordered_multimap}} 还拥有与 {{tt|Key}} 关联的被映射类型 {{tt|T}}。
+
+如果两个 {{tt|Key}} 按照 {{tt|Pred}} 比较为相等，那么 {{tt|Hash}} 必须对两个键返回相同值。
+
+{{rrev|since=c++20|
+如果 {{tt|Hash::is_transparent}} 与 {{tt|Pred::is_transparent}} 均存在且均代表类型，那么成员函数 {{tt|find}}、{{tt|contains}}、{{tt|count}} 与 {{tt|equal_range}} 接受异于 {{tt|Key}} 的实参类型并期待 {{tt|Hash}} 能以那些类型调用，而 {{tt|Pred}} 是如 {{lc|std::equal_to&lt;&gt;}} 的透明比较函数。
+}}
+
+{{lc|std::unordered_map}} 与 {{lc|std::unordered_set}} 能容纳至多一个带给定键的元素，而 {{lc|std::unordered_multiset}} 与 {{lc|std::unordered_multimap}} 能拥有带同一键的多个元素（它们在迭代时必然相邻）。
+
+对于 {{lc|std::unordered_set}} 和 {{lc|std::unordered_multiset}}，它们的值类型与键类型相同，且 {{tt|iterator}} 和 {{tt|const_iterator}} 都是常量迭代器。对于 {{lc|std::unordered_map}} 与 {{lc|std::unordered_multimap}}，值类型是 {{c/core|std::pair&lt;const Key, T&gt;}}。
+
+无序关联容器中的元素被组织到桶中，拥有相同散列值的键将归于相同的桶中。
+桶数在容器大小增加时增加，以保持每个桶中的平均元素数在某个确定值之下。
+
+重散列会使迭代器失效，并可能导致元素被重排到不同的桶中，但不会使元素的引用失效。
+
+无序关联容器满足{{named req|AllocatorAwareContainer}}的要求。对于 {{lc|std::unordered_map}} 与 {{lc|std::unordered_multimap}}，{{named req|AllocatorAwareContainer}}中 {{tt|value_type}} 的要求应用到 {{tt|key_type}} 和 {{tt|mapped_type}}（而非到 {{tt|value_type}}）。
+
+===要求===
+{{dsc begin}}
+{{dsc h2|凡例}}
+{{dsc|{{tt|X}}|无序关联容器类}}
+{{dsc|{{c|a}}|{{tt|X}} 类型的值}}
+{{dsc|{{c|a2}}|一个与 {{tt|X}} [[cpp/container/node_handle|节点兼容]] 的类型的值&lt;!--TODO: N4950, [container.node.overview], Table-83--&gt;}}
+{{dsc|{{c|b}}|类型为 {{tt|X}} 或 {{tt|const X}} 的值}}
+{{dsc|{{c|a_uniq}}|{{tt|X}} 支持唯一键时，{{tt|X}} 类型的值}}
+{{dsc|{{c|a_eq}}|{{tt|X}} 支持等价键时，{{tt|X}} 类型的值}}
+{{dsc|{{c|a_tran}}|当有限定标识符 {{tt|X::key_equal::is_transparent}} 和 {{tt|X::hasher::is_transparent}} 都有效且代表[[cpp/language/template argument deduction|类型]]时，
+为 {{tt|X}} 或 {{tt|const X}} 类型的值}}
+{{dsc|{{c|i}}, {{c|j}}|&lt;!--TODO: {{named req|InputIterator}}s until C++23?--&gt; 引用 {{tt|value_type}} 的输入迭代器}}
+{{dsc|{{range|i|j}}|合法范围}}
+{{dsc|{{c|rg}} {{mark since c++23}}|{{tt|R}} 类型的值，实现 {{box|{{lti|cpp/ranges/to#容器兼容范围|container-compatible-range}}{{tt|&lt;value_type&gt;}}}}}}
+{{dsc|{{c|p}}, {{c|q2}}|{{c|a}} 的合法常量迭代器}}
+{{dsc|{{c|q}}, {{c|q1}}|{{c|a}} 的合法且可解引用的常量迭代器}}
+{{dsc|{{c|r}}|{{c|a}} 的合法且可解引用的迭代器}}
+{{dsc|{{range|q1|q2}}|{{c|a}} 的合法范围}}
+{{dsc|{{c|il}}|{{c/core|std::initializer_list&lt;value_type&gt;}} 类型的值}}
+{{dsc|{{c|t}}|{{tt|X::value_type}} 类型的值}}
+{{dsc|{{c|k}}|{{tt|key_type}} 类型的值}}
+{{dsc|{{c|hf}}|{{tt|hasher}} 或 {{tt|const hasher}} 类型的值}}
+{{dsc|{{c|eq}}|{{tt|key_equal}} 或 {{tt|const key_equal}} 类型的值}}
+{{dsc|{{c|ke}}|值，当 {{c|r1}} 和 {{c|r2}} 是 {{c|a_tran}} 的元素的键时，满足
+* {{c|1=eq(r1, ke) == eq(ke, r1)}},
+* {{c|1=hf(r1) == hf(ke)}} 当 {{c|eq(r1, ke)}} 是 {{c|true}}，且
+* 如果 {{c|eq(r1, ke)}}、{{c|eq(r2, ke)}} 和 {{c|eq(r1, r2)}} 中有两个是 {{c|true}}，那么三个都是 {{c|true}}
+}}
+{{dsc|{{c|kx}} {{mark since c++23}}|值，当 {{c|r1}} 和 {{c|r2}} 是 {{c|a_tran}} 的元素的键时，满足
+* {{c|1=eq(r1, kx) == eq(kx, r1)}},
+* {{c|1=hf(r1) == hf(kx)}} 当 {{c|eq(r1, kx)}} 是 {{c|true}}，
+* 如果 {{c|eq(r1, kx)}}、{{c|eq(r2, kx)}} 和 {{c|eq(r1, r2)}} 中有两个是 {{c|true}}，那么三个都是 {{c|true}} 且
+* {{c|kx}} 不能转换到 {{tt|iterator}} 或者 {{tt|const_iterator}}
+}}
+{{dsc|{{c|n}}|{{tt|size_type}} 类型的值}}
+{{dsc|{{c|z}}|{{c/core|float}} 类型的值}}
+{{dsc|{{c|nh}} {{mark since c++17}}|{{tt|X::node_type}} 类型的右值}}
+{{dsc end}}
+
+====成员类型====
+{|class=wikitable 
+!名字||类型||要求||注解
+|-
+|{{tt|X::key_type}}
+|{{tt|Key}}
+|
+|
+|-
+|{{tt|X::mapped_type}}
+|{{tt|T}}
+|仅 {{lc|std::unordered_map}} 和 {{lc|std::unordered_multimap}}
+|
+|-
+|rowspan="2"|{{tt|X::value_type}}
+|{{tt|Key}}
+|仅 {{lc|std::unordered_set}} 和 {{lc|std::unordered_multiset}}。{{tt|X}} {{named req|Erasable}}
+|
+|-
+|{{c/core|std::pair&lt;const Key, T&gt;}}
+|仅 {{lc|std::unordered_map}} 和 {{lc|std::unordered_multimap}}。{{tt|X}} {{named req|Erasable}}
+|
+|-
+|{{tt|X::hasher}}
+|{{tt|Hash}}
+|{{named req|Hash}}
+|
+|-
+|{{tt|X::key_equal}}
+|{{tt|Pred}}
+|{{named req|CopyConstructible}}；接受两个 {{tt|Key}} 类型的参数，并表达等价关系的{{named req|BinaryPredicate}}
+|
+|-
+|{{tt|X::local_iterator}}
+|{{named req|Iterator}}
+|具有和 {{tt|X::iterator}} 相同的类别和类型
+|rowspan="2"|可用于遍历单个桶，但不能遍历所有桶
+|-
+|{{tt|X::const_local_iterator}}
+|{{named req|Iterator}}
+|具有和 {{tt|X::const_iterator}} 相同的类别和类型
+|-
+|{{tt|X::node_type}} {{mark since c++17}}
+|[[cpp/container/node handle|node-handle]] 类模板的特化
+|其公开嵌套类型与 {{tt|X}} 中的对应类型相同。
+|
+|}
+
+====成员函数和运算符====
+&lt;div style="max-width: 100%; overflow-x: scroll;"&gt;
+{|class=wikitable style="font-size:0.9em"
+!表达式||结果||前条件||效果||返回值||复杂度
+|-
+|{{c|X(n, hf, eq)}}
+|
+|
+|构造一个至少包含 {{c|n}} 个桶的空容器，使用 {{c|hf}} 作为散列函数，使用 {{c|eq}} 作为键相等性谓词
+|
+|{{math|O}}({{c|n}})
+|-
+|{{c|X(n, hf)}}
+|
+|{{tt|key_equal}} 满足{{named req|DefaultConstructible}}
+|构造一个至少包含 {{c|n}} 个桶的空容器，使用 {{c|hf}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词
+|
+|{{math|O}}({{c|n}})
+|-
+|{{c|X(n)}}
+|
+|{{tt|hasher}} 和 {{tt|key_equal}} 满足{{named req|DefaultConstructible}}
+|构造一个至少包含 {{c|n}} 个桶的空容器，使用 {{c|hasher()}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词
+|
+|{{math|O}}({{c|n}})
+|-
+|{{c|1=X a = X();}}&lt;br&gt;{{c|X a;}}
+|
+|{{tt|hasher}} 和 {{tt|key_equal}} 满足{{named req|DefaultConstructible}}
+|构造一个具有未指定数量的桶的空容器，使用 {{c|hasher()}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词
+|
+|常数
+|-
+|{{c|X(i, j, n, hf, eq)}}
+|
+|{{tt|value_type}} 满足从 {{c|*i}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个至少具有 {{c|n}} 个桶的空容器，使用 {{c|hf}} 作为散列函数，使用 {{c|eq}} 作为键相等性谓词，并向其插入 {{range|i|j}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(i, j, n, hf)}}
+|
+|{{tt|key_equal}} 满足{{named req|DefaultConstructible}}。{{tt|value_type}} 满足从 {{c|*i}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个至少具有 {{c|n}} 个桶的空容器，使用 {{c|hf}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词，并向其插入 {{range|i|j}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(i, j, n)}}
+|
+|{{tt|hasher}} 和 {{tt|key_equal}} 满足{{named req|DefaultConstructible}}。{{tt|value_type}} 满足从 {{c|*i}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个至少具有 {{c|n}} 个桶的空容器，使用 {{c|hasher()}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词，并向其插入 {{range|i|j}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(i, j)}}
+|
+|{{tt|hasher}} 和 {{tt|key_equal}} 满足{{named req|DefaultConstructible}}。{{tt|value_type}} 满足从 {{c|*i}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个未指定数量的桶的空容器，使用 {{c|hasher()}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词，并向其插入 {{range|i|j}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg, n, hf, eq)
+}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|value_type}} 满足从 {{c|*ranges::begin(rg)}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个至少具有 {{c|n}} 个桶的空容器，使用 {{c|hf}} 作为散列函数，使用 {{c|eq}} 作为键相等性谓词，并向其插入 {{c|rg}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg, n, hf)}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|key_equal}} 满足{{named req|DefaultConstructible}}。{{tt|value_type}} 满足从 {{c|*ranges::begin(rg)}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个至少具有 {{c|n}} 个桶的空容器，使用 {{c|hf}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词，并向其插入 {{c|rg}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg, n)}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|hasher}} 和 {{tt|key_equal}} 满足{{named req|DefaultConstructible}}。{{tt|value_type}} 满足从 {{c|*ranges::begin(rg)}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个至少具有 {{c|n}} 个桶的空容器，使用 {{c|hasher()}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词，并向其插入 {{c|rg}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c multi
+|X(std::from_range,
+|  rg)}}&lt;br&gt;{{mark since c++23}}
+|
+|{{tt|hasher}} 和 {{tt|key_equal}} 满足{{named req|DefaultConstructible}}。{{tt|value_type}} 满足从 {{c|*ranges::begin(rg)}} {{named req|EmplaceConstructible}}到 {{tt|X}} 
+|构造一个未指定数量的桶的空容器，使用 {{c|hasher()}} 作为散列函数，使用 {{c|key_equal()}} 作为键相等性谓词，并向其插入 {{c|rg}} 的元素
+|
+|平均 {{math|O(N)}}（{{math|N}} 为 {{c|std::distance(i, j)}}），最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|X(il)}}
+|
+|
+|{{c|X(il.begin(), il.end())}}
+|
+|
+|-
+|{{c|X(il, n)}}
+|
+|
+|{{c|X(il.begin(), il.end(), n)}}
+|
+|
+|-
+|{{c|X(il, n, hf)}}
+|
+|
+|{{c|X(il.begin(), il.end(), n, hf)}}
+|
+|
+|-
+|{{c|X(il, n, hf, eq)}}
+|
+|
+|{{c|X(il.begin(), il.end(), n, hf, eq)}}
+|
+|
+|-
+|{{c|X(b)}}
+|
+|
+|{{named req|Container}}；复制散列函数、谓词和最大负载因子
+|
+|平均为与 {{c|b.size()}} 成线性，最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|1=a = b}}
+|{{tt|X&amp;}}
+|
+|{{named req|Container}}；复制哈希函数、谓词和最大负载因子
+|
+|平均为与 {{c|b.size()}} 成线性，最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|1=a = il}}
+|{{tt|X&amp;}}
+|{{tt|value_type}} 满足{{named req|CopyInsertable}}到 {{tt|X}} 且{{named req|CopyAssignable}}
+|使用 {{range|il.begin()|il.end()}} 赋值给 {{c|a}}。{{c|a}} 的所有元素都或被赋值或被销毁
+|
+|平均为与 {{c|li.size()}} 成线性，最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|b.hash_function()}}
+|{{tt|hasher}}
+|
+|
+|{{c|b}} 的散列函数
+|常数
+|-
+|{{c|b.key_eq()}}
+|{{tt|key_equal}}
+|
+|
+|{{c|b}} 的键相等性谓词
+|常数
+|-
+|{{c|a_uniq.emplace(args)}}
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  bool&gt;
+}}
+|{{tt|value_type}} 满足从 {{c|args}} {{named req|EmplaceConstructible}}到 {{tt|X}}
+|当且仅当容器中不存在具有与 {{c|t}} 的键等价的键的元素时，插入一个使用 {{c|std::forward&lt;Args&gt;(args)...}} 构造的 {{tt|value_type}} 类型的对象 {{c|t}}
+|当且仅当发生插入时，返回的对偶的 {{c|bool}} 组分为 {{c|true}}，并且该对偶的迭代器组分指向具有的键等价于 {{c|t}} 的键的元素
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_uniq.size()}})
+|-
+|{{c|a_eq.emplace(args)}}
+|{{tt|iterator}}
+|{{tt|value_type}} 满足从 {{c|args}} {{named req|EmplaceConstructible}}到 {{tt|X}}
+|插入一个使用 {{c|std::forward&lt;Args&gt;(args)...}} 构造的 {{tt|value_type}} 类型的对象 {{c|t}}
+|指向新插入元素的迭代器
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_eq.size()}})
+|-
+|{{c|a.emplace_hint(p, args)}}
+|{{tt|iterator}}
+|{{tt|value_type}} 满足从 {{c|args}} {{named req|EmplaceConstructible}}到 {{tt|X}}
+|{{c multi
+|a.emplace(
+|  std::forward&lt;Args&gt;(args)...)
+}}
+|指向具有与新插入元素等价的键的元素的迭代器。{{tt|const_iterator}} {{c|p}} 是一个提示，指向搜索应该开始的位置。允许实现忽略提示
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a_uniq.insert(t)}}
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  bool&gt;
+}}
+|如果 {{c|t}} 是非 const 右值，则 {{tt|value_type}} {{named req|MoveInsertable}}到 {{tt|X}}；否则，{{tt|value_type}} {{named req|CopyInsertable}}到 {{tt|X}}
+|当且仅当容器中不存在键与 {{c|t}} 的键相同的元素时，插入 {{c|t}}
+|返回的对偶中的 {{c|bool}} 组分指示是否发生插入，而 {{tt|iterator}} 组分则指向键与 {{c|t}} 的键等价的元素
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_uniq.size()}})
+|-
+|{{c|a_eq.insert(t)}}
+|{{tt|iterator}}
+|如果 {{c|t}} 是非 const 右值，则 {{tt|value_type}} {{named req|MoveInsertable}}到 {{tt|X}}；否则，{{tt|value_type}} {{named req|CopyInsertable}}到 {{tt|X}}
+|插入 {{c|t}}
+|指向新插入元素的迭代器
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_eq.size()}})
+|-
+|{{c|a.insert(p, t)}}
+|{{tt|iterator}}
+|如果 {{c|t}} 是非 const 右值，则 {{tt|value_type}} {{named req|MoveInsertable}}到 {{tt|X}}；否则，{{tt|value_type}} {{named req|CopyInsertable}}到 {{tt|X}}
+|{{c|a.insert(t)}}。迭代器 {{c|p}} 是一个提示，指向搜索应该开始的位置。允许实现忽略提示
+|指向键与 {{c|t}} 相等的元素的迭代器
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.insert(i, j)}}
+|{{c/core|void}}
+|{{tt|value_type}} 满足从 {{c|*i}} {{named req|EmplaceConstructible}}到 {{tt|X}}，{{c|i}} 和 {{c|j}} 都不是 {{c|a}} 的迭代器
+|对于 {{range|i|j}} 中的每个元素 {{c|t}}，{{c|a.insert(t)}}
+|
+|平均 {{math|O(N)}}，其中 {{math|N}} 为 {{c|std::distance(i, j)}}，最坏 {{math|O}}({{ c|N·(a.size() + 1)}})
+|-
+|{{c|a.insert_range(rg)}}&lt;br&gt;{{mark since c++23}}
+|{{c/core|void}}
+|{{tt|value_type}} 满足从 {{c|*ranges::begin(rg)}} {{named req|EmplaceConstructible}}到 {{tt|X}}。{{c|rg}} 和 {{c|a}} 不重叠
+|对于 {{c|rg}} 中的每个元素 {{c|t}}，{{c|a.insert(t)}} 
+|
+|平均 {{math|O(N)}}，其中 {{math|N}} 为 {{c|ranges::distance(rg)}}，最坏 {{math|O}}({{c| N·(a.size() + 1)}})
+|-
+|{{c|a.insert(il)}}
+|
+|
+|{{c|a.insert(il.begin(), il.end())}}
+|
+|
+|-
+|{{c|a_uniq.insert(nh)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|insert_return_type}}
+|{{c|nh}} 为空，或
+{{c multi
+|a_uniq.get_allocator()
+|{{==}}
+|nh.get_allocator()
+}}
+是 {{c|true}}
+|如果 {{c|nh}} 为空，则无效。否则，当且仅当容器中不存在键等于 {{c|nh.key()}} 的元素时，插入 {{c|nh}} 拥有的元素。确保：如果 {{c|nh}} 为空，则 {{c|inserted}} 为 {{c|false}}，{{c|position}} 为 {{c|end()}}，并且 {{c|node}} 为空。否则，如果发生插入，则 {{c|inserted}} 为 {{c|true}}，{{c|position}} 指向插入的元素，而 {{c|node}} 为空；如果插入失败，则 {{c|inserted}} 为 {{c|false}}，{{c|node}} 具有 {{c|nh}} 的先前值，并且 {{c|position}} 指向键相当于 {{c|nh.key()}} 的元素
+|
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_uniq.size()}})
+|-
+|{{c|a_eq.insert(nh)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|iterator}}
+|{{c|nh}} 为空，或
+{{c multi
+|a_eq.get_allocator()
+|{{==}}
+|nh.get_allocator()
+}}
+是 {{c|true}}
+|如果 {{c|nh}} 为空，则无效并返回 {{c|a_eq.end()}}。否则，插入 {{c|nh}} 拥有的元素并返回指向新插入元素的迭代器。确保：{{c|nh}} 为空
+|
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_eq.size()}})
+|-
+|{{c|a.insert(q, nh)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|iterator}}
+|{{c|nh}} 为空，或
+{{c multi
+|a.get_allocator()
+|{{==}}
+|nh.get_allocator()
+}}
+是 {{c|true}}
+|如果 {{c|nh}} 为空，则无效并返回 {{c|a.end()}}。否则，当且仅当在具有唯一键的容器中不存在键等于 {{c|nh.key()}} 的元素时，插入 {{c|nh}} 拥有的元素；始终将 {{c|nh}} 拥有的元素插入具有相同键的容器中。迭代器 {{c|q}} 是一个提示，指向搜索应该开始的位置。允许实现忽略提示。确保：如果插入成功，{{c|nh}} 为空；如果插入失败，则保持不变
+|指向键等于 {{c|nh.key()}} 的元素的迭代器
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.extract(k)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|node_type}}
+|
+|移除容器中键等于 {{c|k}} 的元素
+|如果找到，则为拥有该元素的 {{tt|node_type}}，否则为空 {{tt|node_type}}
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a_tran.extract(kx)}}&lt;br&gt;{{mark since c++23}}
+|{{tt|node_type}}
+|
+|移除容器中键等于 {{c|kx}} 的元素
+|如果找到，则为拥有该元素的 {{tt|node_type}}，否则为空 {{tt|node_type}}
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|a.extract(q)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|node_type}}
+|
+|移除 {{c|q}} 指向的元素
+|拥有该元素的 {{tt|node_type}}
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.merge(a2)}}&lt;br&gt;{{mark since c++17}}
+|{{c/core|void}}
+|{{c multi
+|a.get_allocator()
+|{{==}}
+|a2.get_allocator()
+}}
+|尝试使用 {{c|a}} 的散列函数和键相等谓词提取 {{c|a2}} 中的每个元素并将其插入到 {{c|a}} 中。在具有唯一键的容器中，如果 {{c|a}} 中有一个元素的键与 {{c|a2}} 中的元素的键相同，则不会从 {{c|a2} 中提取该元素}。确保：指代被传输 {{c|a2}} 元素的指针和引用仍指代相同的这些元素，但将作为 {{c|a}} 的成员。指代已传输元素的迭代器和指代 {{c|a}} 的所有迭代器都将失效，但指向 {{c|a2}} 中剩余元素的迭代器将保持有效
+|
+|平均 {{math|O(N)}}，其中 {{math|N}} 为 {{c|a2.size()}}，最坏 {{math|O}}({{c|N· (a.size() + 1)}})
+|-
+|{{c|a.erase(k)}}
+|{{tt|size_type}}
+|
+|擦除键等于 {{c|k}} 的所有元素
+|擦除的元素数量
+|平均 {{math|O}}({{c|a.count(k)}})，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a_tran.erase(kx)}}&lt;br&gt;{{mark since c++23}}
+|{{tt|size_type}}
+|
+|擦除键等于 {{c|kx}} 的所有元素
+|擦除的元素数量
+|平均 {{math|O}}({{c|a_tran.count(kx)}})，最坏 {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|a.erase(q)}}
+|{{tt|iterator}}
+|
+|擦除 {{c|q}} 指向的元素
+|擦除之前，紧跟在 {{c|q}} 之后的迭代器
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.erase(r)}}&lt;br&gt;{{mark since c++17}}
+|{{tt|iterator}}
+|
+|擦除 {{c|r}} 指向的元素
+|擦除之前紧跟在 {{c|r}} 之后的迭代器
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.erase(q1, q2)}}
+|{{tt|iterator}}
+|
+|擦除范围 {{range|q1|q2}} 内的所有元素
+|擦除之前紧随所擦除元素的迭代器
+|平均为线性 {{c|std::distance(q1, q2)}}，最坏 {{math|O}}({{c|a.size()}})
+|-
+|{{c|a.clear()}}
+|{{c/core|void}}
+|
+|擦除容器中的所有元素。确保：{{c|a.empty()}} 为 {{c|true}}
+|
+|与 {{c|a.size()}} 成线性
+|-
+|{{c|b.find(k)}}
+|{{tt|iterator}}；对于常量 {{c|b}} 为 {{tt|const_iterator}}
+|
+|
+|指向键等价于 {{c|k}} 的元素的迭代器，或当不存在这种元素时为 {{c|b.end()}}
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|b.size()}})
+|-
+|{{c|a_tran.find(ke)}}&lt;br&gt;{{mark since c++17}}?
+|{{tt|iterator}}；对于常量 {{c|a_tran}} 为 {{tt|const_iterator}}
+|
+|
+|指向键等价于 {{c|ke}} 的元素的迭代器，或当不存在这种元素时为 {{c|a_tran.end()}}
+|平均 {{math|O(1)}}，最坏 {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|b.count(k)}}
+|{{tt|size_type}}
+|
+|
+|键等于 {{c|k}} 的元素数量
+|平均 {{math|O}}({{c|b.count(k)}})，最坏 {{math|O}}({{c|b.size()}})
+|-
+|{{c|a_tran.count(ke)}}&lt;br&gt;{{mark since c++17}}?
+|{{tt|size_type}}
+|
+|
+|键等于 {{c|ke}} 的元素数量
+|平均 {{math|O}}({{c|a_tran.count(ke)}})，最坏 {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|b.contains(k)}}&lt;br&gt;{{mark since c++20}}?
+|
+|
+|{{c|1=b.find(k) != b.end()}}
+|
+|
+|-
+|{{c|a_tran.contains(ke)}}&lt;br&gt;{{mark since c++20}}?
+|
+|
+|{{c|1=a_tran.find(ke) != a_tran.end()}}
+|
+|
+|-
+|{{c|b.equal_range(k)}}
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  iterator&gt;
+}};
+对于常量 {{c|b}} 为 {{cc multi
+|std::pair&lt;
+|  const_iterator,
+|  const_iterator&gt;
+}}
+|
+|
+|包含键等于 {{c|k}} 的所有元素的范围。不存在这样的元素时返回
+{{c multi
+|std::make_pair(
+|  b.end(), b.end())
+}}
+|平均 {{math|O}}({{c|b.count(k)}})，最坏 {{math|O}}({{c|b.size()}})
+|-
+|{{c|a_tran.equal_range(ke)}}&lt;br&gt;{{mark since c++20}}?
+|{{cc multi
+|std::pair&lt;
+|  iterator,
+|  iterator&gt;}};
+对于常量 {{c|a_tran}} 为 {{cc multi
+|std::pair&lt;
+|  const_iterator,
+|  const_iterator&gt;
+}}
+|
+|
+|包含键等于 {{c|ke}} 的所有元素的范围。不存在这样的元素时返回
+{{c multi
+|std::make_pair(
+|  a_tran.end(),
+|  a_tran.end())
+}}
+|平均 {{math|O}}({{c|a_tran.count(ke)}})，最坏 {{math|O}}({{c|a_tran.size()}})
+|-
+|{{c|b.bucket_count()}}
+|{{tt|size_type}}
+|
+|
+|{{c|b}} 包含的桶数
+|常数
+|-
+|{{c|b.max_bucket_count()}}
+|{{tt|size_type}}
+|
+|
+|{{c|b}} 可以包含的存储桶数量的上限
+|常数
+|-
+|{{c|b.bucket(k)}}
+|{{tt|size_type}}
+|{{c|b.bucket_count() &gt; 0}}
+|
+|如果存在任何具有等价于 {{c|k}} 的键的元素，则为在其中找到此类元素的桶的索引。返回值在 {{range|0|b.bucket_count()}} 中
+|常数
+|-
+|{{c|a_tran.bucket(ke)}}
+|{{tt|size_type}}
+|{{c multi
+|a_tran.
+|bucket_count() &gt; 0}}
+|
+|如果存在任何具有等价于 {{c|ke}} 的键的元素，则为在其中找到此类元素的桶的索引。返回值必然在 {{range|0|a_tran.bucket_count()}} 范围内
+|常数
+|-
+|{{c|b.bucket_size(n)}}
+|{{tt|size_type}}
+|{{c|n}} 在范围 {{range|0|b.bucket_count()}} 内
+|
+|{{c|n}}{{sup|th}} 桶中的元素数量
+|{{math|O}}({{c|b.bucket_size(n)}})
+|-
+|{{c|b.begin(n)}}
+|{{tt|local_iterator}}；对于常量 {{c|b}} 为 {{tt|const_local_iterator}}
+|{{c|n}} 在范围 {{range|0|b.bucket_count()}} 内
+|
+|指向桶中第一个元素的迭代器。如果桶是空的，则 {{c|1=b.begin(n) == b.end(n)}}
+|常数
+|-
+|{{c|b.end(n)}}
+|{{tt|local_iterator}}；对于常量 {{c|b}} 为 {{tt|const_local_iterator}}
+|{{c|n}} 在范围 {{range|0|b.bucket_count()}} 内
+|
+|迭代器，它是桶的末尾后值
+|常数
+|-
+|{{c|b.cbegin(n)}}
+|{{tt|const_local_iterator}}
+|{{c|n}} 在范围 {{range|0|b.bucket_count()}} 内
+|
+|指向桶中第一个元素的迭代器。如果桶是空的，则 {{c|1=b.cbegin(n) == b.cend(n)}}
+|常数
+|-
+|{{c|b.cend(n)}}
+|{{tt|const_local_iterator}}
+|{{c|n}} 在范围 {{range|0|b.bucket_count()}} 内
+|
+|迭代器，它是桶的末尾后值
+|常数
+|-
+|{{c|b.load_factor()}}
+|{{c/core|float}}
+|
+|
+|每个桶的平均元素数量
+|常数
+|-
+|{{c|b.max_load_factor()}}
+|{{c/core|float}}
+|
+|
+|容器尝试保持负载系数小于或等于的正数。容器根据需要自动增加桶的数量，以将负载系数保持在该数值以下
+|常数
+|-
+|{{c|a.max_load_factor(z)}}
+|{{c/core|void}}
+|{{c|z}} 为正。可以使用 {{c|z}} 作为提示来更改容器的最大负载系数
+|
+|
+|常数
+|-
+|{{c|a.rehash(n)}}
+|{{c/core|void}}
+|
+|保证：
+{{c multi
+|a.bucket_count() &gt;{{=}}
+|  a.size() / a.max_load_factor()
+}}
+且 {{c|1=a.bucket_count() &gt;= n}}
+|
+|平均为与 {{c|a.size()}} 成线性，最坏 {{math|O(N{{sup|2}})}}
+|-
+|{{c|a.reserve(n)}}
+|
+|
+|{{c multi
+|a.rehash(std::ceil(
+|  n / a.max_load_factor()))
+}}
+|
+|
+|-
+|}
+&lt;/div&gt;
+
+{{todo|考虑成员函数的要求}}
+
+===标准库===
+下列标准库容器均满足{{named req/core|UnorderedAssociativeContainer}}：
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc unordered_set}}
+{{dsc inc|cpp/container/dsc unordered_multiset}}
+{{dsc inc|cpp/container/dsc unordered_map}}
+{{dsc inc|cpp/container/dsc unordered_multimap}}
+{{dsc end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2156|std=C++11|before=重散列后负载系数只能严格小于最大负载系数|after=可以等于最大负载系数}}
+{{dr list end}}
+
+{{langlinks|en|es|ja}}

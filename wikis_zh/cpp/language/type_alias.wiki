@@ -1,0 +1,166 @@
+{{title|类型别名，别名模板 {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+类型别名是指代先前定义的类型的名字（类似 {{rlpt|typedef}}）。
+
+别名模版是指代一族类型的名字。
+
+===语法===
+别名声明是具有下列语法的{{rlp|declarations|声明}}：
+
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|using}} {{spar|标识符}} {{spar optional|属性}} {{ttb|{{=}}}} {{spar|类型标识}} {{ttb|;}}
+}}
+{{sdsc|num=2|{{ttb|template}} {{ttb|&lt;}} {{spar|模板形参列表}} {{ttb|&gt;}}
+{{ttb|using}} {{spar|标识符}} {{spar optional|属性}} {{ttb|1==}} {{spar|类型标识}} {{ttb|;}}}}
+{{sdsc|num=3|notes={{mark since c++20}}|{{ttb|template}} {{ttb|&lt;}} {{spar|模板形参列表}} {{ttb|&gt;}} {{ttb|requires}} {{spar|约束}}
+{{ttb|using}} {{spar|标识符}} {{spar optional|属性}} {{ttb|1==}} {{spar|类型标识}} {{ttb|;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}{{mark c++11}}|可选的任意数量{{rlp|attributes|属性}}的序列}}
+{{par|{{spar|标识符}}|此声明引入的名字，它成为一个类型名 {{v|1}} 或一个模板名 {{v|2}} }}
+{{par|{{spar|模板形参列表}}|{{rlp|template parameters|模板形参列表}}，同{{rlp|templates|模板声明}}}}
+{{par|{{spar|约束}}|{{rlp|constraints|约束表达式}}，限制这个别名模板所能接受的模板形参}}
+{{par|{{spar|类型标识}}|抽象声明符或其他任何合法的{{spar|类型标识}}（可以引入新类型，如{{rlp|type#类型的命名|类型标识}}中所注明）。{{spar|类型标识}} 不能直接或间接涉指 {{spar|标识符}}。注意，标识符的{{rlp|scope#声明点|声明点}}处于跟在{{spar|类型标识}} 之后的分号处。}} 
+{{par end}}
+
+===解释===
+@1@ 类型别名声明引入一个名字，可用做{{spar|类型标识}} 所指代的类型的同义词。它不引入新类型，且不能更改既存类型名的含义。类型别名声明和 {{rlp|typedef}} 声明之间没有区别。此类声明可出现于块作用域、类作用域或命名空间作用域。
+@2@ 别名模板是一种模板，当其特化时等价于以别名模板的模板实参来代换{{spar|类型标识}} 中的模板形参的结果。
+{{source|1=
+template&lt;class T&gt;
+struct Alloc {};
+
+template&lt;class T&gt;
+using Vec = vector&lt;T, Alloc&lt;T&gt;&gt;; // 类型标识为 vector&lt;T, Alloc&lt;T&gt;&gt;
+
+Vec&lt;int&gt; v; // Vec&lt;int&gt; 等同于 vector&lt;int, Alloc&lt;int&gt;&gt;
+}}
+当特化别名模板的结果是一个待决的{{rlp|templates#模板标识|模板标识}}时，对这个模板标识应用后继的替换：
+{{source|1=
+template&lt;typename...&gt;
+using void_t = void;
+
+template&lt;typename T&gt;
+void_t&lt;typename T::foo&gt; f();
+
+f&lt;int&gt;(); // 错误，int 没有嵌套类型 foo
+}}
+特化别名模版时所生成的类型不允许直接或间接使用它自己的类型：
+{{source|1=
+template&lt;class T&gt;
+struct A;
+
+template&lt;class T&gt;
+using B = typename A&lt;T&gt;::U; // 类型标识为 A&lt;T&gt;::U
+
+template&lt;class T&gt;
+struct A { typedef B&lt;T&gt; U; };
+
+B&lt;short&gt; b; // 错误：B&lt;short&gt; 通过 A&lt;short&gt;::U 使用其自身类型
+}}
+在推导模板模板形参时，{{rlp|function_template#模板实参推导|模板实参推导}}始终不推导别名模板。
+不能{{rlp|partial specialization|部分特化}}或{{rlp|template specialization|显式特化}}别名模板。
+
+与任何模板声明相似，别名模版只能在类作用域或命名空间作用域被声明。
+
+{{rrev|since=c++20|
+出现于别名模版声明中的 {{rlp|lambda|lambda 表达式}}的类型在该模板的不同实例化间不同，即使该 lambda 表达式非待决。
+{{source|1=
+template&lt;class T&gt;
+using A = decltype([] {}); // A&lt;int&gt; 与 A&lt;char&gt; 指代不同的闭包类型
+}}
+}}
+
+===注解===
+{{feature test macro|std=C++11|value=200704L|__cpp_alias_templates|别名模板}}
+
+===关键词===
+{{ltt|cpp/keyword/using}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;typeinfo&gt;
+
+// 类型别名，等同于
+// typedef std::ios_base::fmtflags flags;
+using flags = std::ios_base::fmtflags;
+// 名字 'flags' 现在指代类型：
+flags fl = std::ios_base::dec;
+
+// 类型别名，等同于
+// typedef void (*func)(int, int);
+using func = void (*) (int, int);
+
+// 名字 'func' 现在指代函数指针：
+void example(int, int) {}
+func f = example;
+
+// 别名模板
+template&lt;class T&gt;
+using ptr = T*; 
+// 名字 'ptr&lt;T&gt;' 现在是指向 T 的指针的别名
+ptr&lt;int&gt; x;
+
+// 用于隐藏模板形参的别名模版
+template&lt;class CharT&gt;
+using mystring = std::basic_string&lt;CharT, std::char_traits&lt;CharT&gt;&gt;;
+
+mystring&lt;char&gt; str;
+
+// 别名模板可引入成员 typedef 名
+template&lt;typename T&gt;
+struct Container { using value_type = T; };
+
+// 可用于泛型编程
+template&lt;typename ContainerType&gt;
+void info(const ContainerT&amp; c)
+{
+    typename ContainerT::value_type T;
+    std::cout &lt;&lt; "ContainerT 是 `" &lt;&lt; typeid(decltype(c)).name() &lt;&lt; "`\n"
+                 "value_type 是 `" &lt;&lt; typeid(T).name() &lt;&lt; "`\n";
+}
+
+// 用于简化 std::enable_if 语法的类型别名
+template&lt;typename T&gt;
+using Invoke = typename T::type;
+
+template&lt;typename Condition&gt;
+using EnableIf = Invoke&lt;std::enable_if&lt;Condition::value&gt;&gt;;
+
+template&lt;typename T, typename = EnableIf&lt;std::is_polymorphic&lt;T&gt;&gt;&gt;
+int fpoly_only(T) { return 1; }
+
+struct S { virtual ~S() {} };
+
+int main() 
+{
+    Container&lt;int&gt; c;
+    info(c); // Container::value_type 将在此函数中是 int
+//  fpoly_only(c); // 错误：被 enable_if 禁止
+    S s;
+    fpoly_only(s); // OK：被 enable_if 允许
+}
+|p=true
+|output=
+ContainerT 是 `struct Container&lt;int&gt;`
+value_type 是 `int`
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1558|std=C++11|before=别名模板特化中的未使用实参是否参与替换是未指明的|after=进行替换}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc typedef}}
+{{dsc inc|cpp/language/dsc namespace alias}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

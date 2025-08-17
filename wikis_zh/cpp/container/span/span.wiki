@@ -1,0 +1,235 @@
+{{cpp/container/span/title|span}}
+{{cpp/container/span/navbar}}
+{{dcl begin}}
+{{dcl|since=c++20|num=1|1=
+constexpr span() noexcept;
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class It &gt;
+explicit(extent != std::dynamic_extent)
+constexpr span( It first, size_type count );
+}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class It, class End &gt;
+explicit(extent != std::dynamic_extent)
+constexpr span( It first, End last );
+}}
+{{dcl|since=c++20|num=4|1=
+template&lt; std::size_t N &gt;
+constexpr span( std::type_identity_t&lt;element_type&gt; (&amp;arr)[N] ) noexcept;
+}}
+{{dcl|since=c++20|num=5|1=
+template&lt; class U, std::size_t N &gt;
+constexpr span( std::array&lt;U, N&gt;&amp; arr ) noexcept;
+}}
+{{dcl|since=c++20|num=6|1=
+template&lt; class U, std::size_t N &gt;
+constexpr span( const std::array&lt;U, N&gt;&amp; arr ) noexcept;
+}}
+{{dcl|since=c++20|num=7|1=
+template&lt; class R &gt;
+explicit(extent != std::dynamic_extent)
+constexpr span( R&amp;&amp; range );
+}}
+{{dcla|since=c++26|num=8|1=
+explicit(extent != std::dynamic_extent)
+constexpr span( std::initializer_list&lt;value_type&gt; il ) noexcept;
+}}
+{{dcl|since=c++20|num=9|1=
+template&lt; class U, std::size_t N &gt;
+explicit(extent != std::dynamic_extent &amp;&amp; N == std::dynamic_extent)
+constexpr span( const std::span&lt;U, N&gt;&amp; source ) noexcept;
+}}
+{{dcl|since=c++20|num=10|1=
+constexpr span( const span&amp; other ) noexcept = default;
+}}
+{{dcl end}}
+
+构造 {{tt|span}}。
+
+===参数===
+{{par begin}}
+{{par|first|指向序列首元素的迭代器}}
+{{par|count|序列的元素数}}
+{{par|last|指向序列末元素后一位置的迭代器或另一哨位}}
+{{par|arr|用于构造视图的数组}}
+{{par|r|用于构造视图的范围}}
+{{par|source|要转换的另一 {{tt|span}}}}
+{{par|other|要复制的另一 {{tt|span}}}}
+{{par end}}
+
+===效果===
+{|class="wikitable" style="text-align: center; work-break: keep-all;"
+!{{nbsp}}重载{{nbsp}}
+!{{nbsp}}构造后的 {{rlpf|data}}{{nbsp}}
+!{{nbsp}}构造后的 {{rlpf|size}}{{nbsp}}
+|-
+|{{vl|1}}
+|{{c|nullptr}}
+|{{c|0}}
+|-
+|{{vl|2}}
+|rowspan=2|{{c|std::to_address(first)}}
+|{{c|count}}
+|-
+|{{vl|3}}
+|{{c|last - first}}
+|-
+|{{vl|4}}
+|rowspan=3|{{c|std::data(arr)}}
+|rowspan=3|{{c|N}}
+|-
+|{{vl|5}}
+|-
+|{{vl|6}}
+|-
+|{{vl|7}}
+|{{c|ranges::data(r)}}
+|{{c|ranges::size(r)}}
+|-
+|{{vl|8}}
+|{{c|il.begin()}}
+|{{c|il.size()}}
+|-
+|{{vl|9}}
+|{{c|source.size()}}
+|{{c|source.data()}}
+|-
+|{{vl|10}}
+|{{c|other.size()}}
+|{{c|other.data()}}
+|}
+
+===约束和补充信息===
+====大小限制====
+如果 {{c|extent}} 不是 {{c|std::dynamic_extent}}，并且源范围的大小与 {{c|extent}} 不同，那么无法构造 {{tt|span}} 对象。
+
+{{cpp/enable if|plural=yes|以下表达式的结果是 {{c|true}} }}:
+@1@ {{c|1=extent == std::dynamic_extent {{!!}} extent == 0}}
+@4-6@ {{c|1=extent == std::dynamic_extent {{!!}} extent == N}}
+@9@ {{c|1=extent == std::dynamic_extent {{!!}} N == std::dynamic_extent {{!!}} extent == N}}
+
+
+{{cpp/hardened ub if|since=c++26|以下表达式的结果是 {{c|false}}}}
+@2@ {{c|1=extent == std::dynamic_extent {{!!}} extent == count}}
+@3@ {{c|1=extent == std::dynamic_extent {{!!}} extent == last - first}}
+@7@ {{c|1=extent == std::dynamic_extent {{!!}} extent == ranges::size(r)}}
+@8@ {{c|1=extent == std::dynamic_extent {{!!}} extent == il.size()}}
+@9@ {{c|1=extent == std::dynamic_extent {{!!}} extent == source.size()}}
+
+====转换要求====
+如果 {{tt|element_type}} 与源范围的元素类型不同，并且后者不能通过{{ls|cpp/language/implicit conversion#限定性转换}}转换到前者，那么无法构造 {{tt|span}} 对象。
+
+{{cpp/enable if|plural=yes|{{c|std::is_convertible_v&lt;U(*)[], element_type(*)[]&gt;}} 是 {{c|true}}}}，其中 {{tt|U}} 定义如下：
+@2,3@ {{c/core|std::remove_reference_t&lt;std::iter_reference_t&lt;It&gt;&gt;}}
+@4-6@ {{c/core|std::remove_pointer_t&lt;decltype(std::data(arr))&gt;}}
+@7@ {{c/core|std::remove_reference_t&lt;ranges::range_reference_t&lt;R&gt;&gt;}}
+@9@ {{tt|U}}
+
+====概念要求====
+如果某些模板实参没有实现指定的概念，那么无法构造 {{tt|span}} 对象。
+
+{{cpp/enable if|plural=yes|指定的模板形参对应的模板实参满足对应的概念}}。如果它不满足任何对应的概念的语义要求，那么行为未定义：
+{|class="wikitable" style="text-align: center;"
+!{{nbsp}}重载{{nbsp}}
+!模板形参{{nbsp}}
+!概念
+!备注
+|-
+|{{vl|2}}
+|{{tt|It}}
+|{{lconcept|contiguous_iterator}}
+|
+|-
+|rowspan=2|{{vl|3}}
+|{{tt|It}}
+|{{lconcept|contiguous_iterator}}
+|
+|-
+|{{tt|End}}
+|{{nbsp}}{{lconcept|sized_sentinel_for|{{tt|sized_sentinel_for&lt;It&gt;}}}}{{nbsp}}
+|
+|-
+|rowspan=3|{{vl|7}}
+|rowspan=3|{{tt|R}}
+|{{lconcept|contiguous_range}}
+|
+|-
+|{{lconcept|sized_range}}
+|
+|-
+|{{lconcept|borrowed_range}}
+|只有在 {{c|std::is_const_v&lt;element_type&gt;}} 是 {{c|false}} 时需要实现
+|}
+
+====其他约束====
+@2@ {{cpp/ub if| {{range|first|first + count}} 不是[[cpp/iterator#范围|有效范围]]}}。
+
+@3@ {{cpp/enable if|{{c|std::is_convertible_v&lt;End, std::size_t&gt;}} 是 {{c|false}}}}。
+@@ {{cpp/ub if|{{range|first|last}} 不是有效范围}}。
+
+@7@ {{cpp/enable if|满足以下所有条件}}：
+* {{c/core|std::remove_cvref_t&lt;R&gt;}} 不是 {{tt|std::span}} 或 {{lc|std::array}} 的特化。
+* {{c|std::is_array_v&lt;std::remove_cvref_t&lt;R&gt;&gt;}} 是 {{c|false}}。
+
+@8@ {{cpp/enable if|{{c|std::is_const_v&lt;element_type&gt;}} 是 {{c|true}}}}。
+
+===异常===
+@2@ 不抛出。
+@3@ 在 {{c|last - first}} 抛出时抛出其所抛出的异常。
+@7@ 在 {{c|std::ranges::size(r)}} 与 {{c|std::ranges::data(r)}} 抛出时抛出其所抛出的异常。
+
+===注解===
+{{ftm begin}}
+{{ftm|__cpp_lib_span_initializer_list|value=202311L|std=C++26|以一个 {{lc|std::initializer_list}} 构造{{tt|std::span}}，{{vl|8}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;span&gt;
+#include &lt;vector&gt;
+
+void print_span(std::span&lt;const int&gt; s)
+{
+    for (int n : s)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    int c[]{1, 2, 3};
+    print_span(c); // 从数组构造
+    
+    std::array a{4, 5, 6};
+    print_span(a); // 从 std::array 构造
+    
+    std::vector v{7, 8, 9};
+    print_span(v); // 从 std::vector 构造
+    
+#if __cpp_lib_span_initializer_list
+    print_span({0, 1, 2}); // 从 initializer_list 构造
+#else
+    print_span({&lt;!----&gt;{0, 1, 2}&lt;!----&gt;}); // 同上，一种变通方法
+#endif
+}
+|output=
+1 2 3 
+4 5 6
+7 8 9
+0 1 2
+}}
+
+=== 参阅 ===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc data|span}}
+{{dsc inc|cpp/container/dsc size|span}}
+{{dsc inc|cpp/container/span/dsc operator{{=}}}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

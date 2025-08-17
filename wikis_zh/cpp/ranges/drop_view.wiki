@@ -1,0 +1,139 @@
+{{cpp/ranges/view title|drop}}
+{{cpp/ranges/drop_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::view V &gt;
+class drop_view
+    : public ranges::view_interface&lt;drop_view&lt;V&gt;&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    inline constexpr /* 未指定 */ drop = /* 未指定 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto
+    drop( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; count );
+}}
+{{dcl|since=c++20|1=
+template&lt; class DifferenceType &gt;
+constexpr /* 范围适配器闭包 */ drop( DifferenceType&amp;&amp; count );
+}}
+{{dcl end}}
+
+@1@ 由跳过前 ''N'' 个元素的底层元素序列构成的范围适配器。
+
+@2@ {{named req|RangeAdaptorObject}}。给定 {{tt|T}} 为 {{c/core|std::remove_cvref_t&lt;decltype((e))&gt;}} 而 {{tt|D}} 为 {{c/core|ranges::range_difference_t&lt;decltype((e))&gt;}})，表达式 {{c|views::drop(e, f)}} [[cpp/language/expressions#表达式等价|表达式等价]]于：
+&lt;!----&gt;
+* {{box|{{c/core|((void)f,}}{{nbspt}}{{lti|cpp/standard library/decay-copy}}{{c/core|(e))}}}}，如果 {{tt|T}} 是 {{l2tt|cpp/ranges/empty_view}}，但 {{c|e}} 与 {{c|f}} 的求值顺序不确定；&lt;!-- LWG 3524 --&gt;
+* 否则是 {{c multi|
+T(ranges::begin(e) + inc, ranges::end(e),|
+    /* to-unsigned-like */(ranges::distance(e) - inc))
+}}，如果 {{tt|T}} 是 {{l2tt|cpp/ranges/subrange}} 实现 {{lconcept|random_access_range}} 和 {{lconcept|sized_range}} 的特化且 {{tt|T}} 需要存储大小（细节见 {{l2tf|cpp/ranges/subrange/subrange|subrange|ranges::subrange}}），其中 {{c|inc}} 是 {{c|std::min&lt;D&gt;(ranges::distance(e), f)}}；
+* 否则是 {{c|U(ranges::begin(e) + inc, ranges::end(e))}}，如果 {{tt|T}} 是 {{ltt std|cpp/container/span}}、{{lc|std::basic_string_view}}、{{l2tt|cpp/ranges/iota_view}} 或 {{l2tt|cpp/ranges/subrange}} 的实现 {{lconcept|random_access_range}} 和 {{lconcept|sized_range}} 的特化，其中 {{tt|U}} 是
+:* {{c/core|std::span&lt;typename T::element_type&gt;}}，如果 {{tt|T}} 是 {{ltt std|cpp/container/span}} 的特化；
+:* 否则是 {{tt|T}}；
+{{rrev|since=c++23|
+* 否则，如果 {{tt|T}} 是 {{l2tt|cpp/ranges/repeat_view}} 的特化：
+:* {{c|views::repeat(*e.value_, ranges::distance(e) - inc)}}，如果 {{tt|T}} 实现 {{lconcept|sized_range}}；这种情况下 {{c|e}} 仅求值一次；
+:* 否则为 {{c|((void)e, auto(f))}}，但 {{c|e}} 和 {{c|f}} 的求值顺序不确定；
+}}
+* 否则是 {{c|drop_view(e, f)}}。
+&lt;!----&gt;
+所有情况下 {{c/core|decltype((f))}} 必须实现 {{c|std::convertible_to&lt;D&gt;}}。
+
+{{tt|drop_view}} 在底层范围 {{tt|V}} 实现概念 {{lconcept|contiguous_range}}、{{lconcept|random_access_range}}、{{lconcept|bidirectional_range}}、{{lconcept|forward_range}}、{{lconcept|input_range}}、{{lconcept|common_range}} 及 {{lconcept|sized_range}} 时也实现相应的概念。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|说明}}
+{{dsc expos mem obj|base_|id=base|private=yes|spec={{tt|V}}|底层视图}}
+{{dsc expos mem obj|count_|id=count|private=yes|spec={{c/core|ranges::range_difference_t&lt;V&gt;}}|要跳过的元素数量}}
+{{dsc expos mem obj|cache_|id=cache|private=yes|maybe=(仅当 {{tt|V}} 满足 {{lconcept|forward_range}} 但不满足 {{lconcept|random_access_range}} 和 {{lconcept|sized_range}} 时提供)|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}|缓存调用 {{rlpf|drop_view/begin|begin}} 的结果的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|drop_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|drop_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|drop_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|drop_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|drop_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc reserve_hint|drop_view}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=yes}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===辅助模板===
+{{ddcl|since=c++20|1=
+template&lt; class T &gt;
+constexpr bool enable_borrowed_range&lt;std::ranges::drop_view&lt;T&gt;&gt; =
+    ranges::enable_borrowed_range&lt;T&gt;; 
+}}
+{{lc|ranges::enable_borrowed_range}} 的此特化使 {{tt|drop_view}} 在底层视图满足 {{lconcept|borrowed_range}} 时满足它。
+
+===示例===
+{{example
+|code=
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    const auto nums = {1, 2, 3, 4, 5, 6, 7};
+
+    std::cout &lt;&lt; "丢弃 " &lt;&lt; 2 &lt;&lt; ": ";
+    for (int i : std::ranges::drop_view{nums, 2})
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "丢弃 " &lt;&lt; 3 &lt;&lt; ": ";
+    for (int i : nums {{!}} std::views::drop(3))
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "丢弃 " &lt;&lt; 4 &lt;&lt; ": ";
+    for (int i : std::views::iota(1, 8) {{!}} std::views::drop(4))
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    // 注意，丢弃超过元素数量是可以的：
+    for (int dp : {5, 6, 7, 890, 100500})
+    {
+        std::cout &lt;&lt; "丢弃 " &lt;&lt; dp &lt;&lt; ": ";
+        for (int i : std::views::iota(1, 8) {{!}} std::views::drop(dp))
+            std::cout &lt;&lt; i &lt;&lt; ' ';
+        std::cout &lt;&lt; '\n';
+    }
+}
+|output=
+丢弃 2: 3 4 5 6 7 
+丢弃 3: 4 5 6 7 
+丢弃 4: 5 6 7 
+丢弃 5: 6 7 
+丢弃 6: 7 
+丢弃 7: 
+丢弃 890: 
+丢弃 100500: 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3407|std=C++20|before={{tt|views::drop}} 有时无法构造具大小随机访问范围|after=调整构造使之始终合法}}
+{{dr list item|wg=lwg|dr=3494|std=c++20|before={{tt|drop_view}} 决不是 {{tt|borrowed_range}}|after=在底层范围是 {{tt|borrowed_range}} 时它是}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc drop_while_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

@@ -1,0 +1,123 @@
+{{cpp/experimental/title|reduce|hmin|hmax}}
+{{cpp/experimental/simd/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/simd}}
+{{dcl|since=parallelism_ts_2|num=1|1=
+template&lt; class T, class Abi, class BinaryOperation = std::plus&lt;&gt; &gt;
+T reduce( const simd&lt;T, Abi&gt;&amp; v, BinaryOperation binary_op = {} );
+}}
+{{dcl|since=parallelism_ts_2|num=2|1=
+template&lt; class M, class V, class BinaryOperation &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x,
+        typename V::value_type identity_element, BinaryOperation binary_op = {} );
+}}
+{{dcl|since=parallelism_ts_2|num=3|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::plus&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=4|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::multiplies&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=5|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::bit_and&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=6|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::bit_or&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=7|
+template&lt; class M, class V &gt;
+typename V::value_type
+reduce( const const_where_expression&lt;M, V&gt;&amp; x, std::bit_xor&lt;&gt; binary_op ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=8|
+template&lt; class T, class Abi &gt;
+T hmin( const simd&lt;T, Abi&gt;&amp; v ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=9|
+template&lt; class M, class V &gt;
+typename V::value_type
+hmin( const const_where_expression&lt;M, V&gt;&amp; x ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=10|
+template&lt; class T, class Abi &gt;
+T hmax( const simd&lt;T, Abi&gt;&amp; v ) noexcept;
+}}
+{{dcl|since=parallelism_ts_2|num=11|
+template&lt; class M, class V &gt;
+typename V::value_type
+hmax( const const_where_expression&lt;M, V&gt;&amp; x ) noexcept;
+}}
+{{dcl end}}
+
+@1@ 在 {{c|binary_op}} 上归约 {{c|v}} 中的所有者。
+@2@ 在 {{c|binary_op}} 上归约 {{c|x}} 中关联掩码元素为 {{c/core|true}} 的所有值。
+@3@ 返回 {{c|x}} 中关联掩码为 {{c/core|true}} 的所有值的和。
+@4@ 返回 {{c|x}} 中关联掩码为 {{c/core|true}} 的所有值的乘积。
+@5@ 返回对 {{c|x}} 中关联掩码为 {{c/core|true}} 的所有值使用按位与的聚合。
+@6@ 返回对 {{c|x}} 中关联掩码为 {{c/core|true}} 的所有值使用按位或的聚合。
+@7@ 返回对 {{c|x}} 中关联掩码为 {{c/core|true}} 的所有值使用按位异或的聚合。
+@8@ 在 {{c|std::min}} 上归约 {{c|v}} 中的所有者。
+@9@ 在 {{c|std::min}} 上归约 {{c|x}} 中关联掩码元素为 {{c/core|true}} 的所有值。
+@10@ 在 {{c|std::max}} 上归约 {{c|v}} 中的所有者。
+@11@ 在 {{c|std::max}} 上归约 {{c|x}} 中关联掩码元素为 {{c/core|true}} 的所有值。
+
+如果 {{c|binary_op}} 并无结合性或交换性，则其行为不确定。
+
+===参数===
+{{par begin}}
+{{par|v|要运用归约的 {{rlpt|simd}} 向量}}
+{{par|x|要运用归约的 {{rlpt|where}} 表达式的返回值}}
+{{par|identity_element|对于 {{c|binary_op}} 表现为相同元素的值；{{c|1=binary_op(identity_element, a) == a}} 必须持有类型 {{c|V::value_type}} 的所有有穷值}}
+{{par|binary_op| 以未指明的 ABI 标签 {{tt|A}}，以未指明的顺序，运用于 {{c|V::value_type}} 或 {{c|simd&lt;V::value_type, A&gt;}} 类型的实参的二元 {{named req|FunctionObject}}。{{c|binary_op(v, v)}} 必须可转换为 {{tt|V}}}}
+{{par end}}
+
+===返回值===
+类型操作的结果：
+@1,8,10@ {{tt|T}}
+@2-7,9,11@ {{c|V::value_type}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;experimental/simd&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+namespace stdx = std::experimental;
+
+int main()
+{
+    using V = stdx::native_simd&lt;double&gt;;
+
+    alignas(stdx::memory_alignment_v&lt;V&gt;) std::array&lt;V::value_type, 1024&gt; data;
+    std::iota(data.begin(), data.end(), 0);
+
+    V::value_type acc{};
+    for (std::size_t i = 0; i &lt; data.size(); i += V::size())
+        acc += stdx::reduce(V(&amp;data[i], stdx::vector_aligned), std::plus{});
+    std::cout &lt;&lt; "sum of data = " &lt;&lt; acc &lt;&lt; '\n';
+
+    using W = stdx::fixed_size_simd&lt;int, 4&gt;;
+    alignas(stdx::memory_alignment_v&lt;W&gt;) std::array&lt;int, 4&gt; arr{2, 5, 4, 1};
+    auto w = W(&amp;arr[0], stdx::vector_aligned);
+    assert(stdx::hmin(w) == 1 and stdx::hmax(w) == 5);
+}
+|output=
+sum of data = 523776
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc reduce}}
+{{dsc end}}

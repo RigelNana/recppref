@@ -1,0 +1,122 @@
+{{cpp/string/basic_string_view/title|basic_string_view}}
+{{cpp/string/basic_string_view/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|
+constexpr basic_string_view() noexcept;
+}}
+{{dcl|num=2|since=c++17|1=
+constexpr basic_string_view( const basic_string_view&amp; other ) noexcept = default;
+}}
+{{dcl|num=3|since=c++17|
+constexpr basic_string_view( const CharT* s, size_type count );
+}}
+{{dcl|num=4|since=c++17|
+constexpr basic_string_view( const CharT* s );
+}}
+{{dcl|num=5|since=c++20|
+template&lt; class It, class End &gt;
+constexpr basic_string_view( It first, End last );
+}}
+{{dcl|num=6|since=c++23|
+template&lt; class R &gt;
+constexpr explicit basic_string_view( R&amp;&amp; r );
+}}
+{{dcl|num=7|since=c++23|1=
+basic_string_view( std::nullptr_t ) = delete;
+}}
+{{dcl end}}
+
+@1@ 默认构造函数。构造空的 {{tt|std::basic_string_view}}。构造后，{{lc|data()}} 等于 {{c|nullptr}}，而 {{lc|size()}} 等于 {{c|0}}。
+@2@ 复制构造函数。构造内容同 {{c|other}} 的视图。构造后，{{lc|data()}} 等于 {{c|other.data()}}，而 {{lc|size()}} 等于 {{c|other.size()}}。
+@3@ 构造始于 {{c|s}} 所指向元素的字符数组的首 {{c|count}} 个字符的视图。{{c|s}} 可包含空字符。如果 {{range|s|s + count}} 不是有效范围，那么行为未定义（尽管构造函数可能不会访问此范围的任何元素）。构造后， {{lc|data()}} 等于 {{c|s}}，而 {{lc|size()}} 等于 {{c|count}}。
+@4@ 构造一个 {{c|s}} 所指向的空终止字符串的视图，不包含终止空字符。视图的长度如同以 {{c|Traits::length(s)}} 确定。如果 {{range|s|s + Traits::length(s)}} 不是有效范围，那么行为未定义。构造后，{{lc|data()}} 等于 {{c|s}}，而 {{lc|size()}} 等于 {{c|Traits::length(s)}}。
+@5@ 构造范围 {{range|first|last}} 上的 {{tt|std::basic_string_view}}。如果 {{range|first|last}} 不是有效范围，{{tt|It}} 实际上没有实现 {{lconcept|contiguous_iterator}} 或 {{tt|End}} 实际上没有实现 {{tt|It}} 的 {{lconcept|sized_sentinel_for}}，那么行为未定义。构造后 {{lc|data()}} 等于 {{c|std::to_address(first)}}，而 {{lc|size()}} 等于 {{c|last - first}}。
+{{cpp/enable_if|满足以下所有条件}}：
+:* {{tt|It}} 满足 {{lconcept|contiguous_iterator}} ，
+:* {{tt|End}} 满足 {{tt|It}} 的 {{lconcept|sized_sentinel_for}}，
+:* {{c/core|std::iter_value_t&lt;It&gt;}} 与 {{tt|CharT}} 是同一类型且
+:* {{tt|End}} 不可转换到 {{lc|std::size_t}}。
+@6@ 构造范围 {{c|r}} 上的 {{tt|std::basic_string_view}}。构造后 {{lc|data()}} 等于 {{c|ranges::data(r)}}，而 {{lc|size()}} 等于 {{c|ranges::size(r)}}。
+{{cpp/enable_if|满足以下所有条件}}：
+:* {{c/core|std::remove_cvref_t&lt;R&gt;}} 与 {{tt|std::basic_string_view}} 不是同一类型，
+:* {{tt|R}} 实现 {{lconcept|contiguous_range}} 与 {{lconcept|sized_range}}，
+:* {{c/core|ranges::range_value_t&lt;R&gt;}} 与 {{tt|CharT}} 是同一类型，
+:* {{tt|R}} 不可转换成 {{c/core|const CharT*}} 且
+:* 令 {{c|d}} 为 {{c|std::remove_cvref_t&lt;R&gt;}} 类型左值，{{c|d.operator ::std::basic_string_view&lt;CharT, Traits&gt;()}} 不是合法的表达式。
+@7@ 不能从 {{c|nullptr}} 构造 {{tt|std::basic_string_view}}。
+
+===参数===
+{{par begin}}
+{{par|other|用以初始化视图的另一视图}}
+{{par|s|用以初始化视图的指向字符数组或 C 字符串的指针}}
+{{par|count|要包含于视图的字符数}}
+{{par|first|指向序列首字符的迭代器}}
+{{par|last|指向序列尾字符后一位置的迭代器或另一哨位}}
+{{par|r|含有序列的连续范围}}
+{{par end}} 
+
+===复杂度===
+@1-3,5,6@ 常数。
+@4@ 与 {{c|s}} 的长度呈线性。
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    std::string cppstr = "Foo";
+    std::string_view cppstr_v(cppstr); // 重载 (2)，在
+                                       // std::string::operator string_view 之后
+    std::cout &lt;&lt; "1) cppstr_v：" &lt;&lt; std::quoted(cppstr_v) &lt;&lt; '\n';
+
+    char array[3] = {'B', 'a', 'r'};
+    std::string_view array_v(array, std::size(array)); // 重载 (3)
+    std::cout &lt;&lt; "2) array_v：" &lt;&lt; std::quoted(array_v) &lt;&lt; '\n';
+
+    const char* one_0_two = "One\0Two";
+
+    std::string_view one_two_v{one_0_two, 7}; // 重载 (3)
+    std::cout &lt;&lt; "3) one_two_v：\"";
+    for (char c: one_two_v)
+        std::cout &lt;&lt; (c != '\0' ? c : '?');
+    std::cout &lt;&lt; "\"，one_two_v.size()：" &lt;&lt; one_two_v.size() &lt;&lt; '\n';
+
+    std::string_view one_v{one_0_two}; // 重载 (4)
+    std::cout &lt;&lt; "4) one_v：" &lt;&lt; std::quoted(one_v) &lt;&lt; "，one_v.size()：" 
+              &lt;&lt; one_v.size() &lt;&lt; '\n';
+
+    constexpr std::wstring_view wcstr_v = L"xyzzy"; // 重载 (4)
+    std::cout &lt;&lt; "5) wcstr_v.size()：" &lt;&lt; wcstr_v.size() &lt;&lt; '\n';
+
+    std::array ar = {'P', 'u', 'b'};
+    std::string_view ar_v(ar.begin(), ar.end()); // 重载 (5)，C++20
+    std::cout &lt;&lt; "6) ar_v：" &lt;&lt; std::quoted(ar_v) &lt;&lt; '\n';
+
+//  std::string_view ar_v2{ar}; // 重载 (6)，C++23 中 OK
+//  std::cout &lt;&lt; "ar_v2：" &lt;&lt; std::quoted(ar_v2) &lt;&lt; '\n'; // ar_v2: "Pub"
+
+    [[maybe_unused]] auto zero = []{ /* ... */ return nullptr; };
+//  std::string_view s{zero()}; // 重载 (7)，C++23 起无法编译
+}
+|output=
+1) cppstr_v："Foo"
+2) array_v："Bar"
+3) one_two_v："One?Two"，one_two_v.size()：7
+4) one_v："One"，one_v.size()：3
+5) wcstr_v.size()：5
+6) ar_v："Pub"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/basic_string_view/dsc operator{{=}}}}
+{{dsc inc|cpp/string/basic_string/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

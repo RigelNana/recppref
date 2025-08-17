@@ -1,0 +1,186 @@
+{{title|{{tt|try}} 块}}
+{{cpp/language/try/navbar}}
+在 {{c/core|try}} 块中抛出的{{rlp|exceptions|异常}}可以由关联的处理块进行处理。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|try}} {{spar|复合语句}} {{spar|处理块序列}}
+}}
+{{sdsc|num=2|
+{{ttb|try}} {{spar optional|构造函数初始化器}} {{spar|复合语句}} {{spar|处理块序列}}
+}}
+{{sdsc end}}
+
+@1@ [[#通常 try 块|通常 {{c/core|try}} 块]]。
+
+@2@ [[#函数 try 块|函数 {{c/core|try}} 块]]。{{spar sep|复合语句}}必须是函数体的复合语句组分。
+
+{{par begin}}
+{{par|{{spar|复合语句}}|{{rlps|statements#复合语句}}}}
+{{par|{{spar|处理块序列}}|非空{{rlp|catch|处理块}}序列}}
+{{par|{{spar|构造函数初始化器}}|成员初始化器列表（仅限{{rlp|constructor#成员初始化器列表|构造函数}}）}}
+{{par end}}
+
+{{anchor|通常 try 块}}
+===通常 {{c/core|try}} 块===
+通常 {{c/core|try}} 块是一条{{rlp|statements|语句}}。
+
+如果从它的{{spar sep|复合语句}}中抛出了异常，那么会将该异常与它的{{spar sep|处理块序列}}中的{{rlp|catch|处理块}}匹配：
+{{source|
+void f()
+{
+    throw 1;     // 不会被下方处理块处理
+    try
+    {
+        throw 2; // 会被关联处理块处理
+    }
+    catch (...)
+    {
+        // 处理异常 2
+    }
+    throw 3;     // 不会被上方处理块处理
+}
+}}
+
+{{anchor|函数 try 块}}
+===函数 {{c/core|try}} 块===
+函数 {{c/core|try}} 块是一类特殊的{{rlp|function#函数定义|函数体}}。
+
+如果从它的{{spar sep|复合语句}}或{{spar|构造函数初始化器}}（如果存在）中抛出了异常，那么会将该异常与它的{{spar sep|处理块序列}}中的{{rlp|catch|处理块}}匹配：
+{{source|
+int f(bool cond)
+{
+    if (cond)
+        throw 1;
+    return 0;
+}
+
+struct X
+{
+    int mem;
+    
+    X() try : mem(f(true)) {}
+    catch (...)
+    {
+        // 处理异常 1
+    }
+    
+    X(int) try
+    {
+        throw 2;
+    }
+    catch (...)
+    {
+        // 处理异常 2
+    }
+};
+}}
+
+{{rlp|main function|{{c/core|main}} 函数}}的函数 {{c/core|try}} 块不会捕获从具有静态{{rlp|storage duration|存储期}}的对象的析构函数中或从与具有静态存储期的{{rlp|scope#块作用域|非块变量}}关联的对象的构造函数中抛出的异常。
+
+{{rrev|since=c++11|
+线程的初始函数的函数 {{c/core|try}} 块不会捕获从具有线程存储期的对象的析构函数中或从与具有线程存储期的非块变量关联的对象的构造函数中抛出的异常。
+}}
+
+控制流抵达函数 {{c/core|try}} 块的某个{{rlp|catch|处理块}}的{{spar sep|复合语句}}的结尾等价于抵达该函数 {{c/core|try}} 块的{{spar sep|复合语句}}的结尾，除非该函数是构造函数或析构函数（见下文）。
+
+{{anchor|构造函数和析构函数 try 块}}
+====构造函数和析构函数 {{c/core|try}} 块====
+对于类 {{tt|C}}，如果它的构造函数或析构函数定义的函数体是一个函数 {{c/core|try}} 块，并且分别从 {{tt|C}} 的子对象的初始化和析构中抛出了异常，那么会将该异常与该函数 {{c/core|try}} 块的{{spar sep|处理块序列}}中的{{rlp|catch|处理块}}匹配：
+{{source|1=
+int f(bool cond = true)
+{
+    if (cond)
+        throw 1;
+    return 0;
+}
+
+struct X
+{
+    int mem = f();
+    
+    ~X()
+    {
+        throw 2;
+    }
+};
+
+struct Y
+{
+    X mem;
+    
+    Y() try {}
+    catch (...)
+    {
+        // 处理异常 1
+    }
+    
+    ~Y() try {}
+    catch (...)
+    {
+        // 处理异常 2
+    }
+};
+}}
+
+在某个对象构造函数或析构函数的函数 {{c/core|try}} 块的处理块中指涉该对象的非静态成员或基类会导致未定义行为。
+
+如果构造函数的函数 {{c/core|try}} 块的处理块中出现了 {{rlp|return|{{c/core|return}} 语句}}，那么程序非良构。
+
+控制流抵达构造函数或析构函数的函数 {{c/core|try}} 块的某个{{rlp|catch|处理块}}的{{spar sep|复合语句}}的结尾时会重新抛出{{rlp|catch#激活处理块|当前正在处理的异常}}。
+
+===控制流===
+{{c/core|try}} 块的{{spar sep|复合语句}}是{{rlps|statements#有控制流限制的语句}}：
+{{source|
+void f()
+{
+    goto label;     // 错误
+    try
+    {
+        goto label; // OK
+        label: ;
+    }
+    catch (...)
+    {
+        goto label; // 错误
+    }
+}
+}}
+
+{{rlps|statements#跳转语句}}（{{rlpt|goto}}、{{rlpt|break}}、{{rlpt|return}}、{{rlpt|continue}}）可以用来将控制从 {{c/core|try}} 块（包括它的处理块）转出。此时该 {{c/core|try}} 块中声明的每个变量都会在直接包含它的声明的语境中销毁：
+{{source|
+try
+{
+    T1 t1;
+    try
+    {
+        T2 t2;
+        goto label; // 先销毁 t2，然后销毁 t1
+    }
+    catch(...)
+    {
+        // 会在销毁 t2 的过程中抛出异常的情况下执行
+    }
+}
+catch(...)
+{
+    // 会在销毁 t1 的过程中抛出异常的情况下执行
+}
+label: ;
+}}
+
+===关键词===
+{{ltt|cpp/keyword/try}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=98|std=C++98|before={{c/core|switch}} 语句可以转移控制进入 {{c/core|try}} 块的{{spar|复合语句}}|after=已禁止}}
+{{dr list item|wg=cwg|dr=1167|std=C++98|before=未指定析构函数的函数 {{c/core|try}} 块是否会捕获从基类析构函数或成员析构函数抛出的异常|after=会捕获这些异常}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|throw|抛出异常}}
+* {{rlp|catch|处理异常}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

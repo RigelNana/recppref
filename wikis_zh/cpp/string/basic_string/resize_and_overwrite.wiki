@@ -1,0 +1,142 @@
+{{cpp/string/basic_string/title|resize_and_overwrite}}
+{{cpp/string/basic_string/navbar}}
+{{ddcl|since=c++23|
+template&lt; class Operation &gt;
+constexpr void resize_and_overwrite( size_type count, Operation op );
+}}
+
+重设字符串大小以含有至多 {{c|count}} 个字符，用用户提供的操作 {{c|op}} 修改可能不确定的内容并设置长度。这样就避免了初始化大小合适的 {{lc|std::string}} 时所产生的成本，当它打算作为要被填充的字符数组时，例如，C API 调用。
+
+此函数执行下列步骤：
+# 获得至少含有 {{c|count + 1}} 个字符的存储，并使它的前 {{c|k}} 个字符等于 {{c|*this}} 的前 {{c|k}} 个字符，其中 {{c|k}} 是 {{c|count}} 与调用 {{tt|resize_and_overwrite}} 前 {{c|size()}} 的结果的较小者。令 {{c|p}} 代表指向该存储中首个字符的指针。
+#* 相等性以如同检查 {{c|1=this-&gt;compare(0, k, p, k) == 0}} 确定。
+#* {{closed range|p + k|p + count}} 中的字符可能拥有不确定值。
+# 求值 {{c|std::move(op)(p, count)}}，令它的返回值为 {{c|r}}。
+# 以 {{range|p|p + r}} 替换 {{c|*this}} 的内容（这会设置 {{c|*this}} 的长度为 {{c|r}}）。使所有指向范围 {{closed range|p|p + count}} 中的指针与引用失效。
+
+如果 {{c|r}} 不具有[[cpp/iterator/is-integer-like|整数式类型]]，那么程序非良构。
+
+如果满足以下任意条件，那么行为未定义：
+* {{c|std::move(op)(p, count)}} 抛出异常。
+* {{c|std::move(op)(p, count)}} 修改 {{c|p}} 或 {{c|count}}。
+* {{c|r}} 不在范围 {{closed range|0|count}} 中。
+* 范围 {{range|p|p + r}} 中的任何字符拥有不确定值。
+
+推荐实现避免不必要的复制与分配，例如通过使得 {{c|p}} 等于指向调用后为 {{c|*this}} 分配的字符存储的起始指针，如果 {{c|count}} 小于或等于 {{c|capacity()}}，那么该存储能等同于 {{c|*this}} 的既存存储。
+
+===参数===
+{{par begin}}
+{{par|count|字符串的最大可能的新大小}}
+{{par|op|用于设置字符串新内容的函数对象}}
+{{par end}}
+
+===异常===
+如果 {{c|count &gt; max_size()}}，那么就会抛出 {{lc|std::length_error}}。
+对应的 {{tt|Allocator}} 所抛的任何异常。
+
+如果从 {{c|std::move(op)(p, count)}} 抛出异常，那么行为未定义。否则抛出异常的情况下此函数无效果。
+
+===注解===
+无论重分配是否出现，{{tt|resize_and_overwrite}} 都使所有指向 {{c|*this}} 中的迭代器、指针及引用失效。实现可以假设调用 {{tt|resize_and_overwrite}} 后字符串的内容不会被别名化。
+
+{{feature_test_macro|__cpp_lib_string_resize_and_overwrite|std=C++23|value=202110L|{{tt|std::basic_string::resize_and_overwrite}}}}
+
+===示例===
+{{example
+|测试这个示例的链接：[https://godbolt.org/z/fbbeYGf5h compiler explorer]。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstring&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+static_assert(__cpp_lib_string_resize_and_overwrite);
+
+constexpr std::string_view fruits[]{"apple", "banana", "coconut", "date", "elderberry"};
+
+int main()
+{
+    // 简单情况下，仅后附 fruits[0]。字符串大小会增长。
+    std::string s{"Food: "};
+    s.resize_and_overwrite(16, [sz = s.size()](char* buf, std::size_t buf_size) noexcept
+    {
+        const auto to_copy = std::min(buf_size - sz, fruits[0].size());
+        std::memcpy(buf + sz, fruits[0].data(), to_copy);
+        return sz + to_copy;
+    });
+    std::cout &lt;&lt; "1. " &lt;&lt; std::quoted(s) &lt;&lt; '\n';
+    
+    // 缩减大小的情况。注意，总是调用用户的 lambda 表达式。
+    s.resize_and_overwrite(10, [](char* buf, int n) noexcept
+    {
+        return std::find(buf, buf + n, ':') - buf;
+    });
+    std::cout &lt;&lt; "2. " &lt;&lt; std::quoted(s) &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "3. 复制数据直至缓冲区满。打印数据和大小。\n";
+    std::string food{"Food:"};
+    const auto resize_to{27};
+    std::cout &lt;&lt; "起初，food.size: " &lt;&lt; food.size()
+              &lt;&lt; ", food.capacity: " &lt;&lt; food.capacity()
+              &lt;&lt; ", resize_to: " &lt;&lt; resize_to
+              &lt;&lt; ", food: " &lt;&lt; std::quoted(food) &lt;&lt; '\n';
+    
+    food.resize_and_overwrite
+    (
+        resize_to,
+        [food_size = food.size()](char* p, std::size_t n) noexcept -&gt; std::size_t
+        {
+            // p[0]..p[n] 为可赋值范围
+            // p[0]..p[min(n, food_size) - 1] 为可读取范围
+            // （其内容起初等于原字符串）
+            
+            // 调试打印：
+            std::cout &lt;&lt; "Operation() 内; n: " &lt;&lt; n &lt;&lt; '\n';
+            
+            // 在空间足够时，把水果复制到缓冲区 p 中。
+            char* first = p + food_size;
+            
+            for (char* const end = p + n; const std::string_view fruit : fruits)
+            {
+                char* last = first + fruit.size() + 1;
+                if (last &gt; end)
+                    break;
+                *first++ = ' ';
+                std::ranges::copy(fruit, first);
+                first = last;
+            }
+            
+            const auto final_size{static_cast&lt;std::size_t&gt;(first - p)};
+            
+            // 调试打印：
+            std::cout &lt;&lt; "Operation() 内; final_size: " &lt;&lt; final_size &lt;&lt; '\n';
+            
+            assert(final_size &lt;= n);
+            return final_size; // 返回值为字符串的实际新长度，必定在范围 0..n 中
+        }
+    );
+    
+    std::cout &lt;&lt; "最后, food.size: " &lt;&lt; food.size()
+              &lt;&lt; ", food.capacity: " &lt;&lt; food.capacity()
+              &lt;&lt; ", food: " &lt;&lt; std::quoted(food) &lt;&lt; '\n';
+}
+|p=true&lt;!-- 字符串扩容方式可能不同 --&gt;
+|output=
+1. "Food: apple"
+2. "Food"
+3. 复制数据直至缓冲区满。打印数据和大小。
+起初, food.size: 5, food.capacity: 15, resize_to: 27, food: "Food:"
+Operation() 中; n: 27
+Operation() 中; final_size: 26
+最后, food.size: 26, food.capacity: 30, food: "Food: apple banana coconut"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/basic_string/dsc resize}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

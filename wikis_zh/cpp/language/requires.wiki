@@ -1,0 +1,250 @@
+{{title|{{tt|requires}} 表达式 {{mark since c++20}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+产生描述约束的 {{c/core|bool}} 类型的纯右值表达式。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|requires}} {{ttb|{&lt;!----&gt;}} {{spar|要求序列}} {{ttb|}&lt;!----&gt;}}}}
+{{sdsc|num=2|{{ttb|requires}} {{ttb|(}} {{spar optional|形参列表}} {{ttb|)}} {{ttb|{&lt;!----&gt;}} {{spar|要求序列}} {{ttb|}&lt;!----&gt;}}}}
+{{sdsc end}}
+{{par begin}}
+{{par|{{spar|形参列表}}|{{rlps|function#形参列表}}}}
+{{par|{{spar|要求序列}}|''要求''{{sep}}序列，每个要求都属于以下之一：
+* [[#简单要求|简单要求]]
+* [[#类型要求|类型要求]]
+* [[#复合要求|复合要求]]
+* [[#嵌套要求|嵌套要求]]}}
+{{par end}}
+
+===解释===
+要求可以指代处于作用域内的模板形参，{{spar sep|形参列表}}中的形参，以及在上下文中可见的任何其他声明。
+
+将模板参数替换到{{rlps|templates#模板化实体}}的声明中所使用的 {{c/core|requires}} 表达式中，可能会导致在其要求中形成无效的类型或表达式，或者违反这些要求的语义。在这种情况下，{{c/core|requires}} 表达式的值为 {{c|false}} 而不会导致程序非良构。按照词法顺序进行替换和语义约束检查，当遇到决定 {{c/core|requires}} 表达式结果的条件时就停止。如果替换（若存在）和语义约束检查成功，那么 {{c/core|requires}} 表达式的结果是 {{c|true}}。
+
+如果某个 {{c/core|requires}} 表达式在以任何模板实参替换后都会导致替换失败，那么程序非良构，不要求诊断：
+{{source|1=
+template&lt;class T&gt;
+concept C = requires
+{
+    new int[-(int)sizeof(T)]; // 对任何 T 都无效: 非良构，不要求诊断
+};
+}}
+
+如果 {{c/core|requires}} 表达式在其要求中包含无效的类型或表达式，并且它没有出现在{{rlps|templates#模板化实体}}的声明中，则程序非良构。
+
+===局部形参===
+{{c/core|requires}} 表达式可以使用{{rlps|function#形参列表}}引入局部形参。这些形参没有链接、存储和生存期；它们只是为了定义要求而用作标记。
+
+每个形参的类型通过与确定函数形参的{{rlp|function#函数类型|实际类型}}相同的方式确定：
+{{source|1=
+template&lt;typename T&gt;
+concept C = requires(T p[2])
+{
+    (decltype(p))nullptr; // OK，p 的类型为 T*
+};
+}}
+
+如果满足以下任意条件，那么程序非良构：
+* 某个局部形参有{{rlp|default arguments|默认实参}}。
+* 形参列表以省略号结尾。
+{{source|1=
+template&lt;typename T&gt;
+concept C1 = requires(T t = 0)  // 错误：t 有默认实参
+{
+    t;
+};
+
+template&lt;typename T&gt;
+concept C2 = requires(T t, ...) // 错误：以省略号结尾
+{
+    t;
+};
+}}
+
+===要求===
+====简单要求====
+{{sdsc begin}}
+{{sdsc|
+{{spar|表达式}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|表达式}}|不以 {{c/core|requires}} 开始的表达式}}
+{{par end}}
+
+
+简单要求断言{{spar sep|表达式}}是有效的。{{spar sep|表达式}}是{{rlp|expressions#潜在求值表达式|不求值操作数}}。
+
+{{source|1=
+template&lt;typename T&gt;
+concept Addable = requires (T a, T b)
+{
+    a + b; // "需要表达式 “a + b” 是可以通过编译的有效表达式"
+};
+
+template&lt;class T, class U = T&gt;
+concept Swappable = requires(T&amp;&amp; t, U&amp;&amp; u)
+{
+    swap(std::forward&lt;T&gt;(t), std::forward&lt;U&gt;(u));
+    swap(std::forward&lt;U&gt;(u), std::forward&lt;T&gt;(t));
+};
+}}
+
+以关键词 {{c/core|requires}} 开始的要求总是被解释为嵌套要求。因此简单要求不能以没有括号的 {{c/core|requires}} 表达式开始。
+
+====类型要求====
+{{sdsc begin}}
+{{sdsc|
+{{ttb|typename}} {{spar|标识符}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|标识符}}|（可有限定的）{{rlp|identifiers|标识符}}（包括{{rlp|templates#模板标识|简单模板标识}}）}}
+{{par end}}
+
+
+类型要求断言{{spar sep|标识符}}指名的类型是有效的：可以用来验证指名的嵌套类型是否存在，或者某个类/别名模板特化是否指名了某个类型。指名类模板特化的类型要求并不要求该类型是完整的。
+
+{{source|1=
+template&lt;typename T&gt;
+using Ref = T&amp;;
+
+template&lt;typename T&gt;
+concept C = requires
+{
+    typename T::inner; // 需要嵌套成员名
+    typename S&lt;T&gt;;     // 需要类模板特化
+    typename Ref&lt;T&gt;;   // 需要别名模板替换
+};
+
+template&lt;class T, class U&gt;
+using CommonType = std::common_type_t&lt;T, U&gt;;
+
+template&lt;class T, class U&gt;
+concept Common = requires (T&amp;&amp; t, U&amp;&amp; u)
+{
+    typename CommonType&lt;T, U&gt;; // CommonType&lt;T, U&gt; 是合法的类型名
+    { CommonType&lt;T, U&gt;{std::forward&lt;T&gt;(t)} }; 
+    { CommonType&lt;T, U&gt;{std::forward&lt;U&gt;(u)} }; 
+};
+}}
+
+====复合要求====
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|{&lt;!----&gt;}} {{spar|表达式}} {{ttb|};}}
+}}
+{{sdsc|num=2|
+{{ttb|{&lt;!----&gt;}} {{spar|表达式}} {{ttb|}&lt;!----&gt;}} {{ttb|noexcept}} {{ttb|;}}
+}}
+{{sdsc|num=3|
+{{ttb|{&lt;!----&gt;}} {{spar|表达式}} {{ttb|} -&gt;}} {{spar|类型约束}} {{ttb|;}}
+}}
+{{sdsc|num=4|
+{{ttb|{&lt;!----&gt;}} {{spar|表达式}} {{ttb|}&lt;!----&gt;}} {{ttb|noexcept -&gt;}} {{spar|类型约束}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|表达式}}|表达式}}
+{{par|{{spar|类型约束}}|{{rlps|constraints#约束}}}}
+{{par end}}
+
+
+复合要求断言{{spar sep|表达式}}的属性。替换和语义约束检查按以下顺序进行：
+@1@ 模板实参（如果存在）被替换到{{spar sep|表达式}}中。
+@2@ 如果使用了 {{ttb|noexcept}}，那么{{spar sep|表达式}}一定不能[[cpp/language/noexcept|潜在抛出]]。
+@3@ 如果{{spar sep|类型约束}}存在，那么：
+:@a@ 模板实参被替换到{{spar sep|类型约束}}中。
+:@b@ {{c/core|decltype((表达式))}} 必须满足{{spar sep|类型约束}}蕴含的约束。否则，被包含的 {{c/core|requires}} 表达式是 {{c|false}}。
+
+{{spar sep|表达式}}是{{rlp|expressions#潜在求值表达式|不求值操作数}}。
+
+{{source|1=
+template&lt;typename T&gt;
+concept C2 = requires(T x)
+{
+    // 表达式 *x 必须合法
+    // 并且 类型 T::inner 必须存在
+    // 并且 *x 的结果必须可以转换为 T::inner
+    {*x} -&gt; std::convertible_to&lt;typename T::inner&gt;;
+    
+    // 表达式 x + 1 必须合法
+    // 并且 std::same_as&lt;decltype((x + 1)), int&gt; 必须满足
+    // 即, (x + 1) 必须为 int 类型的纯右值
+    {x + 1} -&gt; std::same_as&lt;int&gt;;
+    
+    // 表达式 x * 1 必须合法
+    // 并且 它的结果必须可以转换为 T
+    {x * 1} -&gt; std::convertible_to&lt;T&gt;;
+};
+}}
+
+====嵌套要求====
+{{sdsc begin}}
+{{sdsc|{{ttb|requires}} {{spar|约束表达式}} {{ttb|;}} }}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|约束表达式}}|用来表示{{rlp|constraints|约束}}的表达式}}
+{{par end}}
+
+
+嵌套要求可用于根据本地形参指定其他约束。{{spar sep|约束表达式}}必须由被替换的模板实参（如果存在）满足。将模板实参替换到嵌套要求中会导致替换到{{spar sep|约束表达式}}中，但仅限于确定是否满足{{spar sep|约束表达式}}所需的程度。
+
+{{source|1=
+template&lt;class T&gt;
+concept Semiregular = DefaultConstructible&lt;T&gt; &amp;&amp;
+    CopyConstructible&lt;T&gt; &amp;&amp; Destructible&lt;T&gt; &amp;&amp; CopyAssignable&lt;T&gt; &amp;&amp;
+requires(T a, std::size_t n)
+{  
+    requires Same&lt;T*, decltype(&amp;a)&gt;; // 嵌套："Same&lt;...&gt; 求值为 true"
+    { a.~T() } noexcept; // 复合："a.~T()" 是不会抛出的合法表达式
+    requires Same&lt;T*, decltype(new T)&gt;; // 嵌套："Same&lt;...&gt; 求值为 true"
+    requires Same&lt;T*, decltype(new T[n])&gt;; // 嵌套
+    { delete new T }; // 复合
+    { delete new T[n] }; // 复合
+};
+}}
+
+===注解===
+关键词 {{c/core|requires}} 也用来引入 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}。
+
+{{source|1=
+template&lt;typename T&gt;
+concept Addable = requires (T x) { x + x; }; // requires 表达式
+
+template&lt;typename T&gt; requires Addable&lt;T&gt; // requires 子句，不是 requires 表达式
+T add(T a, T b) { return a + b; }
+
+template&lt;typename T&gt;
+    requires requires (T x) { x + x; } // 临时的约束，注意关键词用了两次
+T add(T a, T b) { return a + b; }
+}}
+
+===关键词===
+{{ltt|cpp/keyword/requires}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2560|std=C++20|before=不明确 {{c/core|requires}} 表达式中是否会调整形参类型|after=也会调整}}
+{{dr list item|wg=cwg|dr=2911|std=C++20|before={{c/core|requires}} 表达式中出现的所有表达式都是不求值操作数|after=只有部分表达式是}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.5.7|title=Requires expressions|id=expr.prim.req}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.5.7|title=Requires expressions|id=expr.prim.req}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc constraints}}
+{{dsc end}}
+
+{{langlinks|en|es|ru}}

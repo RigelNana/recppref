@@ -1,0 +1,112 @@
+{{cpp/locale/time_put/title|put|do_put}}
+{{cpp/locale/time_put/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type put( iter_type out, std::ios_base&amp; str,
+               char_type fill, const std::tm* t,
+               const CharT* fmtbeg, const CharT* fmtend ) const;
+}}
+{{dcl|num=2|1=
+public:
+iter_type put( iter_type out, std::ios_base&amp; str,
+               char_type fill, const std::tm* t,
+               char format, char modifier = 0 ) const;
+}}
+{{dcl|num=3|1=
+protected:
+virtual iter_type do_put( iter_type out, std::ios_base&amp; str,
+                          char_type fill, const std::tm* t,
+                          char format, char modifier ) const;
+}}
+{{dcl end}}
+
+按照[[#格式字符串|格式字符串]] {{tt|[fmtbeg, fmtend)}} 将存储于 {{c|t}} 指向的 {{lc|std::tm}} 对象中的日历日期和时间转换到字符串。格式字符串与 {{c|std::strftime}} 使用的相同，但每个格式指定符会通过对 {{tt|do_put()}} 的单独调用处理，这可以通过扩展此刻面进行定制。
+
+@1@ 逐步通过字符序列 {{tt|[fmtbeg, fmtend)}} 检验字符。每个不是格式序列的字符都会立即被写入输出迭代器 {{c|out}}。为鉴别格式序列，此函数如同用 {{c|std::ctype&lt;char_type&gt;(str.getloc()).narrow(c,0)}} 窄化 {{tt|[fmtbeg, fmtend)}} 中的下个字符 {{c|c}}，而在它等于 {{c|'%'}} 时会将下一个或下两个字符与 {{lc|std::strftime}} 所辨识的格式序列列表，加此本地环境所支持的任何额外实现定义格式比较。对每个合法格式序列进行调用 {{c|do_put(out, str, fill, t, format, modifier)}}，其中 {{c|format}} 是格式序列字符，而 {{c|modifier}} 是可选的格式序列修饰符（{{c|'E'}} 或 {{c|'O'}}）。修饰符不存在时会使用值 {{c|'\0'}}。
+@2@ 调用最终派生类的 {{tt|do_put}} 成员函数。
+@3@ 按照由连接 {{c|'%'}}、{{c|modifier}} 的值（如果不是 {{c|'\0'}}），和 {{c|format}} 的值组成的格式转换序列，将存储于 {{c|t}} 指向的 {{lc|std::tm}} 对象中的日历日期和时间转换到字符串。格式转译方式同函数 {{lc|std::strftime}}，除了描述为本地环境依赖的格式由此本地环境定义，而且可以支持另外的格式指定符（为这些要使用的实现定义格式指定符提供 {{c|fill}} 参数）。将字符串写入输出迭代器 {{c|out}}。
+
+===参数===
+{{par begin}}
+{{par|out|输出迭代器，其中写入转换结果}}
+{{par|str|此函数在需要时用以获得本地环境刻面的流对象，例如用 {{lc|std::ctype}} 窄化字符}}
+{{par|t|指向 {{lc|std::tm}} 对象的指针，从该对象获得日期/时间值}}
+{{par|fmtbeg|指向指定[[#格式字符串|转换格式]]的 {{tt|char_type}} 字符序列首字符的指针}}
+{{par|fmtend|指向指定[[#格式字符串|转换格式]]的 {{tt|char_type}} 字符序列的末字符后一位置的指针}}
+{{par|fill|填充字符（通常为空格）}}
+{{par|format|指名[[#格式字符串|转换说明符]]的字符}}
+{{par|modifier|可以在 {{tt|%}} 和[[#格式字符串|转换说明符]]间出现的可选修饰符}}
+{{par end}}
+
+===格式字符串===
+{{cpp/chrono/c/strftime format}}
+
+===返回值===
+指向最后产生字符后一位置的迭代器。
+
+===注解===
+不提供错误处理。
+
+为实现定义的格式指定符，和使用填充和填满逻辑的用户定义的 {{tt|do_put()}} 覆写提供 {{c|fill}} 字符。这种实现典型地利用来自 {{c|str}} 的格式化标志。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+#include &lt;iomanip&gt;
+#include &lt;ctime&gt;
+
+void try_time_put(const std::tm* t, const std::string&amp; fmt)
+{
+    std::cout.imbue(std::locale());
+    std::cout &lt;&lt; "在本地环境 '" &lt;&lt; std::cout.getloc().name() &lt;&lt; "' 中：'";
+    
+    std::use_facet&lt;std::time_put&lt;char&gt;&gt;(std::cout.getloc()).put(
+        {std::cout}, std::cout, ' ', t, &amp;fmt[0], &amp;fmt[0] + fmt.size());
+    
+    std::cout &lt;&lt; "'\n";
+}
+
+int main()
+{
+    std::time_t t = std::time(NULL);
+    std::tm tm = *std::localtime(&amp;t);
+    
+    std::string fmt = "%c";
+    std::cout &lt;&lt; "使用格式字符串 '" &lt;&lt; fmt
+              &lt;&lt; "' 格式化时间：" &lt;&lt; std::ctime(&amp;t) &lt;&lt; '\n';
+
+    std::locale::global(std::locale("de_DE.utf8"));
+    try_time_put(&amp;tm, fmt);
+
+    std::locale::global(std::locale("el_GR.utf8"));
+    try_time_put(&amp;tm, fmt);
+
+    std::locale::global(std::locale("ja_JP.utf8"));
+    try_time_put(&amp;tm, fmt);
+}
+|p=true
+|output=
+使用格式字符串 '%c' 格式化时间：Mon Feb 11 22:58:50 2013
+
+在本地环境 'de_DE.utf8' 中：'Mo 11 Feb 2013 23:02:38 EST'
+在本地环境 'el_GR.utf8' 中：'Δευ 11 Φεβ 2013 11:02:38 μμ EST'
+在本地环境 'ja_JP.utf8' 中：'2013年02月11日 23時02分38秒'
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=164|std=C++98|before=提供形参 {{c|fill}} 的目的不明确|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/manip/dsc put_time}}
+{{dsc inc|cpp/locale/time_get/dsc do_get}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

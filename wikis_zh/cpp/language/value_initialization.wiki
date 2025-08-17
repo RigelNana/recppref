@@ -1,0 +1,121 @@
+{{title|值初始化}}
+{{cpp/language/initialization/navbar}}
+这是在以空初始化器构造对象时进行的初始化。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|T}} {{ttb|()}}}}
+{{sdsc|num=2|{{ttb|new}} {{spar|T}} {{ttb|()}}}}
+{{sdsc|num=3|{{spar|类}}{{ttb|::}}{{spar|类}}{{ttb|(}}{{spar|...}}{{ttb|)}} {{ttb|:}} {{spar|成员}}{{ttb|()}} {{ttb|{}} {{spar|...}} {{ttb|}&lt;!-- --&gt;}}}}
+{{sdsc|num=4|{{spar|T}} {{spar|对象}} {{ttb|{};}}|notes={{mark since c++11}}}}
+{{sdsc|num=5|{{spar|T}} {{ttb|{}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc|num=6|{{ttb|new}} {{spar|T}} {{ttb|{}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc|num=7|{{spar|类}}{{ttb|::}}{{spar|类}}{{ttb|(}}{{spar|...}}{{ttb|)}} {{ttb|:}} {{spar|成员}}{{ttb|{}&lt;!-- --&gt;}} {{ttb|{}} {{spar|...}} {{ttb|}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+===解释===
+以下场合进行值初始化：
+@1,5@ 当以空的括号{{rev inl|since=c++11|或花括号}}对组成的初始化器创建无名临时对象时；
+@2,6@ 当 {{rlp|new|new 表达式}}以空的括号{{rev inl|since=c++11|或花括号}}对组成的初始化器创建具有动态存储期的对象时；
+@3,7@ 当使用以空的括号{{rev inl|since=c++11|或花括号}}对组成的{{rlp|constructor|成员初始化器}}初始化非静态数据成员或基类时；
+@4@ 当以由空花括号对组成的初始化器声明具名对象（自动、静态或线程局部）时。
+
+所有情况下，如果使用空花括号对 {{tt|{}&lt;!-- --&gt;}} 且 {{tt|T}} 是聚合类型，那么就会进行{{rlp|aggregate initialization|聚合初始化}}而非值初始化。
+
+{{rrev|since=c++11|
+如果 {{tt|T}} 是没有默认构造函数但带有接受 {{lc|std::initializer_list}} 的构造函数的类类型，那么就会进行{{rlp|list initialization|列表初始化}}。
+}}
+
+值初始化的效果是：
+* 如果 {{tt|T}} 是（可有 cv 限定的）类类型：
+:* 如果 {{tt|T}} 的默认初始化选择了一个{{rlp|constructor|构造函数}}，并且该构造函数不{{rev inl|until=c++11|由用户声明}}{{rev inl|since=c++11|{{rlp|function#由用户提供的函数|由用户提供}}}}，那么对象会首先被{{rlp|zero initialization|零初始化}}。
+:* 任何情况下，对象都被{{rlp|default initialization|默认初始化}}。
+* 否则，如果 {{tt|T}} 是数组类型，那么值初始化数组的每个元素。
+* 否则，{{rlp|zero initialization|零初始化}}对象。
+
+===注解===
+语法 {{c|T object();}} 不初始化对象；它声明一个不接受参数并返回 {{tt|T}} 的函数。在 C++11 前值初始化一个具名变量的方式是 {{c|1=T object = T();}}，它值初始化一个临时量然后复制初始化该对象：多数编译器在此情况下能{{rlp|copy elision|优化掉复制}}。
+
+在 C++03（引入了值初始化）之前的 C++98 中，表达式 {{c|new T()}} 被归类为默认初始化并指定进行零初始化。
+
+引用不能被值初始化。
+
+如{{rlp|explicit cast|函数风格转换}}中所述，{{tt|T}} 指名数组类型时禁止语法 {{c|T()}} {{v|1}}，但允许 {{c|T{}&lt;!-- --&gt;}} {{v|5}}。
+
+所有标准容器（{{lc|std::vector}}、{{lc|std::list}} 等）在以单个 {{tt|size_type}} 实参进行构造或由对 {{c|resize()}} 的调用而增长时值初始化它们的各个元素，除非它们的分配器定制了 {{c|construct}} 的行为。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct T1
+{
+    int mem1;
+    std::string mem2;
+    virtual void foo() {} // 确保 T1 不是聚合体
+}; // 隐式默认构造函数
+
+struct T2
+{
+    int mem1;
+    std::string mem2;
+    T2(const T2&amp;) {} // 用户提供的复制构造函数
+};                   // 无默认构造函数
+
+struct T3
+{
+    int mem1;
+    std::string mem2;
+    T3() {} // 用户提供的默认构造函数
+};
+
+std::string s{}; // 类 =&gt; 默认初始化，值为 ""
+
+int main()
+{
+    int n{};                // 标量 =&gt; 零初始化，值为 0
+    assert(n == 0);
+    double f = double();    // 标量 =&gt; 零初始化，值为 0.0
+    assert(f == 0.0);
+    int* a = new int[10](); // 数组 =&gt; 每个元素的值初始化
+    assert(a[9] == 0);      //          每个元素的值为 0
+    T1 t1{};                // 有隐式默认构造函数的类 =&gt;
+    assert(t1.mem1 == 0);   //     t1.mem1 被零初始化，值为 0
+    assert(t1.mem2 == "");  //     t1.mem2 被默认初始化，值为 ""
+//  T2 t2{};                // 错误：类无默认构造函数
+    T3 t3{};                // 有用户提供默认构造函数的类 =&gt;
+    std::cout &lt;&lt; t3.mem1;   //     t3.mem1 被默认初始化为不确定值
+    assert(t3.mem2 == "");  //     t3.mem2 被默认初始化，值为 ""
+    std::vector&lt;int&gt; v(3);  // 值初始化每个元素
+    assert(v[2] == 0);      // 每个元素的值为 0
+    std::cout &lt;&lt; '\n';
+    delete[] a;
+}
+|p=true
+|output=
+42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=178|std=C++98|before=不存在值初始化；空初始化器会调用默认初始化（即使 {{c|new T()}} 也会进行零初始化）|after=空初始化器会调用值初始化}}
+{{dr list item|wg=cwg|dr=543|std=C++98|before=值初始化没有用户提供的构造函数的类对象与值初始化每个子对象&lt;br&gt;（对有用户提供的默认构造函数的成员不需要进行零初始化）等价|after=先零初始化整个对象，&lt;br&gt;再调用默认构造函数}}
+{{dr list item|wg=cwg|dr=1301|std=C++11|before=值初始化有弃置的默认构造函数的结构体会导致零初始化|after=它们会被默认初始化}}
+{{dr list item|wg=cwg|dr=1368|std=C++98|before=不会在有任何用户提供的构造函数时进行零初始化|after=仅限默认构造函数}}
+{{dr list item|wg=cwg|dr=1502|std=C++11|before=值初始化没有用户提供的默认构造函数的联合体只会&lt;br&gt;零初始化整个对象，而不会处理默认成员初始化器|after=在零初始化后&lt;br&gt;进行默认初始化}}
+{{dr list item|wg=cwg|dr=1507|std=C++98|before=值初始化没有用户提供的构造函数的类对象时不会&lt;br&gt;在默认构造函数是平凡的情况下检查它的合法性|after=会检查合法性}}
+{{dr list item|wg=cwg|dr=2820|std=C++98|before=默认初始化后的零初始化要求有非平凡构造函数|after=不要求有非平凡构造函数}}
+{{dr list item|wg=cwg|dr=2859|std=C++98|before=值初始化类对象在默认初始化实际不会选择用户提供的构造函数时也可能涉及零初始化|after=此时不会进行零初始化}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|default constructor|默认构造函数}}
+* {{rlpt|explicit}}
+* {{rlp|aggregate initialization|聚合初始化}}
+* {{rlp|list initialization|列表初始化}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

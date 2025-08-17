@@ -1,0 +1,208 @@
+{{title|{{tt|noexcept}} 说明符 {{mark since c++11}}}}
+{{cpp/language/exceptions/navbar}}
+
+指定函数是否抛出异常。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|noexcept}}}}
+{{sdsc|num=2|{{ttb|noexcept(}}{{spar|表达式}}{{ttb|)}}}}
+{{sdsc|num=3|{{ttb|throw()}}|notes={{mark life|deprecated=c++17|removed=c++20|br=yes}}}}
+{{sdsc end}}
+@1@ 与 {{ttb|noexcept(true)}} 相同
+@2@ 如果 {{spar|表达式}} 求值为 {{c|true}}，那么声明函数不会抛出任何异常。后随 {{ttb|noexcept}} 的 {{ttb|(}} 只能是该形式的一部分（它不是初始化器的开始）。
+@3@ 与 {{ttb|noexcept(true)}} 相同（C++17 前的语义见{{rlp|except spec|动态异常说明}}）
+
+{{par begin}}
+{{par|{{spar|表达式}}|{{rlp|constant expression#经转换的常量表达式|按语境转换为 {{c/core|bool}} 类型的常量表达式}}}}
+{{par end}}
+
+===解释===
+{{rrev multi|until1=c++17|rev1=
+noexcept 说明不是函数类型的一部分（正如同{{rlp|except spec|动态异常说明}}），而且只能在声明函数、变量、函数类型的非静态数据成员、函数指针、函数引用或成员函数指针时，以及在以上这些声明中声明类型为函数指针或函数引用的形参或返回类型时，作为 {{rlp|lambda|lambda 声明符}}或顶层{{rlp|function|函数声明符}}的一部分出现。它不能在 {{rlp|typedef}} 或{{rlp|type alias|类型别名}}声明中出现。
+{{source|1=
+void f() noexcept; // 函数 f() 不会抛出
+void (*fp)() noexcept(false); // fp 指向可能会抛出的函数
+void g(void pfa() noexcept);  // g 接收指向不会抛出的函数的指针
+// typedef int (*pf)() noexcept; // 错误
+}}
+|rev2=
+noexcept 说明是函数类型的一部分，可以作为任何{{rlp|function|函数声明符}}的一部分出现。
+}}
+
+C++ 中的每个函数要么''不会抛出''，要么''有可能会抛出''。
+* ''有可能会抛出''的函数是：
+
+{{rrev|until=c++17|
+:* 声明带有非空{{rlp|except spec|动态异常说明}}的函数。
+}}
+:* 声明带有求值为 {{tt|false}} 的 {{spar|表达式}} 的 {{tt|noexcept}} 说明符的函数
+:* 声明不带有 {{tt|noexcept}} 说明符的函数，但不包括：
+::* {{rlp|destructor|析构函数}}，除非有任何可能在构造的基类或成员的析构函数''有可能会抛出''（见下文）
+::* 隐式声明的或在它的首个声明被预置的{{rlp|default constructor|默认构造函数}}、{{rlp|copy constructor|复制构造函数}}、{{rlp|move constructor|移动构造函数}}，除非
+:::* 由构造函数的隐式定义所调用的某个基类或成员的构造函数''有可能会抛出''（见下文）
+:::* 这种初始化的某个子表达式，例如默认实参表达式，''有可能会抛出''（见下文）
+:::* （默认构造函数的）默认成员初始化器''有可能会抛出''（见下文）
+::* 隐式声明的或在它的首个声明被预置的{{rlp|copy assignment|复制赋值}}运算符、{{rlp|move assignment|移动赋值}}运算符，除非隐式定义中对任何赋值运算符的调用''有可能会抛出''（见下文）
+{{rrev|since=c++20|
+::* 在它的首个声明被预置的{{rlp|default comparisons|比较运算符}}，除非它的隐式定义中对任何比较运算符的调用''有可能会抛出''（见下文）
+}}
+::* [[cpp/memory/new/operator delete|解分配函数]]
+* 所有其他函数（以求值为 {{tt|true}} 的 {{spar|表达式}} 的 {{tt|noexcept}} 说明符声明的函数，以及析构函数、预置的特殊成员函数和解分配函数）都''不会抛出''
+
+{{rlp|function template#显式实例化|显式实例化}}可以使用 {{tt|noexcept}} 说明符，但不要求。如果有使用，那么它的异常说明必须与所有其他声明相同。只有在这些异常说明在同一翻译单元中不相同时才要求诊断。
+
+只有异常说明不同的函数不能重载{{rev inl|since=c++17|（与返回类型相似，异常说明是函数类型的一部分，但不是函数签名的一部分）}}。
+{{source|1=
+void f() noexcept;
+void f(); // 错误：异常说明不同
+void g() noexcept(false);
+void g(); // OK：g 的两个声明均有可能会抛出
+}}
+
+指向不会抛出的函数的指针（包括成员函数指针）{{rev inl|until=c++17|能赋值给或用以初始化}}{{rev inl|since=c++17|{{rlp|implicit conversion#函数指针转换|可以隐式转换到}}}}指向有可能会抛出的函数的指针，但反之不可。
+{{source|1=
+void ft(); // 有可能会抛出
+void (*fn)() noexcept = ft; // 错误
+}}
+
+如果虚函数不会抛出，那么它每个覆盖的函数的所有声明（包括定义）都必须不抛出，除非覆盖函数被定义为弃置：
+{{source|1=
+struct B
+{
+    virtual void f() noexcept;
+    virtual void g();
+    virtual void h() noexcept = delete;
+};
+
+struct D: B
+{
+    void f();          // 非良构：D::f 有可能会抛出，B::f 不会抛出
+    void g() noexcept; // OK
+    void h() = delete; // OK
+};
+}}
+
+不会抛出的函数允许调用有可能会抛出的函数。每当抛出异常且对处理块的查找遇到了不会抛出的函数的最外层块时，就调用函数 {{lc|std::terminate}}{{rev inl|until=c++17| 或 {{lc|std::unexpected}}}}：
+{{source|
+extern void f(); // 有可能会抛出
+
+void g() noexcept
+{
+    f();      // 合法，即使 f 抛出
+    throw 42; // 合法，等效于调用 std::terminate
+}
+}}
+
+函数模板特化的异常说明不随函数声明而实例化；它只会在''需要''（定义如下）时实例化。
+
+隐式声明的特殊成员函数的异常说明也只会在需要时求值（特别是，派生类成员函数的隐式声明不要求实例化基类成员函数的异常说明）。
+
+在''需要''但尚未实例化某个函数模板特化的 noexcept 说明时，如同对该特化的声明一样，对待决名进行查找并实例化 {{spar|表达式}} 中用到的任何模板。
+
+在下列语境中认为''需要''函数的 noexcept 说明：
+* 在表达式中，函数被重载决议选中
+* 函数被{{rlp|definition#ODR 使用|ODR 使用}}
+* 函数本该被 ODR 使用但在不求值操作数中出现：
+{{source|1=
+template&lt;class T&gt;
+T f() noexcept(sizeof(T) &lt; 4);
+
+int main()
+{
+    decltype(f&lt;void&gt;()) *p; // f 不求值，但需要 noexcept 说明
+                            // 错误，因为实例化 noexcept 说明的实例化要计算 sizeof(void)
+}
+}}
+* 该特化需要与另一函数声明进行比较（例如在虚函数覆盖或函数模板的显式特化处）
+* 在函数定义中
+* 需要异常说明，因为某个预置特殊成员函数需要检查它以决定它自身的异常说明（这只会在这个预置特殊成员函数自身的异常说明被需要时发生）。
+
+''有可能会抛出的表达式''的正式定义（用于确定上述析构函数、构造函数和赋值运算符的默认异常说明）是：
+
+以下情况下，表达式 {{tt|e}} ''有可能会抛出''：
+* {{tt|e}} 是对''有可能会抛出''的函数、函数指针或成员函数指针的调用{{rev inl|until=c++17|，除非 {{tt|e}} 是{{rlp|constant expression|核心常量表达式}}}}
+* {{tt|e}} 对''有可能会抛出''的函数进行隐式调用（例如作为重载运算符，new 表达式中的分配函数，函数实参的构造函数，或当 {{tt|e}} 为完整表达式时的析构函数）
+* {{tt|e}} 是 {{rlp|throw|{{tt|throw}} 表达式}}
+* {{tt|e}} 是对多态引用类型进行转型的 {{rlpt|dynamic_cast}}
+* {{tt|e}} 是应用于指向多态类型的指针的解引用的 {{rlpt|typeid}} 表达式
+* {{tt|e}} 包含''有可能会抛出''的直接子表达式
+
+{{source|1=
+struct A
+{
+    A(int = (A(5), 0)) noexcept;
+    A(const A&amp;) noexcept;
+    A(A&amp;&amp;) noexcept;
+    ~A();
+};
+
+struct B
+{
+    B() throw();
+    B(const B&amp;) = default; // 隐式异常说明是 noexcept(true)
+    B(B&amp;&amp;, int = (throw Y(), 0)) noexcept;
+    ~B() noexcept(false);
+};
+
+int n = 7;
+struct D : public A, public B
+{
+    int * p = new int[n];
+    // D::D() 有可能会抛出，因为 new 运算符
+    // D::D(const D&amp;) 不会抛出
+    // D::D(D&amp;&amp;) 有可能会抛出：因为 B 的构造函数的默认实参有可能会抛出
+    // D::~D() 有可能会抛出
+
+    // 注意：如果 A::~A() 为虚，那么此程序将为非良构，因为不会抛出的虚函数的覆盖函数不能抛出
+};
+}}
+
+===注解===
+常量 {{spar|表达式}} 的一种用法（与 {{rlp|noexcept|{{tt|noexcept}} 运算符}}一起）是，定义函数模板，它对一些类型声明 {{ttb|noexcept}}，但对其他类型不声明。
+
+注意，函数上的 {{ttb|noexcept}} 说明不是一种编译时检查；它只不过是程序员告知编译器函数是否可以抛出异常的一种方法。编译器能用此信息启用不会抛出的函数上的某些优化，以及启用能在编译时检查特定表达式是否声明为可抛出任何异常的 {{rlp|noexcept|{{tt|noexcept}} 运算符}}。例如，诸如 {{lc|std::vector}} 的容器会在元素的移动构造函数是 {{ttb|noexcept}} 的情况下移动元素，否则就复制元素（除非复制构造函数不可访问，但有可能会抛出的移动构造函数只会在放弃强异常保证的情况下考虑）。
+
+====弃用====
+{{ttb|noexcept}} 是 {{rlp|except spec|{{c|throw()}}}} 的改进版本，后者在 C++11 中弃用。与 C++17 前的 {{rlp|except spec|{{c|throw()}}}} 不同，{{ttb|noexcept}} 不会调用 {{lc|std::unexpected}}，并且可能或可能不进行栈回溯，这可能允许编译器实现没有 {{rlp|except spec|{{c|throw()}}}} 的运行时开销的 {{ttb|noexcept}}。从 C++17 起，{{c|throw()}} 被重定义为严格等价于 {{c|noexcept(true)}}。
+{{feature test macro|std=C++17|value=201510L|__cpp_noexcept_function_type|使异常说明成为类型系统的一部分}}
+
+===关键词===
+{{ltt|cpp/keyword/noexcept}}{{rev inl|since=c++17|until=c++20|,
+{{ltt|cpp/keyword/throw}}}}
+
+===示例===
+{{example
+|code=
+// foo 是否声明为 noexcept 取决于 T() 是否会抛出异常
+template&lt;class T&gt;
+void foo() noexcept(noexcept(T())) {}
+
+void bar() noexcept(true) {}
+void baz() noexcept { throw 42; } // noexcept 等同于 noexcept(true)
+
+int main() 
+{
+    foo&lt;int&gt;(); // noexcept(noexcept(int())) =&gt; noexcept(true)，所以这是可以的
+
+    bar(); // 可以
+    baz(); // 能编译，但会在运行时调用 std::terminate
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1330|std=C++11|before=异常说明可能被饥渴地实例化|after=仅当被需要才实例化}}
+{{dr list item|wg=cwg|dr=1740|std=C++11|before=后随 {{c|noexcept}} 的 {{c|(}} 可以作为初始化器的开始|after=只能作为 noexcept 说明的一部分}}
+{{dr list item|wg=cwg|dr=2039|std=C++11|before=只要求转换前的表达式是常量|after=转换必须也在常量表达式中合法}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc noexcept}}
+{{dsc inc|cpp/language/dsc except spec}}
+{{dsc inc|cpp/language/dsc throw}}
+{{dsc inc|cpp/utility/dsc move_if_noexcept}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

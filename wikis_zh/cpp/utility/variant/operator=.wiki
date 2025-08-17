@@ -1,0 +1,154 @@
+{{cpp/utility/variant/title|operator{{=}}}}
+{{cpp/utility/variant/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|1=
+constexpr variant&amp; operator=( const variant&amp; rhs );
+}}
+{{dcl|num=2|since=c++17|1=
+constexpr variant&amp; operator=( variant&amp;&amp; rhs ) noexcept(/* 见下文 */);
+}}
+{{dcla|num=3|since=c++17|constexpr=c++20|1=
+template&lt; class T &gt;
+variant&amp; operator=( T&amp;&amp; t ) noexcept(/* 见下文 */);
+}}
+{{dcl end}}
+
+向既存的 {{tt|variant}} 对象赋新值。
+
+@1@ 复制赋值：
+* 若 {{c|*this}} 与 {{c|rhs}} 均因异常无值，则不做任何事。
+* 否则，若 {{c|rhs}} 无值，但 {{c|*this}} 非无值，则销毁 {{c|*this}} 中所含值并使之无值。
+* 否则，若 {{c|rhs}} 保有与 {{c|*this}} 相同的可选项，则赋值 {{c|rhs}} 中所含值给 {{c|*this}} 中所含值。若抛出异常，则 {{c|*this}} 不会变为无值：其值取决于该可选项的复制赋值的异常安全保证。
+* 否则，若 {{c|rhs}} 所保有的可选项是不抛出可复制构造的或者''不是''不抛出可移动构造的（分别由 {{lc|std::is_nothrow_copy_constructible}} 和 {{lc|std::is_nothrow_move_constructible}} 确定），则等价于 {{c|this-&gt;emplace&lt;rhs.index()&gt;(*std::get_if&lt;rhs.index()&gt;(std::addressof(rhs)))}}。若 {{rlpt|emplace}} 内的复制构造抛出了异常，则 {{c|*this}} 可能变为 {{rlpt|valueless_by_exception}}（因异常无值）。
+* 否则，等价于 {{c|1=this-&gt;operator=(variant(rhs))}}。
+@@ 定义此重载为被弃置，除非 {{c|std::is_copy_constructible_v&lt;T_i&gt;}} 与 {{c|std::is_copy_assignable_v&lt;T_i&gt;}} 对 {{tt|Types...}} 中所有 {{tt|T_i}} 均为 {{c|true}}。若 {{c|std::is_trivially_copy_constructible_v&lt;T_i&gt;}}、{{c|std::is_trivially_copy_assignable_v&lt;T_i&gt;}} 及 {{c|std::is_trivially_destructible_v&lt;T_i&gt;}} 对 {{tt|Types...}} 中所有 {{tt|T_i}} 均为 {{c|true}} 则此重载为平凡。
+@2@ 移动赋值：
+* 若 {{c|*this}} 与 {{c|rhs}} 均因异常无值，则不做任何事。
+* 否则，若 {{c|rhs}} 无值，但 {{c|*this}} 非无值，则销毁 {{c|*this}} 中所含值并使之无值。
+* 否则，若 {{c|rhs}} 保有与 {{c|*this}} 相同的可选项，则赋值 {{c|std::move(*std::get_if&lt;j&gt;(std::addressof(rhs)))}} 给 {{c|*this}} 中所含值，其中 {{tt|j}} 为 {{tt|index()}}。若抛出了异常，则 {{c|*this}} 不会变为无值：其值依赖于该可选项的移动赋值的异常安全保证。
+* 否则（若 {{c|rhs}} 与 {{c|*this}} 保有不同可选项），等价于 {{c|this-&gt;emplace&lt;rhs.index()&gt;(std::move(*std::get_if&lt;rhs.index()&gt;(std::addressof(rhs))))}}。若 {{tt|T_i}} 的移动构造函数抛出了异常，则 {{c|*this}} 变为 {{rlpt|valueless_by_exception}}（因异常无值）。
+@@ {{cpp/enable_if| {{tt|std::is_move_constructible_v&lt;T_i&gt;}} 与 {{c|std::is_move_assignable_v&lt;T_i&gt;}} 对 {{tt|Types...}} 中所有 {{tt|T_i}} 均为 {{c|true}} }}。若 {{c|std::is_trivially_move_constructible_v&lt;T_i&gt;}}、{{c|std::is_trivially_move_assignable_v&lt;T_i&gt;}} 及 {{c|std::is_trivially_destructible_v&lt;T_i&gt;}} 对 {{tt|Types...}} 中所有 {{tt|T_i}} 均为 {{c|true}} 则此重载为平凡。
+@3@ 转换赋值：
+* 确定在对 {{tt|Types...}} 中的每个 {{tt|T_i}} 都有一个虚构重载函数 {{c|F(T_i)}} 同时在作用域中时，为表达式 {{c|F(std::forward&lt;T&gt;(t))}} 进行重载决议所选择的可选项类型 {{tt|T_j}}，但其中：
+:* 仅若声明 {{c|1=T_i x[] = { std::forward&lt;T&gt;(t) };}} 对某个虚设变量 {{tt|x}} 合法才考虑重载 {{c|F(T_i)}}；
+* 若 {{c|*this}} 已保有 {{tt|T_j}}，则赋值 {{c|std::forward&lt;T&gt;(t)}} 给 {{c|*this}} 中的所含值。若抛出了异常，则 {{c|*this}} 不会变为无值：其值取决于被调用赋值的异常安全保证。
+* 否则，若 {{c|std::is_nothrow_constructible_v&lt;T_j, T&gt; {{!!}} !std::is_nothrow_move_constructible_v&lt;T_j&gt;}} 为 {{c|true}}，则等价于 {{c|this-&gt;emplace&lt;j&gt;(std::forward&lt;T&gt;(t))}}。若 {{rlpt|emplace}} 内的初始化抛出了异常，则 {{c|*this}} 可能变为{{rlpt|valueless_by_exception}}（因异常无值）。
+* 否则，等价于 {{c|this-&gt;emplace&lt;j&gt;(T_j(std::forward&lt;T&gt;(t))) }}。
+{{cpp/enable_if| {{rev inl|until=c++20|{{c|std::decay_t&lt;T&gt;}}}}{{rev inl|since=c++20|{{c|std::remove_cvref_t&lt;T&gt;}}}} 不是与 {{rlpt|/|variant}} 相同的类型，且 {{c|std::is_assignable_v&lt;T_j&amp;, T&gt;}} 为 {{c|true}} 且 {{c|std::is_constructible_v&lt;T_j, T&gt;}} 为 {{c|true}} 而且表达式 {{c|F(std::forward&lt;T&gt;(t))}}（其中 F 为上述虚构函数集）为良构}}。
+{{source|1=
+std::variant&lt;string&gt; v1;
+v1 = "abc"; // OK
+std::variant&lt;std::string, std::string&gt; v2;
+v2 = "abc"; // 错误
+std::variant &lt;std::string, bool&gt; v3;
+v3 = "abc"; // OK：选择 string；bool 不是候选
+std::variant&lt;float, long, double&gt; v4; // 保有 float
+v4 = 0; // OK：保有 long；float 与 double 不是候选
+}}
+
+===参数===
+{{par begin}}
+{{par|rhs|另一 {{tt|variant}}}}
+{{par|t|可转换成此变体的可选项之一的值}}
+{{par end}}
+
+===返回值===
+{{c|*this}}
+
+===异常===
+@1@ 可能抛出任何可选项的赋值及复制/移动初始化所抛的任何异常。
+@2@ {{noexcept|((std::is_nothrow_move_constructible_v&lt;Types&gt; &amp;&amp;
+           std::is_nothrow_move_assignable_v&lt;Types&gt;) &amp;&amp; ...)}}
+@3@ {{noexcept|std::is_nothrow_assignable_v&lt;T_j&amp;, T&gt; &amp;&amp;
+         std::is_nothrow_constructible_v&lt;T_j, T&gt;}}
+
+===注解===
+{{ftm begin}}
+{{ftm|std=C++20|dr=yes|value=202106L|__cpp_lib_variant|完全 {{c/core|constexpr}} 的 {{tt|std::variant}} {{vl|3}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;variant&gt;
+ 
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::variant&lt;int, std::string&gt; const&amp; va)
+{
+    os &lt;&lt; ": { ";
+ 
+    std::visit([&amp;](auto&amp;&amp; arg)
+    {
+        using T = std::decay_t&lt;decltype(arg)&gt;;
+        if constexpr (std::is_same_v&lt;T, int&gt;)
+            os &lt;&lt; arg;
+        else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+            os &lt;&lt; std::quoted(arg);
+    }, va);
+ 
+    return os &lt;&lt; " };\n";
+}
+ 
+int main()
+{
+    std::variant&lt;int, std::string&gt; a{2017}, b{"CppCon"};
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "b" &lt;&lt; b &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(1) operator=( const variant&amp; rhs )\n";
+    a = b;
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "b" &lt;&lt; b &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(2) operator=( variant&amp;&amp; rhs )\n";
+    a = std::move(b);
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "b" &lt;&lt; b &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(3) operator=( T&amp;&amp; t ), 其中 T 为 int\n";
+    a = 2019;
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; '\n';
+ 
+    std::cout &lt;&lt; "(3) operator=( T&amp;&amp; t ), 其中 T 为 std::string\n";
+    std::string s{"CppNow"};
+    std::cout &lt;&lt; "s: " &lt;&lt; std::quoted(s) &lt;&lt; '\n';
+    a = std::move(s);
+    std::cout &lt;&lt; "a" &lt;&lt; a &lt;&lt; "s: " &lt;&lt; std::quoted(s) &lt;&lt; '\n';
+}
+|p=true&lt;!--state of std::string after std::move is unspecified--&gt;
+|output=
+a: { 2017 };
+b: { "CppCon" };
+
+(1) operator=( const variant&amp; rhs )
+a: { "CppCon" };
+b: { "CppCon" };
+
+(2) operator=( variant&amp;&amp; rhs )
+a: { "CppCon" };
+b: { "" };
+
+(3) operator=( T&amp;&amp; t ), 其中 T 为 int
+a: { 2019 };
+
+(3) operator=( T&amp;&amp; t ), 其中 T 为 std::string
+s: "CppNow"
+a: { "CppNow" };
+s: ""
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++17|dr=3024|before=若任何成员类型不可复制则复制赋值运算符不参与重载决议|after=改为定义为被弃置}}
+{{dr list item|wg=lwg|dr=3585|std=c++17|before=转换赋值有时意外地非良构，因为无可用的移动赋值|after=使之良构}}
+{{dr list item|paper=P0602R4|std=C++17|before=即使底层操作平凡，复制/移动运算符亦可能不平凡|after=要求传播平凡性}}
+{{dr list item|paper=P0608R3|std=C++17|before=转换赋值盲目地组成重载集，导致不想要的转换|after=不考虑窄化和布尔转换}}
+{{dr list item|paper=P2231R1|std=C++20|before=转换赋值 {{vl|3}} 不是 {{c/core|constexpr}} 而要求的操作在 C++20 中可以是 {{c/core|constexpr}}|after=使之为 {{c/core|constexpr}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc emplace}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

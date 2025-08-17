@@ -1,0 +1,148 @@
+{{cpp/title|random_shuffle|shuffle}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|until=c++17|deprecated=c++14|
+template&lt; class RandomIt &gt;
+void random_shuffle( RandomIt first, RandomIt last );
+}}
+{{dcl rev begin|num=2}}
+{{dcla|until=c++11|anchor=2|
+template&lt; class RandomIt, class RandomFunc &gt;
+void random_shuffle( RandomIt first, RandomIt last, RandomFunc&amp; r );
+}}
+{{dcl|since=c++11|until=c++17|deprecated=c++14|
+template&lt; class RandomIt, class RandomFunc &gt;
+void random_shuffle( RandomIt first, RandomIt last, RandomFunc&amp;&amp; r );
+}}
+{{dcl rev end}}
+{{dcla|num=3|since=c++11|
+template&lt; class RandomIt, class URBG &gt;
+void shuffle( RandomIt first, RandomIt last, URBG&amp;&amp; g );
+}}
+{{dcl end}}
+
+重排序给定范围 {{range|first|last}} 中的元素，使得这些元素的每个排列拥有相等的出现概率。
+
+@1@ 随机性来源由实现定义，但经常会使用函数 {{lc|std::rand}}。
+
+@2@ 随机性来源是函数对象 {{c|r}}。
+@@ 如果满足以下任意条件，那么行为未定义：
+* {{c|r}} 的返回类型不可转换到 {{c/core|std::iterator_traits&lt;RandomIt&gt;::difference_type}}。
+* 给定某个 {{c/core|std::iterator_traits&lt;RandomIt&gt;::difference_type}} 类型的正值 {{c|n}}，{{c|r(n)}} 的结果不是在区间 {{range|0|n}} 中随机选择的值。
+
+@3@ 随机性来源是对象 {{c|g}}。
+@@ 给定 {{tt|T}} 为 {{c/core|std::remove_reference_t&lt;URBG&gt;}}，如果满足以下任意条件，那么行为未定义：
+* {{tt|T}} 不是{{named req|UniformRandomBitGenerator}}。
+{{rrev|until=c++20|
+* {{tt|T::result_type}} 不可转换到 {{c/core|std::iterator_traits&lt;RandomIt&gt;::difference_type}}.
+}}
+
+如果 {{rev inl|until=c++11|{{c|*first}} 的类型不{{named req|Swappable}}}}{{rev inl|since=c++11|{{tt|RandomIt}} 不{{named req|ValueSwappable}}}}，那么行为未定义。
+
+===参数===
+{{par begin}}
+{{par range|3=要随机混洗的}}
+{{par|r|返回随机选取的值的函数对象}}
+{{par|g|返回随机选取的值的生成器对象}}
+{{par hreq}}
+{{par req named|RandomIt|RandomAccessIterator}}
+{{par end}}
+
+===复杂度===
+{{c|std::distance(first, last) - 1}} 次交换。
+
+===可能的实现===
+也可以参考 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L4551 libstdc++] 和 [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L3066 libc++] 中的实现。
+{{eq impl
+|title1=random_shuffle (1)|ver1=1|1=
+template&lt;class RandomIt&gt;
+void random_shuffle(RandomIt first, RandomIt last)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::difference_type diff_t;
+    
+    for (diff_t i = last - first - 1; i &gt; 0; --i)
+    {
+        using std::swap;
+        swap(first[i], first[std::rand() % (i + 1)]);
+        // rand() % (i + 1) 实际上不准确，因为生成的数对于多数 i 值不均匀分布。
+        // 正确实现将实际上需要重新实现 C++11 std::uniform_distributtion，
+        // 这超出了此示例的范畴。
+    }
+}
+|title2=random_shuffle (2)|ver2=2|2=
+template&lt;class RandomIt, class RandomFunc&gt;
+void random_shuffle(RandomIt first, RandomIt last, RandomFunc&amp;&amp; r)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::difference_type diff_t;
+    
+    for (diff_t i = last - first - 1; i &gt; 0; --i)
+    {
+        using std::swap;
+        swap(first[i], first[r(i + 1)]);
+    }
+}
+|title3=shuffle|ver3=3|3=
+template&lt;class RandomIt, class URBG&gt;
+void shuffle(RandomIt first, RandomIt last, URBG&amp;&amp; g)
+{
+    typedef typename std::iterator_traits&lt;RandomIt&gt;::difference_type diff_t;
+    typedef std::uniform_int_distribution&lt;diff_t&gt; distr_t;
+    typedef typename distr_t::param_type param_t;
+    
+    distr_t D;
+    for (diff_t i = last - first - 1; i &gt; 0; --i)
+    {
+        using std::swap;
+        swap(first[i], first[D(g, param_t(0, i))]);
+    }
+}
+}}
+
+===注解===
+标准未指定实现，所以即使你用严格相同的 {{tt|RandomFunc}} 或 {{tt|URBG}}，也可能通过不同的标准库实现得到不同结果。
+
+C++17 中移除 {{tt|std::random_shuffle}} 的原因在于，仅用于迭代器的版本通常依赖于 {{lc|std::rand}}，而如今也正讨论对其摒除。（应当将 {{lc|std::rand}} 代之以头文件 {{header|random}} 中的类，因为 {{lc|std::rand}} 被''认为有害''。）此外，仅用于迭代器的 {{tt|std::random_shuffle}} 版本通常依赖于一个全局状态。以 {{tt|std::shuffle}} 的混洗算法为推荐的替代者，因其使用了 {{tt|URBG}} 为其第三个形参。
+
+===示例===
+{{example
+|将整数序列 {{closed range plain|1|10}} 进行随机混洗：
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;random&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    
+    std::random_device rd;
+    std::mt19937 g(rd());
+    
+    std::shuffle(v.begin(), v.end(), g);
+    
+    std::copy(v.begin(), v.end(), std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+8 6 10 4 2 3 7 1 9 5
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=395|std=C++98|before=未指定重载 {{v|1}} 的随机来源，而且&lt;br&gt;{{lc|std::rand}} 由于 C 库的要求不能作为来源|after=由实现定义，并且可以将&lt;br&gt;{{lc|std::rand}} 作为来源}}
+{{dr list item|wg=lwg|dr=552|std=C++98|before=不要求重载 {{v|2}} 的随机来源是 {{c|r}}&lt;ref&gt;重载 {{v|3}} 也有同样的缺陷，但那部分的解决方案不适用于 C++98。&lt;/ref&gt;|after=要求是}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc next_permutation}}
+{{dsc inc|cpp/algorithm/dsc prev_permutation}}
+{{dsc inc|cpp/algorithm/ranges/dsc shuffle}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

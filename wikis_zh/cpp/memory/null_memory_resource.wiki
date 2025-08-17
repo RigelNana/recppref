@@ -1,0 +1,65 @@
+{{cpp/memory/pmr/title|null_memory_resource}}
+{{cpp/memory/navbar}}
+{{ddcl|header=memory_resource|since=c++17|
+std::pmr::memory_resource* null_memory_resource() noexcept;
+}}
+
+返回指向不进行任何分配的 {{tt|memory_resource}} 的指针。
+
+=== 返回值 ===
+返回指针 {{tt|p}}，指向派生自 {{lc|std::pmr::memory_resource}} 类型的静态存储期对象，它拥有下列属性：
+* 其 {{tt|allocate()}} 函数始终抛出 {{lc|std::bad_alloc}}；
+* 其 {{tt|deallocate()}} 函数无效果；
+* 对于任何 {{tt|memory_resource}} {{tt|r}}，{{tt|p-&gt;is_equal(r)}} 返回 {{c|&amp;r {{==}} p}}。
+
+每次调用此函数都返回相同值。
+
+===示例===
+{{example
+|此程序演示 {{tt|null_memory_resource}} 的主要用途：确保需要栈上分配内存的内存池不会在需要更多内存时进行堆内存分配。
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;memory_resource&gt;
+#include &lt;string&gt;
+#include &lt;unordered_map&gt;
+
+int main()
+{
+    // 栈上分配内存
+    std::array&lt;std::byte, 20000&gt; buf;
+
+    // 堆上进行无后备的内存分配
+    std::pmr::monotonic_buffer_resource pool{buf.data(), buf.size(),
+                                             std::pmr::null_memory_resource()};
+
+    // 分配过多内存
+    std::pmr::unordered_map&lt;long, std::pmr::string&gt; coll{&amp;pool};
+    try
+    {
+        for (std::size_t i = 0; i &lt; buf.size(); ++i)
+        {
+            coll.emplace(i, "just a string with number " + std::to_string(i));
+
+            if (i &amp;&amp; i % 50 == 0)
+                std::clog &lt;&lt; "大小: " &lt;&lt; i &lt;&lt; "...\n";
+        }
+    }
+    catch (const std::bad_alloc&amp; e)
+    {
+        std::cerr &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+
+    std::cout &lt;&lt; "大小: " &lt;&lt; coll.size() &lt;&lt; '\n';
+}
+|p=true
+|output=
+大小: 50...
+大小: 100...
+大小: 150...
+std::bad_alloc
+大小: 183
+}}
+
+{{langlinks|de|en|es|ja|ru}}

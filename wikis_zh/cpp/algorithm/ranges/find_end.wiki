@@ -1,0 +1,185 @@
+{{cpp/ranges/title|find_end}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr ranges::subrange&lt;I1&gt;
+    find_end( I1 first1, S1 last1, I2 first2, S2 last2,
+              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R1, ranges::forward_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                    ranges::iterator_t&lt;R2&gt;,
+                                    Pred, Proj1, Proj2&gt;
+constexpr ranges::borrowed_subrange_t&lt;R1&gt;
+    find_end( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+              Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ 搜索序列 {{range|first2|last2}} 在范围 {{range|first1|last1}} 中的''最后''出现，在分别以{{c|proj1}} 与 {{c|proj2}} 投影后。用二元谓词 {{c|pred}} 比较投影后的元素。
+
+@2@ 同 {{v|1}}，但以 {{c|r1}} 为第一源范围并以 {{c|r2}} 为第二源范围，如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，{{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|3=要检验的（又称''草堆''）|sentinel=yes}}
+{{par range|first2|last2|3=要搜索的（又称''针''）|sentinel=yes}}
+{{par|r1|要检验的元素范围（又称''草堆''）}}
+{{par|r2|要搜索的元素范围（又称''针''）}}
+{{par|pred|比较元素的二元谓词}}
+{{par|proj1|应用到第一范围中元素的投影}}
+{{par|proj2|应用到第二范围中元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 以表达式 {{c|1={i, i + (i == last1 ? 0 : last2 - first2)} }} 初始化的 {{c|ranges::subrange&lt;I1&gt;{} }} 值，该范围代表序列 {{range|first2|last2}} 在范围 {{tt|[first1, last1)}} 中的最后一次出现（在以 {{c|proj1}} 与 {{c|proj2}} 投影后）。若 {{tt|[first2, last2)}} 为空或找不到该序列，则等效地以 {{c|{last1, last1}&lt;!----&gt;}} 初始化返回值。
+@2@ 同 {{v|1}}，但返回类型为 {{c|ranges::borrowed_subrange_t&lt;R1&gt;}}。
+
+===复杂度===
+至多应用 {{mathjax-or|\(\scriptsize S\cdot(N-S+1)\)|S&amp;middot;(N-S+1)}} 次谓词和对应的每次投影，其中对于 {{v|1}} {{mathjax-or|\(\scriptsize S\)|S}} 为 {{c|ranges::distance(first2, last2)}} 而 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::distance(first1, last1)}}，或对于 {{v|2}} {{mathjax-or|\(\scriptsize S\)|S}} 为 {{c|ranges::distance(r2)}} 而 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::distance(r1)}}。
+
+===注解===
+若输入迭代器构成 {{c|std::bidirectional_iterator}}，则实现可以通过从末尾到起始搜索改进效率。实现 {{c|std::random_access_iterator}} 可能提升比较速度。然而所有这些不改变最坏情况的理论复杂度。
+
+===可能的实现===
+{{eq fun|1=
+struct find_end_fn
+{
+    template&lt;std::forward_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr ranges::subrange&lt;I1&gt;
+        operator()(I1 first1, S1 last1,
+                   I2 first2, S2 last2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        if (first2 == last2)
+        {
+            auto last_it = ranges::next(first1, last1);
+            return {last_it, last_it};
+        }
+        auto result = ranges::search(
+            std::move(first1), last1, first2, last2, pred, proj1, proj2);
+
+        if (result.empty())
+            return result;
+
+        for (;;)
+        {
+            auto new_result = ranges::search(
+                std::next(result.begin()), last1, first2, last2, pred, proj1, proj2);
+            if (new_result.empty())
+                return result;
+            else
+                result = std::move(new_result);
+        }
+    }
+
+    template&lt;ranges::forward_range R1, ranges::forward_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                        ranges::iterator_t&lt;R2&gt;,
+                                        Pred, Proj1, Proj2&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R1&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(pred),
+                       std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr find_end_fn find_end {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;cctype&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+void print(const auto haystack, const auto needle)
+{
+    const auto pos = std::distance(haystack.begin(), needle.begin());
+    std::cout &lt;&lt; "In \"";
+    for (const auto c : haystack)
+        std::cout &lt;&lt; c;
+    std::cout &lt;&lt; "\" found \"";
+    for (const auto c : needle)
+        std::cout &lt;&lt; c;
+    std::cout &lt;&lt; "\" at position [" &lt;&lt; pos &lt;&lt; ".." &lt;&lt; pos + needle.size() &lt;&lt; ")\n"
+        &lt;&lt; std::string(4 + pos, ' ') &lt;&lt; std::string(needle.size(), '^') &lt;&lt; '\n';
+}
+
+int main()
+{
+    using namespace std::literals;
+    constexpr auto secret{"password password word..."sv};
+    constexpr auto wanted{"password"sv};
+
+    constexpr auto found1 = std::ranges::find_end(
+        secret.cbegin(), secret.cend(), wanted.cbegin(), wanted.cend());
+    print(secret, found1);
+
+    constexpr auto found2 = std::ranges::find_end(secret, "word"sv);
+    print(secret, found2);
+
+    const auto found3 = std::ranges::find_end(secret, "ORD"sv,
+        [](const char x, const char y) { // 用二元谓词
+            return std::tolower(x) == std::tolower(y);
+        });
+    print(secret, found3);
+
+    const auto found4 = std::ranges::find_end(secret, "SWORD"sv, {}, {},
+        [](char c) { return std::tolower(c); }); // 投影第二范围
+    print(secret, found4);
+
+    static_assert(std::ranges::find_end(secret, "PASS"sv).empty()); // =&gt; 找不到
+}
+|output=
+In "password password word..." found "password" at position [9..17)
+             ^^^^^^^^
+In "password password word..." found "word" at position [18..22)
+                      ^^^^
+In "password password word..." found "ord" at position [19..22)
+                       ^^^
+In "password password word..." found "sword" at position [12..17)
+                ^^^^^
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_last}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_first_of}}
+{{dsc inc|cpp/algorithm/ranges/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/ranges/dsc search_n}}
+{{dsc inc|cpp/algorithm/dsc find_end}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,112 @@
+{{cpp/memory/pmr/title|monotonic_buffer_resource}}
+{{cpp/memory/monotonic_buffer_resource/navbar}}
+{{ddcl|header=memory_resource|since=c++17|
+class monotonic_buffer_resource : public std::pmr::memory_resource;
+}}
+
+类 {{tt|std::pmr::monotonic_buffer_resource}} 是特定目的的内存资源类，它仅在销毁资源时释放分配的内存。它的意图是提供非常快速的内存分配，在内存用于分配少量对象，并于之后一次释放的情形。
+
+{{tt|monotonic_buffer_resource}} 能以初始缓冲区构造，若无初始缓冲，或缓冲用尽，则从构造时提供的''上游分配器''分配缓冲区。缓冲区的大小以几何级数增长。
+
+{{tt|monotonic_buffer_resource}} 不是线程安全的。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc constructor}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc destructor}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc operator{{=}}}}
+
+{{dsc h2|公开成员函数}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc release}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc upstream_resource}}
+
+{{dsc h2|受保护成员函数}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc do_allocate}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc do_deallocate}}
+{{dsc inc|cpp/memory/monotonic_buffer_resource/dsc do_is_equal}}
+{{dsc end}}
+
+===示例===
+此程序测量以下列分配器创建巨型双链表的时间：
+* 默认标准分配器，
+* 默认 {{tt|pmr}} 分配器，
+* 具有单调资源但没有显式内存缓冲区的 {{tt|pmr}} 分配器，
+* 具有单调资源和外部内存缓冲区（在栈上）的 {{tt|pmr}} 分配器。
+{{example|code=
+#include &lt;array&gt;
+#include &lt;chrono&gt;
+#include &lt;cstddef&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;memory_resource&gt;
+
+template&lt;typename Func&gt;
+auto benchmark(Func test_func, int iterations)
+{
+    const auto start = std::chrono::system_clock::now();
+    while (iterations-- &gt; 0)
+        test_func();
+    const auto stop = std::chrono::system_clock::now();
+    const auto secs = std::chrono::duration&lt;double&gt;(stop - start);
+    return secs.count();
+}
+
+int main()
+{
+    constexpr int iterations{100};
+    constexpr int total_nodes{2'00'000};
+
+    auto default_std_alloc = [total_nodes]
+    {
+        std::list&lt;int&gt; list;
+        for (int i{}; i != total_nodes; ++i)
+            list.push_back(i);
+    };
+
+    auto default_pmr_alloc = [total_nodes]
+    {
+        std::pmr::list&lt;int&gt; list;
+        for (int i{}; i != total_nodes; ++i)
+            list.push_back(i);
+    };
+
+    auto pmr_alloc_no_buf = [total_nodes]
+    {
+        std::pmr::monotonic_buffer_resource mbr;
+        std::pmr::polymorphic_allocator&lt;int&gt; pa{&amp;mbr};
+        std::pmr::list&lt;int&gt; list{pa};
+        for (int i{}; i != total_nodes; ++i)
+            list.push_back(i);
+    };
+
+    auto pmr_alloc_and_buf = [total_nodes]
+    {
+        std::array&lt;std::byte, total_nodes * 32&gt; buffer; // 足以适合所有节点
+        std::pmr::monotonic_buffer_resource mbr{buffer.data(), buffer.size()};
+        std::pmr::polymorphic_allocator&lt;int&gt; pa{&amp;mbr};
+        std::pmr::list&lt;int&gt; list{pa};
+        for (int i{}; i != total_nodes; ++i)
+            list.push_back(i);
+    };
+
+    const double t1 = benchmark(default_std_alloc, iterations);
+    const double t2 = benchmark(default_pmr_alloc, iterations);
+    const double t3 = benchmark(pmr_alloc_no_buf , iterations);
+    const double t4 = benchmark(pmr_alloc_and_buf, iterations);
+
+    std::cout &lt;&lt; std::fixed &lt;&lt; std::setprecision(3)
+              &lt;&lt; "t1 (default std alloc): " &lt;&lt; t1 &lt;&lt; " sec; t1/t1: " &lt;&lt; t1/t1 &lt;&lt; '\n'
+              &lt;&lt; "t2 (default pmr alloc): " &lt;&lt; t2 &lt;&lt; " sec; t1/t2: " &lt;&lt; t1/t2 &lt;&lt; '\n'
+              &lt;&lt; "t3 (pmr alloc  no buf): " &lt;&lt; t3 &lt;&lt; " sec; t1/t3: " &lt;&lt; t1/t3 &lt;&lt; '\n'
+              &lt;&lt; "t4 (pmr alloc and buf): " &lt;&lt; t4 &lt;&lt; " sec; t1/t4: " &lt;&lt; t1/t4 &lt;&lt; '\n';
+}
+|p=true
+|output=
+t1 (default std alloc): 0.720 sec; t1/t1: 1.000
+t2 (default pmr alloc): 0.915 sec; t1/t2: 0.787
+t3 (pmr alloc  no buf): 0.370 sec; t1/t3: 1.945
+t4 (pmr alloc and buf): 0.247 sec; t1/t4: 2.914
+}}
+
+{{langlinks|de|en|es|ja|ru}}

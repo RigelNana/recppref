@@ -1,0 +1,145 @@
+{{cpp/title|is_move_constructible|is_trivially_move_constructible|is_nothrow_move_constructible}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|num=1|
+template&lt; class T &gt;
+struct is_move_constructible;
+}}
+{{dcl|since=c++11|num=2|
+template&lt; class T &gt;
+struct is_trivially_move_constructible;
+}}
+{{dcl|since=c++11|num=3|
+template&lt; class T &gt;
+struct is_nothrow_move_constructible;
+}}
+{{dcl end}}
+
+{|class="wikitable" style="text-align: center;"
+!rowspan=2|{{nbsp}}类型特征{{nbsp}}
+!colspan=2|成员常量 {{ttn|value}} 的值
+|-
+!{{ttn|T}} 是[[cpp/meta#定义|可引用类型]]
+!{{nbsp}}{{ttn|T}} 不是可引用类型{{nbsp}}
+|-
+|{{v|1}}
+|{{c|std::is_constructible&lt;T, T&amp;&amp;&gt;::value}}
+|rowspan=3|{{c|false}}
+|-
+|{{v|2}}
+|{{c|std::is_trivially_constructible&lt;T, T&amp;&amp;&gt;::value}}
+|-
+|{{v|3}}
+|{{c|std::is_nothrow_constructible&lt;T, T&amp;&amp;&gt;::value}}
+|}
+
+{{cpp/types/cvaub}}
+
+{{cpp/types/nospec|any}}
+
+===辅助变量模板===
+{{dcl begin}}
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+inline constexpr bool is_move_constructible_v =
+    is_move_constructible&lt;T&gt;::value;
+}}
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+inline constexpr bool is_trivially_move_constructible_v =
+    is_trivially_move_constructible&lt;T&gt;::value;
+}}
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+inline constexpr bool is_nothrow_move_constructible_v =
+    is_nothrow_move_constructible&lt;T&gt;::value;
+}}
+{{dcl end}}
+
+{{cpp/types/integral_constant/inherit|{{tt|T}} 可移动构造}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;class T&gt;
+struct is_move_constructible :
+    std::is_constructible&lt;T, typename std::add_rvalue_reference&lt;T&gt;::type&gt; {};
+
+template&lt;class T&gt;
+struct is_trivially_move_constructible :
+    std::is_trivially_constructible&lt;T, typename std::add_rvalue_reference&lt;T&gt;::type&gt; {};
+
+template&lt;class T&gt;
+struct is_nothrow_move_constructible :
+    std::is_nothrow_constructible&lt;T, typename std::add_rvalue_reference&lt;T&gt;::type&gt; {};
+}}
+
+===注解===
+无移动构造函数的但有接受 {{c/core|const T&amp;}} 参数的复制构造函数的类型，满足 {{tt|std::is_move_constructible}}。
+
+移动构造函数通常是 noexcept，因为它们就不可用于任何提供强异常保证的代码中。
+
+多数实现中，{{tt|is_nothrow_move_constructible}} 也检查析构函数是否抛出，因为它相当于 {{c|noexcept(T(arg))}}。同样的情况应用于 {{tt|is_trivially_move_constructible}}，它在这些实现中也要求析构函数平凡：[https://gcc.gnu.org/bugzilla/show_bug.cgi?id=51452 GCC 漏洞 51452]、{{lwg|2116}}。
+
+===示例===
+{{example
+|code=
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+struct Ex1
+{
+    std::string str; // 成员拥有非平凡而不抛出的移动构造函数
+};
+static_assert(std::is_move_constructible_v&lt;Ex1&gt;);
+static_assert(!std::is_trivially_move_constructible_v&lt;Ex1&gt;);
+static_assert(std::is_nothrow_move_constructible_v&lt;Ex1&gt;);
+
+struct Ex2
+{
+    int n;
+    Ex2(Ex2&amp;&amp;) = default; // 平凡且不抛出
+};
+static_assert(std::is_move_constructible_v&lt;Ex2&gt;);
+static_assert(std::is_trivially_move_constructible_v&lt;Ex2&gt;);
+static_assert(std::is_nothrow_move_constructible_v&lt;Ex2&gt;);
+
+struct NoMove1
+{
+    // 避免默认移动构造函数的隐式声明；
+    // 然而，该类仍为可移动构造因为复制构造函数能绑定到右值实参
+    NoMove1(const NoMove1&amp;) {}
+};
+static_assert(std::is_move_constructible_v&lt;NoMove1&gt;);
+static_assert(!std::is_trivially_move_constructible_v&lt;NoMove1&gt;);
+static_assert(!std::is_nothrow_move_constructible_v&lt;NoMove1&gt;);
+
+struct NoMove2
+{
+    // 由于左值引用无法绑定右值实参，这并非可移动构造
+    NoMove2(NoMove2&amp;) {}
+};
+static_assert(!std::is_move_constructible_v&lt;NoMove2&gt;);
+static_assert(!std::is_trivially_move_constructible_v&lt;NoMove2&gt;);
+static_assert(!std::is_nothrow_move_constructible_v&lt;NoMove2&gt;);
+
+int main() {}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2196|std=C++11|before=无法组成 {{c/core|T&amp;&amp;}} 时的行为不明确|after=此时产生的值是 {{c|false}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_constructible}}
+{{dsc inc|cpp/types/dsc is_default_constructible}}
+{{dsc inc|cpp/types/dsc is_copy_constructible}}
+{{dsc inc|cpp/concepts/dsc move_constructible}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc inc|cpp/utility/dsc move_if_noexcept}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

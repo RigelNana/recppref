@@ -1,0 +1,122 @@
+{{cpp/language/attributes/title|expects, ensures, assert|notes={{mark c++20}}}}
+{{cpp/language/attributes/navbar}}
+为函数指定前条件、后条件和断言。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|notes={{mark since c++20}}|1=
+{{ttb|&lt;nowiki&gt;[[&lt;/nowiki&gt;}} {{ttb|expects}} {{spar|契约等级}}{{mark optional}} {{ttb|:}} {{spar|表达式}} {{ttb|&lt;nowiki&gt;]]&lt;/nowiki&gt;}}}}
+{{sdsc|num=2|notes={{mark since c++20}}|1=
+{{ttb|&lt;nowiki&gt;[[&lt;/nowiki&gt;}} {{ttb|ensures}} {{spar|契约等级}}{{mark optional}} {{spar|标识符}}{{mark optional}} {{ttb|:}} {{spar|表达式}} {{ttb|&lt;nowiki&gt;]]&lt;/nowiki&gt;}}}}
+{{sdsc|num=3|notes={{mark since c++20}}|1=
+{{ttb|&lt;nowiki&gt;[[&lt;/nowiki&gt;}} {{ttb|assert}} {{spar|契约等级}}{{mark optional}} {{ttb|:}} {{spar|表达式}} {{ttb|&lt;nowiki&gt;]]&lt;/nowiki&gt;}}}}
+{{sdsc end}}
+{{par begin}}
+{{par | {{spar|契约等级}} |{{ttb|default}}、{{ttb|audit}} 或 {{ttb|axiom}} 之一；默认为 {{ttb|default}} }}
+{{par | {{spar|标识符}} |被用来代表函数返回值的标识符；任何关于是 {{spar|契约等级}} 还是 {{spar|标识符}} 的歧义，以偏向它是 {{spar|契约等级}} 的方式解决}}
+{{par | {{spar|表达式}} |[[cpp/language/implicit conversion#按语境转换|按语境转换成 {{c|bool}}]] 的表达式，指定契约的谓词；其顶层运算符不能是赋值或逗号运算符}}
+{{par end}}
+
+===解释===
+@1@ 定义''前条件（precondition）''，即函数对其各实参和/或到函数入口中时其他对象的状态的期待。此属性可应用到函数声明中的函数类型。紧接函数体开始求值（包括构造函数的成员初始化器列表）之前，通过求值前条件的谓词予以检查。以词法顺序检查同一函数的多个前条件。
+@2@ 定义''后条件（postcondition）''，即函数应该确保的返回值和/或从函数退出时其他对象的状态的条件。此属性可应用到函数声明中的函数类型。若存在 {{spar|标识符}}，则它表示函数所返回对象（适用）的泛左值结果或纯右值结果。在紧接控制返回到函数的调用方之前（在局部变量和临时量的生存期结束后），通过求值后条件的谓词予以检查。以词法顺序检查同一函数的多个后条件。
+@3@ 定义''断言（assertion）''，即在函数体中出现时应该满足的条件。此属性可应用到[[cpp/language/statements#表达式语句|空语句]]。作为断言所应用到的空语句的求值的一部分，通过求值其谓词予以检查。
+
+契约属性中的可按语境转换成 {{c|bool}} 的表达式 {{spar|表达式}}，被称为其''谓词''。谓词的求值，除了修改生存期始于并终于其求值之内的非 volatile 对象之外，不能有任何副作用；否则行为未定义。当谓词的求值通过异常退出时，调用 {{lc|std::terminate}}。
+
+在常量表达式求值期间，仅求值被检查的契约的谓词。所有其他语境中，是否求值未检查的契约的谓词是未指明的；若它求值为 {{c|false}} 则其行为未定义。
+
+====契约条件====
+前条件和后条件合称为''契约条件''。这些属性可应用到函数声明中的函数类型：
+{{source|
+int f(int i) [[expects: i &gt; 0]] [[ensures audit x: x &lt; 1]]; 
+
+int (*fp)(int i) [[expects: i &gt; 0]]; // 错误：不是函数声明
+}}
+
+函数的首个声明必须指定函数的所有契约条件（若存在）。后继的重声明必须不指定契约条件，或指定相同的契约条件列表；如果对应的条件始终求值为相同值，则不要求诊断。若在两个不同的翻译单元中声明同一函数，则契约条件列表应当相同；不要求诊断。
+
+若两个契约条件列表以相同顺序含有相同的契约条件，则它们相同。若两个契约条件是同种契约条件，并拥有相同的 {{spar|契约等级}} 和相同的谓词，则它们相同。若两个谓词，假设当它们出现于函数定义中时满足[[cpp/language/definition#单一定义规则（ODR）|单一定义规则]]，但允许重命名函数和模板形参和返回值标识符（若存在），则它们相同。
+
+{{source|
+int f(int i) [[expects: i &gt; 0]];
+int f(int);                       // OK：重声明
+int f(int j) [[expects: j &gt; 0]];  // OK：重声明
+int f(int k) [[expects: k &gt; 1]];  // 非良构
+int f(int l) [[expects: 0 &lt; l]];  // 非良构，不要求诊断
+}}
+
+若友元声明是翻译单元中函数的首个声明，且其拥有契约条件，则该声明必须是定义，而且必须是该翻译单元中唯一的声明：
+
+{{source |
+struct C {
+   bool ok() const;
+   friend void f(const C&amp; c) [[ensures: c.ok()]]; // 错误：不是定义
+   friend void g(C c) [[expects: c.ok()]] { } // OK
+};
+void g(C c); // 错误
+}}
+
+契约条件的谓词拥有如同它是出现在其所应用到的函数的体内的首条[[cpp/language/statements#表达式语句|表达式语句]]的语义限制。
+
+若后条件 [[cpp/language/definition#ODR 式使用|ODR 式使用]]其谓词中的形参，而函数体直接或间接修改了该形参的值，则行为未定义。
+{{source| 1=
+int f(int x) [[ensures r: r == x]]
+{
+  return ++x; // 未定义行为
+}
+int g(int* p) [[ensures: p != nullptr]]
+{
+  *p = 42; // OK：不修改 p
+}
+
+bool meow(const int&amp;) { return true; }
+
+void h(int x) [[ensures: meow(x)]] 
+{
+  ++x;  // 未定义行为
+}
+
+void i(int&amp; x) [[ensures: meow(x)]]
+{
+  ++x;  // OK：引用的“值”是其所引用者，而且不能修改
+}
+
+}}
+
+对于拥有被推导返回类型的模板化函数，可在后条件中命名其返回值，而无需额外限制（除非返回值的名字被当做具有[[cpp/language/dependent_name#类型待决的表达式|待决类型]]）。对于拥有被推导返回类型的非模板函数，禁止在声明中（但允许在定义中）命名返回值：
+{{source|1=
+auto h(int x) [[ensures res: true]]; // 错误：拥有被推导返回类型的非模板函数声明上的返回值
+}}
+
+====构建等级与违规处理====
+
+程序能以三个''构建等级''之一进行翻译：
+* ''关闭（off）''：不进行契约检查。
+* ''默认（default）''（若无构建等级则为默认）：对 {{spar|契约等级}} 为 {{ttb|default}} 的契约进行检查。
+* ''审核（audit）''：对 {{spar|契约等级}} 为 {{ttb|default}} 或 {{ttb|audit}} 的契约进行检查。
+
+选择构建等级的机制是由实现定义的。以不同构建等级翻译的翻译单元的组合是条件性支持的。
+
+程序的''违规处理函数''是 {{c|void (const std::contract_violation &amp;)}} 类型的函数（可选地为 {{c|noexcept}} ），以实现定义的方式指定。当被检查契约的谓词求值为 {{c|false}} 时调用该函数。
+* 若违背前条件，则反映于 {{lc|std::contract_violation}} 参数的源码位置是由实现定义的。
+* 若违背后条件，则反映于 {{lc|std::contract_violation}} 参数的源码位置是函数定义的源码位置。
+* 若违背断言，则反映于 {{lc|std::contract_violation}} 参数的源码位置是断言所应用到的语句的源码位置。
+其他情况下传递给违规处理函数的 {{lc|std::contract_violation}} 参数值是由实现定义的。
+
+若违规处理函数通过抛异常退出，而在调用具有无抛出异常说明的函数时契约违规，则调用 {{lc|std::terminate}}：
+
+{{source | 
+void f(int x) noexcept [[expects: x &gt; 0]];
+void g() {
+    f(0); // 若违规处理函数抛出则 terminate
+}
+}}
+
+程序可用两种''违规继续模式（violation continuation mode）''进行翻译：
+* ''关闭（off）''（若不选择继续模式则为默认）：违规处理函数执行完成后，调用 {{lc|std::terminate}}；
+* ''开启（on）''：违约处理函数执行完成后，继续正常执行。
+
+鼓励实现不提供任何程序上的方式查询、设置或修改构建等级，或者设置或修改违规处理函数。
+
+{{langlinks|en|ja}}

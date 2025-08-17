@@ -1,0 +1,89 @@
+{{cpp/title|ungetc}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+int ungetc( int ch, std::FILE *stream );
+}}
+
+若 {{tt|ch}} 不等于 {{lc|EOF}}，则推入字符 {{tt|ch}}（判读为 {{c|unsigned char}}）到与流 {{tt|stream}} 关联的输入缓冲区，其方式使得 {{tt|stream}} 的后继读取操作将取得该字符。不修改与流关联的外部设备。
+
+流重寻位操作 {{lc|std::fseek}}、{{lc|std::fsetpos}} 和 {{lc|std::rewind}} 舍弃 {{tt|ungetc}} 的效果。
+
+若调用 {{tt|ungetc}} 多于一次，而无中间读取或重寻位，则可能失败（换言之，保证大小为 1 的回放缓冲区，但任何更大的缓冲区是实现定义的）。若成功进行了多次 {{tt|ungetc}}，则读取操作以 {{tt|ungetc}} 的逆序取得回放的字符。
+
+若 {{tt|ch}} 等于 {{lc|EOF}}，则操作失败而不影响流。
+
+对 {{tt|ungetc}} 的成功调用清除文件尾状态标志 {{lc|std::feof}}。
+
+在二进制流上对 {{tt|ungetc}} 的成功调用将流位置指示器减少一（若流位置指示器为零，则行为不确定）。
+
+在文本流上对 {{tt|ungetc}} 的成功调用以未指定方式修改流位置指示器，但保证在以读取操作取得所有回放字符后，流位置指示器等于其在 {{tt|ungetc}} 之前的值。
+
+===参数===
+{{par begin}}
+{{par | ch |要推入输入流缓冲区的字符}}
+{{par | stream |要回放字符的文件流}}
+{{par end}}
+
+===返回值===
+成功时返回 {{tt|ch}}。
+
+失败时返回 {{lc|EOF}}，而给定的流保持不变。
+
+===注解===
+实践中，回放缓冲区的大小会在 4k（Linux、MacOS）和 4（Solaris）或保证的最小值 1（HPUX、AIX）间变化。
+
+若回放的字符等于存在于外部字符序列中该位置的字符，则回放缓冲区的表观大小可以更大（实现可以简单地自减读取的文件位置指示器，并避免维护回放缓冲区）。
+
+===示例===
+{{example|演示 {{tt|std::ungetc}} 在其原本目的中的用法：实现 {{lc|std::scanf}}
+|code=
+void demo_scanf(const char* fmt, std::FILE* s)
+{
+    while (*fmt != '\0') {
+        if (*fmt == '%') {
+            switch (*++fmt) {
+                case 'u': {
+                    int c{};
+                    while (std::isspace(c=std::getc(s))) {}
+                    unsigned int num{};
+                    while (std::isdigit(c)) {
+                        num = num*10 + c-'0';
+                        c = std::getc(s);
+                    }
+                    std::printf("%%u scanned %u\n", num);
+                    std::ungetc(c, s);
+                    break;
+                }
+                case 'c': {
+                    int c = std::getc(s);
+                    std::printf("%%c scanned '%c'\n", c);
+                    break;
+                }
+            }
+        } else {
+            ++fmt;
+        }
+    }
+}
+
+int main()
+{
+    if (std::FILE* f = std::fopen("input.txt", "w+")) {
+        std::fputs("123x", f);
+        std::rewind(f);
+        demo_scanf("%u%c", f);
+        std::fclose(f);
+    }
+}
+|output=
+%u scanned 123
+%c scanned 'x'
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc fgetc}}
+{{dsc see c|c/io/ungetc}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

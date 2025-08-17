@@ -1,0 +1,74 @@
+{{cpp/memory/shared_ptr/title|~shared_ptr}}
+{{cpp/memory/shared_ptr/navbar}}
+{{ddcl|
+~shared_ptr();
+}}
+
+若 {{c|*this}} 拥有某个对象且它是最后一个拥有该对象的 {{tt|shared_ptr}}，则通过其拥有的删除器销毁该对象。
+
+析构后，与 {{c|*this}} 共享所有权的智能指针（若存在），将报告比先前值少一的 {{lc|use_count()}}。
+
+===注解===
+不同于 {{lc|std::unique_ptr}}，即使被管理指针为空也调用 {{lc|std::shared_ptr}} 的删除器。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct S
+{
+    S() { std::cout &lt;&lt; "S::S()\n"; }
+    ~S() { std::cout &lt;&lt; "S::~S()\n"; }
+    struct Deleter
+    {
+        void operator()(S* s) const
+        {
+            std::cout &lt;&lt; "S::Deleter()\n";
+            delete s;
+        }
+    };
+};
+
+int main()
+{
+    auto sp = std::shared_ptr&lt;S&gt;{new S, S::Deleter{}&lt;!----&gt;};
+
+    auto use_count = [&amp;sp](char c)
+    {
+        std::cout &lt;&lt; c &lt;&lt; ") use_count(): " &lt;&lt; sp.use_count() &lt;&lt; '\n';
+    };
+
+    use_count('A');
+    {
+        auto sp2 = sp;
+        use_count('B');
+        {
+            auto sp3 = sp;
+            use_count('C');
+        }
+        use_count('D');
+    }
+    use_count('E');
+
+//  sp.reset();
+//  use_count('F'); // 将打印 "F) use_count(): 0"
+}
+|output=
+S::S()
+A) use_count(): 1
+B) use_count(): 2
+C) use_count(): 3
+D) use_count(): 2
+E) use_count(): 1
+S::Deleter()
+S::~S()
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/weak_ptr/dsc destructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

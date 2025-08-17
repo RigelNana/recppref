@@ -1,0 +1,131 @@
+{{cpp/title|unique_copy}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt &gt;
+OutputIt unique_copy( InputIt first, InputIt last, OutputIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt2 unique_copy( ExecutionPolicy&amp;&amp; policy, ForwardIt1 first,
+                        ForwardIt1 last, ForwardIt2 d_first );
+}}
+{{dcl|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class OutputIt, class BinaryPred &gt;
+OutputIt unique_copy( InputIt first, InputIt last,
+                      OutputIt d_first, BinaryPred p );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt1,
+          class ForwardIt2, class BinaryPred &gt;
+ForwardIt2 unique_copy( ExecutionPolicy&amp;&amp; policy,
+                        ForwardIt1 first, ForwardIt1 last,
+                        ForwardIt2 d_first, BinaryPred p );
+}}
+{{dcl end}}
+
+从范围 {{range|first|last}} 复制元素到从 {{c|d_first}} 开始的另一范围，使得目标范围不存在连续的相等元素。只复制每组相等元素的首元素。
+
+@1@ 用 {{c/core|1=operator==}} 比较元素。
+@@ 如果 {{c/core|1=operator==}} 没有建立{{enwiki|equivalence relation|等价关系}}，那么行为未定义。
+
+@3@ 用给定的二元谓词 {{c|p}} 比较元素。
+@@ 如果 {{c|p}} 没有建立等价关系，那么行为未定义。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+如果 {{rev inl|until=c++20|{{c|1=*d_first = *first}} 非法}}{{rev inl|since=c++20|{{c|*first}} 不[[cpp/iterator#类型与可写性|可写入]] {{c|d_first}}}}，那么程序非良构。
+
+如果源范围与目标范围有重叠，那么行为未定义。
+
+给定 {{tt|T}} 为 {{tt|InputIt}} 的值类型，如果重载 {{v|1}} 或 {{v|3}} '''不'''满足以下所有条件，那么行为未定义：
+{{rev begin}}
+{{rev|until=c++20|
+* {{tt|InputIt}} 满足{{named req|ForwardIterator}}的要求。
+}}
+{{rev|since=c++20|
+* {{tt|InputIt}} 实现了 {{lconcept|forward_iterator}}。
+}}
+{{rev end}}
+* {{tt|T}} 既{{named req|CopyConstructible}}也{{named req|CopyAssignable}}。
+* 满足以下所有条件：
+:* {{tt|OutputIt}} 满足{{named req|ForwardIterator}}的要求。
+:* {{tt|OutputIt}} 的值类型也是 {{tt|T}}。
+:* {{tt|T}} {{named req|CopyAssignable}}。
+
+===参数===
+{{par begin}}
+{{par range|3=要处理的|range=源}}
+{{par|d_first|目标范围的起始}}
+{{par exec pol}}
+{{par pred2 eq|p|p1=InputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|OutputIt|OutputIterator}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===返回值===
+指向最后被写入元素后一元素的输出迭代器。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+@1,2@ 应用 {{mathjax-or|\(\scriptsize max(0,N-1)\)|max(0,N-1)}} 次 {{c/core|1=operator==}} 进行比较。
+@3,4@ 应用 {{mathjax-or|\(\scriptsize max(0,N-1)\)|max(0,N-1)}} 次谓词 {{c|p}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L1046 libstdc++] 与 [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L2177 libc++] 中的实现。
+
+===注解===
+如果 {{tt|InputIt}} 满足{{named req|ForwardIterator}}，那么此函数重读取输入，以检测重复。
+
+否则，如果 {{tt|OutputIt}} 满足{{named req|ForwardIterator}}，且 {{tt|InputIt}} 的值类型与 {{tt|OutputIt}} 的相同，那么此函数比较 {{c|*d_first}} 与 {{c|*first}}。
+
+否则，此函数比较 {{c|*first}} 和局部元素副本。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::string s1 {"A string with mmmany letters!"};
+    std::cout &lt;&lt; "去重前：" &lt;&lt; s1 &lt;&lt; '\n';
+
+    std::string s2;
+    std::unique_copy(s1.begin(), s1.end(), std::back_inserter(s2),
+                     [](char c1, char c2) { return c1 == 'm' &amp;&amp; 'm' == c2; });
+
+    std::cout &lt;&lt; "去重后：" &lt;&lt; s2 &lt;&lt; '\n';
+}
+|output=
+去重前：A string with mmmany letters!
+去重后：A string with many letters!
+}}
+
+===Defect reports===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=239|std=C++98|before=谓词会应用 {{c|std::distance(first, last)}} 次|after=（对于非空范围）少应用一次}}
+{{dr list item|wg=lwg|dr=241|std=C++98|before={{tt|InputIt}} 的值类型不需要 {{named req|CopyConstructible}}|after=特定条件下需要}}
+{{dr list item|wg=lwg|dr=538|std=C++98|before={{tt|InputIt}} 的值类型不需要 {{named req|CopyAssignable}}|after=特定条件下需要}}
+{{dr list item|wg=lwg|dr=2439|std=C++98|before={{tt|InputIt}} 的值类型在 {{tt|OutputIt}} 是 {{named req|ForwardIterator}}&lt;br&gt;时不需要 {{named req|CopyConstructible}}|after=特定条件下需要}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/dsc unique}}
+{{dsc inc|cpp/algorithm/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

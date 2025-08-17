@@ -1,0 +1,335 @@
+{{cpp/ranges/title|to}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcla|num=1|since=c++23|1=
+template&lt; class C, ranges::input_range R, class... Args &gt;
+  requires (!ranges::view&lt;C&gt;)
+constexpr C to( R&amp;&amp; r, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++23|1=
+template&lt; template&lt; class... &gt; class C,
+          ranges::input_range R, class... Args &gt;
+constexpr auto to( R&amp;&amp; r, Args&amp;&amp;... args );
+}}
+{{dcla|num=3|since=c++23|1=
+template&lt; class C, class... Args &gt;
+  requires (!ranges::view&lt;C&gt;)
+constexpr /*range adaptor closure*/ to( Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; template&lt; class... &gt; class C, class... Args &gt;
+constexpr /*range adaptor closure*/ to( Args&amp;&amp;... args );
+}}
+{{dcl h|辅助模板}}
+{{dcla|num=5|expos=yes|anchor=reservable-container|1=
+template&lt; class Container &gt;
+constexpr bool /*reservable-container*/ =
+    ranges::sized_range&lt;Container&gt; &amp;&amp;
+    requires (Container&amp; c, ranges::range_size_t&lt;Container&gt; n)
+    {
+        c.reserve(n);
+        { c.capacity() } -&gt; std::same_as&lt;decltype(n)&gt;;
+        { c.max_size() } -&gt; std::same_as&lt;decltype(n)&gt;;
+    };
+}}
+{{dcla|num=6|expos=yes|anchor=container-appendable|1=
+template&lt; class Container, class Reference &gt;
+constexpr bool /*container-appendable*/ =
+    requires (Container&amp; c, Reference&amp;&amp; ref)
+    {
+        requires
+        (
+            requires { c.emplace_back(std::forward&lt;Reference&gt;(ref)); }     {{!!}}
+            requires { c.push_back(std::forward&lt;Reference&gt;(ref)); }        {{!!}}
+            requires { c.emplace(c.end(), std::forward&lt;Reference&gt;(ref)); } {{!!}}
+            requires { c.insert(c.end(), std::forward&lt;Reference&gt;(ref)); }
+        );
+    };
+}}
+{{dcla|num=7|expos=yes|anchor=container-appender|1=
+template&lt; class Reference, class C &gt;
+constexpr auto /*container-appender*/( C&amp; c );
+}}
+{{dcla|num=8|expos=yes|anchor=container-compatible-range|1=
+template&lt; class R, class T &gt;
+concept /*container-compatible-range*/ =
+    ranges::input_range&lt;R&gt; &amp;&amp;
+    std::convertible_to&lt;ranges::range_reference_t&lt;R&gt;, T&gt;;
+}}
+{{dcl end}}
+
+范围转换函数的重载，通过以源范围作为第一个实参来调用接受范围的构造函数、带有 {{tt|std::from_range_t}} 标记的范围构造函数、接受迭代器-哨位对的构造函数，或者通过将源范围的每个元素后插入到以实参构造的对象中，来构造新的非视图对象。
+
+@1@ 以下情况下，从 {{c|r}} 的元素构造类型为 {{tt|C}} 的对象：
+:@a@ 如果 {{tt|C}} 不满足 {{lconcept|input_range}} 或者 {{c|std::convertible_to&lt;ranges::range_reference_t&lt;R&gt;, ranges::range_value_t&lt;C&gt;&gt;}} 为 {{c|true}}：
+::@1@ 如果 {{c|std::constructible_from&lt;C, R, Args...&gt;}} 为 {{c|true}}，则如同从源范围 {{c|std::forward&lt;R&gt;(r)}} 和其余的函数实参 {{c|std::forward&lt;Args&gt;(args)...}} 进行[[cpp/language/direct initialization|直接初始化]]（但不是直接列表初始化）一样，构造非视图对象。
+::@2@ 否则，如果 {{c|std::constructible_from&lt;C, std::from_range_t, R, Args...&gt;}} 为 {{c|true}}，则如同从额外的消歧标记 {{c|std::from_range}}、源范围 {{c|std::forward&lt;R&gt;(r)}} 和其余的函数实参 {{c|std::forward&lt;Args&gt;(args)...}} 进行[[cpp/language/direct_initialization|直接初始化]]（但不是直接列表初始化）一样，构造非视图对象。
+::@3@ 否则，如果以下所有条件都为 {{c|true}}，则如同从迭代器-哨位对（以 {{c|ranges::begin(r)}} 为迭代器并以 {{c|ranges::end(r)}} 为哨位，其中迭代器和哨位具有相同的类型。换句话说，源范围必须是 common_range）和其余的函数实参 {{c|std::forward&lt;Args&gt;(args)...}} [[cpp/language/direct initialization|直接初始化]]（但不是直接列表初始化）类型为 {{tt|C}} 的对象一样，构造非视图对象：
+* {{c/core|ranges::common_range&lt;R&gt;}}
+* 如果 {{c/core|std::iterator_traits&lt;ranges::iterator_t&lt;R&gt;&gt;::iterator_category}} 是有效的，并且代表满足 {{c|std::derived_fromstd::input_iterator_tag}} 的类型
+* {{c|std::constructible_from&lt;C, ranges::iterator_t&lt;R&gt;, ranges::sentinel_t&lt;R&gt;, Args...&gt;}}
+::@4@ 否则，如同从其余的函数实参 {{c|std::forward&lt;Args&gt;(args)...}} [[cpp/language/direct initialization|直接初始化]]（但不是直接列表初始化）类型为 {{tt|C}} 的对象，并在构造后使用以下等效调用，构造非视图范围对象：
+{{anchor|reserve_hint}}
+{{rrev multi|until1=c++26|rev1=
+{{c multi|
+if constexpr (ranges::sized_range&lt;R&gt; &amp;&amp; /*reservable-container*/&lt;C&gt;)
+    c.reserve(static_cast&lt;ranges::range_size_t&lt;C&gt;&gt;(ranges::size(r)));
+ranges::for_each(r, /*container-appender*/(c));
+}}|since2=c++26|rev2=
+{{c multi|
+if constexpr (ranges::approximately_sized_range&lt;R&gt;  
+           &amp;&amp; /*reservable-container*/&lt;C&gt;)
+    c.reserve(static_cast&lt;ranges::range_size_t&lt;C&gt;&gt;(ranges::reserve_hint(r)));
+ranges::for_each(r, /*container-appender*/(c));
+}}
+}}&lt;br&gt;如果 {{tt|R}} 满足 {{rev inl|until=c++26|{{lconcept|sized_range}}}}{{rev inl|since=c++26|{{lconcept|approximately_sized_range}}}} 并且 {{tt|C}} 满足 {{lsi|#reservable-container}}，则构造的类型为 {{tt|C}} 的对象 {{c|c}} 能够以初始存储大小 {{rev inl|until=c++26|{{c|ranges::size(r)}}}}{{rev inl|since=c++26|{{c|ranges::reserve_hint(r)}}}} 预留存储空间，以防止在插入新元素时进行额外的分配。向 {{c|c}} 追加 {{c|r}} 的每个元素。
+上述操作在以下两个条件都为 {{c|true}} 时有效：
+* {{c|std::constructible_from&lt;C, Args...&gt;}}
+* {{box|{{lsi|#container-appendable}}{{c/core|&lt;C, ranges::range_reference_t&lt;R&gt;&gt;}}}}
+:@b@ 否则，返回表达式等效于：
+{{c multi|
+to&lt;C&gt;(ranges::ref_view(r) {{!}} views::transform([](auto&amp;&amp; elem)|
+{|
+    return to&lt;ranges::range_value_t&lt;C&gt;&gt;(std::forward&lt;decltype(elem)&gt;(elem));|
+}), std::forward&lt;Args&gt;(args)...)
+}}&lt;br&gt;
+如果 {{c|ranges::input_range&lt;ranges::range_reference_t&lt;C&gt;&gt;}} 为 {{c|true}} 则允许在范围内嵌套范围构造。
+否则，程序非良构。
+
+@2@ 从 {{c|r}} 的元素构造推导出的类型的对象。
+令 {{c/core|/*input-iterator*/}} 为仅用于阐述的满足 {{named req|InputIterator}} 的类型：
+{{dcl begin}}
+{{dcla|anchor=no|expos=yes|1=
+struct /*input-iterator*/
+{
+    using iterator_category = std::input_iterator_tag;
+    using value_type = ranges::range_value_t&lt;R&gt;;
+    using difference_type = std::ptrdiff_t;
+    using pointer = std::add_pointer_t&lt;ranges::range_reference_t&lt;R&gt;&gt;;
+    using reference = ranges::range_reference_t&lt;R&gt;;
+    reference operator*() const;                      // 不定义
+    pointer operator-&gt;() const;                       // 不定义
+    /*input-iterator*/&amp; operator++();                 // 不定义
+    /*input-iterator*/ operator++(int);               // 不定义
+    bool operator==(const /*input-iterator*/&amp;) const; // 不定义
+};
+}}
+{{dcl end}}
+定义 {{c|/*DEDUCE-EXPR*/}} 为以下内容：
+* {{c|C(std::declval&lt;R&gt;(), std::declval&lt;Args&gt;()...)}}，如果该表达式是有效的。
+* 否则，{{c multi|C(std::from_range, std::declval&lt;R&gt;(),|  std::declval&lt;Args&gt;()...)}}，如果该表达式是有效的。
+* 否则，{{c multi|C(std::declval&lt;/*input-iterator*/&gt;(),|  std::declval&lt;/*input-iterator*/&gt;(),|  std::declval&lt;Args&gt;()...)}}，如果该表达式是有效的。
+* 否则，程序非良构。
+该调用等价于 {{c multi|to&lt;decltype(/*DEDUCE-EXPR*/)&gt;|    (std::forward&lt;R&gt;(r), std::forward&lt;Args&gt;(args)...)}}。
+@3,4@ 返回完美转发调用包装器，它也是{{named req|RangeAdaptorClosureObject}}。
+@5@ 如果满足 {{c/core|ranges::sized_range}} 并且有资格被预留，则为 {{c|true}}。
+@6@ 如果 {{tt|Reference}} 类型的一个元素可以通过成员函数调用 {{tt|emplace_back}}、{{tt|push_back}}、{{tt|emplace}} 或 {{tt|insert}} 向 {{tt|Container}} 追加，则为 {{c|true}}。
+@7@ 返回一个函数对象，对所返回的函数对象的调用表达式等价于向容器追加一个元素。返回表达式等价于：
+{{c multi|
+return [&amp;c]&lt;class Reference&gt;(Reference&amp;&amp; ref)
+{
+    if constexpr (requires { c.emplace_back(std::declval&lt;Reference&gt;()); })
+        c.emplace_back(std::forward&lt;Reference&gt;(ref));
+    else if constexpr (requires { c.push_back(std::declval&lt;Reference&gt;()); })
+        c.push_back(std::forward&lt;Reference&gt;(ref));
+    else if constexpr (requires { c.emplace(c.end(),
+                                            std::declval&lt;Reference&gt;()); })
+        c.emplace(c.end(), std::forward&lt;Reference&gt;(ref));
+    else
+        c.insert(c.end(), std::forward&lt;Reference&gt;(ref));
+}
+}}
+{{anchor|容器兼容范围}}
+@8@ 用于输入范围 {{tt|R}} 的构造中的容器定义，该范围的范围引用类型必须可转换为 {{tt|T}}。
+
+===参数===
+{{par begin}}
+{{par|r|源范围对象}}
+{{par|args|用于 {{vl|1,2}} 构造范围或 {{vl|3,4}} 绑定到范围适配器闭包对象的最后形参的实参列表。}}
+{{par hreq}}
+{{par req|{{tt|C}} 必须是无 cv 限定的类类型 {{vl|1,3}}}}
+{{par end}}
+
+===返回值===
+@1,2@ 所构造的非视图对象
+@3,4@ 未指定类型的范围适配器闭包对象，具有以下属性：
+{{member|{{small|ranges::to}} 返回类型|2=
+====成员对象====
+返回的对象的行为如同它没有目标对象，以及用 {{c|std::tuple&lt;std::decay_t&lt;Args&gt;...&gt;(std::forward&lt;Args&gt;(args)...)}} 构造的 {{lc|std::tuple}} 对象 {{c|tup}} 一样，但返回的对象的赋值行为是未指定的，而且名字只是为了阐述。
+
+====构造函数====
+{{tt|ranges::to}} {{vl|3,4}} 的返回类型的行为如同它的复制/移动构造函数执行逐成员复制/移动一样。如果它的（上面指定的）所有成员对象都是{{named req/core|CopyConstructible}}的，那么它是{{named req|CopyConstructible}}的；否则，它是{{named req|MoveConstructible}}的。
+
+====成员函数 {{tt|operator()}}====
+给定对象 {{tt|G}}，它是从之前的调用 {{c|range::to&lt;/* 见下文 */&gt;(args...)}} 得到的，当指代 {{tt|G}} 的泛左值 {{c|g}} 在函数调用表达式 {{c|g(r)}} 中被调用时，会发生对存储对象的调用，如同通过
+* {{c|ranges::to&lt;/* 见下文 */&gt;(r, std::get&lt;Ns&gt;(g.tup)...)}}，其中：
+:* {{c|r}} 是必须满足 {{lconcept|input_range}} 的源范围对象。
+:* {{c|Ns}} 是整数包 {{c|0, 1, ..., (sizeof...(Args) - 1)}}。
+:* {{c|g}} 在调用表达式中是左值或者右值。因此 {{c|std::move(g)(r)}} 可以将绑定的实参移动到调用中，而 {{c|g(r)}} 则会复制。
+:* 指定的模板实参是 {{vl|3}} {{tt|C}} 或 {{vl|4}} 从类模板 {{tt|C}} 推导出的类型，它必须不满足 {{lconcept|view}}。
+
+如果 {{c|g}} 具有 volatile 限定类型，则程序非良构。
+}}
+
+===异常===
+仅当非视图对象的构造抛出异常时有抛出。
+
+===注解===
+向容器中插入元素可能涉及复制，这可能比移动更低效，因为在间接调用过程中会产生左值引用。用户可以选择使用 {{c/core|views::as_rvalue}} 来适配范围，以便它们的元素在间接调用过程中总是产生右值引用，这意味着移动。
+
+当使用管道语法时，括号是必须的。
+
+{{source|1=
+auto vec = r {{!}} std::ranges::to&lt;std::vector&gt;;   // 错误
+auto vec = r {{!}} std::ranges::to&lt;std::vector&gt;(); // OK
+}}
+
+{{ftm begin|sort=yes}}
+{{ftm|__cpp_lib_ranges_to_container|std=C++23|value=202202L|{{tt|std::ranges::to}}}}
+{{ftm|__cpp_lib_ranges_reserve_hint|std=C++26|value=202502L|{{lc|ranges::approximately_sized_range}}, {{lc|ranges::reserve_hint}}, 以及对 {{tt|std::ranges::to}} 的[[#reserve_hint|变动]]}}
+{{ftm end}}
+
+===示例===
+{{example
+|预览链接：[https://godbolt.org/z/s4E3n8ed5 Compiler Explorer]
+|code=
+#include &lt;boost/container/devector.hpp&gt;
+#include &lt;concepts&gt;
+#include &lt;initializer_list&gt;
+#include &lt;list&gt;
+#include &lt;print&gt;
+#include &lt;ranges&gt;
+#include &lt;regex&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+#ifndef __cpp_lib_format_ranges
+#include &lt;format&gt;
+#include &lt;sstream&gt;
+
+auto print_aid(const auto&amp; v)
+{
+    std::ostringstream out;
+    out &lt;&lt; '[';
+    for (int n{}; const auto&amp; e : v)
+        out &lt;&lt; (n++ ? ", " : "") &lt;&lt; e;
+    out &lt;&lt; ']';
+    return out;
+}
+
+template&lt;typename T&gt;
+struct std::formatter&lt;std::vector&lt;T&gt;, char&gt;
+{
+    template&lt;class ParseContext&gt;
+    constexpr ParseContext::iterator parse(ParseContext&amp; ctx)
+    {
+        return ctx.begin();
+    }
+
+    template&lt;class FmtContext&gt;
+    FmtContext::iterator format(auto const&amp; s, FmtContext&amp; ctx) const
+    {
+        auto out{print_aid(s)};
+        return std::ranges::copy(std::move(out).str(), ctx.out()).out;
+    }
+};
+template&lt;typename T&gt;
+struct std::formatter&lt;std::list&lt;T&gt;, char&gt;
+{
+    template&lt;class ParseContext&gt;
+    constexpr ParseContext::iterator parse(ParseContext&amp; ctx)
+    {
+        return ctx.begin();
+    }
+
+    template&lt;class FmtContext&gt;
+    FmtContext::iterator format(auto const&amp; s, FmtContext&amp; ctx) const
+    {
+        auto out{print_aid(s)};
+        return std::ranges::copy(std::move(out).str(), ctx.out()).out;
+    }
+};
+#end if
+
+int main()
+{
+    auto vec = std::views::iota(1, 5)
+             {{!}} std::views::transform([](int v){ return v * 2; })
+             {{!}} std::ranges::to&lt;std::vector&gt;();
+
+    static_assert(std::same_as&lt;decltype(vec), std::vector&lt;int&gt;&gt;);
+    std::println("{}", vec);
+
+    auto list = vec {{!}} std::views::take(3) {{!}} std::ranges::to&lt;std::list&lt;double&gt;&gt;();
+    std::println("{}", list);
+}
+
+void ctor_demos()
+{
+    // 1.a.1) 直接初始化
+    {
+        char array[]{'a', 'b', '\0', 'c'};
+
+        // 实参类型可以转换为结果值类型：
+        auto str_to = std::ranges::to&lt;std::string&gt;(array);
+        // 等价于
+        std::string str(array);
+
+        // 结果类型不是输入范围：
+        auto re_to = std::ranges::to&lt;std::regex&gt;(array);
+        // 等价于
+        std::regex re(array);
+    }
+
+    // 1.a.2) from_range 构造函数
+    {
+        auto list = {'a', 'b', '\0', 'c'};
+
+        // 实参类型可以转换为结果值类型：
+        auto str_to = std::ranges::to&lt;std::string&gt;(list);
+        // 等价于
+        // std::string str(std::from_range, list);
+
+        // 结果类型不是输入范围：
+        [[maybe_unused]]
+        auto pair_to = std::ranges::to&lt;std::pair&lt;std::from_range_t, bool&gt;&gt;(true);
+        // 等价于
+        std::pair&lt;std::from_range_t, bool&gt; pair(std::from_range, true);
+    }
+
+    // 1.a.3) 迭代器对构造函数
+    {
+        auto list = {'a', 'b', '\0', 'c'};
+        
+        // 实参类型可以转换为结果值类型：
+        auto devector_to = std::ranges::to&lt;boost::container::devector&lt;char&gt;&gt;(list);
+        // 等价于
+        boost::container::devector&lt;char&gt; devector(std::ranges::begin(list),
+                                                  std::ranges::end(list));
+
+        // 结果类型不是输入范围：
+        std::regex re;
+        auto it_to = std::ranges::to&lt;std::cregex_iterator&gt;(list, re);
+        // 等价于
+        std::cregex_iterator it(std::ranges::begin(list), std::ranges::end(list), re);
+    }
+}
+|output=
+[2, 4, 6, 8]
+[2, 4, 6]
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3984|std=C++23|before=当 {{c|R&amp;}} 未实现 {{lconcept|viewable_range}} 时 {{tt|ranges::to}} 的嵌套构造分支会导致程序非良构|after=使之良构}}
+{{dr list item|wg=lwg|dr=4016|std=C++23|before={{tt|ranges::to}} 的容器插入分支涉及到使用插入迭代器|after=改为直接向容器追加元素}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Range conversions|id=range.utility.conv|section=26.5.7}}
+{{ref std end}}
+
+{{langlinks|en}}

@@ -1,0 +1,98 @@
+{{cpp/experimental/parallel/title|transform_reduce}}
+{{cpp/experimental/parallelism/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/numeric}}
+{{dcl|num=1|since=parallelism|
+template&lt; class InputIt, class UnaryOp, class T, class BinaryOp &gt;
+T transform_reduce( InputIt first, InputIt last,
+                    UnaryOp unary_op, T init, BinaryOp binary_op );
+}}
+{{dcl|num=2|since=parallelism|
+template&lt; class ExecutionPolicy,
+          class InputIt, class UnaryOp, class T, class BinaryOp &gt;
+T transform_reduce( ExecutionPolicy&amp;&amp; policy,
+                    InputIt first, InputIt last,
+                    UnaryOp unary_op, T init, BinaryOp binary_op );
+}}
+{{dcl end}}
+
+对范围 {{range|first|last}} 中的每个元素应用 {{c|unary_op}}，并将其结果（可能以未指明的方式排列和聚合）和初值 {{c|init}} 一起在 {{c|binary_op}} 上归约。
+
+如果 {{c|binary_op}} 不可结合或不可交换，则其行为不确定。
+
+如果 {{c|unary_op}} 或 {{c|binary_op}} 修改了任何元素或使 {{range|first|last}} 中的任何迭代器失效，则其行为未定义。
+
+===参数===
+{{par begin}}
+{{par|first, last|要向其运用算法的元素范围}}
+{{par|init|广义和的初值}}
+{{par|policy|[[cpp/experimental/parallelism#执行策略|执行策略]]}}
+{{par|unary_op|将应用于输入元素范围的每个元素的一元{{named req|FunctionObject}}。其返回类型必须课接受为 {{c|binary_op}} 的输入}}
+{{par|binary_op|将以未指明顺序应用于 {{c|unary_op}} 的结果，其他 {{c|binary_op}} 的结果和 {{c|init}} 上的二元{{named req|FunctionObject}}}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===返回值===
+{{c|init}} 与 {{c|unary_op(*first)}}, {{c|unary_op(*(first + 1))}}, ... {{c|unary_op(*(last - 1))}} 在 {{c|binary_op}} 上的广义和，
+其中广义和 {{math|GSUM(op, a{{su|b=1}}, ..., a{{su|b=N}})}} 定义如下：
+* 如果 {{math|N {{=}} 1}}，则为 {{math|a{{su|b=1}}}}，
+* 如果 {{math|N &gt; 1}}，则为 {{math|op(GSUM(op, b{{su|b=1}}, ..., b{{su|b=K}}), GSUM(op, b{{su|b=M}}, ..., b{{su|b=N}}))}} 其中
+:* {{math|b{{su|b=1}}, ..., b{{su|b=N}}}} 可以为 {{math|a1, ..., aN}} 的任意排列，且
+:* {{math|1 &lt; K + 1 {{=}} M ≤ N}}
+
+换言之，{{c|unary_op}} 的结果可能以任意顺序分钟和排布。
+
+===复杂度===
+{{math|O(last - first)}} 次运用 {{c|unary_op}} 和 {{c|binary_op}}。
+
+===异常===
+{{cpp/experimental/exceptions_reporting_behavior}}
+
+===注解===
+{{c|unary_op}} 不对 {{c|init}} 运用。
+
+如果范围为空，则返回未修改的 {{c|init}}。
+
+{{cpp/experimental/execution_policy_note}}
+
+===示例===
+{{example|transform_reduce 可以用于并行化 {{lc|std::inner_product}}：
+|code=
+#include &lt;boost/iterator/zip_iterator.hpp&gt;
+#include &lt;boost/tuple.hpp&gt;
+#include &lt;experimental/execution_policy&gt;
+#include &lt;experimental/numeric&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;double&gt; xvalues(10007, 1.0), yvalues(10007, 1.0);
+
+    double result = std::experimental::parallel::transform_reduce(
+        std::experimental::parallel::par,
+        boost::iterators::make_zip_iterator(
+            boost::make_tuple(std::begin(xvalues), std::begin(yvalues))),
+        boost::iterators::make_zip_iterator(
+            boost::make_tuple(std::end(xvalues), std::end(yvalues))),
+        [](auto r) { return boost::get&lt;0&gt;(r) * boost::get&lt;1&gt;(r); }
+        0.0,
+        std::plus&lt;&gt;()
+    );
+    std::cout &lt;&lt; result &lt;&lt; '\n';
+}
+|output=
+10007
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/experimental/parallelism/dsc reduce}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

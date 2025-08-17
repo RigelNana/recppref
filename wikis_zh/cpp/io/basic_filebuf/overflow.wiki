@@ -1,0 +1,68 @@
+{{cpp/io/basic_filebuf/title|overflow}}
+{{cpp/io/basic_filebuf/navbar}}
+{{ddcl|1=
+protected:
+virtual int_type overflow( int_type ch = Traits::eof() );
+}}
+
+从放置区写一些数据到关联字符序列（到文件）。
+
+行为类似基类版本 {{lc|std::basic_streambuf::overflow()}}，但“消耗字符”的行为定义如下：
+
+@1@ 首先，使用所浸染本地环境的 {{lc|std::codecvt::out}} 把这些字符转换为外部（可能多字节）表示，并存储于临时缓冲区，如下：（{{c|XSIZE}} 是未指明的缓冲区大小）
+{{source|1=
+const std::codecvt&lt;CharT, char, typename Traits::state_type&gt;&amp; a_codecvt =
+    std::use_facet&lt;std::codecvt&lt;CharT, char, typename Traits::state_type&gt;&gt;(getloc());
+typename Traits::state_type state;
+CharT* end;
+char xbuf[XSIZE];
+char* xbuf_end;
+std::codecvt_base::result r =
+    a_codecvt.out(state, pbase(), pptr(), end, xbuf, xbuf + XSIZE, xbuf_end);
+}}
+
+@2@ 然后，将缓冲区中所有完全转换的字符写入文件。正式而言，基于 {{c|r}} 的值实施以下步骤：
+{|class="wikitable" style="text-align: center;"
+!{{normal|{{c|r}}}}
+!操作
+|-
+|{{c|std::codecvt_base::ok}}
+|将 {{range|xbuf|xbuf_end}} 中的字符输出到文件，并且在输出失败时失败。此时如果 {{c|1=pbase() != pptr()}} 和 {{c|1=pbase() == end}} 都是 {{c|true}}（意味着 {{c|xbuf}} 即使对于一个外部字符也不够大），那么增加 {{c|XSIZE}} 并从头开始重试。
+|-
+|{{c|std::codecvt_base::partial}}
+|将 {{range|xbuf|xbuf_end}} 中经转换的外部字符输出到文件，然后以 {{range|end|pptr()}} 中剩余未转换的内部字符重复之。如果输出失败，那么直接失败（不重复）。
+|-
+|{{c|std::codecvt_base::noconv}}
+|将 {{range|pbase()|pptr()}} 中的字符输出到文件。
+|-
+|{{c|std::codecvt_base::error}}
+|直接失败。
+|}
+
+@@ 如果关联的文件没有打开（{{lc|is_open()}} 返回 {{c|false}}），那么输出始终会失败。
+
+{{rrev|since=c++26|
+@3@ 建立一个[[cpp/language/as if|可观察检查点]]。
+}}
+
+===参数===
+{{par begin}}
+{{par|ch|要在放置区存储的字符}}
+{{par end}}
+
+===返回值===
+在指示成功时返回 {{c|Traits::not_eof(c)}} 或在指示失败时返回 {{c|Traits::eof()}}。
+
+===注解===
+如果 {{c|a_codecvt.always_noconv()}} 会返回 {{c|true}}，那么可以跳过调用 {{c|a_codecvt.out()}}。
+
+===示例===
+{{example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc overflow}}
+{{dsc inc|cpp/io/basic_filebuf/dsc underflow}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,193 @@
+{{cpp/utility/variant/title|variant}}
+{{cpp/utility/variant/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|
+constexpr variant() noexcept(/* 见下文 */);
+}}
+{{dcl|num=2|since=c++17|
+constexpr variant( const variant&amp; other );
+}}
+{{dcl|num=3|since=c++17|
+constexpr variant( variant&amp;&amp; other ) noexcept(/* 见下文 */);
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class T &gt;
+constexpr variant( T&amp;&amp; t ) noexcept(/* 见下文 */);
+}}
+{{dcl|num=5|since=c++17|
+template&lt; class T,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_type_t&lt;T&gt;,
+                            Args&amp;&amp;... args );
+}}
+{{dcl|num=6|since=c++17|
+template&lt; class T,
+          class U,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_type_t&lt;T&gt;,
+                            std::initializer_list&lt;U&gt; il,
+                            Args&amp;&amp;... args );
+}}
+{{dcl|num=7|since=c++17|
+template&lt; std::size_t I,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_index_t&lt;I&gt;,
+                            Args&amp;&amp;... args );
+}}
+{{dcl|num=8|since=c++17|
+template&lt; std::size_t I,
+          class U,
+          class... Args &gt;
+constexpr explicit variant( std::in_place_index_t&lt;I&gt;,
+                            std::initializer_list&lt;U&gt; il,
+                            Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+构造新的 {{tt|variant}} 对象。
+
+@1@ 默认构造函数。构造 {{tt|variant}}，保有首个可选项（{{rlp|index|index()}} 为零）的[[cpp/language/value initialization|值初始化]]的值。
+* 当且仅当可选项类型 {{tt|T_0}} 的值初始化满足 [[cpp/language/constexpr|constexpr 函数]]的要求时，此构造函数为 {{co|constexpr}}。
+* {{cpp/enable_if| {{c|std::is_default_constructible_v&lt;T_0&gt;}} 为 {{co|true}} }}。
+
+@2@ 复制构造函数。若 {{c|other}} 并非 {{lc|valueless_by_exception}}，则构造一个保有与 {{c|other}} 相同可选项的 {{tt|variant}}，并以 {{c|*std::get_if&lt;other.index()&gt;(std::addressof(other))}} [[cpp/language/direct initialization|直接初始化]]所含值。否则，初始化一个 {{lc|valueless_by_exception}} 的变体。
+* 此构造函数定义为被弃置，除非 {{c|std::is_copy_constructible_v&lt;T_i&gt;}} 对于 {{c|Types...}} 中的所有 {{tt|T_i}} 均为 {{co|true}}。
+* 若 {{c|std::is_trivially_copy_constructible_v&lt;T_i&gt;}} 对 {{c|Types...}} 中的所有 {{tt|T_i}} 为 {{co|true}} 则它为平凡。
+
+@3@ 移动构造函数。若 {{c|other}} 并非 {{lc|valueless_by_exception}}，则构造一个保有与 {{tt|other}} 相同可选项的 {{tt|variant}} 并以 {{c|std::move(*std::get_if&lt;other.index()&gt;(std::addressof(other)))}} [[cpp/language/direct initialization|直接初始化]]所含值。否则，初始化一个 {{lc|valueless_by_exception}} 的变体。
+* {{cpp/enable_if| {{c|std::is_move_constructible_v&lt;T_i&gt;}} 对于 {{c|Types...}} 中的所有 {{tt|T_i}} 均为 {{co|true}} }}。
+* 若 {{c|std::is_trivially_move_constructible_v&lt;T_i&gt;}} 对 {{c|Types...}} 中的所有 {{tt|T_i}} 均为 {{co|true}} 则它为平凡。
+
+@4@ 转换构造函数。对 {{c|Types...}} 中的每个 {{tt|T_i}} 有一个虚设的函数 {{tt|F(T_i)}} 的重载，根据表达式 {{c|F(std::forward&lt;T&gt;(t))}} 进行重载决议得到 {{tt|T_j}}，构造一个持有它的 {{tt|variant}}，但不考虑窄化转换。
+正式而言：
+:* 只有当声明 {{c|1=T_i x[] = { std::forward&lt;T&gt;(t) };}} 对某个虚设变量 {{tt|x}} 有效时，才考虑 {{c|F(T_i)}}。
+@@ 如同用直接非列表初始化从 {{c|std::forward&lt;T&gt;(t)}} [[cpp/language/direct initialization|直接初始化]]所含值。
+* {{cpp/enable_if|
+** {{c|sizeof...(Types) &gt; 0}}，
+** {{rev inl|until=c++20|{{c|std::decay_t&lt;T&gt;}}}}{{rev inl|since=c++20|{{c|std::remove_cvref_t&lt;T&gt;}}}} 既不与 {{c|variant}} 为同一类型，也不是 {{lc|std::in_place_type_t}} 或 {{lc|std::in_place_index_t}} 的特化，
+**  {{c|std::is_constructible_v&lt;T_j, T&gt;}} 为 {{co|true}}，
+** 且表达式 {{c|F(std::forward&lt;T&gt;(t))}}（令 {{tt|F}} 为上述虚构函数的重载集）为良构}}。
+* 若 {{tt|T_j}} 的被选择构造函数为 constexpr 构造函数，则此构造函数为 {{co|constexpr}} 构造函数。
+{{source|1=
+std::variant&lt;std::string&gt; v("abc"); // OK
+std::variant&lt;std::string, std::string&gt; w("abc"); // 非良构
+std::variant&lt;std::string, const char*&gt; x("abc"); // OK：选择 const char*
+std::variant&lt;std::string, bool&gt; y("abc"); // OK：选择 string；bool 不是候选
+std::variant&lt;float, long, double&gt; z = 0; // OK：保有 long
+                                         // float 与 double 不是候选
+}}
+
+@5@ 构造一个有指定可选项类型 {{tt|T}} 的 {{tt|variant}} 并以实参 {{c|std::forward&lt;Args&gt;(args)...}} 初始化所含值。
+* 若 {{tt|T}} 的被选择构造函数是 {{co|constexpr}} 构造函数，则此构造函数亦为 {{co|constexpr}} 构造函数。
+* {{cpp/enable_if| {{c|Types...}} 中正好出现一次 {{tt|T}} 且 {{c|std::is_constructible_v&lt;T, Args...&gt;}} 为 {{co|true}} }}。
+
+@6@ 构造一个有指定可选项类型 {{tt|T}} 的 {{tt|variant}} 并以实参 {{c|il, std::forward&lt;Args&gt;(args)...}} 初始化所含值。
+* 若 {{tt|T}} 的被选择构造函数是 {{co|constexpr}} 构造函数，则此构造函数亦为 {{co|constexpr}} 构造函数。
+* {{cpp/enable_if| {{c|Types...}} 中正好出现一次 {{tt|T}} 且 {{c|std::is_constructible_v&lt;T, initializer_list&lt;U&gt;&amp;, Args...&gt;}} 为 {{co|true}} }}。
+
+@7@ 构造一个有索引 {{tt|I}} 所指定的可选项类型 {{tt|T_i}} 的 {{tt|variant}} 并以实参 {{c|std::forward&lt;Args&gt;(args)...}} 初始化所含值。
+* 若 {{tt|T_i}} 的被选择构造函数是 {{co|constexpr}} 构造函数，则此构造函数亦为 {{co|constexpr}} 构造函数。
+* {{cpp/enable_if| {{c|I &lt; sizeof...(Types)}} 与 {{c|std::is_constructible_v&lt;T_i, Args...&gt;}} 皆为 {{co|true}} }}。
+
+@8@ 构造一个有索引 {{tt|I}} 所指定的可选项类型 {{tt|T_i}} 的 {{tt|variant}} 并以实参 {{c|il, std::forward&lt;Args&gt;(args)...}} 初始化所含值。
+* 若 {{tt|T_i}} 的被选择构造函数是 {{co|constexpr}} 构造函数，则此构造函数亦为 {{co|constexpr}} 构造函数。
+* {{cpp/enable_if| {{c|I &lt; sizeof...(Types)}} 与 {{c|std::is_constructible_v&lt;T_i, std::initializer_list&lt;U&gt;&amp;, Args...&gt;}} 皆为 {{co|true}} }}。
+
+===参数===
+{{par begin}}
+{{par|other|另一个要复制/移动其所含值的 {{tt|variant}} 对象}}
+{{par|t|用以初始化被所含值的值}}
+{{par|args...|用以初始化所含值的实参}}
+{{par|il|用以初始化所含值的初始化式列表}}
+{{par end}}
+
+===异常===
+@1@ 可能抛出首个可选项的值初始化所抛的任何异常。{{noexcept|std::is_nothrow_default_constructible_v&lt;T_0&gt;}}
+@2@ 可能抛出直接初始化 {{c|Types...}} 中的任何 {{tt|T_i}} 时所抛的任何异常。
+@3@ 可能抛出移动构造 {{c|Types...}} 中的任何 {{tt|T_i}} 时所抛的任何异常。{{noexcept| (std::is_nothrow_move_constructible_v&lt;Types&gt; &amp;&amp; ...)}}
+@4@ 可能抛出初始化所选可选项 {{tt|T_j}} 时所抛的任何异常。{{noexcept|std::is_nothrow_constructible_v&lt;T_j, T&gt;}}
+@5-8@ 可能抛出调用所选可选项的所选构造函数时所抛的任何异常。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;variant&gt;
+#include &lt;vector&gt;
+
+using vector_t = std::vector&lt;int&gt;;
+
+auto&amp; operator&lt;&lt;(auto&amp; out, const vector_t&amp; v)
+{
+    out &lt;&lt; "{ ";
+    for (int e : v)
+        out &lt;&lt; e &lt;&lt; ' ';
+    return out &lt;&lt; '}';
+}
+
+int main()
+{
+    // 值初始化第一个可选项
+    std::variant&lt;int, std::string&gt; var0;
+    assert(std::holds_alternative&lt;int&gt;(var0) and
+           var0.index() == 0 and
+           std::get&lt;int&gt;(var0) == 0);
+
+    // 用 std::string{"STR"}; 初始化第一个可选项
+    std::variant&lt;std::string, int&gt; var1{"STR"};
+    assert(var1.index() == 0);
+    std::cout &lt;&lt; "1) " &lt;&lt; std::get&lt;std::string&gt;(var1) &lt;&lt; '\n';
+
+    // 用 int = 42; 初始化第二个可选项
+    std::variant&lt;std::string, int&gt; var2{42};
+    assert(std::holds_alternative&lt;int&gt;(var2));
+    std::cout &lt;&lt; "2) " &lt;&lt; std::get&lt;int&gt;(var2) &lt;&lt; '\n';
+
+    // 用 std::string{4, 'A'}; 初始化第一个可选项
+    std::variant&lt;std::string, vector_t, float&gt; var3
+    {
+        std::in_place_type&lt;std::string&gt;, 4, 'A'
+    };
+    assert(var3.index() == 0);
+    std::cout &lt;&lt; "3) " &lt;&lt; std::get&lt;std::string&gt;(var3) &lt;&lt; '\n';
+
+    // 用 std::vector{1,2,3,4,5}; 初始化第二个可选项
+    std::variant&lt;std::string, vector_t, char&gt; var4
+    {
+        std::in_place_type&lt;vector_t&gt;, {1, 2, 3, 4, 5}
+    };
+    assert(var4.index() == 1);
+    std::cout &lt;&lt; "4) " &lt;&lt; std::get&lt;vector_t&gt;(var4) &lt;&lt; '\n';
+
+    // 用 std::string{"ABCDE", 3}; 初始化第一个可选项
+    std::variant&lt;std::string, vector_t, bool&gt; var5 {std::in_place_index&lt;0&gt;, "ABCDE", 3};
+    assert(var5.index() == 0);
+    std::cout &lt;&lt; "5) " &lt;&lt; std::get&lt;std::string&gt;(var5) &lt;&lt; '\n';
+
+    // 用 std::vector(4, 42); 初始化第二个可选项
+    std::variant&lt;std::string, vector_t, char&gt; var6 {std::in_place_index&lt;1&gt;, 4, 42};
+    assert(std::holds_alternative&lt;vector_t&gt;(var6));
+    std::cout &lt;&lt; "6) " &lt;&lt; std::get&lt;vector_t&gt;(var6) &lt;&lt; '\n';
+}
+|output=
+1) STR
+2) 42
+3) AAAA
+4) { 1 2 3 4 5 }
+5) ABC
+6) { 42 42 42 42 }
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++17|dr=2901|before=提供具分配器构造函数但 {{tt|variant}} 不能正确支持分配器|after=移除构造函数}}
+{{dr list item|paper=p0739r0|std=C++17|before=转换构造函数模板与类模板实参推导交互困难|after=添加了约束}}
+{{dr list item|wg=lwg|std=C++17|dr=3024|before=若任何成员类型非可复制，则复制构造函数不参与重载决议|after=改为定义为被弃置}}
+{{dr list item|paper=P0602R4|std=C++17|before=即使底层构造函数平凡，复制/移动构造函数亦可为非平凡|after=要求传播平凡性}}
+{{dr list item|paper=P0608R3|std=C++17|before=转换构造函数盲目地组成重载集，导致不想要的转换|after=不考虑窄化与布尔转换}}
+{{dr list item|paper=P1957R2|std=C++17|before=对 {{co|bool}} 的转换构造函数不允许隐式转换|after=指针向 {{co|bool}} 转换是窄化，且转换构造函数对 {{co|bool}} 没有例外}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

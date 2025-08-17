@@ -1,0 +1,123 @@
+{{cpp/io/basic_stringbuf/title|underflow}}
+{{cpp/io/basic_stringbuf/navbar}}
+{{ddcl|
+protected:
+virtual int_type underflow()
+}}
+
+从缓冲的获取区读取下个字符。
+
+具体而言：
+
+@1@ 如果输入序列拥有可用的读位置（{{c|egptr() &gt; gptr()}}），那么返回 {{c|Traits::to_int_type(*gptr())}}。
+
+@2@ 否则，如果 {{c|pptr() &gt; egptr()}}（从上次更改 {{lc|egptr()}} 的 {{lc|overflow()}} 起插入了一些字符到流中），那么通过更改 {{lc|egptr()}} 为等于 {{lc|pptr()}} 以扩展获取区结尾以包含最近插入的字符，再返回 {{c|Traits::to_int_type(*gptr())}}。
+
+@3@ 否则，返回 {{c|Traits::eof()}}。
+
+缓冲区中任何已被初始化的字符，无关乎它源自构造函数中传递的字符串还是为 {{lc|overflow()}} 所后附，都被认为是输入序列的一部分。
+
+===参数===
+（无）
+
+===返回值===
+成功情况下为 {{c|Traits::to_int_type(*gptr())}}（获取区中要读取的下个字符），失败情况下为 {{c|Traits::eof()}}。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+struct mybuf : std::stringbuf
+{
+    mybuf(const std::string&amp; new_str,
+          std::ios_base::openmode which = std::ios_base::in {{!}} std::ios_base::out)
+        : std::stringbuf(new_str, which) {}
+
+    int_type overflow(int_type c)
+    {
+        std::cout &lt;&lt; "overflow() 前：获取区的大小是  " &lt;&lt; egptr() - eback() &lt;&lt; ' '
+                  &lt;&lt; " 放置区的大小是 " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        int_type rc = std::stringbuf::overflow(c);
+        std::cout &lt;&lt; "overflow() 后：获取区的大小是  " &lt;&lt; egptr() - eback() &lt;&lt; ' '
+                  &lt;&lt; " 放置区的大小是 " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        return rc;
+    }
+    
+    int_type underflow()
+    {
+        std::cout &lt;&lt; "underflow() 前：获取区的大小是 " &lt;&lt; egptr() - eback() &lt;&lt; ' '
+                  &lt;&lt; " 放置区的大小是 " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        int_type ch = std::stringbuf::underflow();
+        std::cout &lt;&lt; "underflow() 后：获取区的大小是 " &lt;&lt; egptr() - eback() &lt;&lt; ' '
+                  &lt;&lt; " 放置区的大小是 " &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        
+        if (ch == EOF)
+            std::cout &lt;&lt; "underflow() 返回 EOF\n";
+        else
+            std::cout &lt;&lt; "underflow() 返回 '" &lt;&lt; char(ch) &lt;&lt; "'\n";
+        return ch;
+    }
+};
+
+int main()
+{
+    mybuf sbuf("123"); // 读写流
+    std::iostream stream(&amp;sbuf);
+    int n;
+    stream &gt;&gt; n; // 调用 sgetc() 四次
+                 // 三次调用返回字符 '1' 、 '2' 、 '3'
+                 // 第四次调用， gptr() == egptr() 并调用 underflow()
+                 // underflow 返回 EOF
+    std::cout &lt;&lt; n &lt;&lt; '\n';
+    stream.clear(); // 清除 eofbit
+    
+    stream &lt;&lt; "123456"; // 调用 sputc() 6 次
+                        // 前三次调用存储 "123" 于既存缓冲区
+                        // 第 4 次调用发现 pptr() == epptr() 并调用 overflow()
+                        // overflow() 令缓冲区生长并设置 egptr() 为 4
+                        // 第 5 和第 6 次调用存储 '5' 和 '6' ，令 pptr() 前进
+    
+    stream &gt;&gt; n; // 调用 sgetc() 4 次
+                 // 第 1 次调用返回 overflow() 使之可用的 '4'
+                 // 第 2 次调用时， egptr() == egptr() 并调用 underflow()
+                 // underflow 令 egptr() 前进到等于 pptr() (which is 6)
+                 // 第 3 次 sgetc() 返回 '6'
+                 // 第 4 次 sgetc() 发现 gptr() == egptr() ，调用 underflow()
+                 // underflow() 返回 EOF
+    
+    std::cout &lt;&lt; n &lt;&lt; '\n';
+}
+|p=true
+|output=
+underflow() 前：获取区的大小是 3  放置区的大小是 3
+underflow() 后：获取区的大小是 3  放置区的大小是 3
+underflow() 返回 EOF
+123
+overflow() 前： 获取区的大小是 3  放置区的大小是 3
+overflow() 后： 获取区的大小是 4  放置区的大小是 35
+underflow() 前：获取区的大小是 4  放置区的大小是 35
+underflow() 后：获取区的大小是 6  放置区的大小是 35
+underflow() 返回 '5'
+underflow() 前：获取区的大小是 6  放置区的大小是 35
+underflow() 后：获取区的大小是 6  放置区的大小是 35
+underflow() 返回 EOF
+456
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=432|std=C++98|before=不明确由 {{lc|overflow()}} 后附的字符是否会视为输入序列的一部分|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc underflow}}
+{{dsc inc|cpp/io/basic_filebuf/dsc underflow}}
+{{dsc inc|cpp/io/strstreambuf/dsc underflow}}
+{{dsc inc|cpp/io/basic_streambuf/dsc sgetc}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

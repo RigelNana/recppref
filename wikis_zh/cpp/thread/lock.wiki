@@ -1,0 +1,130 @@
+{{cpp/title|lock}}
+{{cpp/thread/navbar}}
+{{ddcl|header=mutex|since=c++11|
+template&lt; class Lockable1, class Lockable2, class... LockableN &gt;
+void lock( Lockable1&amp; lock1, Lockable2&amp; lock2, LockableN&amp;... lockn );
+}}
+
+锁定给定的{{named req|Lockable}}对象 {{c|lock1}}、{{c|lock2}}、{{tt|...}}、{{tt|lockn}}，使用免死锁算法以避免死锁。
+
+对象被一系列未指定的 {{tt|lock}}、{{tt|try_lock}} 和 {{tt|unlock}} 调用锁定。若调用 {{tt|lock}} 或 {{tt|unlock}} 导致异常，则在重抛前对任何已锁的对象调用 {{tt|unlock}}。
+
+===参数===
+{{par begin}}
+{{par|lock1, lock2, ... , lockn|要锁定的{{named req|Lockable}}对象}}
+{{par end}}
+
+===返回值===
+（无）
+
+===注解===
+[https://www.boost.org/doc/libs/release/doc/html/thread/synchronization.html#thread.synchronization.lock_functions.lock_range Boost 提供此函数的一个版本]，它接收以一对迭代器定义的{{named req|Lockable}}对象的序列。
+
+{{ltt|cpp/thread/scoped_lock|std::scoped_lock}} 提供此函数的 [[cpp/language/raii|RAII]] 包装，通常它比裸调用 {{tt|std::lock}} 更好。
+
+===示例===
+{{example
+|下列示例用 {{tt|std::lock}} 锁定互斥体对而不死锁。
+|code=
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+struct Employee
+{
+    Employee(std::string id) : id(id) {}
+    std::string id;
+    std::vector&lt;std::string&gt; lunch_partners;
+    std::mutex m;
+    std::string output() const
+    {
+        std::string ret = "雇员 " + id + " 的午餐伙伴: ";
+        for (auto n{lunch_partners.size()}; const auto&amp; partner : lunch_partners)
+            ret += partner + (--n ? ", " : "");
+        return ret;
+    }
+};
+ 
+void send_mail(Employee &amp;, Employee &amp;)
+{
+    // 模拟耗时的发信操作
+    std::this_thread::sleep_for(std::chrono::milliseconds(696));
+}
+
+void assign_lunch_partner(Employee&amp; e1, Employee&amp; e2)
+{
+    static std::mutex io_mutex;
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+        std::cout &lt;&lt; e1.id &lt;&lt; " 和 " &lt;&lt; e2.id &lt;&lt; " 正等待锁定" &lt;&lt; std::endl;
+    }
+
+    // 用 std::lock 获得两个锁，而不担心对 assign_lunch_partner 的其他调用会死锁我们
+    {
+        std::lock(e1.m, e2.m);
+        std::lock_guard&lt;std::mutex&gt; lk1(e1.m, std::adopt_lock);
+        std::lock_guard&lt;std::mutex&gt; lk2(e2.m, std::adopt_lock);
+    // 等价代码（若需要 unique_locks ，例如对于条件变量）
+    //  std::unique_lock&lt;std::mutex&gt; lk1(e1.m, std::defer_lock);
+    //  std::unique_lock&lt;std::mutex&gt; lk2(e2.m, std::defer_lock);
+    //  std::lock(lk1, lk2);
+    // C++17 中可用的较优解法
+    //  std::scoped_lock lk(e1.m, e2.m);
+        {
+            std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+            std::cout &lt;&lt; e1.id &lt;&lt; " 和 " &lt;&lt; e2.id &lt;&lt; " 获得了锁" &lt;&lt; std::endl;
+        }
+        e1.lunch_partners.push_back(e2.id);
+        e2.lunch_partners.push_back(e1.id);
+    }
+    send_mail(e1, e2);
+    send_mail(e2, e1);
+}
+ 
+int main()
+{
+    Employee alice("Alice"), bob("Bob"), christina("Christina"), dave("Dave");
+ 
+    // 在平行线程指派，因为发邮件给用户告知午餐指派，会消耗长时间
+    std::vector&lt;std::thread&gt; threads;
+    threads.emplace_back(assign_lunch_partner, std::ref(alice), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(bob));
+    threads.emplace_back(assign_lunch_partner, std::ref(christina), std::ref(alice));
+    threads.emplace_back(assign_lunch_partner, std::ref(dave), std::ref(bob));
+
+    for (auto&amp; thread : threads)
+        thread.join();
+
+    std::cout &lt;&lt; alice.output() &lt;&lt; '\n'
+              &lt;&lt; bob.output() &lt;&lt; '\n'
+              &lt;&lt; christina.output() &lt;&lt; '\n'
+              &lt;&lt; dave.output() &lt;&lt; '\n';
+}
+|p=true
+|output=
+Alice 和 Bob 正等待锁定
+Alice 和 Bob 获得了锁
+Christina 和 Bob 正等待锁定
+Christina 和 Bob 获得了锁
+Christina 和 Alice 正等待锁定
+Dave 和 Bob 正等待锁定
+Dave 和 Bob 获得了锁
+Christina 和 Alice 获得了锁
+雇员 Alice 的午餐伙伴: Bob, Christina 
+雇员 Bob 的午餐伙伴: Alice, Christina, Dave 
+雇员 Christina 的午餐伙伴: Bob, Alice 
+雇员 Dave 的午餐伙伴: Bob
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc try_lock}}
+{{dsc inc|cpp/thread/dsc scoped_lock}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

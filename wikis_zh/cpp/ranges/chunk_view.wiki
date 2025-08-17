@@ -1,0 +1,158 @@
+{{cpp/ranges/view title|chunk}}
+{{cpp/ranges/chunk_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcla|num=1|since=c++23|1=
+template&lt; ranges::view V &gt;
+    requires ranges::input_range&lt;V&gt;
+class chunk_view
+    : public ranges::view_interface&lt;chunk_view&lt;V&gt;&gt;
+}}
+{{dcla|num=2|since=c++23|1=
+template&lt; ranges::view V &gt;
+    requires ranges::forward_range&lt;V&gt;
+class chunk_view&lt;V&gt;
+    : public ranges::view_interface&lt;chunk_view&lt;V&gt;&gt;
+}}
+{{dcl|num=3|since=c++23|1=
+namespace views {
+    inline constexpr /* 未指明 */ chunk = /* 未指明 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R &gt;
+constexpr ranges::view auto chunk( R&amp;&amp; r, ranges::range_difference_t&lt;R&gt; n );
+}}
+{{dcl|since=c++23|1=
+template&lt; class DifferenceType &gt;
+constexpr /*range adaptor closure*/ chunk( DifferenceType&amp;&amp; n );
+}}
+{{dcl h|辅助模板}}
+{{dcla|anchor=div-ceil|num=4|notes={{mark expos}}|1=
+template&lt; class I &gt; &lt;!-- TODO: maybe share this __div_ceil with stride_view --&gt;
+constexpr I /*div-ceil*/( I num, I denom );
+}}
+{{dcl end}}
+
+{{tt|chunk_view}} 接收单个视图 {{lconcept|view}} 与数值 {{c|n}} 并基于原视图产生一系列视图（{{i|区块}}），除了最后一个区块，每个{{i|区块}}的大小都为 {{tt|n}}。这些区块是原视图元素按顺序排列的，非重叠，连续的子范围。
+
+令 {{tti|s}} 为原视图的大小，如果 {{tti|s}} 不是 {{c|n}} 的倍数，则最后一个生成的视图（''最后区块''）大小正好为 {{c|s % n}}（余数）。否则，包括最后一个的每个{{i|区块}}大小都为 {{c|n}}。
+
+生成视图的大小为 {{c|/*div-ceil*/(s)}}。
+
+如果 {{c|n}} 不大于 {{c|0}} 则其行为未定义。
+
+@1@ 支持仅实现了 {{lconcept|input_range}} 的底层视图 {{tt|V}} 的实现。
+
+@2@ 支持实现了 {{lconcept|forward_range}} 或更强的底层视图 {{tt|V}} 的部分特化。仅当底层视图 {{tt|V}} 实现 {{lconcept|forward_range}}、{{lconcept|common_range}}、{{lconcept|sized_range}} 或非 {{lconcept|bidirectional_range}} 时实现 {{lconcept|common_range}}。 
+
+@3@ {{c|views::chunk}} 指代一个 {{named req|RangeAdaptorObject}}。给定子表达式 {{c|e}} 和 {{c|n}}， {{c|views::chunk(e, n)}} [[cpp/language/expressions#Expression-equivalence|表达式等价]]于 {{c|chunk_view(e, n)}}。
+
+@4@ 计算大于等于 {{c|num}} 除以 {{c|denom}} 的商的最小整数值，等价于：
+{{source|1=
+I r = num / denom;
+if (num % denom)
+    ++r;
+return r;
+}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|说明}}
+{{dsc expos mem obj|base_|id=base|spec={{tt|V}}|底层视图}}
+{{dsc expos mem obj|n_|id=n|spec={{c/core|ranges::range_difference_t&lt;V&gt;}}|“区块大小”}}
+{{dsc break}}
+{{dsc h2|如果 {{tt|V}} 严格仅实现了 {{lconcept|input_range}} {{vl|1}}}}
+{{dsc expos mem obj|remainder_|id=remainder|maybe=yes|spec={{c/core|ranges::range_difference_t&lt;V&gt;}}|当前“区块”中剩余元素的数量}}
+{{dsc expos mem obj|current_|id=current|maybe=yes|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}|缓存当前底层迭代器的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|chunk_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc reserve_hint|chunk_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem class|cpp/ranges/chunk_view/outer_iterator|notes={{mark c++23}}|当 {{tt|V}} 实现 {{lconcept|input_range}} {{vl|1}} 时的输出（“逐区块的”）迭代器类型}}
+{{dsc expos mem class|cpp/ranges/chunk_view/inner_iterator|notes={{mark c++23}}|当 {{tt|V}} 实现 {{lconcept|input_range}} {{vl|1}} 时的内部（“逐元素的”）迭代器类型}}
+{{dsc expos mem tclass|cpp/ranges/chunk_view/iterator|notes={{mark c++23}}|当 {{tt|V}} 实现 {{lconcept|forward_range}} {{vl|2}} 时的迭代器类型}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++23|1=
+template&lt; class V &gt;
+constexpr bool ranges::enable_borrowed_range&lt;chunk_view&lt;V&gt;&gt; =
+    ranges::forward_range&lt;V&gt; &amp;&amp; ranges::enable_borrowed_range&lt;V&gt;;
+}}
+{{lc|ranges::enable_borrowed_range}} 的这项特化使得当底层视图 {{tt|V}} 同时满足 {{lconcept|forward_range}} 和 {{lconcept|borrowed_range}} 时，{{tt|chunk_view}} 满足{{lconcept|borrowed_range}} 
+
+===注解===
+如果 {{tt|V}} 实现 {{lconcept|input_range}} {{vl|1}}，那么 {{tt|chunk_view}} 的迭代器为一个专有类型：{{rli|outer_iterator/value_type|outer_iterator::value_type}} 且它本身就是输入视图。
+
+如果 {{tt|V}} 实现 {{lconcept|forward_range}} 或更强的范围 {{vl|2}}，那么 {{tt|chunk_view}} 的 {{tt|value_type}} 遵循 {{lc|views::take}} 的规定。
+
+如果 {{tt|V}} 实现 {{lconcept|bidirectional_range}} 或更强的范围 {{vl|2}}，那么由于需要正确计算最后一个块的大小（从尾{{rl|iterator|迭代器}}开始），因此底层范围类型 {{tt|V}} 必须为 {{lconcept|sized_range}}。
+
+{{feature test macro|__cpp_lib_ranges_chunk|std=C++23|value=202202L|{{tt|std::ranges::chunk_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+auto print_subrange = [](std::ranges::viewable_range auto&amp;&amp; r)
+{
+    std::cout &lt;&lt; '[';
+    for (int pos{}; auto elem : r)
+        std::cout &lt;&lt; (pos++ ? " " : "") &lt;&lt; elem;
+    std::cout &lt;&lt; "] ";
+};
+
+int main()
+{
+    const auto v = {1, 2, 3, 4, 5, 6};
+
+    for (const unsigned width : std::views::iota(1U, 2U + v.size()))
+    {
+        auto const chunks = v {{!}} std::views::chunk(width);
+        std::cout &lt;&lt; "chunk(" &lt;&lt; width &lt;&lt; "): ";
+        std::ranges::for_each(chunks, print_subrange);
+        std::cout &lt;&lt; '\n';
+    }
+}
+|output=
+chunk(1): [1] [2] [3] [4] [5] [6]
+chunk(2): [1 2] [3 4] [5 6]
+chunk(3): [1 2 3] [4 5 6]
+chunk(4): [1 2 3 4] [5 6]
+chunk(5): [1 2 3 4 5] [6]
+chunk(6): [1 2 3 4 5 6]
+chunk(7): [1 2 3 4 5 6]
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Chunk view|id=range.chunk|section=26.7.28}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc chunk_by_view}}
+{{dsc inc|cpp/ranges/dsc adjacent_view}}
+{{dsc inc|cpp/ranges/dsc slide_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

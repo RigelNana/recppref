@@ -1,0 +1,76 @@
+{{cpp/filesystem/title|rename}}
+{{cpp/filesystem/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|num=1|since=c++17|1=
+void rename( const std::filesystem::path&amp; old_p,
+             const std::filesystem::path&amp; new_p );
+}}
+{{dcl|num=2|since=c++17|1=
+void rename( const std::filesystem::path&amp; old_p,
+             const std::filesystem::path&amp; new_p,
+             std::error_code&amp; ec ) noexcept;
+}}
+{{dcl end}}
+
+移动或重命名 {{c|old_p}} 所标识的文件系统对象到 {{c|new_p}}，如同用 POSIX [http://pubs.opengroup.org/onlinepubs/9699919799/functions/rename.html {{tt|rename}}]：
+
+* 若 {{c|old_p}} 是非目录文件，则 {{c|new_p}} 必须是下列之一：
+:* 与 {{c|old_p}} 为相同文件，或到它的硬链接：此情况不做任何事。
+:* 既存的非目录文件：{{c|new_p}} 首先被删除，然后因为删除不允许其他进程观测 {{c|new_p}}，并将路径名 {{c|new_p}} 链接到该文件，而 {{c|old_p}} 从该文件解除链接。要求对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录的写权限。
+:* 既存目录中的不存在文件：链接路径名 {{c|new_p}} 到该文件，并从该文件解链接 {{c|old_p}}。要求对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录的写权限。
+* 若 {{c|old_p}} 是目录，则 {{c|new_p}} 必须是下列之一：
+:* 与 {{c|old_p}} 为相同文件或到它的硬链接：此情况不做任何事。
+:* 既存目录：在 POSIX 系统上若 {{c|new_p}} 为空则删除之，但这在其他系统上可能是错误。若非错误，则首先删除 {{c|new_p}}，然后因为删除不允许其他进程观测 {{c|new_p}}，并将路径名 {{c|new_p}} 链接到该目录，将 {{c|old_p}} 从该目录解除链接。要求对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录的写权限。
+:* 不存在的目录，不以目录分隔符终止，且父目录存在：将路径名 {{c|new_p}} 链接到该目录，且从该目录解除链接 {{c|old_p}}。要求对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录的写权限。
+* 不跟随符号链接：若 {{c|old_p}} 是符号链接，则重命名它自身，而非其目标。若 {{c|new_p}} 是既存符号链接，则删除它自身，而非其目标。
+
+若有如下情况则重命名失败
+* {{c|new_p}} 以 {{spar|点}} 或 {{spar|点点}} 结束。
+* {{c|new_p}} 以目录分隔符结尾，指名一个不存在的目录。
+* {{c|old_p}} 是一个目录，其祖先是 {{c|new_p}}。
+
+===参数===
+{{par begin}}
+{{par | old_p | 要移动或重命名的路径}}
+{{par | new_p | 移动/重命名操作的目标路径}}
+{{par | ec | 不抛出重载中报告错误的输出形参}}
+{{par end}}
+
+===返回值===
+（无）
+
+===异常===
+{{cpp/filesystem/error_handling|old_p|new_p|throw=1/2}}
+
+===示例===
+{{example
+|code=
+#include &lt;filesystem&gt;
+#include &lt;fstream&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    std::filesystem::path p = std::filesystem::current_path() / "sandbox";
+    std::filesystem::create_directories(p / "from");
+    std::ofstream{ p / "from/file1.txt" }.put('a');
+    std::filesystem::create_directory(p / "to");
+
+//  fs::rename(p / "from/file1.txt", p / "to/"); // 错误："to" 是目录
+    fs::rename(p / "from/file1.txt", p / "to/file2.txt"); // OK
+//  fs::rename(p / "from", p / "to"); // 错误："to" 非空
+    fs::rename(p / "from", p / "to/subdir"); // OK
+
+    std::filesystem::remove_all(p);
+}
+|output=
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc rename}}
+{{dsc inc|cpp/filesystem/dsc remove}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

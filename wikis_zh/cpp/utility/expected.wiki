@@ -1,0 +1,172 @@
+{{cpp/title|expected}}
+{{cpp/utility/expected/navbar}}
+{{dcl begin}}
+{{dcl header|expected}}
+{{dcl|num=1|since=c++23|
+template&lt; class T, class E &gt;
+class expected;
+}}
+{{dcl|num=2|since=c++23|
+template&lt; class T, class E &gt;
+    requires std::is_void_v&lt;T&gt;
+class expected&lt;T, E&gt;;
+}}
+{{dcl end}}
+
+类模板 {{tt|std::expected}} 提供表示两个值之一的方式：它要么表示一个 {{tt|T}} 类型的''预期''{{sep}}值，要么表示一个 {{tt|E}} 类型的''非预期''{{sep}}值。{{tt|expected}} 决不会无值。
+
+@1@ 主模板。在自身的存储中包含预期值或非预期值，该值[[cpp/language/object#地址|内嵌于]] {{tt|expected}} 对象。
+
+@2@ {{c/core|void}} 部分特化。表示一个 {{c/core|void}} 类型的预期值或在自身的存储中包含非预期值。如果包含非预期值，那么该值内嵌于 {{tt|expected}} 对象。
+
+如果程序以引用类型、函数类型，或 {{ltt std|cpp/utility/expected/unexpected}} 的特化实例化 {{tt|expected}}，那么程序非良构。另外，{{tt|T}} 必须不是 {{lc|std::in_place_t}} 或 {{ltt std|cpp/utility/expected/unexpect_t}}。
+
+===模板形参===
+{{par begin}}
+{{par|T|预期值的类型。类型必须是（可有 cv 限定的）{{c/core|void}}，或者符合{{named req|Destructible}}要求（尤其是不允许数组或引用类型）。}}
+{{par|E|非预期值的类型。类型必须符合{{named req|Destructible}}要求，且必须对于 {{ltt std|cpp/utility/expected/unexpected}} 为合法的模板实参（尤其是不允许数组、非对象类型及 cv 限定的类型）。}}
+{{par end}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|error_type}}|{{tt|E}}}}
+{{dsc|{{tt|unexpected_type}}|{{rlt|unexpected|std::unexpected&lt;E&gt;}}}}
+{{dsc end}}
+
+===成员模板===
+{{dsc begin}}
+{{dsc hitem|模板|定义}}
+{{dsc|{{c/core|rebind&lt;U&gt;}}|{{c/core|std::expected&lt;U, error_type&gt;}}}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|spec={{c/core|bool}}|has_val|id=has_val|{{tt|expected}} 对象当前是否表示预期值}}
+{{dsc expos mem var|spec={{tt|T}}|val|id=val|预期值|notes={{mark|仅限主模板}}}}
+{{dsc expos mem var|spec={{tt|E}}|unex|id=unex|非预期值}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc constructor}}
+{{dsc inc|cpp/utility/expected/dsc destructor}}
+{{dsc inc|cpp/utility/expected/dsc operator{{=}}}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/utility/expected/dsc operator*}}
+{{dsc inc|cpp/utility/expected/dsc operator bool}}
+{{dsc inc|cpp/utility/expected/dsc value}}
+{{dsc inc|cpp/utility/expected/dsc error}}
+{{dsc inc|cpp/utility/expected/dsc value_or}}
+{{dsc inc|cpp/utility/expected/dsc error_or}}
+
+{{dsc h2|单子操作}}
+{{dsc inc|cpp/utility/expected/dsc and_then}}
+{{dsc inc|cpp/utility/expected/dsc transform}}
+{{dsc inc|cpp/utility/expected/dsc or_else}}
+{{dsc inc|cpp/utility/expected/dsc transform_error}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/utility/expected/dsc emplace}}
+{{dsc inc|cpp/utility/expected/dsc swap}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc operator cmp}}
+{{dsc inc|cpp/utility/expected/dsc swap2}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/utility/expected/dsc unexpected}}
+{{dsc inc|cpp/utility/expected/dsc bad_expected_access}}
+{{dsc inc|cpp/utility/expected/dsc unexpect_t}}
+{{dsc end}}
+
+===注解===
+拥有相同功能的类型在 Rust 与 Haskell 中分别被称为 [https://doc.rust-lang.org/std/result/enum.Result.html {{tt|Result}}] 和 [https://hackage.haskell.org/package/base-4.17.0.0/docs/Data-Either.html {{tt|Either}}]。
+
+{{ftm begin|std=1|comment=1}}
+{{ftm|__cpp_lib_expected|rowspan="2"|std=C++23|value=202202L|类模板 {{tt|std::expected}} 和关联的[[#辅助类|辅助类]]}}
+{{ftm|-|std=C++23|value=202211L|{{tt|std::expected}} 的单体式函数}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cmath&gt;
+#include &lt;expected&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+enum class parse_error
+{
+    invalid_input,
+    overflow
+};
+
+auto parse_number(std::string_view&amp; str) -&gt; std::expected&lt;double, parse_error&gt;
+{
+    const char* begin = str.data();
+    char* end;
+    double retval = std::strtod(begin, &amp;end);
+    
+    if (begin == end)
+        return std::unexpected(parse_error::invalid_input);
+    else if (std::isinf(retval))
+        return std::unexpected(parse_error::overflow);
+    
+    str.remove_prefix(end - begin);
+    return retval;
+}
+
+int main()
+{
+    auto process = [](std::string_view str)
+    {
+        std::cout &lt;&lt; "str: " &lt;&lt; std::quoted(str) &lt;&lt; ", ";
+        if (const auto num = parse_number(str); num.has_value())
+            std::cout &lt;&lt; "值: " &lt;&lt; *num &lt;&lt; '\n';
+            // 如果 num 没有值，那么解引用 num 会造成未定义行为，而
+            // num.value() 会抛出 std::bad_expected_access。
+            // num.value_or(123) 则使用指定的默认值 123。
+        else if (num.error() == parse_error::invalid_input)
+            std::cout &lt;&lt; "错误：无效输入\n";
+        else if (num.error() == parse_error::overflow)
+            std::cout &lt;&lt; "错误：溢出\n";
+        else
+            std::cout &lt;&lt; "非预期！\n"; // 或调用 std::unreachable();
+    };
+    
+    for (auto src : {"42", "42abc", "meow", "inf"})
+        process(src);
+}
+|output=
+str: "42", 值: 42
+str: "42abc", 值: 42
+str: "meow", 错误：无效输入
+str: "inf", 错误：溢出
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=4141|std=C++23|before=对存储分配的要求难以理解|after=包含的对象必须内嵌于 {{tt|expected}} 对象}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=22.8|title=Expected objects|id=expected}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc variant}}
+{{dsc inc|cpp/utility/dsc optional}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

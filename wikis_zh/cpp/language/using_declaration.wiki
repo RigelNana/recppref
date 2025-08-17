@@ -1,0 +1,466 @@
+{{title|using 声明}}
+{{cpp/language/classes/navbar}}
+
+将别处定义的名字引入到此 using 声明所出现的声明区中。有关其他相关声明，参见 {{rev inl|since=c++20|{{lc|{{rlp|enum#using enum 声明|using enum}}}} 和 }}{{lc|{{rlp|namespace#using 指令|using namespace}}}}。
+
+{{sdsc begin}}
+{{sdsc|{{ttb|using}} {{ttb|typename}}{{mark optional}} {{spar|嵌套名说明符}} {{spar|无限定标识}} {{ttb|;}}|notes={{mark until c++17}}
+}}
+{{sdsc|{{ttb|using}} {{spar|声明符列表}} {{ttb|;}}|notes={{mark since c++17}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{ttb|typename}}|在 using 声明从基类向类模板中引入成员类型时，可能需要用关键词 {{c/core|typename}} 解决{{rlp|dependent name|待决名}}}}
+{{par|{{spar|嵌套名说明符}}|名字与作用域解析运算符 {{tt|::}} 的序列，以作用域解析运算符结尾。单个 {{tt|::}} 指代全局命名空间。}}
+{{par|{{spar|无限定标识}}|{{rlp|identifiers|标识表达式}}}}
+{{par|{{spar|声明符列表}}|一个或多个形式为 {{ttb|typename}}{{mark optional}} {{spar|嵌套名说明符}} {{spar|无限定标识}} 的声明符的逗号分隔列表。某些或所有声明符都可以后随省略号 {{c|...}} 以指示{{rlp|parameter pack|包展开}}}}
+{{par end}}
+
+===解释===
+using 声明可以用来将命名空间成员引入到另一命名空间与块作用域，或将基类成员引入到派生类定义中{{rev inl|since=c++20|，或将{{rlp|enum|枚举项}}引入命名空间、块或类作用域中}}。
+
+{{rrev|since=c++17|
+包含多于一个 using 声明符的 using 声明等价于一系列相应数量的包含单个 using 声明符的 using 声明。
+}}
+
+====在命名空间和块作用域中====
+using 声明将另一命名空间的成员引入到当前命名空间或块作用域中。
+{{source|1=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+using std::string;
+
+int main()
+{
+    string str = "举例";
+    using std::cout;
+    cout &lt;&lt; str;
+}
+}}
+细节见{{rlp|namespace|命名空间}}。
+
+====在类定义中====
+using 声明可以将基类成员引入到派生类的定义中，例如将基类的受保护成员暴露为派生类的公开成员。此时 {{spar|嵌套名说明符}} 必须指名所定义的类的某个基类。如果这个名字是该基类的某个重载的成员函数的名字，那么具有该名字的所有基类成员函数均被引入。如果派生类已包含具有相同名字、形参列表和限定的成员，那么派生类成员隐藏或覆盖从基类引入的成员（不与之冲突）。
+{{example|
+code=
+#include &lt;iostream&gt;
+
+struct B
+{
+    virtual void f(int) { std::cout &lt;&lt; "B::f\n"; }
+    void g(char)        { std::cout &lt;&lt; "B::g\n"; }
+    void h(int)         { std::cout &lt;&lt; "B::h\n"; }
+protected:
+    int m; // B::m 是受保护的
+    typedef int value_type;
+};
+
+struct D : B
+{
+    using B::m;          // D::m 是公开的
+    using B::value_type; // D::value_type 是公开的
+    
+    using B::f;
+    void f(int) override { std::cout &lt;&lt; "D::f\n"; } // D::f(int) **覆盖** B::f(int)
+    
+    using B::g;
+    void g(int) { std::cout &lt;&lt; "D::g\n"; } // g(int) 与 g(char) 均可见
+ 
+    using B::h;
+    void h(int) { std::cout &lt;&lt; "D::h\n"; } // D::h(int) **隐藏** B::h(int)
+};
+
+int main()
+{
+    D d;
+    B&amp; b = d;
+
+//  b.m = 2;  // 错误：B::m 受保护
+    d.m = 1;  // 受保护的 B::m 可以作为公开的 D::m 访问
+    
+    b.f(1);   // 调用派生类的 f()
+    d.f(1);   // 调用派生类的 f()
+    std::cout &lt;&lt; "----------\n";
+    
+    d.g(1);   // 调用派生类的 g(int)
+    d.g('a'); // 调用基类的 g(char)，它因 using B::g; 而暴露
+    std::cout &lt;&lt; "----------\n";
+    
+    b.h(1);   // 调用基类的 h()
+    d.h(1);   // 调用派生类的 h()
+}
+|output=
+D::f
+D::f
+----------
+D::g
+B::g
+----------
+B::h
+D::h
+}}
+
+{{rrev|since=c++11|1=
+====继承构造函数====
+如果 ''using 声明''指代了正在定义的类的某个直接基类的构造函数（例如 {{c|using Base::Base;}}），那么在初始化派生类时，该基类的所有构造函数（忽略成员访问）均对重载决议可见。
+
+如果重载决议选择了继承的构造函数，那么如果它被用于构造相应基类的对象时可访问，它也是可访问的：引入它的 using 声明的可访问性被忽略。
+
+如果在初始化这种派生类对象时重载决议选择了继承的构造函数之一，那么用这个继承的构造函数对从之继承该构造函数的 {{tt|Base}} 子对象进行初始化，而 {{tt|Derived}} 的所有其他基类和成员，都如同以预置的默认构造函数一样进行初始化（如果提供默认成员初始化器就会使用它，否则进行默认初始化）。整个初始化被视作单个函数调用：继承的构造函数的各形参的初始化，按顺序早于派生类对象的任何基类或成员的初始化。
+
+{{source|1=
+struct B1 { B1(int, ...) {} };
+struct B2 { B2(double)   {} };
+
+int get();
+
+struct D1 : B1
+{
+    using B1::B1; // 继承 B1(int, ...)
+    int x;
+    int y = get();
+};
+
+void test()
+{
+    D1 d(2, 3, 4); // OK：B1 通过调用 B1(2, 3, 4) 初始化，
+                   // 然后 d.x 被默认初始化（不进行初始化），
+                   // 然后 d.y 通过调用 get() 初始化
+    
+    D1 e;          // 错误：D1 没有默认构造函数
+}
+
+struct D2 : B2
+{
+    using B2::B2; // 继承 B2(double)
+    B1 b;
+};
+
+D2 f(1.0); // 错误：B1 没有默认构造函数
+}}
+
+{{source|1=
+struct W { W(int); };
+
+struct X : virtual W
+{
+    using W::W; // 继承 W(int)
+    X() = delete;
+};
+
+struct Y : X
+{
+    using X::X;
+};
+
+struct Z : Y, virtual W
+{
+    using Y::Y;
+};
+
+Z z(0); // OK：Y 的初始化不会调用 X 的默认构造函数
+}}
+
+如果 {{tt|Base}} 基类子对象不会作为 {{tt|Derived}} 对象的一部分被初始化（即 {{tt|Base}} 是 {{tt|Derived}} 的 {{rlps|derived class#虚基类}}，并且 {{tt|Derived}} 对象不是 {{rlp|object#子对象|最终派生对象}}），那么对继承的构造函数的调用（包括对实参的求值）会被省略：
+{{source|1=
+struct V
+{
+    V() = default;
+    V(int);
+};
+
+struct Q { Q(); };
+
+struct A : virtual V, Q
+{
+    using V::V;
+    A() = delete;
+};
+
+int bar() { return 42; }
+
+struct B : A
+{
+    B() : A(bar()) {} // OK
+};
+
+struct C : B {};
+
+void foo()
+{
+    C c; // 因为 V 子对象不会作为 B 的一部分被初始化，所以不会调用 “bar”
+         // （V 子对象会作为 C 的一部分被初始化，这是因为 “c” 才是最终派生对象）
+} 
+}}
+
+如果构造函数从 {{tt|Base}} 类型的多个基类子对象继承，那么程序非良构，这与多继承的非静态成员函数相似：
+{{source|1=
+struct A { A(int); };
+struct B : A { using A::A; };
+struct C1 : B { using B::B; };
+struct C2 : B { using B::B; };
+
+struct D1 : C1, C2
+{
+    using C1::C1;
+    using C2::C2;
+};
+D1 d1(0); // 非良构：从不同的 B 基类子对象继承的构造函数
+
+struct V1 : virtual B { using B::B; };
+struct V2 : virtual B { using B::B; };
+
+struct D2 : V1, V2
+{
+    using V1::V1;
+    using V2::V2;
+};
+
+D2 d2(0); // OK：只有一个 B 子对象。
+          // 这会初始化虚 B 基类，它初始化 A 基类
+          // 然后如同用预置的默认构造函数
+          // 初始化 V1 与 V2 基类
+}}
+
+与任何其他非静态成员函数的 using 声明相同，如果继承的构造函数的签名与 {{tt|Derived}} 的构造函数之一匹配，那么它被 {{tt|Derived}} 中找到的版本从查找中隐藏。如果 {{tt|Base}} 的继承构造函数恰好有与 {{tt|Derived}} 的复制/移动构造函数匹配的签名，那么它不妨碍 {{tt|Derived}} 复制/移动构造函数的隐式生成（然后继承的版本被它隐藏，这与 {{tt|1=using operator=}} 类似）。
+
+{{source|1=
+struct B1 { B1(int); };
+struct B2 { B2(int); };
+
+struct D2 : B1, B2
+{
+    using B1::B1;
+    using B2::B2;
+
+    D2(int); // OK：D2::D2(int) 会隐藏 B1::B1(int) 和 B2::B2(int)
+};
+D2 d2(0);    // 调用 D2::D2(int)
+}}
+
+在{{rlp|templates|模板化类}}中，如果 using 声明指代{{rlp|dependent name|待决名}}，而 {{spar|嵌套名说明符}} 拥有与该 {{spar|无限定标识}} 相同的终止名，那么认为它指名构造函数。{{mark unreviewed dr|CWG|2070}}&lt;!-- P1787 --&gt;
+{{source|1=
+template&lt;class T&gt;
+struct A : T
+{
+    using T::T; // OK：继承 T 的构造函数
+};
+
+template&lt;class T, class U&gt;
+struct B : T, A&lt;U&gt;
+{
+    using A&lt;U&gt;::A; // OK：继承 A&lt;U&gt; 的构造函数
+    using T::A;    // 不继承 T 的构造函数，尽管 T 可以是 A&lt;&gt; 的特化
+};
+}}
+}}
+
+
+{{rrev|since=c++20|
+====引入有作用域枚举项====
+除了另一命名空间的成员和基类的成员，using 声明也能将{{rlp|enum|枚举}}的枚举项引入命名空间、块和类作用域。
+
+using 声明也能用于无作用域枚举项。
+
+{{source|1=
+enum class button { up, down };
+
+struct S
+{
+    using button::up;
+    button b = up; // OK
+};
+
+using button::down;
+constexpr button non_up = down; // OK
+
+constexpr auto get_button(bool is_up)
+{
+    using button::up, button::down;
+    return is_up ? up : down; // OK
+}
+ 
+enum unscoped { val };
+using unscoped::val; // OK，尽管不需要
+}}
+}}
+
+===注解===
+只有在 using 声明中明确提及的名字才会被传送到声明区中：特别是，using 声明枚举类型名时不会传送它的枚举项。
+
+using 声明不能指代命名空间{{rev inl|until=c++20|，有作用域枚举项}}，基类的析构函数，或用户定义转换函数的成员模板的特化。
+
+using 声明不能指名成员模板的特化（语法不容许{{rlp|templates#模板标识|模板标识}}）：
+{{source|1=
+struct B
+{
+    template&lt;class T&gt;
+    void f();
+};
+
+struct D : B
+{
+    using B::f;      // OK：指名模板
+//  using B::f&lt;int&gt;; // 错误：指名模板特化
+    
+    void g() { f&lt;int&gt;(); }
+};
+}}
+using 声明也不能引入待决的成员模板的名字作为''模板名''（不容许{{rlp|dependent name|待决名}}的 {{tt|template}} 消歧义符）：
+{{source|1=
+template&lt;class X&gt;
+struct B
+{
+    template&lt;class T&gt;
+    void f(T);
+};
+
+template&lt;class Y&gt;
+struct D : B&lt;Y&gt;
+{
+//  using B&lt;Y&gt;::template f; // 错误：不允许消歧义符
+    using B&lt;Y&gt;::f;          // 能编译，但 f 不是模板名
+    
+    void g()
+    {
+//      f&lt;int&gt;(0);          // 错误：已知 f 不是模板名，
+                            // 因此 &lt; 不开始模板实参列表
+        f(0);               // OK
+    }
+};
+}}
+
+如果 using 声明引入基类的赋值运算符到派生类，而它的签名恰好与派生类的复制赋值或移动赋值运算符匹配，那么该运算符被派生类的隐式声明的复制/移动赋值运算符隐藏。{{rev inl|since=c++11|相同的规则适用于继承恰好与派生类的移动/复制构造函数匹配的基类构造函数的 using 声明。}}
+
+{{rrev|since=c++11|1=
+[[#缺陷报告|一项针对 C++11 的缺陷报告]]追溯地更改了继承构造函数的语义。以前，继承构造函数的声明导致将一组合成的构造函数声明注入到派生类中，这导致冗余的实参复制/移动，并与某些形式的 SFINAE 的交互有问题，而且某些情况下在主流 ABI 上无法实现。旧编译器可能仍然实现先前的语义。
+
+{{collapse top|旧的继承构造函数语义}}
+如果 ''using 声明''指代被定义类的某个直接基类的构造函数（例如 {{c|using Base::Base;}}），那么按照下列规则继承该基类的构造函数：
+@1@ ''继承构造函数候选''的集合由以下组成：
+:@a@ 基类的所有非模板构造函数{{rev inl|since=c++14|（在忽略省略号形参后，如果存在）}}
+:@b@ 对于每个有默认实参或省略号形参的构造函数，所有构造函数签名通过丢弃省略号及逐个忽略来自形参列表尾的默认实参组成
+:@c@ 基类的所有构造函数模板{{rev inl|since=c++14|（在忽略省略号形参数后，如果存在）}}
+:@d@ 对于每个有默认实参或省略号形参的构造函数模板，所有构造函数签名通过丢弃省略号者及逐个忽略来自形参列表尾的默认实参组成
+@2@ 所有并非默认构造函数或复制/移动构造函数，且它的签名不与派生类中的用户定义的构造函数相匹配的继承构造函数候选，在派生类中隐式声明。不继承默认实参：
+{{source|1=
+struct B1
+{
+    B1(int);
+};
+
+struct D1 : B1
+{
+    using B1::B1;
+    
+    // 继承构造函数候选集是：
+    // 1. B1(const B1&amp;)
+    // 2. B1(B1&amp;&amp;)
+    // 3. B1(int)
+    
+    // D1 有下列构造函数：
+    // 1. D1() = delete
+    // 2. D1(const D1&amp;) 
+    // 3. D1(D1&amp;&amp;)
+    // 4. D1(int) &lt;- 继承的
+};
+
+struct B2
+{
+    B2(int = 13, int = 42);
+};
+
+struct D2 : B2
+{
+    using B2::B2;
+    
+    // 继承构造函数候选集是：
+    // 1. B2(const B2&amp;)
+    // 2. B2(B2&amp;&amp;)
+    // 3. B2(int = 13, int = 42)
+    // 4. B2(int = 13)
+    // 5. B2()
+    
+    // D2 有下列构造函数：
+    // 1. D2()
+    // 2. D2(const D2&amp;)
+    // 3. D2(D2&amp;&amp;)
+    // 4. D2(int, int) &lt;- 继承的
+    // 5. D2(int) &lt;- 继承的
+};
+}}
+
+继承的构造函数与有空函数体和由单个 {{spar|嵌套名说明符}} 组成的{{rlp|initializer list|成员初始化式列表}}的用户定义构造函数等价，它将自己所有的实参转发给基类构造函数。
+
+它与对应的基类构造函数有同样的{{rlp|access|访问}}。如果用户定义构造函数可满足 {{tt|constexpr}} 构造函数的要求，那么它也是 {{tt|constexpr}} 的。如果基类构造函数被弃置或预置的默认构造会被弃置，那么它也会被弃置（但不计构造函数要被继承的基类的构造）。继承的构造函数不能被显式实例化或显式特化。
+
+如果两条 using 声明（分别从两个直接基类）继承了有相同签名的构造函数，那么程序非良构。
+
+不能{{rlp|function template#显式实例化|显式实例化}}或{{rlp|template specialization|显式特化}}继承的构造函数模板。
+{{cob}}
+}}
+{{anchor|包展开}}
+{{rrev|since=c++17|
+在 using 声明中使用{{rlp|parameter pack|包展开}}可以替代递归来组成暴露变长基类的重载成员的类：
+{{source|1=
+
+template&lt;typename... Ts&gt;
+struct Overloader : Ts...
+{
+    using Ts::operator()...; // 从每个基类暴露 operator()
+};
+
+template&lt;typename... T&gt;
+Overloader(T...) -&gt; Overloader&lt;T...&gt;; // C++17 推导指引，C++20 起不再需要
+
+int main()
+{
+    auto o = Overloader{ [] (auto const&amp; a) {std::cout &lt;&lt; a;},
+                         [] (float f) {std::cout &lt;&lt; std::setprecision(3) &lt;&lt; f;} };
+}
+}}
+}}
+{{ftm begin|core=1|sort=1}}
+{{ftm|value=200802L|std=C++11|__cpp_inheriting_constructors|rowspan="2"|[[#继承构造函数|继承构造函数]]}}
+{{ftm|value=201511L|std=C++17|dr=11|-|重新措辞继承构造函数}}
+{{ftm|value=201611L|std=C++17|__cpp_variadic_using|{{tt|using}} 声明中的{{rlp|parameter_pack|包展开}}}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/using}}
+
+=== 缺陷报告 ===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=258|std=C++98|before=派生类的非 const 成员函数可以覆盖和/或隐藏它的基类的 const 成员函数|after=覆盖和隐藏也要求 cv 限定性一致}}
+{{dr list item|wg=cwg|dr=1738|std=C++11|before=不明确是否可以显式实例化或显式特化继承的构造函数模板|after=已禁止}}
+{{dr list item|wg=cwg|dr=2504|std=C++11|before=从虚基类继承构造函数的行为不明确|after=使之明确}}
+{{dr list item|paper=P0136R1|std=C++11|before=继承构造函数声明会将额外的构造函数注入派生类|after=导致名字查找能找到基类构造函数}}
+{{dr list end}}
+
+# 引用
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.9|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.9|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.3.3|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.3.3|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.3.3|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=7.3.3|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=7.3.3|title=The {{tt|using}} declaration|id=namespace.udecl}}
+{{ref std end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

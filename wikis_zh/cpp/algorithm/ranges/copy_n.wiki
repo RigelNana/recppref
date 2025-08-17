@@ -1,0 +1,104 @@
+{{cpp/ranges/title|copy_n|copy_n_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|
+template&lt; std::input_iterator I, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr copy_n_result&lt;I, O&gt;
+    copy_n( I first, std::iter_difference_t&lt;I&gt; n, O result );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class I, class O &gt;
+using copy_n_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ 从始于 {{c|first}} 的范围准确复制 {{c|n}} 个值到始于 {{c|result}} 的范围，其通过对 {{range|0|n}} 中的每个整数进行 {{c|1=*(result + i) = *(first + i)}}。若 {{c|result}} 在范围 {{range|first|first + n}} 内则行为未定义（在此情况下可能可以用 {{lc|ranges::copy_backward}} 代替）。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|first|要复制的元素范围的起始}}
+{{par|n|要复制的元素数}}
+{{par|result|目标范围的起始}}
+{{par end}}
+
+===返回值===
+{{c|ranges::copy_n_result{first + n, result + n} }}，或更正式地，含有一个等于 {{c|ranges::next(first, n)}} 的 {{lconcept|input_iterator}} 迭代器与一个等于 {{c|ranges::next(result, n)}} 的 {{lconcept|weakly_incrementable}} 迭代器的 {{lc|ranges::in_out_result}} 类型的值。
+
+===复杂度===
+准确 {{c|n}} 次赋值。
+
+===注解===
+实践中，若值类型为{{named req|TriviallyCopyable}}并且迭代器类型满足 {{lconcept|contiguous_iterator}}，则 {{tt|std::ranges::copy_n}} 的实现可以用如 {{lc|std::memmove}} 的整块复制函数避免多次赋值。另外，这种复制加速可以由编译器的优化阶段注入。
+
+在复制重叠的范围时，{{tt|std::ranges::copy_n}} 适合向左复制（目标范围的起始在源范围外），而 {{lc|std::ranges::copy_backward}} 适合向右复制（目标范围的末尾在源范围外）。
+
+===可能的实现===
+{{eq fun|1=
+struct copy_n_fn
+{
+    template&lt;std::input_iterator I, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::copy_n_result&lt;I, O&gt;
+        operator()(I first, std::iter_difference_t&lt;I&gt; n, O result) const
+    {
+        for (; n-- &gt; 0; (void)++first, (void)++result)
+            *result = *first;
+
+        return {std::move(first), std::move(result)};
+    }
+};
+
+inline constexpr copy_n_fn copy_n{};
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+
+int main()
+{
+    const std::string_view in{"ABCDEFGH"};
+    std::string out;
+
+    std::ranges::copy_n(in.begin(), 4, std::back_inserter(out));
+    std::cout &lt;&lt; std::quoted(out) &lt;&lt; '\n';
+
+    out = "abcdefgh";
+    const auto res{std::ranges::copy_n(in.begin(), 5, out.begin())};
+    const auto i{std::distance(std::begin(in), res.in)};
+    const auto j{std::distance(std::begin(out), res.out)};
+    std::cout &lt;&lt; "in[" &lt;&lt; i &lt;&lt; "] = '" &lt;&lt; in[i] &lt;&lt; "'\n"
+              &lt;&lt; "out[" &lt;&lt; j &lt;&lt; "] = '" &lt;&lt; out[j] &lt;&lt; "'\n";
+}
+|output=
+"ABCD"
+in[5] = 'F'
+out[5] = 'f'
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc replace_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/dsc copy_n}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

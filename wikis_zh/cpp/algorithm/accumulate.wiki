@@ -1,0 +1,125 @@
+{{cpp/title|accumulate}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|constexpr=c++20|
+template&lt; class InputIt, class T &gt;
+T accumulate( InputIt first, InputIt last, T init );
+}}
+{{dcla|num=2|constexpr=c++20|
+template&lt; class InputIt, class T, class BinaryOp &gt;
+T accumulate( InputIt first, InputIt last, T init, BinaryOp op );
+}}
+{{dcl end}}
+
+计算给定值 {{c|init}} 与范围 {{range|first|last}} 中各元素的和。
+
+@1@ 以初始值 {{c|init}} 初始化（具有 {{tt|T}} 类型的）累加器 {{c|acc}}，然后按顺序对范围 {{range|first|last}} 的每个迭代器 {{c|i}} 通过 {{rev inl|until=c++20|{{c|1=acc = acc + *i}}}}{{rev inl|since=c++20|{{c|1=acc = std::move(acc) + *i}}}} 进行累加。
+
+@2@ 以初始值 {{c|init}} 初始化（具有 {{tt|T}} 类型的）累加器 {{c|acc}}，然后按顺序对范围 {{range|first|last}} 的每个迭代器 {{c|i}} 通过 {{rev inl|until=c++20|{{c|1=acc = op(acc, *i)}}}}{{rev inl|since=c++20|{{c|1=acc = op(std::move(acc), *i)}}}} 进行累加。
+
+如果满足以下任意条件，那么行为未定义：
+* {{tt|T}} 不{{named req|CopyConstructible}}。
+* {{tt|T}} 不{{named req|CopyAssignable}}。
+* {{c|op}} 会修改 {{range|first|last}} 的任何元素。
+* {{c|op}} 会使 {{closed range|first|last}} 中的任何迭代器或子范围失效。
+
+===参数===
+{{par begin}}
+{{par range|3=要累加的}}
+{{par|init|累加的初值}}
+{{par op2|op|t1=T|p2=InputIt|rt=T}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===返回值===
+所有修改完成后的 {{c|acc}}。
+
+===可能的实现===
+{{eq impl
+|title1=accumulate (1)|ver1=1|1=
+template&lt;class InputIt, class T&gt;
+constexpr // C++20 起
+T accumulate(InputIt first, InputIt last, T init)
+{
+    for (; first != last; ++first)
+        init = std::move(init) + *first; // C++20 起有 std::move
+    
+    return init;
+}
+|title2=accumulate (2)|ver2=2|2=
+template&lt;class InputIt, class T, class BinaryOperation&gt;
+constexpr // C++20 起
+T accumulate(InputIt first, InputIt last, T init, BinaryOperation op)
+{
+    for (; first != last; ++first)
+        init = op(std::move(init), *first); // C++20 起有 std::move
+    
+    return init;
+}
+}}
+
+===注解===
+{{tt|std::accumulate}} 进行左{{enwiki|Fold (higher-order function)|折叠}}。为进行右折叠，必须逆转二元运算符的实参顺序，并使用逆序迭代器。
+
+如果使用类型推导，那么 {{c|op}} 就会对与 {{c|init}} 相同类型的值进行操作，这可能引入对迭代器元素非预期的转型，例如 {{c|std::accumulate(v.begin(), v.end(), 0)}} 在 {{c|v}} 是 {{c/core|std::vector&lt;double&gt;}} 时会给出错误的结果。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+ 
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    
+    int sum = std::accumulate(v.begin(), v.end(), 0);
+    int product = std::accumulate(v.begin(), v.end(), 1, std::multiplies&lt;int&gt;());
+    
+    auto dash_fold = [](std::string a, int b)
+    {
+        return std::move(a) + '-' + std::to_string(b);
+    };
+    
+    std::string s = std::accumulate(std::next(v.begin()), v.end(),
+                                    std::to_string(v[0]), // 用首元素开始
+                                    dash_fold);
+    
+    // 使用逆向迭代器右折叠
+    std::string rs = std::accumulate(std::next(v.rbegin()), v.rend(),
+                                     std::to_string(v.back()), // 用末元素开始
+                                     dash_fold);
+    
+    std::cout &lt;&lt; "和：" &lt;&lt; sum &lt;&lt; '\n'
+              &lt;&lt; "积：" &lt;&lt; product &lt;&lt; '\n'
+              &lt;&lt; "以短横线分隔的字符串：" &lt;&lt; s &lt;&lt; '\n'
+              &lt;&lt; "以短横线分隔的字符串（右折叠）：" &lt;&lt; rs &lt;&lt; '\n';
+}
+|output=
+和：55
+积：3628800
+以短横线分隔的字符串：1-2-3-4-5-6-7-8-9-10
+以短横线分隔的字符串（右折叠）：10-9-8-7-6-5-4-3-2-1
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op}} 不能有任何副作用|after=它不能修改涉及到的范围}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc adjacent_difference}}
+{{dsc inc|cpp/algorithm/dsc inner_product}}
+{{dsc inc|cpp/algorithm/dsc partial_sum}}
+{{dsc inc|cpp/algorithm/dsc reduce}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,140 @@
+{{cpp/title|scalbn|scalbnf|scalbnl|scalbln|scalblnf|scalblnl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl h|{{c/core|int}} 指数}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+float       scalbn ( float num, int exp );
+double      scalbn ( double num, int exp );
+long double scalbn ( long double num, int exp );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            scalbn ( /* floating-point-type */ num, int exp );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+float       scalbnf( float num, int exp );
+}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+long double scalbnl( long double num, int exp );
+}}
+{{dcl h|{{c/core|long}} 指数}}
+{{dcl rev multi|num=4|since1=c++11|dcl1=
+float       scalbln ( float num, long exp );
+double      scalbln ( double num, long exp );
+long double scalbln ( long double num, long exp );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            scalbln ( /* floating-point-type */ num, long exp );
+}}
+{{dcl|num=5|since=c++11|notes={{mark constexpr since c++23}}|
+float       scalblnf( float num, long exp );
+}}
+{{dcl|num=6|since=c++11|notes={{mark constexpr since c++23}}|
+long double scalblnl( long double num, long exp );
+}}
+{{dcl h|[[#注解|额外重载]]}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+double scalbn( Integer num, int exp );
+}}
+{{dcl|num=B|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+double scalbln( Integer num, long exp );
+}}
+{{dcl end}}
+
+@1-6@ 将浮点数 {{c|num}} 乘以 {{lc|FLT_RADIX}} 的 {{c|exp}} 次幂。{{rev inl|since=c++23|标准库提供所有以无 cv 限定的浮点数类型作为实参 {{c|num}} 的类型的 {{tt|std::scalbn}} 和 {{tt|std::scalbln}} 重载。}}
+@A,B@ 为所有整数类型提供额外重载，将它们当做 {{c/core|double}}。
+
+===参数===
+{{par begin}}
+{{par|num|浮点数或整数}}
+{{par|exp|整数}}
+{{par end}}
+
+===返回值===
+如果没有发生错误，那么返回 {{c|num}} 乘 {{lc|FLT_RADIX}} 的 {{c|exp}} 次幂（{{math|num&amp;times;FLT_RADIX{{su|p=exp}}}}）。
+
+如果发生上溢导致的值域错误，那么返回 {{tt|±HUGE_VAL}}、{{tt|±HUGE_VALF}} 或 {{tt|±HUGE_VALL}}。
+
+如果发生下溢导致的值域错误，那么返回（舍入后的）正确结果。
+
+===错误处理===
+报告 {{lc|math_errhandling}} 中指定的错误。
+
+如果实现支持 IEEE 浮点数算术（IEC 60559），那么
+* 除非出现值域错误，决不引发 {{lc|FE_INEXACT}}（结果准确）
+* 除非出现值域错误，忽略[[cpp/numeric/fenv/FE_round|当前舍入模式]]
+* 如果 {{c|num}} 是 ±0，那么返回不修改的该值
+* 如果 {{c|num}} 是 ±∞，那么返回不修改的该值
+* 如果 {{c|exp}} 是 0，那么返回不修改的 {{c|num}}
+* 如果 {{c|num}} 是 NaN，那么返回 NaN
+
+===注解===
+在二进制系统上（其中 {{lc|FLT_RADIX}} 是 {{c|2}}），{{tt|std::scalbn}} 等价于 {{tt|std::ldexp}}。
+
+尽管指定 {{tt|std::scalbn}} 和 {{tt|std::scalbln}} 会以高效率进行运算，当时在多数实现上它们的效率仍低于用算术运算符乘或除以二的幂。
+
+函数名代表“新 scalb”，其中 {{tt|scalb}} 是旧的非标准函数名，它的第二实参拥有浮点数类型。
+
+提供 {{tt|std::scalbln}} 函数是因为从最小正浮点数值放大到最大正有限值的因子可能大于标准保证的 {{lc|INT_MAX}} 32767。特别是对于 80 位 {{c/core|long double}}，因子是 32828。
+
+GNU 实现不会设置 {{tt|errno}}，而不管 {{tt|math_errhandling}}。
+
+{{cpp/numeric/math/additional integer overload note|scalbn}}
+
+===示例===
+{{example
+|code=
+#include &lt;cerrno&gt;
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout &lt;&lt; "scalbn(7, -4) = " &lt;&lt; std::scalbn(7, -4) &lt;&lt; '\n'
+              &lt;&lt; "scalbn(1, -1074) = " &lt;&lt; std::scalbn(1, -1074)
+              &lt;&lt; "（最小正次正规 double）\n"
+              &lt;&lt; "scalbn(nextafter(1,0), 1024) = "
+              &lt;&lt; std::scalbn(std::nextafter(1,0), 1024)
+              &lt;&lt; "（最大有限 double）\n";
+    
+    // 特殊值
+    std::cout &lt;&lt; "scalbn(-0, 10) = " &lt;&lt; std::scalbn(-0.0, 10) &lt;&lt; '\n'
+              &lt;&lt; "scalbn(-Inf, -1) = " &lt;&lt; std::scalbn(-INFINITY, -1) &lt;&lt; '\n';
+    
+    // 错误处理
+    errno = 0;
+    std::feclearexcept(FE_ALL_EXCEPT);
+    
+    std::cout &lt;&lt; "scalbn(1, 1024) = " &lt;&lt; std::scalbn(1, 1024) &lt;&lt; '\n';
+    
+    if (errno == ERANGE)
+        std::cout &lt;&lt; "    errno == ERANGE: " &lt;&lt; std::strerror(errno) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_OVERFLOW))
+        std::cout &lt;&lt; "    发生 FE_OVERFLOW\n";
+}
+|p=true
+|output=
+scalbn(7, -4) = 0.4375
+scalbn(1, -1074) = 4.94066e-324（最小正次正规 double）
+scalbn(nextafter(1,0), 1024) = 1.79769e+308（最大有限 double）
+scalbn(-0, 10) = -0
+scalbn(-Inf, -1) = -inf
+scalbn(1, 1024) = inf
+    errno == ERANGE: Numerical result out of range
+    发生 FE_OVERFLOW
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc frexp}}
+{{dsc inc|cpp/numeric/math/dsc ldexp}}
+{{dsc see c|c/numeric/math/scalbn}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,91 @@
+{{cpp/thread/shared_lock/title|lock}}
+{{cpp/thread/shared_lock/navbar}}
+{{dcl begin}}
+{{dcl|since=c++14|1=
+void lock();
+}}
+{{dcl end}}
+
+以共享模式锁定关联互斥体。相当于调用 {{c|mutex()-&gt;lock_shared()}}。
+
+===参数===
+（无）
+
+===返回值===
+（无）
+
+===异常===
+* {{c|mutex()-&gt;lock_shared()}} 抛出的任何异常。
+
+* 若无关联互斥体，则抛出以 {{lc|std::errc::operation_not_permitted}} 为错误码的 {{lc|std::system_error}}。
+
+* 若关联互斥体已被此 {{tt|shared_lock}} 锁定（即 {{rlp|owns_lock}} 返回 {{tt|true}}），则返回以 {{lc|std::errc::resource_deadlock_would_occur}} 为错误码的 {{lc|std::system_error}}。
+
+===示例===
+{{todo|展示有意义的 shared_lock::lock 用法}}
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::string file = "原始内容。"; // 模拟一个文件
+std::mutex output_mutex; // 保护输出操作的互斥体。
+std::shared_mutex file_mutex; // 读/写互斥体
+
+void read_content(int id)
+{
+    std::string content;
+    {
+        std::shared_lock lock(file_mutex, std::defer_lock); // 先不锁定。
+        lock.lock(); // 锁定它。
+        content = file;
+    }
+    std::lock_guard lock(output_mutex);
+    std::cout &lt;&lt; "读者 #" &lt;&lt; id &lt;&lt; " 读取的内容: " &lt;&lt; content &lt;&lt; '\n';
+}
+
+void write_content()
+{
+    {
+        std::lock_guard file_lock(file_mutex);
+        file = "新内容";
+    }
+    std::lock_guard output_lock(output_mutex);
+    std::cout &lt;&lt; "已保存新内容。\n";
+}
+
+int main()
+{
+    std::cout &lt;&lt; "两个读者读取文件。\n"
+              &lt;&lt; "一个写者与它们竞争。\n";
+    std::thread reader1{read_content, 1};
+    std::thread reader2{read_content, 2};
+    std::thread writer{write_content};
+    reader1.join();
+    reader2.join();
+    writer.join();
+    std::cout &lt;&lt; "已完成前几个文件操作。\n";
+    reader1 = std::thread{read_content, 3};
+    reader1.join();
+}
+|p=true
+|output=
+两个读者读取文件。
+一个写者与它们竞争。
+读者 #1 读取的内容: 原始内容。
+读者 #2 读取的内容: 原始内容。
+已保存新内容。
+已完成前几个文件操作。
+读者 #3 读取的内容: 新内容
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/shared_lock/dsc try_lock}}
+{{dsc inc|cpp/thread/shared_lock/dsc unlock}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

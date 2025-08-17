@@ -1,0 +1,251 @@
+{{title|求值顺序}}
+{{cpp/language/expressions/navbar}}
+
+求值任何表达式的任何部分，包括求值函数参数的顺序都''未指明''（一些例外在下文中列出）。编译器能以任何顺序求值任何操作数和其他子表达式，并且可以在再次求值同一表达式时选择另一顺序。
+
+C++ 中无从左到右或从右到左求值的概念。这不会与运算符的从左到右及从右到左结合性混淆：表达式 {{c|a() + b() + c()}} 由于 {{c/core|operator+}} 的从左到右结合性被分析成 {{c|(a() + b()) + c()}}，但在运行时可以首先、最后或者在 {{c|a()}} 和 {{c|b()}} 之间对 {{c|c()}} 求值：
+
+{{example
+|code=
+#include &lt;cstdio&gt;
+
+int a() { return std::puts("a"); }
+int b() { return std::puts("b"); }
+int c() { return std::puts("c"); }
+
+void z(int, int, int) {}
+
+int main()
+{
+    z(a(), b(), c());       // 允许全部 6 种输出排列
+    return a() + b() + c(); // 允许全部 6 种输出排列
+}
+|p=true
+|output=
+b
+c
+a
+c
+a 
+b
+}}
+
+
+===“按顺序早于”规则 {{mark since c++11}}===
+====表达式求值====
+每个表达式的求值包括：
+* ''值计算''：计算表达式所返回的值。这可能涉及确定对象的身份（泛左值的求值，例如当表达式返回到某对象的引用时），或读取先前赋给对象的值（纯右值的求值，例如当表达式返回数或其他某个值时）
+* 引发''副作用''：访问（读或写）{{tt|volatile}} 泛左值所指代的对象，修改（写入）对象，调用库输入/输出函数，或调用任何做出这些操作的函数。
+
+====顺序====
+{{i|按顺序早于}}是同一线程中的求值 {{tt|A}} 和 {{tt|B}} 之间的非对称的、传递的对偶关系。
+
+* 如果 {{tt|A}} 按顺序早于 {{tt|B}}（等价地有 {{tt|B}} ''按顺序晚于'' {{tt|A}}），那么 {{tt|A}} 的求值会在 {{tt|B}} 的求值开始前完成。
+* 如果 {{tt|A}} 不按顺序早于 {{tt|B}} 而 {{tt|B}} 按顺序早于 {{tt|A}}，那么 {{tt|B}} 的求值会在 {{tt|A}} 的求值开始前完成。
+* 如果 {{tt|A}} 不按顺序早于 {{tt|B}} 而 {{tt|B}} 不按顺序早于 {{tt|A}}，那么存在两种可能：
+** {{tt|A}} 与 {{tt|B}} 的求值是{{i|无顺序}}的：它们能以任何顺序进行，并可能重叠（在同一执行线程内，编译器可以将组成 {{tt|A}} 与 {{tt|B}} 的 CPU 指令交错）
+** {{tt|A}} 与 {{tt|B}} 的求值是{{i|顺序不确定}}的：它们可以任意顺序进行但不可重叠，{{tt|A}} 在 {{tt|B}} 前完成，或 {{tt|B}} 在 {{tt|A}} 前完成。下次求值相同表达式时顺序可以相反。
+
+如果表达式 {{c|X}} 的每次值计算和副作用都按顺序早于表达式 {{c|Y}} 的每次值计算和副作用，那么 {{c|X}} ''按顺序早于'' {{c|Y}}。
+
+===规则===
+@1@ 每个{{rlps|expressions#完整表达式}}都按顺序早于下一个完整表达式。
+
+@2@ 任何{{rlps|expressions#运算符}}的各操作数的值计算（但非副作用）都按顺序早于该运算符结果的值计算（但非副作用）。
+
+@3@ 调用函数时（无论函数是否内联，且无论是否使用显式函数调用语法），以下列表中的每一项都按顺序早于下一项：
+* 每个实参表达式与指代 {{c|func}} 的后缀表达式
+{{rrev|since=c++26|
+* {{c|func}} 的每个{{rlps|function#前条件断言}}
+}}
+* {{c|func}} 函数体内的每个表达式或语句
+{{rrev|since=c++26|
+* {{c|func}} 的每个{{rlps|function#后条件断言}}
+}}
+
+@4@ 内建{{rlp|operator incdec#内建的后置运算符|后自增与后自减}}运算符的值计算按顺序早于它的副作用。
+
+@5@ 内建{{rlp|operator incdec#内建的前置运算符|前自增与前自减}}运算符的副作用按顺序早于它的值计算（作为由复合赋值的定义所致的隐含规则）。
+
+@6@ 内建{{rlp|operator logical|逻辑}}与运算符 {{c|&amp;&amp;}}，内建逻辑或运算符 {{c|{{!!}}}}，和内建{{rlp|operator other#内建逗号运算符|逗号运算符}} {{c|,}} 的第一个（左）操作数按顺序早于第二个（右）操作数。
+
+@7@ 与{{rlps|operator other#条件运算符}} {{c|?:}} 中的第一个操作数按顺序早于与第二或第三个操作数。
+
+@8@ 内建{{rlp|operator assignment#内建的直接赋值|赋值}}运算符和所有内建{{rlp|operator assignment#内建的复合赋值|复合}}赋值运算符的副作用（修改左操作数），都按顺序晚于左右操作数的值计算（但非副作用），且按顺序早于赋值表达式的值计算（即早于返回指代被修改对象的引用之时）。
+
+@9@ {{rlp|list initialization|列表初始化}}中，任何给定初始化器子句的每个值计算和副作用，都按顺序早于大括号包围的初始化器的逗号分隔列表中任何跟在它之后的初始化器子句的每个值计算和副作用。
+
+@10@ 如果某个函数调用既不按顺序早于又不按顺序晚于函数外的另一表达式的求值（可能是另一函数调用），那么它与该求值之间是顺序不确定的（程序必须表现为{{rlp|as if|如同}}组成一次函数调用的 CPU 指令，不会与组成其他表达式的求值（包括其他函数调用）的指令之间发生交错，即使函数被内联也是如此）。
+{{rev begin}}
+{{rev|since=c++17|规则 10 有一个例外：在 {{ltt|cpp/algorithm/execution_policy_tag_t|std::execution::par_unseq}} 执行策略下执行的标准库算法所作的函数调用是无顺序的，并且可以任意交错。}}
+{{rev end}}
+
+@11@ 对分配函数（{{ltt|cpp/memory/new/operator new}}）的调用相对于 {{rlp|new|{{c/core|new}} 表达式}}中构造函数各实参的求值来说，{{rev inl|until=c++17|是顺序不确定的}}{{rev inl|since=c++17|按顺序早于它}}。
+
+@12@ 从函数返回时，作为函数调用求值结果的临时量的复制初始化按顺序早于在 {{rlp|return|{{c/core|return}} 语句}}的操作数末尾处对所有临时量的销毁，而这些销毁进一步按顺序早于对环绕 {{c/core|return}} 语句的块的所有局部变量的销毁。
+
+{{rev begin}}
+{{rev|since=c++17|
+@13@ 函数调用表达式中，指名函数的表达式按顺序早于每个实参表达式和每个默认实参。
+
+@14@ 函数调用中，每个形参的初始化的值计算和副作用相对于任何其他形参的初始化的值计算和副作用是顺序不确定的。
+
+@15@ 用运算符写法进行调用时，每个重载的运算符都会遵循它所重载的内建运算符的定序规则。
+
+@16@ 下标表达式 {{c|E1[E2]}} 中，{{c|E1}} 按顺序早于 {{c|E2}}。
+
+@17@ 成员指针表达式 {{c|E1.*E2}} 或 {{c|E1-&gt;*E2}} 中，{{c|E1}} 按顺序早于 {{c|E2}}（除非 E1 的动态类型不含 {{c|E2}} 所指的成员）。
+
+@18@ 移位运算符表达式 {{c|E1 &lt;&lt; E2}} 和 {{c|E1 &gt;&gt; E2}} 中，{{c|E1}} 按顺序早于 {{c|E2}}。
+
+@19@ 每个简单赋值表达式 {{c|1=E1 = E2}} 和每个复合赋值表达式 {{c|1=E1 @= E2}} 中，{{c|E2}} 按顺序早于 {{c|E1}}。
+
+@20@ 带括号的初始化器中的逗号分隔的表达式列表中的每个表达式，如同函数调用一般求值（顺序不确定）。
+}}
+{{rev end}}
+
+===未定义行为===
+在以下情况下行为{{rlp|ub|未定义}}：
+
+@1@ 某个{{rlps|memory model#内存位置}}上的一项副作用相对于同一个内存位置上的另一副作用是无顺序的：
+{{source|1=
+i = ++i + 2;       // 具有良好定义
+i = i++ + 2;       // C++17 前行为未定义
+f(i = -2, i = -2); // C++17 前行为未定义
+f(++i, ++i);       // C++17 前行为未定义，C++17 起未指明
+i = ++i + i++;     // 行为未定义
+}}
+
+@2@ 某个内存位置上的副作用相对于使用在同一个内存位置中的任何对象的值的值计算是无顺序的：
+{{source|1=
+cout &lt;&lt; i &lt;&lt; i++; // C++17 前行为未定义
+a[i] = i++;       // C++17 前行为未定义
+n = ++i + i;      // 行为未定义
+}}
+
+@3@ 开始或结束在某个内存位置中的对象的{{rlp|lifetime|生存期}}与以下任意操作是无顺序的：
+* 在相同内存位置的副作用
+* 使用在相同内存位置的对象的值的值计算
+* 开始或结束某个占用了与该内存位置的存储有重叠的存储的对象的生存期
+{{source|1=
+union U { int x, y; } u;
+(u.x = 1, 0) + (u.y = 2, 0); // 行为未定义
+}}
+
+===序列点规则 {{mark until c++11}}===
+====C++11 前的定义====
+表达式的求值可能产生副作用，包括：访问 {{tt|volatile}} 左值所指代的对象，修改对象，调用库输入/输出函数，或任何做出这些操作的函数。
+
+{{i|序列点}}是执行序列中的点，在该点所有来自序列中先前求值的副作用都已经完成，而后继求值的副作用都尚未开始。
+
+====C++11 前的规则====
+@1@ 每个{{rlps|expressions#完整表达式}}结尾（典型地在分号处）有一个序列点。
+
+@2@ 调用函数时（无论该函数是否内联，无论是否使用函数调用语法），所有函数实参的求值（如果存在）之后有一个序列点，它发生于函数体内的任何表达式或语句的执行之前。
+
+@3@ 在从函数返回时，在从函数调用结果的复制初始化之后，和 {{rlp|return|{{c/core|return}} 语句}}的{{spar sep|表达式}}末尾的临时对象析构（如果存在）前，有一个序列点。
+
+@4@ 对函数的返回值进行复制之后，并在函数外任何表达式的执行之前有一个序列点。
+
+@5@ 一旦函数执行开始，则在被调用函数的执行完成前，不求值调用方函数的任何表达式（函数不能交错执行）。
+ 
+@6@ 每个使用内建（非重载）运算符的下列四种表达式的求值中，表达式 {{c|a}} 的求值后有一个序列点。
+
+{{source|
+a &amp;&amp; b
+a {{!!}} b
+a ? b : c
+a , b
+}}
+
+====C++11 前的未定义行为====
+在以下情况下行为{{rlp|ub|未定义}}：
+
+@1@ 前后序列点间，多次修改在同一个内存位置中的任何对象的存储值：
+{{source|1=
+i = ++i + i++;     // 未定义行为
+i = i++ + 1;       // 未定义行为
+i = ++i + 1;       // 未定义行为
+++ ++i;            // 未定义行为
+f(++i, ++i);       // 未定义行为
+f(i = -1, i = -1); // 未定义行为
+}}
+
+@2@ 前后序列点间，以为确定要存储的值以外的方式访问表达式求值所修改的在同一个内存位置中的对象的先前值：
+{{source|1=
+cout &lt;&lt; i &lt;&lt; i++; // 未定义行为
+a[i] = i++;       // 未定义行为
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1885|std=C++11|before=函数返回时自动变量的销毁顺序不明确|after=添加顺序规则}}
+{{dr list item|wg=cwg|dr=1949|std=C++11|before=C++标准使用了“按顺序晚于”，但没有定义它|after=定义为“按顺序早于”的相反关系}}
+{{dr list item|wg=cwg|dr=1953|std=C++11|before=涉及某个内存位置的副作用和值计算可以相对于&lt;br&gt;开始或结束在相同内存位置的对象的生存期无顺序|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=2146|std=C++98|before=涉及未定义行为的情况没有考虑到位域|after=考虑这种情况}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=6.9.1|title=Program execution|id=intro.execution}}
+{{ref std|section=7.6.1.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=7.6.2.8|title=New|id=expr.new}}
+{{ref std|section=7.6.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=7.6.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=7.6.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=7.6.19|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=7.6.20|title=Comma operator|id=expr.comma}}
+{{ref std|section=9.4.5|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.9.1|title=Program execution|id=intro.execution}}
+{{ref std|section=7.6.1.5|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=7.6.2.7|title=New|id=expr.new}}
+{{ref std|section=7.6.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=7.6.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=7.6.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=7.6.19|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=7.6.20|title=Comma operator|id=expr.comma}}
+{{ref std|section=9.4.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=4.6|title=Program execution|id=intro.execution}}
+{{ref std|section=8.2.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=8.3.4|title=New|id=expr.new}}
+{{ref std|section=8.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=8.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=8.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=8.18|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=8.19|title=Comma operator|id=expr.comma}}
+{{ref std|section=11.6.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=1.9|title=Program execution|id=intro.execution}}
+{{ref std|section=5.2.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=5.3.4|title=New|id=expr.new}}
+{{ref std|section=5.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=5.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=5.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=5.17|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=5.18|title=Comma operator|id=expr.comma}}
+{{ref std|section=8.5.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=1.9|title=Program execution|id=intro.execution}}
+{{ref std|section=5.2.6|title=Increment and decrement|id=expr.post.incr}}
+{{ref std|section=5.3.4|title=New|id=expr.new}}
+{{ref std|section=5.14|title=Logical AND operator|id=expr.log.and}}
+{{ref std|section=5.15|title=Logical OR operator|id=expr.log.or}}
+{{ref std|section=5.16|title=Conditional operator|id=expr.cond}}
+{{ref std|section=5.17|title=Assignment and compound assignment operators|id=expr.ass}}
+{{ref std|section=5.18|title=Comma operator|id=expr.comma}}
+{{ref std|section=8.5.4|title=List-initialization|id=dcl.init.list}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|operator precedence|运算符优先级}}，定义从表达式的源码表示构建它的方式。
+{{dsc begin}}
+{{dsc see c|c/language/eval order|求值顺序|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

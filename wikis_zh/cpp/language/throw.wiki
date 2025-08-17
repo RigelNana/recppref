@@ -1,0 +1,259 @@
+{{title|抛出异常}}
+{{cpp/language/expressions/exceptions/navbar}}
+抛出{{rlp|exceptions|异常}}会转移控制到{{rlp|catch|处理块}}。
+
+异常可以从 [[#throw 表达式|{{c/core|throw}} 表达式]]抛出，以下语境也可能会抛出异常：
+* [[cpp/memory/new/operator new|分配函数]]
+* {{rlpt|dynamic_cast}}
+* {{rlpt|typeid}}
+* {{rlp|new|{{c/core|new}} 表达式}}
+* [[cpp/standard library|标准库]]函数
+
+===异常对象===
+抛出异常时会初始化一个具有动态{{rlp|storage duration|存储期}}的对象，该对象被称为''异常对象''。
+
+如果异常对象具有以下类型之一，那么程序非良构：
+* {{rlps|type#不完整类型}}
+* {{rlp|abstract class|抽象类类型}}
+* 指向（可有 cv 限定的）{{c/core|void}} 以外的不完整类型的指针
+
+====构造和析构异常对象====
+给定异常对象的类型为 {{tt|T}}：
+* 设 {{c|obj}} 为某个 {{c/core|const T}} 类型左值，从 {{c|obj}} {{rlp|copy initialization|复制初始化}} {{tt|T}} 类型对象必须良构。
+* 如果 {{tt|T}} 是类类型，那么：
+:* 选中的{{rlp|constructor|构造函数}}会被 {{rlps|definition#ODR 使用}}。
+:* {{tt|T}} 的{{rlp|destructor|析构函数}}会{{rlp|destructor#潜在调用的析构函数|潜在调用}}。
+
+不指定异常对象的内存的分配方式。仅保证全局[[cpp/memory/new/operator new|分配函数]]不会为异常对象分配存储。
+
+如果{{rlp|catch|处理块}}是通过[[#throw 表达式|重新抛出异常]]退出的，那么对于同一异常对象，控制会转移到另一处理块。此时不会析构异常对象。
+
+{{rev begin}}
+{{rev|until=c++11|
+如果最后一个剩余的活跃处理块通过重新抛出异常以外的方式退出，那么就会销毁异常对象，并且实现会以未指定的方式解分配异常对象的内存。
+
+析构会在处理块中“形参列表”中声明的对象的析构后立刻发生。
+}}
+{{rev|since=c++11|
+异常对象的潜在析构点包括：
+* 当异常的活跃处理块通过重新抛出异常以外的方式退出时，会在处理块中“形参列表”中声明的对象的析构后立刻潜在析构。
+* 当指代异常对象的 {{lc|std::exception_ptr}} 类型对象被销毁时，会在 {{lc|std::exception_ptr}} 的析构函数返回前潜在析构。
+
+在异常对象的所有潜在析构点中，存在一个未指定的最后析构点，异常对象会在这里销毁。所有其他析构点都{{rlp|multithread|先发生于}}最后析构点。然后实现会以未指定的方式解分配异常对象的内存。
+}}
+{{rev end}}
+
+{{anchor|throw 表达式}}
+==={{c/core|throw}} 表达式===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|throw}} {{spar|表达式}}}}
+{{sdsc|num=2|{{ttb|throw}}}}
+{{sdsc end}}
+
+@1@ 抛出新的异常。
+@2@ 重新抛出当前正在处理的异常。
+
+{{par begin}}
+{{par|{{spar|表达式}}|用来构造异常对象的表达式}}
+{{par end}}
+
+
+抛出新的异常时，按以下方式确定它的异常对象：
+# 对{{spar sep|表达式}}进行{{rlp|implicit conversion#数组到指针转换|数组到指针}}和{{rlp|implicit conversion#函数到指针转换|函数到指针}}标准转换。
+# 设 {{c|ex}} 为上述转换的结果：
+::* 异常对象的类型是从 {{c|ex}} 的类型移除顶层 cv 限定得到的类型。
+::* 异常对象会从 {{c|ex}} {{rlp|copy initialization|复制初始化}}。
+
+如果程序试图在没有正在处理异常的情况下重新抛出异常，那么就会调用 {{lc|std::terminate}}。否则会以当前异常对象重新激活异常（不会创建新的异常对象），并且该异常不再视为已捕获。
+
+{{source|
+try
+{
+    // 抛出新异常 123
+    throw 123;
+}
+catch (...) // 捕获所有异常
+{
+    // （部分）响应异常 123
+    throw; // 将异常传递给其他处理块
+}
+}}
+
+===栈回溯===
+异常对象构造完成时，控制流立即反向（沿调用栈向上）直到它抵达一个 {{rlp|try|{{c/core|try}} 块}}的起点，在该点按出现顺序将它每个关联的处理块的形参和异常对象的类型进行比较，以找到一个{{rlp|catch#匹配异常|匹配}}。如果找不到匹配，那么控制流继续回溯栈直到下个 {{c/core|try}} 块，以此类推。如果找到匹配，那么控制流跳到匹配的处理块。
+
+因为控制流沿调用栈向上移动，所以它会为自进入相应 {{c/core|try}} 块之后的所有具有{{rlp|storage duration|自动存储期}}的已构造但尚未销毁的对象，以它们的构造函数完成的逆序调用析构函数。当从 {{rlp|return}} 语句所使用的局部变量或临时量的构造函数中抛出异常时，从函数返回的对象的析构函数也会被调用。
+
+如果异常从某个对象的构造函数或（罕见地）从析构函数抛出（不管该对象的存储期），那么就会对所有已经完整构造的非静态非变体成员和基类以构造函数完成的逆序调用析构函数。{{rlp|union#联合体式的类|联合体式的类}}的变体成员只会在从构造函数中回溯的情况中销毁，且如果初始化与销毁之间改变了活动成员，那么行为未定义。
+
+{{rrev|since=c++11|
+如果委托构造函数在非委托构造函数成功完成后以异常退出，那么就会调用此对象的析构函数。
+}}
+
+如果从 {{rlp|new|new 表达式}}所调用的构造函数抛出异常，那么调用匹配的[[cpp/memory/new/operator delete|解分配函数]]，如果它可用。
+
+此过程被称为''栈回溯''。
+
+如果由栈回溯机制所直接调用的函数在异常对象初始化后且在异常处理块开始执行前以异常退出，那么就会调用 {{lc|std::terminate}}。这种函数包括退出作用域的具有自动存储期的对象的{{rlp|destructor|析构函数}}，和为初始化以值捕获的实参而调用（如果没有被{{rlp|copy elision|消除}}）的异常对象的复制构造函数。
+
+如果异常被抛出但未被捕获，包括从 {{lc|std::thread}} 的启动函数，main 函数，及任何静态或线程局部对象的构造函数或析构函数中脱离的异常，那么就会调用 {{lc|std::terminate}}。是否对未捕获的异常进行任何栈回溯由实现定义。
+
+===注解===
+在重抛异常时，必须使用第二个形式，以避免异常对象使用继承的（典型）情况中发生对象切片：
+{{source|
+try
+{
+    std::string("abc").substr(10); // 抛出 std::out_of_range
+}
+catch (const std::exception&amp; e)
+{
+    std::cout &lt;&lt; e.what() &lt;&lt; '\n';
+//  throw e; // 复制初始化一个 std::exception 类型的新异常对象
+    throw;   // 重抛 std::out_of_range 类型的异常对象
+}
+}}
+
+{{c/core|throw}} 表达式被归类为 {{c/core|void}} 类型的{{rlp|value category|纯右值表达式}}。与任何其他表达式一样，它可以是另一表达式中的子表达式，在{{rlp|operator other#条件运算符|条件运算符}}中最常见：
+{{source|1=
+double f(double d)
+{
+    return d &gt; 1e7 ? throw std::overflow_error("too big") : d;
+}
+
+int main()  
+{
+    try
+    {
+        std::cout &lt;&lt; f(1e10) &lt;&lt; '\n';
+    }
+    catch (const std::overflow_error&amp; e)
+    {
+        std::cout &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/throw}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+struct A
+{
+    int n;
+    
+    A(int n = 0): n(n) { std::cout &lt;&lt; "A(" &lt;&lt; n &lt;&lt; ") 已成功构造\n"; }
+    ~A() { std::cout &lt;&lt; "A(" &lt;&lt; n &lt;&lt; ") 已销毁\n"; }
+};
+
+int foo()
+{
+    throw std::runtime_error("错误");
+}
+
+struct B
+{
+    A a1, a2, a3;
+    
+    B() try : a1(1), a2(foo()), a3(3)
+    {
+        std::cout &lt;&lt; "B 已成功构造\n";
+    }
+    catch(...)
+    {
+    	std::cout &lt;&lt; "B::B() 因异常退出\n";
+    }
+    
+    ~B() { std::cout &lt;&lt; "B 已摧毁\n"; }
+};
+
+struct C : A, B
+{
+    C() try
+    {
+        std::cout &lt;&lt; "C::C() 已成功完成\n";
+    }
+    catch(...)
+    {
+        std::cout &lt;&lt; "C::C() 因异常退出\n";
+    }
+    
+    ~C() { std::cout &lt;&lt; "C 已销毁\n"; }
+};
+
+int main () try
+{
+    // 创建 A 基类子对象
+    // 创建 B 的成员 a1
+    // 创建 B 的成员 a2 失败
+    // 回溯销毁 B 的 a1 成员
+    // 回溯销毁 A 基类子对象
+    C c;
+}
+catch (const std::exception&amp; e)
+{
+    std::cout &lt;&lt; "main() 创建 C 失败，原因：" &lt;&lt; e.what();
+}
+|output=
+A(0) 已成功构造
+A(1) 已成功构造
+A(1) 已销毁
+B::B() 因异常退出
+A(0) 已销毁
+C::C() 因异常退出
+main() 创建 C 失败，原因：错误
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=499|std=C++98|before=不能抛出边界未知的数组，因为它的类型不完整，&lt;br&gt;但是从退化后的指针创建异常对象却不会有任何问题|after=改为对异常对象应用&lt;br&gt;类型完整性限制}}
+{{dr list item|wg=cwg|dr=668|std=C++98|before=从局部非自动存储期对象抛出异常时不会调用 {{lc|std::terminate}}|after=此时也会调用{{lc|std::terminate}}}}
+{{dr list item|wg=cwg|dr=1863|std=C++11|before=在抛出时对仅移动异常对象不要求复制构造函数，但允许之后复制|after=要求复制构造函数}}
+{{dr list item|wg=cwg|dr=1866|std=C++98|before=从构造函数栈回溯时会泄露变体成员|after=变体成员被销毁}}
+{{dr list item|wg=cwg|dr=2176|std=C++98|before=从局部变量的析构函数抛出时会跳过返回值的析构函数|after=添加函数返回值到回溯过程}}
+{{dr list item|wg=cwg|dr=2699|std=C++98|before={{c|throw "EX"}} 实际上会抛出 {{c/core|char*}} 而不是 {{c/core|const char*}}|after=已修正}}
+{{dr list item|wg=cwg|dr=2711|std=C++98|before=未指定异常对象的复制初始化来源|after=从{{spar sep|表达式}}复制初始化}}
+{{dr list item|wg=cwg|dr=2775|std=C++98|before=异常对象的复制初始化要求不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=2854|std=C++98|before=异常对象的存储期不明确|after=使之明确}}
+{{dr list item|paper=P1825R0|std=C++11|before={{tt|throw}} 中禁止从形参的隐式移动|after=允许隐式移动}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.6.18|title=Throwing an exception|id=expr.throw}}
+{{ref std|section=14.2|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.18|title=Throwing an exception|id=expr.throw}}
+{{ref std|section=14.2|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.17|title=Throwing an exception|id=expr.throw}}
+{{ref std|section=18.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=15.1|title=Throwing an exception|id=except.throw}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+* {{rlp|try|{{c/core|try}} 块}}
+* {{rlp|catch|处理异常}}
+* {{rlp|noexcept spec|{{c/core|noexcept}} 说明符}}
+* [[cpp/error#异常处理|异常处理]]
+{{rrev|until=c++17|* {{rlp|except spec|动态异常说明}}}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,95 @@
+{{cpp/title|{{small|generator&lt;Ref,V,Allocator&gt;::promise_type::}}yield_value}}
+{{cpp/coroutine/generator/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|
+std::suspend_always yield_value( yielded val ) noexcept;
+}}
+{{dcl|num=2|since=c++23|
+auto yield_value( const std::remove_reference_t&lt;yielded&gt;&amp; lval )
+    requires std::is_rvalue_reference_v&lt;yielded&gt; &amp;&amp;
+             std::constructible_from&lt;std::remove_cvref_t&lt;yielded&gt;,
+                 const std::remove_reference_t&lt;yielded&gt;&amp;&gt;;
+}}
+{{dcl|num=3|since=c++23|
+template&lt; class R2, class V2, class Alloc2, class Unused &gt;
+    requires std::same_as&lt;typename std::generator&lt;T2, V2, Alloc2&gt;::yielded,
+                          yielded&gt;
+auto yield_value( ranges::elements_of&lt;std::generator&lt;T2, V2, Alloc2&gt;&amp;&amp;,
+                                      Unused&gt; g ) noexcept;
+}}
+{{dcl|num=4|since=c++23|
+template&lt; class R2, class V2, class Alloc2, class Unused &gt;
+    requires std::same_as&lt;typename std::generator&lt;T2, V2, Alloc2&gt;::yielded, 
+                          yielded&gt;
+auto yield_value( ranges::elements_of&lt;std::generator&lt;T2, V2, Alloc2&gt;&amp;,
+                                      Unused&gt; g ) noexcept;
+}}
+{{dcla|num=5|since=c++23|
+template&lt; ranges::input_range R, class Alloc &gt;
+    requires std::convertible_to&lt;ranges::range_reference_t&lt;R&gt;, yielded&gt;
+auto yield_value( ranges::elements_of&lt;R, Alloc&gt; r );
+}}
+{{dcl end}}
+
+一种协程接口函数的实现，内部使用以支持 {{c|operator co_yield}}。
+
+{{petty|({{ltt|cpp/coroutine/generator#成员类型|yielded}} 是 {{c/core|std::generator}} 中定义的引用类型。)}}
+
+@1@ 赋值 {{c|std::addressof(val)}} 给 {{rlpsi|/#value_}}。返回 {{c|{}&lt;!----&gt;}}。
+
+@2@ 返回未指明类型的可等待对象 {{c|x}}，它存储一个 {{box/core|{{c/core|std::remove_cvref_t&lt;}}{{lst|cpp/coroutine/generator#yielded}}{{c/core|&gt;}}}} 类型的对象。{{c|x}} 以 {{c|lval}} [[cpp/language/direct initialization|直接非列表初始化]]，其各成员函数被配置为使得 {{rlpsi|/#value_}} 指向所存储的对象。然后暂停协程。
+
+@3, 4@ 令 {{c|x}} 为某个 {{lt|cpp/coroutine/generator}} 对象。
+返回未指明类型的可等待对象，{{c|g.range}} 被移动如其中，
+* 其成员 {{c|await_ready}} 返回 {{c|false}}，
+* 其成员 {{c|await_suspend}} 将 {{c|g.range.coroutine_}} 推入 {{box|{{c/core|*x.}}{{lsi|cpp/coroutine/generator#active_}}}} 并
+* 恢复 {{c|g.range.coroutine_}} 所代表的协程的执行，并且
+* 其成员 {{c|await_resume}} 求值
+:* {{c|std::rethrow_exception(except_)}} 若 {{c|bool(except_)}} 为 {{c|true}}。
+:* 若 {{c/core|bool(except_)}} 为 {{c|false}}，则 {{c|await_resume }} 成员没有效果。
+
+@@ {{c|g.range.coroutine_}} 所代表的协程必须在其初始暂停点暂停。否则其行为未定义。
+
+@5@ 等价于：
+{{source|1=
+auto nested = [](std::allocator_arg_t, Alloc, ranges::iterator_t&lt;R&gt; i,
+                 ranges::sentinel_t&lt;R&gt; s) -&gt;
+    std::generator&lt;yielded, void, Alloc&gt;
+{
+    for (; i != s; ++i)
+        co_yield static_cast&lt;yielded&gt;(*i);
+};
+
+return yield_value(ranges::elements_of(nested(
+    allocator_arg, r.allocator, ranges::begin(r.range), ranges::end(r.range))));
+}}
+
+@2,3@ {{cpp/precondition|某个生成器对象的 {{box|{{c/core|*}}{{lsi|cpp/coroutine/generator#active_}}}} 的顶端必须为一个代表以 {{c|*this}} 为承诺对象的协程的句柄，}}
+
+@2-5@ 调用这些重载的 [[cpp/language/coroutines#co_yield|''yield-表达式'']] 的类型为 {{c/core|void}}。
+
+===参数===
+{{par begin}}
+{{par|val|''yield-表达式'' 求值结果的值}}
+{{par|lval|''yield-表达式'' 求值结果的左值}}
+{{par|g|由生成器产生的元素范围}}
+{{par|r|元素范围}}
+{{par end}}
+
+===返回值===
+@1@ {{c/core|std::suspend_always}} 类型的可等待对象。
+@2-5@ 如上所述的未指明类型的可等待对象。
+
+===异常===
+@2,4@ 可能抛出由所存储对象的初始化所抛出的任何异常。
+
+===示例===
+{{example}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3899|std=C++23|before=在由左值生成器产生的元素范围上使用 {{tt|yield_value}} &lt;br&gt;使用的是泛型的 {{tt|elements_of}} 重载|after=为这种生成器使用专门的 {{tt|elements_of}} 重载}}
+{{dr list item|wg=lwg|dr=4119|std=C++23|before={{vl|5}} 的 {{c|nested}} 中，作为返回类型一部分&lt;br&gt;的 {{tt|generator}} 的模板实参的 {{tt|range_value_t}} 可能非良构|after=使用 {{c/core|void}}}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

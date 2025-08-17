@@ -1,0 +1,82 @@
+{{cpp/experimental/simd_mask/title|simd_mask}}
+{{cpp/experimental/simd/simd_mask/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=parallelism_ts_2|1=
+simd_mask() noexcept = default;
+}}
+{{dcl|num=2|since=parallelism_ts_2|1=
+explicit simd_mask( bool value ) noexcept;
+}}
+{{dcl|num=3|since=parallelism_ts_2|1=
+template&lt; class U &gt;
+simd_mask( const simd_mask&lt;U, simd_abi::fixed_size&lt;size()&gt;&gt;&amp; other ) noexcept;
+}}
+{{dcl|num=4|since=parallelism_ts_2|1=
+template&lt; class U, class Flags &gt;
+simd_mask( const bool* mem, Flags flags );
+}}
+{{dcl|num=5|since=parallelism_ts_2|notes={{mark implicit}}|1=
+simd_mask( const simd_mask&amp; other ) noexcept = default;
+}}
+{{dcl|num=6|since=parallelism_ts_2|notes={{mark implicit}}|1=
+simd_mask( simd_mask&amp;&amp; other ) noexcept = default;
+}}
+{{dcl end}}
+
+@1@ 使用{{lt|cpp/language/default initialization|默认初始化}}（无初始化式）或{{lt|cpp/language/value initialization|值初始化}}（空初始化式）构造一个 {{tt|simd_mask}}。
+@2@ 广播构造函数构造一个 {{tt|simd_mask}}，其所有值均初始化为 {{c|value}}。
+@3@ 构造一个 {{tt|simd_mask}}，使得{{simd_for_all_i}}，第 i 个元素以 {{c|other[i]}} 初始化。{{cpp/enable_if|{{tt|Abi}} 为 {{c/core|simd_abi::fixed_size&lt;size()&gt;}}}}.
+@4@ 加载构造函数构造一个 {{tt|simd_mask}}，使得{{simd_for_all_i}}，第 i 个元素以 {{c|mem[i]}} 初始化。
+@5,6@ 隐式声明的复制和移动构造函数。构造一个 {{tt|simd_mask}}，其各个元素以 {{c|other}} 中各元素的值初始化。
+
+===参数===
+{{par begin}}
+{{par|value|用于初始化 {{tt|simd_mask}} 的所有元素的值}}
+{{par|other|要复制的另一 {{tt|simd_mask}}}}
+{{par|mem|指向数组的指针，其中 {{range|mem|mem + size()}} 为有效范围}}
+{{par|flags|如果对于类型 {{ltt|cpp/experimental/simd/vector_aligned|vector_aligned_tag}}，则加载构造函数可能假设 {{tt|mem}} 指向按 {{ltt|cpp/experimental/simd/memory_alignment|memory_alignment_v&lt;simd_mask&gt;}} 对齐的存储}}
+{{par hreq}}
+{{par req|{{tt|is_simd_flag_type_v&lt;Flags&gt;}} 必须为 {{c/core|true}}。}}
+{{par end}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstddef&gt;
+#include &lt;experimental/simd&gt;
+#include &lt;iostream&gt;
+namespace stdx = std::experimental;
+
+int main()
+{
+    [[maybe_unused]]
+    stdx::native_simd_mask&lt;int&gt; a;       // 未初始化
+    stdx::native_simd_mask&lt;int&gt; b(true); // 所有元素初始化为 true
+    stdx::native_simd_mask&lt;int&gt; c{};     // 所有元素初始化为 false
+
+    alignas(stdx::memory_alignment_v&lt;stdx::native_simd_mask&lt;int&gt;&gt;)
+        std::array&lt;bool, stdx::native_simd_mask&lt;int&gt;::size() * 2&gt; mem = {};
+    std::ranges::generate(mem, [i{0}] mutable -&gt; bool { return i++ &amp; 1; });
+
+    stdx::native_simd_mask&lt;int&gt; d(&amp;mem[0], stdx::vector_aligned);  // {0, 1, 0, 1, ...}
+    stdx::native_simd_mask&lt;int&gt; e(&amp;mem[1], stdx::element_aligned); // {1, 0, 1, 0, ...}
+
+    const auto xored = b ^ c ^ d ^ e;
+
+    for (std::size_t i{}; i != xored.size(); ++i)
+        std::cout &lt;&lt; xored[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=0 0 0 0 0 0 0 0
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/element aligned}}
+{{dsc inc|cpp/experimental/simd/vector_aligned}}
+{{dsc inc|cpp/experimental/simd/overaligned}}
+{{dsc inc|cpp/experimental/simd/dsc memory_alignment}}
+{{dsc inc|cpp/experimental/simd/simd_mask/dsc copy_from}}
+{{dsc end}}

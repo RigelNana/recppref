@@ -1,0 +1,140 @@
+{{cpp/title|variant}}
+{{cpp/utility/variant/navbar}}
+{{ddcl|header=variant|since=c++17|
+template&lt; class... Types &gt;
+class variant;
+}}
+
+类模板 {{tt|std::variant}} 表示一个类型安全的[[cpp/language/union|联合体]]（以下称“变体”）。
+
+一个 {{tt|variant}} 的实例在任意时刻要么保有它的可选类型之一的值，要么在错误情况下无值（此状态难以达成，见 {{ltt|cpp/utility/variant/valueless_by_exception}}）。
+
+与联合体类似，如果变体保有某个对象类型 {{tt|T}} 的值，那么该 {{tt|T}} 对象[[cpp/language/object#地址|内嵌于]] {{tt|variant}} 对象。
+
+变体不能保有引用、数组，或类型 {{c/core|void}}。
+
+变体可以保有同一类型多于一次，而且可保有同一类型的不同 cv 限定版本。
+
+与联合体在{{lt|cpp/language/aggregate initialization|聚合初始化}}中的行为一致，默认构造的变体保有它的首个选项的值，除非该选项不可默认构造（此时该变体也不可默认构造）。可以用辅助类 {{ltt std|cpp/utility/variant/monostate}} 使这种变化体可默认构造。
+
+如果程序在没有提供任何模板实参的情况下实例化了 {{tt|std::variant}} 的定义，那么程序非良构。此时可以使用 {{c/core|std::variant&lt;std::monostate&gt;}} 代替。
+
+如果程序声明了 {{tt|std::variant}} 的[[cpp/language/template specialization|显式]]或[[cpp/language/partial specialization|部分]]特化，那么程序非良构，不要求诊断。
+
+===模板形参===
+{{par begin}}
+{{par|Types|可在此变体中存储的类型。所有类型必须都满足{{named req|Destructible}}的要求（特别是不允许数组类型和非对象类型）。}}
+{{par end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc constructor}}
+{{dsc inc|cpp/utility/variant/dsc destructor}}
+{{dsc inc|cpp/utility/variant/dsc operator{{=}}}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/utility/variant/dsc index}}
+{{dsc inc|cpp/utility/variant/dsc valueless_by_exception}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/utility/variant/dsc emplace}}
+{{dsc inc|cpp/utility/variant/dsc swap}}
+
+{{dsc h2|观览}}
+{{dsc inc|cpp/utility/variant/dsc visit}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc visit2}}
+{{dsc inc|cpp/utility/variant/dsc holds_alternative}}
+{{dsc inc|cpp/utility/variant/dsc get}}
+{{dsc inc|cpp/utility/variant/dsc get_if}}
+{{dsc inc|cpp/utility/variant/dsc operator_cmp}}
+{{dsc inc|cpp/utility/variant/dsc swap2}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc monostate}}&lt;!-- 包含单态的比较和哈希 --&gt;
+{{dsc inc|cpp/utility/variant/dsc bad_variant_access}}
+{{dsc inc|cpp/utility/variant/dsc variant_size}}
+{{dsc inc|cpp/utility/variant/dsc variant_alternative}}
+{{dsc inc|cpp/utility/variant/dsc hash}}
+{{dsc end}}
+
+===辅助对象===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc variant_npos}}
+{{dsc end}}
+
+===提示===
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|std=C++17|value=201606L|__cpp_lib_variant|rowspan="4"|{{tt|std::variant}}: 类型安全的联合体}}
+{{ftm|std=C++23|dr=17|value=202102L|-|用于 {{tt|std::variant}}}} 派生类的 {{lc|std::visit}}}}
+{{ftm|std=C++23|dr=20|value=202106L|-|完全 {{tt|constexpr}} 的 {{tt|std::variant}}}}
+{{ftm|std=C++26|-|value=202306L|{{rlt|visit2|visit}} 成员}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;variant&gt;
+
+int main()
+{
+    std::variant&lt;int, float&gt; v, w;
+    v = 42; // v 含 int
+    int i = std::get&lt;int&gt;(v);
+    assert(42 == i); // 成功
+    w = std::get&lt;int&gt;(v);
+    w = std::get&lt;0&gt;(v); // 与前一行效果相同
+    w = v; // 与前一行效果相同
+    
+//  std::get&lt;double&gt;(v); // 错误：[int, float] 中无 double
+//  std::get&lt;3&gt;(v);      // 错误：有效索引值为 0 与 1
+    
+    try
+    {
+        std::get&lt;float&gt;(w); // w 含 int 而非 float：会抛出异常
+    }
+    catch (const std::bad_variant_access&amp; ex)
+    {
+        std::cout &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+    
+    using namespace std::literals;
+    
+    std::variant&lt;std::string&gt; x("abc");
+    // 转换构造函数在无歧义时起作用
+    x = "def"; // 转换赋值在无歧义时亦起作用
+    
+    std::variant&lt;std::string, void const*&gt; y("abc");
+    // 传递 char const* 时转换成 void const*
+    assert(std::holds_alternative&lt;void const*&gt;(y)); // 成功
+    y = "xyz"s;
+    assert(std::holds_alternative&lt;std::string&gt;(y)); // 成功
+}
+|p=true
+|output=
+std::get: wrong index for variant
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2901|std=C++17|before=提供 {{lc|std::uses_allocator}} 的特化，但 {{tt|variant}} 不能正确支持分配器|after=移除该特化}}
+{{dr list item|wg=lwg|dr=3990|std=C++17|before=程序可以声明 {{tt|std::variant}} 的显式或部分特化|after=此时程序非良构（不要求诊断）}}
+{{dr list item|wg=lwg|dr=4141|std=C++17|before=对存储分配的要求难以理解|after=包含的对象必须内嵌于 {{tt|variant}} 对象}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc in_place}}
+{{dsc inc|cpp/utility/dsc optional}}
+{{dsc inc|cpp/utility/dsc any}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

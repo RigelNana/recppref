@@ -1,0 +1,111 @@
+{{cpp/filesystem/title|create_directory|create_directories}}
+{{cpp/filesystem/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|num=1|since=c++17|1=
+bool create_directory( const std::filesystem::path&amp; p );
+}}
+{{dcl|num=2|since=c++17|1=
+bool create_directory( const std::filesystem::path&amp; p, std::error_code&amp; ec ) noexcept;
+}}
+{{dcl|num=3|since=c++17|1=
+bool create_directory( const std::filesystem::path&amp; p,
+                       const std::filesystem::path&amp; existing_p );
+}}
+{{dcl|num=4|since=c++17|1=
+bool create_directory( const std::filesystem::path&amp; p,
+                       const std::filesystem::path&amp; existing_p,
+                       std::error_code&amp; ec ) noexcept;
+}}
+{{dcl|num=5|since=c++17|1=
+bool create_directories( const std::filesystem::path&amp; p );
+}}
+{{dcl|num=6|since=c++17|1=
+bool create_directories( const std::filesystem::path&amp; p, std::error_code&amp; ec );
+}}
+{{dcl end}}
+
+@1,2@ 如同用 POSIX [http://pubs.opengroup.org/onlinepubs/9699919799/functions/mkdir.html {{tt|mkdir()}}] 以 {{c|static_cast&lt;int&gt;(std::filesystem::perms::all)}} 为第二实参来创建目录 {{c|p}}（父目录必须已经存在）。若该函数因为 {{c|p}} 解析到既存目录而失败，则不报告错误。否则在失败时报告错误。
+@2@ 同 {{v|1,2}}，但新目录的属性复制自 {{c|existing_p}}（必须是已存在的目录）。复制的属性取决于操作系统：在 POSIX 系统上，如同按照下方复制属性
+{{source|1=
+stat(existing_p.c_str(), &amp;attributes_stat)
+mkdir(p.c_str(), attributes_stat.st_mode)
+}}
+在 Windows 操作系统上，不复制 {{c|existing_p}} 的属性。
+@5,6@ 对每个尚未存在的 {{c|p}} 的元素执行 {{v|1,2}}。若 {{c|p}} 已存在，则函数不做任何事（不把此条件当做错误）。
+
+===参数===
+{{par begin}}
+{{par|p|要创建的新目录的路径}}
+{{par|existing_p|要自之复制属性的目录的路径}}
+{{par|ec|不抛出重载中报告错误的输出形参}}
+{{par end}}
+
+===返回值===
+若新创建了 {{c|p}} 所解析到的目录则为 {{c|true}}，否则为 {{c|false}}。
+
+===异常===
+{{cpp/filesystem/error_handling|p|throw=1,5/2,6}}
+{{cpp/filesystem/error_handling|p|existing_p|throw=3/4|noexcept=no}}
+
+===注解===
+保持属性的重载 {{v|3,4}} 被 {{ltf|cpp/filesystem/copy}} 在递归地复制目录时隐式调用。其在 boost.filesystem 的等价物是 [http://www.boost.org/doc/libs/1_57_0/libs/filesystem/doc/reference.html#copy_directory {{tt|copy_directory}}]（实参顺序相反）。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstdlib&gt;
+#include &lt;filesystem&gt;
+
+int main()
+{
+    std::filesystem::current_path(std::filesystem::temp_directory_path());
+
+    // 基本用法
+    std::filesystem::create_directories("sandbox/1/2/a");
+    std::filesystem::create_directory("sandbox/1/2/b");
+    
+    // 目录已经存在（返回 false，无错误）
+    assert(!std::filesystem::create_directory("sandbox/1/2/b"));
+    
+    // 复制权限的用法
+    std::filesystem::permissions(
+        "sandbox/1/2/b",
+        std::filesystem::perms::others_all,
+        std::filesystem::perm_options::remove
+    );
+    std::filesystem::create_directory("sandbox/1/2/c", "sandbox/1/2/b");
+    
+    std::system("ls -l sandbox/1/2");
+    std::system("tree sandbox");
+    std::filesystem::remove_all("sandbox");
+}
+|p=true
+|output=
+drwxr-xr-x 2 user group 4096 Apr 15 09:33 a
+drwxr-x--- 2 user group 4096 Apr 15 09:33 b
+drwxr-x--- 2 user group 4096 Apr 15 09:33 c
+sandbox
+└── 1
+    └── 2
+        ├── a
+        ├── b
+        └── c
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2935|std=C++17|before=若目标已存在但非目录，则为错误|after=不再是错误}}
+{{dr list item|wg=lwg|dr=3014|std=C++17|before={{tt|create_directories}} 的 {{tt|error_code}} 重载被标记为 noexcept 但能分配内存|after=移除 noexcept}}
+{{dr list item|paper=P1164R1|std=C++17|before=已存在的非目录文件导致的创建失败不是错误|after=使之为错误}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/dsc create_symlink}}
+{{dsc inc|cpp/filesystem/dsc copy}}
+{{dsc inc|cpp/filesystem/dsc perms}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

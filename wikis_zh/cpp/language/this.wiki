@@ -1,0 +1,136 @@
+{{title|{{tt|this}} 指针}}
+{{cpp/language/classes/navbar}}
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|this}}}}
+{{sdsc end}}
+
+表达式 {{c|this}} 是一个{{rlps|value category#纯右值}}{{rlp|expressions|表达式}}，它的值是{{rlps|overload resolution#隐式对象形参}}（在它之上调用隐式对象成员函数的对象）的地址。它能在以下语境出现：
+@1@ 在任意{{rlp|member functions|隐式对象成员函数}}体内，包括{{rlp|initializer list|成员初始化器列表}}{{rev inl|since=c++11|和 {{rlp|lambda#闭包类型函数调用运算符|lambda 表达式体}}}}。
+@2@ 在任意隐式对象成员函数的{{rlp|function|声明}}中，（可能存在的）cv 限定符序列之后的任何位置，包括{{rlp|exceptions|异常说明}}{{rev inl|since=c++11|以及尾随返回类型}}。
+
+{{rrev|since=c++11|
+@3@ 在{{rlp|data members#成员初始化|默认成员初始化器}}中。
+@4@ 在 lambda 表达式的{{rlp|lambda#Lambda 捕获|捕获列表}}中。
+}}
+
+===解释===
+{{c|this}} 只能与它出现处最内层的外围类关联，即使它不能在该语境中出现：
+{{source|1=
+class Outer
+{
+    int a[sizeof(*this)];            // 错误：不在成员函数中
+    unsigned int sz = sizeof(*this); // OK：在默认成员初始化式中
+    
+    void f()
+    {
+        int b[sizeof(*this)];     // OK
+        
+        struct Inner
+        {
+            int c[sizeof(*this)]; // 错误：不在 Inner 的成员函数中
+                                  // 即使在 Outer 的成员函数中，
+                                  // this 也不会与 Outer 关联
+        };
+    }
+};
+}}
+
+在类 {{tt|X}} 的成员函数中，{{c|this}} 的类型是 {{tt|X*}}（指向 X 的指针）。如果成员函数的声明有 {{rlp|member functions#有 const 与 volatile 限定符的成员函数|cv 限定符序列}} ''cv''，那么 {{c|this}} 的类型是 {{tt|''cv'' X*}}（指向有相同 cv 限定的 X 的指针）。因为构造函数与析构函数的声明不能有 cv 限定符，所以它们中 {{c|this}} 的类型始终是 {{tt|X*}}，即使在构造或销毁 const 对象时也是如此。
+
+在类模板中，{{c|this}} 是一个{{rlp|dependent name|待决表达式}}，而且显式的 {{c|this-&gt;}} 可以用于强行使另一表达式变为待决的。
+{{source|1=
+template&lt;typename T&gt;
+struct B
+{
+    int var;
+};
+
+template&lt;typename T&gt;
+struct D : B&lt;T&gt;
+{
+    D()
+    {
+        // var = 1;    // 错误：“var” 没有在此作用域中声明
+        this-&gt;var = 1; // OK
+    }
+};
+}}
+
+在对象的{{rlp|constructor|构造期间}}，如果通过并非直接或间接从构造函数的 {{c|this}} 指针获得的泛左值访问对象或它的任何子对象的值，那么如此获得的对象或子对象的值是未指明的。换言之，构造函数中 this 指针不能被别名化：
+{{source|1=
+extern struct D d;
+
+struct D
+{
+    D(int a) : a(a), b(d.a) {} // b(a) 或 b(this-&gt;a) 是正确的
+    int a, b;
+};
+
+D d = D(1); // 因为 b(d.a) 没有通过 this 访问，所以 d.b 现在未指明
+}}
+
+如果程序能保证对象由 {{c/core|new}} 分配，那么可以执行 {{c|delete this;}}，然而这会令指向被解分配对象的所有指针失效，包括 {{c|this}} 指针自身：在 {{c|delete this;}} 返回后，这种成员函数不能引用类的成员（因为这牵涉到 {{c|this}} 的隐式解引用），也不能再调用其他成员函数。
+
+这在最后一个到被管理对象的引用离开作用域时，能被用于负责减少引用计数的引用计数指针{{rev inl|since=c++11|（例如 {{lc|std::shared_ptr}}）}}。
+
+{{source|1=
+&lt;!-- libreoffice i18nlangtag/source/languagetag/simple-langtag.cxx --&gt;
+class ref
+{
+    // ...
+    void incRef() { ++mnRef; }
+    void decRef() { if (--mnRef == 0) delete this; }
+};
+}}
+
+===关键词===
+{{ltt|cpp/keyword/this}}
+
+===示例===
+{{source
+|
+|code=
+class T
+{
+    int x;
+
+    void foo()
+    {
+        x = 6;       // 等同于 this-&gt;x = 6;
+        this-&gt;x = 5; // 显式使用 this-&gt;
+    }
+
+    void foo() const
+    {
+    //  x = 7; // 错误：*this 是常量
+    }
+
+    void foo(int x) // 形参 x 遮蔽拥有相同名字的成员
+    {
+        this-&gt;x = x; // 无限定的 x 代表形参
+                     // 需要用 “this-&gt;” 消歧义
+    }
+
+    int y;
+    T(int x) : x(x),      // 用形参 x 初始化成员 x
+               y(this-&gt;x) // 用成员 x 初始化成员 y
+    {}
+
+    T&amp; operator=(const T&amp; b)
+    {
+        x = b.x;
+        return *this; // 许多重载运算符都返回 *this
+    }
+};
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=760|std=C++98|before=未指明在嵌套类中用到的 {{c|this}} 与嵌套类还是外围类关联|after={{c|this}} 始终与最内层嵌套类关联，&lt;br&gt;无论它是否在非静态成员函数中}}
+{{dr list item|wg=cwg|dr=2271|std=C++98|before={{c|this}} 可以在构造非 const 对象时被别名化|after=此时也禁止别名化}}
+{{dr list item|wg=cwg|dr=2869|std=C++98|before=不明确是否可以在非关联类的静态成员函数中使用 {{c|this}}|after=使之明确}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

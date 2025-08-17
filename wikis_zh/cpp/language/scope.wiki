@@ -1,0 +1,421 @@
+{{title|作用域}}
+{{cpp/language/basics/navbar}}
+C++ 程序中出现的每个{{rlp|declarations|声明}}，只在某些可能不连续的{{i|作用域}}中有效。
+
+在作用域内，能用{{rlp|lookup|无限定名字查找}}将名字与它的声明关联起来。
+
+===概述===
+每个程序都有一个{{i|全局作用域}}，它{{i|包含}}了整个程序。
+
+其他每个作用域 {{tt|S}} 会以以下之一引入：
+* {{rlp|declarations|声明}}。
+* {{rlps|function#形参列表}}中的形参。
+* {{rlp|statements|语句}}。
+* {{rlp|catch|处理块}}。
+{{tt|S}} 会始终在其他作用域中出现，这些作用域从而''包含'' {{tt|S}}。
+
+程序某一点的{{i|外围作用域}}是任何包含该点的作用域；该点的{{i|立即作用域}}是所有外围作用域中最小的作用域。
+
+给定程序点 {{tt|P}} 和作用域 {{tt|S}}，如果一个作用域是 {{tt|S}} 本身或包含 {{tt|S}}，并且不包含 {{tt|P}}，那么该作用域''介入'' {{tt|P}} 和 {{tt|S}} 之间。
+
+对于{{ls|#模板形参作用域}}以外的任何作用域 {{tt|S}}，它的{{i|父作用域}}是包含作用域 {{tt|S}} 且不是模板形参作用域的最小作用域。
+
+除非另外说明：
+* 声明在它的[[#声明点|声明点]]{{i|居于}}该点的立即作用域中。
+* 声明的{{i|目标作用域}}是该声明居于的作用域。
+* 由声明（重新）引入的名字在目标作用域中{{i|绑定}}到该声明。
+
+如果一个实体的声明的目标作用域是 {{tt|S}}，那么该实体''属于'' {{tt|S}}。
+{{source|
+//                全局     作用域 作用域
+//                作用域     S      T
+int x;         //   ─┐                 // 程序点 X
+               //    │
+{              //    │      ─┐
+    {          //    │       │     ─┐
+        int y; //    │       │      │  // 程序点 Y
+    }          //    │       │     ─┘
+}              //   ─┘      ─┘
+}}
+
+在以上程序中：
+* 全局作用域、作用域 {{tt|S}} 和作用域 {{tt|T}} 都包含程序点 {{tt|Y}}。
+:* 也就是说，在程序点 {{tt|Y}} 这三个作用域都是外围作用域。
+* 全局作用域包含作用域 {{tt|S}} 和作用域 {{tt|T}}，并且作用域 {{tt|S}} 包含作用域 {{tt|T}}。
+:* 因此，作用域 {{tt|T}} 在三者中最小，这意味着：
+::* 程序点 {{tt|Y}} 处的立即作用域是作用域 {{tt|T}}。
+::* 变量 {{c|y}} 的声明在它的声明点居于作用域 {{tt|T}}。
+::* 作用域 {{tt|T}} 是 {{c|y}} 的声明的目标作用域。
+::* 变量 {{c|y}} 属于作用域 {{tt|T}}。
+:* 作用域 {{tt|S}} 是作用域 {{tt|T}} 的父作用域，而全局作用域是作用域 {{tt|S}} 的父作用域。
+* 作用域 {{tt|S}} 介入程序点 {{tt|X}} 和作用域 {{tt|T}} 之间。
+
+===块作用域===
+每个
+* {{rlps|statements#选择语句}}（{{rlp|if|{{c/core|if}}}}、{{rlp|switch|{{c/core|switch}}}}），
+* {{rlps|statements#循环语句}}（{{rlp|for|{{c/core|for}}}}{{rev inl|since=c++11|、{{rlp|range-for|范围 {{c/core|for}}}}}}、{{rlp|while|{{c/core|while}}}}、{{rlp|do|{{c/core|do}}-{{c/core|while}}}}），
+* {{rlp|catch|处理块}}，或者
+* 非处理块中的{{spar sep|复合语句}}的其他{{rlps|statements#复合语句}}
+都会引入一个包含该语句或处理块的''块作用域''。
+
+属于块作用域的变量是{{i|块变量}}。
+
+{{source|1=
+int i = 42;
+int a[10];
+
+for (int i = 0; i &lt; 10; i++) // 内部 “i” 居于 for 语句引入的块作用域
+    a[i] = i;
+
+int j = i; // j = 42
+}}
+
+如果声明位于块作用域 {{tt|S}} 中，并且声明了一个函数或使用了 {{c/core|extern}} 说明符{{rev inl|since=c++20|，则该声明不得附加到{{i|具名模块}}}}，其目标作用域是更大的外围作用域（最内层的外层名称空间作用域），但会直接将名字绑定到声明的立即作用域 {{tt|S}} 中。
+
+如果一个{{rev inl|since=c++26|不{{rlp|conflicting declarations#有潜在冲突的声明|与名字无关}}的}}声明的目标作用域是由以下复合语句或处理块之一引入的某个块作用域 {{tt|S}}，并且该声明与名字绑定到 {{tt|S}} 的父作用域的另一声明{{rlp|conflicting declarations#有潜在冲突的声明|有潜在冲突}}，那么程序非良构：
+* {{rlp|function#函数定义|函数体}}或{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}的{{c/core|复合语句}}。
+{{rrev|since=c++11|
+* {{rlp|lambda|lambda 表达式}}的复合语句 {{ttb|{}} {{spar|函数体}} {{ttb|}&lt;!----&gt;}}。
+}}
+* 自身不是选择语句或循环语句，但是是选择语句或循环语句的子语句的复合语句。
+* 函数 {{c/core|try}} 块的处理块。
+
+{{source|1=
+if (int x = f())  // 声明了 “x”
+{ // 此 if 块是 if 语句的子语句
+    int x;        // 错误：重声明了 “x”
+}
+else
+{ // 此 else 块也是 if 语句的子语句
+    int x;        // 错误：重声明了 “x”
+}
+
+void g(int i)
+{
+    extern int i; // 错误：重声明了 “i”
+}
+}}
+
+{{anchor|函数原型作用域}}
+===函数形参作用域===
+每个{{rlp|function#形参列表|形参声明}} {{tt|P}} 都会引入一个包含 {{tt|P}} 的''函数形参作用域''。
+* 如果声明的形参所在的形参列表是{{rlp|function|函数声明}}的形参列表：
+:* 如果该函数声明是{{rlps|function#函数定义}}，那么引入的作用域会延长到该函数定义的末尾。
+:* 否则（该函数声明是函数原型），引入的作用域会延长到该函数声明的声明符的末尾。
+:* 不管属于哪种情况，引入的作用域都不会包含该函数声明的[[#声明点|声明点]]。
+{{rev begin}}
+{{rev|since=c++11|
+* 如果声明的形参所在的形参列表是 {{rlp|lambda|lambda 表达式}}的形参列表，那么引入的作用域会延长到 {{ttb|{}} {{spar|函数体}} {{ttb|}&lt;!----&gt;}} 的末尾。
+}}
+{{rev|since=c++17|
+* 如果声明的形参所在的形参列表是{{rlp|deduction guide|推导指引}}的形参列表，那么引入的作用域会延长到该推导指引的末尾。
+}}
+{{rev|since=c++20|
+* 如果声明的形参所在的形参列表是 {{rlp|requires|{{c/core|requires}} 表达式}}的形参列表，那么引入的作用域会延长到 {{ttb|{}} {{spar|要求序列}} {{ttb|}&lt;!----&gt;}} 的末尾。
+}}
+{{rev end}}
+
+{{source|1=
+int f(int n) // 形参 “n” 的声明引入了一个函数形参作用域
+{
+    /* ... */
+}            // 引入的函数形参作用域在此结束
+}}
+
+{{rrev|since=c++14|
+===lambda 作用域===
+每个 {{rlp|lambda|lambda 表达式}}都会引入一个 ''lambda 作用域''，它在 {{ttb|[}}{{spar sep|捕获}}{{ttb|]}} 之后立即开始，并延长到 {{ttb|{}} {{spar|函数体}} {{ttb|}&lt;!----&gt;}} 的末尾。
+
+某个 lambda 表达式 {{c|E}} 中带有初始化器的{{rlps|lambda#捕获}}居于由 {{c|E}} 引入的 lambda 作用域。
+
+{{source|1=
+auto lambda = [x = 1, y]() // 此 lambda 表达式引入了一个 lambda 作用域，
+{                          // 它是捕获 “x” 的目标作用域
+    /* ... */
+};                         // 引入的 lambda 作用域在分号前结束
+}}
+}}
+
+===命名空间作用域===
+命名空间 {{tt|N}} 的每个{{rlp|namespace|命名空间定义}}都会引入一个''命名空间作用域'' {{tt|S}}，它包含 {{tt|N}} 的所有命名空间定义中的{{spar|声明序列}}。
+
+对于目标作用域是 {{tt|S}} 或者被 {{tt|S}} 包含的另一作用域的每条非友元重声明或特化，作用域 {{tt|S}} 也包含以下部分：
+* {{rlp|class|类}}（模板）重声明或类模板特化中{{spar sep|类头名}}之后的部分。
+* {{rlp|enum|枚举}}重声明中{{spar sep|枚举头名}}之后的部分。
+* 其他重声明或中特化中{{rlps|declarations#声明符}}的{{spar sep|无限定标识}}或{{spar sep|有限定标识}}之后的部分。
+
+[[#概述|全局作用域]]是{{rlp|namespace|全局命名空间}}引入的命名空间作用域。
+
+{{source|
+namespace V   // “V” 的命名空间定义引入了一个命名空间作用域 “S”
+{
+    // 作用域 “S” 的第一部分在此开始
+    void f();
+    // 作用域 “S” 的第一部分在此结束
+}
+
+void V::f()   // “f” 之后的部分也是作用域 “S” 的一部分
+{
+    void h(); // 声明了 V::h
+}             // 作用域 “S” 的第二部分在此结束
+}}
+
+===类作用域===
+类或类模板 {{tt|C}} 的每个声明都会引入一个''类作用域'' {{tt|S}}，它包含 {{tt|C}} 的所有{{rlp|class|类定义}}中的{{spar|成员说明}}。
+
+对于目标作用域是 {{tt|S}} 或者被 {{tt|S}} 包含的另一作用域的非友元重声明或特化，作用域 {{tt|S}} 也包含以下部分：
+* {{rlp|class|类}}（模板）重声明或类模板特化中{{spar sep|类头名}}之后的部分。
+* {{rlp|enum|枚举}}重声明中{{spar sep|枚举头名}}之后的部分。
+* 其他重声明或中特化中{{rlps|declarations#声明符}}的{{spar sep|无限定标识}}或{{spar sep|有限定标识}}之后的部分。
+
+{{source|
+class C       // “C” 的类定义引入了一个类作用域 “S”
+{
+    // 作用域 “S” 的第一部分在此开始
+    void f();
+    // 作用域 “S” 的第一部分在此结束
+}
+
+void C::f()   // “f” 之后的部分也是作用域 “S” 的一部分
+{
+    /* ... */
+}             // 作用域 “S” 的第二部分在此结束
+}}
+
+===枚举作用域===
+枚举 {{tt|E}} 的每个声明都会引入一个''枚举作用域''，它包含 {{tt|E}} 的{{rev inl|since=c++11|非笼统}}{{rlp|enum|声明}}中的{{spar|枚举项列表}}（如果存在）。
+
+{{source|
+enum class E // “E” 的枚举定义引入了一个枚举作用域 “S”
+{
+    // 作用域 “S” 在此开始
+    e1, e2, e3
+    // 作用域 “S” 在此结束
+}
+}}
+
+===模板形参作用域===
+每个{{rlps|template parameters#模板模板形参}}都会引入一个''模板形参作用域''，它包含该模板模板形参的整个模板形参列表{{rev inl|since=c++20|以及{{rlp|constraints#requires 子句|{{c/core|require}} 子句}}}}。
+
+每个模板声明 {{tt|D}} 也都会引入一个''模板形参作用域'' {{tt|S}}，它从 {{tt|D}} 的模板形参列表开始，到 {{tt|D}} 的末尾结束。在该模板形参列表之外且按之前的语法居于 {{tt|S}} 的声明会改为居于 {{tt|D}} 居于的作用域。
+
+任何不是''模板形参作用域''的作用域 {{tt|S}} 的''父作用域''是包含 {{tt|S}} 且不是''模板形参作用域''的最小作用域。
+
+因此，只有模板参数才属于''模板形参作用域''，也只有''模板形参作用域''才有一个''模板形参作用域''作为''父作用域''。
+
+{{source|1=
+// “X” 的类模板声明引入了一个模板形参作用域 “S1”
+template
+&lt;
+    // 作用域 “S1” 在此开始
+    template // 模板模板形参 “T” 引入了另一个模板形参作用域 “S2”
+    &lt;
+        typename T1
+        typename T2
+    &gt; requires std::convertible_from&lt;T1, T2&gt; // 作用域 “S2” 在此结束
+    class T,
+    typename U
+&gt;
+class X; // 作用域 “S1” 在分号前结束
+
+namespace N
+{
+    template &lt;typename T&gt;
+    using A = struct X; // “X” 居于模板声明居于的作用域，即命名空间 “N” 的作用域
+}
+}}
+
+{{rrev|since=c++26|
+===约定断言作用域===
+每个{{rlp|contracts|约定断言}} {{tt|C}} 都会引入一个包含 {{tt|C}} 的''约定断言作用域''。
+
+如果一个{{rlps|function#后条件断言}}带有不{{rlp|conflicting declarations#相同实体的多次声明|与名字无关}}的{{spar sep|标识符}}，并且该后条件断言与和目标作用域是以下作用域之一的某个声明 {{tt|D}} {{rlps|conflicting declarations#有潜在冲突}}的函数 {{c|func}} 关联，那么程序非良构：
+* {{c|func}} 的函数形参作用域。
+* 该后条件断言的最内层外围 lambda 作用域，如果 {{tt|D}} 与某个 {{rlp|lambda|lambda 表达式}}关联。
+}}
+
+===声明点===
+一般来说，一个名字从其首条声明的{{i|声明点}}之后即可见，它定位如下：
+
+对于简单声明所声明的名字，声明点紧随该名字的{{rlps|declarations#声明符}}之后，且在它的初始化器之前（如果存在）：
+
+{{source|1=
+int x = 32; // 外部 x 的作用域中
+
+{
+    int x = x; // 内部 x 的作用域在初始化器（= x）前就已经开始
+               // 这导致内部 x 不以外部 x 的值（32）初始化，
+               // 而是以自己持有的（不确定）值初始化
+}
+
+std::function&lt;int(int)&gt; f = [&amp;](int n){ return n &gt; 1 ? n * f(n - 1) : n; };
+// lambda 函数体在函数对象 f 的名字的作用域中
+// 因此 f 能正确地被按引用捕获，给出递归函数
+}}
+
+{{source|1=
+const int x = 2; // 外部 x 的作用域中
+
+{
+    int x[x] = {}; // 内部 x 的作用域在初始化器（= {}）前，但在声明符（x[x]）后开始。
+                   // 声明符内仍在外部 x 的作用域中，这声明了一个含有 2 个 int 元素的数组。
+}
+}}
+
+类或类模板声明的声明点，紧随它的{{rlp|classes|类头}}中出现的命名该类的标识符（或命名该模板特化的 {{rlp|templates#template-id|模板标识}}）之后。也就是说，类名或类模板名在基类列表中时已经处于作用域中。
+
+{{source|1=
+struct S: std::enable_shared_from_this&lt;S&gt; {}; // S 的作用域从冒号开始
+}}
+
+{{rlp|enum|enum 说明符}}{{rev inl|since=c++11|或笼统枚举声明}}的声明点紧随命名枚举的标识符之后：
+
+{{source|1=
+enum E : int // E 的作用域从冒号开始
+{
+    A = sizeof(E)
+};
+}}
+
+{{rrev|since=c++11|
+{{rlp|type alias|类型别名或别名模板}}声明的声明点紧随该别名代表的类型标识之后。
+
+{{source|1=
+using T = int; // 外部 T 的作用域从分号开始
+
+{
+    using T = T*; // 内部 T 的作用域从分号开始，
+                  // 但分号前还在外部 T 的作用域中，
+                  // 因此等同于 T = int*
+}
+}}
+}}
+
+不指名构造函数的 {{rlp|using declaration|using 声明}}内的声明符的声明点紧随该声明符之后。
+
+{{source|1=
+template&lt;int N&gt;
+class Base
+{
+protected:
+    static const int next = N + 1;
+    static const int value = N;
+};
+ 
+struct Derived: Base&lt;0&gt;, Base&lt;1&gt;, Base&lt;2&gt;
+{
+    using Base&lt;0&gt;::next,     // next 的作用域从逗号开始
+          Base&lt;next&gt;::value; // Derived::value 是 1
+};
+}}
+
+枚举项的声明点紧随它的定义之后（而不是在初始化器之前，这点与变量不同）。
+
+{{source|1=
+const int x = 12;
+
+{
+    enum
+    {
+        x = x + 1, // 枚举项 x 的作用域从逗号开始，
+                   // 但逗号前还在外部 x 的作用域中，
+                   // x 初始化为 13
+        y = x + 1  // y 初始化为 14
+    };
+}
+}}
+
+{{rlp|injected-class-name|注入类名}}的声明点紧随它的类定义或类模板定义的左花括号之后。
+
+{{source|1=
+template&lt;typename T&gt;
+struct Array
+//  : std::enable_shared_from_this&lt;Array&gt; // 错误：不在注入类名的作用域中
+    : std::enable_shared_from_this&lt; Array&lt;T&gt; &gt; // OK ：在模板名 Array 的作用域中
+{ // 现在在注入类名 Array 的作用域中，如同它是公开成员名
+    Array* p; // 指向 Array&lt;T&gt; 的指针
+};
+}}
+
+{{rrev|since=c++11|
+函数局部预定义变量 {{c|__func__}} 的声明点紧接函数定义的函数体之前。
+}}
+
+
+{{rrev|since=c++17|
+{{rlp|structured binding|结构化绑定声明}}的声明点紧随其{{spar|标识符列表}}之后，但结构化绑定的初始化器禁止提及其所声明的任何名字。
+}}
+
+
+{{rrev|since=c++11|
+声明于{{rlp|range-for|范围 {{c/core|for}} 循环}}的{{spar sep|范围声明}}的变量{{rev inl|since=c++17|或结构化绑定}}的声明点紧随相应的{{spar sep|范围表达式}}之后。
+
+{{source|
+std::vector&lt;int&gt; x;
+
+for (auto x : x) // 右括号前仍然属于 vector x 的作用域，
+                 // 而 auto x 的作用域从右括号开始
+{
+    // auto x 的作用域中
+}
+}}
+}}
+
+{{rlp|template parameters|模板形参}}的声明点紧随其完整模板形参（包括可选的默认实参）之后。
+
+{{source|1=
+typedef unsigned char T;
+
+template&lt;
+    class T = T, // 模板形参 T 的作用域从逗号开始，
+                 // 但逗号前还在 unsigned char 的 typedef 名的作用域中，
+    T, // 模板形参 T 的作用域中
+    N = 0
+&gt;
+struct A;
+}}
+
+{{rrev|since=c++26|
+带有{{spar sep|标识符}}的{{rlps|function#后条件断言}}的生命点紧随其 {{ttb|:}} 之后。
+}}
+
+
+{{rrev|since=c++20|
+{{rlp|constraints|概念定义}}的声明点紧随概念名之后，但概念定义中禁止提及所声明的概念名。
+}}
+
+具名{{rlp|namespace|命名空间定义}}的声明点紧随命名空间名之后。
+
+{{todo|[basic.scope.pdecl] 的剩余内容}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2793|std=C++98|before=块作用域中的 {{c/core|extern}} 声明可以与父作用域的另一声明冲突|after=已禁止}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=6.4|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.4|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.3|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.3|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.3|title=Scope|id=basic.scope}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.3|title=Declarative regions and scopes|id=basic.scope}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/scope|作用域|nomono=true}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,80 @@
+{{cpp/title|construct_at}}
+{{cpp/memory/navbar}}
+{{ddcl|header=memory|since=c++20|
+template&lt; class T, class... Args &gt;
+constexpr T* construct_at( T* location, Args&amp;&amp;... args );
+}}
+
+在给定地址 {{c|location}} 以 {{c|args}} 中的实参创建 {{tt|T}} 类型对象。
+
+等价于 {{box|
+{{c/core|if constexpr (std::is_array_v&lt;T&gt;)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|return ::new (}}{{rlpi|voidify}}{{sep}}{{c/core|(*location)) T[1]();}}&lt;br&gt;
+{{c/core|else}}&lt;br&gt;
+{{nbspt|4}}{{c/core|return ::new (}}{{rlpi|voidify}}{{sep}}{{c/core|(*location)) T(std::forward&lt;Args&gt;(args)...);}}
+}}{{rev inl|until=c++26|，但 {{tt|construct_at}} 可用于[[cpp/language/constant expression|常量表达式]]的求值}}。
+
+在某常量表达式 {{c|expr}} 的求值中调用 {{tt|construct_at}} 时，{{c|location}} 必须指向用 {{c/core|std::allocator&lt;T&gt;::allocate}} 获得的存储或生存期在 {{c|expr}} 的求值内开始的对象。
+
+{{cpp/enable if|满足以下所有条件时}}：
+* {{c|std::is_unbounded_array_v&lt;T&gt;}} 是 {{c|false}}。
+* {{c|::new(std::declval&lt;void*&gt;()) T(std::declval&lt;Args&gt;()...)}} 在被视为[[cpp/language/expressions#潜在求值表达式|不求值操作数]]时良构。
+
+如果当 {{c|std::is_array_v&lt;T&gt;}} 是 {{c|true}} 时 {{c|sizeof...(Args)}} 非零，那么程序非良构。
+
+===参数===
+{{par begin}}
+{{par|location|指向将在其上构造 {{tt|T}} 对象的未初始化存储的指针}}
+{{par|args...|用于初始化的参数}}
+{{par end}}
+
+===返回值===
+{{c|location}}
+
+===示例===
+{{example
+|code=
+#include &lt;bit&gt;
+#include &lt;memory&gt;
+
+class S
+{
+    int x_;
+    float y_;
+    double z_;
+public:
+    constexpr S(int x, float y, double z) : x_{x}, y_{y}, z_{z} {}
+    [[nodiscard("无副作用！")]]
+    constexpr bool operator==(const S&amp;) const noexcept = default;
+};
+
+consteval bool test()
+{
+    alignas(S) unsigned char storage[sizeof(S)]{};
+    S uninitialized = std::bit_cast&lt;S&gt;(storage);
+    std::destroy_at(&amp;uninitialized);
+    S* ptr = std::construct_at(std::addressof(uninitialized), 42, 2.71f, 3.14);
+    const bool res{*ptr == S{42, 2.71f, 3.14}&lt;!----&gt;};
+    std::destroy_at(ptr);
+    return res;
+}
+static_assert(test());
+
+int main() {}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3436|std=C++20|before={{tt|construct_at}} 不能创建数组类型的对象|after=可以值初始化有边界数组}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before={{tt|construct_at}} 能创建有 cv 限定的类型的对象|after=仅允许无 cv 限定的类型}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc allocate}}
+{{dsc inc|cpp/memory/allocator_traits/dsc construct}}
+{{dsc inc|cpp/memory/dsc destroy_at}}
+{{dsc inc|cpp/memory/ranges/dsc construct_at}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

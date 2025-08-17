@@ -1,0 +1,188 @@
+{{title|动态异常说明 {{mark until c++17}}}}
+{{cpp/language/exceptions/navbar}}
+
+列出函数可能直接或间接抛出的异常。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|throw(}}{{spar optional|类型标识列表}}{{ttb|)}}|notes={{mark life|deprecated=c++11|removed=c++17|br=yes}}}}
+{{sdsc end}}
+@1@ 显式动态异常说明。
+
+{{par begin}}
+{{par|{{spar|类型标识列表}}|逗号分隔的{{rlp|type#类型的命名|类型标识}}列表{{rev inl|since=c++11|，后附省略号（...）的类型标识表示{{rlp|parameter pack#包展开|包展开}}}}}}
+{{par end}}
+
+这种说明只能在作为类型为函数类型、函数指针类型、函数引用类型、成员函数指针类型的函数、变量、非静态数据成员的声明符的，顶层函数声明符上和形参的声明符或返回类型的声明符上出现。
+{{source|
+void f() throw(int);            // OK：函数声明
+void (*pf)() throw (int);       // OK：函数指针声明
+void g(void pfa() throw(int));  // OK：函数指针形参声明
+typedef int (*pf)() throw(int); // 错误：typedef 声明
+}}
+
+===解释===
+如果某个函数的声明将类型 {{tt|T}} 列于其动态异常说明，那么该函数可以抛出该类型或从该类型派生的类型的异常。
+
+异常说明中不能出现{{rlp|incomplete type|不完整类型}}，除 cv {{tt|void*}} 之外的到不完整类型的指针或引用{{rev inl|since=c++11|，以及右值引用类型}}。如果使用数组和函数类型，那么它们会被调整到对应的指针类型，顶层 cv 限定也会在调整时移除。{{rev inl|since=c++11|允许{{rlp|parameter pack|形参包}}。}}
+
+调整后类型的集合{{rev inl|since=c++11|（在形参包展开后）}}为空的动态异常说明是不抛出的。带有不抛出动态异常说明的函数不允许任何异常。
+
+动态异常说明不会被认为是函数类型的一部分。
+
+如果函数抛出了没有列于其异常说明的类型的异常，那么将调用函数 {{lc|std::unexpected}}。缺省的该函数会调用 {{lc|std::terminate}}，但可以（通过 {{lc|std::set_unexpected}}）将其替换成可能调用 {{lc|std::terminate}} 或抛出异常的用户提供的函数。如果异常说明接受从 {{lc|std::unexpected}} 抛出的异常，那么栈回溯照常持续。如果它不被接受，但异常说明允许 {{lc|std::bad_exception}}，那么抛出 {{lc|std::bad_exception}}。否则，调用 {{lc|std::terminate}}。
+
+====实例化====
+函数模板特化的动态异常说明不随函数声明而实例化；它只会在''需要''（定义如下）时实例化。
+
+隐式声明的特殊成员函数的动态异常说明也只会在需要时求值（特别是，派生类成员函数的隐式声明不要求实例化基类成员函数的异常说明）
+
+在''需要''但尚未实例化某个函数模板特化的动态异常说明时，如同对该特化的声明一样，对待决名进行查找并实例化 {{spar|表达式}} 中用到的任何模板。
+
+在下列语境中认为''需要''函数的动态异常说明：
+* 在表达式中，函数被重载决议选中
+* 函数被{{rlp|definition#ODR 使用|ODR 使用}}
+* 函数本该被 ODR 使用但在不求值操作数中出现：
+{{source|1=
+template&lt;class T&gt;
+T f() throw(std::array&lt;char, sizeof(T)&gt;);
+
+int main()
+{
+    decltype(f&lt;void&gt;()) *p; // f 不求值，但需要动态异常说明
+                            // 错误，因为实例化动态异常说明的实例化要计算 sizeof(void)
+}
+}}
+* 该特化需要与另一函数声明进行比较（例如在虚函数覆盖或函数模板的显式特化处）
+* 在函数定义中
+* 需要动态异常说明，因为某个预置特殊成员函数需要检查它以决定它自身的动态异常说明（这只会在这个预置特殊成员函数自身的动态异常说明被需要时发生）。
+
+===潜在异常===
+每个函数 {{tt|f}}，函数指针 {{tt|pf}}，与成员函数指针 {{tt|pmf}} 都拥有一个“潜在异常集合”，它由可能抛出的类型构成。所有类型的集合指示可能抛出任何异常。此集合定义如下：
+@1@ 如果 {{tt|f}}、{{tt|pf}} 或 {{tt|pmf}} 的声明使用{{rev inl|until=c++11|并非允许所有异常的}}动态异常说明，那么集合由列于该规定的所有类型组成。
+
+{{rrev|since=c++11|@2@ 否则，如果 {{tt|f}}、{{tt|pf}} 或 {{tt|pmf}} 的声明有使用 {{rlpt|noexcept|noexcept(true)}}，那么集合为空。}}
+@3@ 否则，集合是所有类型的集合。
+
+注意：对于隐式声明的特殊成员函数（构造函数、赋值运算符和析构函数）{{rev inl|since=c++11|，以及对于继承的构造函数}}，潜在异常的集合是它们会调用的所有函数的潜在异常集合的并集：非变体非静态数据成员、直接基类及适当场合的虚基类的构造函数/赋值运算符/析构函数（还包括默认实参表达式）
+
+每个表达式 {{tt|e}} 都拥有一个''潜在异常集合''。如果 {{tt|e}} 是{{rlp|constant expression|核心常量表达式}}，那么集合为空，否则集合是 {{tt|e}} 的全部直接子表达式（包含{{rlp|default arguments|默认实参表达式}}）的潜在异常集合的并集，再与下列取决于 {{tt|e}} 的形式的另一个集合合并：
+@1@ 如果 {{tt|e}} 是一个函数调用表达式，令 {{tt|g}} 代表被调用的函数、函数指针或成员函数指针，那么：
+:* 如果 {{tt|g}} 的声明使用了动态异常说明，那么添加 {{tt|g}} 的潜在异常集合到集合；
+{{rrev|since=c++11|:* 如果 {{tt|g}} 的声明使用了 {{rlpt|noexcept|noexcept(true)}}，那么集合为空；}}
+:* 否则，该集合是所有类型的集合。
+@2@ 如果 {{tt|e}} 隐式调用了某个函数（它是运算符表达式且该运算符被重载，是 {{rlp|new|new 表达式}}且其分配函数被重载，或是完整表达式且调用了临时量的析构函数），那么该集合是这个函数的集合。
+@3@ 如果 {{tt|e}} 是一个 {{rlp|throw|throw 表达式}}，那么该集合是以其操作数所初始化的异常，或对于重抛出表达式（无操作数者）是所有异常的集合。
+@4@ 如果 {{tt|e}} 是对多态类型引用的 {{rlpt|dynamic_cast}}，那么该集合由 {{lc|std::bad_cast}} 组成。
+@5@ 如果 {{tt|e}} 是应用到多解引用指向多态类型指针的 {{rlpt|typeid}}，那么该集合由 {{lc|std::bad_typeid}} 组成。
+
+{{rrev|since=c++11|@6@ 如果 {{tt|e}} 是一个拥有非常量数组大小的 {{rlp|new|new 表达式}}，且选择的分配函数拥有非空的潜在异常集合，那么该集合由 {{lc|std::bad_array_new_length}} 组成。}}
+{{source|1=
+void f() throw(int); // f() 的集合是“int”
+void g();            // g() 的集合是所有类型的集合
+
+struct A { A(); };                  // “new A”的集合是所有类型的集合
+struct B { B() noexcept; };         // “B()”的集合为空
+struct D() { D() throw (double); }; // “new D”的集合是所有类型的集合
+}}
+
+所有隐式声明的成员函数{{rev inl|since=c++11|和继承的构造函数}}都拥有异常说明，选择如下：
+* 如果潜在异常的集合是类型全集，那么隐式异常说明{{rev inl|until=c++11|允许所有异常（该异常说明被认为存在，即使它不可用代码表达，且表现如同无异常说明）}}{{rev inl|since=c++11|是 {{c|noexcept(false)}}}}。
+* 否则，如果潜在异常的集合非空，那么隐式异常说明列出每个来自该集合的类型
+* 否则，隐式异常说明是 {{rev inl|until=c++11|{{c|throw()}}}}{{rev inl|since=c++11|{{c|noexcept(true)}}}}。
+
+{{source|1=
+struct A
+{
+    A(int = (A(5), 0)) noexcept;
+    A(const A&amp;) throw();
+    A(A&amp;&amp;) throw();
+    ~A() throw(X);
+};
+
+struct B
+{
+    B() throw();
+    B(const B&amp;) = default; // 异常说明是“noexcept(true)”
+    B(B&amp;&amp;, int = (throw Y(), 0)) noexcept;
+    ~B() throw(Y);
+};
+
+int n = 7;
+struct D : public A, public B
+{
+    // 可能抛出与 std​::​bad_array_new_length 类型的处理块匹配的异常，
+    // 但不会抛出分配失败异常
+    (void*) new (std::nothrow) int[n];
+
+    // D 拥有下列隐式声明的成员：
+    // D::D() throw(X, std::bad_array_new_length);
+    // D::D(const D&amp;) noexcept(true);
+    // D::D(D&amp;&amp;) throw(Y);
+    // D::~D() throw(X, Y);
+};
+}}
+
+===注解===
+Clang 认为动态异常说明实例化的规则在 C++11 中为 {{wg21|CWG1330}} 所更改，见 [https://github.com/llvm/llvm-project/issues/56439 LLVM #56349]。
+
+===关键词===
+{{ltt|cpp/keyword/throw}}
+
+===示例===
+{{example
+|注意：最好在 C++98 模式下编译以避免警告。与 C++17 或更新版本不兼容。
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;exception&gt;
+#include &lt;iostream&gt;
+
+class X {};
+class Y {};
+class Z : public X {};
+class W {};
+
+void f() throw(X, Y) 
+{
+    bool n = false;
+
+    if (n)
+        throw X(); // OK，可能调用 std::terminate()
+    if (n)
+        throw Z(); // 同样 OK
+
+    throw W(); // 将调用 std::unexpected()
+}
+
+void handler()
+{
+    std::cerr &lt;&lt; "预料外的异常！\n"; // 需要冲洗
+    std::abort();
+}
+
+int main()
+{
+    std::set_unexpected(handler);
+    f();
+}
+|output=
+预料外的异常！
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=25|std=C++98|before=在拥有不同异常说明的指向成员的指针间赋值或初始化的行为未指明|after=应用与函数指针和函数引用相同的限制}}
+{{dr list item|wg=cwg|dr=973|std=C++98|before=异常说明可以包含函数类型，但未指明此处的函数指针转换|after=已指明}}
+{{dr list item|wg=cwg|dr=1267|std=C++98|before=异常说明可以包含右值引用类型|after=不允许包含}}
+{{dr list item|wg=cwg|dr=1330|std=C++11|before=异常说明可能被饥渴地实例化|after=仅当被需要才实例化}}
+{{dr list item|wg=cwg|dr=1351|std=C++98&lt;br&gt;C++11|before=不考虑隐式异常说明中的默认实参（C++98）&lt;br&gt;与默认成员初始化式（C++11）|after=考虑它们}}
+{{dr list item|wg=cwg|dr=1777|std=C++11|before={{c|throw(T...)}} 即使在 {{c|T}} 是空形参包时也不会是不抛出的|after=在形参包为空时不抛出}}
+{{dr list item|wg=cwg|dr=2191|std=C++98|before={{tt|typeid}} 表达式的潜在异常集合可以包含 {{tt|bad_typeid}}，即使不能抛出它|after=只有在能抛出时包含它}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc noexcept spec}}
+{{dsc end}}
+
+{{langlinks|de|es|en|fr|it|ja|pt|ru}}

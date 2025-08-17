@@ -1,0 +1,216 @@
+{{cpp/title|make_unique|make_unique_for_overwrite}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl rev multi|num=1|anchor=1
+|since1=c++14|notes1={{mark|仅对非数组类型}}|dcl1=
+template&lt; class T, class... Args &gt;
+unique_ptr&lt;T&gt; make_unique( Args&amp;&amp;... args );
+|since2=c++23&lt;!--P2273R3--&gt;|notes2={{mark|仅对非数组类型}}|dcl2=
+template&lt; class T, class... Args &gt;
+constexpr unique_ptr&lt;T&gt; make_unique( Args&amp;&amp;... args );
+}}
+{{dcl rev multi|num=2
+|since1=c++14|notes1={{mark|仅对未知边界数组类型}}|dcl1=
+template&lt; class T &gt;
+unique_ptr&lt;T&gt; make_unique( std::size_t size );
+|since2=c++23&lt;!--P2273R3--&gt;|notes2={{mark|仅对未知边界数组类型}}|dcl2=
+template&lt; class T &gt;
+constexpr unique_ptr&lt;T&gt; make_unique( std::size_t size );
+}}
+{{dcl|num=3|since=c++14|notes={{mark|仅对已知边界数组类型}}|1=
+template&lt; class T, class... Args &gt;
+/* 未指明 */ make_unique( Args&amp;&amp;... args ) = delete;
+}}
+{{dcl rev multi|num=4|anchor=4
+|since1=c++20|notes1={{mark|仅对非数组类型}}|dcl1=
+template&lt; class T &gt;
+unique_ptr&lt;T&gt; make_unique_for_overwrite();
+|since2=c++23&lt;!--P2273R3--&gt;|notes2={{mark|仅对非数组类型}}|dcl2=
+template&lt; class T &gt;
+constexpr unique_ptr&lt;T&gt; make_unique_for_overwrite();
+}}
+{{dcl rev multi|num=5
+|since1=c++20|notes1={{mark|仅对未知边界数组类型}}|dcl1=
+template&lt; class T &gt;
+unique_ptr&lt;T&gt; make_unique_for_overwrite( std::size_t size );
+|since2=c++23&lt;!--P2273R3--&gt;|notes2={{mark|仅对未知边界数组类型}}|dcl2=
+template&lt; class T &gt;
+constexpr unique_ptr&lt;T&gt; make_unique_for_overwrite( std::size_t size );
+}}
+{{dcl|num=6|since=c++20|notes={{mark|仅对已知边界数组类型}}|1=
+template&lt; class T, class... Args &gt;
+/* 未指明 */ make_unique_for_overwrite( Args&amp;&amp;... args ) = delete;
+}}
+{{dcl end}}
+
+构造 {{tt|T}} 类型的对象并将其包装进 {{lc|std::unique_ptr}}。
+
+@1@ 构造非数组类型 {{tt|T}} 的对象。传递实参 {{c|args}} 给 {{tt|T}} 的构造函数。{{cpp/enable_if| {{tt|T}} 不是数组类型}}。函数等价于：
+{{source|unique_ptr&lt;T&gt;(new T(std::forward&lt;Args&gt;(args)...))}}
+
+@2@ 构造拥有给定动态大小的数组。[[cpp/language/value initialization|值初始化]]数组元素。{{cpp/enable_if| {{tt|T}} 是未知边界数组}}。函数等价于：
+{{source|unique_ptr&lt;T&gt;(new std::remove_extent_t&lt;T&gt;[size]())}}
+
+@3,6@ 不允许构造已知边界的数组。
+
+@4@ 同 {{v|1}}，但[[cpp/language/default_initialization|默认初始化]]对象。{{cpp/enable_if| {{tt|T}} 不是数组类型}}。函数等价于：
+{{source|unique_ptr&lt;T&gt;(new T)}}
+
+@5@ 同 {{v|2}}，但默认初始化数组。{{cpp/enable_if| {{tt|T}} 是未知边界数组}}。函数等价于：
+{{source|unique_ptr&lt;T&gt;(new std::remove_extent_t&lt;T&gt;[size])}}
+
+===参数===
+{{par begin}}
+{{par|args|将要构造的 {{tt|T}} 实例所用的实参列表}}
+{{par|size|要构造的数组大小}}
+{{par end}}
+
+===返回值===
+类型 {{tt|T}} 实例的 {{lc|std::unique_ptr}}。
+
+===异常===
+可能抛出 {{lc|std::bad_alloc}} 或任何 {{tt|T}} 的构造函数所抛的异常。若抛出异常，则此函数无效果。
+
+===可能的实现===
+{{eq impl
+|title1=make_unique {{v|1-3}}|ver1=1|1=
+// C++14 make_unique
+namespace detail
+{
+    template&lt;class&gt;
+    constexpr bool is_unbounded_array_v = false;
+    template&lt;class T&gt;
+    constexpr bool is_unbounded_array_v&lt;T[]&gt; = true;
+
+    template&lt;class&gt;
+    constexpr bool is_bounded_array_v = false;
+    template&lt;class T, std::size_t N&gt;
+    constexpr bool is_bounded_array_v&lt;T[N]&gt; = true;
+} // namespace detail
+
+template&lt;class T, class... Args&gt;
+std::enable_if_t&lt;!std::is_array&lt;T&gt;::value, std::unique_ptr&lt;T&gt;&gt;
+make_unique(Args&amp;&amp;... args)
+{
+    return std::unique_ptr&lt;T&gt;(new T(std::forward&lt;Args&gt;(args)...));
+}
+
+template&lt;class T&gt;
+std::enable_if_t&lt;detail::is_unbounded_array_v&lt;T&gt;, std::unique_ptr&lt;T&gt;&gt;
+make_unique(std::size_t n)
+{
+    return std::unique_ptr&lt;T&gt;(new std::remove_extent_t&lt;T&gt;[n]());
+}
+
+template&lt;class T, class... Args&gt;
+std::enable_if_t&lt;detail::is_bounded_array_v&lt;T&gt;&gt; make_unique(Args&amp;&amp;...) = delete;
+|title2=make_unique_for_overwrite {{v|4-6}}|ver2=4|2=
+// C++20 make_unique_for_overwrite
+template&lt;class T&gt;
+    requires (!std::is_array_v&lt;T&gt;)
+std::unique_ptr&lt;T&gt; make_unique_for_overwrite()
+{
+    return std::unique_ptr&lt;T&gt;(new T);
+}
+
+template&lt;class T&gt;
+    requires std::is_unbounded_array_v&lt;T&gt;
+std::unique_ptr&lt;T&gt; make_unique_for_overwrite(std::size_t n)
+{
+    return std::unique_ptr&lt;T&gt;(new std::remove_extent_t&lt;T&gt;[n]);
+}
+
+template&lt;class T, class... Args&gt;
+    requires std::is_bounded_array_v&lt;T&gt;
+void make_unique_for_overwrite(Args&amp;&amp;...) = delete;
+}}
+
+===注解===
+不同于 {{lc|std::make_shared}}（它拥有 {{lc|std::allocate_shared}}），{{tt|std::make_unique}} 没有具分配器的对应物。{{wg21|P0211}} 中提案的 {{tt|allocate_unique}} 会要求为其返回的 {{c|unique_ptr&lt;T,D&gt;}} 创作删除器类型 {{tt|D}}，返回类型可能含有分配器对象，并在其 {{c|operator()}} 调用 {{tt|destroy}} 和 {{tt|deallocate}}。
+
+{{ftm begin|std=1|comment=1}}
+{{ftm|std=C++14|value=201304L|__cpp_lib_make_unique|{{tt|std::make_unique}}; 重载 {{v|1|1}}}}
+{{ftm|std=C++20|value=202002L|__cpp_lib_smart_ptr_for_overwrite|进行默认初始化的智能指针 ({{lc|std::allocate_shared_for_overwrite}}, {{lc|std::make_shared_for_overwrite}}, {{tt|std::make_unique_for_overwrite}}); 重载 {{v|4-6|4}}}}
+{{ftm|std=C++23|value=202202L|__cpp_lib_constexpr_memory|重载 {{v|1,2,4,5|1}} 的 {{tt|constexpr}}}}
+{{ftm end}}
+
+===示例===
+{{todo|添加更多 {{c|make_unique_for_overwrite()}} 演示}}
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;utility&gt;
+
+struct Vec3
+{
+    int x, y, z;
+
+    // C++20 起不再需要以下构造函数
+    Vec3(int x = 0, int y = 0, int z = 0) noexcept : x(x), y(y), z(z) {}
+
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const Vec3&amp; v)
+    {
+        return os &lt;&lt; "{ x=" &lt;&lt; v.x &lt;&lt; ", y=" &lt;&lt; v.y &lt;&lt; ", z=" &lt;&lt; v.z &lt;&lt; " }";
+    }
+};
+
+// 向输出迭代器输出斐波那契数列。
+template&lt;typename OutputIt&gt;
+OutputIt fibonacci(OutputIt first, OutputIt last)
+{
+    for (int a = 0, b = 1; first != last; ++first)
+    {
+        *first = b;
+        b += std::exchange(a, b);
+    }
+    return first;
+}
+
+int main()
+{
+    // 使用默认构造函数。
+    std::unique_ptr&lt;Vec3&gt; v1 = std::make_unique&lt;Vec3&gt;();
+    // 使用匹配这些参数的构造函数。
+    std::unique_ptr&lt;Vec3&gt; v2 = std::make_unique&lt;Vec3&gt;(0, 1, 2);
+    // 创建指向 5 个元素数组的 unique_ptr。
+    std::unique_ptr&lt;Vec3[]&gt; v3 = std::make_unique&lt;Vec3[]&gt;(5);
+
+    // 创建指向未初始化的 10 个整数的数组的 unique_ptr，然后以斐波那契数列予以填充。
+    std::unique_ptr&lt;int[]&gt; i1 = std::make_unique_for_overwrite&lt;int[]&gt;(10);
+    fibonacci(i1.get(), i1.get() + 10);
+
+    std::cout &lt;&lt; "make_unique&lt;Vec3&gt;():      " &lt;&lt; *v1 &lt;&lt; '\n'
+              &lt;&lt; "make_unique&lt;Vec3&gt;(0,1,2): " &lt;&lt; *v2 &lt;&lt; '\n'
+              &lt;&lt; "make_unique&lt;Vec3[]&gt;(5):   ";
+    for (std::size_t i = 0; i &lt; 5; ++i)
+        std::cout &lt;&lt; std::setw(i ? 30 : 0) &lt;&lt; v3[i] &lt;&lt; '\n';
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "make_unique_for_overwrite&lt;int[]&gt;(10), fibonacci(...): [" &lt;&lt; i1[0];
+    for (std::size_t i = 1; i &lt; 10; ++i)
+        std::cout &lt;&lt; ", " &lt;&lt; i1[i];
+    std::cout &lt;&lt; "]\n";
+}
+|output=
+make_unique&lt;Vec3&gt;():      { x=0, y=0, z=0 }
+make_unique&lt;Vec3&gt;(0,1,2): { x=0, y=1, z=2 }
+make_unique&lt;Vec3[]&gt;(5):   { x=0, y=0, z=0 }
+                          { x=0, y=0, z=0 }
+                          { x=0, y=0, z=0 }
+                          { x=0, y=0, z=0 }
+                          { x=0, y=0, z=0 }
+
+make_unique_for_overwrite&lt;int[]&gt;(10), fibonacci(...): [1, 1, 2, 3, 5, 8, 13, 21, 34, 55]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

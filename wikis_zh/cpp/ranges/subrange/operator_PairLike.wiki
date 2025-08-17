@@ -1,0 +1,140 @@
+{{cpp/ranges/subrange/title|operator PairLike}}
+{{cpp/ranges/subrange/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+template&lt; /* 见下文 */ PairLike &gt;
+    requires /*pair-like-convertible-from*/&lt;PairLike, const I&amp;, const S&amp;&gt;
+constexpr operator PairLike() const;
+}}
+{{dcl h|辅助概念}}
+{{dcla|num=2|expos=yes|1=
+template&lt; class T &gt;
+concept /*pair-like*/ = /* 见描述 */;
+}}
+{{dcla|num=3|expos=yes|1=
+template&lt; class T, class U, class V &gt;
+concept /*pair-like-convertible-from*/ = /* 见描述 */;
+}}
+{{dcl end}}
+
+@1@ 将 {{tt|subrange}} 转换到某种对偶式类型。
+@@ {{c/core|/*different-from*/}} 的定义见 {{lsi|cpp/ranges#different-from}}{{sep}}。
+
+@2@ 确定类型是否为''对偶式''{{sep}}类型。
+{{rev begin}}
+{{rev|until=c++23|
+等价于：
+{{source|1=
+template&lt; class T &gt;
+concept /*pair-like*/ =
+    !std::is_reference_v&lt;T&gt; &amp;&amp; requires(T t)
+    {
+        typename std::tuple_size&lt;T&gt;::type;
+        requires std::derived_from&lt;std::tuple_size&lt;T&gt;,
+                                   std::integral_constant&lt;std::size_t, 2&gt;&gt;;
+        typename std::tuple_element_t&lt;0, std::remove_const_t&lt;T&gt;&gt;;
+        typename std::tuple_element_t&lt;1, std::remove_const_t&lt;T&gt;&gt;;
+        { std::get&lt;0&gt;(t) } -&gt; std::convertible_to&lt;
+                                  const std::tuple_element_t&lt;0, T&gt;&amp;&gt;;
+        { std::get&lt;1&gt;(t) } -&gt; std::convertible_to&lt;
+                                  const std::tuple_element_t&lt;1, T&gt;&amp;&gt;;
+    };
+}}
+}}
+{{rev|since=c++23|
+此概念等价于标准库通用的仅用于阐述的概念 {{lti|cpp/utility/tuple/tuple-like|pair-like}}。
+}}
+{{rev end}}
+
+@3@ 确定某个对偶式类型是否能从两个可能具有不同的给定类型的值构造。
+{{rev begin}}
+{{rev|until=c++23|
+等价于：
+{{source|1=
+template&lt; class T, class U, class V &gt;
+concept /*pair-like-convertible-from*/ =
+    !ranges::range&lt;T&gt; &amp;&amp; /*pair-like*/&lt;T&gt; &amp;&amp;
+    std::constructible_from&lt;T, U, V&gt; &amp;&amp;
+    /*convertible-to-non-slicing*/&lt;U, std::tuple_element_t&lt;0, T&gt;&gt; &amp;&amp;
+    std::convertible_to&lt;V, std::tuple_element_t&lt;1, T&gt;&gt;;
+}}
+}}
+{{rev|since=c++23|
+等价于：
+{{source|1=
+template&lt; class T, class U, class V &gt;
+concept /*pair-like-convertible-from*/ =
+    !ranges::range&lt;T&gt; &amp;&amp; !std::is_reference_v&lt;T&gt; &amp;&amp; /*pair-like*/&lt;T&gt; &amp;&amp;
+    std::constructible_from&lt;T, U, V&gt; &amp;&amp;
+    /*convertible-to-non-slicing*/&lt;U, std::tuple_element_t&lt;0, T&gt;&gt; &amp;&amp;
+    std::convertible_to&lt;V, std::tuple_element_t&lt;1, T&gt;&gt;;
+}}
+}}
+{{rev end}}
+
+===返回值===
+{{box|{{c/core|PairLike(}}{{rlpsi|/#begin_}}{{sep}}{{c/core|,}}{{nbspt}}{{rlpsi|/#end_}}{{sep}}{{c/core|)}}}}
+
+===注解===
+下列类型都是对偶式类型：
+* {{c/core|std::pair&lt;T, U&gt;}}
+* {{c/core|std::tuple&lt;T, U&gt;}}
+* {{c/core|std::array&lt;T, 2&gt;}}
+* {{c/core|std::ranges::subrange&lt;I, S, K&gt;}}
+{{rrev|since=c++26|
+* {{c/core|std::complex&lt;T&gt;}}
+}}
+
+
+{{rrev|until=c++23|
+从这些类型之一派生的程序定义类型，在满足以下条件时可以是对偶式类型：
+* {{ltt std|cpp/utility/tuple_size}} 和 {{ltt std|cpp/utility/tuple_element}} 对它正确特化，且
+* 对它的值调用 {{c|std::get&lt;0&gt;}} 与 {{c|std::get&lt;1&gt;}} 良构。
+}}
+
+因为 {{tt|subrange}} 的特化是 {{lconcept|range}} 类型，所以到它们的转换不是通过此转换函数进行。
+
+{{lc|std::array}} 的特化不能从 {{tt|subrange}} 转换而来，因为它们是 {{lconcept|range}} 类型。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+using striter = std::string::const_iterator;
+
+using legacy_strview = std::pair&lt;striter, striter&gt;;
+
+void legacy_print(legacy_strview p)
+{
+    for (; p.first != p.second; ++p.first)
+        std::cout &lt;&lt; *p.first &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string dat{"ABCDE"};
+    for (auto v{ std::ranges::subrange{dat} }; v; v = {v.begin(), v.end() - 1})
+    {
+        /*...*/
+        legacy_print(legacy_strview{v});
+    }
+}
+|output=
+A B C D E 
+A B C D 
+A B C 
+A B 
+A
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple-like}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

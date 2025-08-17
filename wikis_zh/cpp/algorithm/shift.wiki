@@ -1,0 +1,172 @@
+{{cpp/title|shift_left|shift_right}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class ForwardIt &gt;
+constexpr ForwardIt shift_left( ForwardIt first, ForwardIt last,
+                                typename std::iterator_traits&lt;ForwardIt&gt;::
+                                    difference_type n );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt shift_left( ExecutionPolicy&amp;&amp; policy,
+                      ForwardIt first, ForwardIt last,
+                      typename std::iterator_traits&lt;ForwardIt&gt;::
+                          difference_type n );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class ForwardIt &gt;
+constexpr ForwardIt shift_right( ForwardIt first, ForwardIt last,
+                                 typename std::iterator_traits&lt;ForwardIt&gt;::
+                                     difference_type n );
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt shift_right( ExecutionPolicy&amp;&amp; policy,
+                       ForwardIt first, ForwardIt last,
+                       typename std::iterator_traits&lt;ForwardIt&gt;::
+                           difference_type n );
+}}
+{{dcl end}}
+
+将范围 {{range|first|last}} 中的元素迁移 {{c|n}} 个位置。
+
+@1@ 向范围开端迁移元素。
+* 如果 {{c|1=n == 0 {{!!}} n &gt;= last - first}}，那么没有效果。
+* 否则，对于每个 {{range|0|last - first - n}} 中的整数 {{c|i}}，移动原处于位置 {{c|first + n + i}} 的元素到位置 {{c|first + i}}。
+@@ 以 {{c|i}} 从 {{c|0}} 开始递增的顺序进行移动。
+
+@3@ 向范围结尾迁移元素。
+* 如果 {{c|1=n == 0 {{!!}} n &gt;= last - first}}，那么没有效果。
+* 否则，对于每个 {{range|0|last - first - n}} 中的整数 {{c|i}}，移动原处于位置 {{c|first + i}} 的元素到位置 {{c|first + n + i}}。
+@@ 如果 {{tt|ForwardIt}} 满足{{named req|BidirectionalIterator}}的要求，那么以 {{c|i}} 从 {{c|last - first - n - 1}} 开始递减的顺序进行移动。
+
+@2,4@ 分别同 {{v|1}} 与 {{v|3}}，但按照 {{c|policy}} 执行，并可能以任何顺序进行移动。
+@@ {{cpp/enable_if| {{c|std::is_execution_policy_v&lt;std::decay_t&lt;ExecutionPolicy&gt;&gt;}} 是 {{c|true}} |plural=yes}}。
+
+在原范围但不在新范围中的元素被置于合法但未指定的状态。
+
+如果满足以下任意条件，那么行为未定义：
+* {{c|1=n &gt;= 0}} 不是 {{c|true}}。
+* {{c|*first}} 的类型不{{named req|MoveAssignable}}。
+* 对于 {{tt|shift_right}}，{{tt|ForwardIt}} 既不是{{named req|BidirectionalIterator}}也不{{named req|ValueSwappable}}。
+
+===参数===
+{{par begin}}
+{{par range|3=要迁移的}}
+{{par|n|要迁移的位置数}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par end}}
+
+===返回值===
+@1,2@ 结果范围的结尾。
+* 如果 {{c|n}} 小于 {{c|std::distance(first, last)}}，那么返回的迭代器等于 {{c|std::next(first, (std::distance(first, last) - n))}}。
+* 否则返回 {{c|first}}。
+
+@3,4@ 结果范围的开始。
+* 如果 {{c|n}} 小于 {{c|std::distance(first, last)}}，那么返回的迭代器等于 {{c|std::next(first, n)}}。
+* 否则返回 {{c|last}}。
+
+===复杂度===
+@1,2@ 最多 {{c|std::distance(first, last) - n}} 次赋值。
+@3,4@ 最多 {{c|std::distance(first, last) - n}} 次赋值或交换。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior}}
+
+===注解===
+{{feature test macro|__cpp_lib_shift|std=C++20|value=201806L|{{ttt|std::shift_left}} 和 {{ttt|std::shift_right}}}}
+
+===示例===
+{{example||code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int value{0};
+    bool specified_state{true};
+    
+    S(int v = 0) : value{v} {}
+    S(S const&amp; rhs) = default;
+    S(S&amp;&amp; rhs) { *this = std::move(rhs); }
+    S&amp; operator=(S const&amp; rhs) = default;
+    S&amp; operator=(S&amp;&amp; rhs)
+    {
+        if (this != &amp;rhs)
+        {
+            value = rhs.value;
+            specified_state = rhs.specified_state;
+            rhs.specified_state = false;
+        }
+        return *this;
+    }
+};
+
+template&lt;typename T&gt;
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, std::vector&lt;T&gt; const&amp; v)
+{
+    for (const auto&amp; s : v)
+    {
+        if constexpr (std::is_same_v&lt;T, S&gt;)
+            s.specified_state ? os &lt;&lt; s.value &lt;&lt; ' ' : os &lt;&lt; ". ";
+        else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+            os &lt;&lt; (s.empty() ? "." : s) &lt;&lt; ' ';
+        else
+            os &lt;&lt; s &lt;&lt; ' ';
+    }
+    return os;
+}
+
+int main()
+{
+    std::cout &lt;&lt; std::left;
+    
+    std::vector&lt;S&gt;           a{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;int&gt;         b{1, 2, 3, 4, 5, 6, 7};
+    std::vector&lt;std::string&gt; c{"α", "β", "γ", "δ", "ε", "ζ", "η"};
+    
+    std::cout &lt;&lt; "vector&lt;S&gt; \tvector&lt;int&gt; \tvector&lt;string&gt;\n";
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+    std::shift_left(begin(a), end(a), 3);
+    std::shift_left(begin(b), end(b), 3);
+    std::shift_left(begin(c), end(c), 3);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+    std::shift_right(begin(a), end(a), 2);
+    std::shift_right(begin(b), end(b), 2);
+    std::shift_right(begin(c), end(c), 2);
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+    std::shift_left(begin(a), end(a), 8); // 无效果：n &gt;= last - first
+    std::shift_left(begin(b), end(b), 8); // 同上
+    std::shift_left(begin(c), end(c), 8); // 同上
+    std::cout &lt;&lt; a &lt;&lt; "  " &lt;&lt; b &lt;&lt; "  " &lt;&lt; c &lt;&lt; '\n';
+    
+//  std::shift_left(begin(a), end(a),-3); // 未定义行为，例如段错误
+}
+|p=true &lt;!-- 在移动后访问对象 --&gt;
+|output=
+vector&lt;S&gt; 	vector&lt;int&gt; 	vector&lt;string&gt;
+1 2 3 4 5 6 7   1 2 3 4 5 6 7   α β γ δ ε ζ η 
+4 5 6 7 . . .   4 5 6 7 5 6 7   δ ε ζ η . . . 
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η . 
+. . 4 5 6 7 .   4 5 4 5 6 7 5   . . δ ε ζ η .
+}}
+
+=== 参阅 ===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc inc|cpp/algorithm/dsc move_backward}}
+{{dsc inc|cpp/algorithm/dsc rotate}}
+{{dsc inc|cpp/algorithm/ranges/dsc shift}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

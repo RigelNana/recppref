@@ -1,0 +1,150 @@
+{{title|{{tt|typeid}} 运算符}}
+{{cpp/language/expressions/navbar}}
+
+查询类型的信息。
+
+用于必须知晓{{rlp|object#多态对象|多态对象}}的{{rlp|type#动态类型|动态类型}}的场合以及静态类型鉴别。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|typeid (}} {{spar|类型}} {{ttb|)}}}}
+{{sdsc|num=2|{{ttb|typeid (}} {{spar|表达式}} {{ttb|)}}}}
+{{sdsc end}}
+
+{{c/core|typeid}} 表达式是{{rlp|value category|左值表达式}}，它指代一个具有{{rlp|static|静态存储期}}的，多态类型 {{lc|std::type_info}} 或它的某个派生类型的 const 限定版本类型的对象。
+
+如果使用 {{c/core|typeid}} 时 {{lc|std::type_info}} 的标准库定义不可见，那么程序非良构。
+
+===解释===
+如果{{spar sep|类型}}或{{spar sep|表达式}}的类型是类类型或到类类型的引用，那么该类类型不能是{{rlp|type#不完整类型|不完整类型}}。
+
+@1@ 指代一个表示{{spar sep|类型}}的 {{lc|std::type_info}} 对象。如果{{spar sep|类型}}是引用类型，那么结果指代的 {{lc|std::type_info}} 对象表示被引用的类型的无 cv 限定版本。
+@2@ 检验{{spar|表达式}}：
+* 如果{{spar sep|表达式}}是标识了某个{{rlp|object#多态对象|多态类型}}（即声明或继承至少一个{{rlp|virtual|虚函数}}的类）对象的{{rev inl|until=c++11|{{rlp|value category#左值|左值}}}}{{rev inl|since=c++11|{{rlp|value category#泛左值|泛左值}}}}表达式，那么 {{c/core|typeid}} 表达式对该表达式求值，然后指代表示该表达式动态类型的 {{lc|std::type_info}} 对象。
+:* 如果{{spar sep|表达式}}是一个{{rlp|operator member access#内建的间接寻址运算符|间接寻址表达式}}，并且它的操作数求值为{{rlp|pointer#空指针|空指针值}}，那么就会抛出匹配 {{lc|std::bad_typeid}} 类型的处理块的类型的异常&lt;ref&gt;在其他语境下，对此类{{spar sep|表达式}}进行求值会导致未定义行为。&lt;/ref&gt;。
+* 否则，{{c/core|typeid}} {{rlp|expressions#潜在求值表达式|不对该表达式求值}}{{rev inl|since=c++11|（即该表达式是不求值操作数}}，而它所指代的 {{lc|std::type_info}} 对象表示该表达式的静态类型。不进行左值到右值、数组到指针或函数到指针转换。
+{{rrev|since=c++17|
+:* 然而对于纯右值参数，（形式上）要进行{{rlp|implicit conversion#临时量实质化|临时量实质化}}：参数必须在 {{c/core|typeid}} 表达式所出现的语境中可析构。
+}}
+
+如果{{spar sep|类型}}和{{spar sep|表达式}}的类型具有 cv 限定，那么 {{c/core|typeid}} 的结果会指代对应的无 cv 限定类型（即 {{c|1=typeid(T) == typeid(const T)}}）。
+
+如果对处于构造和销毁过程中的对象（在构造函数或析构函数之内，包括构造函数的{{rlp|initializer_list|初始化器列表}}或{{rlp|data members#成员初始化|默认成员初始化式}}）使用 {{c/core|typeid}}，那么此 {{c/core|typeid}} 指代的 {{lc|std::type_info}} 对象表示正在构造或销毁的类，即便它不是最终派生类。
+
+&lt;references/&gt;
+
+===注解===
+当应用于多态类型的表达式时，typeid 表达式的求值可能涉及运行时开销（虚表查找），其他情况下 typeid 表达式都在编译时解决。
+
+未指明 {{c/core|typeid}} 指代的对象的析构函数是否会在程序结束时执行。
+
+不保证同一类型上的 typeid 表达式的所有求值都指代同一个 {{lc|std::type_info}} 对象，不过这些 {{tt|type_info}} 对象的 {{lc|std::type_info::hash_code}} 相同，它们的 {{lc|std::type_index}} 也相同。
+{{source|1=
+const std::type_info&amp; ti1 = typeid(A);
+const std::type_info&amp; ti2 = typeid(A);
+
+assert(&amp;ti1 == &amp;ti2); // 不保证
+assert(ti1 == ti2); // 保证
+assert(ti1.hash_code() == ti2.hash_code()); // 保证
+assert(std::type_index(ti1) == std::type_index(ti2)); // 保证
+}}
+
+===关键词===
+{{ltt|cpp/keyword/typeid}}
+
+===示例===
+{{example|该示例展示使用一种实现时的输出，其中 type_info::name 返回完整类型名；若使用 gcc 或相似者则须通过 c++filt -t 过滤。
+|p=true
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;typeinfo&gt;
+
+struct Base {}; // 非多态
+struct Derived : Base {};
+
+struct Base2 { virtual void foo() {} }; // 多态
+struct Derived2 : Base2 {};
+
+int main()
+{
+    int myint = 50;
+    std::string mystr = "string";
+    double *mydoubleptr = nullptr;
+    
+    std::cout &lt;&lt; "myint 的类型：" &lt;&lt; typeid(myint).name() &lt;&lt; '\n'
+              &lt;&lt; "mystr 的类型：" &lt;&lt; typeid(mystr).name() &lt;&lt; '\n'
+              &lt;&lt; "mydoubleptr 的类型：" &lt;&lt; typeid(mydoubleptr).name() &lt;&lt; '\n';
+    
+    // std::cout &lt;&lt; myint 是多态类型的泛左值表达式；求值
+    const std::type_info&amp; r1 = typeid(std::cout &lt;&lt; myint); // 副作用：打印 50
+    std::cout &lt;&lt; '\n' &lt;&lt; "std::cout&lt;&lt;myint 的类型：" &lt;&lt; r1.name() &lt;&lt; '\n';
+    
+    // std::printf() 不是多态类型的泛左值表达式；不求值
+    const std::type_info&amp; r2 = typeid(std::printf("%d\n", myint));
+    std::cout &lt;&lt; "printf(\"%d\\n\",myint) 的类型：" &lt;&lt; r2.name() &lt;&lt; '\n';
+    
+    // 非多态左值时是静态类型
+    Derived d1;
+    Base&amp; b1 = d1;
+    std::cout &lt;&lt; "非多态基类的引用：" &lt;&lt; typeid(b1).name() &lt;&lt; '\n';
+    
+    Derived2 d2;
+    Base2&amp; b2 = d2;
+    std::cout &lt;&lt; "多态基类的引用：" &lt;&lt; typeid(b2).name() &lt;&lt; '\n';
+    
+    try
+    {
+        // 解引用空指针：对于非多态表达式 OK
+        std::cout &lt;&lt; "mydoubleptr 指向 " &lt;&lt; typeid(*mydoubleptr).name() &lt;&lt; '\n'; 
+        // 解引用空指针：对多态左值则不行
+        Derived2* bad_ptr = nullptr;
+        std::cout &lt;&lt; "bad_ptr 指向...";
+        std::cout &lt;&lt; typeid(*bad_ptr).name() &lt;&lt; '\n';
+    }
+    catch (const std::bad_typeid&amp; e)
+    {
+         std::cout &lt;&lt; " 捕获 " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+|output=
+======== 来自 Clang 的输出 ========
+myint 的类型：i
+mystr 的类型：NSt3__112basic_stringIcNS_11char_traitsIcEENS_9allocatorIcEEEE
+mydoubleptr 的类型：Pd
+50
+std::cout&lt;&lt;myint 的类型：NSt3__113basic_ostreamIcNS_11char_traitsIcEEEE
+printf("%d\n",myint) 的类型：i
+非多态基类的引用：4Base
+多态基类的引用：8Derived2
+mydoubleptr 指向 d
+bad_ptr 指向... 捕获 std::bad_typeid
+ 
+======== 来自 MSVC 的输出 ========
+myint 的类型：int
+mystr 的类型：class std::basic_string&lt;char,struct std::char_traits&lt;char&gt;,⮠
+class std::allocator&lt;char&gt; &gt;
+mydoubleptr 的类型：double * __ptr64
+50
+std::cout&lt;&lt;myint 的类型：class std::basic_ostream&lt;char,struct std::char_traits&lt;char&gt; &gt;
+printf("%d\n",myint) 的类型：int
+非多态基类的引用：struct Base
+多态基类的引用：struct Derived2
+mydoubleptr 指向 double
+bad_ptr 指向... 捕获 Attempted a typeid of nullptr pointer!
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=492|std=C++98|before=对指代 cv 限定类型的引用应用 {{c/core|typeid}} 的结果表示被引用类型|after=结果表示无 cv 限定的被引用类型}}
+{{dr list item|wg=cwg|dr=1416|std=C++98|before=对于顶层 cv 限定的用词可能会引起误解|after=改进用词}}
+{{dr list item|wg=cwg|dr=1431|std=C++98|before=只允许 {{c/core|typeid}} 抛出 {{lc|std::bad_typeid}}|after=允许抛出可匹配的派生类}}
+{{dr list item|wg=cwg|dr=1954|std=C++98|before=不明确是否会在{{spar sep|表达式}}的子表达式中检查空指针解引用|after=只会在顶层检查}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc type_info}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

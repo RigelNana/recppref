@@ -1,0 +1,117 @@
+{{cpp/title|void_t}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++17|
+template&lt; class... &gt;
+using void_t {{=}} void;
+}}
+{{dcl end}}
+
+将任意类型的序列映射到类型 {{c|void}} 的工具元函数。这个元函数是在 C++20 的[[cpp/language/constraints|概念]]之前用于促进 [[cpp/language/sfinae|SFINAE]] 的便利方式，尤其是，基于某个表达式在[[cpp/language/expressions#不求值表达式|不求值语句]]中是否合法（比如 {{ltt|cpp/language/decltype}} 表达式的操作数）而有条件地从[[cpp/language/overload_resolution|候选集]]中移除函数，以及基于所支持的操作允许独立的函数重载或特化的存在等等。
+
+===注解===
+模板元编程中，用此元函数检测 SFINAE 语境中的非良构类型：
+{{source|1=
+// 主模板处理无嵌套 ::type 成员的类型：
+template&lt; class, class = void &gt;
+struct has_type_member : std::false_type { };
+
+// 特化识别拥有嵌套 ::type 成员的类型：
+template&lt; class T &gt;
+struct has_type_member&lt;T, std::void_t&lt;typename T::type&gt;&gt; : std::true_type { };
+}}
+
+它亦可用于检测表达式的合法性：
+{{source|1=
+// 主模板处理不支持前置自增的类型：
+template&lt; class, class = void &gt;
+struct has_pre_increment_member : std::false_type {};
+
+// 特化识别支持前置自增的类型：
+template&lt; class T &gt;
+struct has_pre_increment_member&lt;T,
+           std::void_t&lt;decltype( ++std::declval&lt;T&amp;&gt;() )&gt;
+       &gt; : std::true_type { };
+}}
+
+直至 {{cwg|1558}}（C++11 缺陷）的解决方案前，[[cpp/language/type alias|别名模板]]中未使用的形参不保证 SFINAE 且可被忽略，故早期编译器要求 {{tt|void_t}} 的更复杂定义，例如：
+{{source|1=
+template&lt;typename... Ts&gt;
+struct make_void { typedef void type; };
+
+template&lt;typename... Ts&gt;
+using void_t = typename make_void&lt;Ts...&gt;::type;
+}}
+{{feature test macro|__cpp_lib_void_t|std=C++17|value=201411L|[[#Top|{{tt|std::void_t}}]]}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+// 检查类型是否有 begin() 和 end() 成员函数的变量模板
+template&lt;typename, typename = void&gt;
+constexpr bool is_iterable = false;
+
+template&lt;typename T&gt;
+constexpr bool is_iterable&lt;
+    T,
+    std::void_t&lt;decltype(std::declval&lt;T&gt;().begin()),
+                decltype(std::declval&lt;T&gt;().end())
+    &gt;
+&gt; = true;
+
+// 迭代器特征，其 value_type 是被迭代容器的 value_type，
+// 也支持 value_type 为 void 的 back_insert_iterator
+
+template&lt;typename T, typename = void&gt;
+struct iterator_trait : std::iterator_traits&lt;T&gt; {};
+
+template&lt;typename T&gt;
+struct iterator_trait&lt;T, std::void_t&lt;typename T::container_type&gt;&gt;
+    : std::iterator_traits&lt;typename T::container_type::iterator&gt; {};
+
+class A {};
+
+#define SHOW(...) std::cout &lt;&lt; std::setw(34) &lt;&lt; #__VA_ARGS__ \
+                            &lt;&lt; " == " &lt;&lt; __VA_ARGS__ &lt;&lt; '\n'
+
+int main()
+{
+    std::cout &lt;&lt; std::boolalpha &lt;&lt; std::left;
+    SHOW(is_iterable&lt;std::vector&lt;double&gt;&gt;);
+    SHOW(is_iterable&lt;std::map&lt;int, double&gt;&gt;);
+    SHOW(is_iterable&lt;double&gt;);
+    SHOW(is_iterable&lt;A&gt;);
+
+    using container_t = std::vector&lt;int&gt;;
+    container_t v;
+
+    static_assert(std::is_same_v&lt;
+        container_t::value_type,
+        iterator_trait&lt;decltype(std::begin(v))&gt;::value_type
+    &gt;);
+
+    static_assert(std::is_same_v&lt;
+        container_t::value_type,
+        iterator_trait&lt;decltype(std::back_inserter(v))&gt;::value_type
+    &gt;);
+}
+|output=
+is_iterable&lt;std::vector&lt;double&gt;&gt;   == true
+is_iterable&lt;std::map&lt;int, double&gt;&gt; == true
+is_iterable&lt;double&gt;                == false
+is_iterable&lt;A&gt;                     == false
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc enable_if}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

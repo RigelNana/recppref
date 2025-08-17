@@ -1,0 +1,638 @@
+{{title|协程 {{mark c++20}}}}
+{{cpp/language/functions/navbar}}
+
+协程是能暂停执行以在之后恢复的函数。协程是无栈的：它们通过返回到调用方暂停执行，并且恢复执行所需的数据与栈分离存储。这样就可以编写异步执行的顺序代码（例如不使用显式的回调来处理非阻塞输入/输出），还支持作用于惰性计算的无限序列上的算法及其他用途。
+
+定义中包含了以下之一的函数是协程：
+* {{c/core|co_await}} 表达式——用于暂停执行，直到恢复：
+{{source|1=
+task&lt;&gt; tcp_echo_server()
+{
+    char data[1024];
+    while (true)
+    {
+        std::size_t n = co_await socket.async_read_some(buffer(data));
+        co_await async_write(socket, buffer(data, n));
+    }
+}
+}}
+* {{c/core|co_yield}} 表达式——用于暂停执行并返回一个值：
+{{source|1=
+generator&lt;unsigned int&gt; iota(unsigned int n = 0)
+{
+    while (true)
+        co_yield n++;
+}
+}}
+* {{c/core|co_return}} 语句——用于完成执行并返回一个值：
+{{source|1=
+lazy&lt;int&gt; f()
+{
+    co_return 7;
+}
+}}
+
+每个协程必须具有能够满足一组要求的返回类型，如下所述。
+
+===限制===
+协程不能使用{{rlp|variadic arguments|变长实参}}，普通的 {{rlp|return}} 语句，或{{rlp|function|占位符返回类型}}（{{rlpt|auto}} 或 {{rlp|constraints#概念|概念}}）。
+
+{{rlp|consteval|consteval 函数}}、{{rlp|constexpr|constexpr 函数}}、{{rlp|constructor|构造函数}}、{{rlp|destructor|析构函数}}及 {{rlp|main function|{{tt|main}} 函数}} 不能是协程。
+
+===执行===
+每个协程都与下列对象关联：
+* ''承诺对象''，在协程内部操纵。协程通过此对象提交其结果或异常。承诺对象和 {{lc|std::promise}} 没有任何关系。
+* ''协程句柄''，在协程外部操纵。这是用于恢复协程执行或销毁协程帧的不带所有权句柄。
+* ''协程状态''，一个动态存储分配（除非优化掉其分配）的内部对象，其包含：
+:* 承诺对象
+:* 各个形参（全部按值复制）
+:* 当前暂停点的某种表示，使得程序在恢复时知晓要从何处继续，销毁时知晓有哪些局部变量在作用域内
+:* 生存期跨过当前暂停点的局部变量和临时量
+
+当协程开始执行时，进行下列操作：
+* 用 {{lc|operator new}} [[#动态分配|分配]]协程状态对象。
+* 将所有函数形参复制到协程状态中：按值传递的形参被移动或复制，按引用传递的形参保持为引用（因此，如果在被指代对象的生存期结束后恢复协程，它可能变成悬垂引用——参见下面的示例）。
+* 调用承诺对象的构造函数。如果承诺类型拥有接收所有协程形参的构造函数，那么以复制后的协程实参调用该构造函数。否则调用其默认构造函数。
+* 调用 {{c|promise.get_return_object()}} 并将结果保存在局部变量中。该调用的结果将在协程首次暂停时返回给调用方。至此并包含这个步骤为止，任何抛出的异常均传播回调用方，而非置于承诺中。
+* 调用 {{c|promise.initial_suspend()}} 并 {{c/core|co_await}} 它的结果。典型的承诺类型 {{tt|Promise}} 要么（对于惰性启动的协程）返回{{ltt std|cpp/coroutine/suspend_always}}，要么（对于急切启动的协程）返回{{ltt std|cpp/coroutine/suspend_never}}。
+* 当 {{c|co_await promise.initial_suspend()}} 恢复时，开始协程体的执行。
+
+一些形参会悬垂的例子:
+{{source|1=
+#include &lt;coroutine&gt;
+#include &lt;iostream&gt;
+
+struct promise;
+
+struct coroutine : std::coroutine_handle&lt;promise&gt;
+{
+    using promise_type = ::promise;
+};
+ 
+struct promise
+{
+    coroutine get_return_object() { return {coroutine::from_promise(*this)}; }
+    std::suspend_always initial_suspend() noexcept { return {}; }
+    std::suspend_always final_suspend() noexcept { return {}; }
+    void return_void() {}
+    void unhandled_exception() {}
+};
+ 
+struct S
+{
+    int i;
+    coroutine f()
+    {
+        std::cout &lt;&lt; i;
+        co_return;
+    }
+};
+ 
+void bad1()
+{
+    coroutine h = S{0}.f();
+    // S{0} 被销毁
+    h.resume(); // 协程恢复并执行了 std::cout &lt;&lt; i，这在释放之后使用了 S::i
+    h.destroy();
+}
+ 
+coroutine bad2()
+{
+    S s{0};
+    return s.f(); // 返回的协程不能被恢复执行，否则会导致释放后使用
+}
+ 
+void bad3()
+{
+    coroutine h = [i = 0]() -&gt; coroutine // 一个 lambda，同时也是个协程
+    {
+        std::cout &lt;&lt; i;
+        co_return;
+    }(); // 立即调用
+    // lambda 被销毁
+    h.resume(); // 释放后使用了 (匿名 lambda 类型)::i
+    h.destroy();
+}
+ 
+void good()
+{
+    coroutine h = [](int i) -&gt; coroutine // i 是一个协程形参
+    {
+        std::cout &lt;&lt; i;
+        co_return;
+    }(0);
+    // lambda 被销毁
+    h.resume(); // 没有问题，i 已经作为按值传递的形参被复制到协程帧中
+    h.destroy();
+}
+}}
+
+当协程抵达暂停点时：
+* 将先前获得的返回对象返回给调用方/恢复方，如果需要就先隐式转换到协程的返回类型。
+
+当协程抵达 {{c/core|co_return}} 语句时，进行下列操作：
+* 对下列情形调用 {{c|promise.return_void()}}
+:* {{c|co_return;}}
+:* {{c|co_return expr;}}，其中 {{c|expr}} 具有 {{c/core|void}} 类型
+* 或对于 {{c|co_return expr;}}，其中 {{c|expr}} 具有非 {{c/core|void}} 类型时，调用 {{c|promise.return_value(expr)}}
+* 以创建顺序的逆序销毁所有具有自动存储期的变量。
+* 调用 {{c|promise.final_suspend()}} 并 {{c/core|co_await}} 它的结果。
+
+控制流出协程的结尾，等价于 {{c|co_return;}}，但如果在 {{tt|Promise}} 的作用域中没有找到 {{tt|return_void}} 的声明，那么行为未定义。函数体中没有任何一个定义关键词的函数不是协程，无论其返回类型为何，并且如果返回类型不是（可有 cv 限定的） {{c/core|void}}，那么控制流出结尾导致未定义行为。
+
+{{source|1=
+// 假定 task 为某种协程任务类型
+task&lt;void&gt; f()
+{
+    // 不是协程，未定义行为
+}
+
+task&lt;void&gt; g()
+{
+    co_return;  // OK
+}
+
+task&lt;void&gt; h()
+{
+    co_await g();
+    // OK, 隐式 co_return;
+}
+}}
+
+如果协程因未捕获的异常结束，那么进行下列操作：
+* 捕获异常并在处理块内调用 {{c|promise.unhandled_exception()}}。
+* 调用 {{c|promise.final_suspend()}} 并 {{c/core|co_await}} 它的结果（例如，恢复某个继续或发布某个结果）。此时开始恢复协程是未定义行为。
+
+当经由 {{c/core|co_return}} 或未捕获异常而终止协程导致协程状态被销毁，或通过它的句柄销毁它时，进行下列操作：
+
+* 调用承诺对象的析构函数。
+* 调用各个函数形参副本的析构函数。
+* 调用 {{lc|operator delete}} 以释放协程状态所用的内存。
+* 转移执行回到调用方/恢复方。
+
+===动态分配===
+协程状态通过非数组形式 {{lc|operator new}} 动态分配。
+
+如果承诺类型 {{tt|Promise}} 定义了类级别的替代函数，那么会使用它，否则会使用全局的 {{lc|operator new}}。
+
+如果承诺类型 {{tt|Promise}} 定义了接收额外形参的 {{ltt|cpp/memory/new/operator new}} 的布置形式，且它们所匹配的实参列表中的第一实参是要求的大小（{{lc|std::size_t}} 类型），而其余则是各个协程函数实参，那么将这些实参传递给 {{lc|operator new}}（这使得能对协程使用{{lt|cpp/memory/uses allocator#使用分配器构造|前导分配器约定}}）
+
+以下情况下，可以优化掉对 {{lc|operator new}} 的调用（即使使用了自定义分配器）：
+* 协程状态的生存期严格内嵌于调用方的生存期，且
+* 协程帧的大小在调用点已知
+
+此时协程状态嵌入调用方的栈帧（如果调用方是普通函数）或协程状态（如果调用方是协程）之中。
+
+如果分配失败，那么协程抛出 {{lc|std::bad_alloc}}，除非承诺类型 {{tt|Promise}} 类型定义了成员函数 {{c/core|Promise::get_return_object_on_allocation_failure()}}。如果定义了该成员函数，那么使用 {{lc|operator new}} 的不抛出形式进行分配，而在分配失败时，协程会立即将从 {{c/core|Promise::get_return_object_on_allocation_failure()}} 获得的对象返回给调用方，例如：
+
+{{source|1=
+struct Coroutine::promise_type
+{
+    /* ... */
+
+    // 确保使用不抛出 operator-new
+    static Coroutine get_return_object_on_allocation_failure()
+    {
+        std::cerr &lt;&lt; __func__ &lt;&lt; '\n';
+        throw std::bad_alloc(); // 或者返回 Coroutine(nullptr);
+    }
+    
+    // 自定义重载不抛出 new
+    void* operator new(std::size_t n) noexcept
+    {
+        if (void* mem = std::malloc(n))
+            return mem;
+        return nullptr; // 分配失败
+    }
+};
+}}
+
+===承诺===
+编译器用 {{lc|std::coroutine_traits}} 从协程的返回类型确定承诺类型 {{tt|Promise}}。
+
+正式而言，
+* 令 {{tt|R}} 与 {{tt|Args...}} 分别代表协程的返回类型与形参类型列表，
+* 如果协程被定义为非静态成员函数，那么令 {{tt|ClassT}} 代表协程所属的类，
+* 如果协程被定义为非静态成员函数，那么令 {{spar|cv}} 代表协程的{{rlp|function|函数声明}}的 cv 限定，
+以如下方式确定它的承诺类型 {{tt|Promise}}：
+* {{c/core|std::coroutine_traits&lt;R, Args...&gt;::promise_type}}，如果协程未被定义为{{rlp|member functions|隐式对象成员函数}}，
+* {{c/core|std::coroutine_traits&lt;R,}}{{nbspt}}{{spar|cv}}{{nbspt}}{{c/core|ClassT&amp;, Args...&gt;::promise_type}}，如果协程被定义为非右值引用限定的隐式对象成员函数，
+* {{c/core|std::coroutine_traits&lt;R,}}{{nbspt}}{{spar|cv}}{{nbspt}}{{c/core|ClassT&amp;&amp;, Args...&gt;::promise_type}}，如果协程被定义为右值引用限定的隐式对象成员函数。
+
+例如：
+{|class="wikitable"
+!如果定义协程为!!那么它的承诺类型 {{tt|Promise}} 是
+|-
+|{{c|task&lt;void&gt; foo(int x);}}
+|{{c/core|std::coroutine_traits&lt;task&lt;void&gt;, int&gt;::promise_type}}
+|-
+|{{c|task&lt;void&gt; Bar::foo(int x) const;}}
+|{{c/core|std::coroutine_traits&lt;task&lt;void&gt;, const Bar&amp;, int&gt;::promise_type}}{{nbsp}}
+|-
+|{{c|task&lt;void&gt; Bar::foo(int x) &amp;&amp;;}}
+|{{c/core|std::coroutine_traits&lt;task&lt;void&gt;, Bar&amp;&amp;, int&gt;::promise_type}}
+|}
+
+==={{c/core|co_await}}===
+{{anchor|co_await}}
+一元运算符 {{c/core|co_await}} 暂停协程并将控制返回给调用方。
+{{sdsc begin}}
+{{sdsc|{{ttb|co_await}} {{spar|表达式}}}}
+{{sdsc end}}
+
+{{c/core|co_await}} 表达式只能在常规{{rlp|function#函数定义|函数体}}（包括 {{rlp|lambda|lambda 表达式}}的函数体）里面的{{rlp|expressions#潜在求值表达式|潜在求值}}表达式中出现，并且不能在以下位置出现：
+* {{rlp|catch|处理块}}中，
+* {{rlp|declarations|声明}}语句中，但可以在该声明语句的初始化式中出现，
+* {{spar sep|初始化语句}}的{{rlpsd|declarations#简单声明}}中（见 {{rlpt|if}}、{{rlpt|switch}}、{{rlpt|for}} 以及{{rlp|range-for|范围 {{c/core|for}}}}），但可以在该{{spar sep|初始化语句}}的初始化式中出现，
+* {{rlp|default arguments|默认实参}}中
+* 具有静态或线程{{rlp|storage duration|存储期}}的块作用域变量的初始化式中。
+
+{{rrev|since=c++26|
+{{c/core|co_await}} 表达式不可以是{{rlp|contracts|契约断言}}的谓词的{{rlp|expressions#潜在求值表达式|潜在求值}}的子表达式。
+}}
+
+首先，以下列方式将{{spar sep|表达式}}转换成可等待体：
+* 如果{{spar sep|表达式}}由初始暂停点、最终暂停点或 yield 表达式所产生，那么可等待体是{{spar sep|表达式}}本身。
+* 否则，如果当前协程的承诺类型 {{tt|Promise}} 拥有成员函数 {{tt|await_transform}}，那么可等待体是 {{c|promise.await_transform(表达式)}}。
+* 否则，可等待体是{{spar sep|表达式}}本身。
+
+然后以下列方式获得等待器对象：
+* 如果针对 {{c/core|operator co_await}} 的重载决议给出单个最佳重载，那么等待器是该调用的结果：
+:* 对于成员重载为 {{c|awaitable.operator co_await();}}，
+:* 对于非成员重载为 {{c|operator co_await(static_cast&lt;Awaitable&amp;&amp;&gt;(awaitable));}}.
+* 否则，如果重载决议找不到 {{c/core|operator co_await}}，那么等待器是可等待体本身。
+* 否则，如果重载决议有歧义，那么程序非良构。
+如果上述表达式为{{rlps|value category#纯右值}}，那么等待器对象是从它{{rlp|implicit conversion#临时量实质化|实质化}}的临时量。否则，如果上述表达式为{{rlps|value category#泛左值}}，那么等待器对象是它所指代的对象。
+
+然后，调用 {{c|awaiter.await_ready()}}（这是当已知结果就绪或可以同步完成时，用以避免暂停开销的快捷方式）。如果结果按语境转换到 {{c/core|bool}} 的结果是 {{c|false}}，那么：
+: 暂停协程（以各局部变量和当前暂停点填充其协程状态）。
+: 调用 {{c|awaiter.await_suspend(handle)}}，其中 {{c|handle}} 是表示当前协程的协程句柄。这个函数内部可以通过这个句柄观察暂停协程的状态，而且此函数负责调度它以在某个执行器上恢复，或将其销毁（并返回 {{c|false}} 当做调度）
+:* 如果 {{c|await_suspend}} 返回 {{c/core|void}}，那么立即将控制返回给当前协程的调用方/恢复方（此协程保持暂停），否则
+:* 如果 {{c|await_suspend}} 返回 {{c/core|bool}}，那么：
+::* 值为 {{c|true}} 时将控制返回给当前协程的调用方/恢复方
+::* 值为 {{c|false}} 时恢复当前协程。
+:* 如果 {{c|await_suspend}} 返回某个其他协程的协程句柄，那么（通过调用 {{c|handle.resume()}}）恢复该句柄（注意这可以连锁进行，并最终导致当前协程恢复）。
+:* 如果 {{c|await_suspend}} 抛出异常，那么捕获该异常，恢复协程，并立即重抛异常。
+最后，当协程重新获得控制时（无论协程是否被暂停过），调用 {{c|awaiter.await_resume()}}，它的结果就是整个 {{c|co_await expr}} 表达式的结果。
+
+如果协程在 {{c/core|co_await}} 表达式中暂停而在后来恢复，那么恢复点处于紧接对 {{c|awaiter.await_resume()}} 的调用之前。
+
+注意，协程在进入 {{c|awaiter.await_suspend()}} 前已经完全暂停。在 {{c/core|await_suspend()}} 函数返回前，可以将其句柄共享给另一线程并恢复执行。（要注意，默认的内存安全性规则仍适用，因此如果不加锁地跨线程共享协程句柄，那么其等待器至少应当使用[[cpp/atomic/memory order#释放操作|释放语义]]，而且恢复方至少应当使用[[cpp/atomic/memory order#获得操作|获得语义]]。）例如，可以将协程句柄放入回调内部，将它调度成在异步输入/输出操作完成时在线程池上运行等。此时因为当前协程可能已被恢复，从而执行了等待器对象的析构函数，同时由于 {{c|await_suspend()}} 在当前线程上持续执行，{{c|await_suspend()}} 应该把 {{c|*this}} 当作已被销毁并且在句柄被发布到其他线程后不再访问它。
+
+===示例===
+{{example|
+|code=
+#include &lt;coroutine&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;thread&gt;
+ 
+auto switch_to_new_thread(std::jthread&amp; out)
+{
+    struct awaitable
+    {
+        std::jthread* p_out;
+        bool await_ready() { return false; }
+        void await_suspend(std::coroutine_handle&lt;&gt; h)
+        {
+            std::jthread&amp; out = *p_out;
+            if (out.joinable())
+                throw std::runtime_error("jthread 输出参数非空");
+            out = std::jthread([h] { h.resume(); });
+            // 潜在的未定义行为：访问潜在被销毁的 *this
+            // std::cout &lt;&lt; "新线程 ID：" &lt;&lt; p_out-&gt;get_id() &lt;&lt; '\n';
+            std::cout &lt;&lt; "新线程 ID：" &lt;&lt; out.get_id() &lt;&lt; '\n'; // 这样没问题
+        }
+        void await_resume() {}
+    };
+    return awaitable{&amp;out};
+}
+
+struct task
+{
+    struct promise_type
+    {
+        task get_return_object() { return {}; }
+        std::suspend_never initial_suspend() { return {}; }
+        std::suspend_never final_suspend() noexcept { return {}; }
+        void return_void() {}
+        void unhandled_exception() {}
+    };
+};
+
+task resuming_on_new_thread(std::jthread&amp; out)
+{
+    std::cout &lt;&lt; "协程开始，线程 ID：" &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+    co_await switch_to_new_thread(out);
+    // 等待器在此销毁
+    std::cout &lt;&lt; "协程恢复，线程 ID：" &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::jthread out;
+    resuming_on_new_thread(out);
+}
+|p=true
+|output=
+协程开始，线程 ID：139972277602112
+新线程 ID：139972267284224
+协程恢复，线程 ID：139972267284224
+}}
+
+注意：等待器对象是协程状态的一部分（作为生存期跨过暂停点的临时量），并且在 {{c/core|co_await}} 表达式结束前销毁。可以用它维护某些异步输入/输出 API 所要求的每操作内状态，而无需用到额外的堆分配。
+
+标准库定义了两个平凡的可等待体：{{ltt std|cpp/coroutine/suspend_always}} 及 {{ltt std|cpp/coroutine/suspend_never}}。
+
+{{todo|示例}}
+
+{{cot|演示 {{c/core|promise_type::await_transform}} 和一个提供等待器的程序}}
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;coroutine&gt;
+#include &lt;iostream&gt;
+
+struct tunable_coro
+{
+    // 一种等待器，其 "就绪状态" 由构造函数参数决定。
+    class tunable_awaiter
+    {
+        bool ready_;
+    public:
+        explicit(false) tunable_awaiter(bool ready) : ready_{ready} {}
+        // 三个标准等待器接口函数：
+        bool await_ready() const noexcept { return ready_; }
+        static void await_suspend(std::coroutine_handle&lt;&gt;) noexcept {}
+        static void await_resume() noexcept {}
+    };
+
+    struct promise_type
+    {
+        using coro_handle = std::coroutine_handle&lt;promise_type&gt;;
+        auto get_return_object() { return coro_handle::from_promise(*this); }
+        static auto initial_suspend() { return std::suspend_always(); }
+        static auto final_suspend() noexcept { return std::suspend_always(); }
+        static void return_void() {}
+        static void unhandled_exception() { std::terminate(); }
+        // 一个用户提供的变换函数，返回自定义等待器：
+        auto await_transform(std::suspend_always) { return tunable_awaiter(!ready_); }
+        void disable_suspension() { ready_ = false; }
+    private:
+        bool ready_{true};
+    };
+
+    tunable_coro(promise_type::coro_handle h) : handle_(h) { assert(h); }
+
+    // 为简化起见，将四个特殊函数声明为弃置：
+    tunable_coro(tunable_coro const&amp;) = delete;
+    tunable_coro(tunable_coro&amp;&amp;) = delete;
+    tunable_coro&amp; operator=(tunable_coro const&amp;) = delete;
+    tunable_coro&amp; operator=(tunable_coro&amp;&amp;) = delete;
+
+    ~tunable_coro()
+    {
+        if (handle_)
+            handle_.destroy();
+    }
+
+    void disable_suspension() const
+    {
+        if (handle_.done())
+            return;
+        handle_.promise().disable_suspension();
+        handle_();
+    }
+
+    bool operator()()
+    {
+        if (!handle_.done())
+            handle_();
+        return !handle_.done();
+    }
+private:
+    promise_type::coro_handle handle_;
+};
+
+tunable_coro generate(int n)
+{
+    for (int i{}; i != n; ++i)
+    {
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+        // 传递给 co_await 的等待器会交给 promise_type::await_transform，
+        // 它给出的是导致起始暂停的 tunable_awaiter（每次循环均返回到 main），
+        // 但经过一次对 disable_suspension 的调用后不再发生暂停，
+        // 而循环到结尾都不再返回到 main()。
+        co_await std::suspend_always{};
+    }
+}
+
+int main()
+{
+    auto coro = generate(8);
+    coro(); // 仅发出一个首元素 == 0
+    for (int k{}; k &lt; 4; ++k)
+    {
+        coro(); // 发出 1 2 3 4，每次迭代一个元素
+        std::cout &lt;&lt; ": ";
+    }
+    coro.disable_suspension();
+    coro(); // 一次性发出剩余的数 5 6 7
+}
+|output=
+0 1 : 2 : 3 : 4 : 5 6 7
+}}
+{{cob}}
+
+==={{c/core|co_yield}}===
+{{tt|co_yield}} 表达式向调用方返回一个值并暂停当前协程：它是可恢复生成器函数的常用构建块。
+
+{{sdsc begin}}
+{{sdsc|{{ttb|co_yield}} {{spar|表达式}}}}
+{{sdsc|{{ttb|co_yield}} {{spar|花括号初始化式列表}}}}
+{{sdsc end}}
+
+等价于
+{{source|
+co_await promise.yield_value(表达式)
+}}
+
+典型的生成器的 {{tt|yield_value}} 会将其实参存储（复制/移动或仅存储它的地址，因为实参的生存期跨过 {{tt|co_await}} 内的暂停点）到生成器对象中并返回 {{ltt std|cpp/coroutine/suspend_always}}，将控制转移给调用方/恢复方。
+
+{{example|
+|code=
+#include &lt;coroutine&gt;
+#include &lt;cstdint&gt;
+#include &lt;exception&gt;
+#include &lt;iostream&gt;
+
+template&lt;typename T&gt;
+struct Generator
+{
+    // 类名 'Generator' 只是我们的选择，使用协程魔法不依赖它。
+    // 编译器通过关键词 'co_yield' 的存在识别协程。
+    // 你可以使用 'MyGenerator'（或者任何别的名字）作为替代，只要在类中包括了
+    // 拥有 'MyGenerator get_return_object()' 方法的嵌套 struct promise_type。
+    // （注意：在重命名时，你还需要调整构造函数/析构函数的声明。）
+ 
+    struct promise_type;
+    using handle_type = std::coroutine_handle&lt;promise_type&gt;;
+ 
+    struct promise_type // 必要
+    {
+        T value_;
+        std::exception_ptr exception_;
+ 
+        Generator get_return_object()
+        {
+            return Generator(handle_type::from_promise(*this));
+        }
+        std::suspend_always initial_suspend() { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void unhandled_exception() { exception_ = std::current_exception(); } // 保存异常
+ 
+        template &lt;std::convertible_to&lt;T&gt; From&gt; // C++20 概念
+        std::suspend_always yield_value(From&amp;&amp; from)
+        {
+            value_ = std::forward&lt;From&gt;(from); // 在承诺中缓存结果
+            return {};
+        }
+        void return_void() {}
+    };
+ 
+    handle_type h_;
+ 
+    Generator(handle_type h) : h_(h) {}
+    ~Generator() { h_.destroy(); }
+    explicit operator bool()
+    {
+        fill(); // 获知协程是结束了还是仍能通过 C++ getter（下文的 operator()）
+                // 获得下一个生成值的唯一可靠方式，是执行/恢复协程到下一个 co_yield 节点
+                // （或让执行流抵达结尾）。
+                // 我们在承诺中存储/缓存了执行结果，使得 getter（下文的 operator()）
+                // 可以获得这一结果而不执行协程。
+        return !h_.done();
+    }
+    T operator()()
+    {
+        fill();
+        full_ = false;// 我们将移动走先前缓存的结果来重新置空承诺
+        return std::move(h_.promise().value_);
+    }
+ 
+private:
+    bool full_ = false;
+ 
+    void fill()
+    {
+        if (!full_)
+        {
+            h_();
+            if (h_.promise().exception_)
+                std::rethrow_exception(h_.promise().exception_);
+            // 在调用上下文中传播协程异常
+ 
+            full_ = true;
+        }
+    }
+};
+ 
+Generator&lt;uint64_t&gt;
+fibonacci_sequence(unsigned n)
+{
+    if (n == 0)
+        co_return;
+ 
+    if (n &gt; 94)
+        throw std::runtime_error("斐波那契序列过大，元素将会溢出。");
+ 
+    co_yield 0;
+ 
+    if (n == 1)
+        co_return;
+ 
+    co_yield 1;
+ 
+    if (n == 2)
+        co_return;
+ 
+    uint64_t a = 0;
+    uint64_t b = 1;
+ 
+    for (unsigned i = 2; i &lt; n; i++)
+    {
+        uint64_t s = a + b;
+        co_yield s;
+        a = b;
+        b = s;
+    }
+}
+ 
+int main()
+{
+    try
+    {
+        auto gen = fibonacci_sequence(10); // 最大值94，避免 uint64_t 溢出
+ 
+        for (int j = 0; gen; j++)
+            std::cout &lt;&lt; "fib(" &lt;&lt; j &lt;&lt; ")=" &lt;&lt; gen() &lt;&lt; '\n';
+    }
+    catch (const std::exception&amp; ex)
+    {
+        std::cerr &lt;&lt; "发生了异常：" &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+    catch (...)
+    {
+        std::cerr &lt;&lt; "未知异常。\n";
+    }
+}
+|output=
+fib(0)=0
+fib(1)=1
+fib(2)=1
+fib(3)=2
+fib(4)=3
+fib(5)=5
+fib(6)=8
+fib(7)=13
+fib(8)=21
+fib(9)=34
+}}
+
+===注解===
+{{ftm begin|std=1|comment=1}}
+{{ftm|value=201902L|std=C++20|__cpp_impl_coroutine|[[#top|协程]]（编译器支持）}}
+{{ftm|value=201902L|std=C++20|__cpp_lib_coroutine|{{lt|cpp/coroutine|协程}}（库支持）}}
+{{ftm|value=202207L|std=C++23|__cpp_lib_generator|{{lc|std::generator}}: 适用于范围的同步协程生成器}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/co_await}},
+{{ltt|cpp/keyword/co_return}},
+{{ltt|cpp/keyword/co_yield}}
+
+===库支持===
+[[cpp/coroutine|协程支持库]]定义数个类型，提供协程的编译与运行时支持。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2556|std=C++20|before=非法的 {{tt|return_void}} 会导致控制流出协程的结尾的行为未定义|after=此时程序非良构}}
+{{dr list item|wg=cwg|dr=2668|std=C++20|before={{c/core|co_await}} 不能在 lambda 表达式中出现|after=可以出现}}
+{{dr list item|wg=cwg|dr=2754|std=C++23|before=对显式对象成员函数构造承诺对象时会取 {{c|*this}}|after=此时不会取 {{c|*this}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc generator}}
+{{dsc end}}
+
+===外部链接===
+{{elink begin}}
+{{elink|Lewis Baker, 2017-2022 - [https://lewissbaker.github.io/ 非对称转移]}}
+{{elink|David Mazières, 2021 - [https://www.scs.stanford.edu/~dm/blog/c++-coroutines.html C++20 协程教程]}}
+{{elink|许传奇 &amp; 祁宇 &amp; 韩垚, 2021 - [https://zhuanlan.zhihu.com/p/497224333 C++20 协程原理和应用]}}
+{{elink|Simon Tatham, 2023 - [https://www.chiark.greenend.org.uk/~sgtatham/quasiblog/coroutines-c++20/ 编写自定义的 C++20 协程系统]}}
+{{elink end}}
+
+{{langlinks|en|es|ja|ru}}

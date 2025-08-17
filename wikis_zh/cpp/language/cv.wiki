@@ -1,0 +1,166 @@
+{{title|cv{{small|（{{tt|const}} 与 {{tt|volatile}}）}}类型限定符}}
+{{cpp/language/declarations/navbar}}
+
+可出现于任何类型说明符（包括{{rlp|declarations|声明语法}}的 {{spar|声明说明符序列}}）中，以指定被声明对象或被命名类型的常量性（constness）或易变性（volatility）。
+* {{ttb|const}} ——定义类型为''常量''{{sep}}类型。
+* {{ttb|volatile}} ——定义类型为''易变''{{sep}}类型。
+
+===解释===
+{{rlp|functions|函数类型}}和{{rlp|reference|引用类型}}以外的任何（可能{{rlp|type#不完整类型|不完整}}的）类型都是包含以下四个不同但有关联的类型的组中的一个类型：
+* ''无 cv 限定''{{sep}}版本
+* ''const 限定''{{sep}}版本
+* ''volatile 限定''{{sep}}版本
+* ''const volatile 限定''{{sep}}版本
+
+组内的四个成员有着相同的{{rlp|object#对象表示与值表示|表示}}和{{rlp|object#对齐|对齐}}要求。
+
+{{rlp|array|数组类型}}被当做与它的元素类型有相同的 cv 限定。
+
+====常量和易变对象====
+当对象创建时，所用的 cv 限定符（可以是{{rlp|declarations|声明}}中的{{spar sep|声明说明符序列}}或 {{spar|声明符}} 的一部分，或者是 {{rlp|new|new 表达式}}中的 {{spar|类型标识}} 的一部分）决定对象的常量性或易变性，如下所示：
+
+* ''常量对象''{{sep}}是以下对象之一：
+:* 类型具有 const 限定的对象
+:* 常量对象的不[[#mutable|可变]]子对象
+: 这种对象不能被修改：直接尝试这么做是编译时错误，而间接尝试这么做（例如通过到非常量类型的引用或指针修改常量对象）的行为未定义。
+
+* ''易变对象''{{sep}}是以下对象之一：
+:* 类型具有 volatile 限定的对象
+:* 易变对象的子对象
+:* 常量易变对象的[[#mutable|可变]]子对象
+: 每次访问（读或写、调用成员函数等）易变类型之泛左值表达式&lt;!--注意：在 C++17 上的 p0612r0/NB comment CH2 前， C++ 标准说的是“对象”而非“表达式”，但这使得以按本意使用 volatile 不可行--&gt;，都当作{{rlp|as if|优化}}方面可见的副作用（即在单个执行线程内，易变对象访问不能被优化掉，或者与另一{{rlp|eval order|先于或后于}}该易变对象访问的可见副作用进行重排序。这使得易变对象适用于与[[cpp/utility/program/signal|信号处理函数]]而非另一执行线程交流，参阅 {{lc|std::memory_order}}）。试图通过非易变类型的{{rlp|value category#泛左值|泛左值}}访问易变对象（例如，通过到非易变类型的引用或指针）的行为未定义。
+
+* ''常量易变对象''{{sep}}是以下对象之一：
+:* 类型具有 const volatile 限定的对象
+:* 常量易变对象的不[[#mutable|可变]]子对象
+:* 易变对象的常量子对象
+:* 常量对象的不[[#mutable|可变]]易变子对象
+: 同时表现为常量对象与易变对象。
+
+每个 cv 限定符（{{c/core|const}} 和 {{c/core|volatile}}）在任何 cv 限定符序列中都最多只能出现一次。例如 {{c/core|const const}} 和 {{c/core|volatile const volatile}} 都不是合法的 cv 限定符序列。
+
+{{anchor|mutable}}
+==={{tt|mutable}} 说明符===
+* {{ttb|mutable}} - 允许常量类类型对象修改相应类成员（即类成员可变）。
+
+可以在非引用非常量类型的非静态{{rlp|data members|数据成员}}的声明中出现：
+{{source|
+class X
+{
+    mutable const int* p; // OK
+    mutable int* const q; // 非良构
+    mutable int&amp;       r; // 非良构
+};
+}}
+
+{{c/core|mutable}} 用于指定不影响类的外部可观察状态的成员（通常用于互斥量、记忆缓存、惰性求值和访问指令等）。
+
+{{source|1=
+class ThreadsafeCounter
+{
+    mutable std::mutex m; // “M&amp;M 规则”：mutable 与 mutex 一起出现
+    int data = 0;
+public:
+    int get() const
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        return data;
+    }
+    
+    void inc()
+    {
+        std::lock_guard&lt;std::mutex&gt; lk(m);
+        ++data;
+    }
+};
+}}
+
+===转换===
+存在一种基于限制性的增长顺序的 cv 限定符的偏序。从而可以称类型具有''更多''{{sep}}或''更少''{{sep}}的 cv 限定：
+:* ''无限定'' &lt; {{c/core|const}}
+:* ''无限定'' &lt; {{c/core|volatile}}
+:* ''无限定'' &lt; {{c/core|const volatile}}
+:* {{c/core|const}} &lt; {{c/core|const volatile}}
+:* {{c/core|volatile}} &lt; {{c/core|const volatile}}
+
+到 cv 限定类型的引用和指针能被隐式转换成更多 cv 限定的类型的引用和指针，详情见{{rlp|implicit conversion#限定性转换|限定性转换}}。
+
+想要将到 cv 限定类型的引用或指针转换成更少 cv 限定类型的引用或指针就必须使用 {{rlpt|const_cast}}。
+
+===注解===
+在未声明为 {{c/core|extern}} 的非局部非易变{{rev inl|since=c++14|非{{rlp|variable template|模板}}}}{{rev inl|since=c++17|非 {{rlp|inline}} }}变量声明上使用 {{c/core|const}} 限定符，会给予该变量{{rlp|storage duration#内部链接|内部链接}}。这有别于 C，其中 const 文件作用域对象拥有外部链接。
+
+C++ 语言语法把 {{c/core|mutable}} 当做{{rlp|storage duration|存储类说明符}}而非类型限定符，但它不影响存储类或链接。
+
+{{rrev|since=c++20|
+volatile 的一些用法被弃用：
+* volatile 类型的左值作为内建{{rlp|operator incdec|自增/自减}}运算符的操作数；
+* volatile 类型的左值作为&lt;!-- P2327R1, CWG2654 --&gt;内建{{rlp|operator assignment|直接赋值}}运算符的左操作数，除非该直接赋值表达式出现于{{rlp|expressions#不求值表达式|不求值语境}}或是{{rlp|expressions#弃值表达式|弃值表达式}}；
+* 具有 volatile 限定的对象类型作为函数形参类型或返回类型；
+* volatile 限定符在{{rlp|structured binding|结构化绑定}}声明中。
+}}
+
+===关键词===
+{{ltt|cpp/keyword/const}}, 
+{{ltt|cpp/keyword/volatile}},
+{{ltt|cpp/keyword/mutable}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+
+int main()
+{
+    int n1 = 0;          // 非 const 对象
+    const int n2 = 0;    // const 对象
+    int const n3 = 0;    // const 对象（同 n2）
+    volatile int n4 = 0; // volatile 对象
+    
+    const struct
+    {
+        int n1;
+        mutable int n2;
+    } x = {0, 0};        // 带 mutable 成员的 const 对象
+    
+    n1 = 1; // OK，可修改对象
+//  n2 = 2; // 错误：不可修改对象
+    n4 = 3; // OK，当做副作用
+//  x.n1 = 4; // 错误：const 对象的成员为 const
+    x.n2 = 4; // OK，const 对象的 mutable 成员不是 const
+    
+    const int&amp; r1 = n1; // 绑定到非 const 对象的 const 引用
+//  r1 = 2; // 错误：试图通过到 const 的引用修改
+    const_cast&lt;int&amp;&gt;(r1) = 2; // OK，修改非 const 对象 n1
+    
+    const int&amp; r2 = n2; // 绑定到 const 对象的 const 引用
+//  r2 = 2; // 错误：试图通过到 const 的引用修改
+//  const_cast&lt;int&amp;&gt;(r2) = 2; // 未定义行为：试图修改 const 对象 n2
+    
+    std::system("g++ -O3 -Wa,-adhln ./main.cpp"); // 在 POSIX 系统上可能给出汇编
+}
+|p=true
+|output=
+# x86_64 平台上生成的典型机器码
+# （只输出贡献可观测副效应的代码）
+main:
+    movl    $0, -4(%rsp) # volatile int n4 = 0;
+    movl    $3, -4(%rsp) # n4 = 3;
+    xorl    %eax, %eax   # return 0 （隐式）
+    ret
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1428|std=C++98|before='const 对象'的定义基于声明|after=基于对象类型}}
+{{dr list item|wg=cwg|dr=1528|std=C++98|before=一个 cv 限定符序列中每个 cv 限定符的出现次数没有限制|after=每个 cv 限定符最多出现一次}}
+{{dr list item|wg=cwg|dr=1799|std=C++98|before=可以将 {{c/core|mutable}} 应用到没有声明为 {{c/core|const}} 的&lt;br&gt;数据成员，但这些成员的类型依然可能有 const 限定|after=不能将 {{c/core|mutable}} 应用到类型&lt;br&gt;有 const 限定的数据成员}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/const|{{c/core|const}} 限定符|nomono=true}}
+{{dsc see c|c/language/volatile|{{c/core|volatile}} 限定符|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

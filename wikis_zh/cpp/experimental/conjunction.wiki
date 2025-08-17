@@ -1,0 +1,81 @@
+{{cpp/experimental/title|conjunction}}
+{{cpp/experimental/lib extensions 2/navbar}}
+{{fmbox|class=noprint|style=font-size: 0.8em|text='''已并入 ISO C++''' 此页面描述的功能，于 2016 年二月起已并入 ISO C++ 标准主线，参见 {{ltt|cpp/types/conjunction|std::conjunction}} {{mark since c++17}}}}
+{{dcl begin}}
+{{dcl header|experimental/type_traits}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class... B &gt;
+struct conjunction;
+}}
+{{dcl end}}
+
+构成类型特征 {{tt|B...}} 的[https://en.wikipedia.org/wiki/Logical_conjunction 逻辑合取]，实际上在特征序列上实施逻辑与（AND）。
+
+特化 {{c|std::experimental::conjunction&lt;B1, ..., BN&gt;}} 具有公开且无歧义基类：
+* 若 {{c|1=sizeof...(B) == 0}}，则为 {{c|std::true_type}}；否则
+* {{tt|B1, ..., BN}} 中使得 {{c|1=bool(Bi::value) == false}} 的首个 {{tt|Bi}}，或当没有这种类型时为 {{tt|BN}}。
+
+基类中的成员名，除了 {{tt|conjunction}} 和 {{tt|operator{{=}}}} 之外均未被隐藏，且在 {{tt|conjunction}} 中可以无歧义访问。
+
+合取支持短路：如果有任何模板类型实参 {{tt|Bi}} 使得 {{c|1= bool(Bi::value) == false}}，则实例化 {{c|conjunction&lt;B1, ..., BN&gt;::value}} 时不要求对 {{c|j &gt; i}} 实例化 {{c|Bj::value}}。
+
+===模板形参===
+{{par begin}}
+{{par|B...|每个模板实参 {{tt|Bi}}，其中若实例化了 {{c|Bi::value}}，则它必须可用作基类，且定义了可转换为 {{c|bool}} 的成员 {{tt|value}}}}
+{{par end}}
+
+=== 辅助变量模板 ===
+{{dcl begin}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class... B &gt;
+constexpr bool conjunction_v = conjunction&lt;B...&gt;::value;
+}}
+{{dcl end}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;class...&gt; struct conjunction : std::true_type {};
+template&lt;class B1&gt; struct conjunction&lt;B1&gt; : B1 {};
+template&lt;class B1, class... Bn&gt;
+struct conjunction&lt;B1, Bn...&gt; 
+    : std::conditional_t&lt;bool(B1::value), conjunction&lt;Bn...&gt;, B1&gt; {};
+}}
+
+===注解===
+{{tt|conjunction}} 的特化不必继承于 {{c|std::true_type}} 或者 {{c|std::false_type}}：它只是继承于 {{tt|::value}} 显式转换为 {{tt|bool}} 时为 false 的首个 {{tt|B}}，或者当它们均转换为 true 时继承于最后一个 B。例如，{{c|conjunction&lt;std::integral_constant&lt;int, 2&gt;, std::integral_constant&lt;int, 4&gt;&gt;::value}} 为 {{c|4}}。
+
+===示例===
+{{example|code=
+#include &lt;experimental/type_traits&gt;
+#include &lt;iostream&gt;
+
+// 当所有 Ts... 均具有相同类型时启用 func
+template&lt;typename T, typename... Ts&gt;
+constexpr std::enable_if_t&lt;std::experimental::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;&gt;
+func(T, Ts...)
+{
+    std::cout &lt;&lt; "所有类型均相同。\n";
+}
+
+template&lt;typename T, typename... Ts&gt;
+constexpr std::enable_if_t&lt;!std::experimental::conjunction_v&lt;std::is_same&lt;T, Ts&gt;...&gt;&gt;
+func(T, Ts...)
+{
+    std::cout &lt;&lt; "类型不同。\n";
+}
+
+int main()
+{
+    func(1, 2'7, 3'1);    
+    func(1, 2.7, '3');    
+}
+|output=
+所有类型均相同。
+类型不同。
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc conjunction}}
+{{dsc end}}

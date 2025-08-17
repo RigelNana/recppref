@@ -1,0 +1,200 @@
+{{title|占位类型说明符 {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+占位类型说明符指定了后续会被替换的''占位类型''，替换的类型通常通过{{rlp|initialization|初始化器}}推导得到。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar optional|类型约束}} {{ttb|auto}}}}
+{{sdsc|num=2|{{spar optional|类型约束}} {{ttb|decltype(auto)}}|notes={{mark since c++14}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类型约束}}|{{mark since c++20}} {{rlps|constraints#概念}}名，可以有限定，可以后随以 {{ttb|&lt;&gt;}} 包围的模板实参列表}}
+{{par end}}
+
+@1@ 用{{rlp|template argument deduction#其他语境|模板实参推导}}的规则推导类型。
+@2@ 类型是 {{rlpt|decltype|decltype(expr)}}，其中 {{c|expr}} 是初始化器或返回语句中所用的表达式。
+
+占位符 {{c/core|auto}} 可伴随如 {{c/core|const}} 或 {{tt|&amp;}} 这样的修饰符，它们参与类型推导。{{rev inl|since=c++14|占位符 {{c|decltype(auto)}} 必须是被声明类型的唯一组分。}}
+
+{{rrev|since=c++20|
+如果{{spar sep|类型约束}}存在，令 {{tt|T}} 作为该占位符的被推导类型，那么此{{spar sep|类型约束}}按如下方式引入一个{{rlp|constraints|约束表达式}}：
+
+* 如果 {{spar|类型约束}} 是 {{tt|Concept&lt;A{{sub|1}}, ..., A{{sub|n}}&gt;}}，那么约束表达式为 {{tt|Concept&lt;T, A{{sub|1}}, ..., A{{sub|n}}&gt;}}；
+* 否则（{{spar|类型约束}} 是无实参列表的 {{tt|Concept}}），约束表达式为 {{tt|Concept&lt;T&gt;}}。
+
+如果约束表达式无效或返回 {{c|false}}，那么推导失败。
+}}
+
+===解释===
+占位类型说明符可以在以下语境出现：
+
+{{rev begin}}
+{{rev|since=c++14|
+====形参声明====
+在以下形参声明中，声明的形参的类型可以具有语法 {{v|1}}：
+* 如果 {{rlp|lambda|lambda 表达式}}的某个形参具有占位类型，那么该 lambda 表达式是泛型 lambda。
+}}
+{{rev|since=c++17|
+* 如果{{rlp|template parameters#模板非类型实参|非类型模板形参}}具有占位类型，那么它的类型会从对应的模板实参推导。
+}}
+{{rev|since=c++20|
+* 如果{{rlp|function|函数声明}}的某个形参具有占位类型，那么就会声明一个{{rlps|function template#简写函数模板}}。
+}}
+{{rev end}}
+
+====函数声明====
+占位类型可以在有尾随返回类型的{{rlp|function|函数声明符}}的{{rlp|declarations#说明符|声明说明符}}中出现。
+
+{{rrev|since=c++14|
+占位类型可以在{{rlp|function|函数声明符}}中声明的返回类型的{{rlp|declarations#说明符|类型说明符}}中出现。此时会应用{{rlps|function#返回类型推导}}。
+}}
+
+{{source|1=
+auto f() -&gt; int; // OK：f 返回 int
+auto g() { return 0.0; } // C++14 起 OK：g 返回 double
+auto h(); // C++14 起 OK：h 的返回类型会在定义时推导
+}}
+
+====变量声明====
+使用占位类型声明的变量的类型会从它的{{rlp|initialization|初始化器}}推导。可以在变量的初始化声明中使用这种写法。
+
+占位类型只能在声明说明符序列中的某个{{rlp|declarations#说明符|声明说明符}}，或者指定了要替换此类声明说明符的类型的尾随返回类型中的某个类型说明符中出现。此时该声明必须至少声明一个变量，并且每个变量都必须有一个非空初始化器。
+
+{{source|1=
+// 声明说明符中的 “auto”
+auto x = 5; // OK：x 具有 int 类型
+const auto *v = &amp;x, u = 6; // OK：v 具有 const int* 类型，u 具有 const int 类型
+static auto y = 0.0; // OK：y 具有 double 类型
+
+auto f() -&gt; int;
+auto (*fp)() -&gt; auto = f; // OK：尾随返回类型中的 “auto” 可以从 f 推导
+}}
+
+{{rrev|since=c++17|1=
+====结构化绑定声明====
+{{c/core|auto}} 说明符可以在{{rlp|structured binding|结构化绑定}}声明中使用。
+}}
+
+{{anchor|new 表达式}}
+===={{c/core|new}} 表达式====
+占位类型可以在 {{rlp|new|new 表达式}}中的类型标识中的类型说明符序列中使用。在此类类型标识中，占位类型必须在类型说明符序列中的某个类型说明符，或者指定了要替换此类类型说明符的尾随返回类型中出现。
+
+{{rrev|since=c++23|1=
+====函数风格转型====
+类型说明符 {{c/core|auto}} 可以作为{{rlp|explicit cast|函数风格转型}}的类型说明符使用。
+}}
+
+===注解===
+C++11 之前，{{c/core|auto}} 具有{{rlp|storage duration|存储期说明符}}的语义。
+
+在以上列出的语境外使用占位类型的程序非良构。
+
+如果一条声明声明了多个实体，并且声明说明符序列使用了占位类型，那么在满足以下任意条件时程序非良构：
+* 声明的某些实体不是变量。
+* 通过每个变量推导出的要替换占位类型的类型不一致。
+
+{{source|1=
+auto f() -&gt; int, i = 0; // 错误：以 “auto” 同时声明了函数和变量
+auto a = 5, b = {1, 2}; // 错误：“auto” 指代不同类型
+}}
+
+{{rrev|since=concepts_ts|
+{{c/core|auto}} 关键词也可以用于嵌套名说明符。形如 {{c|auto::}} 的嵌套名说明符是一个占位符，它会遵循[[cpp/experimental/constraints|受约束类型]]占位符的推导规则被替换为某个类或枚举类型。
+}}
+
+{{feature test macro|value=201304L|std=C++14|__cpp_decltype_auto|{{c/core|decltype(auto)}}}}
+
+===关键词===
+{{ltt|cpp/keyword/auto}},
+{{ltt|cpp/keyword/decltype}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;utility&gt;
+
+template&lt;class T, class U&gt;
+auto add(T t, U u) { return t + u; } // 返回类型是 operator+(T, U) 的类型
+
+// 在它调用的函数返回引用的情况下
+// 函数调用的完美转发必须用 decltype(auto)
+template&lt;class F, class... Args&gt;
+decltype(auto) PerfectForward(F fun, Args&amp;&amp;... args) 
+{ 
+    return fun(std::forward&lt;Args&gt;(args)...); 
+}
+
+template&lt;auto n&gt; // C++17 auto 形参声明
+auto f() -&gt; std::pair&lt;decltype(n), decltype(n)&gt; // auto 不能从花括号初始化器列表推导
+{
+    return {n, n};
+}
+
+int main()
+{
+    auto a = 1 + 2;          // a 的类型是 int
+    auto b = add(1, 1.2);    // b 的类型是 double
+    static_assert(std::is_same_v&lt;decltype(a), int&gt;);
+    static_assert(std::is_same_v&lt;decltype(b), double&gt;);
+    
+    auto c0 = a;             // c0 的类型是 int，保有 a 的副本
+    decltype(auto) c1 = a;   // c1 的类型是 int，保有 a 的副本
+    decltype(auto) c2 = (a); // c2 的类型是 int&amp;，它是 a 的别名
+    std::cout &lt;&lt; "通过 c2 修改前，a = " &lt;&lt; a &lt;&lt; '\n';
+    ++c2;
+    std::cout &lt;&lt; "通过 c2 修改后，a = " &lt;&lt; a &lt;&lt; '\n';
+    
+    auto [v, w] = f&lt;0&gt;(); // 结构化绑定声明
+    
+    auto d = {1, 2}; // OK：d 的类型是 std::initializer_list&lt;int&gt;
+    auto n = {5};    // OK：n 的类型是 std::initializer_list&lt;int&gt;
+//  auto e{1, 2};    // C++17 起错误，之前是 std::initializer_list&lt;int&gt;
+    auto m{5};       // OK：DR N3922 起 m 的类型是 int，之前是 initializer_list&lt;int&gt;
+//  decltype(auto) z = { 1, 2 } // 错误：{1, 2} 不是表达式
+    
+    // auto 常用于无名类型，例如 lambda 表达式的类型
+    auto lambda = [](int x) { return x + 3; };
+    
+//  auto int x; // 在 C++98 合法，C++11 起错误
+//  auto x;     // 在 C 合法，在 C++ 错误
+    
+    [](...){}(c0, c1, v, w, d, n, m, lambda); // 阻止“变量未使用”警告
+}
+|p=true
+|output=
+通过 c2 修改前，a = 3
+通过 c2 修改后，a = 4
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1265|std=C++11|before={{c/core|auto}} 说明符可以用来在一条声明语句中同时声明有尾随返回类型的函数和定义变量|after=禁止这种用法}}
+{{dr list item|wg=cwg|dr=1346|std=C++11|before=不能将被括号包围的表达式列表赋给 {{c/core|auto}} 变量|after=允许这种用法}}
+{{dr list item|wg=cwg|dr=1347|std=C++11|before=一个带 {{c|auto}} 说明符的声明可以同时声明两个类型&lt;br&gt;分别是 {{tt|T}} 和 {{c/core|std::initializer_list&lt;T&gt;}} 的变量|after=禁止这种用法}}
+{{dr list item|wg=cwg|dr=1852|std=C++14|before={{c|decltype(auto)}} 中的 {{c/core|auto}} 说明符也是占位符|after=此时它不是占位符}}
+{{dr list item|wg=cwg|dr=1892|std=C++11|before=函数指针类型标识的返回类型可以是 {{c/core|auto}}|after=已禁止}}
+{{dr list item|wg=cwg|dr=2476|std=C++11|before={{cwg|1892}}的解决方案禁止从初始化器推导函数指针变量的返回类型|after=允许推导}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.2.9.6|title=Placeholder type specifiers|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.2.8.5|title=Placeholder type specifiers|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.1.7.4|title=The {{tt|auto}} specifier|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.1.6.4|title={{tt|auto}} specifier|id=dcl.spec.auto}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.1.6.4|title={{tt|auto}} specifier|id=dcl.spec.auto}}
+{{ref std end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

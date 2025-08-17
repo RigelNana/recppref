@@ -1,0 +1,135 @@
+{{cpp/title|ilogb|ilogbf|ilogbl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+int ilogb ( float num );
+int ilogb ( double num );
+int ilogb ( long double num );
+|since2=c++23|dcl2=
+constexpr int ilogb( /* floating-point-type */ num );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+int ilogbf( float num );
+}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+int ilogbl( long double num );
+}}
+{{dcl|num=4|since=c++11|
+#define FP_ILOGB0   /* 由实现定义 */
+}}
+{{dcl|num=5|since=c++11|
+#define FP_ILOGBNAN /* 由实现定义 */
+}}
+{{dcl h|[[#注解|额外重载]]}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+int ilogb ( Integer num );
+}}
+{{dcl end}}
+
+@1-3@ 从浮点数实参 {{c|num}} 提取独立于基底的无偏指数，并将它作为有符号整数返回。{{rev inl|since=c++23|标准库提供所有以无 cv 限定的浮点数类型作为实参 {{c|num}} 的类型的 {{tt|std::ilogb}} 重载。}}
+@4@ 展开成整数常量表达式，值为 {{c|INT_MIN}} 或 {{c|-INT_MAX}}。
+@5@ 展开成整数常量表达式，值为 {{c|INT_MIN}} 或 {{c|+INT_MAX}}。
+@A@ 为所有整数类型提供额外重载，将它们当做 {{c/core|double}}。
+
+正式而言，无偏指数是非零 {{c|num}} 的 {{math|log{{su|b=r}}{{!}}num{{!}}}} 作为有符号整数的整数部分，其中 {{c|r}} 是 {{c|std::numeric_limits&lt;T&gt;::radix}}，而 {{tt|T}} 是 {{c|num}} 的浮点数类型。
+
+===参数===
+{{par begin}}
+{{par|num|浮点数或整数}}
+{{par end}}
+
+===返回值===
+如果没有发生错误，那么返回作为有符号整数的 {{c|num}} 的无偏指数。
+
+如果 {{c|num}} 为零，那么返回 {{lc|FP_ILOGB0}}。
+
+如果 {{c|num}} 是无穷大，那么返回 {{lc|INT_MAX}}。
+
+如果 {{c|num}} 是 NaN，那么返回 {{lc|FP_ILOGBNAN}}。
+
+如果正确结果大于 {{lc|INT_MAX}} 或小于 {{lc|INT_MIN}}，那么返回值未指定，并且可能出现定义域或值域错误。&lt;!-- dr 410 --&gt;
+
+===错误处理===
+报告 {{lc|math_errhandling}} 中指定的错误。
+
+如果 {{c|num}} 是零、无穷大或 NaN，那么可能出现定义域错误或值域错误。
+
+如果正确结果大于 {{lc|INT_MAX}} 或小于 {{lc|INT_MIN}} ，则可能出现定义域错误或值域错误。&lt;!-- 此为针对 C11 的 DR 410，它做出匹配 lrint 和 lround 的措辞 --&gt;
+
+如果实现支持 IEEE 浮点数算术（IEC 60559），那么
+* 如果正确结果大于 {{lc|INT_MAX}} 或小于 {{lc|INT_MIN}}，那么引发 {{lc|FE_INVALID}}。
+* 如果 {{c|num}} 是 ±0、±∞ 或 NaN，那么引发 {{lc|FE_INVALID}}。
+* 所有其他情况下，结果是准确的（决不引发 {{lc|FE_INEXACT}}）并且忽略[[cpp/numeric/fenv/FE_round|当前舍入模式]]。
+
+===注解===
+如果 {{c|num}} 不是零、无穷大或 NaN，那么返回的值准确等价于 {{c|(int)std::logb(num)}}。
+
+[https://pubs.opengroup.org/onlinepubs/9699919799/functions/ilogb.html POSIX 要求]在 {{c|num}} 是零、无穷大、NaN 或正确结果在 {{c/core|int}} 的范围外时发生定义域错误。
+
+POSIX 也要求在符合 XSI 的系统上，在正确结果大于 {{lc|INT_MAX}} 时返回 {{lc|INT_MAX}}，而在正确结果小于 {{lc|INT_MIN}} 时返回 {{lc|INT_MIN}}。
+
+在所有已知平台上正确结果都能表示成 {{c/core|int}}。对于要出现溢出的情况，{{lc|INT_MAX}} 必须小于 {{c|LDBL_MAX_EXP * std::log2(FLT_RADIX)}} 或 {{lc|INT_MIN}} 必须大于 {{c|(LDBL_MIN_EXP - LDBL_MANT_DIG) * std::log2(FLT_RADIX)}}。
+
+{{tt|std::ilogb}} 所返回的指数值始终比 {{lc|std::frexp}} 所返回的小 1，因为正规化要求不同：对于 {{tt|std::ilogb}} 返回的指数 {{c|e}}，{{math|{{!}}num*r{{su|p=-e}}{{!}}}} 在 {{c|1}} 和 {{c|r}} 之间（典型地在 {{c|1}} 和 {{c|2}} 之间），但对于 {{lc|std::frexp}} 返回的指数 {{c|e}}，{{math|{{!}}num*2{{su|p=-e}}{{!}}}} 在 {{c|0.5}} 和 {{c|1}} 之间。
+
+{{cpp/numeric/math/additional integer overload note|ilogb}}
+
+===示例===
+{{example
+|比较不同的浮点数分解函数：
+|code=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+ 
+// #pragma STDC FENV_ACCESS ON
+ 
+int main()
+{
+    double f = 123.45;
+    std::cout &lt;&lt; "给定数字 " &lt;&lt; f &lt;&lt; "（十六进制表示为 " &lt;&lt; std::hexfloat
+              &lt;&lt; f &lt;&lt; std::defaultfloat &lt;&lt; "），\n";
+
+    double f3;
+    double f2 = std::modf(f, &amp;f3);
+    std::cout &lt;&lt; "modf() 会把它拆分成 " &lt;&lt; f3 &lt;&lt; " + " &lt;&lt; f2 &lt;&lt; '\n';
+
+    int i;
+    f2 = std::frexp(f, &amp;i);
+    std::cout &lt;&lt; "frexp() 会把它拆分成 " &lt;&lt; f2 &lt;&lt; " * 2^" &lt;&lt; i &lt;&lt; '\n';
+
+    i = std::ilogb(f);
+    std::cout &lt;&lt; "logb()/ilogb() 会把它拆分成 " &lt;&lt; f / std::scalbn(1.0, i) &lt;&lt; " * "
+              &lt;&lt; std::numeric_limits&lt;double&gt;::radix
+              &lt;&lt; "^" &lt;&lt; std::ilogb(f) &lt;&lt; '\n';
+
+    // 错误处理
+    std::feclearexcept(FE_ALL_EXCEPT);
+    
+    std::cout &lt;&lt; "ilogb(0) = " &lt;&lt; std::ilogb(0) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    发生 FE_INVALID\n";
+}
+|p=true
+|output=
+给定数字 123.45（十六进制表示为 0x1.edccccccccccdp+6），
+modf() 会把它拆分成 123 + 0.45
+frexp() 会把它拆分成 0.964453 * 2^7
+logb()/ilogb() 会把它拆分成 1.92891 * 2^6
+ilogb(0) = -2147483648
+    发生 FE_INVALID
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc frexp}}
+{{dsc inc|cpp/numeric/math/dsc logb}}
+{{dsc inc|cpp/numeric/math/dsc scalbn}}
+{{dsc see c|c/numeric/math/ilogb}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

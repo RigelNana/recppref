@@ -1,0 +1,76 @@
+{{cpp/thread/condition_variable/title|wait_until}}
+{{cpp/thread/condition_variable/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+template&lt; class Clock, class Duration &gt;
+std::cv_status
+    wait_until( std::unique_lock&lt;std::mutex&gt;&amp; lock,
+                const std::chrono::time_point&lt;Clock, Duration&gt;&amp; abs_time );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class Clock, class Duration, class Predicate &gt;
+bool wait_until( std::unique_lock&lt;std::mutex&gt;&amp; lock,
+                 const std::chrono::time_point&lt;Clock, Duration&gt;&amp; abs_time,
+                 Predicate pred );
+}}
+{{dcl end}}
+
+{{tt|wait_until}} 导致当前线程阻塞，直至条件变量被通知，抵达指定的时间点，或发生虚假唤醒。可以提供 {{c|pred}} 以检测虚假唤醒。
+
+@1@ 原子地调用 {{c|lock.unlock()}}，并在 {{c|*this}} 上阻塞调用线程。
+@@ 调用线程会在抵达 {{c|abs_time}}，或者执行 {{lc|notify_all()}} 或 {{lc|notify_one()}} 时解除阻塞。它也可能因虚假唤醒而解除阻塞。
+@@ 在解除阻塞时调用 {{c|lock.lock()}}（在锁定时可能还会阻塞），然后返回。
+
+@2@ 等价于 {{c multi|while (!pred())|    if (wait_until(lock, abs_time) {{==}} std::cv_status::timeout)|        return pred();|return true;}}。
+@@ 此重载可用于在等待特定条件变为真的过程中忽略虚假唤醒。
+
+在 {{tt|wait_until}} 返回时，{{c|lock.owns_lock()}} 是 {{c|true}}，并且调用线程会锁定 {{c|lock.mutex()}}。如果无法满足这些后条件&lt;ref&gt;重新锁定互斥体的过程中抛出异常就会发生这种情况。&lt;/ref&gt;，那么就会调用 {{lc|std::terminate}}。
+
+如果满足以下任意条件，那么行为未定义：
+* {{c|lock.owns_lock()}} 是 {{c|false}}。
+* 调用线程没有锁定 {{c|lock.mutex()}}。
+* 在有其他线程也在 {{c|*this}} 上等待的情况下，那些线程在 {{c|*this}} 上调用的等待函数（{{lc|wait}}、{{lc|wait_for}} 以及 {{tt|wait_until}}）解锁的互斥体与 {{c|lock.mutex()}} 不同。
+
+&lt;references/&gt;
+
+===参数===
+{{par begin}}
+{{par|lock|必须已经由调用线程锁定的锁}}
+{{par|abs_time|等待截止的时间点}}
+{{par|pred|检查是否可以完成等待的谓词}}
+{{par hreq}}
+{{par req named|Predicate|FunctionObject}}
+{{par req|{{c|pred()}} 必须为合法的表达式，且其类型与值类别必须符合{{named req|BooleanTestable}}要求。}}
+{{par end}}
+
+===返回值===
+@1@ 已经抵达 {{c|abs_time}} 的情况下返回 {{c|std::cv_status::timeout}}，否则返回 {{c|std::cv_status::no_timeout}}。
+@2@ 在返回调用方前 {{c|pred()}} 的最新结果。
+
+===异常===
+@1@ 超时相关异常。
+@2@ 超时相关异常，以及 {{c|pred}} 抛出的任何异常。
+
+===注解===
+{{cpp/thread/wait until clock note|cv|param=abs_time}}
+
+{{cpp/thread/condition_variable/single total order note}}
+
+===示例===
+{{include|cpp/thread/condition_variable/example1|condition_variable}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2093|std=C++11|before=说明中缺失了超时相关异常|after=提及这些异常}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++11|before=到 {{c/core|bool}} 的可转换性过于弱而无法反映实现的期待|after=加强要求}}
+{{dr list item|wg=lwg|dr=2135|std=C++11|before=在 {{c|lock.lock()}} 抛出异常时的行为不明确|after=此时会调用 {{lc|std::terminate}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

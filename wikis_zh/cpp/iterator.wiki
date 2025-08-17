@@ -1,0 +1,327 @@
+{{title|迭代器库}}
+{{cpp/iterator/navbar}}
+
+迭代器是一种广义化的[[cpp/language/pointer|指针]]，它使得 C++ 程序可以通过统一的方式处理不同的数据结构（例如[[cpp/container|容器]]{{rev inl|since=c++20|和[[cpp/container|范围]]}}）。迭代器库提供了迭代器的定义，同时还提供了迭代器特征、适配器及相关的工具函数。
+
+因为迭代器是指针的抽象，所以它们的语义是 C++ 的指针的大多数语义的泛化。这确保所有接受迭代器的{{lt|cpp/language/function template|函数模板}}都可以对普通指针正常工作。
+
+===迭代器分类===
+共有{{rev inl|until=c++17|五}}{{rev inl|since=c++17|六}}种迭代器：{{named req|InputIterator}}、{{named req|OutputIterator}}、{{named req|ForwardIterator}}、{{named req|BidirectionalIterator}}、{{named req|RandomAccessIterator}}{{rev inl|since=c++17|，及{{named req|ContiguousIterator}}}}。（对于最基本的迭代器种类，参见{{named req|Iterator}}。）
+
+定义各个迭代器类别的依据并不是迭代器的类型，而是迭代器所支持的操作。这种定义方式意味着，支持必要的操作的任何类型，都可以作为迭代器使用。例如，指针支持{{named req|RandomAccessIterator}}要求的所有操作，于是任何需要{{named req|RandomAccessIterator}}的地方都可以使用指针。
+
+可以把所有迭代器类别（除了{{named req|OutputIterator}}）组织到一个层级中，其中更强力的迭代器类别（如{{named req|RandomAccessIterator}}）支持较不强力的类别（例如{{named req|InputIterator}}）的所有操作。如果迭代器落入这些类别之一且同时满足{{named req|OutputIterator}}的要求，那么它被称为''可变''{{sep}}迭代器并且''同时''{{sep}}支持输入和输出。非可变迭代器被称为''常''{{sep}}迭代器。
+
+{{rrev|since=c++20|
+提供的所有满足迭代器类别要求的操作都是 {{ls|cpp/language/constexpr#constexpr 函数}}的迭代器被称为 ''constexpr'' 迭代器。
+}}
+
+{|class="wikitable"
+!rowspan="3"|迭代器类别
+!colspan="7"|操作和存储要求
+|- style="text-align: center;"
+|rowspan="2" style="width: 60px;"|写
+|rowspan="2" style="width: 60px;"|读
+|colspan="2"|自增
+|rowspan="2" style="width: 60px;"|自减
+|rowspan="2" style="width: 60px;"|随机访问
+|rowspan="2" style="width: 60px;"|连续存储
+|- style="text-align: center;"
+|style="width: 60px;"|无多趟
+|style="width: 60px;"|有多趟
+|- style="text-align:center;"
+|{{named req|Iterator}}
+|
+|
+|{{yes|需要支持}}
+|
+|
+|
+|
+|-style="text-align:center;"
+|{{named req|OutputIterator}}
+|{{yes|需要支持}}
+|
+|{{yes|需要支持}}
+|
+|
+|
+|
+|- style="text-align:center;"
+|{{named req|InputIterator}}&lt;br&gt;{{small|支持写操作时是可变迭代器}}
+|
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|
+|
+|
+|
+|- style="text-align:center;"
+|{{named req|ForwardIterator}}&lt;br&gt;{{small|同时满足{{named req|InputIterator}}}}
+|
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|
+|
+|
+|- style="text-align:center;"
+|{{named req|BidirectionalIterator}}&lt;br&gt;{{small|同时满足{{named req|ForwardIterator}}}}
+|
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|
+|
+|- style="text-align:center;"
+|{{named req|RandomAccessIterator}}&lt;br&gt;{{small|同时满足{{named req|BidirectionalIterator}}}}
+|
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|
+|- style="text-align:center;"
+|{{nbsp}}{{named req|ContiguousIterator}}&lt;ref&gt;{{named req|ContiguousIterator}}类别只在 C++17 中正式规定，但 {{lc|std::vector}}、{{lc|std::basic_string}}、{{lc|std::array}}，及 {{lc|std::valarray}} 的迭代器还有指向 C 数组中的指针在 C++17 前的代码中通常都被处理成独立类别。&lt;/ref&gt;&lt;br&gt;{{small|同时满足{{named req|RandomAccessIterator}}}}
+|
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|{{yes|需要支持}}
+|}
+&lt;references/&gt;
+
+注意：支持上方表格其中一行的所有操作的类型并不一定属于对应的迭代器类别，迭代器类别页面中包含了完整的要求列表。
+
+===定义===
+====类型与可写性====
+输入迭代器 {{c|i}} 支持表达式 {{c|*i}}，结果是某个[[cpp/language/type|对象类型]] {{tt|T}} 的值，此类型被称为该迭代器的''值类型''。
+
+输出迭代器 {{c|i}} 有一个{{rev inl|until=c++20|''可写入''}}{{rev inl|since=c++20|{{ltt|cpp/iterator/indirectly_writable}} 到}}该迭代器的类型的非空集合；对于其中的每个类型 {{tt|T}}，在 {{c|o}} 是 {{tt|T}} 类型的值时表达式 {{c|1=*i = o}} 合法。
+
+每个{{rev inl|until=c++20|定义了相等性的}}迭代器类型 {{tt|X}} 都有一个对应的有符号{{rev inl|until=c++20|[[cpp/language/types#有符号和无符号整数类型|整数]]}}{{rev inl|since=c++20|{{rl|is-integer-like|整数式}}}}类型，此类型被称为该迭代器的''差类型''。
+
+====可解性与有效性====
+与指向[[cpp/language/array|数组]]的通常指针保证存在一个指向该数组的尾后元素的指针值一样，任何迭代器类型也保证存在一个指向对应序列的尾后元素的迭代器值。这种值被称为''尾后''{{sep}}值。
+
+定义了表达式 {{c|*i}} 的迭代器值 {{c|i}} 被称为''可解引用''{{sep}}的值。[[cpp/standard library|标准库]]始终不会假设尾后值可解引用。
+
+迭代器也可以具有不与任何序列关联的''奇异''{{sep}}值。大部分表达式对于奇异值的结果未定义，除了：
+* 将非奇异值赋给持有奇异值的迭代器
+* 销毁持有奇异值的迭代器
+* 对于满足了{{named req|DefaultConstructible}}的要求的迭代器，使用[[cpp/language/value initialization|值初始化]]的迭代器作为复制{{rev inl|since=c++11|或移动}}操作的来源。
+此时奇异值会和其他值一样被覆写。可解引用的值始终不会是奇异值。
+
+''无效''{{sep}}的迭代器是可能持有奇异值的迭代器。
+
+====范围====
+标准库的大部分操作数据结构的算法模板都有使用范围的接口。
+
+{{rev begin}}
+{{rev|until=c++20|
+对于两个迭代器 {{c|i}} 和 {{c|j}}，当且仅当存在表达式 {{c|++i}} 的有限次应用序列使得 {{c|1=i == j}} 时，{{c|j}} 从 {{c|i}} ''可及''。如果 {{c|j}} 从 {{c|i}} 可及，那么它们指代相同序列中的元素。
+
+''范围''{{sep}}是一对指定了计算的开头和结尾的迭代器。范围 {{range|i|i}} 是空范围；通常来说，范围 {{range|i|j}} 指代数据结构中从 {{c|i}} 指向的元素开始直至（但不包含）{{c|j}} 指向的元素为止的那些元素。
+
+范围 {{range|i|j}} 当且仅当 {{c|j}} 从 {{c|i}} 可及时''有效''。
+}}
+{{rev|since=c++20|
+''范围''{{sep}}有以下两种表示：
+* {{range|i|s}}，由迭代器 {{c|i}} 和''哨位'' {{c|s}} 组成，指定了计算的开头和结尾（{{c|i}} 和 {{c|s}} 可以具有不同的类型）。
+* {{counted range|i|n}}，由迭代器 {{c|i}} 和计数 {{c|n}} 组成，指定了计算要应用的开头和元素数量。
+
+=====迭代器-哨位范围=====
+由迭代器和哨位组成的范围可以比较。{{range|i|s}} 在 {{c|1=i == s}} 时为空；否则 {{range|i|s}} 指代数据结构中从 {{c|i}} 指向的元素开始直至（但不包含）首个满足 {{c|1=j == s}} 的迭代器 {{c|j}} 指向的元素为止的那些元素。
+
+对于迭代器 {{c|i}} 和哨位 {{c|s}}，当且仅当存在表达式 {{c|++i}} 的有限次应用序列使得 {{c|1=i == s}} 时，{{c|s}} 从 {{c|i}} ''可及''。
+
+如果 {{c|s}} 从 {{c|i}} 可及，那么 {{range|i|s}} 表示的范围''有效''。
+
+=====计数范围=====
+''计数范围'' {{counted range|i|n}} 在 {{c|1=n == 0}} 时为空；否则 {{counted range|i|n}} 指代数据结构中从 {{c|i}} 指向的元素开始直至（但不包含，如果存在）应用了 {{c|n}} 次 {{c|++i}} 的结果指向的元素（如果存在）为止的 {{c|n}} 个元素。
+
+计数范围 {{counted range|i|n}} 当且仅当满足以下任一条件时''有效''：
+* {{c|1=n == 0}}
+* 满足以下所有条件：
+** {{c|n}} 是正数，
+** {{c|i}} 可解引用，
+** {{counted range|++i|--n}} 有效。
+}}
+{{rev end}}
+
+将标准库函数应用到无效范围的结果未定义。
+
+{{anchor|迭代器概念}}
+===迭代器概念 {{mark since c++20}}===
+C++20 引入了基于[[cpp/language/constraints|概念]]的新迭代器系统，它与 C++17 迭代器不同。虽然基础分类法保持类似，但单独的迭代器类别的要求有些区别。
+
+{{dsc begin}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/iterator/dsc indirectly_readable}}
+{{dsc inc|cpp/iterator/dsc indirectly_writable}}
+{{dsc inc|cpp/iterator/dsc weakly_incrementable}}
+{{dsc inc|cpp/iterator/dsc incrementable}}
+{{dsc inc|cpp/iterator/dsc is-integer-like}}
+{{dsc inc|cpp/iterator/dsc input_or_output_iterator}}
+{{dsc inc|cpp/iterator/dsc sentinel_for}}
+{{dsc inc|cpp/iterator/dsc sized_sentinel_for}}
+{{dsc inc|cpp/iterator/dsc input_iterator}}
+{{dsc inc|cpp/iterator/dsc output_iterator}}
+{{dsc inc|cpp/iterator/dsc forward_iterator}}
+{{dsc inc|cpp/iterator/dsc bidirectional_iterator}}
+{{dsc inc|cpp/iterator/dsc random_access_iterator}}
+{{dsc inc|cpp/iterator/dsc contiguous_iterator}}
+{{dsc end}}
+
+{{anchor|迭代器关联类型}}
+===迭代器关联类型 {{mark since c++20}}===
+{{dsc begin}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/iterator/dsc incrementable_traits}}
+{{dsc inc|cpp/iterator/dsc indirectly_readable_traits}}
+{{dsc inc|cpp/iterator/dsc iter_t}}
+{{dsc end}}
+
+===迭代器原语===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc iterator_traits}}
+{{dsc inc|cpp/iterator/dsc iterator_tags}}
+{{dsc inc|cpp/iterator/dsc iterator}}
+{{dsc end}}
+
+{{anchor|迭代器定制点}}
+===迭代器定制点 {{mark since c++20}}===
+{{dsc begin}}
+{{dsc namespace|std::ranges}}
+{{dsc inc|cpp/iterator/ranges/dsc iter_move}}
+{{dsc inc|cpp/iterator/ranges/dsc iter_swap}}
+{{dsc end}}
+
+{{anchor|算法概念与工具}}
+===算法概念与工具 {{mark since c++20}}===
+还提供了为简化常用算法操作的约束而设计的一组概念和相关的工具模板。
+
+{{dsc begin}}
+{{dsc header|iterator}}
+{{dsc namespace|std }}
+{{dsc h2|间接可调用对象}}
+{{dsc inc|cpp/iterator/dsc indirectly_unary_invocable}}
+{{dsc inc|cpp/iterator/dsc indirect_unary_predicate}}
+{{dsc inc|cpp/iterator/dsc indirect_binary_predicate}}
+{{dsc inc|cpp/iterator/dsc indirect_equivalence_relation}}
+{{dsc inc|cpp/iterator/dsc indirect_strict_weak_order}}
+{{dsc h2|常用算法要求}}
+{{dsc inc|cpp/iterator/dsc indirectly_movable}}
+{{dsc inc|cpp/iterator/dsc indirectly_movable_storable}}
+{{dsc inc|cpp/iterator/dsc indirectly_copyable}}
+{{dsc inc|cpp/iterator/dsc indirectly_copyable_storable}}
+{{dsc inc|cpp/iterator/dsc indirectly_swappable}}
+{{dsc inc|cpp/iterator/dsc indirectly_comparable}}
+{{dsc inc|cpp/iterator/dsc permutable}}
+{{dsc inc|cpp/iterator/dsc mergeable}}
+{{dsc inc|cpp/iterator/dsc sortable}}
+{{dsc h2|工具}}
+{{dsc inc|cpp/iterator/dsc indirect_result_t}}
+{{dsc inc|cpp/iterator/dsc projected}}
+{{dsc inc|cpp/iterator/dsc projected_value_t}}
+{{dsc end}}
+
+===迭代器适配器===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc reverse_iterator}}
+{{dsc inc|cpp/iterator/dsc make_reverse_iterator}}
+
+{{dsc inc|cpp/iterator/dsc back_insert_iterator}}
+{{dsc inc|cpp/iterator/dsc back_inserter}}
+{{dsc inc|cpp/iterator/dsc front_insert_iterator}}
+{{dsc inc|cpp/iterator/dsc front_inserter}}
+{{dsc inc|cpp/iterator/dsc insert_iterator}}
+{{dsc inc|cpp/iterator/dsc inserter}}
+
+{{dsc inc|cpp/iterator/dsc basic_const_iterator}}
+{{dsc inc|cpp/iterator/dsc const_iterator}}
+{{dsc inc|cpp/iterator/dsc const_sentinel}}
+{{dsc inc|cpp/iterator/dsc make_const_iterator}}
+{{dsc inc|cpp/iterator/dsc make_const_sentinel}}
+
+{{dsc inc|cpp/iterator/dsc move_iterator}}
+{{dsc inc|cpp/iterator/dsc move_sentinel}}
+{{dsc inc|cpp/iterator/dsc make_move_iterator}}
+
+{{dsc inc|cpp/iterator/dsc common_iterator}}
+{{dsc inc|cpp/iterator/dsc default_sentinel_t}}
+{{dsc inc|cpp/iterator/dsc counted_iterator}}
+{{dsc inc|cpp/iterator/dsc unreachable_sentinel_t}}
+{{dsc end}}
+
+===流迭代器===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc istream_iterator}}
+{{dsc inc|cpp/iterator/dsc ostream_iterator}}
+{{dsc inc|cpp/iterator/dsc istreambuf_iterator}}
+{{dsc inc|cpp/iterator/dsc ostreambuf_iterator}}
+{{dsc end}}
+
+===迭代器操作===
+{{dsc begin}}
+{{dsc header|iterator}}
+{{dsc inc|cpp/iterator/dsc advance}}
+{{dsc inc|cpp/iterator/dsc distance}}
+{{dsc inc|cpp/iterator/dsc next}}
+{{dsc inc|cpp/iterator/dsc prev}}
+{{dsc inc|cpp/iterator/ranges/dsc advance}}
+{{dsc inc|cpp/iterator/ranges/dsc distance}}
+{{dsc inc|cpp/iterator/ranges/dsc next}}
+{{dsc inc|cpp/iterator/ranges/dsc prev}}
+{{dsc end}}
+
+{{anchor|范围访问}}
+===范围访问 {{mark since c++11}}===
+这些非成员函数模板提供对容器、通常数组，及 {{lc|std::initializer_list}} 的通用接口。
+{{dsc begin}}
+{{dsc header|array}}
+{{dsc header|deque}}
+{{dsc header|flat_map}}
+{{dsc header|flat_set}}
+{{dsc header|forward_list}}
+{{dsc header|inplace_vector}}
+{{dsc header|iterator}}
+{{dsc header|list}}
+{{dsc header|map}}
+{{dsc header|regex}}
+{{dsc header|set}}
+{{dsc header|span}}
+{{dsc header|string}}
+{{dsc header|string_view}}
+{{dsc header|unordered_map}}
+{{dsc header|unordered_set}}
+{{dsc header|vector}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/iterator/dsc begin}}
+{{dsc inc|cpp/iterator/dsc end}}
+{{dsc inc|cpp/iterator/dsc rbegin}}
+{{dsc inc|cpp/iterator/dsc rend}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc inc|cpp/iterator/dsc empty}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1181|std=C++98|before=数组类型不能为值类型|after=它们能}}
+{{dr list item|wg=lwg|dr=208|std=C++98|before=尾后迭代器不会持有奇异值|after=可能会持有奇异值}}
+{{dr list item|wg=lwg|dr=278|std=C++98|before=未定义迭代器的有效性|after=定义为始终不持有奇异值}}
+{{dr list item|wg=lwg|dr=324|std=C++98|before=输出迭代器具有值类型|after=改成具有可写入类型}}
+{{dr list item|wg=lwg|dr=407|std=C++98|before=不能销毁持有奇异值的迭代器|after=可以销毁}}
+{{dr list item|wg=lwg|dr=408|paper=N3066|std=C++98|before=不能复制持有奇异值的迭代器|after=它是值初始化的情况下可以}}
+{{dr list item|wg=lwg|dr=1185|paper=N3066|std=C++98|before={{named req|ForwardIterator}}、&lt;br&gt;{{named req|BidirectionalIterator}}和&lt;br&gt;{{named req|RandomAccessIterator}}&lt;br&gt;始终满足{{named req|OutputIterator}}|after=它们不一定满足&lt;br&gt;{{named req|OutputIterator}}}}
+{{dr list item|wg=lwg|dr=1210|paper=N3066|std=C++98|before=迭代器的奇异性和可及性的定义依赖容器|after=改为依赖序列}}
+{{dr list item|wg=lwg|dr=3009|std=C++17|before={{header|string_view}} 没有提供范围访问函数模板|after=提供这些模板}}
+{{dr list item|wg=lwg|dr=3987|std=C++23|before={{header|flat_map}} 和 {{header|flat_set}} 没有提供范围访问函数模板|after=提供这些模板}}
+{{dr list end}}
+
+{{langlinks|ar|de|es|en|fr|it|ja|ko|pt|ru|tr}}

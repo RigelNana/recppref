@@ -1,0 +1,71 @@
+{{cpp/thread/condition_variable/title|wait}}
+{{cpp/thread/condition_variable/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+void wait( std::unique_lock&lt;std::mutex&gt;&amp; lock );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class Predicate &gt;
+void wait( std::unique_lock&lt;std::mutex&gt;&amp; lock, Predicate pred );
+}}
+{{dcl end}}
+
+{{tt|wait}} 导致当前线程阻塞直至条件变量被通知，或虚假唤醒发生。可以提供 {{c|pred}} 以检测虚假唤醒。
+
+@1@ 原子地调用 {{c|lock.unlock()}}，并在 {{c|*this}} 上阻塞调用线程。
+@@ 调用线程会在执行 {{lc|notify_all()}} 或 {{lc|notify_one()}} 时解除阻塞。它也可能因虚假唤醒而解除阻塞。
+@@ 在解除阻塞时调用 {{c|lock.lock()}}（在锁定时可能还会阻塞），然后返回。
+
+@2@ 等价于
+@@ {{c multi|
+while (!pred())|
+    wait(lock);
+}}。
+@@ 此重载可用于在等待特定条件变为真的过程中忽略虚假唤醒。
+
+在 {{tt|wait}} 返回时，{{c|lock.owns_lock()}} 是 {{c|true}}，并且调用线程已锁定 {{c|lock.mutex()}}。如果无法满足这些后条件&lt;ref&gt;重新锁定互斥体的过程中抛出异常就会发生这种情况。&lt;/ref&gt;，那么就会调用 {{lc|std::terminate}}。
+
+如果满足以下任意条件，那么行为未定义：
+* {{c|lock.owns_lock()}} 是 {{c|false}}。
+* 调用线程没有锁定 {{c|lock.mutex()}}。
+* 在有其他线程也在 {{c|*this}} 上等待的情况下，那些线程在 {{c|*this}} 上调用的等待函数（{{tt|wait}}、{{lc|wait_for}} 以及 {{lc|wait_until}}）解锁的互斥体与 {{c|lock.mutex()}} 不同。
+
+&lt;references/&gt;
+
+===参数===
+{{par begin}}
+{{par|lock|必须已经由调用线程锁定的锁}}
+{{par|pred|检查是否可以完成等待的谓词}}
+{{par hreq}}
+{{par req named|Predicate|FunctionObject}}
+{{par req|{{c|pred()}} 必须为合法的表达式，且其类型与值类别必须满足{{named req|BooleanTestable}}。}}
+{{par end}}
+
+===异常===
+@1@ 不抛出。
+@2@ {{c|pred}} 抛出的任何异常。
+
+===注解===
+{{cpp/thread/condition_variable/single total order note}}
+
+===示例===
+{{cpp/thread/condition_variable/example1|condition_variable}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++11|before=到 {{c/core|bool}} 的可转换性过于弱而无法反映实现的期待|after=加强要求}}
+{{dr list item|wg=lwg|dr=2135|std=C++11|before=在 {{c|lock.lock()}} 抛出异常时的行为不明确|after=此时会调用 {{lc|std::terminate}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_until|condition_variable}}
+{{dsc see c|c/thread/cnd_wait}}
+{{dsc end}}
+
+===外部链接===
+{{eli|1=[https://devblogs.microsoft.com/oldnewthing/20180201-00/?p=97946 The Old New Thing] 文章: Spurious wake-ups in Win32 condition variables.}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

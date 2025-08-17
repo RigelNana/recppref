@@ -1,0 +1,176 @@
+{{cpp/ranges/title|is_heap_until}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt; std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr I is_heap_until( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;std::projected
+                   &lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    is_heap_until( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+在指定范围中，查找从指定范围的开头开始，并且是关于 {{c|comp}} 和 {{c|proj}} 的[[cpp/algorithm#堆操作|堆]]的最大范围。
+
+@1@ 指定的范围是 {{range|first|last}}。
+
+@2@ 指定的范围是 {{c|r}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|first, last|指定要检验的元素范围的迭代器和哨位}}
+{{par|r|要检验的元素范围}}
+{{par|comp|应用到投影后元素的比较器}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+指定范围中的最后一个满足以下条件的迭代器 {{c|iter}}：
+@1@ 范围 {{range|first|iter}} 是关于 {{c|comp}} 和 {{c|proj}} 的堆。
+@2@ 范围 {{range|ranges::begin(r)|iter}} 是关于 {{c|comp}} 和 {{c|proj}} 的堆。
+
+===复杂度===
+应用 {{mathjax-or|\(\scriptsize O(N) \)|O(N)}} 次 {{c|comp}} 和 {{c|proj}}，其中 {{mathjax-or|\(\scriptsize N \)|N}} 是：
+@1@ {{c|ranges::distance(first, last)}}
+@2@ {{c|ranges::distance(r)}}
+
+===可能的实现===
+{{eq fun|1=
+struct is_heap_until_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Proj = std::identity,
+             std::indirect_strict_weak_order
+                 &lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr I operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        std::iter_difference_t&lt;I&gt; n{ranges::distance(first, last)}, dad{0}, son{1};
+        for (; son != n; ++son)
+        {
+            if (std::invoke(comp, std::invoke(proj, *(first + dad)),
+                                  std::invoke(proj, *(first + son))))
+                return first + son;
+            else if ((son % 2) == 0)
+                ++dad;
+        }
+        return first + n;
+    }
+    
+    template&lt;ranges::random_access_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order
+                 &lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr is_heap_until_fn is_heap_until{};
+}}
+
+===示例===
+{{example
+|此示例将给定的 vector 重置为（平衡）{{enwiki|二叉树}}。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+void out(const auto&amp; what, int n = 1)
+{
+    while (n-- &gt; 0)
+        std::cout &lt;&lt; what;
+}
+
+void draw_bin_tree(auto first, auto last)
+{
+    auto bails = [](int n, int w)
+    {
+        auto b = [](int w) { out("┌"), out("─", w), out("┴"), out("─", w), out("┐"); };
+        n /= 2;
+        if (!n)
+            return;
+        for (out(' ', w); n-- &gt; 0;)
+            b(w), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto data = [](int n, int w, auto&amp; first, auto last)
+    {
+        for (out(' ', w); n-- &gt; 0 &amp;&amp; first != last; ++first)
+            out(*first), out(' ', w + w + 1);
+        out('\n');
+    };
+    
+    auto tier = [&amp;](int t, int m, auto&amp; first, auto last)
+    {
+        const int n{1 &lt;&lt; t};
+        const int w{(1 &lt;&lt; (m - t - 1)) - 1};
+        bails(n, w), data(n, w, first, last);
+    };
+    
+    const auto size{std::ranges::distance(first, last)};
+    const int m{static_cast&lt;int&gt;(std::ceil(std::log2(1 + size)))};
+    for (int i{}; i != m; ++i)
+        tier(i, m, first, last);
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{3, 1, 4, 1, 5, 9};
+    std::ranges::make_heap(v);
+    
+    // 可能扰乱堆
+    v.push_back(2);
+    v.push_back(6);
+    
+    out("调用 make_heap 和 push_back 后的 v：\n");
+    draw_bin_tree(v.begin(), v.end());
+    
+    out("v 的最大堆前缀：\n");
+    const auto heap_end = std::ranges::is_heap_until(v);
+    draw_bin_tree(v.begin(), heap_end);
+}
+|output=&lt;nowiki/&gt;
+调用 make_heap 和 push_back 后的 v：
+       9               
+   ┌───┴───┐       
+   5       4       
+ ┌─┴─┐   ┌─┴─┐   
+ 1   1   3   2   
+┌┴┐ ┌┴┐ ┌┴┐ ┌┴┐ 
+6 
+v 的最大堆前缀：
+   9       
+ ┌─┴─┐   
+ 5   4   
+┌┴┐ ┌┴┐ 
+1 1 3 2
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc is_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc make_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc push_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc pop_heap}}
+{{dsc inc|cpp/algorithm/ranges/dsc sort_heap}}
+{{dsc inc|cpp/algorithm/dsc is_heap_until}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

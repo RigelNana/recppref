@@ -1,0 +1,88 @@
+{{cpp/ranges/title|size}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|notes={{mark custpt}}|since=c++20|1=
+inline namespace /* 未指定 */ {
+    inline constexpr auto size = /* 未指定 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|1=
+template&lt; class T &gt;
+    requires /* 见下文 */
+constexpr auto size( T&amp;&amp; t );
+}}
+{{dcl end}}
+
+在常量时间内计算 {{c|t}} 的元素数。
+
+给定其（可能经[[cpp/language/implicit conversion#临时量实质化|实质化]]的）结果对象以 {{c|t}} 表示的[[cpp/language/expressions#完整表达式|子表达式]]为 {{c|E}}，以及 {{c|E}} 的类型为 {{tt|T}}：
+* 如果 {{tt|T}} 是边界未知的数组，那么 {{c|ranges::size(E)}} 非良构。
+* 否则，如果 {{tt|T}} 是数组类型，那么 {{c|ranges::size(E)}} {{ls|cpp/language/expressions#表达式等价}}于 {{rev inl|until=c++23|{{box|{{lti|cpp/standard library/decay-copy}}{{sep}}{{c/core|(std::extent_v&lt;T&gt;)}}}}}}{{rev inl|since=c++23|{{c|auto(std::extent_v&lt;T&gt;)}}}}。
+* 否则，如果满足以下所有条件，那么 {{c|ranges::size(E)}} 表达式等价于 {{rev inl|until=c++23|{{box|{{lti|cpp/standard library/decay-copy}}{{sep}}{{c/core|(t.size())}}}}}}{{rev inl|since=c++23|{{c|auto(t.size())}}}}：
+** {{c|ranges::disable_sized_range&lt;std::remove_cv_t&lt;T&gt;&gt;}} 是 {{c|false}}。
+** {{rev inl|until=c++23|{{box|{{lti|cpp/standard library/decay-copy}}{{sep}}{{c/core|(t.size())}}}}}}{{rev inl|since=c++23|{{c|auto(t.size())}}}} 是合法的[[cpp/iterator/is-integer-like|整数式类型]]表达式。
+* 否则，如果满足以下所有条件，那么 {{c|ranges::size(E)}} 表达式等价于 {{rev inl|until=c++23|{{box|{{lti|cpp/standard library/decay-copy}}{{sep}}{{c/core|(size(t))}}}}}}{{rev inl|since=c++23|{{c|auto(size(t))}}}}：
+** {{tt|T}} 是类类型或枚举类型。
+** {{c|ranges::disable_sized_range&lt;std::remove_cv_t&lt;T&gt;&gt;}} 是 {{c|false}}。
+** {{rev inl|until=c++23|{{box|{{lti|cpp/standard library/decay-copy}}{{sep}}{{c/core|(size(t))}}}}}}{{rev inl|since=c++23|{{c|auto(size(t))}}}} 是合法的整数式类型表达式，其中 {{tt|size}} 的含义只能通过进行[[cpp/language/adl|实参依赖查找]]来建立。
+* 否则，如果满足以下所有条件，那么 {{c|ranges::size(E)}} 表达式等价于 {{box|{{lsi|cpp/ranges#to-unsigned-like}}{{sep}}{{c/core|(ranges::end(t) - ranges::begin(t))}}}}：
+** {{tt|T}} 实现了 {{lconcept|forward_range}}。
+** 给定 {{c|ranges::begin(t)}} 的类型为 {{tt|I}}，{{c|ranges::end(t)}} 的类型为 {{tt|S}}，{{box/core|{{lconcept|sized_sentinel_for}}{{c/core|&lt;S, I&gt;}}}} 和 {{box/core|{{lconcept|forward_iterator}}{{c/core|&lt;I&gt;}}}} 都得到实现。
+** {{box|{{lsi|cpp/ranges#to-unsigned-like}}{{sep}}{{c/core|(ranges::end(t) - ranges::begin(t))}}}} 是合法的表达式。
+* 否则， {{c|ranges::size(E)}} 非良构。
+
+以上非良构的情况能在 {{c|ranges::size(t)}} 出现于模板实例化的立即语境中时会导致[[cpp/language/sfinae|代换失败]]。
+
+{{cpp/ranges/cpo}}
+
+===注解===
+只要 {{c|ranges::size(e)}} 对表达式 {{c|e}} 合法，那么返回类型是[[cpp/iterator/is-integer-like|整数式类型]]。
+
+{{cpp/ranges/prv}}
+
+表达式 {{c|ranges::distance(e)}} 也可以用于确定范围 {{c|e}} 的大小。与 {{c|ranges::size(e)}} 不同，{{c|ranges::distance(e)}} 即便在 {{c|e}} 是无大小范围时也能工作，这种情况下其代价是具有线性复杂度。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;type_traits&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    auto v = std::vector&lt;int&gt;{};
+    std::cout &lt;&lt; "ranges::size(v) == " &lt;&lt; std::ranges::size(v) &lt;&lt; '\n';
+    
+    auto il = {7};     // std::initializer_list
+    std::cout &lt;&lt; "ranges::size(il) == " &lt;&lt; std::ranges::size(il) &lt;&lt; '\n';
+    
+    int array[]{4, 5}; // 拥有已知边界的数组
+    std::cout &lt;&lt; "ranges::size(array) == " &lt;&lt; std::ranges::size(array) &lt;&lt; '\n';
+    
+    static_assert(std::is_signed_v&lt;decltype(std::ranges::size(v))&gt; == false);
+}
+|output=
+ranges::size(v) == 0
+ranges::size(il) == 1
+ranges::size(array) == 2
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2602R2|std=C++20|before=存在禁止 [[cpp/language/adl|ADL]] 找到特定的非成员 {{tt|size}} 的机制|after=移除这种机制}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc ssize}}
+{{dsc inc|cpp/ranges/dsc sized_range}}
+{{dsc inc|cpp/iterator/ranges/dsc distance}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

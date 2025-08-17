@@ -1,0 +1,248 @@
+{{title|PImpl}}
+{{cpp/language/navbar}}
+
+“指向实现的指针”或“pImpl”是一种 C++ [[#外部链接|编程技巧]]，它将类的实现细节从对象表示中移除，放到一个分离的类中，并以一个不透明的指针进行访问：
+{{source|1=
+// ---------------
+// 接口（widget.h）
+class widget
+{
+    // 公开成员
+private:
+    struct impl; // 实现类的前置声明
+    // 一种实现示例：见下文中的其他设计选项和权衡
+    std::experimental::propagate_const&lt; // 转发 const 的指针包装器
+        std::unique_ptr&lt;                // 唯一所有权的不透明指针
+            impl&gt;&gt; pImpl;               // 指向前置声明的实现类
+};
+
+// -----------------
+// 实现（widget.cpp）
+struct widget::impl
+{
+   // 实现细节
+};
+}}
+
+此技巧用于构造拥有稳定 ABI 的 C++ 库接口，及减少编译时依赖。
+
+===解释===
+因为类的私有数据成员参与其对象表示，影响大小和布局，也因为类的私有成员函数参与{{rlp|overload resolution|重载决议}}（这会在成员访问检查之前发生），因此对实现细节的任何更改都要求该类的所有用户重新编译。
+
+pImpl 打破了这种编译依赖；实现的改动不会导致重编译。结果是，如果某个库在其 ABI 中使用 pImpl，那么这个库的新版本可以更改实现，并且与旧版本保持 ABI 兼容。
+
+===得失权衡===
+pImpl 技法的替代方案是：
+* 内联实现：私有成员和公开成员是同一类的成员
+* 纯虚类（OOP 工厂）：用户获得到某个轻量级或纯虚的基类的唯一指针，实现细节则处于覆盖其虚成员函数的派生类中。
+
+====编译防火墙====
+简单情况下，pImpl 和工厂方法都会打破实现和类接口的用户之间的编译时依赖。工厂方法创建对虚表的一次隐藏依赖，故而对虚函数进行重排序、添加或移除都会打破 ABI。pImpl 方法则没有隐藏的依赖，然而如果实现类是类模板特化，那么就会丧失编译防火墙的优势：接口的用户必须观测到整个模板定义，以实例化正确的特化。这种情况下的一种常见的设计方案是，以避免参数化的方式对实现进行重构，这是《C++ 核心指南》的另一种使用情况：
+* [https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#Rt-scary T.61 不要过分参数化成员] 和
+* [https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#t84-use-a-non-template-core-implementation-to-provide-an-abi-stable-interface T.84 使用非模板核心实现以提供 ABI 稳定的接口]。
+
+举例来说，以下的类模板在其私有成员或 {{tt|push_back}} 函数体内并未使用类型 {{tt|T}}：&lt;!-- 注意；示例的解参数化部分基于 User:Jwakely 的 http://accu.org/content/conf2011/Jonathan-Wakely-diet-templates.pdf --&gt;
+{{source|1=
+template&lt;class T&gt;
+class ptr_vector
+{
+    std::vector&lt;void*&gt; vp;
+public:
+    void push_back(T* p)
+    {
+        vp.push_back(p);
+    }
+};
+}}
+
+因此，能按原样把私有成员传递给实现，而且 {{tt|push_back}} 可以转发到同样未在接口使用 {{tt|T}} 的实现：
+{{example
+|code=
+// ---------------------
+// 头文件（ptr_vector.h）
+#include &lt;memory&gt;
+
+class ptr_vector_base
+{
+    struct impl; // 不依赖 T
+    std::unique_ptr&lt;impl&gt; pImpl;
+protected:
+    void push_back_fwd(void*);
+    void print() const;
+    ... // 见特殊成员函数的实现部分
+public:
+    ptr_vector_base();
+    ~ptr_vector_base();
+};
+
+template&lt;class T&gt;
+class ptr_vector : private ptr_vector_base
+{
+public:
+    void push_back(T* p) { push_back_fwd(p); }
+    void print() const { ptr_vector_base::print(); }
+};
+
+// -----------------------
+// 源文件（ptr_vector.cpp）
+// #include "ptr_vector.hpp"
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct ptr_vector_base::impl
+{
+    std::vector&lt;void*&gt; vp;
+
+    void push_back(void* p)
+    {
+        vp.push_back(p);
+    }
+
+    void print() const
+    {
+        for (void const * const p: vp) std::cout &lt;&lt; p &lt;&lt; '\n';
+    }
+};
+
+void ptr_vector_base::push_back_fwd(void* p) { pImpl-&gt;push_back(p); }
+ptr_vector_base::ptr_vector_base() : pImpl{std::make_unique&lt;impl&gt;()} {}
+ptr_vector_base::~ptr_vector_base() {}
+void ptr_vector_base::print() const { pImpl-&gt;print(); }
+
+// ---------------
+// 用户 (main.cpp)
+// #include "ptr_vector.hpp"
+
+int main()
+{
+    int x{}, y{}, z{};
+    ptr_vector&lt;int&gt; v;
+    v.push_back(&amp;x);
+    v.push_back(&amp;y);
+    v.push_back(&amp;z);
+    v.print();
+}
+|p=true
+|output=
+0x7ffd6200a42c
+0x7ffd6200a430
+0x7ffd6200a434
+}}
+
+====运行时开销====
+* 访问开销：在 pImpl 中每次对私有成员函数的调用都会通过一个指针间接进行。私有成员对公开成员的每次访问也都会通过另一个指针间接进行。两个访问都跨翻译单元边界，从而只能被链接时优化优化掉。注意 OO 工厂对公开数据和实现细节的访问都要求跨翻译单元间接进行，而且由于虚派发存在，链接时优化器进行优化的机会更少。
+* 空间开销：pImpl 添加一个指针到公开组分，并且如果有任何私有成员需要访问公开成员，那么要么添加另一个指针到实现组分，要么每次调用要求它的私有成员时作为参数传递。如果支持有状态自定义分配器，那么必须一同存储分配器实例。
+* 生存期管理开销：pImpl（还有 OO 工厂）将实现对象放在堆上，这在构造与销毁时强加了显著的运行时开销。这可以部分地由自定义分配器所弥补，因为 pImpl（但非 OO 工厂）的大小在编译时是已知的。
+
+另一方面，pImpl 类是对移动友好的；把大型的类重构为可以移动的 pImpl，可以提升对保有这些对象的容器进行操作的算法性能，即便可以移动的 pImpl 也具有额外的运行时开销：任何在被移动对象上容许使用并需要访问私有实现的公开成员函数必须进行空指针检查。
+
+{{todo|微基准测试？)}}
+
+====维护开销====
+pImpl 的使用要求专用的翻译单元（只有头文件的库无法使用 pImpl），引入一个额外类，一组转发函数，且当使用分配器时，会暴露公开接口所使用的分配器的细节。
+
+因为虚成员是 pImpl 的接口组分的一部分，所以模拟 pImpl 意味着单独模拟接口组分。可以测试的 pImpl 典型情况下被设计为允许通过可用接口达成完整的测试覆盖。
+
+===实现===
+由于接口类型的对象控制实现类型对象的生存期，指向实现的指针通常是 {{lc|std::unique_ptr}}。
+
+因为 {{lc|std::unique_ptr}} 要求被指向类型在任何实例化删除器的语境中均为完整类型，所以特殊成员函数必须由用户声明，并在实现文件（实现类完整处）中类外定义。
+
+因为当 const 成员通过非 const 成员指针调用函数时会调用实现函数的非 const 重载，所以该指针必须包装于 {{lc|std::experimental::propagate_const}} 或等价物中。
+
+将所有私有数据成员和所有私有非虚成员函数放到实现类中。将所有公开、受保护和虚的成员留在接口类中（对替代方案的讨论见 [http://herbsutter.com/gotw/_100/ GOTW #100]）。
+
+如果有任何私有成员需要访问公开或受保护的成员，那么可以将指向接口的引用或指针作为参数传递给私有函数。另外，也可以将回溯引用作为实现类的一部分维持。
+
+如果有意使用非默认分配器以支持实现对象的分配，那么可以利用任何常用的具分配器模式，包括默认为 {{lc|std::allocator}} 的分配器模板形参，以及类型为 {{ltt|cpp/memory/memory_resource|std::pmr::memory_resource*}} 的构造函数实参。
+
+===注解===
+{{todo|注明与值语义多态的关联}}
+
+===示例===
+{{example
+|演示有传播 const 的 pImpl，带有作为参数传递的回溯引用，不具分配器，并启用不带运行时检查的移动
+|code=
+// ---------------
+// 接口（widget.h）
+#include &lt;experimental/propagate_const&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+class widget
+{
+    class impl;
+    std::experimental::propagate_const&lt;std::unique_ptr&lt;impl&gt;&gt; pImpl;
+public:
+    void draw() const; // 公开 API，将被转发给实现
+    void draw();
+    bool shown() const { return true; } // 公开 API，实现必须调用它
+    
+    widget(); // 即使是默认构造函数也需要定义于实现文件之中
+              // 注意：在默认构造的对象上调用 draw() 是未定义行为
+    explicit widiget(int);
+    ~widget(); // 在实现文件中定义，其中 impl 是完整类型
+    widget(widget&amp;&amp;); // 在实现文件中定义
+                      // 注意：在被移动的对象上调用 draw() 是未定义行为
+    widget(const widget&amp;) = delete;
+    widget&amp; operator=(widget&amp;&amp;); // 在实现文件中定义
+    widget&amp; operator=(const widget&amp;) = delete;
+};
+
+// -----------------
+// 实现（widget.cpp）
+// #include "widget.hpp"
+
+class widget::impl
+{
+    int n; // 私有数据
+public:
+    void draw(const widget&amp; w) const
+    {
+        if (w.shown()) // 对公开成员函数的此调用要求回溯引用
+            std::cout &lt;&lt; "正在绘制 const 组件 " &lt;&lt; n &lt;&lt; '\n';
+    }
+    
+    void draw(const widget&amp; w)
+    {
+        if (w.shown())
+            std::cout &lt;&lt; "正在绘制非 const 组件 " &lt;&lt; n &lt;&lt; '\n';
+    }
+    
+    impl(int n) : n(n) {}
+};
+
+void widget::draw() const { pImpl-&gt;draw(*this); }
+void widget::draw() { pImpl-&gt;draw(*this); }
+widget::widget() = default;
+widget::widget(int n) : pImpl{std::make_unique&lt;impl&gt;(n)} {}
+widget::widget(widget&amp;&amp;) = default;
+widget::~widget() = default;
+widget&amp; widget::operator=(widget&amp;&amp;) = default;
+
+// ---------------
+// 用户（main.cpp）
+// #include "widget.hpp"
+
+int main()
+{
+    widget w(7);
+    const widget w2(8);
+    w.draw();
+    w2.draw();
+}
+|output=
+正在绘制非 const 组件 7
+正在绘制 const 组件 8
+}}
+
+{{todo|描述另一种替代方案 &amp;mdash; "快速 PImpl"。主要区别是实现的内存在（PImpl 类定义中的）不透明的 C 数组数据成员中保留实现的内存，而 cpp 文件中将此内存（通过 {{tt|reinterpret_cast}} 或布置 {{tt|new}}）映射为实现的结构。这种方法有其自身的优势和弱点，尤其是，一项明显的优势是其没有额外的分配，因其在 PImpl 类的''设计时''最初就已经保留了足够的内存。（而一种弱点则是减弱了移动友好性。）}}
+
+===外部链接===
+{{elink begin}}
+{{elink|[http://www.gotw.ca/gotw/028.htm GotW #28]：高速 Pimpl 手法}}
+{{elink|[https://herbsutter.com/gotw/_100/ GotW #100]：编译防火墙}}
+{{elink|[https://www.cppstories.com/2018/01/pimpl/ Pimpl 模式 - 必知必会]}}
+{{elink end}}
+
+{{langlinks|en|es|ja|ru}}

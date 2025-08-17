@@ -1,0 +1,107 @@
+{{cpp/title|promise}}
+{{cpp/thread/promise/navbar}}
+{{dcl begin}}
+{{dcl header|future}}
+{{dcl|num=1|since=c++11|
+template&lt; class R &gt; class promise;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class R &gt; class promise&lt;R&amp;&gt;;
+}}
+{{dcl|num=3|since=c++11|
+template&lt;&gt; class promise&lt;void&gt;;
+}}
+{{dcl end}}
+
+@1@ 基模板
+@2@ 非 {{tt|void}} 特化，用于在线程间交流对象
+@3@ {{tt|void}} 特化，用于交流无状态事件
+
+类模板 {{tt|std::promise}} 提供一种设施用以存储一个值或一个异常，之后通过 {{tt|std::promise}} 对象所创建的 {{lc|std::future}} 对象异步获得。注意 {{tt|std::promise}} 只应当使用一次。
+
+每个承诺体都与一个''共享状态''{{sep}}关联，其中含有一些状态信息和一个''结果''，它可能尚未求值，已求值为一个值（可能为 {{tt|void}}），或者求值为一个异常。承诺可以对共享状态做三件事：
+* ''使就绪''：承诺体存储结果或异常于共享状态。标记共享状态为就绪，并除阻在该共享状态所关联的未来体上等待的任何线程。
+* ''释放''：承诺体放弃其对共享状态的引用。若这是最后一个这种引用，则销毁共享状态。除非这是 {{c|std::async}} 所创建的未就绪的共享状态，否则此操作不阻塞。
+* ''抛弃''：承诺体存储以 {{lc|std::future_errc::broken_promise}} 为错误码的 {{lc|std::future_error}} 类型的异常，令共享状态为''就绪''，然后''释放''它。
+
+承诺体是承诺体-未来体交流通道的“推”端：向共享状态存储值的操作''同步于''（定义于 {{lc|std::memory_order}}）任何在共享状态上等待的函数（如 {{lc|std::future::get}}）的成功返回。其他情况下对共享状态的共时访问可能冲突：例如，{{lc|std::shared_future::get}} 的多个调用方必须全都是只读，或提供外部同步。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc constructor}}
+{{dsc inc|cpp/thread/promise/dsc destructor}}
+{{dsc inc|cpp/thread/promise/dsc operator{{=}}}}
+{{dsc inc|cpp/thread/promise/dsc swap}}
+
+{{dsc h2|获取结果}}
+{{dsc inc|cpp/thread/promise/dsc get_future}}
+
+{{dsc h2|设置结果}}
+{{dsc inc|cpp/thread/promise/dsc set_value}}
+{{dsc inc|cpp/thread/promise/dsc set_value_at_thread_exit}}
+{{dsc inc|cpp/thread/promise/dsc set_exception}}
+{{dsc inc|cpp/thread/promise/dsc set_exception_at_thread_exit}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc swap2}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc uses_allocator}}
+{{dsc end}}
+
+===示例===
+{{example
+|此示例展示能如何将 {{tt|promise&lt;int&gt;}} 用作线程间信号。
+|code=
+#include &lt;chrono&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+ 
+void accumulate(std::vector&lt;int&gt;::iterator first,
+                std::vector&lt;int&gt;::iterator last,
+                std::promise&lt;int&gt; accumulate_promise)
+{
+    int sum = std::accumulate(first, last, 0);
+    accumulate_promise.set_value(sum); // 提醒 future
+}
+
+void do_work(std::promise&lt;void&gt; barrier)
+{
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    barrier.set_value();
+}
+ 
+int main()
+{
+    // 演示用 promise&lt;int&gt; 在线程间传递结果。
+    std::vector&lt;int&gt; numbers = {1, 2, 3, 4, 5, 6};
+    std::promise&lt;int&gt; accumulate_promise;
+    std::future&lt;int&gt; accumulate_future = accumulate_promise.get_future();
+    std::thread work_thread(accumulate, numbers.begin(), numbers.end(),
+                            std::move(accumulate_promise));
+
+    // future::get() 将等待直至该 future 拥有合法结果并取得它
+    // 无需在 get() 前调用 wait()
+    // accumulate_future.wait(); // 等待结果
+    std::cout &lt;&lt; "result=" &lt;&lt; accumulate_future.get() &lt;&lt; '\n';
+    work_thread.join(); // wait for thread completion
+    
+    // 演示用 promise&lt;void&gt; 在线程间对状态发信号
+    std::promise&lt;void&gt; barrier;
+    std::future&lt;void&gt; barrier_future = barrier.get_future();
+    std::thread new_work_thread(do_work, std::move(barrier));
+    barrier_future.wait();
+    new_work_thread.join();
+}
+|output=
+result=21
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

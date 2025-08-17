@@ -1,0 +1,100 @@
+{{cpp/language/attributes/title|assume|notes={{mark since c++23}}}}
+{{cpp/language/attributes/navbar}}
+
+指示可以假设给定的表达式在给定位置总是求值为 {{c|true}}，以允许编译器根据给定的信息进行优化。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{{c/core|[&lt;!----&gt;[}}assume{{c/core|(}}}} {{spar|表达式}} {{ttb|{{c/core|)]&lt;!----&gt;]}}}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|表达式}}|（无括号的[[cpp/language/operator other#内建的逗号运算符|逗号表达式]]以外的）任意表达式}}
+{{par end}}
+
+===解释===
+{{c/core|[[assume]]}} 只能被应用到[[cpp/language/statements#表达式语句|空语句]]，如 {{c|[[assume(x &gt; 0)]];}}。该语句被称为一条''假设''{{sep}}。
+
+{{spar sep|表达式}}会[[cpp/language/implicit conversion#按语境转换|按语境转换到 {{c/core|bool}}]]，但不会求值（依然会[[cpp/language/expressions#潜在求值表达式|潜在求值]]）。
+* 如果转换后的{{spar sep|表达式}}在假设出现的位置求值为 {{c|true}}，那么假设不会有任何效果。
+* 否则对假设求值具有[[cpp/language/ub|运行时未定义行为]]。
+
+===注解===
+因为假设在不成立时会导致运行时未定义行为，所以必须小心使用它们。它们不用来提供函数的前提条件文档或者诊断是否违反前条件。另外，不要未经检验就假设编译器实际会使用任何特定的假设。
+
+一种正确用法是连续使用断言和假设：
+
+{{source
+|code=
+assert(x &gt; 0);     // 在 NDEBUG 没有定义时检查条件，如果条件不成立则触发断言
+[[assume(x &gt; 0)]]; // 在 NDEBUG 定义时提供优化机会
+}}
+
+===示例===
+{{source
+|code=
+#include &lt;cmath&gt;
+
+void f(int&amp; x, int y)
+{
+    void g(int);
+    void h();
+    
+    [[assume(x &gt; 0)]]; // 编译器可以假设 x 是正数
+    
+    g(x / 2); // 可以生成更高效的代码
+    
+    x = 3;
+    int z = x;
+    
+    [[assume((h(), x == z))]]; // 编译器可以假设在调用 h 后 x 的值保持相同
+                               // 该假设本身不会调用 h
+    
+    h();
+    g(x); // 编译器可以用 g(3); 替换该语句
+    
+    h();
+    g(x); // 编译器不能用 g(3); 替换该语句
+          // 假设只在它出现的地方适用
+    
+    z = std::abs(y);
+    
+    [[assume((g(z), true))]]; // 编译器可以假设 g(z) 会返回
+    
+    g(z); // 根据上面和下面的假设，编译器可以用 g(10); 替换该语句
+    
+    [[assume(y == -10)]]; // 这里 y != -10 的情况下行为未定义
+    
+    [[assume((x - 1) * 3 == 12)]];
+    
+    g(x); // 编译器可以用 g(5); 替换该语句
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2924|std=C++11|before=违背假设会导致未定义行为|after=会导致运行时未定义行为}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.12.3|title=Assumption attribute|id=dcl.attr.assume}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc unreachable}}
+{{dsc inc|cpp/language/dsc contract_assert}}
+{{dsc end}}
+
+===外部链接===
+{{elink begin}}
+{{elink|Clang 语言扩展文档：[https://clang.llvm.org/docs/LanguageExtensions.html#langext-builtin-assume {{tt|__builtin_assume}}]。}}
+{{elink|Clang 属性参考文档：[https://clang.llvm.org/docs/AttributeReference.html#assume {{tt|assume}}]。}}
+{{elink|MSVC 文档：[https://learn.microsoft.com/en-us/cpp/intrinsics/assume {{tt|__assume}}] 内建函数。}}
+{{elink|GCC 文档：[https://gcc.gnu.org/onlinedocs/gcc/Statement-Attributes.html#index-assume-statement-attribute {{tt|__attribute__((assume(...)))}}]。}}
+{{elink end}}
+
+{{langlinks|en|es|ja|ru}}

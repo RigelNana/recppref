@@ -1,0 +1,71 @@
+{{cpp/title|kill_dependency}}
+{{cpp/thread/navbar}}
+{{ddcla|header=atomic|since=c++11|deprecated=c++26|constexpr=c++26|
+template&lt; class T &gt;
+T kill_dependency( T y ) noexcept;
+}}
+
+{{rrev multi|rev1=
+告诉编译器 {{lc|std::memory_order_consume}} 原子加载操作所开始的依赖树不会扩张越过 {{tt|std::kill_dependency}} 的返回值；即实参不会将依赖携带进返回值。
+
+这可用于在依赖链离开函数作用域（而函数无 {{attr|carries_dependency}} 属性）时，避免不必要的 {{lc|std::memory_order_acquire}} 栅栏。
+|since2=c++26|rev2=
+简单地返回 {{c|y}}。此函数模板被弃用。
+}}
+
+===参数===
+{{par begin}}
+{{par|y|要从依赖树移除其返回值的表达式}}
+{{par end}} 
+
+===返回值===
+返回 {{tt|y}}{{rev inl|until=c++26|，它不再是依赖树的一部分}}。
+
+===示例===
+=====file1.cpp:=====
+{{source|1=
+struct Foo
+{
+    int* a;
+    int* b;
+};
+
+std::atomic&lt;Foo*&gt; foo_head[10];
+int foo_array[10][10];
+
+// 消费操作开始依赖链，它将脱离此函数
+[[carries_dependency]] Foo* f(int i)
+{
+    return foo_head[i].load(memory_order_consume);
+}
+
+// 依赖链通过有参数进入此函数，而在函数前被杀掉（故不发生额外的获得操作）
+int g(int* x, int* y [[carries_dependency]])
+{
+    return std::kill_dependency(foo_array[*x][*y]);
+}
+}}
+=====file2.cpp:=====
+{{source|1=
+[[carries_dependency]] struct Foo* f(int i);
+int g(int* x, int* y [[carries_dependency]]);
+
+int c = 3;
+void h(int i)
+{
+    Foo* p;
+    p = f(i); // f 内开始的依赖链持续进入 p，而无过度的获得
+    do_something_with(g(&amp;c, p-&gt;a)); // p-&gt;b 不从缓存进口
+    do_something_with(g(p-&gt;a, &amp;c)); // 左参数无 carries_dependency 属性：
+                                    // 可能发生内存获得栅栏
+                                    // p-&gt;b 在进入 g() 前变为可见
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc memory_order}}
+{{dsc see c|c/atomic/kill_dependency}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

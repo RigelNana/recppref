@@ -1,0 +1,891 @@
+{{title|函数声明}}
+{{cpp/language/functions/navbar}}
+
+函数声明引入函数名和它的类型。函数定义将函数名/类型与函数体关联起来。
+
+===函数声明===
+函数声明可以在任何作用域出现。类作用域中的函数声明引入成员函数（除非使用 {{c/core|friend}} 说明符），细节见{{rlp|member functions|成员函数}}和{{rlp|friend|友元函数}}。
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|非指针声明符}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{spar optional|cv限定符}} {{spar optional|引用限定符}} {{spar optional|异常说明}} {{spar optional|属性}}
+}}
+{{sdsc|num=2|notes={{mark since c++11}}|
+{{spar|非指针声明符}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{spar optional|cv限定符}} {{spar optional|引用限定符}} {{spar optional|异常说明}} {{spar optional|属性}}&lt;br&gt;{{ttb|-&gt;}} {{spar|尾随返回类型}}
+}}
+{{sdsc end}}
+
+（{{spar sep|声明符}}语法的其他形式见{{rlp|declarations|声明}}页面）
+
+@1@ 常规函数声明符语法。
+@2@ 尾随返回类型声明。这种情况中的{{spar sep|声明说明符序列}}必须包含关键词 {{c/core|auto}}。
+
+{{par begin}}
+{{par|{{spar|非指针声明符}}|任何合法的{{spar|声明符}}，但如果它以 {{tt|*}}、{{tt|&amp;}} 或 {{tt|&amp;&amp;}} 开始，那么它必须被括号环绕。}}
+{{par|{{spar|形参列表}}|函数形参的逗号分隔列表，可以为空（细节见下文）}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}的列表。这些属性应用于函数的类型，而非函数自身。声明符中标识符之后出现的属性与声明开端出现的属性合并到一起，如果存在。}}
+{{par|{{spar|cv限定符}}|const/volatile 限定，只能在非静态成员函数中使用}}
+{{par|{{spar|引用限定符}}|{{mark since c++11}} 引用限定，只能在非静态成员函数中使用}}
+{{par|{{spar|异常说明}}|{{rrev multi|until1=c++11|until2=c++17|rev1={{rlp|except spec|动态异常说明}}|rev2={{rlp|except spec|动态异常说明}}或 {{rlp|noexcept spec|noexcept 说明}}|rev3={{rlp|noexcept spec|noexcept 说明}}}}}}
+{{par|{{spar|尾随返回类型}}|{{mark since c++11}} 尾随返回类型，当返回类型取决于实参名时，例如 {{c|template&lt;class T, class U&gt; auto add(T t, U u) -&gt; decltype(t + u);}}，或当返回类型复杂时，例如在 {{c|auto fpif(int)-&gt;int(*)(int)}} 中，尾随返回类型很有用}}
+{{par end}}
+
+
+{{rrev|since=c++20|
+如{{rlp|declarations#声明符|声明}}页面所示，声明符可以后随 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}，它声明与该函数关联的{{rlp|constraints|约束}}，而{{rlp|overload resolution|重载决议}}所要选择的函数必须满足该制约。（例如 {{c|void f1(int a) requires true;}}）注意，关联的制约是函数签名的一部分，但不是函数类型的一部分。
+}}
+
+只要{{rlp|declarations#说明符|声明说明符序列}}允许，函数声明符就可以和其他声明符混合：
+{{source|1=
+// 声明一个 int、一个 int*、一个函数，及一个函数指针
+int a = 1, *p = NULL, f(), (*pf)(double);
+// 声明说明符序列 是 int
+// 声明符 f() 声明（但不定义）一个不接受实参并返回 int 的函数
+
+struct S
+{
+    virtual int f(char) const, g(int) &amp;&amp;; // 声明两个非静态成员函数
+    virtual int f(char), x; // 编译时错误：（声明说明符序列中的）virtual
+                            // 只能声明非静态成员函数
+};
+}}
+
+{{rrev|since=c++20|
+以 volatile 限定的对象类型作为形参类型或返回类型是被弃用的。
+}}
+
+函数的返回类型不能是函数类型或数组类型（但可以是到它们的指针或引用）。
+
+{{rev begin}}
+{{rev|since=c++11|
+与任何声明相同，声明前出现的属性和声明符中直接跟在标识符之后的属性都会应用到所声明或定义的实体（在这个例子中，应用到函数）：
+{{source|
+[[noreturn]] void f [[noreturn]] (); // OK：两个属性都应用到函数 f
+}}
+然而，（按上述语法）在声明符后出现的属性会应用到函数类型而非函数自身：
+{{source|
+void f() [[noreturn]]; // 错误：此属性对函数自身没有影响
+}}
+}}
+{{rev|since=c++14|
+===返回类型推导===
+如果函数声明的{{spar sep|声明说明符序列}}包含关键词 {{c/core|auto}}，那么尾随返回类型可以省略，且编译器将从返回语句中所用的表达式的类型推导出它。如果返回类型没有使用 {{c/core|decltype(auto)}}，那么推导遵循{{rlp|template argument deduction#其他语境|模板实参推导}}的规则进行：
+{{source|1=
+int x = 1;
+auto f() { return x; }        // 返回类型是 int
+const auto&amp; f() { return x; } // 返回类型是 const int&amp;
+}}
+如果返回类型是 {{c/core|decltype(auto)}}，那么返回类型是将返回语句中所用的表达式包裹到 {{rlpt|decltype}} 中时所得到的类型：
+{{source|1=
+int x = 1;
+decltype(auto) f() { return x; }   // 返回类型是 int，同 decltype(x)
+decltype(auto) f() { return (x); } // 返回类型是 int&amp;，同 decltype((x))
+}}
+（注意：“{{c/core|const decltype(auto)&amp;}}”是错误的，{{c/core|decltype(auto)}} 必须独自使用）
+
+如果有多条返回语句，那么它们必须推导出相同的类型：
+{{source|
+auto f(bool val)
+{
+    if (val) return 123; // 推导出返回类型 int
+    else return 3.14f;  // 错误：推导出返回类型 float
+} 
+}}
+
+如果没有返回语句或返回语句的实参是 void 表达式，那么所声明的返回类型，必须要么是 {{c/core|decltype(auto)}}，此时推导返回类型是 {{c/core|void}}，要么是（可有 cv 限定的）{{c/core|auto}}，此时推导的返回类型是（具有相同 cv 限定的）{{c/core|void}}。
+{{source|
+auto f() {}              // 返回 void
+auto g() { return f(); } // 返回 void
+auto* x() {}             // 错误: 不能从 void 推导 auto*
+}}
+
+一旦在函数中见到一条返回语句，那么从该语句推导的返回类型就可以用于函数的剩余部分，包括其他返回语句：
+{{source|1=
+auto sum(int i)
+{
+    if (i == 1)
+        return i;              // sum 的返回类型是 int
+    else
+        return sum(i - 1) + i; // OK，sum 的返回类型已知
+}
+}}
+
+如果返回语句使用{{rlp|initialization|花括号包围的初始化器列表}}，那么就不能推导：
+{{source|
+auto func() { return {1, 2, 3}; } // 错误
+}}
+
+{{rlp|virtual|虚函数}}{{rev inl|since=c++20|与{{rlp|coroutines|协程}}}}不能使用返回类型推导：
+{{source|
+struct F
+{
+    virtual auto f() { return 2; } // 错误
+};
+}}
+
+除了{{rlp|cast operator|用户定义转换函数}}以外的{{rlp|function template|函数模板}}可以使用返回类型推导。即使返回语句中的表达式并非{{rlp|dependent name|待决}}，推导也在实例化时发生。这种实例化并不处于 {{rlp|sfinae|SFINAE}} 的目的的立即语境中。
+{{source|1=
+template&lt;class T&gt;
+auto f(T t) { return t; }
+typedef decltype(f(1)) fint_t;    // 实例化 f&lt;int&gt; 以推导返回类型
+
+template&lt;class T&gt;
+auto f(T* t) { return *t; }
+void g() { int (*p)(int*) = &amp;f; } // 实例化两个 f 以确定返回类型，
+                                  // 选择第二个模板重载
+}}
+
+使用返回类型推导的函数或函数模板的重声明或特化必须使用同一返回类型占位符：
+{{source|
+auto f(int num) { return num; }
+// int f(int num);            // 错误：返回类型未使用占位符
+// decltype(auto) f(int num); // 错误：占位符不同
+ 
+template&lt;typename T&gt;
+auto g(T t) { return t; }
+template auto g(int);     // OK：返回类型是 int
+// template char g(char); // 错误：不是主模板 g 的特化
+}}
+
+反过来也一样：不使用返回类型推导的函数或函数模板的重声明或特化不能使用返回类型占位符：
+{{source|
+int f(int num);
+// auto f(int num) { return num; } // 错误：不是 f 的重声明
+ 
+template&lt;typename T&gt;
+T g(T t) { return t; }
+template int g(int);      // OK：特化 T 为 int
+// template auto g(char); // 错误：不是主模板 g 的特化
+}}
+
+{{rlp|function template#显式实例化|显式实例化声明}}本身并不会实例化使用返回类型推导的函数模板：
+{{source|1=
+template&lt;typename T&gt;
+auto f(T t) { return t; }
+extern template auto f(int); // 不会实例化 f&lt;int&gt;
+
+int (*p)(int) = f; // 实例化 f&lt;int&gt; 以确定它的返回类型，
+                   // 但仍需要在程序的别处出现显式实例化的定义
+}}
+}}
+{{rev end}}
+
+===形参列表===
+形参列表决定调用函数时所能指定的实参。它是''形参声明''{{sep}}的逗号分隔列表，其中每一项拥有下列语法：
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar|声明符}}
+}}
+{{sdsc|num=2|notes={{mark since c++23}}|{{anchor|版本_2}}
+{{spar optional|属性}} {{ttb|this}} {{spar|声明说明符序列}} {{spar|声明符}}
+}}
+{{sdsc|num=3|
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar|声明符}} {{ttb|1==}} {{spar|初始化器}}
+}}
+{{sdsc|num=4|
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar optional|抽象声明符}}
+}}
+{{sdsc|num=5|notes={{mark since c++23}}|{{anchor|版本_5}}
+{{spar optional|属性}} {{ttb|this}} {{spar|声明说明符序列}} {{spar optional|抽象声明符}}
+}}
+{{sdsc|num=6|
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar optional|抽象声明符}} {{ttb|1==}} {{spar|初始化器}}
+}}
+{{sdsc|num=7|
+{{ttb|void}}
+}}
+{{sdsc end}}
+
+@1@ 声明一个具名（形式）参数。{{spar sep|声明说明符序列}}和{{spar sep|声明符}}的含义见{{rlp|declarations|声明}}页面。
+@@ {{cc|
+int f(int a, int* p, int (*(*x)(double))[3]);
+}}
+@2@ 声明一个具名{{ls|#显式对象形参}}。
+@3@ 声明一个带有{{rlp|default arguments|默认值}}的具名（形式）参数。
+@@ {{cc|1=
+int f(int a = 7, int* p = nullptr, int (*(*x)(double))[3] = nullptr);
+}}
+@4@ 声明一个无名形参。
+@@ {{cc|
+int f(int, int*, int (*(*)(double))[3]);
+}}
+@5@ 声明一个无名{{ls|#显式对象形参}}。
+@6@ 声明一个具有{{rlp|default arguments|默认值}}的无名形参。
+@@ {{cc|1=
+int f(int = 7, int* = nullptr, int (*(*)(double))[3] = nullptr);
+}}
+@7@ 指示函数不接受形参，它是空形参列表的确切同义词：{{c|int f(void);}} 和 {{c|int f();}} 声明同一函数。
+@@ 只有 {{c|void}} 这一种形式与空形参列表等价，{{c/core|void}} 形参的其他用法非良构：
+{|class="wikitable"
+!错误用法
+!示例
+|-
+|存在多个形参
+|{{c|int f1(void, int);}}
+|-
+|{{c/core|void}} 形参具名
+|{{c|inf f2(void param);}}
+|-
+|{{c/core|void}} 具有 cv 限定
+|{{c|int f3(const void);}}
+|-
+|{{c/core|void}} 是{{rlp|dependent name|待决}}的
+|{{c|int f4(T);}} (where {{tt|T}} is {{c/core|void}})
+|-
+|{{c/core|void}} 形参是[[#显式对象形参|显式对象形参]] {{mark since c++23}}
+|{{c|int f5(this void);}}
+|}
+
+{{rev begin}}
+{{rev|until=c++17|
+尽管{{spar sep|声明说明符序列}}暗示可以存在类型说明符之外的{{rlps|declarations#说明符}}，但可用的其他说明符只有 {{c/core|register}} {{rev inl|until=c++11|和 {{c/core|auto}}}}，而且它没有任何效果。
+}}
+{{rev|since=c++20|
+如果任何函数形参使用了''占位符''（{{c/core|auto}} 或 [[cpp/concepts|概念类型]]），那么函数声明转变为{{rlps|function template#简写函数模板}}声明：
+{{source|
+void f1(auto);    // 同 template&lt;class T&gt; void f(T)
+void f2(C1 auto); // 如果 C1 是概念，同 template&lt;C1 T&gt; void f7(T)
+}}
+}}
+{{rev|since=c++23|
+{{anchor|显式对象形参}}
+带说明符 {{c/core|this}} 的形参声明（形式 {{vl|2}}/{{vl|5}}）声明的是''显式对象形参''。
+
+显式对象形参不能是{{rlp|pack|函数形参包}}，并且只能作为以下声明中的形参列表的首个形参：
+* {{rlp|member functions|成员函数}}或成员函数模板声明
+* 模板化成员函数的{{rlps|function template#显式实例化}}或{{rlp|template specialization|显式特化}}
+* {{rlp|lambda}} 声明
+
+有显式对象形参的成员函数具有以下限制：
+* 该函数不是{{rlp|static|静态}}函数。
+* 该函数不是{{rlp|virtual|虚}}函数。
+* 该函数的[[#函数声明|声明]]不含 {{spar sep|cv限定符}}和{{spar|引用限定符}}。
+
+{{source|
+struct C
+{
+    void f(this C&amp; self);     // OK
+    
+    template&lt;typename Self&gt;
+    void g(this Self&amp;&amp; self); // 模板也 OK
+    
+    void p(this C) const;     // 错误：此处不允许使用 “const”
+    static void q(this C);    // 错误：此处不允许使用 “static”
+    void r(int, this C);      // 错误：显式对象形参只能是首个形参
+};
+
+// void func(this C&amp; self);   // 错误：非成员函数不能有显式对象形参
+}}
+}}
+{{rev end}}
+
+函数声明中声明的形参名通常只用作以自身为文档。&lt;!--有时，在使用尾随返回类型时它们有意义--&gt;它们在函数定义中被使用（但仍不强制）。
+
+当类型名称被圆括号包围时{{rev inl|since=c++11|（包括 {{rlp|lambda|lambda 表达式}}）}}会产生歧义。此时可以解析成类型是函数指针的形参的声明以及{{spar sep|声明符}}中的标识符被额外的圆括号包围的形参的声明。解决方案是将该类型名称视为{{rlp|declarations#说明符|简单类型说明符}}（此时它即是函数指针类型）：
+{{source|
+class C {};
+
+void f(int(C)) {} // void f(int(*fp)(C param)) {}
+                  // 不是 void f(int C) {}
+
+void g(int *(C[10])); // void g(int *(*fp)(C param[10]));
+                      // 不是 void g(int *C[10]);
+}}
+
+形参类型不能是含有到未知边界数组的引用或指针的类型，含有这种类型的多级指针/数组，或含有指向以这些类型为形参的函数的指针。
+
+====使用省略号====
+形参列表的最后一个形参可以是省略号（{{c|...}}）；这会声明一个{{rlp|variadic arguments|变参函数}}&lt;span class="t-rev-inl"&gt;位于省略号前的逗号可以省略{{mark deprecated c++26}}&lt;/span&gt;：
+{{source|
+int printf(const char* fmt, ...); // 变参函数
+int printf(const char* fmt...);   // 同上，但 C++26 起被弃用
+
+template&lt;typename... Args&gt;
+void f(Args..., ...); // 带形参包的变参函数模板
+
+template&lt;typename... Args&gt;
+void f(Args... ...);  // 同上，但 C++26 起被弃用
+
+template&lt;typename... Args&gt;
+void f(Args......);   // 同上，但 C++26 起被弃用
+}}
+
+===函数类型===
+====形参类型列表====
+函数的''形参类型列表''{{sep}}按以下方式确定：
+# 每个形参{{rev inl|since=c++11|（包括{{rlp|pack|形参包}}）}}的类型通过形参自身的[[#形参列表|声明]]确定。
+# 在确定每个形参的类型后，类型是 “{{tt|T}} 的数组”或某个函数类型 {{tt|T}} 的形参会调整为具有类型“指向 {{tt|T}} 的指针”。
+# 在产生形参类型的列表后，在组成函数类型时会移除所有修改了形参类型的顶层 {{rlp|cv|cv 限定符}}。
+# 转换后的形参类型的列表，加上是否有出现[[#使用省略号|省略号]]{{rev inl|since=c++11|或者{{rlp|pack|形参包}}}}的特征共同组成了函数的形参类型列表。
+
+{{source|
+void f(char*);         // #1
+void f(char[]) {}      // 定义了 #1
+void f(const char*) {} // OK，另一重载
+void f(char* const) {} // 错误：重定义了 #1
+
+void g(char(*)[2]);   // #2
+void g(char[3][2]) {} // 定义了 #2
+void g(char[3][3]) {} // OK，另一重载
+
+void h(int x(const int)); // #3
+void h(int (*)(int)) {}   // 定义了 #3
+}}
+
+====确定函数类型====
+在语法 {{v|1}} 中，在假设{{spar sep|非指针声明符}}是独立声明的情况下，给定{{spar sep|非指针声明符}}中{{spar sep|有限定标识}}或{{spar sep|无限定标识}}的类型为“{{tt|T}} 派生的声明符类型列表”：
+{{rrev|since=c++17|
+* 如果异常说明是{{rlp|noexcept spec|不抛出}}的，那么声明的函数的类型是&lt;br&gt;“返回 {{tt|T}} 的 {{spar optional|cv限定符}} {{spar optional|引用限定符}}接受形参类型列表的 {{c/core|noexcept}} 函数 派生的声明符类型列表”。
+}}
+* {{rev inl|since=c++17|否则，}}声明的函数的类型是&lt;br&gt;“返回 {{tt|T}} 的 {{spar optional|cv限定符}}{{rev inl|since=c++11| {{spar optional|引用限定符}}}}接受形参类型列表的函数 派生的声明符类型列表”。
+
+{{rev begin}}
+{{rev|since=c++11|
+在语法 {{v|2}} 中，在假设{{spar sep|非指针声明符}}是独立声明的情况下，给定{{spar sep|非指针声明符}}中{{spar sep|有限定标识}}或{{spar sep|无限定标识}}的类型为“{{tt|T}} 派生的声明符类型列表”（此时 {{tt|T}} 只能是 {{c/core|auto}}）：
+}}
+{{rev|since=c++17|
+* 如果异常说明是{{rlp|noexcept spec|不抛出}}的，那么声明的函数的类型是&lt;br&gt;“返回{{spar sep|尾随返回类型}}的 {{spar optional|cv限定符}} {{spar optional|引用限定符}}&lt;br&gt;接受形参类型列表的 {{c/core|noexcept}} 函数 派生的声明符类型列表”。
+}}
+{{rev|since=c++11|
+* {{rev inl|since=c++17|否则，}}声明的函数的类型是&lt;br&gt;“返回{{spar sep|尾随返回类型}}的 {{spar optional|cv限定符}} {{spar optional|引用限定符}}接受形参类型列表的函数 派生的声明符类型列表”。
+存在{{spar sep|属性}}时，它会应用到函数类型。
+}}
+{{rev end}}
+
+{{source|
+// f1 的类型是“返回 void 的接受 int 的函数，带有属性 noreturn”
+void f1(int a) [[noreturn]];
+
+// f2 的类型是“返回 int 的接受指向 int 的指针的 constexpr noexcept 函数”
+constexpr auto f2(int[] b) noexcept -&gt; int;
+
+struct X
+{
+    // f3 的类型是“返回 const int 的 const 的不接受参数的函数”
+    const int f3() const;
+};
+}}
+
+====尾随限定符====
+有 {{spar sep|cv限定符}}{{rev inl|since=c++11|或{{spar sep|引用限定符}}}}的函数类型(包括以 {{rlpt|typedef}} 名命名的类型)只能作为以下类型出现：
+* {{rlp|member functions|非静态成员函数}}的类型。
+* 成员指针指代的函数类型。
+* 函数 {{c/core|typedef}} 声明{{rev inl|since=c++11|或{{rlp|type alias|别名声明}}}}的顶层函数类型。
+* {{rlps|template parameters#模板类型形参}}的默认实参中的{{rlp|type#类型的命名|类型标识}}。
+* 模板类型形参对应的模板实参的类型标识。
+
+{{source|1=
+typedef int FIC(int) const;
+FIC f;     // 错误：声明的不是成员函数
+
+struct S
+{
+    FIC f; // OK
+};
+
+FIC S::*pm = &amp;S::f; // OK
+}}
+
+===函数签名===
+每个函数都有一个签名。
+
+函数签名包含函数的名字和[[#形参类型列表|形参类型列表]]。除以下情况外，函数签名也包含函数的外围{{rlp|namespace|命名空间}}：
+* 如果函数是{{rlp|member functions|成员函数}}，那么它的签名会包含以该函数为成员的类而非它的外围命名空间。它的签名也包含以下组分（如果存在）：
+:* {{spar|cv限定符}}
+{{rev begin}}
+{{rev|since=c++11|
+:* {{spar|引用限定符}}
+}}
+{{rev|since=c++20|
+:* 尾随 {{c/core|requires}} 子句
+* 如果函数是带尾随 {{c/core|requires}} 子句的非模板{{rlp|friend|友元}}函数，那么它的签名会包含它的外围类而非它的外围命名空间。签名也会包含该尾随 {{c/core|requires}} 子句。
+}}
+{{rev end}}
+
+{{spar sep|异常说明}}{{rev inl|since=c++11|和{{spar|属性}}}}不是函数签名的一部分{{rev inl|since=c++17|，尽管 {{rlp|noexcept spec|{{c/core|noexcept}} 说明}}会影响函数类型}}。
+
+===函数定义===
+非成员函数的定义只能在命名空间作用域中出现（不存在嵌套函数）。{{rlp|member functions|成员函数}}的定义也可以在{{rlp|class|类定义}}的体内出现。它们拥有下列语法：
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{spar optional|声明说明符序列}} {{spar|声明符}} {{spar optional|虚说明}} {{spar optional|契约说明}} {{spar|函数体}}
+}}
+{{sdsc|num=2|notes={{mark since c++20}}|
+{{spar optional|属性}} {{spar optional|声明说明符序列}} {{spar|声明符}} {{spar|requires子句}} {{spar optional|契约说明}} {{spar|函数体}}
+}}
+{{sdsc end}}
+@1@ 没有约束的函数定义。
+@2@ 有约束的函数定义。
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}的列表。这些属性与可能出现在{{spar sep|声明符}}中标识符之后的属性（见本页顶部）合并到一起。}}
+{{par|{{spar|声明说明符序列}}|带有说明符的返回类型，与{{rlp|declarations|声明文法}}相同}}
+{{par|{{spar|声明符}}|函数声明符，与上述函数声明语法相同（可以被圆括号包围）}}
+{{par|{{spar|虚说明}}|{{mark since c++11}} {{rlpt|override}}、{{rlpt|final}}，或它们任意顺序的组合（只能用于非静态成员函数）}}
+{{par|{{spar|requires子句}}|{{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}}}
+{{par|{{spar|契约说明}}|{{mark since c++26}} [[#函数契约说明符|函数契约说明符]]的列表}}
+{{par|{{spar|函数体}}|函数体（见下文）}}
+{{par end}}
+
+
+{{spar sep|函数体}}是下列之一：
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|构造函数初始化器}} {{spar|复合语句}}}}
+{{sdsc|num=2|
+{{spar|函数try块}}}}
+{{sdsc|num=3|notes={{mark since c++11}}|
+{{ttb|1==}} {{ttb|default}} {{ttb|;}}}}&lt;!--分号是语法的一部分--&gt;
+{{sdsc|num=4|notes={{mark since c++11}}|
+{{ttb|1==}} {{ttb|delete}} {{ttb|;}}}}
+{{sdsc|num=5|notes={{mark since c++26}}|
+{{ttb|1==}} {{ttb|delete}} {{ttb|(}} {{spar|字符串字面量}} {{ttb|);}}}}
+{{sdsc end}}
+@1@ 常规函数体。
+@2@ {{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}。
+@3@ 显式预置的函数定义。
+@4@ 显式弃置的函数定义。
+@5@ 显式弃置的函数定义，带有错误消息。
+
+{{par begin}}
+{{par|{{spar|构造函数初始化器}}|{{rlp|initializer list|成员初始化器列表}}，只能用于构造函数}}
+{{par|{{spar|复合语句}}|花括号环绕的{{rlp|statements#复合语句|语句序列}}，它们构成函数体}}
+{{par|{{spar|函数try块}}|{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}}}
+{{par|{{spar|字符串字面量}}|[[cpp/language/string literal#不求值字符串|不求值字符串字面量]]，可以用于解释函数为何被弃置的理由}}
+{{par end}}
+
+{{source|1=
+int max(int a, int b, int c)
+{
+    int m = (a &gt; b) ? a : b;
+    return (m &gt; c) ? m : c;
+}
+
+// 声明说明符序列是“int”
+// 声明符是“max(int a, int b, int c)”
+// 函数体是 { ... }
+}}
+
+函数体是一条{{rlps|statements#复合语句}}（由一对花括号环绕的零或多条语句），它们在函数调用时被执行。{{rlp|constructor|构造函数}}的函数体还包括以下内容：
+* 对于所有标识符未在该构造函数的{{rlp|constructor|成员初始化器列表}}中出现的非静态数据成员，用于初始化对应成员{{rlps|object#子对象}}的{{rev inl|since=c++11|{{rlp|data members#成员初始化|默认成员初始化式}}或}}{{rlp|default initialization|默认初始化}}。
+* 对于所有类型名未在该构造函数的成员初始化器列表中出现的基类，用于初始化对应基类子对象的默认初始化。
+
+{{rev begin}}
+{{rev|since=c++11|
+如果函数定义包含了{{spar|虚说明}}，那么定义的必须是{{rlp|member functions|成员函数}}。
+}}
+{{rev|since=c++20|
+如果函数定义包含了 {{spar|requires子句}}，那么定义的必须是{{rlp|templates#模板化实体|模板化函数}}。
+}}
+{{rev end}}
+
+{{source|1=
+void f() override {} // 错误：不是成员函数
+
+void g() requires (sizeof(int) == 4) {} // 错误：不是模板化函数
+}}
+
+函数的各个形参类型和返回类型不能是（可有 cv 限定的）{{rlp|incomplete type|不完整的}}{{rlp|class|类类型}}，{{rev inl|since=c++11|除非函数已显式定义为被弃置}}。完整性检查只会在函数体中进行，因此{{rlp|member functions|成员函数}}可以返回在其中定义它们的类（或它的外围类），尽管在定义点它可能不完整（它在函数体内完整）。
+
+在函数定义的{{spar sep|声明符}}中声明的形参在函数体内{{rlp|scope|处于作用域中}}。如果某个形参没有在函数体中使用，那么它不需要具名（只需要使用抽象声明符）：
+{{source|1=
+void print(int a, int) // 没有使用第二个形参
+{
+    std::printf("a = %d\n", a);
+}
+}}
+尽管形参上的顶层 {{rlp|cv|cv 限定符}}在函数声明中被忽略，它们仍然会修饰形参的类型，这在函数体中可见：
+{{source|
+void f(const int n) // 声明 void(int) 类型的函数
+{
+    // 但在体内，n 的类型是 const int
+}
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+====预置函数====
+如果函数定义具有语法 {{vl|3}}，那么该函数被定义为''显式预置的''。
+
+显式预置的函数必须是{{rlps|member functions#特殊成员函数}}{{rev inl|since=c++20|或{{rlp|operator comparison|比较运算符函数}}}}，并且不能有{{rlp|default arguments|默认实参}}。
+
+显式预置的特殊成员函数 {{tt|F1}} 与对应的隐式声明版本 {{tt|F2}} 可以有以下不同：
+* {{tt|F1}} 与 {{tt|F2}} 的{{spar sep|引用限定符}}和/或{{spar|异常说明}}可以不同。
+* 如果 {{tt|F2}} 有一个 {{c/core|const C&amp;}} 类型的非对象形参，那么 {{tt|F1}} 对应的非对象形参的类型可以是 {{tt|C&amp;}}。
+{{rrev|since=c++23|
+* 如果 {{tt|F2}} 有一个“到 {{tt|C}} 的引用”类型的隐式对象形参，那么 {{tt|F1}} 可以是有一个（可以不同的）“到 {{tt|C}} 的引用”类型的{{ls|#显式对象形参}}的显式对象成员函数，这种情况下 {{tt|F1}} 的类型可以因为多了一个形参而与 {{tt|F2}} 的类型不同。
+}}
+如果 {{tt|F1}} 与 {{tt|F2}} 的类型因为先前规则以外的原因不同，那么：
+* 如果 {{tt|F1}} 是赋值运算符，并且 {{tt|F1}} 与 {{tt|F2}} 的返回类型不同或 {{tt|F1}} 的非对象形参类型不是引用，那么程序非良构。
+* 否则，如果 {{tt|F1}} 在它的首个声明被显式预置，那么它会被定义为弃置。
+* 否则程序非良构。
+
+在首个声明被显式预置的函数隐式{{rlp|inline|内联}}，并且在它可以是 {{rlps|constexpr#constexpr 函数}}的情况下隐式具有 constexpr。
+
+{{source|1=
+struct S
+{
+    S(int a = 0) = default;             // 错误：有默认实参
+    void operator=(const S&amp;) = default; // 错误：返回类型不匹配
+    ~S() noexcept(false) = default;     // OK，异常说明可以不同
+private:
+    int i;
+    S(S&amp;);          // OK，私有构造函数
+};
+
+S::S(S&amp;) = default; // OK，定义了构造函数
+}}
+
+显式预置的函数和隐式声明的函数统称为''预置''{{sep}}函数。它们的实际定义会隐式提供，详情见这些函数各自对应的页面。
+
+====弃置函数====
+如果函数定义具有语法 {{vl|4}}{{rev inl|since=c++26| 或 {{vl|5}}}}，那么该函数被定义为''显式弃置的''。
+
+任何弃置函数的使用都是非良构的（程序无法编译）。这包含调用，包括显式（以函数调用运算符）及隐式（对弃置的重载运算符、特殊成员函数、分配函数等的调用），构成指向弃置函数的指针或成员指针，甚至是在不{{rlp|expressions#潜在求值表达式|潜在求值}}的表达式中使用弃置函数。
+
+非纯虚成员函数可以被定义为弃置，即便它被隐式 {{rlps|definition#ODR 使用}}。弃置函数只能被弃置函数覆写，而非弃置函数只能被非弃置函数覆写。
+
+{{rrev|since=c++26|
+如果出现{{spar|字符串字面量}}，那么鼓励实现将此文本作为其给出的诊断消息的一部分，用以展示弃置的理由或者给出替代建议。
+}}
+
+如果函数被重载，那么首先进行{{rlp|overload resolution|重载决议}}，且只有在选择了弃置函数时程序才非良构：
+{{source|1=
+struct T
+{
+    void* operator new(std::size_t) = delete;
+    void* operator new[](std::size_t) = delete("new[] 已被弃置"); // C++26 起
+};
+
+T* p = new T;    // 错误：尝试调用弃置的 T::operator new
+T* p = new T[5]; // 错误：尝试调用弃置的 T::operator new[]，产生诊断消息“new[] 已被弃置”
+}}
+
+函数的弃置定义必须是翻译单元中的首条声明：已经声明过的函数不能声明为弃置的：
+{{source|1=
+struct T { T(); };
+T::T() = delete; // 错误：必须在首条声明弃置
+}}
+
+====由用户提供的函数====
+如果一个函数由用户声明且没有在它的首个声明被显式预置或显式弃置，那么它''由用户提供''。由用户提供的显式预置的函数（即在它的首个声明后被显式预置）在它被显式预置的地方定义；如果该函数被隐式定义为弃置的，那么程序非良构。需要为不断变化的代码库提供稳定的二进制接口的情况下，在函数的首个声明后再定义为预置可以保证执行效率，也能提供简明的定义。
+{{source|1=
+// trivial 的所有特殊成员函数都分别在它们的首个声明处被显式预置，
+// 因此它们都不由用户提供
+struct trivial
+{
+    trivial() = default;
+    trivial(const trivial&amp;) = default;
+    trivial(trivial&amp;&amp;) = default;
+    trivial&amp; operator=(const trivial&amp;) = default;
+    trivial&amp; operator=(trivial&amp;&amp;) = default;
+    ~trivial() = default;
+};
+ 
+struct nontrivial
+{
+    nontrivial(); // 首个声明
+};
+ 
+// 没有在首个声明处被显式预置，
+// 因此该函数由用户提供并在此定义
+nontrivial::nontrivial() = default;
+}}
+
+====解决歧义====
+在以 {{ttb|{}}{{rev inl|since=c++26| 或 {{ttb|1==}}}} 开头的函数体和{{rlp|initialization|初始化器}}间有歧义的情况下，检查{{spar sep|非指针声明符}}的{{rlp|declarations#声明符|声明符标识符}}的类型来解决歧义：
+* 如果类型是函数类型，那么有歧义的记号序列会被视为函数体。
+* 否则有歧义的记号序列会被视为初始化器。
+
+{{source|1=
+using T = void(); // 函数类型
+using U = int;    // 非函数类型
+
+T a{}; // 定义一个什么也不做的函数
+U b{}; // 值初始化一个 int 对象
+
+T c = delete("hello"); // 定义一个被弃置的函数
+U d = delete("hello"); // 以 delete 表达式的结果复制初始化一个 int 对象（非良构）
+}}
+
+{{anchor|func}}
+====__func__====
+在函数体内，如同以如下方式定义了函数局部的预定义变量 {{lc|__func__}}：
+{{source|1=static const char __func__[] = "函数名";}}
+此变量具有块作用域及静态存储期：
+{{source|1=
+struct S
+{
+    S(): s(__func__) {} // OK：初始化器列表是函数体的一部分
+    const char* s;
+};
+void f(const char* s = __func__); // 错误：形参列表是声明符的一部分
+}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+void Foo() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; }
+
+struct Bar
+{
+    Bar() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; }
+    ~Bar() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; }
+    struct Pub { Pub() { std::cout &lt;&lt; __func__ &lt;&lt; ' '; } };
+};
+
+int main()
+{
+    Foo();
+    Bar bar;
+    Bar::Pub pub;
+}
+|p=true
+|output=
+Foo Bar Pub ~Bar
+}}
+}}
+{{rev|since=c++26|
+===函数契约说明符===
+函数声明和 {{rlp|lambda|lambda 表达式}}可以包含{{i|函数契约说明符}}的序列，说明符语法如下：
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|pre}} {{spar optional|属性}} {{ttb|(}} {{spar|谓词}} {{ttb|)}}
+}}
+{{sdsc|num=2|
+{{ttb|post}} {{spar optional|属性}} {{ttb|(}} {{spar|谓词}} {{ttb|)}}
+}}
+{{sdsc|num=3|
+{{ttb|post}} {{spar optional|属性}} {{ttb|(}} {{spar|标识符}} {{spar optional|结果属性}} {{ttb|:}} {{spar|谓词}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+@1@ 引入''前条件断言''。
+
+@2,3@ 引入''后条件断言''。
+:@2@ 断言没有绑定到结果。
+:@3@ 断言有绑定到结果。
+
+{{par begin}}
+{{par|{{spar|属性}}|附属于引入的契约断言的属性的列表}}
+{{par|{{spar|谓词}}|（无括号的{{rlp|operator other#内建的逗号运算符|逗号表达式}}以外的）任意表达式}}
+{{par|{{spar|标识符}}|指代结果的标识符}}
+{{par|{{spar|结果属性}}|附属于结果绑定的属性的列表}}
+{{par end}}
+
+
+前条件断言和后条件断言统称为''函数契约断言''。
+
+函数契约断言是与函数关联的{{rlp|contracts|契约断言}}。函数契约断言的谓词是它的{{rlps|implicit conversion#按语境转换}}到 {{c/core|bool}} 的{{spar|谓词}}。
+
+以下函数不能声明有函数契约说明符：
+* {{rlp|virtual|虚函数}}
+* [[#弃置函数|弃置函数]]
+* 在首次声明中[[#预置函数|预置]]的函数
+
+====前条件断言====
+前条件断言与进入函数关联：
+{{source|1=
+int divide(int dividend, int divisor) pre(divisor != 0)
+{
+    return dividend / divisor;
+}
+
+double square_root(double num) pre(num &gt;= 0)
+{
+    return std::sqrt(num);
+}
+}}
+
+====后条件断言====
+后条件断言与正常退出函数关联。
+
+如果后条件断言有{{spar|标识符}}，那么函数契约说明符会引入{{spar sep|标识符}}作为关联函数的''结果绑定''。结果绑定表示对该函数的调用返回的对象或引用。结果绑定的类型是关联函数的返回类型。
+{{source|1=
+int absolute_value(int num) post(r : r &gt;= 0)
+{
+    return std::abs(num);
+}
+
+double sine(double num) post(r : r &gt;= -1.0 &amp;&amp; r &lt;= 1.0)
+{
+    if (std::isnan(num) {{!!}} std::isinf(num))
+        // 以异常退出不会导致契约违背
+        throw std::invalid_argument("参数非法");
+    return std::sin(num);
+}
+}}
+
+如果后条件断言有{{spar|标识符}}，而关联函数的返回类型是（可有 cv 限定的 {{c/core|void}}），那么程序非良构：
+{{source|
+void f() post(r : r &gt; 0); // 错误：没有值能绑定到 “r”
+}}
+
+当非模板化函数声明的返回类型包含{{rlp|auto|占位类型}}时，有{{spar sep|标识符}}的后条件断言只能在函数定义中出现：
+{{source|1=
+auto g(auto&amp;) post(r : r &gt;= 0); // OK，“g” 是模板
+
+auto h() post(r : r &gt;= 0);      // 错误：无法命名返回值
+
+auto k() post(r : r &gt;= 0)       // OK，“k” 是定义
+{
+    return 0;
+}
+}}
+
+====契约一致性====
+函数或函数模板 {{c|func}} 的{{rlp|conflicting declarations#相同实体的多次声明|重声明}} {{tt|D}} 要么不能有{{spar sep|契约说明}}，要么{{spar sep|契约说明}}必须和从 {{tt|D}} 可及的首次声明 {{tt|F}} 的{{spar sep|契约说明}}相同。如果 {{tt|D}} 和 {{tt|F}} 在不同的翻译单元中，那么只要求在 {{tt|D}} 附着于具名模块的情况下进行诊断。
+
+如果声明 {{tt|F1}} 是 {{c|func}} 在某个翻译单元中的首次声明，而声明 {{tt|F2}} 是 {{c|func}} 在另一个翻译单元中的首次声明，那么 {{tt|F1}} 和 {{tt|F2}} 必须指定相同的{{spar|契约说明}}，不要求诊断。
+
+两个{{spar sep|契约说明}}在以相同顺序包含相同的函数契约说明符时相同。
+
+如果满足以下所有条件，那么函数声明 {{tt|D1}} 上的函数契约说明符 {{tt|C1}} 与函数声明 {{tt|D2}} 上的函数契约说明符 {{tt|C2}} 相同：
+* {{tt|C1}} 和 {{tt|C2}} 各自的{{spar sep|谓词}}分别被放在声明 {{tt|D1}} 和 {{tt|D2}} 的函数定义中时（如果 {{tt|D1}} 和 {{tt|D2}} 在不同的翻译单元中，那么在每个{{spar sep|谓词}}中定义的对应实体表现如同只存在具有一个定义的单个实体），它们在除了以下重命名外满足{{rlp|definition#ODR|单一定义规则}}：
+** 对声明的函数的形参的重命名。
+** 对声明的函数的外围模板的模板形参的重命名。
+** 对结果绑定（如果存在）的重命名。
+* {{tt|C1}} 和 {{tt|C2}} 要么都有{{spar|标识符}}，要么都没有。
+
+如果只是因为比较{{spar sep|谓词}}中的两个 lambda 表达式而不满足以上条件，那么不要求诊断。
+
+{{source|
+bool b1, b2;
+
+void f() pre (b1) pre([]{ return b2; }());
+void f(); // OK，省略函数契约说明符
+void f() pre (b1) pre([]{ return b2; }()); // 错误：闭包类型不同
+void f() pre (b1); // 错误：函数契约说明符不同
+
+int g() post(r : b1);
+int g() post(b1); // 错误：没有结果绑定
+
+namespace N
+{
+    void h() pre (b1);
+    bool b1;
+    void h() pre (b1); // 错误：函数契约说明符因单一定义规则而不同
+}
+}}
+}}
+{{rev end}}
+
+===注解===
+在使用直接初始化语法的变量声明和函数声明之间有歧义的情况下，编译器选择函数声明；见{{rlp|direct initialization#注解|直接初始化}}页面。
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=201304L|std=C++14|__cpp_decltype_auto|{{rlpt|auto|decltype(auto)}}}}
+{{ftm|value=201304L|std=C++14|__cpp_return_type_deduction|普通函数的{{lsd|#返回类型推导}}}}
+{{ftm|value=202110L|std=C++23|__cpp_explicit_this_parameter|{{ls|#显式对象形参}}（[[cpp/language/member functions#显式对象成员函数|推导 {{c/core|this}}]]）}}
+{{ftm|value=202403L|std=C++26|__cpp_deleted_function|带有理由的弃置函数}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/default}},
+{{ltt|cpp/keyword/delete}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+// 拥有默认实参的简单函数，不返回内容
+void f0(const std::string&amp; arg = "world!")
+{
+    std::cout &lt;&lt; "Hello, " &lt;&lt; arg &lt;&lt; '\n';
+}
+
+// 命名空间（文件）作用域中的声明
+// （定义在后面提供）
+int f1();
+
+// 返回指向 f0 的指针的函数，C++11 前的风格
+void (*fp03())(const std::string&amp;)
+{
+    return f0;
+}
+
+// 返回指向 f0 的指针的函数
+auto fp11() -&gt; void(*)(const std::string&amp;)
+{
+    return f0;
+}
+
+int main()
+{
+    f0();
+    fp03()("test!");
+    fp11()("again!");
+    int f2(std::string) noexcept; // 函数作用域中的声明
+    std::cout &lt;&lt; "f2(\"bad\")：" &lt;&lt; f2("bad") &lt;&lt; '\n';
+    std::cout &lt;&lt; "f2(\"42\")：" &lt;&lt; f2("42") &lt;&lt; '\n';
+}
+
+// 简单的非成员函数，返回 int
+int f1()
+{
+    return 007;
+}
+
+// 拥有异常说明和函数 try 块的函数
+int f2(std::string str) noexcept
+try
+{ 
+    return std::stoi(str);
+}
+catch (const std::exception&amp; e)
+{
+    std::cerr &lt;&lt; "stoi() 失败！\n";
+    return 0;
+}
+
+// 弃置函数，尝试调用它会造成编译错误
+void bar() = delete
+#   if __cpp_deleted_function
+    ("理由")
+#   endif
+;
+|p=true
+|output=
+stoi() 失败！
+Hello, world!
+Hello, test!
+Hello, again!
+f2("bad")：0
+f2("42")：42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=135|std=C++98|before=类内的成员函数定义的形参和返回值不能是类本身，因为它还不完整|after=允许此类定义}}
+{{dr list item|wg=cwg|dr=332|std=C++98|before=函数形参可以是有 cv 限定的 {{c/core|void}} 类型|after=已禁止}}
+{{dr list item|wg=cwg|dr=393|std=C++98|before=含有到未知边界数组的指针/引用的类型不能作为形参|after=允许这些类型}}
+{{dr list item|wg=cwg|dr=452|std=C++98|before=成员初始化器列表不是函数体的一部分|after=是函数体的一部分}}
+{{dr list item|wg=cwg|dr=577|std=C++98|before=待决 {{c/core|void}} 类型可以用来声明无形参函数|after=只有非待决的 {{c/core|void}} 可以}}
+{{dr list item|wg=cwg|dr=1327|std=C++11|before=显式预置或弃置的函数定义不能带有 {{c/core|override}} 或 {{c/core|final}} 说明符|after=可以带有这些说明符}}
+{{dr list item|wg=cwg|dr=1355|std=C++11|before=只有特殊成员函数能由用户提供|after=拓展到所有函数}}
+{{dr list item|wg=cwg|dr=1394|std=C++11|before=弃置函数不能有不完整类型的形参或返回不完整类型|after=允许这些地方有不完整的返回类型}}
+{{dr list item|wg=cwg|dr=1824|std=C++98|before=函数定义的返回类型和形参类型的完整性检查也会在函数定义的语境外进行|after=只能在函数定义的语境中检查}}
+{{dr list item|wg=cwg|dr=1877|std=C++14|before={{c|return;}} 在返回类型推导中被视为 {{c|return void();}}|after=此时直接将返回类型推导成 {{c/core|void}}}}
+{{dr list item|wg=cwg|dr=2015|std=C++11|before=虚弃置函数的隐式 ODR 使用非良构|after=将此类 ODR 使用从使用禁止豁免}}
+{{dr list item|wg=cwg|dr=2044|std=C++14|before=返回 {{c/core|void}} 但声明的返回类型是&lt;br&gt;{{c/core|decltype(auto)}} 的函数的返回类型推导会失败|after=更新推导规则以处理这种情况}}
+{{dr list item|wg=cwg|dr=2081|std=C++14|before=即使函数的最初声明没有使用返回类型推导，它的重声明也可以使用|after=不能使用}}
+{{dr list item|wg=cwg|dr=2144|std=C++11|before={{c|{}&lt;!----&gt;}} 在同一个地方既可以是函数体也可以是初始化器|after=通过声明符标识符的类型来区分}}
+{{dr list item|wg=cwg|dr=2145|std=C++98|before=函数定义中{{spar sep|声明符}}不能被圆括号包围|after=可以包围}}
+{{dr list item|wg=cwg|dr=2259|std=C++11|before=圆括号包围类型名称时产生的歧义的解决规则未覆盖 lambda 表达式|after=已覆盖}}
+{{dr list item|wg=cwg|dr=2430|std=C++98|before={{cwg|1824}} 的解决方案导致在类定义中的&lt;br&gt;函数定义中不能将该类作为返回类型形参类型|after=只能在函数体中检查}}
+{{dr list item|wg=cwg|dr=2760|std=C++98|before=构造函数的函数体不包括未在常规函数体中指定的初始化|after=也包括这些初始化}}
+{{dr list item|wg=cwg|dr=2831|std=C++20|before=带有 {{spar sep|requires子句}}的函数定义可以定义非模板化函数|after=已禁止}}
+{{dr list item|wg=cwg|dr=2846|std=C++23|before=显式对象成员函数不能有类外定义|after=可以有}}
+{{dr list item|wg=cwg|dr=2915|std=C++23|before=无名显式对象形参可以具有 {{c/core|void}} 类型|after=已禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/function declaration|声明函数|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

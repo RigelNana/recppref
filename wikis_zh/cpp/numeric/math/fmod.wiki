@@ -1,0 +1,107 @@
+{{cpp/title|fmod|fmodf|fmodl}}
+{{cpp/numeric/math/navbar}}
+{{cpp/numeric/math/declarations
+|family=fmod
+|param1=x
+|param2=y
+|constexpr_since=23
+|desc=计算除法运算 {{c|x / y}} 的浮点数余数。
+}}
+
+此函数计算的除法 {{c|x / y}} 的浮点数余数是 {{c|x - iquot * y}} 的准确值，其中 {{c|iquot}} 是截断小数部分的 {{c|x / y}}。
+
+返回值与 {{c|x}} 拥有相同符号，且绝对值小于 {{c|y}}。
+
+===参数===
+{{par begin}}
+{{par|x, y|浮点数或整数}}
+{{par end}}
+
+===返回值===
+在成功时返回在上文定义的除法 {{c|x / y}} 的浮点数余数。
+
+如果出现定义域错误，那么返回值由实现定义（受支持的平台上是 NaN）。
+
+如果出现下溢导致的值域错误，那么返回（舍入后的）正确结果。
+
+===错误处理===
+报告 {{lc|math_errhandling}} 中指定的错误。
+
+如果 {{c|y}} 为零，那么可能发生定义域错误。
+
+如果实现支持 IEEE 浮点数算术（IEC 60559），那么
+* 如果 {{c|x}} 是 ±0 且 {{c|y}} 非零，那么返回 ±0。
+* 如果 {{c|x}} 是 ±∞ 且 {{c|y}} 非 NaN，那么返回 NaN 并引发 {{lc|FE_INVALID}}。
+* 如果 {{c|y}} 是 ±0 且 {{c|x}} 非 NaN，那么返回 NaN 并引发 {{lc|FE_INVALID}}。
+* 如果 {{c|y}} 是 ±∞ 且 {{c|x}} 有限，那么返回 {{c|x}}。
+* 如果任一参数是 NaN，那么返回 NaN。
+
+===注解===
+[https://pubs.opengroup.org/onlinepubs/9699919799/functions/fmod.html POSIX 要求]在 {{c|x}} 是无穷大或 {{c|y}} 为零时出现定义域错误。
+
+{{tt|std::fmod}}，但不是 {{lc|std::remainder}}，适于安静地包装浮点数类型到无符号整数类型：{{c|1=(0.0 &lt;= (y = std::fmod(std::rint(x), 65536.0)) ? y : 65536.0 + y)}} 在范围 {{tt|[-0.0 .. 65535.0]}} 内，它对应 {{c/core|unsigned short}}，但 {{c|std::remainder(std::rint(x), 65536.0}} 在范围 {{tt|[-32767.0, +32768.0]}} 内，它在 {{c/core|signed short}} 的范围外。
+
+{{tt|std::fmod}} 的 {{c/core|double}} 版本表现为如同实现如下：
+{{source|1=
+double fmod(double x, double y)
+{
+#pragma STDC FENV_ACCESS ON
+    double result = std::remainder(std::fabs(x), y = std::fabs(y));
+    if (std::signbit(result))
+        result += y;
+    return std::copysign(result, x);
+}
+}}
+
+当舍入 {{c|x / y}} 到 {{lc|std::trunc}} 的参数损失过多精度时，表达式 {{c|x - trunc(x / y) * y}} 不一定会等于 {{c|fmod(x, y)}}（例如：{{c|1=x = 30.508474576271183309}}，{{c|1=y = 6.1016949152542370172}}）。
+
+{{cpp/numeric/math/additional overload note|fmod}}
+
+===示例===
+{{example
+|code=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout &lt;&lt; "fmod(+5.1, +3.0) = " &lt;&lt; std::fmod(5.1, 3) &lt;&lt; '\n'
+              &lt;&lt; "fmod(-5.1, +3.0) = " &lt;&lt; std::fmod(-5.1, 3) &lt;&lt; '\n'
+              &lt;&lt; "fmod(+5.1, -3.0) = " &lt;&lt; std::fmod(5.1, -3) &lt;&lt; '\n'
+              &lt;&lt; "fmod(-5.1, -3.0) = " &lt;&lt; std::fmod(-5.1, -3) &lt;&lt; '\n';
+    
+    // 特殊值
+    std::cout &lt;&lt; "fmod(+0.0, 1.0) = " &lt;&lt; std::fmod(0, 1) &lt;&lt; '\n'
+              &lt;&lt; "fmod(-0.0, 1.0) = " &lt;&lt; std::fmod(-0.0, 1) &lt;&lt; '\n'
+              &lt;&lt; "fmod(5.1, Inf) = " &lt;&lt; std::fmod(5.1, INFINITY) &lt;&lt; '\n';
+    
+    // 错误处理
+    std::feclearexcept(FE_ALL_EXCEPT);
+    std::cout &lt;&lt; "fmod(+5.1, 0) = " &lt;&lt; std::fmod(5.1, 0) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    发生 FE_INVALID\n";
+}
+|p=true
+|output=
+fmod(+5.1, +3.0) = 2.1
+fmod(-5.1, +3.0) = -2.1
+fmod(+5.1, -3.0) = 2.1
+fmod(-5.1, -3.0) = -2.1
+fmod(+0.0, 1.0) = 0
+fmod(-0.0, 1.0) = -0
+fmod(5.1, Inf) = 5.1
+fmod(+5.1, 0) = -nan
+    发生 FE_INVALID
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc div}}
+{{dsc inc|cpp/numeric/math/dsc remainder}}
+{{dsc inc|cpp/numeric/math/dsc remquo}}
+{{dsc see c|c/numeric/math/fmod}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|ko|pl|pt|ru}}

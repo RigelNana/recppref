@@ -1,0 +1,113 @@
+{{title|函数契约说明符 {{mark since c++26}}}}
+{{cpp/language/functions/navbar}}
+函数契约说明符（前条件写为 {{c/core|pre}}，后条件写为 {{c/core|post}}）是可应用于函数或 lambda 表达式的声明符的说明符，以向对应函数引入相应种类的函数契约断言。
+
+它们确保指定的条件成立在执行时，在调试构建中当条件求值为 {{c|false}}，或者求值由于异常退出时触发违例（如终止程序），也可在发布构建中为性能而将之忽略。
+
+====前条件====
+前条件 ({{c/core|pre}}) 是'''调用方'''必须确保于调用函数或 lambda ''之前''{{sep}}成立的谓词，调试构建中检查它以验证输入或状态。
+
+====后条件====
+后条件 ({{c/core|post}}) 是'''被调用方'''必须确保于函数或 lambda 执行结束''之后''{{sep}}成立的谓词，调试构建中验证它以确认输出或状态。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|pre}} {{spar optional|属性}} {{ttb|(}} {{spar|表达式}} {{ttb|)}}
+}}
+{{sdsc|num=2|
+{{ttb|post}} {{spar optional|属性}} {{ttb|(}} {{spar optional|结果名}} {{spar|谓词}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|任意数量的[[cpp/language/attributes|属性]]}}
+{{par|{{spar|结果名}}|{{spar|标识符}} {{ttb|:}}}}
+{{par|{{spar|标识符}}|与关联函数的结果绑定的名字}}
+{{par|{{spar|谓词}}|应当求值为 {{c|true}} 的布尔表达式}}
+{{par end}}{{br}}
+
+@1@ 前条件
+@2@ 后条件
+
+===关键词===
+{{ltt|cpp/identifier with special meaning/pre}}, {{ltt|cpp/identifier with special meaning/post}}
+
+===注解===
+{{ftm begin|core=true}}
+{{ftm|std=C++26|value=202502L|__cpp_contracts|[[cpp/language/contracts|契约]]}}
+{{ftm end}}
+
+===示例===
+* 函数 {{tt|normalize}} 的前条件要求调用方传递可正规化的向量。
+* 后条件则保证函数 {{tt|normalize}} 返回正规化后的 {{tt|vector}}。
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cmath&gt;
+#include &lt;concepts&gt;
+#include &lt;contracts&gt;
+#include &lt;limits&gt;
+#include &lt;print&gt;
+
+template &lt;std::floating_point T&gt;
+constexpr auto is_normalizable(const std::array&lt;T, 3&gt;&amp; vector) noexcept
+{
+    const auto&amp; [x, y, z]{vector};
+    const auto norm{std::hypot(x, y, z)};
+
+    return std::isfinite(norm) &amp;&amp; norm &gt; T {0};
+}
+
+template &lt;std::floating_point T&gt;
+constexpr auto is_normalized(const std::array&lt;T, 3&gt;&amp; vector) noexcept
+{
+    const auto&amp; [x, y, z]{vector};
+    const auto norm{std::hypot(x, y, z)};
+    constexpr auto tolerance{010 * std::numeric_limits&lt;T&gt;::epsilon()};
+
+    if (!is_normalizable(norm)) [[unlikely]]
+        return false;
+
+    return std::abs(norm - T{1}) &lt;= tolerance;
+}
+
+template &lt;std::floating_point T&gt;
+constexpr auto normalize(std::array&lt;T, 3&gt; vector) noexcept -&gt; std::array&lt;T, 3&gt;
+    pre(is_normalizable(vector))
+    post(vector: is_normalized(vector))
+{
+    auto&amp; [x, y, z]{vector};
+    const auto norm{std::hypot(x, y, z)};
+
+    x /= norm, y /= norm, z /= norm;
+
+    return vector;
+}
+
+int main()
+{
+    const auto v = normalize&lt;float&gt;({0.3, 0.4, 0.5});
+    std::println("{}", v);
+
+    const auto w = normalize&lt;float&gt;({0, 0, 0}); // 违反前条件和后条件
+    std::println("{}", w);
+}
+|p=true
+|output=
+[0.4242641, 0.56568545, 0.70710677]
+[-nan, -nan, -nan]
+}}
+
+===引用===
+{{ref std c++26}}
+{{ref std|section=9.(3+{{i|c}})|title= Function contract specifiers|id=dcl.contract}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc contracts}}
+{{dsc inc|cpp/language/dsc contract_assert}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

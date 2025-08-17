@@ -1,0 +1,126 @@
+{{title|如同规则}}
+{{cpp/language/basics/navbar}}
+允许进行任何不改变程序可观察行为的代码转换。
+
+===解释===
+程序的{{i|可观察行为}}包括：
+{{rev begin}}
+{{rev|until=c++11|
+* 在每一个{{rlp|eval order|序列点}}, 所有 {{rlp|cv|volatile}} 对象的值是稳定的（之前的求值已经完成，新的求值尚未开始）。
+}}
+{{rev|since=c++11|
+* 对 {{rlp|cv|volatile}} 对象的访问（读或写）严格按照它们所发生的表达式的语义进行。特别地，它们和同一线程中的其他 volatile 访问之间[[cpp/atomic/memory_order|不会发生重排]]。
+}}
+{{rev end}}
+{{rev begin}}
+{{rev|until=c++26|
+* 程序终止时，写入文件的数据完全如同程序是按照所写的代码那样执行的一般。
+}}
+{{rev|since=c++26|
+* 传递给数组宿主环境的数据会被写入文件。
+}}
+{{rev end}}
+* 发送到交互式设备的提示文本将在程序等待输入之前显示出来。
+* 如果 ISO C 语用 {{ltt|cpp/preprocessor/impl|#pragma STDC FENV_ACCESS}} 受到支持并被设为 {{tt|ON}}，则保证浮点算术运算符和函数调用会观察到对[[cpp/numeric/fenv|浮点环境]]（浮点异常和舍入模式）的修改，就如同按照所写的代码那样执行一般，但
+** 除去转型和赋值以外的任何浮点表达式的结果可能有不同于表达式本身的浮点范围和精度（参见 {{lc|FLT_EVAL_METHOD}}），
+** 尽管如此，任何浮点表达式的中间结果可能按照无限的范围和精度进行计算（除非 {{ltt|cpp/preprocessor/impl##pragma STDC|#pragma STDC FP_CONTRACT}} 为 {{tt|OFF}}）。
+
+{{rev begin}}
+{{rev|until=c++26|
+对于相同的输入，只要可观察行为始终属于程序对该输入可产生的所有可观察行为的其中之一，就允许 C++ 编译器对程序进行任何修改。
+
+然而如果某些输入会导致{{rlp|ub|未定义行为}}，那么编译器就无法保证程序对该输入会产生哪些可观察行为，即使可观察行为中有操作先发生于任何可能的未定义操作。
+}}
+{{rev|since=c++26|
+程序可能包含{{i|可观察检查点}}。
+
+对于操作 {{tt|OP}}，如果对于每个未定义操作 {{tt|U}} 都存在某个可观察检查点 {{tt|CP}} 使得 {{tt|OP}} 先发生于 {{tt|CP}} 且 {{tt|CP}} 先发生于 {{tt|U}}，那么 {{tt|OP}} {{i|免于未定义}}。对于指定输入，程序的{{i|有定义前缀}}包含了它所有的免于未定义的操作。
+
+对于相同的输入，只要有定义前缀的可观察行为始终属于程序对该输入可产生的有定义前缀的所有可观察行为的其中之一，就允许 C++ 编译器对程序进行任何修改。
+
+如果某些输入会导致{{rlp|ub|未定义行为}}，那么编译器就无法保证程序的有定义前缀以外的部分对该输入会产生哪些可观察行为。
+}}
+{{rev end}}
+
+===注解===
+由于编译器（通常）不能分析外部库的代码，以确定它是否执行输入/输出或者 volatile 访问，因此第三方库的调用同样不受这种优化的影响。然而，标准库调用可能会在优化过程中被其它调用替换，被消除，或者被添加到程序中。静态连接的第三方库代码可能会参与连接时优化。
+
+有未定义行为的程序当使用不同的优化设置重新编译时，它们常常会表现出不同的可观察行为。例如，如果一个有符号整数溢出的测试依赖于溢出的结果，比如 {{c|if(n+1 &lt; n) abort();}}，[http://blog.llvm.org/2011/05/what-every-c-programmer-should-know_14.html 则它会被某些编译器完全删除]，因为{{rlp|operator arithmetic#溢出|有符号数溢出是未定义行为}}而优化器可以自由地假设它永远不会发生，从而测试是多余的。
+
+{{rlp|copy elision|复制消除}}是“如同”规则的一项例外：编译器可以删除对移动和复制构造函数的调用以及与之匹配的临时对象析构函数的调用，纵使这些调用具有可观察的副作用也是如此。
+
+{{rrev|since=c++14|
+{{rlp|new#分配|{{c/core|new}} 表达式}}拥有“如同”规则的另一项例外：编译器可以移除对[[cpp/memory/new/operator new|可替换分配函数]]的调用，即使提供了一个用户定义的替代函数并且具有可观察的副作用也是如此。
+}}
+
+浮点异常的数目和顺序可以被优化改变，只要下一次浮点操作所观察到的状态就如同没有优化发生一样即可：
+{{source|1=
+#pragma STDC FENV_ACCESS ON
+for (i = 0; i &lt; n; ++i)
+    x + 1; // x + 1 是死代码，但可能会导致浮点异常（除非优化器能证否）。
+           // 然而，执行它 n 次只会反复导致同样的异常。 所以这可以被优化为：
+if (0 &lt; n)
+    x + 1; 
+}}
+
+===示例===
+{{example
+|code=
+int&amp; preinc(int&amp; n) { return ++n; }
+int add(int n, int m) { return n + m; }
+ 
+// volatile 输入用来避免常量折叠
+volatile int input = 7;
+ 
+// volatile 输出用来确保结果为可观察副作用
+volatile int result;
+ 
+int main()
+{
+    int n = input;
+// 使用内置运算符会导致未定义行为
+//  int m = ++n + ++n;
+// 但使用函数会确保代码的执行如同这些函数不发生重叠一般
+    int m = add(preinc(n), preinc(n));
+    result = m;
+}
+|output=
+# GCC 编译器所产生的 main() 函数的完整代码
+# x86 (Intel) 平台：
+        movl    input(%rip), %eax   # eax = input
+        leal    3(%rax,%rax), %eax  # eax = 3 + eax + eax
+        movl    %eax, result(%rip)  # result = eax
+        xorl    %eax, %eax          # eax = 0（main() 的返回值）
+        ret
+
+# PowerPC (IBM) 平台：
+        lwz 9,LC..1(2)
+        li 3,0          # r3 = 0（main() 的返回值）
+        lwz 11,0(9)     # r11 = input;
+        slwi 11,11,1    # r11 = r11 &lt;&lt; 1;
+        addi 0,11,3     # r0 = r11 + 3;
+        stw 0,4(9)      # result = r0;
+        blr
+
+# Sparc (Sun) 平台：
+        sethi   %hi(result), %g2
+        sethi   %hi(input), %g1
+        mov     0, %o0                 # o0 = 0（main() 的返回值）
+        ld      [%g1+%lo(input)], %g1  # g1 = input
+        add     %g1, %g1, %g1          # g1 = g1 + g1
+        add     %g1, 3, %g1            # g1 = 3 + g1
+        st      %g1, [%g2+%lo(result)] # result = g1
+        jmp     %o7+8
+        nop
+
+# 所有情况下 preinc() 的副作用都被消除，
+# 而且整个 main() 函数被简化到等价于 result = 2*input + 3;
+}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+{{dsc begin}}
+{{dsc see c|c/language/as if|如同规则|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

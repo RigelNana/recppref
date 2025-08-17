@@ -1,0 +1,127 @@
+{{cpp/title|format}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class... Args &gt;
+std::string format( std::format_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class... Args &gt;
+std::wstring format( std::wformat_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class... Args &gt;
+std::string format( const std::locale&amp; loc,
+                    std::format_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class... Args &gt;
+std::wstring format( const std::locale&amp; loc,
+                     std::wformat_string&lt;Args...&gt; fmt, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+按照格式字符串 {{c|fmt}} 格式化 {{c|args}}，并返回作为字符串的结果。若存在 {{c|loc}}，则它用于本地环境特定的格式化。
+
+@1@ 等价于 {{c|return std::vformat(fmt.get(), std::make_format_args(args...));}}。
+@2@ 等价于 {{c|return std::vformat(fmt.get(), std::make_wformat_args(args...));}}。
+@3@ 等价于 {{c|return std::vformat(loc, fmt.get(), std::make_format_args(args...));}}。
+@4@ 等价于 {{c|return std::vformat(loc, fmt.get(), std::make_wformat_args(args...));}}。
+
+从 {{wg21|P2216R3}} 起，{{tt|std::format}} 会对格式字符串进行编译时检查（通过辅助类型 {{lc|std::format_string}} 或 {{lc|std::wformat_string}}）。如果发现格式字符串与要格式化的实参类型不匹配，则会发出编译错误。如果格式字符串不能作为编译时常量，或者需要避免编译时检查，请使用 {{lc|std::vformat}} {{rev inl|since=c++26|或 {{c|fmt}} 上的 {{rlpt|runtime_format|std::runtime_format}} }}代替。
+
+以下要求适用于 {{tt|Args}} 中的每个类型 {{tt|T}}，其中 {{tt|CharT}} 对于重载 {{v|1,3}} 是 {{c|char}}，对于重载 {{v|2,4}} 是 {{c|wchar_t}}：
+* {{c|std::formatter&lt;T, CharT&gt;}} 必须满足 {{named req|BasicFormatter}}
+* {{c|std::formatter&lt;T, CharT&gt;::parse()}} 在 {{wg21|P2216R3}} 起必须为 {{c|constexpr}}（{{lc|std::vformat}} 不要求这点）
+
+===参数===
+{{par begin}}
+{{par|fmt|{{include|cpp/utility/format/format string|const}}}}
+{{par|args...|要格式化的实参}}
+{{par|loc|用于本地环境特定格式化的 {{lc|std::locale}}}}
+{{par end}}
+
+===返回值===
+保有格式化结果的字符串对象。
+
+===异常===
+在分配失败时抛出 {{lc|std::bad_alloc}}。并且会传播格式化器所抛的任何异常。
+
+===注解===
+提供多于格式字符串所要求的实参不是错误：
+
+{{source|
+std::format("{} {}!", "Hello", "world", "something"); // OK，产生 "Hello world!"
+}}
+
+自 {{wg21|P2216R3}} 起，格式字符串不是常量表达式是错误。此情况下可使用 {{lc|std::vformat}}。
+
+{{source|
+std::string f(std::string_view runtime_format_string)
+{
+    // return std::format(runtime_format_string, "foo", "bar"); // 错误
+    return std::vformat(runtime_format_string, std::make_format_args("foo", "bar")); // OK
+}
+}}
+
+{{rrev|since=c++26|可以直接在 {{tt|std::format}} 上使用 {{lc|std::runtime_format}}，代替要求以 {{lc|std::basic_format_args}} 为实参的 {{lc|std::vformat}}。
+
+{{source|
+std::string f(std::string_view runtime_format_string)
+{
+    return std::format(std::runtime_format(runtime_format_string), "foo", "bar");
+}
+}}
+
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;format&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+
+template &lt;typename... Args&gt;
+std::string dyna_print(std::string_view rt_fmt_str, Args&amp;&amp;... args)
+{
+    return std::vformat(rt_fmt_str, std::make_format_args(args...));
+}
+
+int main()
+{
+    std::cout &lt;&lt; std::format("Hello {}!\n", "world");
+
+    std::string fmt;
+    for (int i{}; i != 3; ++i)
+    {
+        fmt += "{} "; // 构造格式化字符串
+        std::cout &lt;&lt; fmt &lt;&lt; " : ";
+        std::cout &lt;&lt; dyna_print(fmt, "alpha", 'Z', 3.14, "unused");
+        std::cout &lt;&lt; '\n';
+    }
+}
+|output=
+Hello world!
+{}  : alpha 
+{} {}  : alpha Z 
+{} {} {}  : alpha Z 3.14 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2216R3|std=C++20|before=对非法格式字符串抛出 {{lc|std::format_error}} |after=非法格式字符串导致编译时错误}}
+{{dr list item|paper=P2418R2|std=C++20|before=既不可常量使用也不可复制的对象&lt;br&gt;（例如生成器类对象）不可格式化|after=允许格式化这些对象}}
+{{dr_p2508}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc format_to}}
+{{dsc inc|cpp/utility/format/dsc format_to_n}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

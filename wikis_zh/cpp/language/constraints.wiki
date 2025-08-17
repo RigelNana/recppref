@@ -1,0 +1,473 @@
+{{title|约束与概念 {{mark since c++20}}}}
+{{cpp/language/templates/navbar}}
+
+{{rlp|class template|类模板}}，{{rlp|function template|函数模板}}（包括{{rlp|lambda|泛型 lambda}}），以及其他{{rlp|templates#模板化实体|模板化函数}}（通常为类模板的成员），可以与一项{{i|约束}}相关联，它指定了对模板实参的一些要求，这些要求可以被用于选择最恰当的函数重载和模板特化。
+
+这种{{rlp|requires|要求}}的具名集合被称为{{i|概念}}。每个概念都是一个谓词，它在编译时求值，并在将之用作约束时成为模板接口的一部分：
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;concepts&gt;
+#include &lt;functional&gt;
+#include &lt;string&gt;
+
+// 概念 Hashable 的声明可以被符合以下条件的任意类型 T 满足：
+// 对于 T 类型的值 a，表达式 std::hash&lt;T&gt;{}(a) 可以编译并且它的结果可以转换到 std::size_t
+template&lt;typename T&gt;
+concept Hashable = requires(T a)
+{
+    { std::hash&lt;T&gt;{}(a) } -&gt; std::convertible_to&lt;std::size_t&gt;;
+};
+
+struct meow {};
+
+// 受约束的 C++20 函数模板
+template&lt;Hashable T&gt;
+void f(T);
+//
+// 应用相同约束的另一种方式：
+// template&lt;typename T&gt;
+//     requires Hashable&lt;T&gt;
+// void f(T) {}
+//
+// template&lt;typename T&gt;
+// void f(T) requires Hashable&lt;T&gt; {}
+//
+// void f(Hashable auto /* 形参名 */) {}
+
+int main()
+{
+    using std::operator""s;
+    
+    f("abc"s);    // OK，std::string 满足 Hashable
+    // f(meow{}); // 错误：meow 不满足 Hashable
+}
+}}
+
+在编译时（模板实例化过程的早期）就检测是否违背约束，这样错误信息就更容易理解：
+
+{{source|1=
+std::list&lt;int&gt; l = {3,-1,10};
+std::sort(l.begin(), l.end()); 
+// 没有概念时典型编译器的诊断：
+// 二元表达式的操作数非法 ('std::_List_iterator&lt;int&gt;' 和 'std::_List_iterator&lt;int&gt;')
+//                           std::__lg(__last - __first) * 2);
+//                                     &lt;nowiki&gt;~~~~~~ ^ ~~~~~~~&lt;/nowiki&gt;
+// …… 50 行输出……
+//
+// 有概念时典型编译器的诊断：
+// 错误：无法以 std::_List_iterator&lt;int&gt; 调用 std::sort
+// 注意：未满足概念 RandomAccessIterator&lt;std::_List_iterator&lt;int&gt;&gt;
+}}
+
+概念的目的是塑造语义分类（Number、Range、RegularFunction）而非语法上的限制（HasPlus、Array）。按照 [https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#t20-avoid-concepts-without-meaningful-semantics ISO C++ 核心方针 T.20] 所说，“与语法限制相反，真正的概念的一个决定性的特征是有能力指定有意义的语义。”
+
+===概念===
+概念是{{rlp|requires|要求}}的具名集合。概念的定义必须在命名空间作用域中出现。
+
+概念定义拥有以下形式：
+
+{{sdsc begin}}
+{{sdsc|{{ttb|template &lt;}} {{spar|模板形参列表}} {{ttb|&gt;}}
+{{ttb|concept}} {{spar optional|概念名 属性}} {{ttb|1==}} {{spar|约束表达式}}{{ttb|;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|任意数量的{{rlp|attributes|属性}}的序列}}
+{{par end}}
+
+{{source|1=
+// 概念
+template&lt;class T, class U&gt;
+concept Derived = std::is_base_of&lt;U, T&gt;::value;
+}}
+
+概念不能递归地提及自身，而且不能受约束：
+
+{{source|1=
+template&lt;typename T&gt;
+concept V = V&lt;T*&gt;; // 错误：递归的概念
+
+template&lt;class T&gt;
+concept C1 = true;
+template&lt;C1 T&gt;
+concept Error1 = true; // 错误：C1 T 试图约束概念定义
+template&lt;class T&gt; requires C1&lt;T&gt;
+concept Error2 = true; // 错误：requires 子句试图约束概念
+}}
+
+概念不能被显式实例化、显式特化或部分特化（不能更改约束的原初定义的含义）。
+
+概念可以在标识表达式中命名。该标识表达式的值在满足约束表达式时是 {{c|true}}，否则是 {{c|false}}。
+
+概念在作为以下内容的一部分时也可以在类型约束中被命名：
+
+* {{rlp|template parameters#模板类型形参|模板类型形参声明}}
+* {{rlp|auto|占位类型说明符}}
+* {{rlp|requires#复合要求|复合要求}}
+
+概念在 {{spar|类型约束}} 中接受的实参要比它的形参列表要求的要少一个，因为按语境推导出的类型会隐式地用作第一个实参：
+
+{{source|1=
+template&lt;class T, class U&gt;
+concept Derived = std::is_base_of&lt;U, T&gt;::value;
+ 
+template&lt;Derived&lt;Base&gt; T&gt;
+void f(T); // T 被 Derived&lt;T, Base&gt; 约束
+}}
+
+===约束===
+约束是逻辑操作和操作数的序列，它指定了对模板实参的要求。它们可以在 {{c/core|requires}} 表达式中出现，也可以直接作为概念的主体。
+
+有{{rev inl|until=c++26|三}}{{rev inl|since=c++26|四}}种类型的约束：
+@1@ 合取
+@2@ 析取
+@3@ 原子（不可分割）约束
+
+{{rrev|since=c++26|
+@4@ 折叠展开约束
+}}
+
+对包含遵循以下顺序的操作数的逻辑与表达式进行[[#约束规范化|规范化]]，确定与一个声明关联的约束：
+* 每个声明中受约束的{{rlps|template parameters#类型模板形参}}或带{{rlp|auto|占位类型}}声明的非类型模板形参所引入的约束表达式，按出现顺序；
+* 模板形参列表之后的 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}中的约束表达式；
+* {{rlp|function template#简写函数模板|简写函数模板声明}}中每个拥有受约束{{rlp|auto|占位类型}}的形参所引入的约束表达式;
+* 尾部的 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}中的约束表达式。
+
+这个顺序决定了在检查是否满足时各个约束时的实例化顺序。
+
+====重复声明====
+受约束的声明只能以相同的语法形式重声明。不要求诊断：
+
+{{source|1=
+
+// 前两条 f 的声明没有问题
+template&lt;Incrementable T&gt;
+void f(T) requires Decrementable&lt;T&gt;;
+
+template&lt;Incrementable T&gt;
+void f(T) requires Decrementable&lt;T&gt;; // OK：重声明
+
+// f 的第三个声明式，逻辑上等价但语法上不同，若包括它则非良构，无须诊断
+template&lt;typename T&gt;	
+    requires Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt;
+void f(T); // 非良构，不要求诊断
+
+// 下列两个声明拥有不同的约束：
+// 第一个声明拥有 Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt;
+// 第二个声明拥有 Decrementable&lt;T&gt; &amp;&amp; Incrementable&lt;T&gt;
+// 尽管它们在逻辑上等价
+
+template&lt;Incrementable T&gt; 
+void g(T) requires Decrementable&lt;T&gt;;
+
+template&lt;Decrementable T&gt; 
+void g(T) requires Incrementable&lt;T&gt;; // 非良构，不要求诊断
+}}
+
+====合取====
+两个约束的合取是通过在约束表达式中使用 {{tt|&amp;&amp;}} 运算符来构成的：
+
+{{source|1=
+template&lt;class T&gt;
+concept Integral = std::is_integral&lt;T&gt;::value;
+template&lt;class T&gt;
+concept SignedIntegral = Integral&lt;T&gt; &amp;&amp; std::is_signed&lt;T&gt;::value;
+template&lt;class T&gt;
+concept UnsignedIntegral = Integral&lt;T&gt; &amp;&amp; !SignedIntegral&lt;T&gt;;
+}}
+
+两个约束的合取只有在两个约束都被满足时才会得到满足。合取从左到右短路求值（如果不满足左侧的约束，那么就不会尝试对右侧的约束进行模板实参替换：这样就会防止出现立即语境外的替换所导致的失败）。
+
+{{source|
+
+template&lt;typename T&gt;
+constexpr bool get_value() { return T::value; }
+
+template&lt;typename T&gt;
+    requires (sizeof(T) &gt; 1 &amp;&amp; get_value&lt;T&gt;())
+void f(T);   // #1
+
+void f(int); // #2
+
+void g() 
+{
+    f('A'); // OK，调用 #2。当检查 #1 的约束时，
+            // 不满足 'sizeof(char) &gt; 1'，故不检查 get_value&lt;T&gt;()
+}
+
+}}
+
+====析取====
+两个约束的析取，是通过在约束表达式中使用 {{tt|{{!!}}}} 运算符来构成的：
+
+如果其中一个约束得到满足，那么两个约束的析取得到满足。析取从左到右短路求值（如果满足左侧约束，那么就不会尝试对右侧约束进行模板实参替换）。
+
+{{source|1=
+template&lt;class T = void&gt;
+    requires EqualityComparable&lt;T&gt; {{!!}} Same&lt;T, void&gt;
+struct equal_to;
+}}
+
+====原子约束====
+原子约束由一个表达式 {{c|E}}，和一个从 {{c|E}} 内出现的模板形参到（对受约束实体的各模板形参的有所涉及的）模板实参的映射组成。这种映射被称作{{i|形参映射}}。
+
+原子约束在[[#约束规范化|约束规范化]]过程中形成。{{c|E}} 始终不会是逻辑与或者逻辑或表达式（它们分别构成合取和析取）。
+
+对原子约束是否满足的检查会通过替换形参映射和各个模板实参到表达式 {{c|E}} 中来进行。如果替换产生了无效的类型或表达式，那么约束就没有被满足。否则，在任何左值到右值转换后，{{c|E}} 应当是 {{c/core|bool}} 类型的纯右值常量表达式，当且仅当它求值为 {{c|true}} 时该约束才会得到满足。
+
+{{c|E}} 在替换后的类型必须严格为 {{c/core|bool}}。不能有任何转换：
+
+{{source|1=
+template&lt;typename T&gt;
+struct S
+{
+    constexpr operator bool() const { return true; }
+};
+
+template&lt;typename T&gt;
+    requires (S&lt;T&gt;{})
+void f(T);   // #1
+
+void f(int); // #2
+
+void g()
+{
+    f(0); // 错误：检查 #1 时 S&lt;int&gt;{} 不具有 bool 类型，
+          // 尽管 #2 能更好地匹配
+}
+}}
+
+如果两个原子约束由在源码层面上相同的表达式组成，且它们的形参映射等价，那么认为它们''等同''。
+
+{{source|1=
+template&lt;class T&gt;
+constexpr bool is_meowable = true;
+
+template&lt;class T&gt;
+constexpr bool is_cat = true;
+
+template&lt;class T&gt;
+concept Meowable = is_meowable&lt;T&gt;;
+
+template&lt;class T&gt;
+concept BadMeowableCat = is_meowable&lt;T&gt; &amp;&amp; is_cat&lt;T&gt;;
+
+template&lt;class T&gt;
+concept GoodMeowableCat = Meowable&lt;T&gt; &amp;&amp; is_cat&lt;T&gt;;
+
+template&lt;Meowable T&gt;
+void f1(T); // #1
+
+template&lt;BadMeowableCat T&gt;
+void f1(T); // #2
+
+template&lt;Meowable T&gt;
+void f2(T); // #3
+
+template&lt;GoodMeowableCat T&gt;
+void f2(T); // #4
+
+void g()
+{
+    f1(0); // 错误，有歧义：
+           // BadMeowableCat 和 Meowable 中的 is_meowable&lt;T&gt;
+           // 构成了有区别的原子约束且它们并不等同（因此它们不互相包含）
+    
+    f2(0); // OK，调用 #4，它比 #3 更受约束
+           // GoodMeowableCat 从 Meowable 获得其 is_meowable&lt;T&gt;
+}
+
+}}
+
+{{rrev|since=c++26|
+====折叠展开约束====
+''折叠展开约束''{{sep}}由约束 {{tt|C}} 和折叠运算符（{{tt|&amp;&amp;}} 或 {{tt|{{!!}}}}）组成。折叠展开约束是{{rlp|parameter pack|包展开}}。
+
+设 {{c|N}} 为包展开参数中元素的个数：
+* 如果包展开无效（例如展开不同大小的多个包），那么折叠展开约束不会得到满足。
+* 如果 {{c|N}} 是 {{c|0}}，那么折叠展开约束在折叠运算符是 {{tt|&amp;&amp;}} 时会得到满足，而在折叠运算符是 {{tt|{{!!}}}} 时不会得到满足。
+* 对于具有正数 {{c|N}} 的折叠展开约束，对于 {{closed range|1|N}} 中的每一个 {{c|i}}，按递增顺序以第 {{c|i}} 个元素替换每个对应的包展开参数：
+:* 对于折叠运算符是 {{tt|&amp;&amp;}} 的折叠展开约束，如果对第 {{c|j}} 个元素的替换会违背 {{tt|C}}，那么该折叠展开约束不会得到满足。此时不会对大于 {{c|j}} 的任何 {{c|i}} 进行替换。否则，该折叠展开约束会得到满足。
+:* 对于折叠运算符是 {{tt|{{!!}}}} 的折叠展开约束，如果对第 {{c|j}} 个元素的替换会满足 {{tt|C}}，那么该折叠展开约束会得到满足。此时不会对大于 {{c|j}} 的任何 {{c|i}} 进行替换。否则，该折叠展开约束不会得到满足。
+
+{{source|1=
+template &lt;class T&gt; concept A = std::is_move_constructible_v&lt;T&gt;;
+template &lt;class T&gt; concept B = std::is_copy_constructible_v&lt;T&gt;;
+template &lt;class T&gt; concept C = A&lt;T&gt; &amp;&amp; B&lt;T&gt;;
+
+// C++23 中，g() 的这两个重载具有不同的原子约束，不相同且不包含另一方：调用 g() 有歧义
+// C++26 中，折叠被展开，重载 #2 的约束（同时需要移动和复制）包含重载 #1 的约束（仅需要移动）
+template &lt;class... T&gt;
+requires (A&lt;T&gt; &amp;&amp; ...) void g(T...); // #1
+
+template &lt;class... T&gt;
+requires (C&lt;T&gt; &amp;&amp; ...) void g(T...); // #2
+
+}}
+
+}}
+
+====约束规范化====
+''约束规范化''{{sep}}是将一个约束表达式变换为一个原子约束的合取与析取的序列的过程。表达式的''范式''{{sep}}定义如下：
+* 表达式 {{c|(E)}} 的范式就是 {{c|E}} 的范式；
+* 表达式 {{c|E1 &amp;&amp; E2}} 的范式是 {{c|E1}} 和 {{c|E2}} 范式的合取；
+* 表达式 {{c|E1 {{!!}} E2}} 的范式是 {{c|E1}} 和 {{c|E2}} 范式的析取；
+* 表达式 {{c|C&lt;A1, A2, ... , AN&gt;}}（其中 {{tt|C}} 指名某个概念）的范式，是以 {{tt|A1}}, {{tt|A2}}, ... , {{tt|AN}} 对 {{tt|C}} 的每个原子约束的形参映射中的 {{tt|C}} 的对应模板形参进行替换之后，{{tt|C}} 的约束表达式的范式。如果在这种形参映射中的替换产生了无效的类型或表达式，那么程序非良构，不要求诊断。
+
+{{source|1=
+template&lt;typename T&gt;
+concept A = T::value {{!!}} true;
+
+template&lt;typename U&gt; 
+concept B = A&lt;U*&gt;; // OK：规范化为以下各项的析取
+                   // - T::value（映射为 T -&gt; U*）和
+                   // - true（映射为空）。
+                   // 映射中没有无效类型，尽管 T::value 对所有指针类型均非良构
+
+template&lt;typename V&gt; 
+concept C = B&lt;V&amp;&gt;; // 规范化为以下的析取
+                   // - T::value（映射为 T-&gt; V&amp;*）和
+                   // - true（映射为空）。
+                   // 映射中构成了无效类型 V&amp;* =&gt; 非良构，不要求诊断
+}}
+
+{{rrev|since=c++26|
+* 表达式 {{c|(E &amp;&amp; ...)}} 和 {{c|(... &amp;&amp; E)}} 的范式是一条折叠展开约束，其中 {{tt|C}} 是 {{c|E}} 的范式，并且折叠运算符是 {{tt|&amp;&amp;}}。
+* 表达式 {{c|(E {{!!}} ...)}} 和 {{c|(... {{!!}} E)}} 的范式是一条折叠展开约束，其中 {{tt|C}} 是 {{c|E}} 的范式，并且折叠运算符是 {{tt|{{!!}}}}。
+* 表达式 {{c|(E1 &amp;&amp; ... &amp;&amp; E2)}} 和 {{c|(E1 {{!!}} ... {{!!}} E2)}} 的范式分别是：
+:* {{c|(E1 &amp;&amp; ...) &amp;&amp; E2}} 的范式和 {{c|(E1 {{!!}} ...) {{!!}} E2}} 的范式（如果 {{c|E1}} 含有未展开的包）
+:* {{c|E1 &amp;&amp; (... &amp;&amp; E2)}} 的范式和 {{c|E1 {{!!}} (... {{!!}} E2)}} 的范式（如果 {{c|E1}} 不含未展开的包）
+}}
+
+* 任何其他表达式 {{c|E}} 的范式都是一条原子约束，它的表达式是 {{c|E}} 而它的形参映射是恒等映射。这包括所有{{rlp|fold|折叠表达式}}，甚至包括以 {{tt|&amp;&amp;}} 或 {{tt|{{!!}}}} 运算符进行的折叠。
+
+用户定义的 {{tt|&amp;&amp;}} 或 {{tt|{{!!}}}} 重载在约束规范化上无效。
+
+{{anchor|requires 子句}}
+==={{c/core|requires}} 子句===
+关键词 {{ltt|cpp/keyword/requires}} 用来引入 {{i|{{c/core|requires}} 子句}}，它指定对各模板实参，或对函数声明的约束。
+{{source|1=
+template&lt;typename T&gt;
+void f(T&amp;&amp;) requires Eq&lt;T&gt;; // 可以作为函数声明符的末尾元素出现
+
+template&lt;typename T&gt; requires Addable&lt;T&gt; // 或者在模板形参列表的右边
+T add(T a, T b) { return a + b; }
+}}
+
+这种情况下，关键词 {{c/core|requires}} 必须后随某个常量表达式（因此可以写成 {{c|requires true}}），但这是为了使用一个具名概念（如上例），具名概念的一条合取/析取，或者一个 {{rlp|requires|{{c/core|requires}} 表达式}}。
+
+表达式必须具有下列形式之一：
+* {{rlps|expressions#初等表达式}}，例如 {{c|Swappable&lt;T&gt;}}、{{c|std::is_integral&lt;T&gt;::value}}、{{c|(std::is_object_v&lt;Args&gt; &amp;&amp; ...)}} 或任何带括号的表达式
+* 以运算符 {{tt|&amp;&amp;}} 联结的初等表达式的序列
+* 以运算符 {{tt|{{!!}}}} 联结的前述表达式的序列
+
+{{source|1=
+template&lt;class T&gt;
+constexpr bool is_meowable = true;
+
+template&lt;class T&gt;
+constexpr bool is_purrable() { return true; }
+
+template&lt;class T&gt;
+void f(T) requires is_meowable&lt;T&gt;; // OK
+
+template&lt;class T&gt;
+void g(T) requires is_purrable&lt;T&gt;(); // 错误：is_purrable&lt;T&gt;() 不是初等表达式
+
+template&lt;class T&gt;
+void h(T) requires (is_purrable&lt;T&gt;()); // OK
+}}
+
+===约束的偏序===
+在任何进一步的分析之前都会对各个约束进行[[#约束规范化|规范化]]，对每个具名概念的主体和每个 requires 表达式进行替换，直到剩下原子约束的合取与析取的序列为止。
+
+如果根据约束 {{tt|P}} 和约束 {{tt|Q}} 中的各原子约束的同一性可以证明 {{tt|P}} [[enwiki:Logical consequence|蕴含]] {{tt|Q}}，那么称 {{tt|P}} ''归入'' {{tt|Q}}。（并不进行类型和表达式的等价性分析：{{tt|N &gt; 0}} 并不归入 {{tt|1=N &gt;= 0}}）。
+
+具体来说，首先转换 {{tt|P}} 为析取范式并转换 {{tt|Q}} 为合取范式。当且仅当以下情况下 {{tt|P}} 归入 {{tt|Q}}：
+* {{tt|P}} 的析取范式中的每个析取子句都能归入 {{tt|Q}} 的合取范式中的每个合取子句，其中
+* 当且仅当析取子句中存在原子约束 {{tt|U}} 而合取子句中存在原子约束 {{tt|V}}，使得 {{tt|U}} 归入 {{tt|V}} 时，析取子句能归入合取子句；
+* 当且仅当使用[[#原子约束|上文]]所述的规则判定为等同时，称原子约束 {{tt|A}} 能归入原子约束 {{tt|B}}。
+{{rrev|since=c++26|
+* 当折叠展开约束 {{tt|A}} 和 {{tt|B}} 具有相同的折叠运算符，{{tt|A}} 的约束 {{tt|C}} 归入 {{tt|B}} 的约束 {{tt|C}}，并且两个 {{tt|C}} 均包含等价的未展开包时，称折叠展开约束 {{tt|A}} 能归入折叠展开约束 {{tt|B}}。
+}}
+
+归入关系定义了约束的偏序，用于确定：
+* {{rlp|overload resolution|重载决议}}中非模板函数的最佳可行候选
+* 重载集中的{{rlp|overloaded address|非模板函数的地址}}
+* 模板模板实参的最佳匹配
+* 类模板特化的偏序
+* 函数模板的{{rlp|function template#函数模板重载|偏序}}
+
+{{todo|从上述内容添加到此的回链}}
+
+如果声明 {{tt|D1}} 和 {{tt|D2}} 均受约束，且 {{tt|D1}} 关联的约束能归入 {{tt|D2}} 关联的约束，（或 {{tt|D2}} 没有约束），那么称 {{tt|D1}} 与 {{tt|D2}} 相比''至少一样受约束''。如果 {{tt|D1}} 至少与 {{tt|D2}} 一样受约束，而 {{tt|D2}} 并非至少与 {{tt|D1}} 一样受约束，那么 {{tt|D1}} 比 {{tt|D2}} ''更受约束''。
+
+在满足以下所有条件时，非模板函数 {{tt|F1}} 比非模板函数 {{tt|F2}} ''更受偏序约束''：
+* 它们的{{rlps|function#形参类型列表}}相同{{rev inl|since=c++23|，其中忽略{{rlps|member functions#显式对象形参}}的类型}}。
+* 如果它们是成员函数，那么它们是相同类的直接成员。
+* 如果它们都是非静态成员函数，那么它们的对象形参的类型相同。
+* {{tt|F1}} 比 {{tt|F2}} 更受约束。
+
+{{source|1=
+template&lt;typename T&gt;
+concept Decrementable = requires(T t) { --t; };
+template&lt;typename T&gt;
+concept RevIterator = Decrementable&lt;T&gt; &amp;&amp; requires(T t) { *t; };
+
+// RevIterator 能归入 Decrementable，但反之不行
+
+template&lt;Decrementable T&gt;
+void f(T); // #1
+
+template&lt;RevIterator T&gt;
+void f(T); // #2，比 #1 更受约束
+
+f(0);       // int 只满足 Decrementable，选择 #1
+f((int*)0); // int* 满足两个约束，选择 #2，因为它更受约束
+
+template&lt;class T&gt;
+void g(T); // #3（无约束）
+
+template&lt;Decrementable T&gt;
+void g(T); // #4
+
+g(true); // bool 不满足 Decrementable，选择 #3
+g(0);    // int 满足 Decrementable，选择 #4，因为它更受约束
+
+template&lt;typename T&gt;
+concept RevIterator2 = requires(T t) { --t; *t; };
+
+template&lt;Decrementable T&gt;
+void h(T); // #5
+
+template&lt;RevIterator2 T&gt;
+void h(T); // #6
+
+h((int*)0); // 有歧义
+}}
+
+===注解===
+{{ftm begin|sort=yes|core=true}}
+{{ftm|std=C++20|value=201907L|__cpp_concepts|rowspan="2"|约束}}
+{{ftm|std=C++20|value=202002L|-|有条件平凡的{{rlp|member_functions#特殊成员函数|特殊成员函数}}}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/template}},
+{{ltt|cpp/keyword/class}},
+{{ltt|cpp/keyword/typename}}{{rev inl|since=c++20|, {{ltt|cpp/keyword/concept}}, {{ltt|cpp/keyword/requires}}}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2428|std=C++20|before=不能将属性应用到概念|after=可以应用}}
+{{dr list end}}
+
+===参阅===
+* [[cpp/experimental/constraints|概念 TS]]
+* [[cpp/named req|具名要求]]
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc requires}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

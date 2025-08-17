@@ -1,0 +1,130 @@
+{{cpp/utility/any/title|any}}
+{{cpp/utility/any/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|
+constexpr any() noexcept;
+}}
+{{dcl|num=2|since=c++17|
+any( const any&amp; other );
+}}
+{{dcl|num=3|since=c++17|
+any( any&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ValueType &gt;
+any( ValueType&amp;&amp; value );
+}}
+{{dcl|num=5|since=c++17|
+template&lt; class ValueType, class... Args &gt;
+explicit any( std::in_place_type_t&lt;ValueType&gt;, Args&amp;&amp;... args );
+}}
+{{dcl|num=6|since=c++17|
+template&lt; class ValueType, class U, class... Args &gt;
+explicit any( std::in_place_type_t&lt;ValueType&gt;, std::initializer_list&lt;U&gt; il,
+              Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+构造新的 {{tt|any}} 对象。
+
+@1@ 构造空对象。
+
+@2,3@ 复制 {{v|2}} 或移动 {{v|3}} {{c|other}} 的内容进新实例，从而任何内容的类型和值都等于构造函数调用前的 {{c|other}} 所拥有者，或者若 {{c|other}} 为空则内容为空。正式地说，
+:@2@ 若 {{c|other}} 为空，则构造的对象为空。否则，等价于 {{c|any(std::in_place_type&lt;T&gt;, std::any_cast&lt;const T&amp;&gt;(other))}}，其中 {{tt|T}} 是 {{c|other}} 中含有的对象类型。
+:@3@ 若 {{c|other}} 为空，则构造的对象为空，否则，构造的对象含 {{c|other}} 中曾容纳的对象，或从 {{c|other}} 中的对象（将该对象当作右值）构造的同类型对象。
+@4@ 构造对象，其初始内容为 {{c|std::decay_t&lt;ValueType&gt;}} 类型的对象，从 {{c|std::forward&lt;ValueType&gt;(value)}} [[cpp/language/direct initialization|直接初始化]]它。
+* {{cpp/enable if| {{c|std::decay_t&lt;ValueType&gt;}} 既非与 {{c|any}} 相同类型，亦非{{lc|std::in_place_type_t}} 的特化，且 {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;ValueType&gt;&gt;}} 为{{c|true}} }}。
+
+@5@ 构造对象，其初始内容为 {{tt|std::decay_t&lt;ValueType&gt;}} 类型的对象，从 {{c|std::forward&lt;Args&gt;(args)...}} [[cpp/language/direct initialization|直接非列表初始化]]它。
+* {{cpp/enable_if| {{c|1=std::is_constructible_v&lt;std::decay_t&lt;ValueType&gt;, Args...&gt;}} 与 {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;ValueType&gt;&gt;}} 皆为 {{c|true}} }}。
+
+@6@ 构造对象，其初始内容为 {{tt|std::decay_t&lt;ValueType&gt;}} 类型的对象，从 {{c|il, std::forward&lt;Args&gt;(args)...}} [[cpp/language/direct initialization|直接非列表初始化]]它。
+* {{cpp/enable if| {{c|1=std::is_constructible_v&lt;std::decay_t&lt;ValueType&gt;, std::initializer_list&lt;U&gt;&amp;, Args...&gt;}} 与 {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;ValueType&gt;&gt;}} 皆为 {{c|true}} }}。
+
+===模板形参===
+{{par begin}}
+{{par|ValueType|所含的值类型}}
+{{par hreq}}
+{{par req named|std::decay_t&lt;ValueType&gt;|CopyConstructible}}
+{{par end}}
+
+===参数===
+{{par begin}}
+{{par|other|另一个用以复制或移动的 {{tt|any}} 对象}}
+{{par|value|用于初始化所含值的值}}
+{{par|il, args|要传递给所含对象的构造函数的实参}}
+{{par end}}
+
+===异常===
+@2,4-6@ 抛出所含类型的构造函数所抛出的任何异常
+
+===注解===
+因为默认构造函数为 {{c/core|constexpr}}，所以静态的 {{tt|std::any}} 是在任何动态非局部初始化开始之前，作为[[cpp/language/initialization#非局部变量|静态非局部初始化]]的一部分初始化的。这使得在任何静态对象的构造函数中使用 {{tt|std::any}} 对象是安全的。
+
+===示例===
+{{example
+|code=
+#include &lt;boost/core/demangle.hpp&gt;
+
+#include &lt;any&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;set&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    int age;
+    std::string name;
+    double salary;
+
+#if __cpp_aggregate_paren_init &lt; 201902L
+    // C++20 前进行原位构造所需
+    A(int age, std::string name, double salary)
+        : age(age), name(std::move(name)), salary(salary) {}
+#endif
+};
+
+// 使用 abi 去重整，以打印 any 所持有的实例的可读类型名
+void printType(const std::any&amp; a)
+{
+    std::cout &lt;&lt; boost::core::demangle(a.type().name()) &lt;&lt; '\n';
+}
+
+int main()
+{
+    // 构造函数 #4: std::any 持有 int
+    std::any a1{7};
+    
+    // 构造函数 #5: std::any 持有原位构造的 A
+    std::any a2(std::in_place_type&lt;A&gt;, 30, "Ada", 1000.25);
+ 
+    // 构造函数 #6: std::any 持有带有自定义比较的 A 的 set
+    auto lambda = [](auto&amp;&amp; l, auto&amp;&amp; r){ return l.age &lt; r.age; };
+    std::any a3(
+        std::in_place_type&lt;std::set&lt;A, decltype(lambda)&gt;&gt;,
+        {
+            A{39, std::string{"Ada"}, 100.25},
+            A{20, std::string{"Bob"}, 75.5}
+        },
+        lambda);
+
+    printType(a1);
+    printType(a2);
+    printType(a3);
+}
+|p=true
+|output=
+int
+A
+std::set&lt;A, main::{lambda(auto:1&amp;&amp;, auto:2&amp;&amp;)#1}, std::allocator&lt;A&gt; &gt;
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/any/dsc operator{{=}}}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

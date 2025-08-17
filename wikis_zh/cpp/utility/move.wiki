@@ -1,0 +1,108 @@
+{{cpp/title|move}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|utility}}
+{{dcl rev begin}}
+{{dcl|since=c++11|until=c++14|
+template&lt; class T &gt;
+typename std::remove_reference&lt;T&gt;::type&amp;&amp; move( T&amp;&amp; t ) noexcept;
+}}
+{{dcl|since=c++14|
+template&lt; class T &gt;
+constexpr std::remove_reference_t&lt;T&gt;&amp;&amp; move( T&amp;&amp; t ) noexcept;
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+{{tt|std::move}} 用于''指示''对象 {{c|t}} 可以“被移动”，即允许从 {{c|t}} 到另一对象的高效资源传递。
+
+具体而言，{{tt|std::move}} 生成标识其实参 {{c|t}} 的[[cpp/language/value_category|亡值表达式]]。它严格等价于到右值引用类型的 {{tt|static_cast}}。
+
+===参数===
+{{par begin}}
+{{par|t|要被移动的对象}}
+{{par end}}
+
+===返回值===
+{{c|static_cast&lt;typename std::remove_reference&lt;T&gt;::type&amp;&amp;&gt;(t)}}
+
+===注解===
+以[[cpp/language/value_category|右值]]实参（如临时对象的[[cpp/language/value_category|纯右值]]或如 {{tt|std::move}} 所产生的[[cpp/language/value_category|亡值]]之一）调用函数时，[[cpp/language/overload_resolution|重载决议]]选择接受右值引用形参的版本（包含[[cpp/language/move_constructor|移动构造函数]]、[[cpp/language/move_assignment|移动赋值运算符]]及常规成员函数，如 {{lc|std::vector::push_back}}）。若实参标识一个占有资源的对象，则这些重载拥有''移动''实参所保有的任何资源的选择，但不强求如此。例如，链表的移动构造函数可以复制指向表头的指针，并将 {{c|nullptr}} 存储到实参中，而非分配并复制逐个结点。
+
+[[cpp/language/reference|右值引用]]变量的名称是[[cpp/language/value_category|左值]]，而若要绑定到接受右值引用形参的重载，就必须转换到[[cpp/language/value_category|亡值]]，此乃[[cpp/language/move_constructor|移动构造函数]]与[[cpp/language/move_assignment|移动赋值运算符]]典型地使用 {{c|std::move}} 的原因：
+{{source|1=
+// 简单的移动构造函数
+A(A&amp;&amp; arg) : member(std::move(arg.member)) // 表达式 "arg.member" 为左值
+{} 
+
+// 简单的移动赋值运算符
+A&amp; operator=(A&amp;&amp; other)
+{
+    member = std::move(other.member);
+    return *this;
+}
+}}
+一个例外是当函数形参类型是[[cpp/language/reference#转发引用|转发引用]]（看起来像到模板形参的右值引用）时，该情况下应转而使用 {{lc|std::forward}}。
+
+除非另外指定，否则所有已被移动的标准库对象都被置于“合法但未指定的状态”，这意味着该对象的类不变式成立（因此只有无前条件的函数，例如赋值运算符，才能安全地在对象被移动后使用）：
+{{source|1=
+std::vector&lt;std::string&gt; v;
+std::string str = "example";
+v.push_back(std::move(str)); // str 现在合法但未指定
+str.back(); // 若 size() == 0 则为未定义行为：back() 拥有前条件 !empty()
+if (!str.empty())
+    str.back(); // OK，empty() 没有前条件而 back() 的前条件已满足
+
+str.clear(); // OK，clear() 无前条件
+}}
+
+而且，以亡值实参调用的标准库函数可以假设该实参是到对象的唯一引用；若它以 {{tt|std::move}} 从左值构造，则不进行别名检查。然而标准库类型的自移动赋值保证将对象置于合法（但未指定的）状态：
+{{source|1=
+std::vector&lt;int&gt; v = {2, 3, 3};
+v = std::move(v); // v 的值未指定
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::string str = "Salut";
+    std::vector&lt;std::string&gt; v;
+
+    // 使用 push_back(const T&amp;) 重载，
+    // 表示我们将带来复制 str 的成本
+    v.push_back(str);
+    std::cout &lt;&lt; "复制后，str 为 \"" &lt;&lt; str &lt;&lt; "\"\n";
+
+    // 使用右值引用 push_back(T&amp;&amp;) 重载，
+    // 表示不复制字符串；而是
+    // str 的内容被移动进 vector。
+    // 这个开销比较低，但也意味着 str 现在可能为空。
+    v.push_back(std::move(str));
+    std::cout &lt;&lt; "移动后，str 为 " &lt;&lt; std::quoted(str) &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "vector 的内容是 {" &lt;&lt; std::quoted(v[0])
+              &lt;&lt; ", " &lt;&lt; std::quoted(v[1]) &lt;&lt; "}\n";
+}
+|p=true
+|output=
+复制后，str 为 "Salut"
+移动后，str 为 ""
+vector 的内容是 {"Salut", "Salut"}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc forward}}
+{{dsc inc|cpp/utility/dsc move_if_noexcept}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,98 @@
+{{cpp/execution/title|bulk|bulk_chunked|bulk_unchunked}}
+{{cpp/execution/navbar}}
+
+{{dcl begin}}
+{{dcl header|execution}}
+{{dcl|num=1|since=c++26|
+std::execution::sender
+auto bulk( std::execution::sender auto input,
+           std::integral auto size,
+           auto&amp;&amp; policy,
+           std::invocable&lt;decltype(size),
+                          /*values-sent-by*/(input)...&gt; function );
+}}
+{{dcl|num=2|since=c++26|
+std::execution::sender
+auto bulk_chunked( std::execution::sender auto input,
+                   std::integral auto size,
+                   auto&amp;&amp; policy,
+                   std::invocable&lt;decltype(size), decltype(size),
+                                  /*values-sent-by*/(input)...&gt; function2 );
+}}
+{{dcl|num=3|since=c++26|
+std::execution::sender
+auto bulk_unchunked( std::execution::sender auto input,
+                     std::integral auto size,
+                     std::invocable&lt;decltype(size), decltype(size),
+                                    /*values-sent-by*/(input)...&gt; function );
+}}
+{{dcl end}}
+
+===参数===
+{{par begin}}
+{{par|input|发送器，一旦执行就将发送函数执行所需的值}}
+{{par|policy|附属于 {{c|function}}/{{c|function2}} 的[[cpp/algorithm/execution_policy_tag_t|执行策略]]}}
+{{par|function|可调用体，将为范围 {{range|0|size}} 中的每个索引调用，还会传递输入发送器产生的值}}
+{{par|function2|同 {{c|function}}，但以一对索引 {{open range|b|e}} 调用，其中 {{tt|b &lt; e}}，使得对于范围 {{range|0|size}} 中的每个索引 {{tt|i}}，存在恰好一次对 {{c|function2}} 的调用满足 {{c|1=b &lt;= i &lt; e}}。}}
+{{par end}}
+
+===返回值===
+返回一个发送器，它描述输入发送器所描述的任务图，并添加一个节点，以范围 {{range|0|size}} 中的索引调用所提供的函数，还把输入发送器所发送的值作为实参传递给它。
+
+{{c|function}}/{{c|function2}} 保证在返回的发送器启动后才启动执行。
+
+===错误完成===
+{{c|input}} 传入的所有错误都被转发。
+
+此外，允许发送器以一个包含以下之一的 {{lc|std::exception_ptr}} 错误完成：
+* {{c|function}} 抛出的任何异常
+* 当实现分配所需资源失败时的 {{lc|std::bad_alloc}}
+* 派生自 {{lc|std::runtime_error}} 的表示其他内部错误的异常（例如，无法把来自执行上下文的异常传播给调用方）
+
+===取消===
+未定制化的 {{tt|std::execution::bulk}}、{{tt|std::execution::bulk_chunk}} 和 {{tt|std::execution::bulk_unchunked}} 会转发来自 {{c|input}} 的停止完成信号。它们并不提供额外的产生停止完成信号机制。
+
+===注解===
+调用 {{tt|std::execution::bulk}} 和 {{tt|std::execution::bulk_chunked}} 时，{{c|function}}/{c|function2}} 的不同调用可能发生在同一个执行代理上。
+
+调用 {{tt|std::execution::bulk_unchunked}} 时，{{c|function}} 的不同调用必须发生在不同执行代理上。
+
+缺省的 {{tt|std::execution::bulk}} 实现基于 {{tt|std::execution::bulk_chunked}}。定制化 {{tt|std::execution::bulk}} 是可能的，但预计大多数情况下只需对 {{tt|std::execution::bulk_chunked}} 定制化。
+
+在没有 {{tt|std::execution::bulk}} 和 {{tt|std::execution::bulk_chunked}} 的定制化时，{{tt|std::execution::bulk}} 和 {{tt|std::execution::bulk_chunk}} 的行为是串行执行 {{c|function}}，这并没什么用。预期各个实现提供一些定制，使得 {{tt|std::execution::bulk}} 和 {{tt|std::execution::bulk_chunked}} 在不同调度器上的运行能够更有用。
+
+{{tt|std::execution::bulk_unchunked}} 的目的是在 {{c|function}} 可能在不同调用之间有依赖时使用，而且它要求并发向前进展保证（并行向前进展是不够的）。运行大小为 1000 的 {{tt|std::execution::bulk_unchunked}} 需要同时运行 1000 个执行代理（如线程）。
+
+{{tt|std::execution::bulk_unchunked}} 不需要执行策略，因为它已经预期 {{c|function}} 可以并发运行。
+
+===示例===
+{{tt|execution::bulk}} 的可能用法：
+{{source|1=
+std::vector&lt;double&gt; x;
+std::vector&lt;double&gt; y;
+//...
+sender auto process_elements
+    = just(get_coefficient())
+    {{!}} bulk(x.size(), [&amp;](size_t i, double a)
+    {
+        y[i] = a * x[i] + y[i];
+    });
+// process_elements 描述的工作为：调用某个函数以获得一个系数 `a`，
+// 然后用它对范围 [0, x.size()) 中的每个 `i` 执行
+//   y[i] = a * x[i] + y[i]
+}}
+
+{{tt|execution::bulk_chunked}} 的可能用法：
+{{source|1=
+std::vector&lt;std::uint32_t&gt; data = ...;
+std::atomic&lt;std::uint32_t&gt; sum{0};
+sender auto s = bulk_chunked(just(), par, 100000,
+    [&amp;sum,&amp;data](int begin, int end)
+    {
+        auto partial_sum = std::accumulate(data.begin()+begin, data.begin()+end, 0U);
+        sum.fetch_add(partial_sum);
+    });
+// 不会触碰原子对象达 100000 次；执行将比 bulk() 更快
+}}
+
+{{langlinks|de|en|es|ja|ru}}

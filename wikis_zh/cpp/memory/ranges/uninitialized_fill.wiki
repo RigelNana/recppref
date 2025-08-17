@@ -1,0 +1,136 @@
+{{cpp/ranges/title|uninitialized_fill}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|调用签名}}
+{{dcla|num=1|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-iterator I, no-throw-sentinel-for&lt;I&gt; S,
+          class T &gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;I&gt;, const T&amp;&gt;
+I uninitialized_fill( I first, S last, const T&amp; value );
+}}
+{{dcla|num=2|since=c++20|constexpr=c++26|
+template&lt; no-throw-forward-range R, class T &gt;
+    requires std::constructible_from&lt;ranges::range_value_t&lt;R&gt;,
+                                     const T&amp;&gt;
+ranges::borrowed_iterator_t&lt;R&gt; uninitialized_fill( R&amp;&amp; r,
+                                                   const T&amp; value );
+}}
+{{dcl end}}
+
+@1@ 如同用以下方式将 {{c|value}} 复制到未初始化内存区域 {{range|first|last}}：
+{{box|
+{{c/core|1=for (; first != last; ++first)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{lti|cpp/memory/voidify}}{{c/core|(*first)) std::remove_reference_t&lt;std::iter_reference_t&lt;I&gt;&gt;(value);}}&lt;br&gt;
+{{c/core|return first;}}
+}}
+@@ 如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。
+
+@2@ 等价于 {{c|return ranges::uninitialized_fill(ranges::begin(r), ranges::end(r), value);}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要初始化的|sentinel=yes}}
+{{par|r|要初始化的元素 {{lconcept|range}}}}
+{{par|value|用以构造元素的值}}
+{{par end}}
+
+===返回值===
+等于 {{c|last}} 的迭代器。
+
+===复杂度===
+与未初始化内存区域的大小成线性。
+
+===异常===
+构造目标范围中的元素时抛出的任何异常。
+
+===注解===
+如果输出范围的值类型是{{named req|TrivialType}}，那么实现可以提升 {{tt|ranges::uninitialized_fill}} 的效率，例如用 {{lc|ranges::fill}}。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1,2}}}}
+
+===可能的实现===
+{{eq fun|1=
+struct uninitialized_fill_fn
+{
+    template&lt;no-throw-forward-iterator I, no-throw-sentinel-for&lt;I&gt; S, class T&gt;
+        requires std::constructible_from&lt;std::iter_value_t&lt;I&gt;, const T&amp;&gt;
+    constexpr I operator()(I first, S last, const T&amp; value) const
+    {
+        I rollback{first};
+        try
+        {
+            for (; !(first == last); ++first)
+                ranges::construct_at(std::addressof(*first), value);
+            return first;
+        }
+        catch (...)
+        {
+            // 回滚：销毁已构造的元素
+            for (; rollback != first; ++rollback)
+                ranges::destroy_at(std::addressof(*rollback));
+            throw;
+        }
+    }
+    
+    template&lt;no-throw-forward-range R, class T&gt;
+        requires std::constructible_from&lt;ranges::range_value_t&lt;R&gt;, const T&amp;&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt; operator()(R&amp;&amp; r, const T&amp; value) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), value);
+    }
+};
+
+inline constexpr uninitialized_fill_fn uninitialized_fill{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    constexpr int n{4};
+    alignas(alignof(std::string)) char out[n * sizeof(std::string)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;std::string*&gt;(out)};
+        auto last{first + n};
+        std::ranges::uninitialized_fill(first, last, "▄▀▄▀▄▀▄▀");
+        
+        int count{1};
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; count++ &lt;&lt; ' ' &lt;&lt; *it &lt;&lt; '\n';
+        
+        std::ranges::destroy(first, last);
+    }
+    catch(...)
+    {
+        std::cout &lt;&lt; "异常！\n";
+    }
+}
+|output=
+1 ▄▀▄▀▄▀▄▀
+2 ▄▀▄▀▄▀▄▀
+3 ▄▀▄▀▄▀▄▀
+4 ▄▀▄▀▄▀▄▀
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可能在 {{c/core|const}} 存储上创建对象|after=保持禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_fill_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_fill}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

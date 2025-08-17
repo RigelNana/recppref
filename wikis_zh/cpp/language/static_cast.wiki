@@ -1,0 +1,308 @@
+{{title|{{tt|static_cast}} 转换}}
+{{cpp/language/expressions/navbar}}
+使用隐式和用户定义转换的组合来进行类型之间的转换。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|static_cast&lt;}}{{spar sep|目标类型}}{{ttb|&gt;(}}{{spar sep|表达式}}{{ttb|)}}}}
+{{sdsc end}}
+
+返回{{spar sep|目标类型}}类型的值。
+
+===解释===
+只有下列转换在不{{rlps|const_cast#移除常量性}}（或易变性）的场合才能用 {{c/core|static_cast}} 执行。
+
+@1@ 如果{{spar sep|表达式}}是 “''cv1'' {{tt|Base}}” 类型左值且{{spar sep|目标类型}}是“到 ''cv2'' {{tt|Derived}} 的引用”，那么在满足以下所有条件时结果指代{{spar sep|表达式}}的外围 {{tt|Derived}} 类型对象：
+* {{tt|Derived}} 是完整类类型。
+* {{tt|Base}} 是 {{tt|Derived}} 的基类
+* ''cv1'' 是不多于 ''cv2'' 的 cv 限定。
+@@ 如果满足以下任意条件，那么程序非良构：
+* {{tt|Base}} 是 {{tt|Derived}} 的{{rlps|derived class#虚基类}}。
+* {{tt|Base}} 是 {{tt|Derived}} 的某个虚基类的基类。
+* 不存在从“指向 {{tt|Derived}} 的指针”到“指向 {{tt|Base}} 的指针”的合法{{rlp|implicit conversion|标准转换}}。
+@@ 如果{{spar sep|表达式}}实际上不是某个 {{tt|Derived}} 类型对象的基类子对象，那么行为未定义。
+{{source|1=
+struct B {};
+struct D : B { B b };
+
+D d;
+B&amp; br1 = d;
+B&amp; br2 = d.b;
+
+static_cast&lt;D&amp;&gt;(br1); // OK，该左值指代原来的 d 对象
+static_cast&lt;D&amp;&gt;(br2); // 未定义行为：子对象 b 不是基类子对象
+}}
+
+{{rrev|since=c++11|
+@2@ 如果{{spar sep|目标类型}}是“到 {{tt|Derived}} 的右值引用”且{{spar sep|表达式}}是“（可有 cv 限定的）{{tt|Base}}” 类型亡值，其中 {{tt|Base}} 是 {{tt|Derived}} 的基类，那么这种转换的结果和约束与 “{{tt|Base}} 左值到 {{tt|Derived}} 引用”转换的相同。
+
+@3@ 如果{{spar sep|目标类型}}是右值引用类型且被引用类型{{rlp|reference initialization#定义|引用兼容}}{{spar sep|表达式}}的类型，那么 {{c/core|static_cast}} 将{{rev inl|until=c++17|泛左值、类纯右值或数组纯右值}}{{rev inl|since=c++17|任何左值}}{{spar sep|表达式}}的值转换为与该表达式指代相同对象，或指代它的基类子对象（取决于{{spar|目标类型}}）的亡值。&lt;ref&gt;这种 {{c/core|static_cast}} 用于在 {{lc|std::move}} 中实现移动语义。&lt;/ref&gt;
+@@ 如果{{spar sep|目标类型}}是{{spar sep|表达式}}的不可访问或有歧义的基类，那么程序非良构。
+@@ 如果{{spar sep|表达式}}是{{rlp|bit field|位域}}左值，那么它会首先被转换成底层类型的纯右值。
+}}
+
+@4@ 如果{{spar sep|目标类型}}是（可有 cv 限定的）{{c/core|void}}，那么转换没有结果。在这种情况下，{{spar sep|表达式}}是{{rlps|expressions#弃值表达式}}。
+
+@5@ 否则，
+{{rev begin}}
+{{rev|until=c++17|
+如果对于某个虚设变量 {{c|temp}} 存在良构声明 {{box|{{spar|目标类型}} {{c/core|temp(}}{{spar sep|表达式}}{{c/core|);}}}}，那么{{spar sep|表达式}}可以显式转换到{{spar|目标类型}}。
+
+此类显式转换的效果与在进行该声明和初始化后将 {{c|temp}} 作为转换结果相同。当且仅当该初始化将{{spar sep|表达式}}作为{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}使用时，转换才会将它作为作为{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}使用。
+}}
+{{rev|since=c++17|
+如果满足以下任意条件，那么{{spar sep|表达式}}可以显式转换到{{spar|目标类型}}：
+* 存在从{{spar sep|表达式}}到{{spar sep|目标类型}}的隐式转换序列。
+* 对从{{spar sep|表达式}}{{rlp|direct initialization|直接初始化}}{{spar sep|目标类型}}对象或引用的{{rlp|overload resolution|重载决议}}会找到至少一个可行函数。
+{{rrev|since=c++20|
+* {{spar sep|目标类型}}是有首元素 {{c|x}} 的{{rlp|aggregate initialization#聚合体|聚合体类型}}，并且存在从{{spar sep|表达式}}到 {{c|x}} 的类型的隐式转换序列。
+}}
+
+此类显式转换定义如下：
+* 如果{{spar sep|目标类型}}是引用类型，那么转换的效果与对于某个虚设变量 {{c|temp}} 进行声明和初始化 {{box|{{spar|目标类型}} {{c/core|temp(}}{{spar sep|表达式}}{{c/core|);}}}} 然后以 {{c|temp}} 作为转换结果相同。
+* 否则，从{{spar sep|表达式}}直接初始化结果对象。
+}}
+{{rev end}}
+
+@6@ 否则，如果从{{spar sep|表达式}}到{{spar sep|目标类型}}的转换是某个标准转换序列的逆转，并且该转换序列不含以下任何转换，那么可以通过 {{c/core|static_cast}} 进行该逆转：
+* {{rlps|implicit conversion#左值到右值转换}}
+* {{rlps|implicit conversion#数组到指针转换}}
+* {{rlps|implicit conversion#函数到指针转换}}
+* {{rlp|implicit conversion#指针转换|空指针转换}}
+* {{rlp|implicit conversion#成员指针转换|空成员指针转换}}
+* {{rlps|implicit conversion#布尔转换}}
+{{rrev|since=c++17|
+* {{rlps|implicit conversion#函数指针转换}}
+}}
+@@ 如果程序使用 {{c/core|static_cast}} 进行了某个非法标准转换序列的逆转，那么它非良构。
+
+@7@ 否则，对{{spar sep|表达式}}应用左值到右值、数组到指针和函数到指针转换。在这些转换后，只有以下转换能通过 {{c/core|static_cast}} 进行：
+
+{{rrev|since=c++11|
+:@a@ {{rlps|enum#有作用域枚举}}类型的值可以转换到整数或浮点数类型。
+{{rev begin}}
+{{rev|until=c++20|
+* 如果{{spar sep|目标类型}}是（可有 cv 限定的）{{c/core|bool}}，那么结果在{{spar sep|表达式}}的原值为零时是 {{c|false}}，在其他情况下是 {{c|true}}。
+* 如果{{spar sep|目标类型}}是（可有 cv 限定的）{{c/core|bool}} 以外的整数类型，那么在{{spar sep|表达式}}的原值能够以{{spar sep|目标类型}}表示时不会改变值。否则结果值未定义。
+}}
+{{rev|since=c++20|
+* 如果{{spar sep|目标类型}}是整数类型，那么结果与先转换到枚举的底层类型再转换到{{spar sep|目标类型}}的结果相同。
+}}
+{{rev end}}
+* 如果{{spar sep|目标类型}}是浮点数类型，那么结果与将原值转换到{{spar sep|目标类型}}的结果相同。
+}}
+
+:@b@ 整数或枚举类型的值可以转换到任意完整的{{rlp|enum|枚举类型}}。
+* 如果{{spar sep|目标类型}}的底层类型固定，那么{{spar sep|表达式}}会先以{{rlps|implicit conversion#整数提升}}或{{rlps|implicit conversion#整数转换}}转换到底层类型（如有必要），然后再转换到{{spar sep|目标类型}}。
+* 如果{{spar sep|目标类型}}的底层类型不固定，那么{{spar sep|表达式}}的值在原值处于{{rlp|enum#注解|枚举值的范围中}}时不会改变，否则行为未定义。
+
+:@c@ 浮点数类型的值可以转换到任意完整的枚举类型。结果与将{{spar sep|表达式}}的原值先{{rlp|implicit conversion#浮点数整数转换|转换}}到{{spar sep|目标类型}}的底层类型，然后再转换到{{spar sep|目标类型}}本身的结果相同。
+
+{{rrev|since=c++23|
+:@d@ 浮点数类型的纯右值可以转换到其他任意浮点数类型。
+* 如果{{spar sep|表达式}}的源值能以目标类型准确表示，那么就不会更改它。
+* 如果{{spar sep|表达式}}的源值处于目标类型的两个可表示值之间，那么由实现定义结果是这两个值中的哪一个。&lt;ref&gt;如果支持 IEEE，那么舍入默认为到最接近。&lt;/ref&gt;
+* 否则，行为未定义。
+}}
+
+:@e@ “指向 ''cv1'' {{tt|Base}} 的指针”类型的{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}在满足以下所有条件时可以显式转换到“指向 ''cv2'' {{tt|Derived}} 的指针”：
+* {{tt|Derived}} 是完整类类型。
+* {{tt|Base}} 是 {{tt|Derived}} 的基类
+* ''cv1'' 是不多于 ''cv2'' 的 cv 限定。
+:@@ 如果{{spar sep|表达式}}是{{rlp|pointer#空指针|空指针值}}，那么结果是{{spar sep|目标类型}}的空指针值。否则，结果是指向{{spar sep|表达式}}指向的 {{tt|Base}} 类型对象的外围 {{tt|Derived}} 类型对象的指针。
+:@@ 如果满足以下任意条件，那么程序非良构：
+* {{tt|Base}} 是 {{tt|Derived}} 的{{rlps|derived class#虚基类}}。
+* {{tt|Base}} 是 {{tt|Derived}} 的某个虚基类的基类。
+* 不存在从“指向 {{tt|Derived}} 的指针”到“指向 {{tt|Base}} 的指针”的合法{{rlp|implicit conversion|标准转换}}。
+:@@ 如果{{spar sep|表达式}}既不是空指针值，实际上也不指向某个 {{tt|Derived}} 类型对象的基类子对象，那么行为未定义。
+
+:@f@ “指向 {{tt|Derived}} 的 ''cv1'' {{tt|T}} 类型成员的指针”类型的{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}在满足以下所有条件时可以显式转换到“指向 {{tt|Base}} 的 ''cv2'' {{tt|T}} 类型成员的指针”：
+* {{tt|Derived}} 是完整类类型。
+* {{tt|Base}} 是 {{tt|Derived}} 的基类
+* ''cv1'' 是不多于 ''cv2'' 的 cv 限定。
+:@@ 如果{{spar sep|表达式}}是空成员指针值，那么结果是{{spar sep|目标类型}}的空成员指针值。否则，结果是指向 {{tt|Base}} 类的原（可能间接的）成员的指针。
+:@@ 如果不存在从“指向 {{tt|Base}} 的 {{tt|T}} 类型成员的指针”到“指向 {{tt|Derived}} 的 {{tt|T}} 类型成员的指针”的合法标准转换，那么程序非良构。
+:@@ 如果{{spar sep|表达式}}既不是空成员指针值，也不表示 {{tt|Base}} 类的（可能间接的）成员，那么行为未定义。
+
+:@g@ “指向 ''cv1'' {{c/core|void}} 的指针”类型的{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}在 {{tt|T}} 是对象类型且 ''cv1'' 是不多于 ''cv2'' 的 cv 限定时可以显式转换到“指向 ''cv2'' {{tt|T}} 的指针”类型。
+{{rev begin}}
+{{rev|until=c++17|
+* 如果{{spar sep|表达式}}是空指针值，那么结果是{{spar sep|目标类型}}的空指针值。
+* 如果{{spar sep|表达式}}{{rlp|pointer#指针|表示}}内存中某个{{rlps|memory model#字节}}的地址 {{tt|A}}，并且 {{tt|A}} 满足 {{tt|T}} 的{{rlps|object#对齐}}要求，那么结果指针同样表示 {{tt|A}}。
+* 其他此类指针转换的结果未指定。
+* 如果{{spar sep|表达式}}是先前从“指向 ''cv3'' {{tt|T}} 的指针”类型对象转换得到的结果，那么本次转换的结果是原来的值。
+}}
+{{rev|since=c++17|
+* 如果{{spar sep|表达式}}{{rlp|pointer#指针|表示}}内存中某个{{rlps|memory model#字节}}的地址 {{tt|A}}，但是 {{tt|A}} 不满足 {{tt|T}} 的{{rlps|object#对齐}}要求，那么结果未指定。
+* 否则，如果{{spar sep|表达式}}指向 {{c|a}}，并且存在 {{tt|T}} 类型（忽略 cv 限定）对象 {{c|b}} 使得 {{c|a}} 与 {{c|b}} 的指针可以互相转换（见下文），那么结果是指向 {{c|b}} 的指针。
+* 否则，该转换不会修改指针的值。
+}}
+{{rev end}}
+
+{{cpp/language/cast return}}
+
+&lt;references/&gt;
+
+{{anchor|指针可以互相转换}}
+===指针可以互相转换的对象===
+满足以下条件时，两个对象 {{c|a}} 与 {{c|b}} 的''指针可以互相转换''：
+* 它们是同一个对象，或
+* 一个是联合体对象而另一个是该对象的非静态数据成员，或
+* 一个是{{rlps|data members#标准布局}}的类对象，而另一个是该对象的首个非静态数据成员，或是该对象的任何基类子对象，或
+* 存在对象 {{c|c}} 使得 {{c|a}} 与 {{c|c}} 的指针可以互相转换，而 {{c|c}} 与 {{c|b}} 的指针可以互相转换。
+
+{{source|1=
+union U { int a; double b; } u;
+void* x = &amp;u;                        // x 的值是“指向 u 的指针”
+double* y = static_cast&lt;double*&gt;(x); // y 的值是“指向 u.b 的指针”
+char* z = static_cast&lt;char*&gt;(x);     // z 的值是“指向 u 的指针”
+}}
+
+===注解===
+使用 {{c/core|static_cast}} 进行的基类到派生类转换（''向下转换''）不会在运行时检查该对象的{{rlps|type#动态类型}}确实为 {{tt|D}}，因此它只能在该前提条件通过其他方法保证时，例如在实现{{enwiki|Curiously recurring template pattern#Static polymorphism|静态多态}}时，才能安全使用。安全的向下转换可以用 {{rlpt|dynamic_cast}} 执行。
+
+{{c/core|static_cast}} 也能用来通过进行到指定类型的函数到指针转换来消解函数重载的歧义，如
+{{source|
+std::for_each(files.begin(), files.end(),
+              static_cast&lt;std::ostream&amp;(*)(std::ostream&amp;)&gt;(std::flush));
+}}
+
+===关键词===
+{{ltt|cpp/keyword/static_cast}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct B
+{
+    int m = 42;
+    const char* hello() const
+    {
+        return "Hello world，这里是 B！\n";
+    }
+};
+
+struct D : B
+{
+    const char* hello() const
+    {
+        return "Hello world，这里是 D！\n";
+    }
+};
+
+enum class E { ONE = 1, TWO, THREE };
+enum EU { ONE = 1, TWO, THREE };
+
+int main()
+{
+    // 1. 静态向下转换
+    D d;
+    B&amp; br = d; // 通过隐式转换向上转换
+    std::cout &lt;&lt; "1) " &lt;&lt; br.hello();
+    D&amp; another_d = static_cast&lt;D&amp;&gt;(br); // 向下转换
+    std::cout &lt;&lt; "1) " &lt;&lt; another_d.hello();
+    
+    // 3. 左值到亡值
+    std::vector&lt;int&gt; v0{1, 2, 3};
+    std::vector&lt;int&gt; v2 = static_cast&lt;std::vector&lt;int&gt;&amp;&amp;&gt;(v0);
+    std::cout &lt;&lt; "3) 移动后，v0.size() = " &lt;&lt; v0.size() &lt;&lt; '\n';
+    
+    // 4. 弃值表达式
+    static_cast&lt;void&gt;(v2.size());
+    
+    // 5. 初始化转换
+    int n = static_cast&lt;int&gt;(3.14); 
+    std::cout &lt;&lt; "5) n = " &lt;&lt; n &lt;&lt; '\n';
+    std::vector&lt;int&gt; v = static_cast&lt;std::vector&lt;int&gt;&gt;(10);
+    std::cout &lt;&lt; "5) v.size() = " &lt;&lt; v.size() &lt;&lt; '\n';
+    
+    // 6. 隐式转换的逆转换
+    void* nv = &amp;n;
+    int* ni = static_cast&lt;int*&gt;(nv);
+    std::cout &lt;&lt; "6) *ni = " &lt;&lt; *ni &lt;&lt; '\n';
+    
+    // 7a. 有作用域枚举到 int 或 float
+    E e = E::TWO;
+    int two = static_cast&lt;int&gt;(e);
+    std::cout &lt;&lt; "7a) " &lt;&lt; two &lt;&lt; '\n';
+    
+    // 7b. int 到枚举，枚举到另一枚举
+    E e2 = static_cast&lt;E&gt;(two);
+    [[maybe_unused]]
+    EU eu = static_cast&lt;EU&gt;(e2);
+    
+    // 7f. 指向成员指针向上转换
+    int D::*pm = &amp;D::m;
+    std::cout &lt;&lt; "7f) " &lt;&lt; br.*static_cast&lt;int B::*&gt;(pm) &lt;&lt; '\n';
+    
+    // 7g. void* 到任意对象指针
+    void* voidp = &amp;e;
+    [[maybe_unused]]
+    std::vector&lt;int&gt;* p = static_cast&lt;std::vector&lt;int&gt;*&gt;(voidp);
+}
+|output=
+1) Hello world，这里是 B！
+1) Hello world，这里是 D！
+3) 移动后，v0.size() = 0
+5) n = 3
+5) v.size() = 10
+6) *ni = 3
+7a) 2
+7f) 42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=137|std=C++98|before=指向 {{c/core|void}} 的指针的常量性或易变性可以被去除|after=不能通过 {{c/core|static_cast}} 去除}}
+{{dr list item|wg=cwg|dr=427|std=C++98|before=向下转换与直接初始化之间有歧义|after=此时选择向下转换}}
+{{dr list item|wg=cwg|dr=439|std=C++98|before=当指向对象的指针先转换到指向 {{c/core|void}} 的指针再转换回自身时，&lt;br&gt;它的值只有在目标类型有相同的 cv 限定时才会保留|after=允许 cv 限定不同}}
+{{dr list item|wg=cwg|dr=1094|std=C++98|before=未指明浮点数到枚举的转换|after=指明转换规则}}
+{{dr list item|wg=cwg|dr=1320|std=C++11|before=未指明有作用域枚举到 {{c/core|bool}} 的转换|after=指明转换规则}}
+{{dr list item|wg=cwg|dr=1412|std=C++98|before=从“指向 {{c/core|void}} 的指针”转换到“指向对象的指针”的结果不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=1447|std=C++11|before=未指明位域到右值引用的转换（无法绑定引用到位域）|after=指明转换规则}}
+{{dr list item|wg=cwg|dr=1766|std=C++98|before=整数或枚举到（另一）枚举的转换的结果在{{spar sep|表达式}}超出（结果枚举的）范围时未指定|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=1832|std=C++98|before=整数或枚举到（另一）枚举的转换允许{{spar sep|目标类型}}不完整|after=此时结果枚举类型必须完整}}
+{{dr list item|wg=cwg|dr=2224|std=C++98|before=从具有基类类型的成员到它的具有派生类类型的完整对象的转换合法|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=2254|std=C++11|before=无数据成员的标准布局类对象可指针间转换到它的首个基类|after=可指针间转换到它的任意基类}}
+{{dr list item|wg=cwg|dr=2284|std=C++11|before=联合体对象和该对象的非静态数据成员的指针不可互相转换|after=可以互相转换}}
+{{dr list item|wg=cwg|dr=2310|std=C++98|before=基类到派生类的指针转换和派生类到基类的成员指针转换不需要派生类是完整类型|after=必须是完整类型}}
+{{dr list item|wg=cwg|dr=2338|std=C++11|before=到底层类型固定的枚举类型的转换在{{spar sep|表达式}}超出范围时的行为未定义|after=先转换到底层类型&lt;br&gt;（不会有未定义行为）}}
+{{dr list item|wg=cwg|dr=2499|std=C++11|before=标准布局类可以有非指针可互转换的基类，即使所有基类子对象均拥有相同地址|after=它没有}}
+{{dr list item|wg=cwg|dr=2718|std=C++98|before=基类到派生类的引用转换不需要派生类是完整类型|after=必须是完整类型}}
+{{dr list item|wg=cwg|dr=2882|std=C++98|before=不明确 {{c|static_cast&lt;void&gt;(expr)}} 是否&lt;br&gt;会尝试组成从 {{c|expr}} 到 {{c/core|void}} 的隐式转换序列|after=此时不会尝试}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.6.1.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.8|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.9|title=Static cast|id=expr.static.cast}}
+{{ref std end}}
+
+===参阅===
+* {{rlpt|const_cast}}
+* {{rlpt|dynamic_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast|显式转换}}
+* {{rlp|implicit conversion|隐式转换}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,102 @@
+{{cpp/named req/title|ForwardIterator}}
+{{cpp/named req/navbar}}
+
+{{named req|ForwardIterator}}是能从所指向的元素读取数据的{{named req|Iterator}}。
+
+与{{named req|InputIterator}}和{{named req|OutputIterator}}不同，它可被用于多趟算法。
+
+如果某个{{named req/core|ForwardIterator}} {{c|it}} 源自某个{{named req|Container}}，那么 {{c|it}} 与该容器具有相同的值类型，因此解引用 ({{c|*it}}) 将获得该容器的值类型。
+
+===要求===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|X}}|向前迭代器类型}}
+{{dsc|{{tt|T}}|{{tt|X}} 的[[cpp/iterator#类型与可写性|值类型]]（即 {{c/core|std::iterator_traits&lt;X&gt;::value_type}}）}}
+{{dsc|{{tt|Ref}}|{{c/core|std::iterator_traits&lt;X&gt;::reference}}}}
+{{dsc hitem|值|定义}}
+{{dsc|{{c|i}}, {{c|j}}|{{tt|X}} 或 {{c/core|const X}} 类型的值}}
+{{dsc|{{c|r}}|{{tt|X&amp;}} 类型的值}}
+{{dsc end}}
+
+在满足以下所有条件时，{{tt|X}} 是{{named req/core|ForwardIterator}}：
+* {{tt|X}} 满足{{named req|InputIterator}}.
+* {{tt|X}} 满足{{named req|DefaultConstructible}}.
+* 如果 {{tt|X}} 是[[cpp/iterator|可变﻿迭代器]]，那么 {{tt|Ref}} 是到 {{tt|T}} 的引用。
+* 如果 {{tt|X}} 是常迭代器，那么 {{tt|Ref}} 是到 {{c/core|const T}} 的引用。
+* {{tt|X}} 类型的对象提供[[#多趟保证|多趟保证]]。
+* 如果 {{c|i}} 与 {{c|j}} 相等，那么 {{c|i}} 和 {{c|j}} 要么都[[cpp/iterator#可解性与有效性|可解引用]]，要么都不可解引用。
+* 如果 {{c|i}} 和 {{c|j}} 都可解引用，那么当且仅当 {{c|*i}} 和 {{c|*j}} 都绑定到相同的对象时 {{c|1=i == j}}。
+* 下列表达式必须合法，并且具有指定的效果：
+{|table class="wikitable"
+|-
+!{{nbsp}}表达式{{nbsp}}
+!类型
+!效果
+|-
+|{{c|r++}}
+|可转换到 {{c/core|const X&amp;}}{{nbsp}}
+|等价于 {{c multi|1=X x = r;|2=++r;|3=return x;}}。
+|-
+|{{c|*i++}}
+|{{tt|Ref}}
+|
+|-
+|}
+
+===相等性定义域===
+对于向前迭代器，{{c|1===}} 的{{rlp|InputIterator#相等性定义域|定义域}}是具有相同的[[cpp/iterator#可解性与有效性|底层序列]]的迭代器。
+
+{{rrev|since=c++14|
+[[cpp/language/value initialization|值初始化]]的向前迭代器也可以用来比较，而且必须与相同类型的其他值初始化的迭代器比较相等。
+
+也就是说，值初始化的向前迭代器如同是指代相同的空序列的尾后位置的迭代器。
+}}
+
+===多趟保证===
+{{tt|X}} 类型的两个可解引用的迭代器 {{c|a}} 和 {{c|b}} 在满足以下所有条件时提供''多趟保证''：
+* {{c|1=a == b}} 意味着 {{c|1=++a == ++b}}。
+* 满足以下任意条件：
+:* {{tt|X}} 是指针类型。
+:* 表达式 {{c|(void)++X(a), *a}} 等价于表达式 {{c|*a}}。
+
+
+{{rrev|since=c++20|
+===概念===
+为了定义 {{lc|std::iterator_traits}}，定义了以下仅用于阐述的概念：
+{{dcl begin}}
+{{dcl|1=
+template&lt;class It&gt;
+concept __LegacyForwardIterator&lt;!-- called cpp17-forward-iterator in the standard --&gt; =
+    __LegacyInputIterator&lt;It&gt; &amp;&amp; std::constructible_from&lt;It&gt; &amp;&amp;
+    std::is_reference_v&lt;std::iter_reference_t&lt;It&gt;&gt; &amp;&amp;
+    std::same_as&lt;
+        std::remove_cvref_t&lt;std::iter_reference_t&lt;It&gt;&gt;,
+        typename std::indirectly_readable_traits&lt;It&gt;::value_type&gt; &amp;&amp;
+    requires(It it) {
+        {  it++ } -&gt; std::convertible_to&lt;const It&amp;&gt;;
+        { *it++ } -&gt; std::same_as&lt;std::iter_reference_t&lt;It&gt;&gt;;
+    };
+}}
+{{dcl end}}
+
+其中仅用于阐述的概念 {{tt|__LegacyInputIterator&lt;T&gt;}} 描述于 {{rlp|InputIterator#概念|LegacyInputIterator}}。
+}}
+
+===注解===
+与 {{lc|std::forward_iterator}} 概念不同，{{named req/core|ForwardIterator}}要求解引用需要返回引用。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=1212|paper=N3066|std=C++98|before={{c|*i++}} 的类型与{{named req|BidirectionalIterator}}&lt;br&gt;要求的 {{c|*i--}} 的类型不匹配|after=将类型改为 {{tt|Ref}}}}
+{{dr list item|wg=lwg|dr=1311|paper=N3066|std=C++98|before=“{{c|1=a == b}} 意味着 {{c|1=++a == ++b}}”不足以提供多趟保证&lt;ref&gt;例如在 {{c|a}} 和 {{c|b}} 使用相同的底层迭代器的情况下，对表达式 {{c|1=++a == ++b}} 进行求值会将底层迭代器自增两次，但求值结果依然是 {{c|true}}。&lt;/ref&gt;|after=也要求“{{c|1=a == b}} 意味着 {{c|1=++a != b}}”&lt;ref&gt;正式而言也要求蕴含 {{c|1=++b != a}}。&lt;/ref&gt;}}
+{{dr list item|wg=lwg|dr=3798|std=C++20|before={{tt|__LegacyForwardIterator}} 要求&lt;br&gt;{{c/core|std::iter_reference_t&lt;It&gt;}} 是左值引用类型|after=也允许右值引用类型}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc forward_iterator}}
+{{see also iterator library}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

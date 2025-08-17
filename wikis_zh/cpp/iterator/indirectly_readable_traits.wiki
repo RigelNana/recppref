@@ -1,0 +1,112 @@
+{{cpp/title|indirectly_readable_traits}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl|num=1|since=c++20|
+template&lt; class I &gt;
+struct indirectly_readable_traits {};
+}}
+{{dcl|num=2|since=c++20|
+template&lt; class T &gt;
+struct indirectly_readable_traits&lt;T*&gt; :
+    /* cond-value-type */&lt;T&gt; {};
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I &gt;
+    requires std::is_array_v&lt;I&gt;
+struct indirectly_readable_traits&lt;I&gt;;
+{ using value_type = std::remove_cv_t&lt;std::remove_extent_t&lt;I&gt;&gt;; }
+}}
+{{dcl|num=4|since=c++20|
+template&lt; class T &gt;
+struct indirectly_readable_traits&lt;const T&gt; :
+    indirectly_readable_traits&lt;T&gt; {};
+}}
+{{dcl|num=5|since=c++20|
+template&lt; /* has-member-value-type */ T &gt;
+struct indirectly_readable_traits&lt;T&gt; :
+    /* cond-value-type */&lt;typename T::value_type&gt; {};
+}}
+{{dcl|num=6|since=c++20|
+template&lt; /* has-member-element-type */ T &gt;
+struct indirectly_readable_traits&lt;T&gt; :
+    /* cond-value-type */&lt;typename T::element_type&gt; {};
+
+}}
+{{dcl|num=7|since=c++20|
+template&lt; /* has-member-value-type */ T &gt;
+    requires /* has-member-element-type */&lt;T&gt;
+struct indirectly_readable_traits&lt;T&gt; {};
+
+}}
+{{dcl|num=8|since=c++20|
+template&lt; /* has-member-value-type */ T &gt;
+    requires /* has-member-element-type */&lt;T&gt; &amp;&amp;
+             std::same_as&lt;std::remove_cv_t&lt;typename T::element_type&gt;,
+                          std::remove_cv_t&lt;typename T::value_type&gt;&gt;
+struct indirectly_readable_traits&lt;T&gt; :
+    /* cond-value-type */&lt;typename T::value_type&gt; {};
+}}
+{{dcl h|辅助概念}}
+{{dcl|num=1|notes={{mark expos}}|
+template&lt; class &gt;
+struct /* cond-value-type */ {};
+}}
+{{dcl|num=2|notes={{mark expos}}|1=
+template&lt; class T &gt;
+    requires std::is_object_v&lt;T&gt;
+struct /* cond-value-type */ &lt;T&gt;
+{ using value_type = std::remove_cv_t&lt;T&gt;; };
+}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class T &gt;
+concept /* has-member-value-type */ =
+    requires { typename T::value_type; };
+}}
+{{dcl|num=4|notes={{mark expos}}|1=
+template&lt; class T &gt;
+concept /* has-member-element-type */ =
+    requires { typename T::element_type; };
+}}
+{{dcl end}}
+
+计算模板实参的关联值类型。如果关联值类型存在，那么它会以嵌套类型 {{tt|value_type}} 表示，否则不会定义 {{tt|value_type}}。程序可对{{ls|cpp/language/type#由程序定义的类型}}特化 {{tt|indirectly_readable_traits}}。
+
+===解释===
+以上特化可以非正式地描述如下。
+
+给定类型 {{tt|T}}，它的关联值类型 {{tt|V}} 按以下方式确定：
+* 如果 {{tt|T}} 具有 const 限定，那么 {{tt|V}} 是无 const 限定的 {{tt|T}} 的关联值类型。
+* 否则，如果 {{tt|T}} 是数组类型，那么 {{tt|V}} 是无 cv 限定的数组元素类型。
+* 否则，首先确定条件值类型 {{tt|C}}：
+:* 如果 {{tt|T}} 是指针类型，那么 {{tt|C}} 是被指向的类型。
+:* 否则，如果 {{tt|T}} 具有嵌套类型 {{tt|value_type}} 和 {{tt|element_type}}：
+::* 如果两个嵌套类型相同（不考虑 cv 限定），那么 {{tt|C}} 是 {{tt|typename T::value_type}}。
+::* 否则 {{tt|C}} 未定义。
+:* 否则，如果 {{tt|T}} 只有嵌套类型 {{tt|value_type}} 而没有 {{tt|element_type}}，那么 {{tt|C}} 是 {{tt|typename T::value_type}}。
+:* 否则，如果 {{tt|T}} 只有嵌套类型 {{tt|element_type}} 而没有 {{tt|value_type}}，那么 {{tt|C}} 是 {{tt|typename T::element_type}}。
+:* 否则 {{tt|C}} 未定义。
+: 然后按以下方式从 {{tt|C}} 确定 {{tt|V}}：
+:* 如果 {{tt|C}} 未定义，或者 {{tt|C}} 不是{{ls|cpp/language/type#对象类型}}，那么 {{tt|V}} 未定义。
+:* 否则 {{tt|V}} 是无 cv 限定的 {{tt|C}}。
+
+===注解===
+有意将 {{tt|value_type}} 对如迭代器的 {{lconcept|indirectly_readable}} 类型使用。并非有意将它对范围使用。
+
+===示例===
+{{example}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3446|std=C++20|before=特化 {{v|5,6}} 对具有 {{tt|value_type}} 和 {{tt|element_type}} 两个嵌套类型的类型有歧义|after=添加特化 {{v|8}}}}
+{{dr list item|wg=lwg|dr=3541|std=C++20|before=LWG 3446 对 {{tt|value_type}} 与 {{tt|element_type}} 不同的情况引入了硬错误|after=添加特化 {{v|7}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc indirectly_readable}}
+{{dsc inc|cpp/iterator/dsc iter_t}}
+{{dsc inc|cpp/iterator/dsc iterator_traits}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

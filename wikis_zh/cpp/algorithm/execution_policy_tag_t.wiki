@@ -1,0 +1,78 @@
+{{cpp/algorithm/execution/title|sequenced_policy|parallel_policy|parallel_unsequenced_policy|unsequenced_policy}}
+{{cpp/algorithm/navbar}}
+
+{{dcl begin}}
+{{dcl header|execution}}
+{{dcl|num=1|since=c++17|
+class sequenced_policy { /* 未指明 */ };
+}}
+{{dcl|num=2|since=c++17|
+class parallel_policy { /* 未指明 */ };
+}}
+{{dcl|num=3|since=c++17|
+class parallel_unsequenced_policy { /* 未指明 */ };
+}}
+{{dcl|num=4|since=c++20|
+class unsequenced_policy { /* 未指明 */ };
+}}
+{{dcl end}}
+
+@1@ 执行策略类型，用作对并行算法重载消歧义的独有类型，并要求并行算法的执行不可以并行化。以此策略调用（通常以 {{lc|std::execution::seq}} 指定）的并行算法中，元素访问函数的调用在调用方线程中是顺序不确定的。
+@2@ 执行策略类型，用作对并行算法重载消歧义的独有类型，并指示并行算法的执行可以并行化。以此策略调用（通常以 {{lc|std::execution::par}} 指定）的并行算法中，元素访问函数的调用允许在调用方线程，或由库隐式创建的用以支持并行算法执行的线程中执行。任何执行于同一线程中的这种调用彼此间是顺序不确定的。如果由 {{lc|std::thread}} 或 {{lc|std::jthread}} 创建的线程提供了并发向前进展保证，那么由库创建的执行线程就提供并行向前进展保证。否则，所提供的向前进展保证是由实现定义的。注意：并行向前进展所保证的是，如果某个执行线程做出了步骤，那么它终将做出另一步骤，这就允许线程进入关键区并获取锁，因为取得锁的线程终将被再次调度并能予以释放。
+@3@ 执行策略类型，用作对并行算法重载消歧义的独有类型，并指示并行算法的执行可以并行化、向量化，或在线程间迁移（例如用亲代窃取式调度器）。以此策略调用的并行算法中，容许在未指定线程中以无序方式来执行元素访问函数调用，并相对于各个线程中的另一调用间无顺序。以此策略调用的并行算法中，对元素访问函数的调用不允许调用向量化不安全的操作，比如标准库指定进行同步的操作，其中包括 {{lc|std::atomic}} 的操作和其他并发原语。如果由 {{lc|std::thread}} 或 {{lc|std::jthread}} 创建的线程提供了并发向前进展保证，那么由库创建的执行线程就提供弱并行向前进展保证。否则，所提供的向前进展保证就是调用并行算法的线程的向前进展保证。注意：弱并行向前进展所保证的是，做出了步骤的执行线程之一终将做出另一步骤，这并不能允许线程进入关键区或获取锁，因为在尝试获取这个锁的线程退出前，取得锁的线程可能不会被再次调度。
+@4@ 执行策略类型，用作对并行算法重载消歧义的独有类型，并指示可将算法的执行向量化，例如在单个线程上使用操作多个数据项的指令执行。
+
+在以任何这些执行策略执行并行算法的过程中，若元素访问函数的调用因未捕获的异常退出，则调用 {{lc|std::terminate}}，但实现可以定义以其他方式处理异常的额外执行策略。
+
+===注解===
+在使用并行执行策略时，避免数据竞争和死锁是程序员的责任：
+{{source|1=
+int a[] = {0, 1};
+std::vector&lt;int&gt; v;
+std::for_each(std::execution::par, std::begin(a), std::end(a), [&amp;](int i)
+{
+  v.push_back(i*2+1); // 错误：数据竞争
+});
+}}
+
+{{source|1=
+std::atomic&lt;int&gt; x {0};
+int a[] = {1, 2};
+std::for_each(std::execution::par, std::begin(a), std::end(a), [&amp;](int)
+{
+    x.fetch_add(1, std::memory_order_relaxed);
+    while (x.load(std::memory_order_relaxed) == 1) { } // 错误：假设执行顺序
+});
+}}
+
+{{source|1=
+int x = 0;
+std::mutex m;
+int a[] = {1, 2};
+std::for_each(std::execution::par, std::begin(a), std::end(a), [&amp;](int)
+{
+    std::lock_guard&lt;std::mutex&gt; guard(m);
+    ++x; // 正确
+});
+}}
+
+无顺序执行策略是函数调用彼此间''无顺序''的仅有情况，这意味着它们可以穿插执行。C++ 的所有其他情况中，它们都是[[cpp/language/eval_order|非确定顺序]]的（不能穿插）。因此，在使用这些策略时，不允许用户分配或解分配内存，使用非免锁的 {{lc|std::atomic}} 特化，获得互斥体，或者泛言之进行任何''向量化不安全''操作（向量化不安全函数是与其他函数同步的函数，例如 {{lc|std::mutex::unlock}} 与前一 {{lc|std::mutex::lock}} 同步）
+{{source|1=
+int x = 0;
+std::mutex m;
+int a[] = {1, 2};
+std::for_each(std::execution::par_unseq, std::begin(a), std::end(a), [&amp;](int)
+{
+    std::lock_guard&lt;std::mutex&gt; guard(m); // 错误： lock_guard 构造函数调用 m.lock()
+    ++x;
+});
+}}
+
+若实现无法并行化或向量化（例如由于资源不足），则所有标准执行策略都能回落到按顺序执行。
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/algorithm/dsc execution_policy_tag}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

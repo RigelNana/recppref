@@ -1,0 +1,88 @@
+{{cpp/title|recursive_mutex}}
+{{cpp/thread/recursive_mutex/navbar}}
+{{ddcl|header=mutex|since=c++11|1=
+class recursive_mutex;
+}}
+
+{{tt|recursive_mutex}} 类是一种同步原语，能用于保护共享数据免受从个多线程同时访问。
+
+{{tt|recursive_mutex}} 提供排他性递归所有权语义：
+
+* 调用方线程在从它成功调用 [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]] 或 [[cpp/thread/mutex/try_lock|{{tt|try_lock}}]] 开始的时期里''占有'' {{tt|recursive_mutex}}。此时期之内，线程可以进行对 [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]] 或 [[cpp/thread/recursive_mutex/try_lock|{{tt|try_lock}}]] 的附加调用。所有权的时期在线程进行匹配次数的 [[cpp/thread/recursive_mutex/unlock|{{tt|unlock}}]] 调用时结束。
+* 线程占有 {{tt|recursive_mutex}} 时，若其他所有线程试图要求 {{tt|recursive_mutex}} 的所有权，则它们将阻塞（对于调用 [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]]）或收到 {{c|false}} 返回值（对于调用 [[cpp/thread/recursive_mutex/try_lock|{{tt|try_lock}}]]）。
+* 可锁定 {{tt|recursive_mutex}} 次数的最大值是未指定的，但抵达该数后，对 [[cpp/thread/recursive_mutex/lock|{{tt|lock}}]] 的调用将抛出 {{lc|std::system_error}} 而对 [[cpp/thread/mutex/try_lock|{{tt|try_lock}}]] 的调用将返回 {{c|false}}。
+
+若 {{tt|recursive_mutex}} 在仍为某线程占有时被销毁，则程序行为未定义。{{tt|recursive_mutex}} 类满足{{named req|Mutex}}和{{named req|StandardLayoutType}}的所有要求。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc inc|cpp/thread/dsc native_handle_type|recursive_mutex}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/mutex/dsc constructor|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc destructor|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc operator{{=}}}}
+
+{{dsc h2|锁定}}
+{{dsc inc|cpp/thread/mutex/dsc lock|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock|recursive_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock|recursive_mutex}}
+
+{{dsc h2|本机句柄}}
+{{dsc inc|cpp/thread/mutex/dsc native_handle|recursive_mutex}}
+{{dsc end}}
+
+===示例===
+{{example
+|{{tt|recursive_mutex}} 的使用场景之一是保护类中的共享状态，而类的成员函数可能相互调用。
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+class X
+{
+    std::recursive_mutex m;
+    std::string shared;
+public:
+    void fun1()
+    {
+        std::lock_guard&lt;std::recursive_mutex&gt; lk(m);
+        shared = "fun1";
+        std::cout &lt;&lt; "fun1 中，共享变量现在为 " &lt;&lt; shared &lt;&lt; '\n';
+    }
+    void fun2()
+    {
+        std::lock_guard&lt;std::recursive_mutex&gt; lk(m);
+        shared = "fun2";
+        std::cout &lt;&lt; "fun2 中，共享变量现在为 " &lt;&lt; shared &lt;&lt; '\n';
+        fun1(); // 递归锁在此处变得有用
+        std::cout &lt;&lt; "回到 fun2，共享变量为 " &lt;&lt; shared &lt;&lt; '\n';
+    };
+};
+
+int main() 
+{
+    X x;
+    std::thread t1(&amp;X::fun1, &amp;x);
+    std::thread t2(&amp;X::fun2, &amp;x);
+    t1.join();
+    t2.join();
+}
+|p=true
+|output=
+fun1, 中，共享变量现在为 fun1
+fun2 中，共享变量现在为 fun2
+fun1 中，共享变量现在为 fun1
+回到 fun2，共享变量为 fun1
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc mutex}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

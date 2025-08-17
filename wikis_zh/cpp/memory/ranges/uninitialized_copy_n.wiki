@@ -1,0 +1,119 @@
+{{cpp/ranges/title|uninitialized_copy_n|uninitialized_copy_n_result}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|调用签名}}
+{{dcla|num=1|since=c++20|constexpr=c++26|
+template&lt; std::input_iterator I,
+          no-throw-input-iterator O, no-throw-sentinel-for&lt;O&gt; S &gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;,
+                                     std::iter_reference_t&lt;I&gt;&gt;
+uninitialized_copy_n_result&lt;I, O&gt;
+    uninitialized_copy_n( I ifirst, std::iter_difference_t&lt;I&gt; count,
+                          O ofirst, S olast );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class I, class O &gt;
+using uninitialized_copy_n_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+设 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::min(count, ranges::distance(ofirst, olast))}}。
+
+如同用以下方式将始于 {{c|ifirst}} 的范围中的 {{mathjax-or|\(\scriptsize N\)|N}} 个元素复制到未初始化内存区域 {{range|ofirst|olast}}：
+{{c multi|
+auto ret {{=}} ranges::uninitialized_copy(std::counted_iterator(std::move(ifirst), count),|
+                                      std::default_sentinel, ofirst, olast);|
+return {std::move(ret.in).base(), ret.out};
+}}
+
+如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。
+
+如果 {{range|ofirst|olast}} 与 {{counted range|ifirst|count}} 有重叠，那么行为未定义。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|ifirst|要复制的元素[[cpp/iterator#范围|范围]]的起始}}
+{{par|count|要复制的元素数}}
+{{par range|ofirst|olast|3=|range=目标|sentinel=yes}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+{{mathjax-or|\(\scriptsize\mathcal{O}(N)\)|𝓞(N)}}。
+
+===异常===
+构造目标范围中的元素时抛出的任何异常。
+
+===注解===
+如果输出范围的值类型是{{named req|TrivialType}}，那么实现可能提升 {{tt|ranges::uninitialized_copy_n}} 的效率，例如用 {{lc|ranges::copy_n}}。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1}}}}
+
+===可能的实现===
+{{eq fun|1=
+struct uninitialized_copy_n_fn
+{
+    template&lt;std::input_iterator I, no-throw-input-iterator O, no-throw-sentinel-for&lt;O&gt; S&gt;
+        requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;, std::iter_reference_t&lt;I&gt;&gt;
+    constexpr ranges::uninitialized_copy_n_result&lt;I, O&gt;
+        operator()(I ifirst, std::iter_difference_t&lt;I&gt; count, O ofirst, S olast) const
+    {
+        auto iter = std::counted_iterator(std::move(ifirst), count);
+        auto ret = ranges::uninitialized_copy(iter, std::default_sentinel, ofirst, olast);
+        return {std::move(ret.in).base(), ret.out};
+    }
+};
+
+inline constexpr uninitialized_copy_n_fn uninitialized_copy_n{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    const char* stars[]{"Procyon", "Spica", "Pollux", "Deneb", "Polaris"};
+    
+    constexpr int n{4};
+    alignas(alignof(std::string)) char out[n * sizeof(std::string)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;std::string*&gt;(out)};
+        auto last{first + n};
+        auto ret{std::ranges::uninitialized_copy_n(std::begin(stars), n, first, last)};
+        
+        std::cout &lt;&lt; '{';
+        for (auto it{first}; it != ret.out; ++it)
+            std::cout &lt;&lt; (it == first ? "" : ", ") &lt;&lt; std::quoted(*it);
+        std::cout &lt;&lt; "};\n";
+        
+        std::ranges::destroy(first, last);
+    }
+    catch (...)
+    {
+        std::cout &lt;&lt; "uninitialized_copy_n 异常\n";
+    }
+}
+|output=
+{"Procyon", "Spica", "Pollux", "Deneb"};
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_copy}}
+{{dsc inc|cpp/memory/dsc uninitialized_copy_n}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

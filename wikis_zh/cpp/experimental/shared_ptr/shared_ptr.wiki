@@ -1,0 +1,121 @@
+{{cpp/experimental/shared_ptr/title|shared_ptr}}
+{{cpp/experimental/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl|num=1|1= 
+constexpr shared_ptr() noexcept;
+}}
+{{dcl|num=2|1= 
+constexpr shared_ptr( std::nullptr_t ) noexcept;
+}}
+{{dcl|num=3|1= 
+template&lt; class Y &gt; 
+explicit shared_ptr( Y* ptr );
+}}
+{{dcl|num=4|1= 
+template&lt; class Y, class Deleter &gt; 
+shared_ptr( Y* ptr, Deleter d );
+}}
+{{dcl|num=5|1= 
+template&lt; class Deleter &gt; 
+shared_ptr( std::nullptr_t ptr, Deleter d );
+}}
+{{dcl|num=6|1= 
+template&lt; class Y, class Deleter, class Alloc &gt; 
+shared_ptr( Y* ptr, Deleter d, Alloc alloc );
+}}
+{{dcl|num=7|1= 
+template&lt; class Deleter, class Alloc &gt; 
+shared_ptr( std::nullptr_t ptr, Deleter d, Alloc alloc );
+}}
+{{dcl|num=8|1= 
+template&lt; class Y &gt; 
+shared_ptr( const shared_ptr&lt;Y&gt;&amp; r, element_type *ptr ) noexcept;
+}}
+{{dcl|num=9|1= 
+shared_ptr( const shared_ptr&amp; r ) noexcept;
+}}
+{{dcl|num=9|1= 
+template&lt; class Y &gt; 
+shared_ptr( const shared_ptr&lt;Y&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=10|1= 
+shared_ptr( shared_ptr&amp;&amp; r ) noexcept;
+}}
+{{dcl|num=10|1= 
+template&lt; class Y &gt; 
+shared_ptr( shared_ptr&lt;Y&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcl|num=11|1= 
+template&lt; class Y &gt; 
+explicit shared_ptr( const std::weak_ptr&lt;Y&gt;&amp; r );
+}}
+{{dcl|num=12|1= 
+template&lt; class Y &gt; 
+shared_ptr( std::auto_ptr&lt;Y&gt;&amp;&amp; r );
+}}
+{{dcl|num=13|1= 
+template&lt; class Y, class Deleter &gt; 
+shared_ptr( std::unique_ptr&lt;Y,Deleter&gt;&amp;&amp; r );
+}}
+{{dcl end}}
+
+从各种指代要管理对象的指针类型构造新的 {{tt|shared_ptr}}。
+
+For the purposes of the description below, a pointer type {{tt|Y*}} is said to be compatible with a pointer type {{tt|T*}} if either {{tt|Y*}} is convertible to {{tt|T*}} or {{tt|Y}} is the array type {{tt|U[N]}} and {{tt|T}} is {{tt|U cv []}} (where cv is some set of cv-qualifiers).
+
+@1,2@ 构造没有管理对象的 {{tt|shared_ptr}}，即空 {{tt|shared_ptr}}。
+
+@3-7@ 以 {{c|ptr}} 为指向被管理对象的指针来构造 {{tt|shared_ptr}}。如果 {{tt|T}} 是数组类型 {{tt|U[N]}}，则 {{tt|Y(*)[N]}} 必须可以转换为 {{tt|T*}}。如果 {{tt|T}} 为数组类型 {{tt|U[]}}，则 {{tt|Y(*)[]}} 必须可以转换为 {{tt|T*}}。否则，{{tt|Y*}} 必须可以转换为 {{tt|T*}}。此外：
+
+:@3@ 使用 [[cpp/language/delete|delete-表达式]]（当 {{tt|T}} 不是数组类型时为 {{c|delete ptr}}；如果 {{tt|T}} 是数组类型时为 {{c|delete[] ptr}}）为删除器。{{tt|Y}} 必须为完整类型。该 delete 表达式必须良构，具有良好定义的行为，且不抛出任何异常。
+
+:@4,5@ 使用指定的删除器 {{c|d}} 为删除器。表达式 {{c|d(ptr)}} 必须良构，具有良好定义的行为，且不抛出任何异常。{{tt|Deleter}} 必须为{{named req|CopyConstructible}}，且其复制构造函数和析构函数不能抛出异常。
+
+:@6,7@ 与 {{v|4,5}} 相同，但此外还使用 {{c|alloc}} 的副本来分配内部使用的数据。{{tt|Alloc}} 必须为{{named req|Allocator}}，且其复制构造函数和析构函数不能抛出异常。
+
+@8@ ''别名构造函数''：构造与 {{c|r} 共享所有权的 {{tt|shared_ptr}}，但持有无关且未管理的指针 {{c|ptr}}。即便此 {{tt|shared_ptr}} 是离开作用域组中最后一个，它仍将为原来由 {{c|r}} 管理的对象调用析构函数。不过，在其上调用 {{tt|get()}} 将总是返回 {{c|ptr}} 的副本。程序员有责任确保，只要这个 {{tt|shared_ptr}} 存在，{{c|ptr}} 就保持有效，比如在 {{c|ptr}} 为 {{c|r}} 所管理的对象的成员，或者为 {{c|r.get()}} 的别名（比如经向下转型）等典型使用情景。
+
+@9@ 构造共享 {{c|r}} 所管理对象的所有权的 {{tt|shared_ptr}}。如果 {{c|r}} 并不管理对象，则 {{c|*this}} 也不管理对象。如果 {{tt|Y*}} 不''兼容于'' {{tt|T*}}，则模板重载不参与重载决议。
+
+@10@ 从 {{c|r}} 移动构造 {{tt|shared_ptr}}。经过构造后，{{c|*this}} 含义 {{c|r}} 之前状态的副本，{{c|r}} 为空。如果 {{tt|Y*}} 不''兼容于'' {{tt|T*}}，则模板重载不参与重载决议。
+
+@11@ 构造共享 {{c|r}} 所管理对象的所有权的 {{tt|shared_ptr}}。{{tt|Y*}} 必须''兼容于'' {{tt|T*}}。注意 {{c|r.lock()}} 可以用于相同目的：其差别在于此构造函数在实参为空时会抛出异常，而 {{c|weak_ptr&lt;T&gt;::lock()}} 在此情况下构造空 {{tt|shared_ptr}}。
+
+@12@ 构造存储并拥有 {{c|r}} 之前拥有的对象的 {{tt|shared_ptr}}。{{tt|Y*}} 必须可以转换为 {{tt|T*}}。经过构造后，{{c|r}} 为空。
+
+@13@ 构造 {{tt|shared_ptr}}，它管理当前由 {{c|r}} 管理的对象。存储 {{c|r}} 关联的删除器，以在未来删除所管理的对象。此调用后 {{c|r}} 不再管理对象。如果 {{tt|Y*}} 不''兼容于'' {{tt|T*}}，则此重载不参与重载决议。&lt;br&gt;如果 {{tt|D}} 是引用类型，则等价于 {{c|shared_ptr(r.release(), std::ref(r.get_deleter())}}。否则，等价于 {{c|shared_ptr(r.release(), r.get_deleter())}}。
+
+===注解===
+当从指向派生于 {{lc|std::experimental::enable_shared_from_this}} 的类型的对象的裸指针来构造 {{tt|shared_ptr}} 时，{{tt|shared_ptr}} 的构造函数会更新 {{lc|std::experimental::enable_shared_from_this}} 基类的私有 {{tt|weak_ptr}} 成员，使得未来对 {{ltt|cpp/memory/enable_shared_from_this/shared_from_this|shared_from_this()}} 的调用将能与由此裸指针构造函数所创建的 {{tt|shared_ptr}} 共享所有权。
+
+裸指针重载假定所指向对象的所有权，因此对已经被 {{tt|shared_ptr}} 管理的对象使用裸指针重载来构造 {{tt|shared_ptr}} 可能导致未定义行为，即便该对象具有派生于 {{lc|std::experimental::enable_shared_from_this}} 的类型也是如此。
+
+===参数===
+{{par begin}}
+{{par|ptr|指向被管理对象的指针}}
+{{par|d|用于销毁对象的删除器}}
+{{par|alloc|用于分配内部使用的数据的分配器}}
+{{par|r|要对其共享所有权或从中获取所有权的另一智能指针}}
+{{par end}} 
+
+===异常===
+@3@ 如果无法获取所需的额外内存则抛出 {{lc|std::bad_alloc}}。可能为其他错误抛出由实现定义的异常。当发生异常时，若 {{tt|T}} 不是数组类型则调用适用的 delete-表达式 ({{c|delete ptr}}，否则调用 {{c|delete[] ptr}}。
+
+@4-7@ 如果无法获取所需的额外内存则抛出 {{lc|std::bad_alloc}}。可能为其他错误抛出由实现定义的异常。当发生异常时调用 {{c|d(ptr)}}。
+
+@11@ 如果 {{c|r.expired() {{==}} true}} 则抛出 {{lc|std::bad_weak_ptr}}。这种情况下构造函数没有效果。
+
+@12@ 如果无法获取所需的额外内存则抛出 {{lc|std::bad_alloc}}。可能为其他错误抛出由实现定义的异常。发生异常时构造函数没有效果。
+
+@13@ 如果抛出了异常，则构造函数没有效果。
+
+===示例===
+{{example
+|code=
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc allocate_shared}}
+{{dsc end}}

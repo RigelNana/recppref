@@ -1,0 +1,109 @@
+{{cpp/title|strtok}}
+{{cpp/string/byte/navbar}}
+{{ddcl|header=cstring|
+char* strtok( char* str, const char* delim );
+}}
+
+记号化空终止字节字符串。
+
+对 {{tt|std::strtok}} 进行的一系列调用会将 {{c|str}} 指向的字符串拆分为记号序列，记号之间以 {{c|delim}} 中的某个字符分隔。调用序列中的每次调用都有一个{{i|搜索目标''}}：
+* 如果 {{c|str}} 非空，那么该调用是序列中的''首次调用''。搜索目标是 {{c|str}} 指向的空终止字节字符串。
+* 如果 {{c|str}} 为空，那么该调用是序列中的''后续调用''。搜索目标由系列中的上一次调用确定。
+
+序列中的每次调用都会在搜索目标中搜索第一个'''不'''在 {{c|delim}} 指向的''分隔字符串''{{sep}}中出现的字符，每次调用中分隔字符串可以不一致。
+* 如果没有找到这种字符，那么搜索目标中没有任何记号。序列中的下次调用的搜索目标保持不变。&lt;ref&gt;后续调用使用其他分隔字符串仍然有可能组成记号。&lt;/ref&gt;
+* 如果找到了这种字符，那么它就是当前记号的起始。然后 {{tt|std::strtok}} 会从此处开始搜索第一个在分隔字符串中出现的字符。
+** 如果没有找到这种字符，那么当前记号会持续到搜索目标的末尾。序列中的下次调用的搜索目标是空字符串。&lt;ref&gt;后续调用中无法再组成记号。&lt;/ref&gt;
+** 如果找到了这种字符，那么会用空字符覆盖它，并结束当前记号。序列中的下次调用的搜索目标从下一字符开始。
+
+如果 {{c|str}} 或 {{c|delim}} 不是指向空终止字节字符串的指针，那么行为未定义。
+
+&lt;references/&gt;
+
+===参数===
+{{par begin}}
+{{par|str|指向要记号化的空终止字节字符串的指针}}
+{{par|delim|指向标识分隔符的空终止字节字符串的指针}}
+{{par end}}
+
+===返回值===
+指向下个记号起始的指针，或若无更多记号则为空指针。
+
+===注解===
+此函数是破坏性的：它在字符串 {{c|str}} 的元素中写入 {{c|'\0'}} 字符。特别是，[[cpp/language/string_literal|字符串字面量]]不能用作 {{tt|std::strtok}} 的首个实参。
+
+每次对此函数的调用都会修改静态对象：它不是线程安全的。
+
+与大多数其他记号化器不同，{{tt|std::strtok}} 中的分隔符对于各个后继记号可以有所不同，它甚至能依赖于先前记号的内容。
+
+===可能的实现===
+{{eq fun|1=
+char* strtok(char* str, const char* delim)
+{
+    static char* buffer;
+    
+    if (str != nullptr)
+        buffer = str;
+    
+    buffer += std::strspn(buffer, delim);
+    
+    if (*buffer == '\0')
+        return nullptr;
+    
+    char* const tokenBegin = buffer;
+    
+    buffer += std::strcspn(buffer, delim);
+    
+    if (*buffer != '\0')
+        *buffer++ = '\0';
+    
+    return tokenBegin;
+}
+}}
+
+这个函数的实际 C++ 库实现都委托给 C 库，其中会直接实现它（如 [https://github.com/bminor/musl/blob/master/src/string/strtok.c MUSL libc]），或以它的可重入版本实现（如 [https://github.com/bminor/glibc/blob/master/string/strtok.c GNU libc]）。
+
+===示例===
+{{example
+|code=
+#include &lt;cstring&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main() 
+{
+    char input[] = "one + two * (three - four)!";
+    const char* delimiters = "! +- (*)";
+    char* token = std::strtok(input, delimiters);
+    while (token)
+    {
+        std::cout &lt;&lt; std::quoted(token) &lt;&lt; ' ';
+        token = std::strtok(nullptr, delimiters);
+    }
+    
+    std::cout &lt;&lt; "\n输入字符串的内容现在是：\n\"";
+    for (std::size_t n = 0; n &lt; sizeof input; ++n)
+    {
+        if (const char c = input[n]; c != '\0')
+            std::cout &lt;&lt; c;
+        else
+            std::cout &lt;&lt; "\\0";
+    }
+    std::cout &lt;&lt; "\"\n";
+}
+|output=
+"one" "two" "three" "four" 
+输入字符串的内容现在是：
+"one\0+ two\0* (three\0- four\0!\0"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/byte/dsc strpbrk}}
+{{dsc inc|cpp/string/byte/dsc strcspn}}
+{{dsc inc|cpp/string/byte/dsc strspn}}
+{{dsc inc|cpp/ranges/dsc split_view}}
+{{dsc see c|c/string/byte/strtok}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

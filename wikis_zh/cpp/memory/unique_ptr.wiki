@@ -1,0 +1,284 @@
+{{cpp/title|unique_ptr}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|since=c++11|num=1|1=
+template&lt;
+    class T,
+    class Deleter = std::default_delete&lt;T&gt;
+&gt; class unique_ptr;
+}}
+{{dcl|since=c++11|num=2|1=
+template &lt;
+    class T,
+    class Deleter
+&gt; class unique_ptr&lt;T[], Deleter&gt;;
+}}
+{{dcl end}}
+
+{{tt|std::unique_ptr}} 是一种智能指针，它通过指针持有并管理另一对象（对其负责），并在 {{tt|unique_ptr}} 离开作用域时释放该对象。
+
+在发生下列两者之一时，用关联的删除器释放对象：
+* 管理它的 {{tt|unique_ptr}} 对象被销毁。
+* 通过 {{lc|1=operator=}} 或 {{lc|reset()}} 赋值另一指针给管理它的 {{tt|unique_ptr}} 对象。
+
+对象的释放，是通过调用 {{c|get_deleter()(ptr)}}，用可能由用户提供的删除器进行的。默认删除器（{{tt|std::default_delete}}）使用 {{c/core|delete}} 运算符，它销毁对象并解分配内存。
+
+{{tt|unique_ptr}} 也可以不占有对象，该情况下称它为''空''。
+
+{{tt|std::unique_ptr}} 有两个版本：
+# 管理单个对象（例如以 {{c/core|new}} 分配）
+# 管理动态分配的对象数组（例如以 {{c/core|new[]}} 分配）
+
+此类满足{{named req|MoveConstructible}}和{{named req|MoveAssignable}}，但不满足{{named req|CopyConstructible}}或{{named req|CopyAssignable}}。
+
+如果 {{tt|T*}} 不是合法类型（例如 {{tt|T}} 是引用类型），那么实例化 {{c/core|std::unique_ptr&lt;T, Deleter&gt;}} 的程序非良构。
+
+{{par begin}}
+{{par hreq}}
+{{par req|{{tt|Deleter}} 必须是{{named req|FunctionObject}}或{{named req|FunctionObject}}的左值引用或函数的左值引用，且可以以 {{tt|unique_ptr&lt;T, Deleter&gt;::pointer}} 类型的实参调用。}}
+{{par end}}
+
+===注解===
+只有非 const 的 {{tt|unique_ptr}} 能转移被管理对象的所有权给另一 {{tt|unique_ptr}}。如果对象的生存期由 {{c/core|const std::unique_ptr}} 所管理，那么它被限定在创建指针的作用域中。
+
+{{tt|unique_ptr}} 常用于管理对象的生存期，包含：
+
+* 通过保证在正常退出和经由异常退出两者上都进行删除，向处理拥有动态生存期的对象的类和函数提供异常安全性。
+
+* 向函数传递独占的拥有动态生存期的对象的所有权。
+
+* 从函数获得独占的拥有动态生存期的对象的所有权。
+
+* 作为具移动容器的元素类型，例如保有指向动态分配对象的指针的 {{lc|std::vector}}（比如当需要多态行为的场合）。
+
+{{tt|std::unique_ptr}} 可为{{ls|cpp/language/type#不完整类型}} {{tt|T}} 构造，例如用于改善用作 [[cpp/language/pimpl|pImpl 手法]]中把柄的用途。如果使用默认删除器，那么 {{tt|T}} 必须在代码中调用删除器点处完整，这会在析构函数、移动赋值运算符和 {{tt|unique_ptr}} 的 {{tt|reset}} 成员函数中发生。（与之相反，{{lc|std::shared_ptr}} 不能从指向不完整类型的裸指针构造，但可在 {{tt|T}} 不完整处销毁）。注意如果 {{tt|T}} 是类模板特化，那么把 {{tt|unique_ptr}} 用作操作数（如 {{c|!p}}），将因[[cpp/language/adl|实参依赖查找]]而要求 {{tt|T}} 的形参完整。
+
+如果 {{tt|T}} 是某基类 {{tt|B}} 的[[cpp/language/derived class|派生类]]，那么 {{c/core|unique_ptr&lt;T&gt;}} {{rl|unique_ptr|可隐式转换}}到 {{c/core|unique_ptr&lt;B&gt;}}。产生的 {{c/core|unique_ptr&lt;B&gt;}} 的默认删除器将使用 {{tt|B}} 的 {{ltt|cpp/memory/new/operator delete}}，如果 {{tt|B}} 的析构函数不是[[cpp/language/virtual|虚函数]]，那么就会导致[[cpp/language/destructor#虚析构函数|未定义行为]]。注意 {{lc|std::shared_ptr}} 的表现不一样：{{c/core|std::shared_ptr&lt;B&gt;}} 将使用类型 {{tt|T}} 的 {{ltt|cpp/memory/new/operator delete}}，而且即使 {{tt|B}} 的析构函数非[[cpp/language/virtual|虚]]，也会正确删除所持有的对象。
+
+与 {{lc|std::shared_ptr}} 不同，{{tt|unique_ptr}} 可通过任何满足{{named req|NullablePointer}}的定制把柄类型管理对象。例如，这允许通过提供定义了 {{tt|typedef [http://www.boost.org/doc/libs/release/doc/html/boost/interprocess/offset_ptr.html boost::offset_ptr] pointer;}} 或其他{{ls|cpp/named req/Allocator#缀饰指针}}的 {{tt|Deleter}} 来管理位于共享内存的对象。
+
+{{feature test macro|__cpp_lib_constexpr_memory|{{co|constexpr}} {{ttt|std::unique_ptr}}|value=202202L|std=C++23}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{co|pointer}}|该类型存在时是 {{c/core|std::remove_reference&lt;Deleter&gt;::type::pointer}}，否则是 {{tt|T*}}。必须满足{{named req|NullablePointer}}。}}
+{{dsc|{{co|element_type}}|{{tt|T}}，此 {{tt|unique_ptr}} 所管理的对象类型}}
+{{dsc|{{co|deleter_type}}|{{tt|Deleter}}，函数对象或到函数或到函数对象的左值引用，会从析构函数调用}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/unique_ptr/dsc destructor}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator{{=}}}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/memory/unique_ptr/dsc release}}
+{{dsc inc|cpp/memory/unique_ptr/dsc reset}}
+{{dsc inc|cpp/memory/unique_ptr/dsc swap}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/memory/unique_ptr/dsc get}}
+{{dsc inc|cpp/memory/unique_ptr/dsc get_deleter}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator bool}}
+
+{{dsc h2|单对象版本，{{tt|unique_ptr&lt;T&gt;}}}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator*}}
+
+{{dsc h2|数组版本，{{tt|unique_ptr&lt;T[]&gt;}}}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator at}}
+
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc make_unique}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator cmp}}
+{{dsc inc|cpp/memory/unique_ptr/dsc operator ltlt}}
+{{dsc inc|cpp/memory/unique_ptr/dsc swap2}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc hash}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstdio&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;memory&gt;
+#include &lt;stdexcept&gt;
+
+// 用于下面运行时多态演示的辅助类
+struct B
+{
+    virtual ~B() = default;
+    
+    virtual void bar() { std::cout &lt;&lt; "B::bar\n"; }
+};
+
+struct D : B
+{
+    D() { std::cout &lt;&lt; "D::D\n"; }
+    ~D() { std::cout &lt;&lt; "D::~D\n"; }
+    
+    void bar() override { std::cout &lt;&lt; "D::bar\n"; }
+};
+
+// 消费 unique_ptr 的函数能以值或以右值引用接收它
+std::unique_ptr&lt;D&gt; pass_through(std::unique_ptr&lt;D&gt; p)
+{
+    p-&gt;bar();
+    return p;
+}
+
+// 用于下面自定义删除器演示的辅助函数
+void close_file(std::FILE* fp)
+{
+    std::fclose(fp);
+}
+
+// 基于 unique_ptr 的链表演示
+struct List
+{
+    struct Node
+    {
+        int data;
+        std::unique_ptr&lt;Node&gt; next;
+    };
+    
+    std::unique_ptr&lt;Node&gt; head;
+    
+    ~List()
+    {
+        // 循环按顺序销毁各列表节点，默认析构函数将会递归调用其 “next” 指针的析构函数，
+        // 这在足够大的链表上可能造成栈溢出。
+        while (head)
+        {
+            auto next = std::move(head-&gt;next);
+            head = std::move(next);
+        }
+    }
+    
+    void push(int data)
+    {
+        head = std::unique_ptr&lt;Node&gt;(new Node{data, std::move(head)});
+    }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "1) 独占所有权语义演示\n";
+    {
+        // 创建一个（独占）资源
+        std::unique_ptr&lt;D&gt; p = std::make_unique&lt;D&gt;();
+        
+        // 转移所有权给 “pass_through”，而它再通过返回值将所有权转移回来
+        std::unique_ptr&lt;D&gt; q = pass_through(std::move(p));
+        
+        // “p” 现在是已被移动的“空”状态，等于 nullptr
+        assert(!p);
+    }
+    
+    std::cout &lt;&lt; "\n" "2) 运行时多态演示\n";
+    {
+        // 创建派生类资源并通过基类指向它
+        std::unique_ptr&lt;B&gt; p = std::make_unique&lt;D&gt;();
+        
+        // 动态派发如期工作
+        p-&gt;bar();
+    }
+    
+    std::cout &lt;&lt; "\n" "3) 自定义删除器演示\n";
+    std::ofstream("demo.txt") &lt;&lt; 'x'; // 准备要读取的文件
+    {
+        using unique_file_t = std::unique_ptr&lt;std::FILE, decltype(&amp;close_file)&gt;;
+        unique_file_t fp(std::fopen("demo.txt", "r"), &amp;close_file);
+        if (fp)
+            std::cout &lt;&lt; char(std::fgetc(fp.get())) &lt;&lt; '\n';
+    } // 在此调用 “close_file()”（如果 “fp” 为空）
+    
+    std::cout &lt;&lt; "\n" "4) 自定义 lambda 表达式删除器和异常安全性演示\n";
+    try
+    {
+        std::unique_ptr&lt;D, void(*)(D*)&gt; p(new D, [](D* ptr)
+        {
+            std::cout &lt;&lt; "由自定义删除器销毁...\n";
+            delete ptr;
+        });
+        
+        throw std::runtime_error(""); // “p” 是普通指针的情况下此处就会泄漏
+    }
+    catch (const std::exception&amp;)
+    {
+        std::cout &lt;&lt; "捕获到异常\n";
+    }
+    
+    std::cout &lt;&lt; "\n" "5) 数组形式的 unique_ptr 演示\n";
+    {
+        std::unique_ptr&lt;D[]&gt; p(new D[3]);
+    } // “D::~D()” 被调用 3 次
+    
+    std::cout &lt;&lt; "\n" "6) 链表演示\n";
+    {
+        List wall;
+        const int enough{1'000'000};
+        for (int beer = 0; beer != enough; ++beer)
+            wall.push(beer);
+        
+        std::cout.imbue(std::locale("en_US.UTF-8"));
+        std::cout &lt;&lt; "墙上有 " &lt;&lt; enough &lt;&lt; " 瓶啤酒...\n";
+    } // 销毁所有啤酒
+}
+|p=true
+|output=
+1) 独占所有权语义演示
+D::D
+D::bar
+D::~D
+
+2) 运行时多态演示
+D::D
+D::bar
+D::~D
+
+3) 自定义删除器演示
+x
+
+4) 自定义 lambda 表达式删除器和异常安全性演示
+D::D
+由自定义删除器销毁...
+D::~D
+捕获到异常
+
+5) 数组形式的 unique_ptr 演示
+D::D
+D::D
+D::D
+D::~D
+D::~D
+D::~D
+
+6) 链表演示
+墙上有 1,000,000 瓶啤酒...
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=4144|std=C++11|before={{tt|T*}} 不需要组成合法类型|after=需要}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc inc|cpp/memory/dsc weak_ptr}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

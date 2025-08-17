@@ -1,0 +1,116 @@
+{{cpp/io/basic_istream/title|sentry}}
+{{cpp/io/basic_istream/navbar}}
+{{dcl begin}}
+{{dcl|1=
+class sentry;
+}}
+{{dcl end}}
+
+在每个执行输入（有格式和无格式）的 {{lc|std::basic_istream}} 成员函数起始，在块作用域构造一个类 {{tt|basic_istream::sentry}} 的对象。其构造函数准备输入流：检查流是否已在失败状态，冲入 {{tt|tie()}} 过的输出流，若非设置了 {{c|noskipws}} 标志则跳过前导空白，并在需要时进行其他由实现定义的任务。如果必要则在析构函数中进行所有清理，从而在输入过程中抛出异常的情况下保证清理发生。
+
+===成员类型===
+{{dsc begin}}
+{{dsc|{{tt|traits_type}}|{{tt|Traits}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_istream/sentry/dsc constructor}}
+{{dsc inc|cpp/io/basic_istream/sentry/dsc destructor}}
+{{dsc mem fun|operator{{=}}|nolink=true|notes={{cmark deleted}}|不可复制赋值}}
+{{dsc inc|cpp/io/basic_istream/sentry/dsc operator bool}}
+{{dsc end}}
+
+{{member|{{small|std::basic_istream::sentry::}}sentry|2=
+{{ddcl|1=
+explicit sentry(std::basic_istream&lt;CharT, Traits&gt;&amp; is, bool noskipws = false);
+}}
+
+为有格式输入准备流。
+
+如果 {{c|is.good()}} 是 {{c|false}}，那么调用 {{c|is.setstate(std::ios_base::failbit)}} 并返回。否则，如果 {{c|is.tie()}} 不是空指针，那么调用 {{c|is.tie()-&gt;flush()}} 将输出序列与外部流同步。{{c|is.tie()}} 的放置区为空时可以抑制此调用。实现可以延迟对 {{c|flush()}} 的调用，直到发生对 {{c|is.rdbuf()-&gt;underflow()}} 的调用。如果在销毁 sentry 对象前未出现这种调用，那么它可以被完全消除。
+
+如果 {{c|noskipws}} 为零且 {{c|is.flags() &amp; std::ios_base::skipws}} 不为零，那么函数提取并舍弃所有空白字符，直到下个可用字符不是空白字符（由当前 {{c|is}} 中浸染的本地环境确定）。如果 {{c|is.rdbuf()-&gt;sbumpc()}} 或 {{c|is.rdbuf()-&gt;sgetc()}} 返回 {{c|traits::eof()}}，那么此函数调用 {{c|setstate(std::ios_base::failbit {{!}} std::ios_base::eofbit)}}（可能会抛出 {{lc|std::ios_base::failure}}）。
+
+可能会发生由实现定义的其他准备，其可能会调用 {{c|setstate(std::ios_base::failbit)}}（可能会抛出 {{lc|std::ios_base::failure}}）。
+
+如果准备完成后 {{c|1=is.good() == true}}，那么对 {{c/core|operator bool}} 的任何后继调用都会返回 {{c|true}}。
+
+===参数===
+{{par begin}}
+{{par|is|要准备的文件流}}
+{{par|noskipws|不应跳过空白时是 {{c|true}}}}
+{{par end}}
+
+===异常===
+在跳过空白符且出现文件尾条件时抛出 {{lc|std::ios_base::failure}}。
+}}
+
+
+{{member|{{small|std::basic_istream::sentry::}}~sentry|2=
+{{ddcl|1=
+~sentry();
+}}
+不做任何事。
+}}
+
+
+{{member|{{small|std::basic_istream::sentry::}}operator bool|2=
+{{ddcl|1=
+explicit operator bool() const;
+}}
+检查输入流准备是否成功。
+
+===参数===
+（无）
+
+===返回值===
+输入流初始化成功时返回 {{c|true}}，否则返回 {{c|false}}。
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+struct Foo
+{
+    char n[5];
+};
+
+std::istream&amp; operator&gt;&gt;(std::istream&amp; is, Foo&amp; f)
+{
+    std::istream::sentry s(is);
+    if (s)
+        is.read(f.n, 5);
+    return is;
+}
+
+int main()
+{
+    std::string input = "   abcde";
+    std::istringstream stream(input);
+    Foo f;
+    stream &gt;&gt; f;
+    std::cout.write(f.n, 5);
+    std::cout &lt;&lt; '\n';
+}
+|output=
+abcde
+}}
+
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=195|std=C++98|before=不明确构造函数是否会设置 {{tt|eofbit}}|after=使之明确}}
+{{dr list item|wg=lwg|dr=419|std=C++98|before=构造函数在已设置 {{tt|eofbit}} 的情况下不会设置|{{tt|failbit}}|after=此时会设置 {{tt|failbit}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_istream/dsc operator_gtgt}}
+{{dsc inc|cpp/io/basic_istream/dsc operator_gtgt2}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,120 @@
+{{cpp/title|modf|modff|modfl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|dcl1=
+float       modf ( float num, float* iptr );
+double      modf ( double num, double* iptr );
+long double modf ( long double num, long double* iptr );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            modf ( /* floating-point-type */ num,
+                   /* floating-point-type */* iptr );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+float       modff( float num, float* iptr );
+}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+long double modfl( long double num, long double* iptr );
+}}
+{{dcl h|[[#注解|额外重载]] {{mark since c++11}}}}
+{{dcl header|cmath}}
+{{dcl|num=A|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+double      modf ( Integer num, double* iptr );
+}}
+{{dcl end}}
+
+@1-3@ 分解给定的浮点数 {{c|num}} 为整数和分数部分，每个都拥有与 {{c|num}} 相同的类型和符号。（以浮点数格式）存储整数部分于 {{c|iptr}} 所指向的对象。{{rev inl|since=c++23|标准库提供所有以无 cv 限定的浮点数类型作为参数 {{c|num}} 的类型的 {{tt|std::modf}} 重载。}}
+
+{{rrev|since=c++11|
+@A@ 为所有整数类型提供额外重载，将它们当做 {{c/core|double}}。
+}}
+
+===参数===
+{{par begin}}
+{{par|num|浮点数或整数}}
+{{par|iptr|指向要存储整数部分的目标的浮点数值的指针}}
+{{par end}}
+
+===返回值===
+如果没有发生错误，那么返回与 {{c|num}} 相同符号的 {{c|num}} 小数部分。将整数部分放进 {{c|iptr}} 所指向的值。
+
+将返回值与存储到 {{c|*iptr}} 的值相加会得到 {{c|num}}（允许舍入）。
+
+===错误处理===
+此函数不受制于任何指定于 {{lc|math_errhandling}} 的错误。
+
+如果实现支持 IEE 浮点数算术（IEC 60559），那么
+* 如果 {{c|num}} 是 ±0，那么返回 ±0，并将 ±0 存储到 {{c|*iptr}}。
+* 如果 {{c|num}} 是 ±∞，那么返回 ±0，并将 ±∞ 存储到 {{c|*iptr}}。
+* 如果 {{c|num}} 是 NaN，那么返回 NaN，并将 NaN 存储到 {{c|*iptr}}。
+* 返回值是准确的，忽略[[cpp/numeric/fenv/FE_round|当前舍入模式]]。
+
+===注解===
+此函数表现为如同实现如下：
+{{source|1=
+double modf(double num, double* iptr)
+{
+#pragma STDC FENV_ACCESS ON
+    int save_round = std::fegetround();
+    std::fesetround(FE_TOWARDZERO);
+    *iptr = std::nearbyint(num);
+    std::fesetround(save_round);
+    return std::copysign(std::isinf(num) ? 0.0 : x - (*iptr), num);
+}
+}}
+
+{{cpp/numeric/math/additional integer overload note|modf}}
+
+===示例===
+{{example
+|比较不同的浮点数分解函数：
+|code=
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+
+int main()
+{
+    double f = 123.45;
+    std::cout &lt;&lt; "给定数字 " &lt;&lt; f &lt;&lt; "（十六进制表示为 " &lt;&lt; std::hexfloat
+              &lt;&lt; f &lt;&lt; std::defaultfloat &lt;&lt; "），\n";
+    
+    double f3;
+    double f2 = std::modf(f, &amp;f3);
+    std::cout &lt;&lt; "modf() 会把它拆分成 " &lt;&lt; f3 &lt;&lt; " + " &lt;&lt; f2 &lt;&lt; '\n';
+    
+    int i;
+    f2 = std::frexp(f, &amp;i);
+    std::cout &lt;&lt; "frexp() 会把它拆分成 " &lt;&lt; f2 &lt;&lt; " * 2^" &lt;&lt; i &lt;&lt; '\n';
+    
+    i = std::ilogb(f);
+    std::cout &lt;&lt; "logb()/ilogb() 会把它拆分成 " &lt;&lt; f / std::scalbn(1.0, i) &lt;&lt; " * "
+              &lt;&lt; std::numeric_limits&lt;double&gt;::radix
+              &lt;&lt; "^" &lt;&lt; std::ilogb(f) &lt;&lt; '\n';
+    
+    // 特殊值
+    f2 = std::modf(-0.0, &amp;f3);
+    std::cout &lt;&lt; "modf(-0) 会拆分成 " &lt;&lt; f3 &lt;&lt; " + " &lt;&lt; f2 &lt;&lt; '\n';
+    f2 = std::modf(-INFINITY, &amp;f3);
+    std::cout &lt;&lt; "modf(-Inf) 会拆分成 " &lt;&lt; f3 &lt;&lt; " + " &lt;&lt; f2 &lt;&lt; '\n';
+
+}
+|p=true
+|output=
+给定数字 123.45（十六进制表示为 0x1.edccccccccccdp+6），
+modf() 会把它拆分成 123 + 0.45
+frexp() 会把它拆分成 0.964453 * 2^7
+logb()/ilogb() 会把它拆分成 1.92891 * 2^6
+modf(-0) 会拆分成 -0 + -0
+modf(-Inf) 会拆分成 -INF + -0
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc trunc}}
+{{dsc see c|c/numeric/math/modf}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru|tr}}

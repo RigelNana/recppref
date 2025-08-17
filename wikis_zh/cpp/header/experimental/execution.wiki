@@ -1,0 +1,378 @@
+{{cpp/header/experimental/title|experimental/execution}}
+{{cpp/header/experimental/navbar}}
+
+此头文件是[[cpp/experimental/execution|执行]]库的一部分，基于 {{stddoc|p2300R7}}。
+
+{{dsc begin}}
+{{dsc h1|包含}}
+{{todo}}
+&lt;!--examples:
+{{dsc inc|cpp/header/dsc exp executor|{{mark_since_networking_ts}}}}
+{{dsc inc|cpp/header/dsc exp io_context|{{mark_since_networking_ts}}}}
+--&gt;
+{{dsc end}}
+
+===纲要===
+{{source|1=
+namespace std {
+  // 辅助概念
+  template&lt;class T&gt;
+    concept /*movable-value*/ = /* 见下文 */; // 仅用于阐释
+
+  template&lt;class From, class To&gt;
+    concept /*decays-to*/ = same_as&lt;decay_t&lt;From&gt;, To&gt;; // 仅用于阐释
+
+  template&lt;class T&gt;
+    concept /*class-type*/ = /*decays-to*/&lt;T, T&gt; &amp;&amp; is_class_v&lt;T&gt;;  // 仅用于阐释
+
+  // 可查询对象
+  template&lt;class T&gt;
+    concept queryable = destructible;
+
+  // 查询
+  namespace queries { // 仅用于阐释
+    struct forwarding_query_t;
+    struct get_allocator_t;
+    struct get_stop_token_t;
+  }
+  using queries::forwarding_query_t;
+  using queries::get_allocator_t;
+  using queries::get_stop_token_t;
+  inline constexpr forwarding_query_t forwarding_query{};
+  inline constexpr get_allocator_t get_allocator{};
+  inline constexpr get_stop_token_t get_stop_token{};
+
+  template&lt;class T&gt;
+    using stop_token_of_t =
+      remove_cvref_t&lt;decltype(get_stop_token(declval&lt;T&gt;()))&gt;;
+
+  template&lt;class T&gt;
+    concept /*forwarding-query*/ = // 仅用于阐释
+      forwarding_query(T{});
+
+  namespace /*exec-envs*/ { // 仅用于阐释
+    struct empty_env {};
+    struct get_env_t;
+  }
+  using /*exec-envs*/::empty_env;
+  using /*exec-envs*/::get_env_t;
+  inline constexpr get_env_t get_env {};
+
+  template&lt;class T&gt;
+    using env_of_t = decltype(get_env(declval&lt;T&gt;()));
+}
+
+namespace std::execution {
+  // 查询
+  enum class forward_progress_guarantee;
+  namespace queries { // 仅用于阐释
+    struct get_scheduler_t;
+    struct get_delegatee_scheduler_t;
+    struct get_forward_progress_guarantee_t;
+    template&lt;class CPO&gt;
+      struct get_completion_scheduler_t;
+  }
+  using queries::get_scheduler_t;
+  using queries::get_delegatee_scheduler_t;
+  using queries::get_forward_progress_guarantee_t;
+  using queries::get_completion_scheduler_t;
+  inline constexpr get_scheduler_t get_scheduler{};
+  inline constexpr get_delegatee_scheduler_t get_delegatee_scheduler{};
+  inline constexpr get_forward_progress_guarantee_t get_forward_progress_guarantee{};
+  template&lt;class CPO&gt;
+    inline constexpr get_completion_scheduler_t&lt;CPO&gt; get_completion_scheduler{};
+
+  // 调度器
+  template&lt;class S&gt;
+    concept scheduler = /* 见下文 */;
+
+  // 接收器
+  template&lt;class R&gt;
+    inline constexpr bool enable_receiver = /* 见下文 */;
+
+  template&lt;class R&gt;
+    concept receiver = /* 见下文 */;
+
+  template&lt;class R, class Completions&gt;
+    concept receiver_of = /* 见下文 */;
+
+  namespace receivers { // 仅用于阐释
+    struct set_value_t;
+    struct set_error_t;
+    struct set_stopped_t;
+  }
+  using receivers::set_value_t;
+  using receivers::set_error_t;
+  using receivers::set_stopped_t;
+  inline constexpr set_value_t set_value{};
+  inline constexpr set_error_t set_error{};
+  inline constexpr set_stopped_t set_stopped{};
+
+  // 操作状态
+  template&lt;class O&gt;
+    concept operation_state = /* 见下文 */;
+
+  namespace /*op-state*/ { // 仅用于阐释
+    struct start_t;
+  }
+  using /*op-state*/::start_t;
+  inline constexpr start_t start{};
+
+  // 发送器
+  template&lt;class S&gt;
+    inline constexpr bool enable_sender = /* 见说明 */;
+
+  template&lt;class S&gt;
+    concept sender = /* 见下文 */;
+
+  template&lt;class S, class E = empty_env&gt;
+    concept sender_in = /* 见下文 */;
+
+  template&lt;class S, class R&gt;
+    concept sender_to = /* 见下文 */;
+
+  template &lt;class S, class Sig, class E = empty_env&gt;
+    concept sender_of = /* 见说明 */;
+
+  template&lt;class... Ts&gt;
+    struct /*type-list*/; // 仅用于阐释
+
+  template&lt;class S, class E = empty_env&gt;
+    using /*single-sender-value-type*/ = /* 见说明*/; // 仅用于阐释
+
+  template&lt;class S, class E = empty_env&gt;
+    concept /*single-sender*/ = /* 见说明 */; // 仅用于阐释
+
+  // 完成签名
+  namespace /*completion-signatures*/ { // 仅用于阐释
+    struct get_completion_signatures_t;
+  }
+  using /*completion-signatures*/::get_completion_signatures_t;
+  inline constexpr get_completion_signatures_t get_completion_signatures {};
+
+  template&lt;class S, class E = empty_env&gt;
+      requires sender_in&lt;S, E&gt;
+    using completion_signatures_of_t = /*call-result-t*/&lt;get_completion_signatures_t, S, E&gt;;
+
+  template&lt;class... Ts&gt;
+    using /*decayed-tuple*/ = tuple&lt;decay_t&lt;Ts&gt;...&gt;; // 仅用于阐释
+
+  template&lt;class... Ts&gt;
+    using /*variant-or-empty*/ = /* 见说明 */; // 仅用于阐释
+
+  template&lt;class S,
+           class E = empty_env,
+           template&lt;class...&gt; class Tuple = /*decayed-tuple*/,
+           template&lt;class...&gt; class Variant = /*variant-or-empty*/&gt;
+      requires sender_in&lt;S, E&gt;
+    using value_types_of_t = /* 见说明 */;
+
+  template&lt;class S,
+           class Env = empty_env,
+           template&lt;class...&gt; class Variant = /*variant-or-empty*/&gt;
+      requires sender_in&lt;S, E&gt;
+    using error_types_of_t = /* 见说明 */;
+
+  template&lt;class S, class E = empty_env&gt;
+      requires sender_in&lt;S, E&gt;
+    inline constexpr bool sends_stopped = /* 见说明 */;
+
+  // 连接发送器算法
+  namespace /*senders-connect*/ { // 仅用于阐释
+    struct connect_t;
+  }
+  using /*senders-connect*/::connect_t;
+  inline constexpr connect_t connect{};
+
+  template&lt;class S, class R&gt;
+    using connect_result_t = decltype(connect(declval&lt;S&gt;(), declval&lt;R&gt;()));
+
+  // 发送器工厂
+  namespace /*senders-factories*/ { // 仅用于阐释
+    struct schedule_t;
+    struct transfer_just_t;
+  }
+  inline constexpr /* 未指明 */ just{};
+  inline constexpr /* 未指明 */ just_error{};
+  inline constexpr /* 未指明 */ just_stopped{};
+  using /*senders-factories*/::schedule_t;
+  using /*senders-factories*/::transfer_just_t;
+  inline constexpr schedule_t schedule{};
+  inline constexpr transfer_just_t transfer_just{};
+  inline constexpr /* 未指明 */ read{};
+
+  template&lt;scheduler S&gt;
+    using schedule_result_t = decltype(schedule(declval&lt;S&gt;()));
+
+  // 发送器适配器
+  namespace /*sender-adaptor-closure*/ { // 仅用于阐释
+    template&lt;/*class-type*/ D&gt;
+      struct sender_adaptor_closure { };
+  }
+  using /*sender-adaptor-closure*/::sender_adaptor_closure;
+
+  namespace /*sender-adaptors*/ { // 仅用于阐释
+    struct on_t;
+    struct transfer_t;
+    struct schedule_from_t;
+    struct then_t;
+    struct upon_error_t;
+    struct upon_stopped_t;
+    struct let_value_t;
+    struct let_error_t;
+    struct let_stopped_t;
+    struct bulk_t;
+    struct split_t;
+    struct when_all_t;
+    struct when_all_with_variant_t;
+    struct transfer_when_all_t;
+    struct transfer_when_all_with_variant_t;
+    struct into_variant_t;
+    struct stopped_as_optional_t;
+    struct stopped_as_error_t;
+    struct ensure_started_t;
+  }
+  using /*sender-adaptors*/::on_t;
+  using /*sender-adaptors*/::transfer_t;
+  using /*sender-adaptors*/::schedule_from_t;
+  using /*sender-adaptors*/::then_t;
+  using /*sender-adaptors*/::upon_error_t;
+  using /*sender-adaptors*/::upon_stopped_t;
+  using /*sender-adaptors*/::let_value_t;
+  using /*sender-adaptors*/::let_error_t;
+  using /*sender-adaptors*/::let_stopped_t;
+  using /*sender-adaptors*/::bulk_t;
+  using /*sender-adaptors*/::split_t;
+  using /*sender-adaptors*/::when_all_t;
+  using /*sender-adaptors*/::when_all_with_variant_t;
+  using /*sender-adaptors*/::transfer_when_all_t;
+  using /*sender-adaptors*/::transfer_when_all_with_variant_t;
+  using /*sender-adaptors*/::into_variant_t;
+  using /*sender-adaptors*/::stopped_as_optional_t;
+  using /*sender-adaptors*/::stopped_as_error_t;
+  using /*sender-adaptors*/::ensure_started_t;
+
+  inline constexpr on_t on{};
+  inline constexpr transfer_t transfer{};
+  inline constexpr schedule_from_t schedule_from{};
+
+  inline constexpr then_t then{};
+  inline constexpr upon_error_t upon_error{};
+  inline constexpr upon_stopped_t upon_stopped{};
+
+  inline constexpr let_value_t let_value{};
+  inline constexpr let_error_t let_error{};
+  inline constexpr let_stopped_t let_stopped{};
+
+  inline constexpr bulk_t bulk{};
+
+  inline constexpr split_t split{};
+  inline constexpr when_all_t when_all{};
+  inline constexpr when_all_with_variant_t when_all_with_variant{};
+  inline constexpr transfer_when_all_t transfer_when_all{};
+  inline constexpr transfer_when_all_with_variant_t
+    transfer_when_all_with_variant{};
+
+  inline constexpr into_variant_t into_variant{};
+
+  inline constexpr stopped_as_optional_t stopped_as_optional;
+
+  inline constexpr stopped_as_error_t stopped_as_error;
+
+  inline constexpr ensure_started_t ensure_started{};
+
+  // 发送器消耗器
+  namespace /*sender-consumers*/ { // 仅用于阐释
+    struct start_detached_t;
+  }
+  using /*sender-consumers*/::start_detached_t;
+  inline constexpr start_detached_t start_detached{};
+
+  // 发送器和接收器的工具
+  // [exec.utils.rcvr.adptr]
+  template&lt;
+      /*class-type*/ Derived,
+      receiver Base = /* 未指明 */&gt; // 实参不是关联实体
+    class receiver_adaptor;
+
+  template&lt;class Fn&gt;
+    concept /*completion-signature*/ = // 仅用于阐释
+      /* 见说明 */;
+
+  // [exec.utils.cmplsigs]
+  template&lt;/*completion-signature*/... Fns&gt;
+    struct completion_signatures {};
+
+  template&lt;class... Args&gt; // 仅用于阐释
+    using /*default-set-value*/ =
+      completion_signatures&lt;set_value_t(Args...)&gt;;
+
+  template&lt;class Err&gt; // 仅用于阐释
+    using /*default-set-error*/ =
+      completion_signatures&lt;set_error_t(Err)&gt;;
+
+  template&lt;class Sigs&gt; // 仅用于阐释
+    concept /*valid-completion-signatures*/ = /* 见说明 */;
+
+  // [exec.utils.mkcmplsigs]
+  template&lt;
+    sender Sndr,
+    class Env = empty_env,
+    /*valid-completion-signatures*/ AddlSigs = completion_signatures&lt;&gt;,
+    template&lt;class...&gt; class SetValue = /* 见说明 */,
+    template&lt;class&gt; class SetError = /* 见说明 */,
+    /*valid-completion-signatures*/ SetStopped = completion_signatures&lt;set_stopped_t()&gt;&gt;
+      requires sender_in&lt;Sndr, Env&gt;
+  using make_completion_signatures = completion_signatures&lt;/* 见说明 */&gt;;
+
+  // 执行资源
+  class run_loop;
+}
+
+namespace std::this_thread {
+  // 查询
+  namespace queries { // 仅用于阐释only
+    struct execute_may_block_caller_t;
+  }
+  using queries::execute_may_block_caller_t;
+  inline constexpr execute_may_block_caller_t execute_may_block_caller{};
+
+  namespace /*this-thread*/ { // 仅用于阐释
+    struct /*sync-wait-env*/; // 仅用于阐释
+    template&lt;class S&gt;
+        requires sender_in&lt;S, /*sync-wait-env*/&gt;
+      using /*sync-wait-type*/ = /* 见下文 */; // 仅用于阐释
+    template&lt;class S&gt;
+      using /*sync-wait-with-variant-type*/ = /* 见下文 */; // 仅用于阐释
+
+    struct sync_wait_t;
+    struct sync_wait_with_variant_t;
+  }
+  using /*this-thread*/::sync_wait_t;
+  using /*this-thread*/::sync_wait_with_variant_t;
+  inline constexpr sync_wait_t sync_wait{};
+  inline constexpr sync_wait_with_variant_t sync_wait_with_variant{};
+}
+
+namespace std::execution {
+  // 单向执行
+  namespace execute { // 仅用于阐释
+    struct execute_t;
+  }
+  using execute::execute_t;
+  inline constexpr execute_t execute{};
+
+  // [exec.as.awaitable]
+  namespace /*coro-utils*/ { // 仅用于阐释
+    struct as_awaitable_t;
+  }
+  using /*coro-utils*/::as_awaitable_t;
+  inline constexpr as_awaitable_t as_awaitable;
+
+  // [exec.with.awaitable.senders]
+  template&lt;/*class-type*/ Promise&gt;
+    struct with_awaitable_senders;
+}
+}}
+
+{{langlinks|de|en|es|fr|ja|ru}}

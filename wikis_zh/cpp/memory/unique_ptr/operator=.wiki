@@ -1,0 +1,104 @@
+{{cpp/memory/unique_ptr/title|operator{{=}}}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcla|num=1|constexpr=c++23|1=
+unique_ptr&amp; operator=( unique_ptr&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=2|constexpr=c++23|1=
+template&lt; class U, class E &gt;
+unique_ptr&amp; operator=( unique_ptr&lt;U, E&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcla|num=3|constexpr=c++23|1=
+unique_ptr&amp; operator=( std::nullptr_t ) noexcept;
+}}
+{{dcl|num=4|1=
+unique_ptr&amp; operator=( const unique_ptr&amp; ) = delete;
+}}{{dcl end}}
+
+@1@ 移动赋值运算符。从 {{c|r}} 转移所有权到 {{c|*this}}，如同在调用 {{c|reset(r.release())}} 后立即将 {{c|std::forward&lt;Deleter&gt;(r.get_deleter())}} 赋给 {{lc|get_deleter()}}。
+@@ {{cpp/enable if| {{c|std::is_move_assignable&lt;Deleter&gt;::value}} 是 {{c|true}} }}。
+@@ 如果 {{tt|Deleter}} 不是引用类型，那么在以下情况下行为未定义：
+* {{tt|Deleter}} 不{{named req|MoveAssignable}}。
+* 将 {{tt|Deleter}} 类型的[[cpp/language/value category|右值]]赋给 {{lc|get_deleter()}} 会抛出异常。
+@@ 否则（{{tt|Deleter}} 是引用类型），那么在以下情况下行为未定义：
+* {{tt|std::remove_reference&lt;Deleter&gt;::type}} 不{{named req|CopyAssignable}}。
+* 将 {{tt|Deleter}} 类型的[[cpp/language/value category|左值]]赋给 {{lc|get_deleter()}} 会抛出异常。
+
+@2@ 转换赋值运算符。从 {{c|r}} 转移所有权到 {{c|*this}}，如同在调用 {{c|reset(r.release())}} 后立即将 {{c|std::forward&lt;E&gt;(r.get_deleter())}} 赋给 {{lc|get_deleter()}}。
+@@ {{cpp/enable if|满足以下所有条件}}：
+* {{c|std::is_assignable&lt;Deleter&amp;, E&amp;&amp;&gt;::value}} 是 {{c|true}}。
+* 对于主模板，需要满足以下所有条件：
+:* {{tt|U}} 不是数组类型。
+:* {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::pointer}} 可以隐式转换到 {{tt|pointer}}。
+* 对于数组特化（{{tt|unique_ptr&lt;T[]&gt;}}），需要满足以下所有条件：
+:* {{tt|U}} 是数组类型。
+:* {{tt|pointer}} 和 {{tt|element_type*}} 是同一类型。
+:* {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::pointer}} 和 {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::element_type*}} 是同一类型。
+:* {{tt|unique_ptr&lt;U, E&lt;nowiki&gt;&gt;&lt;/nowiki&gt;::element_type(*)[]}} 可以转换到 {{tt|element_type(*)[]}}。
+@@ 如果 {{tt|E}} 不是引用类型，那么在将 {{tt|E}} 类型的[[cpp/language/value category|右值]]赋给 {{lc|get_deleter()}} 会非良构或者抛出异常时行为未定义。
+@@ 否则（{{tt|E}} 是引用类型），那么在将 {{tt|E}} 类型的[[cpp/language/value category|左值]]赋给 {{lc|get_deleter()}} 会非良构或者抛出异常时行为未定义。
+
+@3@ 与调用 {{lc|reset()}} 等效。
+
+@4@ 复制赋值运算符被显式弃置。
+
+===参数===
+{{par begin}}
+{{par|r|所有权将被转移的智能指针}}
+{{par end}} 
+
+===返回值===
+{{c|*this}}
+
+===注解===
+作为只能被移动的类型，{{tt|unique_ptr}} 的赋值运算符只接受[[cpp/language/value category|右值]]实参（例如 {{lc|std::make_unique}} 的结果或已被 {{lc|std::move}} 的 {{tt|unique_ptr}} 变量）。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+ 
+struct Foo
+{
+    int id;
+    Foo(int id) : id(id) { std::cout &lt;&lt; "Foo " &lt;&lt; id &lt;&lt; '\n'; }
+    ~Foo() { std::cout &lt;&lt; "~Foo " &lt;&lt; id &lt;&lt; '\n'; }
+};
+
+int main() 
+{
+    std::unique_ptr&lt;Foo&gt; p1(std::make_unique&lt;Foo&gt;(1));
+    
+    {
+        std::cout &lt;&lt; "创建新的 Foo...\n";
+        std::unique_ptr&lt;Foo&gt; p2(std::make_unique&lt;Foo&gt;(2));
+        // p1 = p2; // 错误！不能复制 unique_ptr
+        p1 = std::move(p2);
+        std::cout &lt;&lt; "准备离开内层块...\n";
+        
+        // 即使 p2 将要离开作用域，但是 Foo 示例会继续生存
+    }
+    
+    std::cout &lt;&lt; "准备离开程序...\n";
+}
+|output=
+Foo 1
+创建新的 Foo...
+Foo 2
+~Foo 1
+准备离开内层块...
+准备离开程序...
+~Foo 2
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2047|std=C++11|before=对于重载 {{v|2}}，{{lc|get_deleter()}} 会被赋予&lt;br&gt;{{c|std::forward&lt;Deleter&gt;(r.get_deleter())}}|after=改成&lt;br&gt;{{c|std::forward&lt;E&gt;(r.get_deleter())}}}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before={{tt|1=unique_ptr&lt;T[]&gt;::operator=}} 拒绝限定转换|after=接受}}
+{{dr list item|wg=lwg|dr=2228|std=C++11|paper=N4366|before=转换赋值运算符缺少可赋值性约束|after=添加该约束}}
+{{dr list item|wg=lwg|dr=2246|std=C++11|before=未指定 {{c|r}} 的转换后的删除器的赋值目标|after=指定为 {{lc|get_deleter()}}}} 
+{{dr list item|wg=lwg|dr=2899|std=C++11|before=移动赋值运算符未受约束|after=已约束}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

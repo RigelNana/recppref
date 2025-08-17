@@ -1,0 +1,108 @@
+{{cpp/title|atomic_flag}}
+{{cpp/atomic/atomic_flag/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|since=c++11|1=
+class atomic_flag;
+}}
+{{dcl end}}
+
+{{tt|std::atomic_flag}} 是一种原子布尔类型。与所有 {{lc|std::atomic}} 的特化不同，它保证是免锁的。与 {{c/core|std::atomic&lt;bool&gt;}} 不同，{{tt|std::atomic_flag}} 不提供加载或存储操作。
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|cpp/atomic/atomic_flag/atomic_flag|构造 atomic_flag}}
+{{dsc mem fun|cpp/atomic/atomic_flag/operator{{=}}|赋值运算符}}
+{{dsc inc|cpp/atomic/atomic_flag/dsc clear}}
+{{dsc inc|cpp/atomic/atomic_flag/dsc test_and_set}}
+{{dsc inc|cpp/atomic/atomic_flag/dsc test}}
+{{dsc inc|cpp/atomic/atomic/dsc wait|atomic_flag}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_one|atomic_flag}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_all|atomic_flag}}
+{{dsc end}}
+
+===示例===
+{{example
+|可于用户空间用 atomic_flag 实现[[enwiki:Spinlock|自旋锁]]互斥体。注意在实践中使用自旋锁[https://www.realworldtech.com/forum/?threadid{{=}}189711&amp;curpostid{{=}}189723 通常是错误]。
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+class mutex
+{
+    std::atomic_flag m_{};
+
+  public:
+    void lock() noexcept
+    {
+        while (m_.test_and_set(std::memory_order_acquire))
+#if defined(__cpp_lib_atomic_wait) &amp;&amp; __cpp_lib_atomic_wait &gt;= 201907L
+            // C++ 20 起可以仅在 unlock 中通知后才获得锁，从而避免任何无效自旋
+            // 注意，即使 wait 保证一定在值被更改后才返回，但锁定是在下一次执行条件时完成的
+            m_.wait(true, std::memory_order_relaxed)
+#endif
+                ;
+    }
+    bool try_lock() noexcept
+    {
+        return !m_.test_and_set(std::memory_order_acquire);
+    }
+    void unlock() noexcept
+    {
+        m_.clear(std::memory_order_release);
+#if defined(__cpp_lib_atomic_wait) &amp;&amp; __cpp_lib_atomic_wait &gt;= 201907L
+        m_.notify_one();
+#endif
+    }
+};
+
+static mutex m;
+
+static int out{};
+
+void f(std::size_t n)
+{
+    for (std::size_t cnt{}; cnt &lt; 40; ++cnt)
+    {
+        std::lock_guard lock{m};
+        std::cout &lt;&lt; n &lt;&lt; ((++out % 40) == 0 ? '\n' : ' ');
+    }
+}
+
+int main()
+{
+    std::vector&lt;std::thread&gt; v;
+    for (std::size_t n{}; n &lt; 10; ++n)
+        v.emplace_back(f, n);
+    for (auto &amp;t : v)
+        t.join();
+}
+|p=true
+|output=
+0 1 1 2 0 1 3 2 3 2 0 1 2 3 2 3 0 1 3 2 0 1 2 3 2 3 0 3 2 3 2 3 2 3 1 2 3 0 1 3
+2 3 2 0 1 2 3 0 1 2 3 2 0 1 2 3 0 1 2 3 2 3 2 3 2 0 1 2 3 2 3 0 1 3 2 3 0 2 1 1
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 3 2 0 2 3 2 3 2 3 2 3 2 3 0 3
+2 3 0 3 0 3 2 3 0 3 2 3 2 3 0 2 3 0 3 2 0 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4
+5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5
+6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6
+7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7
+8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8
+9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_test_and_set}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_clear}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_wait}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_notify_one}}
+{{dsc inc|cpp/atomic/dsc atomic_flag_notify_all}}
+{{dsc inc|cpp/atomic/dsc ATOMIC_FLAG_INIT}}
+{{dsc see c|c/atomic/atomic_flag}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,184 @@
+{{cpp/title|coroutine_traits}}
+{{cpp/coroutine/navbar}}
+{{ddcl|header=coroutine|since=c++20|
+template&lt; class R, class... Args &gt;
+struct coroutine_traits;
+}}
+
+从协程的返回类型与形参类型确定承诺类型。如果限定标识 {{tt|R::promise_type}} 合法并代表一个类型，那么标准库实现提供与该类型相同的公开可访问成员类型 {{tt|promise_type}}。否则无此成员。
+
+{{tt|coroutine_traits}} 的[[cpp/language/type#由程序定义的类型|由程序定义的特化]]必须定义公开可访问的嵌套类型 {{tt|promise_type}}，否则程序非良构。
+
+===模板形参===
+{{par begin}}
+{{par|R|协程的返回类型}}
+{{par|Args|协程的形参类型，若协程为非静态成员函数则包括[[cpp/language/member functions#引用限定的成员函数|隐式对象形参]]}}
+{{par end}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|名字|定义}}
+{{dsc|{{tt|promise_type}}|{{tt|R::promise_type}}（如果合法），或由程序定义的特化提供}}
+{{dsc end}}
+
+===可能的实现===
+{{eq fun|1=
+namespace detail {
+template&lt;class, class...&gt;
+struct coroutine_traits_base {};
+ 
+template&lt;class R, class... Args&gt;
+requires requires { typename R::promise_type; }
+struct coroutine_traits_base &lt;R, Args...&gt;
+{
+    using promise_type = R::promise_type;
+};
+}
+ 
+template&lt;class R, class... Args&gt;
+struct coroutine_traits : detail::coroutine_traits_base&lt;R, Args...&gt; {};
+}}
+
+===注解===
+如果协程是非静态成员函数，那么 {{tt|Args...}} 中的首个类型为隐式对象形参的类型，而剩下的是函数的形参类型（如果存在）。
+
+如果 {{tt|std::coroutind_traits&lt;R, Args...&gt;::promise_type}} 不存在或不是类类型，那么对应的协程定义非良构。
+
+用户可定义取决于程序定义类型的 {{tt|coroutine_traits}} 显式或部分特化，以避免修改返回类型。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;coroutine&gt;
+#include &lt;exception&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;type_traits&gt;
+
+// 程序定义的类型，下面提供 coroutine_traits 针对它的特化
+struct as_coroutine {};
+
+// 通过使用 std::promise&lt;T&gt; 为承诺类型，
+// 允许将 std::future&lt;T&gt; 用作协程类型。
+template&lt;typename T, typename... Args&gt;
+    requires(!std::is_void_v&lt;T&gt; &amp;&amp; !std::is_reference_v&lt;T&gt;)
+struct std::coroutine_traits&lt;std::future&lt;T&gt;, as_coroutine, Args...&gt;
+{
+    struct promise_type : std::promise&lt;T&gt;
+    {
+        std::future&lt;T&gt; get_return_object() noexcept
+        {
+            return this-&gt;get_future();
+        }
+        
+        std::suspend_never initial_suspend() const noexcept { return {}; }
+        std::suspend_never final_suspend() const noexcept { return {}; }
+        
+        void return_value(const T&amp; value)
+            noexcept(std::is_nothrow_copy_constructible_v&lt;T&gt;)
+        {
+            this-&gt;set_value(value);
+        }
+        
+        void return_value(T&amp;&amp; value) noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;)
+        {
+            this-&gt;set_value(std::move(value));
+        }
+        
+        void unhandled_exception() noexcept
+        {
+            this-&gt;set_exception(std::current_exception());
+        }
+    };
+};
+
+// 与 std::future&lt;void&gt; 相同
+template&lt;typename... Args&gt;
+struct std::coroutine_traits&lt;std::future&lt;void&gt;, as_coroutine, Args...&gt;
+{
+    struct promise_type : std::promise&lt;void&gt;
+    {
+        std::future&lt;void&gt; get_return_object() noexcept
+        {
+            return this-&gt;get_future();
+        }
+        
+        std::suspend_never initial_suspend() const noexcept { return {}; }
+        std::suspend_never final_suspend() const noexcept { return {}; }
+        
+        void return_void() noexcept
+        {
+            this-&gt;set_value();
+        }
+        
+        void unhandled_exception() noexcept
+        {
+            this-&gt;set_exception(std::current_exception());
+        }
+    };
+};
+
+// 通过单纯地为每个 co_await 孵化新线程，
+// 允许对 std::future&lt;T&gt; 和 std::future&lt;void&gt; 的 co_await。
+template&lt;typename T&gt;
+auto operator co_await(std::future&lt;T&gt; future) noexcept
+    requires(!std::is_reference_v&lt;T&gt;)
+{
+    struct awaiter : std::future&lt;T&gt;
+    {
+        bool await_ready() const noexcept
+        {
+            using namespace std::chrono_literals;
+            return this-&gt;wait_for(0s) != std::future_status::timeout;
+        }
+        
+        void await_suspend(std::coroutine_handle&lt;&gt; cont) const
+        {
+            std::thread([this, cont]
+            {
+                this-&gt;wait();
+                cont();
+            }).detach();
+        }
+        
+        T await_resume() { return this-&gt;get(); }
+    };
+    
+    return awaiter { std::move(future) };
+}
+
+// 利用已经建立的架构。
+std::future&lt;int&gt; compute(as_coroutine)
+{
+    int a = co_await std::async([] { return 6; });
+    int b = co_await std::async([] { return 7; });
+    co_return a * b;
+}
+
+std::future&lt;void&gt; fail(as_coroutine)
+{
+    throw std::runtime_error("bleah");
+    co_return;
+}
+
+int main()
+{
+    std::cout &lt;&lt; compute({}).get() &lt;&lt; '\n';
+    
+    try
+    {
+        fail({}).get();
+    }
+    catch (const std::runtime_error&amp; e)
+    {
+        std::cout &lt;&lt; "错误：" &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+}
+|output=
+42
+错误：bleah
+}}
+
+{{langlinks|en|es|ja}}

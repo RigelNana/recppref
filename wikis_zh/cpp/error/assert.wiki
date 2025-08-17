@@ -1,0 +1,145 @@
+{{title|assert}}
+{{cpp/error/navbar}}
+{{dcl begin}}
+{{dcl header|cassert}}
+{{dcl h|禁用的断言}}
+{{dcl rev begin|num=1}}
+{{dcl|until=c++26|
+#define assert(condition) ((void)0)
+}}
+{{dcl|since=c++26|
+#define assert(...)       ((void)0)
+}}
+{{dcl rev end}}
+{{dcl h|启用的断言}}
+{{dcl rev begin|num=2}}
+{{dcl|until=c++26|
+#define assert(condition) /* 未指定 */
+}}
+{{dcl|since=c++26|
+#define assert(...)       /* 未指定 */
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+宏 {{tt|assert}} 的定义依赖于标准库中没有定义的另一个名为 {{c|NDEBUG}} 的宏。
+
+@1@ 如果在源代码中包含 {{header|cassert}} 或 {{ltt|cpp/header/cassert|&lt;assert.h&gt;}} 的位置已经定义了名为 {{c|NDEBUG}} 的宏，那么断言会禁用：{{tt|assert}} 不做任何事。
+
+@2@ 否则断言会启用：
+{{rev begin}}
+{{rev|until=c++26|
+{{tt|assert}} 会检查它的实参（必须具有标量类型）：
+* 如果实参与零比较不相等，那么 {{tt|assert}} 后面不做任何事。
+* 否则 {{tt|assert}} 会在标准错误流上创建诊断信息，并调用 {{lc|std::abort()}}。
+}}
+{{rev|since=c++26|
+{{tt|assert}} 会往程序中加入一个诊断测试，并展开成一个类型 {{c/core|void}} 的表达式。对 {{c|__VA_ARGS__}} 进行求值，并将它[[cpp/language/implicit conversion#按语境转换|按语境转换到 {{c/core|bool}}]]：
+* 如果求值产生 {{c|true}}，那么 {{tt|assert}} 后面不做任何事。
+* 否则 {{tt|assert}} 会在标准错误流上创建诊断信息，并调用 {{lc|std::abort()}}。
+}}
+{{rev end}}
+
+诊断信息的格式由实现定义，但它始终会包含以下信息：
+{{rev begin}}
+{{rev|until=c++26|
+* {{c|expression}} 的文本
+}}
+{{rev|since=c++26|
+* {{c|#__VA_ARGS__}}
+}}
+{{rev end}}
+* 源文件名（即{{box|{{ltt|cpp/preprocessor/replace#预定义宏|__FILE__}}}}）
+* 源代码行号（即{{box|{{ltt|cpp/preprocessor/replace#预定义宏|__LINE__}}}}）
+* 外围函数名（即{{box|{{ltt|cpp/language/function#func|__func__}}}}）
+
+{{rrev|since=c++11|
+如果满足以下条件之一，那么表达式 {{c|assert(E)}} 保证是{{ls|cpp/language/constant expression#常量子表达式}}：
+* 在最后定义或重定义 {{tt|assert}} 的位置已经定义了 {{c|NDEBUG}}。
+* {{c|E}} [[cpp/language/implicit conversion#按语境转换|按语境转换到 {{c/core|bool}}]] 后，是求值为 {{c|true}} 的常量子表达式。
+}}
+
+===参数===
+{{par begin}}
+{{par|condition|标量类型的表达式}}
+{{par end}}
+
+===注解===
+{{rrev|until=c++26|
+因为 {{tt|assert}} 是[[cpp/preprocessor/replace|仿函数宏]]，在实参中未被括号保护的逗号都被转译成宏实参的分隔符。这种逗号常能在模板实参列表和列表初始化中找到：
+{{source|1=
+assert(std::is_same_v&lt;int, int&gt;);        // 错误：assert 不接收两个参数
+assert((std::is_same_v&lt;int, int&gt;));      // OK：一个实参
+static_assert(std::is_same_v&lt;int, int&gt;); // OK：不是宏
+std::complex&lt;double&gt; c;
+assert(c == std::complex&lt;double&gt;{0, 0});   // 错误
+assert((c == std::complex&lt;double&gt;{0, 0})); // OK
+}}
+}}
+
+没有标准化的添加消息到 {{tt|assert}} 错误的接口。一个包含它的方式是使用[[cpp/language/operator other#内建的逗号运算符|逗号运算符]]，只要它未被[[cpp/language/operators|重载]]，或者和字符串字面量一起使用 {{tt|&amp;&amp;}}：
+
+{{source|1=
+assert(("有五盏灯", 2 + 2 == 5));
+assert(2 + 2 == 5 &amp;&amp; "有五盏灯");
+}}
+
+{{tt|assert}} 在 [https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/assert-macro-assert-wassert Microsoft CRT] 中的实现不遵从 C++11 以及后续标准版本，因为它的底层函数（{{tt|_wassert}}）不接收 {{c|__func__}} 或等价的替代品。
+
+从 C++20 开始，诊断信息所需的值也可以通过 {{l2tf std|cpp/utility/source_location/current}} 获取。
+
+虽然 C23/C++26 中 {{tt|assert}} 的更改不是正式的缺陷报告， C 委员会[https://www.open-std.org/jtc1/sc22/wg14/www/previous.html 推荐]实现将该更改向后移植到旧模式。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+// 去注释以禁用 assert()
+// #define NDEBUG
+#include &lt;cassert&gt;
+
+// 使用 (void) 关闭“未使用”警告
+#define assertm(exp, msg) assert((void(msg), exp))
+
+int main()
+{
+    assert(2 + 2 == 4);
+    std::cout &lt;&lt; "检查点 #1\n";
+    
+    assert((void("void 可以避免“未使用值”警告"), 2 * 2 == 4));
+    std::cout &lt;&lt; "检查点 #2\n";
+    
+    assert((010 + 010 == 16) &amp;&amp; "另一种添加断言信息的方式");
+    std::cout &lt;&lt; "检查点 #3\n";
+    
+    assertm((2 + 2) % 3 == 1, "成功");
+    std::cout &lt;&lt; "检查点 #4\n";
+    
+    assertm(2 + 2 == 5, "失败"); // 断言失败
+    std::cout &lt;&lt; "在最后一个断言后继续执行\n"; // 不会输出
+}
+|p=true
+|output=
+检查点 #1
+检查点 #2
+检查点 #3
+检查点 #4
+main.cpp:23: int main(): Assertion `((void)"失败", 2 + 2 == 5)' failed.
+Aborted
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2234|std=C++11|before={{tt|assert}} 无法在常量表达式中使用|after=可以使用}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc contract_assert}}
+{{dsc inc|cpp/language/dsc static_assert}}
+{{dsc inc|cpp/utility/program/dsc abort}}
+{{dsc see c|c/error/assert}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

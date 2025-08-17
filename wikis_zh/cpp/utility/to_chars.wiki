@@ -1,0 +1,129 @@
+{{cpp/title|to_chars}}
+{{cpp/text/navbar}}
+{{dcl begin}}
+{{dcl header|charconv}}
+{{dcla|num=1|since=c++17|notes={{mark constexpr since c++23}}|1=
+std::to_chars_result
+    to_chars( char* first, char* last,
+              /* integer-type */ value, int base = 10 );
+}}
+{{dcl|num=2|since=c++17|1=
+std::to_chars_result
+    to_chars( char*, char*, bool, int = 10 ) = delete;
+}}
+{{dcl|num=3|since=c++17|
+std::to_chars_result
+    to_chars( char* first, char* last, /* floating-point-type */ value );
+}}
+{{dcl|num=4|since=c++17|
+std::to_chars_result
+    to_chars( char* first, char* last, /* floating-point-type */ value,
+              std::chars_format fmt );
+}}
+{{dcl|num=5|since=c++17|
+std::to_chars_result
+    to_chars( char* first, char* last, /* floating-point-type */ value,
+              std::chars_format fmt, int precision );
+}}
+{{dcl end}}
+
+通过连续填充范围 {{range|first|last}} 将 {{c|value}} 转换成字符串，{{range|first|last}} 要求是[[cpp/iterator#范围|有效范围]]。
+
+@1@ 整数格式化器：{{c|value}} 以给定底数 {{c|base}} 转换成数位的字符串（无冗余的前导零）。范围 {{tt|10..35}}（含上下限）中的数字被表示成小写字母 {{tt|a..z}}。如果值小于零，那么该表示以负号开头。标准库提供以所有{{rev inl|since=c++23|无 cv 限定的}}有符号及无符号整数和 {{c/core|char}} 类型作为形参 {{c|value}} 的类型的重载。
+
+@2@ 对 {{c/core|bool}} 的重载被弃置。{{tt|std::to_chars}} 拒绝 {{c/core|bool}} 类型的实参，因为假如允许则结果会是 {{c|"0"}}/{{c|"1"}} 而非 {{c|"false"}}/{{c|"true"}}。
+
+@3@ 如同用 {{lc|std::printf}} 在默认（"C"）本地环境将 {{c|value}} 转换成字符串。转换说明符是 {{c|f}} 或 {{c|e}}，根据最短表示方式的要求选择（两者相当时优先选择 {{c|f}}）：字符串表示由小数点（如果存在）前至少有一位，且用对应的 {{lc|std::from_chars}} 分析该表示能准确恢复值的，最小数量的字符组成。如果有多个这种表示，那么选择到 {{c|value}} 的差最小者，用根据 {{lc|std::round_to_nearest}} 的舍入解决任何剩余倾向。标准库提供以所有无 cv 限定的{{rev inl|until=c++23|标准}}浮点数类型作为形参 {{c|value}} 的类型的重载。
+
+@4@ 同 {{v|3}}，但在 {{c|fmt}} 是 {{ltt|cpp/utility/chars_format|std::chars_format::fixed}} 时如同对应 {{tt|printf}} 的转换指定为 {{c|f}}，在 {{c|fmt}} 是 {{ltt|cpp/utility/chars_format|std::chars_format::scientific}} 时指定为 {{c|e}}，在 {{c|fmt}} 是 {{ltt|cpp/utility/chars_format|std::chars_format::hex}} 时指定为 {{c|a}}（但结果无前导 "0x"），且在 {{c|fmt}} 是 {{ltt|cpp/utility/chars_format|chars_format::general}} 时指定为 {{c|g}}。标准库提供以所有无 cv 限定的{{rev inl|until=c++23|标准}}浮点数类型作为形参 {{c|value}} 的类型的重载。
+
+@5@ 同 {{v|4}}，但精度由形参 {{c|precision}} 指定，而非以最短表示要求。标准库提供以所有无 cv 限定的{{rev inl|until=c++23|标准}}浮点数类型作为形参 {{c|value}} 的类型的重载。
+
+===参数===
+{{par begin}}
+{{par|first, last|要写入的字符范围}}
+{{par|value|要转换到其字符串表示的值}}
+{{par|base|使用的整数底数：2 与 36 间的值（含上下限）。}}
+{{par|fmt|使用的浮点数格式 {{ltt std|cpp/utility/chars_format}} 类型的位掩码}}
+{{par|precision|使用的浮点数精度}}
+{{par end}}
+
+===返回值===
+成功时，返回 {{ltt std|cpp/utility/to_chars_result}} 类型的值，它的 {{tt|ec}} 等于值初始化的 {{lc|std::errc}}，且其 {{tt|ptr}} 是指向被写入字符尾后一位置的指针。注意该字符串''不''{{sep}}是空终止的。
+
+错误时，返回 {{ltt std|cpp/utility/to_chars_result}} 类型的值，{{tt|ec}} 保有 {{lc|std::errc::value_too_large}}，{{tt|ptr}} 保有 {{c|last}} 值的副本，并在范围 {{range|first|last}} 中留下未指定状态的内容。
+
+===异常===
+不抛出。
+
+===注解===
+不同于 C++ 和 C 库中的其他格式化函数，{{tt|std::to_chars}} 独立于本地环境，不分配，而且不抛出。它只提供其他库（例如 {{lc|std::sprintf}}）所用策略的一个小子集。它的目的是在常见的高吞吐量环境，例如基于文本的交换（{{enwiki|JSON}} 或 {{enwiki|XML}}）中，允许尽可能快的实现。
+
+只有在两个函数都来自同一实现的情况下，才保证 {{ltt std|cpp/utility/from_chars}} 能恢复每个由 {{tt|std::to_chars}} 格式化的浮点数。
+
+如果想要格式化 {{c/core|bool}} 值为 {{c|"0"}}/{{c|"1"}}，那么要求将它显式转换为另一整数类型。
+
+{{ftm begin|std=yes}}
+{{ftm|std=C++17|value=201611L|__cpp_lib_to_chars|rowspan="2"|初等字符串转换（{{tt|std::to_chars}}，{{ltt std|cpp/utility/from_chars}}）}}
+{{ftm|std=C++26|value=202306L|-|检测 {{header|charconv}} 函数是否成功}}
+{{ftm|std=C++23|value=202207L|__cpp_lib_constexpr_charconv|向 {{tt|std::to_chars}} 和 {{ltt std|cpp/utility/from_chars}} 对于整数类型的重载 {{vl|1}} 添加 {{co|constexpr}} 修饰符}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;charconv&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+#include &lt;system_error&gt;
+
+void show_to_chars(auto... format_args)
+{
+    const size_t buf_size = 10;
+    char buf[buf_size]{};
+    std::to_chars_result result = std::to_chars(buf, buf + buf_size, format_args...);
+
+    if (result.ec != std::errc())
+        std::cout &lt;&lt; std::make_error_code(result.ec).message() &lt;&lt; '\n';
+    else
+    {
+        std::string_view str(buf, result.ptr - buf);
+        std::cout &lt;&lt; std::quoted(str) &lt;&lt; '\n';
+    }
+}
+
+int main()
+{
+    show_to_chars(42);
+    show_to_chars(+3.14159F);
+    show_to_chars(-3.14159, std::chars_format::fixed);
+    show_to_chars(-3.14159, std::chars_format::scientific, 3);
+    show_to_chars(3.1415926535, std::chars_format::fixed, 10);
+}
+|p=true
+|output=
+"42"
+"3.14159"
+"-3.14159"
+"-3.142e+00"
+Value too large for defined data type
+}}
+
+=== 缺陷报告 ===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2955|std=C++17|before=此函数在 {{header|utility}} 且使用 {{lc|std::error_code}}|after=移动到 {{header|charconv}} 并使用 {{lc|std::errc}}}}
+{{dr list item|wg=lwg|dr=3266|std=C++17|before=接受 {{c/core|bool}} 实参并将它提升到 {{c/core|int}}|after=由弃置重载拒绝}}
+{{dr list item|wg=lwg|dr=3373|std=C++17|before={{tt|std::to_chars_result}} 可能拥有额外的成员|after=禁止额外的成员}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc to_chars_result}}
+{{dsc inc|cpp/utility/dsc from_chars}}
+{{dsc inc|cpp/string/basic_string/dsc to_string}}
+{{dsc inc|cpp/io/c/dsc fprintf}}
+{{dsc inc|cpp/io/basic_ostream/dsc operator_ltlt}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

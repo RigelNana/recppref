@@ -1,0 +1,198 @@
+{{cpp/title|iterator_traits}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl|
+template&lt; class Iter &gt;
+struct iterator_traits;
+}}
+{{dcl|
+template&lt; class T &gt;
+struct iterator_traits&lt;T*&gt;;
+}}
+{{dcl|removed=c++20|
+template&lt; class T &gt;
+struct iterator_traits&lt;const T*&gt;;
+}}
+{{dcl end}}
+
+{{tt|std::iterator_traits}} 是类型特征类，提供面对{{named req|Iterator}}类型各项属性的统一接口。这使得可以仅通过迭代器实现算法。
+
+可针对用户定义的迭代器特化此模板，使得即使不提供通常的 typedef 也能从迭代器取得信息。
+
+{{rrev|since=c++20|
+用户定义的特化可以将嵌套类型 {{tt|iterator_concept}} 定义为[[cpp/iterator/iterator_tags|迭代器类别标签]]之一，以指示它遵从该迭代器概念。
+}}
+
+===模版形参===
+{{par begin}}
+{{par|Iter|需要取得与之相关属性的迭代器类型}}
+{{par end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|嵌套类型|定义}}
+{{dsc|{{tt|difference_type}}|{{tt|Iter::difference_type}}}}
+{{dsc|{{tt|value_type}}|{{tt|Iter::value_type}}}}
+{{dsc|{{tt|pointer}}|{{tt|Iter::pointer}}}}
+{{dsc|{{tt|reference}}|{{tt|Iter::reference}}}}
+{{dsc|{{tt|iterator_category}}|{{tt|Iter::iterator_category}}}}
+{{dsc end}}
+
+
+{{rrev multi
+|since1=c++17|rev1=
+如果 {{tt|Iter}} 缺少以上五个嵌套类型之一，那么此模板不会包含任何有这些名称的成员（{{tt|std::iterator_traits}} 对 SFINAE 友好）。
+|since2=c++20|rev2=
+如果 {{tt|Iter}} 没有 {{tt|pointer}}，但拥有全部其他四个嵌套类型，那么按如下方式声明各嵌套类型：
+
+{{dsc begin}}
+{{dsc hitem|嵌套类型|定义}}
+{{dsc|{{tt|difference_type}}|{{tt|Iter::difference_type}}}}
+{{dsc|{{tt|value_type}}|{{tt|Iter::value_type}}}}
+{{dsc|{{tt|pointer}}|{{c/core|void}}}}
+{{dsc|{{tt|reference}}|{{tt|Iter::reference}}}}
+{{dsc|{{tt|iterator_category}}|{{tt|Iter::iterator_category}}}}
+{{dsc end}}
+
+
+否则，如果 {{tt|Iter}} 满足仅用于阐述的概念 {{ltt|cpp/named_req/InputIterator#概念|__LegacyInputIterator}}，那么按如下方式声明嵌套类型：
+
+{{dsc begin}}
+{{dsc hitem|嵌套类型|定义}}
+{{dsc|{{tt|difference_type}}|{{c/core|std::incrementable_traits&lt;Iter&gt;::difference_type}}}}
+{{dsc|{{tt|value_type}}|{{c/core|std::indirectly_readable_traits&lt;Iter&gt;::value_type}}}}
+{{dsc|{{tt|pointer}}|
+* {{tt|Iter::pointer}}，如果合法。
+* 否则是 {{c/core|decltype(std::declval&lt;Iter&amp;&gt;().operator-&gt;())}}，如果合法。
+* 否则是 {{c/core|void}}。}}
+{{dsc|{{tt|reference}}|
+* {{tt|Iter::reference}}，如果合法。
+* 否则是 {{c/core|std::iter_reference_t&lt;Iter&gt;}}。}}
+{{dsc|{{tt|iterator_category}}|
+* {{tt|Iter::iterator_category}}，如果合法。
+* 否则在 {{tt|Iter}} 满足 {{ltt|cpp/named_req/RandomAccessIterator#概念|__LegacyRandomAccessIterator}} 时是 {{lc|std::random_access_iterator_tag}}。
+* 否则在 {{tt|Iter}} 满足 {{ltt|cpp/named_req/BidirectionalIterator#概念|__LegacyBidirectionalIterator}} 时是 {{lc|std::bidirectional_iterator_tag}}。
+* 否则在 {{tt|Iter}} 满足 {{ltt|cpp/named_req/ForwardIterator#概念|__LegacyForwardIterator}} 时是 {{lc|std::forward_iterator_tag}}。
+* 否则是 {{lc|std::input_iterator_tag}}。}}
+{{dsc end}}
+
+
+否则，如果 {{tt|Iter}} 满足仅用于阐述的概念 {{ltt|cpp/named_req/Iterator#概念|__LegacyIterator}}，那么按如下方式声明嵌套类型：
+
+{{dsc begin}}
+{{dsc hitem|嵌套类型|定义}}
+{{dsc|{{tt|difference_type}}|
+* {{c/core|std::incrementable_traits&lt;Iter&gt;::difference_type}}，如果合法。
+* 否则是 {{c/core|void}}。}}
+{{dsc|{{tt|value_type}}|{{c/core|void}}}}
+{{dsc|{{tt|pointer}}|{{c/core|void}}}}
+{{dsc|{{tt|reference}}|{{c/core|void}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::output_iterator_tag}}}}
+{{dsc end}}
+
+否则，此模板无任何有这些名称的嵌套类型（{{tt|std::iterator_traits}} 对 SFINAE 友好）。
+}}
+
+===特化===
+如果要把用户提供的类型作为迭代器使用，该类型特征可以针对这一类型进行特化。标准库中提供了针对指针类型 {{tt|T*}} 的两种偏特化，使得可以在任何需要迭代器的算法里使用裸指针。
+
+{{rrev|since=c++20|
+标准库也会提供对一些标准迭代器适配器的特化。
+}}
+
+{{anchor|T* 特化嵌套类型}}
+===={{tt|T*}} 特化嵌套类型====
+{{rrev|since=c++20|
+只有在 {{c|std::is_object_v&lt;T&gt;}} 是 {{c|true}} 时才会特化。
+}}
+
+
+{{dsc begin}}
+{{dsc hitem|嵌套类型|定义}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|value_type}}|{{rev inl|until=c++20|{{tt|T}}}}{{rev inl|since=c++20|{{c/core|std::remove_cv_t&lt;T&gt;}}}}}}
+{{dsc|{{tt|pointer}}|{{tt|T*}}}}
+{{dsc|{{tt|reference}}|{{tt|T&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::random_access_iterator_tag}}}}
+{{dsc|{{tt|iterator_concept}} {{mark since c++20}}|{{lc|std::contiguous_iterator_tag}}}}
+{{dsc end}}
+
+
+{{rrev|until=c++20|1=
+{{anchor|const T* 特化嵌套类型}}
+===={{c/core|const T *}} 特化嵌套类型====
+{{dsc begin}}
+{{dsc hitem|嵌套类型|定义}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|pointer}}|{{c/core|const T*}}}}
+{{dsc|{{tt|reference}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::random_access_iterator_tag}}}}
+{{dsc end}}
+}}
+
+====对库类型的特化====
+{{dsc begin}}
+{{dsc inc|cpp/iterator/common_iterator/dsc iterator_traits}}
+{{dsc inc|cpp/iterator/counted_iterator/dsc iterator_traits}}
+{{dsc end}}
+
+===示例===
+{{example
+|下列使用展示针对双向迭代器的通用 {{c|std::reverse()}} 实现。
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;list&gt;
+#include &lt;vector&gt;
+
+template&lt;class BidirIt&gt;
+void my_reverse(BidirIt first, BidirIt last)
+{
+    typename std::iterator_traits&lt;BidirIt&gt;::difference_type n = std::distance(first, last);
+    for (--n; n &gt; 0; n -= 2)
+    {
+        typename std::iterator_traits&lt;BidirIt&gt;::value_type tmp = *first;
+        *first++ = *--last;
+        *last = tmp;
+    }
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3, 4, 5};
+    my_reverse(v.begin(), v.end());
+    for (int n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    std::list&lt;int&gt; l{1, 2, 3, 4, 5};
+    my_reverse(l.begin(), l.end());
+    for (int n : l)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    
+    int a[]{1, 2, 3, 4, 5};
+    my_reverse(a, a + std::size(a));
+    for (int n : a)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+//  std::istreambuf_iterator&lt;char&gt; i1(std::cin), i2;
+//  my_reverse(i1, i2); // 编译错误：il, i2 是输入迭代器
+}
+|output=
+5 4 3 2 1
+5 4 3 2 1
+5 4 3 2 1
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc iterator}}
+{{dsc inc|cpp/iterator/dsc iterator_tags}}
+{{dsc inc|cpp/iterator/dsc iter_t}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

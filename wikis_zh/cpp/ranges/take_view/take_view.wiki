@@ -1,0 +1,95 @@
+{{cpp/ranges/take_view/title|take_view}}
+{{cpp/ranges/take_view/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+take_view() requires std::default_initializable&lt;V&gt; = default;&lt;!-- P2325R3 --&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr explicit take_view( V base, ranges::range_difference_t&lt;V&gt; count );
+}}
+{{dcl end}}
+
+构造 {{tt|take_view}}。
+
+@1@ 默认构造函数。[[cpp/language/value initialization|值初始化]]底层视图 {{rlpi|/#数据成员|base_}} 并初始化 {{rlpi|/#数据成员|count_}} 为 {{c|0}}。构造后 {{rlpf|base}} 返回 {{c|V()}} 的副本而 {{rlpf|size}} 返回 {{c|0}}。
+
+@2@ 以 {{c|std::move(base)}} 初始化底层视图 {{tti|base_}} 并以 {{c|count}} 初始化 {{tti|count_}}。构造后 {{rlpf|base}} 返回 {{c|base}} 的副本而 {{rlpf|size}} 返回 {{c|count}} 与 {{c|ranges::size(base)}} 的较小者。
+
+===参数===
+{{par begin}}
+{{par|base|底层视图}}
+{{par|count|要收取的元素数}}
+{{par end}}
+
+===示例===
+{{example
+|打印前 {{c|n}} 个质数，用{{enwiki|Sieve of Eratosthenes|埃拉托色尼筛法}}生成它们。
+|code=
+#include &lt;bit&gt;
+#include &lt;bitset&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &lt;ranges&gt;
+
+constexpr unsigned clog2(auto x) // ≈ ⌈ log₂(x) ⌉
+{
+    return std::numeric_limits&lt;decltype(x)&gt;::digits - std::countl_zero(x);
+}
+
+template&lt;unsigned Count&gt;
+struct FirstPrimes
+{
+    static constexpr int count = Count;
+    
+    constexpr bool operator()(int n) // 是否是质数？
+    {
+        return n &lt; 2 ? false :
+               n == 2 ? true :
+               n % 2 == 0 or bits_.test(n / 2) ? false : true;
+    }
+private:
+    consteval static auto init()
+    {
+        std::bitset&lt;size_ / 2 + 1&gt; bits;
+        for (int n{3}; n &lt; size_; n += 2)
+            for (int i{n}, j{3}, k{}; (k = i * j) &lt; size_; j += 2)
+                bits.set(k / 2);
+        return bits;
+    }
+
+    // 仅保留奇数；0 意味着它是质数
+    constexpr static auto bits_ { init() };
+ 
+    // a(n) &lt;= n * (log(n) + log(log(n)))
+    static constexpr int size_ = Count * (clog2(Count) + clog2(clog2(Count)));
+};
+
+int main()
+{
+    constexpr FirstPrimes&lt;42&gt; primes;
+    
+    auto primes_view = std::ranges::take_view{ std::views::iota(1)
+                                             {{!}} std::views::filter(primes)
+                                             , primes.count };
+    
+    std::cout &lt;&lt; "前 " &lt;&lt; primes.count &lt;&lt; " 个质数是：\n";
+    for (int new_line{1}; const int prime : primes_view)
+        std::cout &lt;&lt; std::setw(3) &lt;&lt; prime &lt;&lt; (new_line++ % 7 ? ' ' : '\n');
+}
+|output=
+前 42 个质数是：
+  2   3   5   7  11  13  17
+ 19  23  29  31  37  41  43
+ 47  53  59  61  67  71  73
+ 79  83  89  97 101 103 107
+109 113 127 131 137 139 149
+151 157 163 167 173 179 181
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3714|paper=P2711R1|std=C++20|before=多参数构造函数不是显式的|after=改成显式的}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

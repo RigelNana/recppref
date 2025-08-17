@@ -1,0 +1,67 @@
+{{cpp/memory/allocator/title|allocate_at_least}}
+{{cpp/memory/allocator/navbar}}
+{{ddcl|since=c++23|
+constexpr std::allocation_result&lt;T*, std::size_t&gt;
+    allocate_at_least( std::size_t n );
+}}
+
+调用 {{c|::operator new}}（可能带有额外的 {{lc|std::align_val_t}} 实参）分配 {{c|count * sizeof(T)}} 字节的未初始化存储，其中 {{tt|count}} 是未指定的不小于 {{c|n}} 的整数值，但未指定何时及如何调用此函数。
+
+然后，此函数在该存储中创建一个 {{c|T[count]}} 数组并开始其生存期，但不开始其任何元素的生存期。
+
+为在常量表达式中使用此函数，必须在同一表达式的求值内解分配其所分配的存储。&lt;!-- P0401R6 中缺失，见 LWG3684 --&gt;
+
+若 {{tt|T}} 为[[cpp/language/type#不完整类型|不完整类型]]则此函数的使用为非良构。
+
+===参数===
+{{par begin}}
+{{par|n|要分配存储的对象数的下界}}
+{{par end}}
+
+===返回值===
+{{c|std::allocation_result&lt;T*&gt;{p, count}&lt;!----&gt;}}，其中 {{tt|p}} 指向 {{tt|T}} 类型的 {{tt|count}} 个对象的数组首元素的指针，数组元素尚未构造。
+
+===异常===
+若 {{c|std::numeric_limits&lt;std::size_t&gt;::max() / sizeof(T) &lt; n}} 则抛出 {{lc|std::bad_array_new_length}}，或若分配失败则抛出 {{lc|std::bad_alloc}}。
+
+===注解===
+{{tt|allocate_at_least}} 主要为连续容器，例如 {{lc|std::vector}} 与 {{lc|std::basic_string}} 提供，以通过使得其容量在可能时匹配实际分配的大小减少重分配。
+
+措辞“未指定何时及如何”令标准库容器可以[[cpp/language/new#分配|组合或优化掉堆分配]]，即使对直接调用 {{c|::operator new}} 禁止这种优化。例如 libc++ 实现了它（[https://github.com/llvm-mirror/libcxx/blob/master@%7B2017-02-09%7D/include/memory#L1766-L1772] 与 [https://github.com/llvm-mirror/libcxx/blob/master@%7B2017-02-09%7D/include/new#L211-L217]）。
+
+在调用 {{tt|allocate_at_least}} 后、构造元素前，{{c|T*}} 的指针算术在分配的数组内是良定义的，但若访问元素则行为未定义。
+{{feature test macro|__cpp_lib_allocate_at_least|std=C++23|value=202302L|{{tt|allocate_at_least}} 等。}}
+
+===示例===
+{{example
+|code=
+#include &lt;memory&gt;
+#include &lt;print&gt;
+
+int main()
+{
+    const std::size_t count{69};
+    std::allocator&lt;int&gt; alloc;
+    std::allocation_result res{alloc.allocate_at_least(count)};
+    std::print("count: {}\n"
+               "res.ptr: {}\n"
+               "res.count: {}\n", count, res.ptr, res.count);
+
+    /* 构造，使用，然后销毁各个元素 */
+
+    alloc.deallocate(res.ptr, res.count);
+}
+|p=true
+|output=
+count: 69
+res.ptr: 0x555a486a0960
+res.count: 96
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocation_result}}
+{{dsc inc|cpp/memory/allocator_traits/dsc allocate_at_least}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

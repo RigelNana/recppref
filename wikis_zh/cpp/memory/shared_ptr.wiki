@@ -1,0 +1,333 @@
+{{cpp/title|shared_ptr}}
+{{cpp/memory/shared_ptr/navbar}}
+{{ddcl|header=memory|since=c++11|1=
+template&lt; class T &gt; class shared_ptr;
+}}
+
+{{tt|std::shared_ptr}} 是一种通过指针保持对象共享所有权的智能指针。多个 {{tt|shared_ptr}} 对象可持有同一对象。下列情况之一出现时销毁对象并解分配其内存：
+* 最后剩下的持有对象的 {{tt|shared_ptr}} 被销毁；
+* 最后剩下的持有对象的 {{tt|shared_ptr}} 被通过 {{lc|1=operator=}} 或 {{lc|reset()}} 赋值为另一指针。
+
+用 [[cpp/language/delete|{{tt|delete}} 表达式]]或在构造期间提供给 {{tt|shared_ptr}} 的定制删除器销毁对象。
+
+{{tt|shared_ptr}} 能在存储指向一个对象的指针时共享另一对象的所有权。此特性能用于在持有其所属对象时，指向成员对象。存储的指针可以使用 {{lc|get()}}、解引用或比较运算符访问。被管理指针在使用计数抵达零时传递给删除器。
+
+{{tt|shared_ptr}} 也可不持有对象，该情况下称它为''空 (empty)''（若以别名使用构造函数创建，空 {{tt|shared_ptr}} 可拥有非空的存储指针）。
+
+{{tt|shared_ptr}} 的所有特化都满足{{named req|CopyConstructible}}、{{named req|CopyAssignable}}和{{named req|LessThanComparable}}的要求，并[[cpp/language/implicit conversion|可按语境转换]]为 {{tt|bool}}。
+
+多个线程能在不同的 {{tt|shared_ptr}} 对象上调用所有成员函数（包含复制构造函数与复制赋值）而不附加同步，即使这些实例是同一对象的副本且共享所有权也是如此。若多个执行线程访问同一 {{tt|shared_ptr}} 对象而不同步，且任一线程使用 {{tt|shared_ptr}} 的非 const 成员函数，则将出现数据竞争；{{ltt|cpp/memory/shared_ptr/atomic2|std::atomic&lt;shared_ptr&gt;}} 能用于避免数据竞争。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|element_type}}|{{rev begin}}
+{{rev|until=c++17|{{c/core|T}}}}
+{{rev|since=c++17|{{c/core|std::remove_extent_t&lt;T&gt;}}}}
+{{rev end}}
+}}
+{{dsc|{{tt|weak_type}} {{mark since c++17}}|{{c/core|std::weak_ptr&lt;T&gt;}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc destructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator{{=}}}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/memory/shared_ptr/dsc reset}}
+{{dsc inc|cpp/memory/shared_ptr/dsc swap}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/memory/shared_ptr/dsc get}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator*}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator_at}}
+{{dsc inc|cpp/memory/shared_ptr/dsc use_count}}
+{{dsc inc|cpp/memory/shared_ptr/dsc unique}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator bool}}
+{{dsc inc|cpp/memory/shared_ptr/dsc owner_before}}
+{{dsc inc|cpp/memory/shared_ptr/dsc owner_hash}}
+{{dsc inc|cpp/memory/shared_ptr/dsc owner_equal}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc allocate_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc pointer_cast}}
+{{dsc inc|cpp/memory/shared_ptr/dsc get_deleter}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator_cmp}}
+{{dsc inc|cpp/memory/shared_ptr/dsc operator_ltlt}}
+{{dsc inc|cpp/memory/shared_ptr/dsc swap2}}
+{{dsc break}}
+{{dsc inc|cpp/memory/shared_ptr/dsc atomic}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc atomic2}}
+{{dsc inc|cpp/memory/shared_ptr/dsc hash}}
+{{dsc end}}
+
+==={{rl|deduction_guides|推导指引}} {{mark since c++17}}===
+
+===注解===
+只能通过复制构造或复制赋值其值给另一 {{tt|shared_ptr}}，将对象所有权与另一 {{tt|shared_ptr}} 共享。用另一 {{tt|shared_ptr}} 所持有的原始底层指针创建新的 {{tt|shared_ptr}} 导致未定义行为。
+
+{{tt|std::shared_ptr}} 可以用于[[cpp/language/type#不完整类型|不完整类型]] {{tt|T}}。然而，参数为裸指针的构造函数（{{c|template&lt;class Y&gt; shared_ptr(Y*)}}）和 {{c|template&lt;class Y&gt; void reset(Y*)}} 成员函数只可以用指向完整类型的指针调用（注意 {{lc|std::unique_ptr}} 可以从指向不完整类型的裸指针构造）。
+
+{{c/core|std::shared_ptr&lt;T&gt;}} 中的 {{tt|T}} 可以是函数类型：这种情况下它管理函数指针而非对象指针。有时用这种方式维持动态库或插件的加载，只要仍有其任何函数的引用存在：
+{{source|
+void del(void(*)()) {}
+
+void fun() {}
+
+int main()
+{
+    std::shared_ptr&lt;void()&gt; ee(fun, del);
+    (*ee)();
+}
+}}
+
+===实现说明===
+在典型的实现中，{{lc|std::shared_ptr}} 只保有两个指针：
+* 所存储的指针（{{lc|get()}}) 所返回的指针）
+* 指向''控制块''{{sep}}的指针
+
+控制块是一个动态分配的对象，其中包含：
+* 指向被管理对象的指针或被管理对象本身
+* 删除器（类型擦除）
+* 分配器（类型擦除）
+* 持有被管理对象的 {{tt|shared_ptr}} 的数量
+* 涉及被管理对象的 {{tt|weak_ptr}} 的数量
+
+以调用 {{lc|std::make_shared}} 或 {{lc|std::allocate_shared}} 创建 {{tt|shared_ptr}} 时，以单次分配创建控制块和被管理对象。被管理对象在控制块的数据成员中原位构造。通过 {{tt|shared_ptr}} 的构造函数之一创建 {{tt|shared_ptr}} 时，被管理对象和控制块只能分离分配。此情况中，控制块存储指向被管理对象的指针。
+
+{{tt|shared_ptr}} 直接持有的指针即是 {{lc|get()}} 所返回的指针；而控制块所持有的指针/对象则是引用计数归零时会被删除的那个。两者并不一定相等。
+
+{{tt|shared_ptr}} 的析构函数会将控制块中的共享所有者数量减一，如果该计数器减至零，控制块就会调用被管理对象的析构函数。但控制块本身直到 {{lc|std::weak_ptr}} 计数器同样归零时会解分配其自身。
+
+既存实现中，若有共享指针指向同一控制块，则会增加弱指针计数 ([https://stackoverflow.com/questions/43297517/stdshared-ptr-internals-weak-count-more-than-expected], [https://www.reddit.com/r/cpp/comments/3eia29/stdshared_ptrs_secret_constructor/ctfeh1p])。
+
+为满足线程安全要求，引用计数器典型地用等价于以 {{lc|std::memory_order_relaxed}} 调用 {{lc|std::atomic::fetch_add}} 进行自增（自减则要求更强的定序，以安全销毁控制块）。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;mutex&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+struct Base
+{
+    Base() { std::cout &lt;&lt; "Base::Base()\n"; }
+
+    // 注意：此处非虚析构函数 OK
+    ~Base() { std::cout &lt;&lt; "Base::~Base()\n"; }
+};
+
+struct Derived : public Base
+{
+    Derived() { std::cout &lt;&lt; "Derived::Derived()\n"; }
+
+    ~Derived() { std::cout &lt;&lt; "Derived::~Derived()\n"; }
+};
+
+void print(auto rem, std::shared_ptr&lt;Base&gt; const&amp; sp)
+{
+    std::cout &lt;&lt; rem &lt;&lt; "\n\tget() = " &lt;&lt; sp.get()
+              &lt;&lt; ", use_count() = " &lt;&lt; sp.use_count() &lt;&lt; '\n';
+}
+
+void thr(std::shared_ptr&lt;Base&gt; p)
+{
+    std::this_thread::sleep_for(987ms);
+    std::shared_ptr&lt;Base&gt; lp = p; // 线程安全，虽然自增共享的 use_count
+    {
+        static std::mutex io_mutex;
+        std::lock_guard&lt;std::mutex&gt; lk(io_mutex);
+        print("线程中的局部指针:", lp);
+    }
+}
+
+int main()
+{
+    std::shared_ptr&lt;Base&gt; p = std::make_shared&lt;Derived&gt;();
+
+    print("创建共享的 Derived (为 Base 指针)", p);
+
+    std::thread t1{thr, p}, t2{thr, p}, t3{thr, p};
+    p.reset(); // 从 main 释放所有权
+
+    print("在 3 个线程间共享所有权并从 main 释放所有权:", p);
+
+    t1.join();
+    t2.join();
+    t3.join();
+
+    std::cout &lt;&lt; "线程全部已完成，最后一个删除了 Derived。\n";
+}
+|p=true
+|output=
+Base::Base()
+Derived::Derived()
+创建共享的 Derived (为 Base 指针)
+	get() = 0x118ac30, use_count() = 1
+在 3 个线程间共享所有权并从 main 释放所有权:
+	get() = 0, use_count() = 0
+线程中的局部指针:
+	get() = 0x118ac30, use_count() = 5
+线程中的局部指针:
+	get() = 0x118ac30, use_count() = 4
+线程中的局部指针:
+	get() = 0x118ac30, use_count() = 2
+Derived::~Derived()
+Base::~Base()
+已完成，最后一个删除了 Derived。
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct MyObj
+{
+    MyObj() { std::cout &lt;&lt; "构造 MyObj\n"; }
+
+    ~MyObj() { std::cout &lt;&lt; "析构 MyObj\n"; }
+};
+
+struct Container : std::enable_shared_from_this&lt;Container&gt; // 注: 公开继承
+{
+    std::shared_ptr&lt;MyObj&gt; memberObj;
+
+    void CreateMember() { memberObj = std::make_shared&lt;MyObj&gt;(); }
+
+    std::shared_ptr&lt;MyObj&gt; GetAsMyObj()
+    {
+        // 为成员使用使用别名 shared_ptr
+        return std::shared_ptr&lt;MyObj&gt;(shared_from_this(), memberObj.get());
+    }
+};
+
+#define COUT(str) std::cout &lt;&lt; '\n' &lt;&lt; str &lt;&lt; '\n'
+
+#define DEMO(...) std::cout &lt;&lt; #__VA_ARGS__ &lt;&lt; " = " &lt;&lt; __VA_ARGS__ &lt;&lt; '\n'
+
+int main()
+{
+    COUT("创建共享容器");
+    std::shared_ptr&lt;Container&gt; cont = std::make_shared&lt;Container&gt;();
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("创建成员");
+    cont-&gt;CreateMember();
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("创建另一个共享容器");
+    std::shared_ptr&lt;Container&gt; cont2 = cont;
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+    DEMO(cont2.use_count());
+    DEMO(cont2-&gt;memberObj.use_count());
+
+    COUT("GetAsMyObj");
+    std::shared_ptr&lt;MyObj&gt; myobj1 = cont-&gt;GetAsMyObj();
+    DEMO(myobj1.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+    DEMO(cont2.use_count());
+    DEMO(cont2-&gt;memberObj.use_count());
+
+    COUT("复制别名对象");
+    std::shared_ptr&lt;MyObj&gt; myobj2 = myobj1;
+    DEMO(myobj1.use_count());
+    DEMO(myobj2.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+    DEMO(cont2.use_count());
+    DEMO(cont2-&gt;memberObj.use_count());
+
+    COUT("重置 cont2");
+    cont2.reset();
+    DEMO(myobj1.use_count());
+    DEMO(myobj2.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("重置 myobj2");
+    myobj2.reset();
+    DEMO(myobj1.use_count());
+    DEMO(cont.use_count());
+    DEMO(cont-&gt;memberObj.use_count());
+
+    COUT("重置 cont");
+    cont.reset();
+    DEMO(myobj1.use_count());
+    DEMO(cont.use_count());
+}
+|output=
+
+创建共享容器
+cont.use_count() = 1
+cont-&gt;memberObj.use_count() = 0
+
+创建成员
+构造 MyObj
+cont.use_count() = 1
+cont-&gt;memberObj.use_count() = 1
+
+创建另一个共享容器
+cont.use_count() = 2
+cont-&gt;memberObj.use_count() = 1
+cont2.use_count() = 2
+cont2-&gt;memberObj.use_count() = 1
+
+GetAsMyObj
+myobj1.use_count() = 3
+cont.use_count() = 3
+cont-&gt;memberObj.use_count() = 1
+cont2.use_count() = 3
+cont2-&gt;memberObj.use_count() = 1
+
+复制别名对象
+myobj1.use_count() = 4
+myobj2.use_count() = 4
+cont.use_count() = 4
+cont-&gt;memberObj.use_count() = 1
+cont2.use_count() = 4
+cont2-&gt;memberObj.use_count() = 1
+
+重置 cont2
+myobj1.use_count() = 3
+myobj2.use_count() = 3
+cont.use_count() = 3
+cont-&gt;memberObj.use_count() = 1
+
+重置 myobj2
+myobj1.use_count() = 2
+cont.use_count() = 2
+cont-&gt;memberObj.use_count() = 1
+
+重置 cont
+myobj1.use_count() = 1
+cont.use_count() = 0
+析构 MyObj
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc inc|cpp/memory/dsc weak_ptr}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

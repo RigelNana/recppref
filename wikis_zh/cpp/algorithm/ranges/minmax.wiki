@@ -1,0 +1,165 @@
+{{cpp/ranges/title|minmax|minmax_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; class T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::minmax_result&lt;const T&amp;&gt;
+    minmax( const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; std::copyable T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::minmax_result&lt;T&gt;
+    minmax( std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=3|1=
+template&lt; ranges::input_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;, ranges::range_value_t&lt;R&gt;*&gt;
+constexpr ranges::minmax_result&lt;ranges::range_value_t&lt;R&gt;&gt;
+    minmax( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=4|1=
+template&lt; class T &gt;
+using minmax_result = ranges::min_max_result&lt;T&gt;;
+}}
+{{dcl end}}
+
+返回给定的投影后值中的最小者与最大者。
+
+@1@ 返回 {{c|a}} 与 {{c|b}} 的较小者与较大者的引用。
+@2@ 返回 initializer_list {{c|r}} 中的最小与最大值。
+@3@ 返回范围 {{c|r}} 中的最小与最大值。
+
+{{cpp/ranges/niebloid}}
+
+===Parameters===
+{{par begin}}
+{{par | a, b  | 要比较的值}}
+{{par | r     | 要比较的非空的值范围}}
+{{par | comp  | 应用到投影后元素的值}}
+{{par | proj  | 应用到元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 若按照被投影值 {{c|b}} 小于 {{c|a}}，则为 {{c|{b, a} }}；否则返回 {{c|{a, b} }}。
+
+@2,3@ {{c|{s, l} }}，其中 {{tt|s}} 与 {{tt|l}} 分别为 {{c|r}} 中按照其投影值的的最小与最大值。若数个值等价于最小与最大，则返回最左的最小值与最右的最大值。若范围为空（由 {{c|ranges::distance(r)}} 确定）则行为未定义。
+
+===复杂度===
+@1@ 至多比较一次并投影二次。
+
+@2,3@ 至多比较 {{c|3 / 2 * ranges::distance(r)}} 次并且应用两倍次数的投影。
+
+===可能的实现===
+{{eq fun
+|1=
+struct minmax_fn
+{
+    template&lt;class T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::minmax_result&lt;const T&amp;&gt;
+         operator()(const T&amp; a, const T&amp; b, Comp comp = {}, Proj proj = {}) const
+    {
+        if (std::invoke(comp, std::invoke(proj, b), std::invoke(proj, a)))
+            return {b, a};
+      
+        return {a, b};
+    }
+
+    template&lt;std::copyable T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;const T*, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::minmax_result&lt;T&gt;
+        operator()(std::initializer_list&lt;T&gt; r, Comp comp = {}, Proj proj = {}) const
+    {
+        auto result = ranges::minmax_element(r, std::ref(comp), std::ref(proj));
+        return {*result.min, *result.max};
+    }
+
+    template&lt;ranges::input_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    requires std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;,
+                                               ranges::range_value_t&lt;R&gt;*&gt;
+    constexpr ranges::minmax_result&lt;ranges::range_value_t&lt;R&gt;&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        auto result = ranges::minmax_element(r, std::ref(comp), std::ref(proj));
+        return {std::move(*result.min), std::move(*result.max)};
+    }
+};
+
+inline constexpr minmax_fn minmax;
+}}
+
+===注解===
+对于重载 {{v|1}}，若形参之一为临时量，则返回的引用在含有对 {{tt|minmax}} 的该调用的完全表达式结束后变为悬垂引用。
+{{source|1=
+int n = 1;
+auto p = std::ranges::minmax(n, n + 1);
+int m = p.min; // ok
+int x = p.max; // 未定义行为
+ 
+// 注意，结构化绑定有相同的问题
+auto [mm, xx] = std::ranges::minmax(n, n + 1);
+xx; // 未定义行为
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+
+int main()
+{
+    namespace ranges = std::ranges;
+
+    constexpr std::array v{3, 1, 4, 1, 5, 9, 2, 6, 5};
+
+    std::random_device rd;
+    std::mt19937_64 generator(rd());
+    std::uniform_int_distribution&lt;&gt; distribution(0, ranges::distance(v)); // [0..9]
+
+    // auto bounds = ranges::minmax(distribution(generator), distribution(generator));
+    // UB: 悬垂引用: bounds.min 和 bounds.max 类型为 `const int&amp;`。
+
+    const int x1 = distribution(generator);
+    const int x2 = distribution(generator);
+    auto bounds = ranges::minmax(x1, x2); // OK: 获得对左值 x1 和 x2 的引用
+
+    std::cout &lt;&lt; "v[" &lt;&lt; bounds.min &lt;&lt; ":" &lt;&lt; bounds.max &lt;&lt; "]: ";
+    for (int i = bounds.min; i &lt; bounds.max; ++i)
+        std::cout &lt;&lt; v[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto [min, max] = ranges::minmax(v);
+    std::cout &lt;&lt; "最小值: " &lt;&lt; min &lt;&lt; ", " &lt;&lt; "最大值: " &lt;&lt; max &lt;&lt; '\n';
+}
+|p=true
+|output=
+v[3:9]: 1 5 9 2 6 5 
+最小值: 1, 最大值: 9
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/algorithm/ranges/dsc min}}
+{{dsc inc | cpp/algorithm/ranges/dsc max}}
+{{dsc inc | cpp/algorithm/ranges/dsc minmax_element}}
+{{dsc inc | cpp/algorithm/ranges/dsc clamp}}
+{{dsc inc | cpp/algorithm/dsc minmax}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

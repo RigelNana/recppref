@@ -1,0 +1,176 @@
+{{title|{{tt|static_assert}} 声明 {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+进行编译时断言检查。
+
+===语法===
+{{anchor|版本 1}}{{anchor|版本 2}}{{anchor|版本 3}}
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|static_assert(}} {{spar|布尔常量表达式}} {{ttb|,}} {{spar|不求值字符串}} {{ttb|)}}
+}}
+{{sdsc|num=2|notes={{mark since c++17}}|
+{{ttb|static_assert(}} {{spar|布尔常量表达式}} {{ttb|)}}
+}}
+{{sdsc|num=3|notes={{mark since c++26}}|
+{{ttb|static_assert(}} {{spar|布尔常量表达式}} {{ttb|,}} {{spar|常量表达式}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+{{anchor|错误消息}}
+声明静态断言。如果断言失败，那么程序非良构，并且可能会生成诊断错误信息。
+@1@ 带有固定错误信息的静态断言。
+@2@ 不带错误信息的静态断言。
+@3@ 带有用户生成的错误信息的静态断言。
+@@ 只有在语法 {{vl|1}} 不匹配的情况下才会匹配该语法。
+
+===解释===
+{{par begin}}
+{{par|{{spar|布尔常量表达式}}|{{rrev multi|rev1=
+{{rlp|constant expression#经转换的常量表达式|按语境转换到 {{c/core|bool}} 类型的常量表达式}}。不允许进行除了到 {{c/core|bool}} 的非{{rlp|list initialization#窄化转换|窄化}}{{rlps|implicit conversion#整数转换}}之外的内建转换。
+|since2=c++23|rev2={{rlp|implicit conversion#按语境转换|按语境转换到 {{c/core|bool}}}} 的表达式，其中转换是{{rlp|constant expression|常量表达式}}。
+}}}}
+{{par|{{spar|不求值字符串}}|作为编译器错误信息的{{rlp|string literal#不求值字符串|不求值字符串字面量}}}}
+{{par|{{spar|常量表达式}}|
+{{rrev|since=c++26|满足以下所有条件的 {{rlp|constant expression|常量表达式}} {{c|msg}}：
+* {{c|msg.size()}} 可以隐式转换到 {{lc|std::size_t}}。
+* {{c|msg.data()}} 可以隐式转换到 {{c/core|const char*}}。
+}}}}
+{{par end}}
+
+{{c/core|static_assert}} 声明可以出现在命名空间和块作用域中（作为{{rlp|declarations|块声明}}），也可以在类体中（作为{{rlp|class|成员声明}}）。
+
+如果{{spar sep|布尔常量表达式}}良构并求值为 {{c|true}}，或在模板定义的语境中求值而该模板未被实例化，那么该声明没有效果。否则将发出编译时错误，并且诊断消息中会包含用户提供的错误信息（如果存在）。
+
+按以下方式确定用户提供的错误信息文本：
+* 如果消息匹配{{spar sep|不求值字符串}}的语法要求，那么错误信息文本就是{{spar sep|不求值字符串}}的文本。
+{{rrev|since=c++26|
+* 否则，给定以下值：
+:* {{c|msg}} 表示{{spar sep|常量表达式}}的值。
+:* {{c|len}} 表示 {{c|msg.size()}} 的值，该表达式必须是 {{lc|std::size_t}} 类型的{{rlps|constant expression#经转换的常量表达式}}。
+:* {{c|ptr}} 表示{{rlp|implicit conversion|隐式转换}}到 {{c/core|const char*}} 的表达式 {{c|msg.data()}}。{{c|ptr}} 必须是{{rlps|constant expression#核心常量表达式}}。
+: 错误信息文本使用{{rlp|charset#代码单元与字面量编码|普通字面量编码}}，它由从 {{c|ptr}} 开始的包含 {{c|len}} 个{{rlp|charset#代码单元与字面量编码|代码单元}}的序列组成。对于 {{range|0|len}} 中的每个整数 {{c|i}}，{{c|ptr[i]}} 都必须是{{rlps|constant expression#整数常量表达式}}。
+}}
+
+===注解===
+标准并不要求编译器逐字打印{{ls|#错误消息}}的文本，不过编译器一般会尽可能打印。
+
+{{rrev|until=c++26|
+因为错误消息必须是字符串字面量，所以它不能容纳动态信息，乃至自身并非字符串字面量的{{rlp|constant expression|常量表达式}}。特别是它不能容纳{{rlp|template parameters|模板类型实参}}的{{rlp|identifiers#名字|名字}}。
+}}
+
+{{ftm begin|core=yes}}
+{{ftm|value=200410L|std=C++11|__cpp_static_assert|rowspan="3"|{{c/core|static_assert}}（语法 {{vl|1}}）}}
+{{ftm|value=201411L|std=C++17|-|单参数 {{c/core|static_assert}}（语法 {{vl|2}}）}}
+{{ftm|value=202306L|std=C++26|-|用户生成的错误信息（语法 {{vl|3}}）}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/static_assert}}
+
+===示例===
+{{example
+|code=
+#include &lt;format&gt;
+#include &lt;type_traits&gt;
+
+static_assert(03301 == 1729); // C++17 起可省略消息
+
+template &lt;class T&gt;
+void swap(T&amp; a, T&amp; b) noexcept
+{
+    static_assert(std::is_copy_constructible&lt;T&gt;::value,
+                  "交换需要可复制");
+    static_assert(std::is_nothrow_copy_constructible&lt;T&gt;::value
+               &amp;&amp; std::is_nothrow_copy_assignable&lt;T&gt;::value,
+                  "交换需要可复制及可赋值，且无异常抛出");
+    auto c = b;
+    b = a;
+    a = c;
+}
+
+template&lt;class T&gt;
+struct data_structure
+{
+    static_assert(std::is_default_constructible&lt;T&gt;::value,
+                  "数据结构要求元素可默认构造");
+};
+ 
+template&lt;class&gt;
+constexpr bool dependent_false = false; // CWG2518/P2593R1 前的变通方法
+ 
+template&lt;class T&gt;
+struct bad_type
+{
+    static_assert(dependent_false&lt;T&gt;, "实例化时错误，变通方法");
+    static_assert(false, "实例化时错误"); // 由于 CWG2518/P2593R1 OK
+};
+
+struct no_copy
+{
+    no_copy(const no_copy&amp;) = delete;
+    no_copy() = default;
+};
+
+struct no_default
+{
+    no_default() = delete;
+};
+
+#if __cpp_static_assert &gt;= 202306L
+// C++ 目前还不能真正使下面这句工作（需要 std::format 为 constexpr）：
+static_assert(sizeof(long) == 4, std::format("期待 4，得到 {}", sizeof(long)));
+#endif
+
+int main()
+{
+    int a, b;
+    swap(a, b);
+    
+    no_copy nc_a, nc_b;
+    swap(nc_a, nc_b); // 1
+    
+    [[maybe_unused]] data_structure&lt;int&gt; ds_ok;
+    [[maybe_unused]] data_structure&lt;no_default&gt; ds_error; // 2
+}
+|p=true
+|output=
+1：错误：静态断言失败：交换需要可复制
+2：错误：静态断言失败：数据结构要求元素可默认构造
+3：错误：静态断言失败：期待 4，得到 8
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2039|std=C++11|before=只要求转换前的表达式是常量|after=转换本身必须也在常量表达式中合法}}
+{{dr list item|wg=cwg|dr=2518|paper=P2593R1|std=C++11|before=未实例化的 {{c|static_assert(false, "");}} 会导致错误|after=使之良构}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.1|title=Preamble|id=dcl.pre|p=10}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.1|title=Preamble|id=dcl.pre|p=6}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10|title=Declarations|id=dcl.dcl|p=6}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7|title=Declarations|id=dcl.dcl|p=4}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7|title=Declarations|id=dcl.dcl|p=4}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/preprocessor/dsc error}}
+{{dsc inc|cpp/error/dsc assert}}
+{{dsc inc|cpp/language/dsc contract_assert}}
+{{dsc inc|cpp/types/dsc enable_if}}
+{{dsc|[[cpp/meta#类型特征|'''类型特征''' ]] {{mark c++11}}|定义编译时基于模板的接口，以查询类型的属性。| nomono=true}}
+{{dsc see c|c/language/_Static_assert|静态断言|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,93 @@
+{{cpp/title|mutex}}
+{{cpp/thread/mutex/navbar}}
+
+{{ddcl|header=mutex|since=c++11|
+class mutex;
+}}
+
+{{tt|mutex}} 类是能用于保护共享数据免受从多个线程同时访问的同步原语。
+
+{{tt|mutex}} 提供排他性非递归所有权语义：
+
+* 调用方线程从它成功调用 {{rlt|lock}} 或 {{rlt|try_lock}} 开始，到它调用 {{rlt|unlock}} 为止''占有'' {{tt|mutex}}。
+* 线程占有 {{tt|mutex}} 时，其他线程如果试图要求 {{tt|mutex}} 的所有权，那么就会阻塞（对于 {{rlt|lock}} 的调用）或收到 {{c|false}} 返回值（对于 {{rlt|try_lock}}）。
+* 调用方线程在调用 {{rlt|lock}} 或 {{rlt|try_lock}} 前必须不占有 {{tt|mutex}}。
+
+如果 {{tt|mutex}} 在仍为任何线程所占有时即被销毁，或在占有 {{tt|mutex}} 时线程终止，那么行为未定义。{{tt|mutex}} 类满足{{named req|Mutex}}和{{named req|StandardLayoutType}}的全部要求。
+
+{{tt|std::mutex}} 既不可复制也不可移动。
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|名字|定义}}
+{{dsc inc|cpp/thread/dsc native_handle_type|mutex}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/mutex/dsc constructor|mutex}}
+{{dsc inc|cpp/thread/mutex/dsc destructor|mutex}}
+{{dsc inc|cpp/thread/mutex/dsc operator{{=}}}}
+
+{{dsc h2|锁定}}
+{{dsc inc|cpp/thread/mutex/dsc lock|mutex}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock|mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock|mutex}}
+
+{{dsc h2|本机句柄}}
+{{dsc inc|cpp/thread/mutex/dsc native_handle|mutex}}
+{{dsc end}}
+
+===注解===
+通常不直接使用 {{tt|std::mutex}}：{{lc|std::unique_lock}}、{{lc|std::lock_guard}}{{rev inl|since=c++17| 或 {{lc|std::scoped_lock}}}} 以更加异常安全的方式管理锁定。
+
+===示例===
+{{example
+|此示例展示 {{tt|mutex}} 能如何用于在保护在两个线程间共享的 {{lc|std::map}}。
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::map&lt;std::string, std::string&gt; g_pages;
+std::mutex g_pages_mutex;
+
+void save_page(const std::string &amp;url)
+{
+    // 模拟长页面读取
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::string result = "伪内容";
+    
+    std::lock_guard&lt;std::mutex&gt; guard(g_pages_mutex);
+    g_pages[url] = result;
+}
+
+int main() 
+{
+    std::thread t1(save_page, "http://foo");
+    std::thread t2(save_page, "http://bar");
+    t1.join();
+    t2.join();
+    
+    // 现在可以不带锁地安全访问 g_pages，因为线程 t1/t2 都已完成执行
+    for (const auto&amp; [url, page] : g_pages)
+        std::cout &lt;&lt; url &lt;&lt; " =&gt; " &lt;&lt; page &lt;&lt; '\n';
+}
+|output=
+http://bar =&gt; 伪内容
+http://foo =&gt; 伪内容
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc recursive_mutex}}
+{{dsc inc|cpp/thread/dsc lock_guard}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc inc|cpp/thread/dsc scoped_lock}}
+{{dsc inc|cpp/thread/dsc condition_variable}}
+{{dsc end}}
+
+{{langlinks|ar|de|en|es|fr|it|ja|ko|pt|ru}}

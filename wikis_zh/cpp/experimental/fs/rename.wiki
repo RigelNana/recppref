@@ -1,0 +1,70 @@
+{{cpp/experimental/fs/title|rename}}
+{{cpp/experimental/fs/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/filesystem}}
+{{dcl|since=fs_ts|1=
+void rename( const path&amp; old_p, const path&amp; new_p );
+void rename( const path&amp; old_p, const path&amp; new_p, std::error_code&amp; ec );
+}}
+{{dcl end}}
+
+将 {{c|old_p}} 所标定的文件系统对象移动或重命名为 {{c|new_p}}，如同通过 POSIX [https://pubs.opengroup.org/onlinepubs/9699919799/functions/rename.html rename] 进行：
+
+* 如果 {{c|old_p}} 是非目录文件，则 {{c|new_p}} 必须为以下之一：
+:* 与 {{c|old_p}} 相同的文件或为到它的硬链接：这种情况下不做任何事
+:* 现存非目录文件：首先删除 {{c|new_p}}，然后，不允许其他进程观察到 {{c|new_p}} 被删除，路径名 {{c|new_p}} 链接到文件而 {{c|old_p}} 从文件解除链接。对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录均需要写权限。
+:* 已存在目录中的不存在文件：路径名 {{c|new_p}} 链接到文件而 {{c|old_p}} 从文件解除链接。对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录均需要写权限。
+* 如果 {{c|old_p}} 是目录，则 {{c|new_p}} 必须为以下之一：
+:* 与 {{c|old_p}} 相同的目录或为到它的硬链接：这种情况下不做任何事。
+:* 现存目录：在 POSIX 系统上当 {{c|new_p}} 为空时即被删除，但这在其他系统上可能是错误。若其并非错误，则首先删除 {{c|new_p}} 但不允许其他进程观察到 {{c|new_p}} 被删除，将 {{c|new_p}} 链接到目录，而 {{c|old_p}} 从目录断开链接。对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录均需要写权限。
+:* 不存在的目录，不以目录分隔符结尾，且其父目录存在：路径名 {{c|new_p}} 链接到目录而 {{c|old_p}} 从目录断开链接。对包含 {{c|old_p}} 的目录和包含 {{c|new_p}} 的目录均需要写权限。
+* 不跟随符号链接：如果 {{c|old_p}} 是符号链接，则改名它自身，而非其目标。如果 {{c|new_p}} 是现存符号链接，则擦除其自身，而非其目标。
+
+一下情况导致重命名失败：
+* {{c|new_p}} 以 {{spar|点}} 或 {{spar|点点}} 结束。
+* {{c|new_p}} 指明不存在的目录并以目录分隔符结尾。
+* {{c|old_p}} 是目录且为 {{c|new_p}} 的祖先。
+
+===参数===
+{{par begin}}
+{{par|old_p|要移动或重命名的路径}}
+{{par|new_p|移动/重命名操作的目标路径}}
+{{par|ec|用于无抛出重载中错误报告的输出形参}}
+{{par end}}
+
+===返回值===
+（无）
+
+===异常===
+{{cpp/experimental/fs/error_handling|old_p|new_p}}
+
+===示例===
+{{example
+|code=
+#include &lt;experimental/filesystem&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+namespace fs = std::experimental::filesystem;
+
+int main()
+{
+    fs::path p = fs::current_path() / "sandbox";
+    fs::create_directories(p/"from");
+    std::ofstream(p/"from/file1.txt").put('a');
+    fs::create_directory(p/"to");
+
+//  fs::rename(p/"from/file1.txt", p/"to/"); // 错误: to 为目录
+    fs::rename(p/"from/file1.txt", p/"to/file2.txt"); // OK
+//  fs::rename(p/"from", p/"to"); // 错误: to 非空
+    fs::rename(p/"from", p/"to/subdir"); // OK
+
+    fs::remove_all(p);
+}
+|output=
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc rename}}
+{{dsc inc|cpp/experimental/fs/dsc remove}}
+{{dsc end}}

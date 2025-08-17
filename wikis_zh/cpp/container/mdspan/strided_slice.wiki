@@ -1,0 +1,124 @@
+{{cpp/title|strided_slice}}
+{{cpp/container/mdspan/navbar}}
+{{dcl begin}}
+{{dcl header|mdspan}}
+{{dcl|since=c++26|1=
+template&lt; class OffsetType, class ExtentType, class StrideType &gt;
+struct strided_slice;
+}}
+{{dcl end}}
+
+{{tt|strided_slice}} 的每个特化的实例都是 {{lc|std::submdspan}} 中使用的切片说明符，它使用在 {{rlpt|/|std::mdspan}} 的某个指定维度上有规律排布的索引集合选择一个元素子集。
+
+每个 {{tt|strided_slice}} 对象 {{c|s}} 都以三个数据成员来描绘：偏移量索引 {{c|s.offset}}、尺度 {{c|s.extent}} 和步长 {{c|s.stride}}。
+
+给定大于零的 {{c|s.stride}}，由 {{tt|N}} 代表所选中索引的数量，若 {{c|s.extent}} 非零则确定为 {{c|1 + (s.extent - 1) / s.stride}}，否则为 {{c|0}}。索引从半开区间 {{range|s.offset|s.offset + s.extent}} 中选取。所选中索引的序列为：{{c|s.offset, ..., s.offset + (N - 1) * s.stride}}。
+
+这个类模板没有基类或声明除了下述之外的成员。
+
+===模板形参===
+{{par begin}}
+{{par|OffsetType|偏移量的类型}}
+{{par|ExtentType|尺度的类型}}
+{{par|StrideType|步长的类型}}
+{{par hreq}}
+{{par req|所有模板形参都必须是无符号或有符号整数类型或者满足 {{lti|cpp/header/span#概念 integral-constant-like|integral-constant-like}}}}
+{{par end}}
+
+如果不满足类型要求则程序非良构
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|offset_type}}|{{tt|OffsetType}}}}
+{{dsc|{{tt|extent_type}}|{{tt|ExtentType}}}}
+{{dsc|{{tt|stride_type}}|{{tt|StrideType}}}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc begin}}
+{{dsc hitem|成员名字|定义}}
+{{dsc mem obj|offset|nolink=true|{{tt|offset_type}} 类型的起始索引}}
+{{dsc mem obj|extent|nolink=true|{{tt|extent_type}} 类型的值，加到偏移量上以定义索引上界}}
+{{dsc mem obj|stride|nolink=true|{{tt|stride_type}} 类型的增加值，等价于两个索引之间的距离}}
+{{dsc end}}
+
+所有这些成员都被声明为带有 {{attr|no_unique_address}} 属性，并具有默认成员初始化式以使各个成员被值初始化。
+
+===注解===
+{{tt|strided_slice}} 的每个特化都是聚合体类，允许数据成员的[[cpp/language/aggregate_initialization|聚合初始化]]（包括指派初始化，例如，{{c|1=std::strided_slice{.offset = 2, .extent = 10, .stride = 3}&lt;!----&gt;}}）。
+
+{{tt|strided_slice}} 的切片说明利用了数据成员 {{c|extent}} 的优势，这点与其他使用 {{c|end}} 来指示上界值的切片说明有所不同。这是因为在 {{c|extent}} 和 {{c|stride}} 都是满足 {{lti|cpp/header/span#概念 integral-constant-like|integral-constant-like}} 的类型时，它可以为 {{lc|std::mdspan}} 的子视图直接生成静态尺度。这样就允许通过混用编译时值和运行时的 {{tt|offset}} 值来高效提取具有静态尺度的子视图。
+
+===示例===
+{{example
+|code=
+#include &lt;mdspan&gt;
+#include &lt;print&gt;
+
+template &lt;typename View, typename O = int, typename E = int, typename S = int&gt;
+    requires (View::extents_type::rank() == 1)
+void print_sliced_view(View v, std::strided_slice&lt;O, E, S&gt; s)
+{
+    using index_type = View::index_type;
+    auto subview = std::submdspan(v, s);
+    const auto&amp; submap = subview.mapping();
+
+    std::print("[");
+    bool uses_comma = false;
+    for (index_type i = 0; i != subview.extent(0); ++i) 
+    {
+        if (uses_comma)
+            std::print(", ");
+        std::print("{}", subview[i]);
+        uses_comma = true;
+    }
+    uses_comma = false;
+    std::print("] 提取于索引 [");
+    for (index_type i = 0; i != subview.extent(0); ++i) 
+    {
+        if (uses_comma)
+            std::print(", ");
+        std::print("{}", submap(i) + s.offset);
+        uses_comma = true;
+    }
+    std::println("]");
+}
+
+int main()
+{
+    static constexpr char letters[]
+    {
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+        'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+        'U', 'V', 'W', 'X', 'Y', 'Z'
+    };
+    constexpr std::mdspan md(letters, 26);
+    print_sliced_view(md, {.offset = 0, .extent = 10, .stride = 1});
+    print_sliced_view(md, {.offset = 2, .extent = 10, .stride = 1});
+    print_sliced_view(md, {.offset = 0, .extent = 5,  .stride = 1});
+    print_sliced_view(md, {.offset = 2, .extent = 5,  .stride = 1});
+    print_sliced_view(md, {.offset = 0, .extent = 10, .stride = 2});
+    print_sliced_view(md, {.offset = 2, .extent = 10, .stride = 3});
+    print_sliced_view(md, {.offset = 0, .extent = 15, .stride = 5});
+    print_sliced_view(md, {.offset = 6, .extent = 15, .stride = 5});
+}
+|output=
+[A, B, C, D, E, F, G, H, I, J] 提取于索引 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[C, D, E, F, G, H, I, J, K, L] 提取于索引 [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+[A, B, C, D, E] 提取于索引 [0, 1, 2, 3, 4]
+[C, D, E, F, G] 提取于索引 [2, 3, 4, 5, 6]
+[A, C, E, G, I] 提取于索引 [0, 2, 4, 6, 8]
+[C, F, I, L] 提取于索引 [2, 5, 8, 11]
+[A, F, K] 提取于索引 [0, 5, 10]
+[G, L, Q] 提取于索引 [6, 11, 16]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/valarray/dsc slice}}
+{{dsc inc|cpp/container/mdspan/dsc submdspan}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

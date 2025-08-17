@@ -1,0 +1,199 @@
+{{cpp/atomic/atomic/title|compare_exchange_weak|compare_exchange_strong}}
+{{cpp/atomic/atomic/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order success, 
+                            std::memory_order failure ) noexcept;
+}}
+{{dcl|num=2|since=c++11|
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order success, 
+                            std::memory_order failure ) volatile noexcept;
+}}
+{{dcl|num=3|since=c++11|1=
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order order =
+                                std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=4|since=c++11|1=
+bool compare_exchange_weak( T&amp; expected, T desired,
+                            std::memory_order order =
+                                std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl|num=5|since=c++11|
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order success, 
+                              std::memory_order failure ) noexcept;
+}}
+{{dcl|num=6|since=c++11|
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order success, 
+                              std::memory_order failure ) volatile noexcept;
+}}
+{{dcl|num=7|since=c++11|1=
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order order = 
+                                  std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=8|since=c++11|1=
+bool compare_exchange_strong( T&amp; expected, T desired,
+                              std::memory_order order =
+                                  std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl end}}
+
+原子地比较 {{c|*this}} 和 {{c|expected}} 的{{rev inl|until=c++20|[[cpp/language/object|对象表示]]}}{{rev inl|since=c++20|[[cpp/language/object|值表示]]}}。如果它们逐位相等，那么以 {{c|desired}} 替换前者（进行读修改写操作）。否则，将 {{c|*this}} 中的实际值加载进 {{c|expected}}（进行加载操作）。
+
+{|class="wikitable" style="text-align: center;"
+!重载
+!{{nbsp}}读修改写操作的内存模型{{nbsp}}
+!加载操作的内存模型
+|-
+|{{nbsp}}{{v|1,2,5,6}}{{nbsp}}
+|{{c|success}}
+|{{c|failure}}
+|-
+|{{v|3,4,7,8}}
+|{{c|order}}
+|
+* 在 {{c|order}} 是 {{c|std::memory_order_acq_rel}} 时{{nbsp}}&lt;br&gt;是 {{c|std::memory_order_acquire}}
+* 在 {{c|order}} 是 {{c|std::memory_order_release}} 时&lt;br&gt;是 {{c|std::memory_order_relaxed}}
+* 否则是 {{c|order}}
+|}
+
+如果 {{c|failure}} {{rev inl|until=c++17|强于 {{c|success}} 或者}}是 {{c|std::memory_order_release}} 和 {{c|std::memory_order_acq_rel}} 之一，那么行为未定义。
+
+{{rrev|since=c++20|
+任何 {{c/core|volatile}} 重载在参与重载决议且 {{c|std::atomic&lt;T&gt;::is_always_lock_free}} 是 {{c|false}} 时被弃用。
+}}
+
+===参数===
+{{par begin}}
+{{par|expected|到期待在原子对象中找到的值的引用}}
+{{par|desired|在符合期待时存储到原子对象的值}}
+{{par|success|读修改写操作所用的内存同步定序}}
+{{par|failure|加载操作所用的内存同步定序}}
+{{par|order|两个操作所用的内存同步定序}}
+{{par end}}
+
+===返回值===
+成功更改底层原子值时返回 {{c|true}}，否则为返回 {{c|false}}。
+
+===注解===
+比较和复制是逐位的（类似 {{lc|std::memcmp}} 和 {{lc|std::memcpy}}）；不使用构造函数、赋值运算符或比较运算符。
+
+允许 {{tt|compare_exchange_weak}} 假性失败，即即使它们相等也表现如同 {{c|1=*this != expected}}。在循环中进行比较和交换时，{{tt|compare_exchange_weak}} 在有的平台上会产出更好的性能。
+
+当 {{tt|compare_exchange_weak}} 比较和交换会要求循环，而 {{tt|compare_exchange_strong}} 不要求时，推荐用 {{tt|std::compare_exchange_strong}}，除非 {{tt|T}} 的对象表示可包含{{rev inl|until=c++20|填充位、}}陷阱位或为同一值提供多个对象表示（例如浮点 NaN）。这些情况下，{{tt|compare_exchange_weak}} 一般均可用，因为它在一些稳定对象表示上快速收敛。
+
+对于联合体，如果它持有某些只有部分成员的值表示有参与的位，那么比较和交换可能总会失败，因为这种填充位在不参与活跃成员的值表示时拥有不确定值。
+
+{{rrev|since=c++20|
+忽略决不参与对象值表示的填充位。
+}}
+
+===示例===
+{{example
+|比较和交换操作通常用作{{enwiki|Non-blocking algorithm|免锁}}数据结构的基本组成部分。
+|code=
+#include &lt;atomic&gt;
+
+template&lt;typename T&gt;
+struct node
+{
+    T data;
+    node* next;
+    node(const T&amp; data) : data(data), next(nullptr) {}
+};
+
+template&lt;typename T&gt;
+class stack
+{
+    std::atomic&lt;node&lt;T&gt;*&gt; head;
+public:
+    void push(const T&amp; data)
+    {
+        node&lt;T&gt;* new_node = new node&lt;T&gt;(data);
+        
+        // 将 head 的当前值放到 new_node-&gt;next 中
+        new_node-&gt;next = head.load(std::memory_order_relaxed);
+        
+        // 现在令 new_node 为新的 head ，但如果 head 不再是
+        // 存储于 new_node-&gt;next 的值（某些其他线程必须在刚才插入结点）
+        // 那么将新的 head 放到 new_node-&gt;next 中并再尝试
+        while(!head.compare_exchange_weak(new_node-&gt;next, new_node,
+                                          std::memory_order_release,
+                                          std::memory_order_relaxed))
+            ; // 循环体为空
+
+// 注意：上述使用至少在这些版本不是线程安全的
+// 先于 4.8.3 的 GCC（漏洞 60272），先于 2014-05-05 的 clang（漏洞 18899）
+// 先于 2014-03-17 的 MSVC（漏洞 819819）。下面是变通方法：
+//      node&lt;T&gt;* old_head = head.load(std::memory_order_relaxed);
+//      do
+//      {
+//          new_node-&gt;next = old_head;
+//      }
+//      while (!head.compare_exchange_weak(old_head, new_node,
+//                                         std::memory_order_release,
+//                                         std::memory_order_relaxed));
+    }
+};
+
+int main()
+{
+    stack&lt;int&gt; s;
+    s.push(1);
+    s.push(2);
+    s.push(3);
+}
+}}
+
+{{example
+|演示 {{tt|std::compare_exchange_strong}} 如何要么更改原子对象的值，要么将变量用于比较。{{todo|强 CAS 的更实际用法会更好，例如在 Concurrency in Action 使用它的地方}}
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+
+std::atomic&lt;int&gt; ai;
+
+int tst_val = 4;
+int new_val = 5;
+bool exchanged= false;
+
+void valsout()
+{
+    std::cout &lt;&lt; "ai = " &lt;&lt; ai
+	      &lt;&lt; "  tst_val = " &lt;&lt; tst_val
+	      &lt;&lt; "  new_val = " &lt;&lt; new_val
+	      &lt;&lt; "  exchanged = " &lt;&lt; std::boolalpha &lt;&lt; exchanged
+	      &lt;&lt; "\n";
+}
+
+int main()
+{
+    ai= 3;
+    valsout();
+    
+    // tst_val != ai   ==&gt;  tst_val 被修改
+    exchanged= ai.compare_exchange_strong(tst_val, new_val);
+    valsout();
+    
+    // tst_val == ai   ==&gt;  ai 被修改
+    exchanged= ai.compare_exchange_strong(tst_val, new_val);
+    valsout();
+}
+|output=
+ai = 3  tst_val = 4  new_val = 5  exchanged = false
+ai = 3  tst_val = 3  new_val = 5  exchanged = false
+ai = 5  tst_val = 3  new_val = 5  exchanged = true
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_compare_exchange}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

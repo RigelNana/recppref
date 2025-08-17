@@ -1,0 +1,158 @@
+{{cpp/title|forward}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|utility}}
+{{dcl rev multi|num=1
+|since1=c++11|dcl1=
+template&lt; class T &gt;
+T&amp;&amp; forward( typename std::remove_reference&lt;T&gt;::type&amp; t ) noexcept;
+|since2=c++14|dcl2=
+template&lt; class T &gt;
+constexpr T&amp;&amp; forward( std::remove_reference_t&lt;T&gt;&amp; t ) noexcept;
+}}
+{{dcl rev multi|num=2
+|since1=c++11|dcl1=
+template&lt; class T &gt;
+T&amp;&amp; forward( typename std::remove_reference&lt;T&gt;::type&amp;&amp; t ) noexcept;
+|since2=c++14|dcl2=
+template&lt; class T &gt;
+constexpr T&amp;&amp; forward( std::remove_reference_t&lt;T&gt;&amp;&amp; t ) noexcept;
+}}
+{{dcl end}}
+
+@1@ 转发左值为左值或右值，依赖于 T
+
+当 {{c|t}} 是[[cpp/language/reference#转发引用|转发引用]]（被声明为到无 cv 限定函数模板形参的右值引用的函数实参）时，此重载将实参转发给另一个函数，带有它被传递给调用方函数时的[[cpp/language/value_category|值类别]]。
+
+例如，若用于如下的包装器，则模板表现为下方所描述：
+
+{{source|1=
+template&lt;class T&gt;
+void wrapper(T&amp;&amp; arg) 
+{
+    // arg 始终是左值
+    foo(std::forward&lt;T&gt;(arg)); // 转发为左值或右值，依赖于 T
+}
+}}
+
+* 若对 {{tt|wrapper()}} 的调用传递右值 {{tt|std::string}}，则推导 {{tt|T}} 为 {{tt|std::string}}（并非 {{tt|std::string&amp;}}、{{tt|const std::string&amp;}} 或 {{tt|std::string&amp;&amp;}}），且 {{tt|std::forward}} 确保将右值引用传递给 {{tt|foo}}。
+* 若对 {{tt|wrapper()}} 的调用传递 const 左值 {{tt|std::string}}，则推导 {{tt|T}} 为 {{tt|const std::string&amp;}}，且 {{tt|std::forward}} 确保将 const 左值引用传递给 {{tt|foo}}。
+* 若对 {{tt|wrapper()}} 的调用传递非 const 左值 {{tt|std::string}}，则推导 {{tt|T}} 为 {{tt|std::string&amp;}}，且 {{tt|std::forward}} 确保将非 const 左值引用传递给 {{tt|foo}}。
+
+@2@ 转发右值为右值并禁止右值被转发为左值。
+
+此重载令转发表达式（如函数调用）的结果（可以是右值或左值），使其具有转发引用实参的原始值类别成为可能。
+
+例如，若包装器不仅转发其实参，还在实参上调用成员函数，并转发其结果：
+{{source|1=
+// 转换包装器 
+template&lt;class T&gt;
+void wrapper(T&amp;&amp; arg)
+{&lt;!-- 示例来自 from http://stackoverflow.com/a/29135871 --&gt;
+    foo(forward&lt;decltype(forward&lt;T&gt;(arg).get())&gt;(forward&lt;T&gt;(arg).get()));
+}
+}}
+
+其中 arg 的类型可以是
+{{source|1=
+struct Arg
+{
+    int i = 1;
+    int  get() &amp;&amp; { return i; } // 此重载的调用为右值
+    int&amp; get() &amp;  { return i; } // 此重载的调用为左值
+};
+}}
+
+试图转发右值为左值，例如通过以左值引用类型 T 实例化形式 {{v|2}}，会产生编译时错误。
+
+===注解===
+转发引用背后的特殊规则（{{tt|T&amp;&amp;}} 用作函数形参）见[[cpp/language/template_argument_deduction|模板实参推导]]，其他细节见[[cpp/language/reference#转发引用|转发引用]]。
+
+===参数===
+{{par begin}}
+{{par|t|要转发的对象}}
+{{par end}}
+
+===返回值===
+{{c|static_cast&lt;T&amp;&amp;&gt;(t)}}
+
+===复杂度===
+常数。
+
+===示例===
+{{example
+|此示例演示把形参完美转发到类 {{tt|T}} 构造函数的实参。还展示了形参包的完美转发。
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    A(int&amp;&amp; n) { std::cout &lt;&lt; "rvalue overload, n=" &lt;&lt; n &lt;&lt; "\n"; }
+    A(int&amp; n)  { std::cout &lt;&lt; "lvalue overload, n=" &lt;&lt; n &lt;&lt; "\n"; }
+};
+
+class B
+{
+public:
+    template&lt;class T1, class T2, class T3&gt;
+    B(T1&amp;&amp; t1, T2&amp;&amp; t2, T3&amp;&amp; t3) :
+        a1_{std::forward&lt;T1&gt;(t1)},
+        a2_{std::forward&lt;T2&gt;(t2)},
+        a3_{std::forward&lt;T3&gt;(t3)}
+    {}
+
+private:
+    A a1_, a2_, a3_;
+};
+
+template&lt;class T, class U&gt;
+std::unique_ptr&lt;T&gt; make_unique1(U&amp;&amp; u)
+{
+    return std::unique_ptr&lt;T&gt;(new T(std::forward&lt;U&gt;(u)));
+}
+
+template&lt;class T, class... U&gt;
+std::unique_ptr&lt;T&gt; make_unique2(U&amp;&amp;... u)
+{
+    return std::unique_ptr&lt;T&gt;(new T(std::forward&lt;U&gt;(u)...));
+}
+
+auto make_B(auto&amp;&amp;... args) // C++20 起
+{
+    return B(std::forward&lt;decltype(args)&gt;(args)...);
+}
+
+int main()
+{   
+    auto p1 = make_unique1&lt;A&gt;(2); // 右值
+    int i = 1;
+    auto p2 = make_unique1&lt;A&gt;(i); // 左值
+
+    std::cout &lt;&lt; "B\n";
+    auto t = make_unique2&lt;B&gt;(2, i, 3);
+    
+    std::cout &lt;&lt; "make_B\n";
+    [[maybe_unused]] B b = make_B(4, i, 5);
+}
+|output=
+rvalue overload, n=2
+lvalue overload, n=1
+B
+rvalue overload, n=2
+lvalue overload, n=1
+rvalue overload, n=3
+make_B
+rvalue overload, n=4
+lvalue overload, n=1
+rvalue overload, n=5
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc inc|cpp/utility/dsc move_if_noexcept}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,101 @@
+{{cpp/ranges/title|reverse_copy|reverse_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr reverse_copy_result&lt;I, O&gt;
+    reverse_copy( I first, S last, O result );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::bidirectional_range R, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr reverse_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    reverse_copy( R&amp;&amp; r, O result );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using reverse_copy_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ 从源范围 {{range|first|last}} 复制元素到目标范围 {{range|result|result + N}}，其中 {{tt|N}} 为 {{c|1=N = ranges::distance(first, last) }}，使得新范围中的元素处于逆序。表现如同通过对 {{range|0|N}} 中的每个整数 {{tt|i}} 执行一次赋值 {{c|1=*(result + N - 1 - i) = *(first + i)}}。若源与目标范围重叠则行为未定义。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的|range=源|sentinel=yes}}
+{{par|r|要复制的源元素范围}}
+{{par|result|目标范围的起始}}
+{{par end}}
+
+===返回值===
+{{c|{last, result + N} }}。
+
+===复杂度===
+准确赋值 {{tt|N}} 次。
+
+===注解===
+实现（例如 [https://github.com/microsoft/STL/blob/main/stl/src/vector_algorithms.cpp MSVC STL]）可能在两个迭代器类型均实现 {{lconcept|contiguous_iterator}} 并拥有同一值类型，且值类型为{{named req|TriviallyCopyable}}时启用向量化。
+
+===可能的实现===
+参阅 [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L4245-L4323 MSVC STL] 与 [https://github.com/gcc-mirror/gcc/blob/14d8a5ae472ca5743016f37da2dd4770d83dea21/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1330-L1359 libstdc++] 中的实现。
+{{eq fun|1=
+struct reverse_copy_fn
+{
+    template&lt;std::bidirectional_iterator I, std::sentinel_for&lt;I&gt; S,
+             std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::reverse_copy_result&lt;I, O&gt;
+        operator()(I first, S last, O result) const
+    {
+        auto ret = ranges::next(first, last);
+        for (; last != first; *result = *--last, ++result);
+        return {std::move(ret), std::move(result)};
+    }
+
+    template&lt;ranges::bidirectional_range R, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::reverse_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, O result) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr reverse_copy_fn reverse_copy {};
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::string x {"12345"}, y(x.size(), ' ');
+    std::cout &lt;&lt; x &lt;&lt; " → ";
+    std::ranges::reverse_copy(x.begin(), x.end(), y.begin());
+    std::cout &lt;&lt; y &lt;&lt; " → ";
+    std::ranges::reverse_copy(y, x.begin());
+    std::cout &lt;&lt; x &lt;&lt; '\n';
+}
+|output=
+12345 → 54321 → 12345
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse}}
+{{dsc inc|cpp/algorithm/dsc reverse_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

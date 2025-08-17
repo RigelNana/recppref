@@ -1,0 +1,204 @@
+{{title|可赋值包装 {{mark c++20}}}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl rev multi
+|since1=c++20|notes1={{mark expos}}|dcl1=
+template&lt; class T &gt;
+    requires std::copy_constructible&lt;T&gt; &amp;&amp; std::is_object_v&lt;T&gt;
+class /*copyable-box*/;
+|since2=c++23|notes2={{mark expos}}|dcl2=
+template&lt; class T &gt;
+    requires std::move_constructible&lt;T&gt; &amp;&amp; std::is_object_v&lt;T&gt;
+class /*movable-box*/;
+}}
+{{dcl end}}
+
+{{ltt|cpp/ranges/single_view|ranges::single_view}}{{rev inl|since=c++23|、{{ltt|cpp/ranges/repeat_view|ranges::repeat_view}}}} 以及存储一个可调用对象的范围适配器，通过仅用于阐释的类模板 {{rev inl|until=c++23|{{tti|copyable-box}}}}{{rev inl|since=c++23|{{tti|movable-box}}}} 说明。此处显示的名字仅用于阐释目的。
+
+该包装行为准确地与 {{c|std::optional&lt;T&gt;}} 相同，但其默认构造函数、复制赋值运算符与移动赋值运算符（条件性地）异于 {{lc|std::optional}}。这在需要时为 {{tt|T}} 增设赋值能力，并使得包装始终满足 {{lconcept|copyable}}{{rev inl|since=c++23| 或 {{lconcept|movable}}}}。
+
+{{rrev multi
+|rev1=
+若 {{tt|T}} 已为 {{lconcept|copyable}}，或 {{c|std::is_nothrow_move_constructible_v&lt;T&gt;}} 与 {{c|std::is_nothrow_copy_constructible_v&lt;T&gt;}} 均为 {{c|true}}，则 {{c|/*copyable-box*/&lt;T&gt;}} 可以只存储一个 {{tt|T}} 对象，因为它始终含值。
+|since2=c++23|rev2=
+若 {{tt|T}}
+* 已为 {{lconcept|copyable}}，或
+* 为 {{lconcept|copy_constructible}} 且 {{c|std::is_nothrow_move_constructible_v&lt;T&gt;}} 与 {{c|std::is_nothrow_copy_constructible_v&lt;T&gt;}} 均为 {{c|true}}，或
+* 不满足 {{lconcept|copy_constructible}} 但满足 {{lconcept|movable}}，或
+* 不满足 {{lconcept|copy_constructible}} 但 {{c|std::is_nothrow_move_constructible_v&lt;T&gt;}} 为 {{c|true}}，
+则 {{c|/*movable-box*/&lt;T&gt;}} 可以仅存储一个 {{tt|T}} 对象，因为它始终含值。
+}}
+
+===模板形参===
+{{par begin}}
+{{par|T|被含有值的类型，必须为实现 {{rev inl|until=c++23|{{lconcept|copy_constructible}}}}{{rev inl|since=c++23|{{lconcept|move_constructible}}}} 的对象类型}}
+{{par end}}
+
+===成员函数===
+{{member|默认构造函数|
+{{dcl begin}}
+{{dcl rev multi
+|since1=c++20|dcl1=
+constexpr /*copyable-box*/() noexcept(std::is_nothrow_default_constructible_v&lt;T&gt;)
+    requires std::default_initializable&lt;T&gt;
+    : /*copyable-box*/(std::in_place) { }
+|since2=c++23|dcl2=
+constexpr /*movable-box*/() noexcept(std::is_nothrow_default_constructible_v&lt;T&gt;)
+    requires std::default_initializable&lt;T&gt;
+    : /*movable-box*/(std::in_place) { }
+}}
+{{dcl end}}
+
+当且仅当 {{tt|T}} 实现 {{lconcept|default_initializable}} 才提供默认构造函数。
+
+默认构造的包装含有一个值初始化的 {{tt|T}} 对象。
+}}
+
+{{member|赋值运算符|
+{{dcl begin}}
+{{dcl rev multi|num=1
+|since1=c++20|dcl1=
+constexpr /*copyable-box*/&amp; operator=(const /*copyable-box*/&amp; other);
+    noexcept(/* see below */);
+|since2=c++23|dcl2=
+constexpr /*movable-box*/&amp; operator=(const /*movable-box*/&amp; other);
+    noexcept(/* see below */) requires std::copy_constructible&lt;T&gt;;
+}}
+{{dcl rev multi|num=2
+|since1=c++20|dcl1=
+constexpr /*copyable-box*/&amp; operator=(/*copyable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;);
+|since2=c++23|dcl2=
+constexpr /*movable-box*/&amp; operator=(/*movable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;);
+}}
+{{dcl end}}
+
+@1@ 若 {{c|std::copyable&lt;T&gt;}} 未得到实现，则复制赋值运算符等价地定义为：
+{{rrev multi
+|rev1=
+{{c|1=
+constexpr /*copyable-box*/&amp; operator=(const /*copyable-box*/&amp; other)
+    noexcept(std::is_nothrow_copy_constructible_v&lt;T&gt;)
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(*other);
+        else
+            reset();
+
+    return *this;
+}
+}}
+|since2=c++23|rev2=
+{{c|1=
+constexpr /*movable-box*/&amp; operator=(const /*movable-box*/&amp; other)
+    noexcept(std::is_nothrow_copy_constructible_v&lt;T&gt;)
+    requires std::copy_constructible&lt;T&gt;
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(*other);
+        else
+            reset();
+
+    return *this;
+}
+}}
+}}
+否则，它等同于 [[cpp/utility/optional/operator=|{{tt|std::optional}} 的复制赋值运算符]]。
+
+@2@ 若 {{c|std::movable&lt;T&gt;}} 未得到实现，则移动赋值运算符等价地定义为：
+{{rrev multi
+|rev1=
+{{c|1=
+constexpr /*copyable-box*/&amp; operator=(/*copyable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;)
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(std::move(*other));
+        else
+            reset();
+
+    return *this;
+}
+}}
+|since2=c++23|rev2=
+{{c|1=
+constexpr /*movable-box*/&amp; operator=(/*movable-box*/&amp;&amp; other)
+    noexcept(std::is_nothrow_move_constructible_v&lt;T&gt;)
+{
+    if (this != std::addressof(other))
+        if (other)
+            emplace(std::move(*other));
+        else
+            reset();
+
+    return *this;
+}
+}}
+}}
+否则，它等同于 [[cpp/utility/optional/operator=|{{tt|std::optional}} 的移动赋值运算符]]。
+}}
+
+{{identical|{{small|std::}}optional|
+2=&lt;!--
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc end}}
+--&gt;
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/optional/dsc constructor}}
+{{dsc inc|cpp/utility/optional/dsc destructor}}
+{{dsc inc|cpp/utility/optional/dsc operator{{=}}}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/utility/optional/dsc operator*}}
+{{dsc inc|cpp/utility/optional/dsc operator bool}}
+&lt;!--{{dsc inc|cpp/utility/optional/dsc value}}
+{{dsc inc|cpp/utility/optional/dsc value_or}}--&gt;
+
+{{dsc h2|修改器}}
+&lt;!--{{dsc inc|cpp/utility/optional/dsc swap}}--&gt;
+{{dsc inc|cpp/utility/optional/dsc reset}}
+{{dsc inc|cpp/utility/optional/dsc emplace}}
+{{dsc end}}
+}}
+
+===注解===
+仅当下列条件成立时，{{rev inl|until=c++23|{{tti|copyable-box}}}}{{rev inl|since=c++23|{{tti|movable-box}}}} 不含值：
+* {{tt|T}} 不实现 {{lconcept|movable}} 或 {{lconcept|copyable}}，而分别在移动赋值或复制赋值时抛异常，或者
+* 从另一不含值的包装初始化/赋值它。
+
+在 {{wg21|P2325R3}} 前，该包装在标准中被称为 {{tt|''semiregular-box''}}，并且始终满足 {{lconcept|semiregular}}，因为始终提供默认构造函数（可能构造无值的包装）。
+
+{{ftm begin|std=1|sort=1|comment=1}}
+{{ftm|value=201911L|std=C++20|__cpp_lib_ranges|rowspan="3"|[[cpp/ranges|范围库]]与[[cpp/algorithm/ranges|受约束算法]]}}
+{{ftm|value=202106L|std=C++20|dr=yes|-|非[[cpp/concepts/default_initializable|可默认初始化]]的[[cpp/ranges/view|视图]]}}
+{{ftm|value=202207L|std=C++23|-|放松[[cpp/ranges#范围适配器|范围适配器]]以允许仅移动类型}}
+{{ftm end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2325R3|std=C++20|before=若 {{tt|T}} 非 {{lconcept|default_initializable}} 则默认构造函数构造不含值的包装|after=包装亦非 {{lconcept|default_initializable}}}}
+{{dr list item|wg=lwg|dr=3572|std=C++20|before=条件性有别的赋值运算符不是 constexpr|after=使之为 constexpr}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc single_view}}
+{{dsc inc|cpp/ranges/dsc repeat_view}}
+{{dsc inc|cpp/ranges/dsc filter_view}}
+{{dsc inc|cpp/ranges/dsc transform_view}}
+{{dsc inc|cpp/ranges/dsc take_while_view}}
+{{dsc inc|cpp/ranges/dsc drop_while_view}}
+{{dsc inc|cpp/ranges/dsc zip_transform_view}}
+{{dsc inc|cpp/ranges/dsc adjacent_transform_view}}
+{{dsc end}}
+
+{{langlinks|ar|cs|de|en|es|fr|it|ja|ko|pl|pt|ru|tr}}

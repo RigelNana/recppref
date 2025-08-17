@@ -1,0 +1,260 @@
+{{title|析构函数}}
+{{cpp/language/classes/navbar}}
+
+析构函数是{{rlp|lifetime|对象生存期}}终结时调用的特殊{{rlp|member functions|成员函数}}。析构函数的目的是释放对象可能在它的生存期间获得的资源。
+
+{{rrev|since=c++20|
+析构函数不能是{{rlp|coroutines|协程}}。
+}}
+
+===语法===
+{{rev inl|since=c++20|预期}}析构函数用以下形式的成员{{rlp|function|函数声明符}}声明：
+
+{{sdsc begin}}
+{{sdsc|{{spar|带波浪符类名}} {{ttb|(}} {{spar optional|形参列表}} {{ttb|)}} {{spar optional|异常说明}} {{spar optional|属性}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类名}}|{{rev inl|since=c++11|可后随{{rlp|attributes|属性}}列表，并}}可以圆括号包围的{{rlp|expressions#初等表达式|标识表达式}}}}
+{{par|{{spar|形参列表}}|{{rlpsd|function#形参列表}}（必须为空或 {{c/core|void}}）}}
+{{par|{{spar|异常说明}}|{{rrev multi|until1=c++11|until2=c++17|rev1={{rlp|except spec|动态异常说明}}|rev2={{rlp|except spec|动态异常说明}}或 {{rlp|noexcept spec|noexcept 说明}}|rev3={{rlp|noexcept spec|noexcept 说明}}}}}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}列表}}
+{{par end}}
+
+{{rev inl|since=c++20|预期}}析构函数声明的{{rlp|declarations#说明符|声明说明符}}中只允许说明符 {{rev inl|since=c++11|{{rlpt|constexpr}}、}}{{rlpt|friend}}、{{rlpt|inline}} 及 {{rlpt|virtual}}（尤其是不允许返回类型）。
+
+{{spar sep|带波浪符类名}}的标识表达式必须具有以下形式之一：
+* 在属于类或类模板的{{rlps|class#成员说明}}的成员声明中：
+:* 对于类，标识表达式是 {{c|~}} 后随立即外围类的{{rlp|injected-class-name|注入类名}}。
+:* 对于类模板，标识表达式是 {{c|~}} 后随{{rev inl|until=c++20|命名了立即外围类模板的{{rlps|dependent name#当前实例化}}的类名}}{{rev inl|since=c++20|立即外围类模板的注入类名}}。
+* 否则，标识表达式是一个有限定的标识符，并且它尾部的未限定的标识符是 {{c|~}} 后随该有限定的标识符的尾部以外部分指名的类的注入类名。
+
+===解释===
+每当对象的{{rlp|lifetime|生存期}}结束时都会隐式调用析构函数，时间点包含：
+* [[cpp/utility/program/exit|程序终止]]，对于具有静态{{rlp|storage duration|存储期}}的对象
+{{rrev|since=c++11|
+* 退出线程，对于具有线程局部存储期的对象
+}}
+* 作用域结束，对于具有自动存储期的对象和生存期因绑定到引用而延长的临时量
+* {{rlp|delete|{{c/core|delete}} 表达式}}，对于具有动态存储期的对象
+* 完整{{rlp|expressions|表达式}}的结尾，对于无名临时量
+* {{rlpsd|throw#栈回溯}}，对于具有自动存储期的对象，当未捕捉的异常脱离它所在的块时。
+
+析构函数也可以显式调用。
+
+{{rrev|since=c++20|
+===预期析构函数===
+一个类可以有一个或多个预期析构函数，其中之一会被选为类的析构函数。
+
+为确定哪个预期析构函数是析构函数，{{rlp|overload resolution|重载决议}}会在类定义的末尾以空实参列表，在类中声明的潜在析构函数之间进行。如果重载决议失败，那么程序非良构。析构函数选择不会 {{rlps|definition#ODR 使用}}选中的析构函数，而且选择的析构函数可以是弃置的。
+
+所有预期析构函数都是特殊成员函数。如果不对类 {{tt|T}} 提供用户声明的预期析构函数，那么编译器总是会声明一个（见后述），而该隐式声明的预期析构函数也是 {{tt|T}} 的析构函数。
+
+{{example
+|code=
+#include &lt;cstdio&gt;
+#include &lt;type_traits&gt;
+ 
+template&lt;typename T&gt;
+struct A
+{
+    ~A() requires std::is_integral_v&lt;T&gt; { std::puts("~A, T 是整数"); }
+    ~A() requires std::is_pointer_v&lt;T&gt; { std::puts("~A, T 是指针"); }
+    ~A() { std::puts("~A, T 是其他类型"); }
+};
+ 
+int main()
+{
+    A&lt;int&gt; a;
+    A&lt;int*&gt; b;
+    A&lt;float&gt; c;
+}
+|output=
+~A, T 是其他类型
+~A, T 是指针
+~A, T 是整数
+}}
+}}
+
+===潜在调用的析构函数===
+类 {{tt|T}} 的析构函数在以下情况下会''潜在调用''：
+* 它被显式或隐式调用。
+* {{rlp|new|{{c/core|new}} 表达式}}创建了包含 {{tt|T}} 类型对象的数组。
+* {{rlp|return|{{c/core|return}} 语句}}的结果对象的类型是 {{tt|T}}。
+* 数组正在进行{{rlp|aggregate initialization|聚合初始化}}，并且它的元素类型是 {{tt|T}}。
+* 类对象正在进行聚合初始化，并且它的某个成员的类型是 {{tt|T}}，其中 {{tt|T}} 不是{{rlps|union#匿名联合体}}类型。
+* 在{{rev inl|since=c++11|非{{rlp|constructor#委托构造函数|委托}}}}构造函数中，某个{{rlps|object#潜在构造的子对象}}的类型是 {{tt|T}}。
+* 构造 {{tt|T}} 类型{{rlps|throw#异常对象}}。
+
+如果潜在调用的析构函数在调用它的语境中{{rev inl|since=c++11|被弃置或}}无法访问，那么程序非良构。
+
+===隐式声明的析构函数===
+如果不向{{rlp|class|类类型}}提供用户声明的析构函数，那么编译器总是会声明一个析构函数作为这个类的 {{c/core|inline public}} 成员。
+
+与任何隐式声明的特殊成员函数相同，隐式声明的析构函数的异常说明是不抛出的，除非{{rev inl|since=c++17|任何潜在构造的基类或成员的析构函数是{{rlp|noexcept spec|潜在抛出}}的}}{{rev inl|until=c++17|隐式定义会直接调用有不同异常说明的函数}}。实践上，隐式的析构函数是 {{c/core|noexcept}} 的，除非该类被析构函数被 {{c/core|noexcept(false)}} 的基类或成员所“毒害”。
+
+===隐式定义的析构函数===
+如果隐式声明的析构函数没有被弃置，那么当它被 {{rlps|definition#ODR 使用}}时，它会被编译器隐式定义（即生成并编译函数体）。这个隐式定义的析构函数拥有空的函数体。
+
+{{rrev|since=c++20|
+如果生成的析构函数满足 {{rev inl|until=c++23|{{rlps|constexpr#constexpr 析构函数}}}}{{rev inl|since=c++23|{{rlps|constexpr#constexpr 函数}}}}的要求，那么它是 {{c/core|constexpr}} 的。
+}}
+
+
+{{rrev|since=c++11|
+===弃置的析构函数===
+如果满足以下任意条件，那么类 {{tt|T}} 中隐式声明的或显式预置的析构函数被定义为弃置的：
+{{rev begin}}
+{{rev|until=c++26|
+* {{tt|T}} 有一个具有类类型 {{tt|M}}（或它的可以有多维的数组类型）的{{rlps|object#潜在构造的子对象}}，并且
+:* {{tt|M}} 有一个被弃置或无法从 {{tt|T}} 的析构函数访问的析构函数，或者
+:* 在该子对象是{{rlp|union#联合体式的类|变体成员}}时，{{tt|M}} 有一个非平凡的析构函数。
+}}
+{{rev|since=c++26|
+* {{tt|T}} 不是联合体，并且有一个具有类类型 {{tt|M}}（或它的可以有多维的数组类型）的{{rlps|object#潜在构造的子对象}}，该对象不是{{rlp|union#联合体式的类|变体成员}}，并且 {{tt|M}} 有一个被弃置或无法从 {{tt|T}} 的析构函数访问的析构函数。
+* {{tt|T}} 是联合体，并且满足以下任意条件：
+:* 要选择用来默认构造 {{tt|T}} 类型对象的构造函数的重载决议要么失败，要么选择了被弃置或非平凡的构造函数。
+:* {{tt|T}} 有一个具有类类型 {{tt|M}}（或它的可以有多维的数组类型）的变体成员，其中该成员带有默认初始化器，并且 {{tt|M}} 有一个非平凡的析构函数。
+}}
+{{rev end}}
+* 隐式声明的析构函数是虚函数，且对[[cpp/memory/new/operator delete|解分配函数]]的查找
+:* 导致歧义，或者
+:* 找到的函数被弃置或无法从 {{tt|T}} 访问。
+
+{{rrev|since=c++20|
+如果显式预置的 {{tt|T}} 的预期析构函数不是 {{tt|T}} 的析构函数，那么它被定义为弃置的。
+}}
+}}
+
+===平凡析构函数===
+如果满足下列全部条件，那么 {{tt|T}} 的析构函数是平凡的：
+* 析构函数{{rev inl|until=c++11|是隐式声明的}}{{rev inl|since=c++11|不是{{rlp|function#由用户提供的函数|由用户提供的}}}}。
+* 析构函数非虚。
+* 所有直接基类都拥有平凡析构函数。
+{{rev begin}}
+{{rev|until=c++26|
+* 每个类类型（或类的数组类型）的非静态数据成员都拥有平凡析构函数。
+}}
+{{rev|since=c++26|
+* 要么 {{tt|T}} 是联合体，要么每个类类型（或类的数组类型）的非变体非静态数据成员都拥有平凡析构函数。
+}}
+{{rev end}}
+
+平凡析构函数是不进行任何动作的析构函数。有平凡析构函数的对象不要求 {{c/core|delete}} 表达式，并可以通过简单地解分配它的存储进行释放。所有与 C 语言兼容的数据类型（POD 类型）都是可以平凡析构的。
+
+===析构序列===
+对于用户定义或隐式定义的析构函数，在析构函数体执行后，编译器会以声明的逆序调用该类的所有非静态非变体数据成员的析构函数，然后以{{rlp|initializer list#初始化顺序|构造的逆序}}调用所有直接非虚基类的析构函数（继而调用它的成员与它的基类的析构函数，以此类推），最后，如果此对象类型是{{rlp|object#子对象|最终派生类}}，那么调用所有虚基类的析构函数。
+
+即便在直接调用析构函数时（例如 {{c|obj.~Foo();}}），{{c|~Foo()}} 中的 {{c/core|return}} 语句也不会立即将控制返回到调用方：它首先调用它的所有成员及基类的析构函数。
+
+===虚析构函数===
+通过指向基类的指针删除对象会引发未定义行为，除非基类的析构函数是{{rlp|virtual|虚函数}}：
+
+{{source|1=
+class Base
+{
+public:
+    virtual ~Base() {}
+};
+
+class Derived : public Base {};
+
+Base* b = new Derived;
+delete b; // 安全
+}}
+
+一条常用方针是，基类的析构函数必须[http://www.gotw.ca/publications/mill18.htm 是公开且虚或受保护且非虚之一]
+
+===纯虚析构函数===
+{{rev inl|since=c++20|预期}}析构函数可以声明为{{rlp|abstract class|纯虚}}的，例如对于需要声明为抽象类，但没有其他可声明为纯虚的适合函数的基类。纯虚析构函数必须有定义，因为在销毁派生类时，所有基类析构函数都会被调用：
+
+{{source|1=
+class AbstractBase
+{
+public:
+    virtual ~AbstractBase() = 0;
+};
+AbstractBase::~AbstractBase() {}
+
+class Derived : public AbstractBase {};
+
+// AbstractBase obj; // 编译错误
+Derived obj;         // OK
+}}
+
+===异常===
+与其他函数一样，析构函数可以通过抛出{{rlp|exceptions|异常}}终止{{rev inl|since=c++11|（这通常要求将它明确声明为 {{c/core|noexcept(false)}}）}}，然而如果恰好在{{rlpsd|throw#栈回溯}}期间调用析构函数，那么会改为调用 {{lc|std::terminate}}。
+
+虽然有时候可以用 {{lc|std::uncaught_exception}} 来检测进展中的栈回溯，但允许任何析构函数通过抛异常终止通常被认为是坏的实践。尽管如此，一些库（如 [https://github.com/SOCI/soci SOCI] 与 [http://galeracluster.com/downloads/ Galera 3] 等）仍然使用了这项功能，它们利用了无名临时量的析构函数的能力，以在构造该临时量的完整表达式结束处抛异常。
+
+库基础 TS v3 中的 {{l2tt std|cpp/experimental/scope_success}} 可以拥有[[cpp/experimental/scope_success/~scope_success|潜在抛出的析构函数]]，它在正常退出作用域且退出函数抛异常时抛出异常。
+
+===注解===
+对普通对象（如局部变量）直接调用析构函数会导致在作用域结束处再次调用析构函数时引发未定义行为。
+
+在泛型语境中，析构函数调用语法可以用于非类类型的对象；这被称为伪析构函数调用：见{{rlp|operator member access#内建的成员访问运算符|成员访问运算符}}。
+
+{{feature test macro|__cpp_trivial_union|放松对联合体的特殊成员函数的平凡性要求|value=202502L|std=C++26}}
+
+===示例===
+{{example|code=
+#include &lt;iostream&gt;
+ 
+struct A
+{
+    int i;
+    
+    A(int num) : i(num)
+    {
+        std::cout &lt;&lt; "构造 a" &lt;&lt; i &lt;&lt; '\n';
+    }
+    
+    (~A)() // 通常写作 ~A()
+    {
+        std::cout &lt;&lt; "析构 a" &lt;&lt; i &lt;&lt; '\n';
+    }
+};
+
+A a0(0);
+
+int main()
+{
+    A a1(1);
+    A* p;
+    
+    { // 嵌套的作用域
+        A a2(2);
+        p = new A(3);
+    } // a2 离开作用域
+    
+    delete p; // 调用 a3 的析构函数
+}
+|output=
+构造 a0
+构造 a1
+构造 a2
+构造 a3
+析构 a2
+析构 a3
+析构 a1
+析构 a0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=192|std=C++98|before=未指明析构函数内的自动存储期对象会在&lt;br&gt;类的基类和成员子对象之前还是之后被摧毁|after=它们会在那些子对象之前被摧毁}}
+{{dr list item|wg=cwg|dr=344|std=C++98|before=析构函数的声明符语法有缺陷（存在与&lt;br&gt;{{cwg|194}}和{{cwg|263}}相同的问题）|after=改为使用特殊的函数声明符语法}}
+{{dr list item|wg=cwg|dr=1241|std=C++98|before=析构序列也会析构静态成员|after=只析构非静态成员}}
+{{dr list item|wg=cwg|dr=1353|std=C++98|before=不定义隐式声明的析构函数的条件没有考虑多维数组类型|after=考虑这些类型}}
+{{dr list item|wg=cwg|dr=1435|std=C++98|before=析构函数的声明符语法中“类名”的含义不明确|after=改为使用特殊的函数声明符语法}}
+{{dr list item|wg=cwg|dr=2180|std=C++98|before=一个非最终派生类的析构函数会调用它所有的直接虚基类的析构函数|after=它不会调用那些析构函数}}
+&lt;!-- CWG 问题 #2237 没有以缺陷报告的方式解决 --&gt;
+{{dr list item|wg=cwg|dr=2807|std=C++20|before=声明说明符中可以包含 {{c/core|consteval}}|after=已禁止}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+* {{rlpt|new}}
+* {{rlpt|delete}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

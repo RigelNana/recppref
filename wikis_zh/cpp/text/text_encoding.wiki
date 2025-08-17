@@ -1,0 +1,144 @@
+{{cpp/title|text_encoding}}
+{{cpp/text/text_encoding/navbar}}
+{{ddcl|header=text_encoding|since=c++26|
+struct text_encoding;
+}}
+
+类 {{tt|text_encoding}} 提供一种识别字符编码的机制。它用于确定编译时翻译环境的[[cpp/language/charset#代码单元与字面量编码|普通字符字面量编码]]和运行时执行环境的字符编码。
+
+每个 {{tt|text_encoding}} 对象都封装了一种''字符编码方案''，它以 [[#成员类型|{{tt|text_encoding::id}}]] 中的一个枚举项和一个相应的以空终止字节字符串表示的名称所唯一标识。可以通过成员函数 {{lc|mib()}} 和 {{lc|name()}} 来分别访问它们。如何确定一个对象所代表的字符编码方案是否被翻译或执行环境所支持是由实现定义的。
+
+类 {{tt|text_encoding}} 是一种{{named req|TriviallyCopyable}}类型。表示字符编码方案的对应名称的数组对象，[[cpp/language/object#地址|嵌套于]] {{tt|text_encoding}} 对象自身之中。所存储的名称被限制为最大 [[#成员常量|{{c|max_name_length}}]] 个字符，不包括空字符 {{c|'\0'}}。
+
+这个类既支持已注册也支持未注册的字符编码。已注册编码是 [https://www.iana.org/assignments/character-sets/character-sets.xhtml IANA 字符集注册表]中的编码，排除以下字符编码：
+* NATS-DANO (33)
+* NATS-DANO-ADD (34)
+
+此外，此类对已注册字符编码提供对以下各项的访问：
+# ''主名称''：注册表中规定的官方名称。
+# ''别名'': 注册表中的别名的由实现定义的超集。
+# ''MIBenum 值'': 用于识别字符编码代码的唯一标识符。
+
+未注册编码可以以枚举项 {{c|id::other}} 或 {{c|id::unknown}} 和一个自定义名称来代表。
+
+{{tt|text_encoding}} 对象 {{c|e}}，若其 MIBenum 值既不是 {{c|id::other}} 也不是 {{c|id::unknown}}，则它维护以下不变式：
+* {{c|1=*e.name() != '\0'}} 为 {{c|true}}，且
+* {{c|1=e.mib() == std::text_encoding(e.name()).mib()}} 为 {{c|true}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc inc|cpp/text/text_encoding/dsc id}}
+{{dsc inc|cpp/text/text_encoding/dsc aliases_view}}
+{{dsc end}}
+
+===成员常量===
+{{dsc begin}}
+{{dsc hitem|名称|值}}
+{{dsc mem sconst|nolink=true|{{dsc small|{{c/core|constexpr std::size_t}}}} max_name_length|{{c|63}}}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|名称|描述}}
+{{dsc expos mem obj|private=yes|spec={{c/core|std::text_encoding::id}}|mib_|id=mib|MIBenum 值，默认值为 {{c|id::unknown}}}}
+{{dsc expos mem obj|private=yes|spec={{c/core|char[max_name_length + 1]}}|name_|id=name|存储的主名称}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc h2|创建}}
+{{dsc inc|cpp/text/text_encoding/dsc constructor}}
+{{dsc inc|cpp/text/text_encoding/dsc literal}}
+{{dsc inc|cpp/text/text_encoding/dsc environment}}
+{{dsc h2|观察器}}
+{{dsc inc|cpp/text/text_encoding/dsc mib}}
+{{dsc inc|cpp/text/text_encoding/dsc name}}
+{{dsc inc|cpp/text/text_encoding/dsc aliases}}
+{{dsc inc|cpp/text/text_encoding/dsc environment_is}}
+{{dsc h2|辅助项}}
+{{dsc inc|cpp/text/text_encoding/dsc comp-name}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/text/text_encoding/dsc operator_eq}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc|cpp/text/text_encoding/dsc hash}}
+{{dsc end}}
+
+===注解===
+在处理字符编码时，需要重点注意的是，两个不同的已注册字符编码的主名称和别名，在使用 Unicode 技术标准所述的[https://www.unicode.org/reports/tr22/tr22-8.html#Charset_Alias_Matching 字符集别名匹配（Charset Alias Matching）]进行比较时是不等价的。
+
+为便利起见，{{tt|text_encoding::id}} 的各个枚举项被引入作为 {{tt|text_encoding}} 的成员，以便直接访问它们。这表示 {{c|text_encoding::ASCII}} 和 {{c|text_encoding::id::ASCII}} 代表相同的实体。
+
+建议实现最好将已注册编码视为不可互换的。
+此外，最好不要用某个已注册编码的主名称来描述某个相似但不同的未注册编码，除非这样做有明确的先例。
+
+{{feature test macro|__cpp_lib_text_encoding|std=C++26|value=202306L|{{tt|std::text_encoding}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;locale&gt;
+#include &lt;print&gt;
+#include &lt;text_encoding&gt;
+ 
+int main()
+{
+    // 字面量编码是编译时已知的
+    constexpr std::text_encoding literal_encoding = std::text_encoding::literal();
+
+    // 检查字面量编码
+    static_assert(literal_encoding.mib() != std::text_encoding::other &amp;&amp;
+                  literal_encoding.mib() != std::text_encoding::unknown);
+   
+    // 环境编码仅在运行时可知
+    std::text_encoding env_encoding = std::text_encoding::environment();
+
+    // 默认本地环境的关联编码
+    std::text_encoding locale_encoding = std::locale("").encoding();
+
+    std::println("字面量编码为 {}", literal_encoding.name());
+    std::println("字面量编码的别名有：");
+    for (const char* alias_name : literal_encoding.aliases())
+        std::println(" + {}", alias_name);
+
+    if (env_encoding == locale_encoding)
+        std::println("执行环境和本地环境编码相同");
+
+    std::println("执行环境编码为 {}", env_encoding.name());
+    std::println("执行环境编码的别名有：");
+    for (const char* alias_name : env_encoding.aliases())
+        std::println(" + {}", alias_name);
+}
+|p=true
+|output=
+字面量编码为 UTF-8
+字面量编码的别名有：
+ + UTF-8
+ + csUTF8
+执行环境和本地环境编码相同
+执行环境编码为 ANSI_X3.4-1968
+执行环境编码的别名有：
+ + US-ASCII
+ + iso-ir-6
+ + ANSI_X3.4-1968
+ + ANSI_X3.4-1986
+ + ISO_646.irv:1991
+ + ISO646-US
+ + us
+ + IBM367
+ + cp367
+ + csASCII
+ + ASCII
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/locale/dsc locale}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,82 @@
+{{cpp/title|extent}}
+{{cpp/meta/navbar}}
+{{ddcl|header=type_traits|since=c++11|1=
+template&lt; class T, unsigned N = 0 &gt;
+struct extent;
+}}
+
+若 {{tt|T}} 是数组类型，则提供等于数组第 {{tt|N}} 维元素数量的成员常量 {{tt|value}}，若 {{tt|N}} 在 {{range|0|std::rank&lt;T&gt;::value}} 中。对于任何其他类型，或若 {{tt|T}} 是在其首维度未知边界数组且 {{tt|N}} 为 {{c|0}}，则 {{tt|value}} 为 {{c|0}}。
+
+{{cpp/types/nospec|v}}
+
+=== 辅助变量模板 ===
+{{ddcl|since=c++17|1=
+template&lt; class T, unsigned N = 0 &gt;
+constexpr std::size_t extent_v = extent&lt;T, N&gt;::value;
+}}
+
+{{cpp/types/integral_constant/inherit2|{{tt|T}} 的第 {{tt|N}} 维的元素数|std::size_t}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;class T, unsigned N = 0&gt;
+struct extent : std::integral_constant&lt;std::size_t, 0&gt; {};
+
+template&lt;class T&gt;
+struct extent&lt;T[], 0&gt; : std::integral_constant&lt;std::size_t, 0&gt; {};
+
+template&lt;class T, unsigned N&gt;
+struct extent&lt;T[], N&gt; : std::extent&lt;T, N - 1&gt; {};
+
+template&lt;class T, std::size_t I&gt;
+struct extent&lt;T[I], 0&gt; : std::integral_constant&lt;std::size_t, I&gt; {};
+
+template&lt;class T, std::size_t I, unsigned N&gt;
+struct extent&lt;T[I], N&gt; : std::extent&lt;T, N - 1&gt; {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;type_traits&gt;
+ 
+static_assert(
+    std::extent_v&lt;int[3]&gt; == 3 &amp;&amp; // 默认维度为 0
+    std::extent_v&lt;int[3], 0&gt; == 3 &amp;&amp; // 同上
+    std::extent_v&lt;int[3][4], 0&gt; == 3 &amp;&amp;
+    std::extent_v&lt;int[3][4], 1&gt; == 4 &amp;&amp;
+    std::extent_v&lt;int[3][4], 2&gt; == 0 &amp;&amp;
+    std::extent_v&lt;int[]&gt; == 0
+);
+
+int main()
+{
+    const auto ext = std::extent&lt;int['*']&gt;{};
+    static_assert(ext == 42); // 隐式转换到 std::size_t
+
+    const int ints[]{1, 2, 3, 4};
+    static_assert(std::extent_v&lt;decltype(ints)&gt; == 4); // 数组大小
+
+    [[maybe_unused]] int ary[][3] = {&lt;!----&gt;{1, 2, 3}&lt;!----&gt;};
+
+    // ary[0] 的类型是 'int[3]' 的引用，因此无法正确计算尺度值并返回 0
+    static_assert(std::is_same_v&lt;decltype(ary[0]), int(&amp;)[3]&gt;);
+    static_assert(std::extent_v&lt;decltype(ary[0])&gt; == 0);
+
+    // 移除引用可给出正确尺度值 3
+    static_assert(std::extent_v&lt;std::remove_cvref_t&lt;decltype(ary[0])&gt;&gt; == 3);
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_array}}
+{{dsc inc|cpp/types/dsc rank}}
+{{dsc inc|cpp/types/dsc remove_extent}}
+{{dsc inc|cpp/types/dsc remove_all_extents}}
+{{dsc inc|cpp/container/mdspan/dsc extents}}
+
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

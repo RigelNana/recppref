@@ -1,0 +1,112 @@
+{{cpp/title|launder}}
+{{cpp/memory/new/navbar}}
+{{dcl begin}}
+{{dcl header|new}}
+{{dcl|since=c++17|
+template&lt; class T &gt;
+constexpr T* launder( T* p ) noexcept;
+}}
+{{dcl end}}
+
+有关 {{c|p}} 的去虚化屏障。返回指向位于与 {{c|p}} 所表示相同地址的对象的指针，该对象可以为一个新的基类子对象，其最终派生类不同于原先的 {{c|*p}} 对象的最终派生类。
+
+正式而言，给定
+* 表示内存中一个字节的地址 {{tt|A}} 的指针 {{c|p}}
+* 一个位于地址 {{tt|A}} 的对象 {{c|x}} 
+* {{c|x}} 在它的[[cpp/language/lifetime|生存期]]内
+* {{c|x}} 的类型与 {{tt|T}} 相同，忽略每层的 cv 限定符
+* 能通过结果触及的每个字节都能通过 {{c|p}} 触及（如果字节在与 {{c|y}} [[cpp/language/static_cast#指针可以互相转换|指针可以互相转换]]的对象 {{c|z}} 的存储内，或在以 {{c|z}} 为元素的直接外围数组内，那么能通过指向对象 {{c|y}} 的指针触及这些字节）。
+
+那么 {{c|std::launder(p)}} 返回 {{tt|T*}} 类型的值，它指向对象 {{c|x}}。否则行为未定义。
+
+如果 {{tt|T}} 是函数类型或（可有 cv 限定的）{{c/core|void}}，那么程序非良构。
+
+{{tt|std::launder}} 可用于[[cpp/language/constant expression|核心常量表达式]]，当且仅当它的（在转换后的）实参的值在函数调用的位置可使用。换言之，{{tt|std::launder}} 不放松常量求值中的限制。
+
+===注解===
+{{tt|std::launder}} 在它的实参上无效果。必须用它的返回值访问对象。从而，舍弃返回值始终是错误。
+
+{{tt|std::launder}} 的典型用途包括：
+* 获得指向在同类型既存对象的存储中创建的对象的指针，这里不能[[cpp/language/lifetime#存储的重用|重用]]指向旧对象的指针（例如，因为任一对象为基类子对象）；
+* 获得指向对象的指针，该对象由布置 {{tt|new}} 从指向为该对象提供存储的对象的指针创建。
+
+''可触及性''{{sep}}限制确保不能用 {{tt|std::launder}} 访问不可通过原指针访问的字节，从而干涉编译器的逃逸分析。
+
+{{source|1=
+int x[10];
+auto p = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x[0])); // OK
+
+int x2[2][10];
+auto p2 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x2[0][0])); 
+// 未定义行为：可通过产生的指向 x2[0] 的指针触及 x2[1]，但不可从源触及
+   
+struct X { int a[10]; } x3, x4[2]; // 标准布局；假定无填充
+auto p3 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x3.a[0])); // OK
+auto p4 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x4[0].a[0]));
+// 未定义行为：可通过产生的指向 x4[0].a 的指针
+// （它与 x4[0] 指针间可转换）触及 x4[1]，但不可从源触及
+
+struct Y { int a[10]; double y; } x5;
+auto p5 = std::launder(reinterpret_cast&lt;int(*)[10]&gt;(&amp;x5.a[0])); 
+// 未定义行为：可通过产生的指向 x5.a 的指针触及 x5.y，但不可从源触及
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;new&gt;
+
+struct Base
+{
+    virtual int transmogrify();
+};
+
+struct Derived : Base
+{
+    int transmogrify() override
+    {
+        new(this) Base;
+        return 2;
+    }
+};
+
+int Base::transmogrify()
+{
+    new(this) Derived;
+    return 1;
+}
+
+static_assert(sizeof(Derived) == sizeof(Base));
+
+int main()
+{
+    // 情况1：新对象无法为透明可替换，因为它是基类子对象而旧对象是完整对象。
+    Base base;
+    int n = base.transmogrify();
+    // int m = base.transmogrify(); // 未定义行为
+    int m = std::launder(&amp;base)-&gt;transmogrify(); // OK
+    assert(m + n == 3);
+    
+    // 情况2：通过指向字节数组的指针访问存储为该数组所提供的新对象。
+    struct Y { int z; };
+    alignas(Y) std::byte s[sizeof(Y)];
+    Y* q = new(&amp;s) Y{2};
+    const int f = reinterpret_cast&lt;Y*&gt;(&amp;s)-&gt;z; // 类成员访问为未定义行为：
+                                               // reinterpret_cast&lt;Y*&gt;(&amp;s) 拥有值
+                                               // “指向 s 的指针”而不指向 Y 对象
+    const int g = q-&gt;z; // OK
+    const int h = std::launder(reinterpret_cast&lt;Y*&gt;(&amp;s))-&gt;z; // OK
+    
+    [](...){}(f, g, h); // 压制 [[maybe_unused]] 效果
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2859|std=C++17|before=''可触及''{{sep}}的定义未考虑来自指针可互转换的对象的指针算术|after=已考虑}}
+{{dr list item|wg=lwg|dr=3495|std=C++17|before={{tt|std::launder}} 可以在常量表达式中令指向不活跃成员的指针可解引用|after=已禁止}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

@@ -1,0 +1,464 @@
+{{title|包 {{mark since c++11}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+包是一种 C++ 实体，它定义以下各项之一：
+* 形参包
+:* 模板形参包
+:* 函数形参包
+{{rrev|since=c++20|
+* {{rlp|lambda#lambda 捕获|lambda 初始化捕获包}}
+}}
+{{rrev|since=c++26|
+* {{rlp|structured binding|结构化绑定包}}
+}}
+
+模板形参包是接受零个或更多个模板实参（非类型、类型或模板）的模板形参。函数形参包是接受零个或更多个函数实参的函数形参。
+
+{{rrev|since=c++20|lambda 初始化捕获包是一种初始化捕获，它为其初始化器的包展开中每个元素引入一个初始化捕获。}}
+
+{{rrev|since=c++26|结构化绑定包是结构化绑定声明中引入一个或多个结构化绑定的标识符。}}
+
+包中元素的个数等于：
+* 为形参包提供的实参的数量，若包是模板或函数形参包，
+{{rrev|since=c++20|
+* 其初始化器的包展开中的元素数量，若包是 lambda 初始化捕获包，
+}}
+{{rrev|since=c++26|
+* 初始化器的结构化绑定大小减去结构化绑定声明中非包元素的数量，若包是结构化绑定包。
+}}
+{{anchor|变参模板}}
+至少有一个形参包的模板被称作''变参模板''。
+
+===语法===
+模板形参包（在{{rlp|type alias|别名模版}}、{{rlp|class template|类模板}}{{rev inl|since=c++14|、{{rlp|variable template|变量模板}}}}{{rev inl|since=c++20|、{{rlp|constraints|概念}}}}及{{rlp|function template|函数模板}}形参列表中出现）
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|类型}} {{ttb|...}} {{spar optional|包名}}}}
+{{sdsc|num=2|{{ttb|typename}}{{ttb|{{!}}}}{{ttb|class}} {{ttb|...}} {{spar optional|包名}}}}
+{{sdsc|num=3|{{spar|类型约束}} {{ttb|...}} {{spar optional|包名}}|notes={{mark since c++20}}}}
+{{sdsc|num=4|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|class}} {{ttb|...}} {{spar optional|包名}}|notes={{mark until c++17}}}}
+{{sdsc|num=4|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|typename}}{{ttb|{{!}}}}{{ttb|class}} {{ttb|...}} {{spar optional|包名}}|notes={{mark since c++17}}}}
+{{sdsc end}}
+函数形参包（{{rlp|declarations|声明符}}的一种形式，在变参函数模板的函数形参列表中出现）
+{{sdsc begin}}
+{{sdsc|num=5|{{spar|包名}} {{ttb|...}} {{spar optional|包形参名}}}}
+{{sdsc end}}
+{{rrev|since=c++20|
+有关非形参的包，参见 {{rlp|lambda#lambda 捕获|lambda 初始化捕获包}}{{rev inl|since=c++26|和{{rlp|structured binding|结构化绑定包}}}}。
+}}
+
+形参包展开（在变参模板体中出现）
+{{sdsc begin}}
+{{sdsc|num=6|{{spar|模式}} {{ttb|...}}&lt;!----&gt;}}
+{{sdsc end}}
+
+@1@ 可以有名字的非类型模板形参包
+@2@ 可以有名字的类型模板形参包
+
+{{rrev|since=c++20|@3@ 可以有名字的受{{rlp|constraints|约束}}的类型模板形参包}}
+@4@ 可以有名字的模板模板形参包
+@5@ 可以有名字的函数形参包
+@6@ 形参包展开：展开成零个或更多个{{spar sep|模式}}的逗号分隔列表。模式必须包含至少一个形参包。
+
+===解释===
+变参类模板可以用任意数量的模板实参实例化：
+{{source|
+template&lt;class... Types&gt;
+struct Tuple {};
+
+Tuple&lt;&gt; t0;           // Types 不包含实参
+Tuple&lt;int&gt; t1;        // Types 包含一个实参：int
+Tuple&lt;int, float&gt; t2; // Types 包含两个实参：int 与 float
+Tuple&lt;0&gt; error;       // 错误：0 不是类型
+}}
+
+变参函数模板可以用任意数量的函数实参调用（模板实参通过{{rlp|template argument deduction|模板实参推导}}推导）：
+{{source|
+template&lt;class... Types&gt;
+void f(Types... args);
+
+f();       // OK：args 不包含实参
+f(1);      // OK：args 包含一个实参：int
+f(2, 1.0); // OK：args 包含两个实参：int 与 double
+}}
+
+在主类模板中，模板形参包必须是模板形参列表的最后一个形参。在函数模板中，模板参数包可以在列表中更早出现，只要其后的所有形参都可以从函数实参推导或拥有默认实参即可：
+{{source|1=
+template&lt;typename U, typename... Ts&gt;    // OK：能推导出 U
+struct valid;
+// template&lt;typename... Ts, typename U&gt; // 错误：Ts... 不在结尾
+// struct Invalid;
+
+template&lt;typename... Ts, typename U, typename=void&gt;
+void valid(U, Ts...);    // OK：能推导出 U
+// void valid(Ts..., U); // 不能使用：Ts... 在此位置是不推导语境
+
+valid(1.0, 1, 2, 3);     // OK：推导出 U 是 double，Ts 是 {int, int, int}
+}}
+
+如果变参模板的每个合法的特化都要求空模板形参包，那么程序非良构，不要求诊断。
+
+===包展开===
+后随省略号且其中至少有一个形参包的名字的模式会被''展开''{{sep}}成零个或更多个逗号分隔的模式实例，其中形参包的名字按顺序被替换成包中的各个元素。{{ls|#对齐说明符}}实例以空格分隔，其他实例以逗号分隔：
+
+{{source|
+template&lt;class... Us&gt;
+void f(Us... pargs) {}
+
+template&lt;class... Ts&gt;
+void g(Ts... args)
+{
+    f(&amp;args...); // “&amp;args...” 是包展开
+                 // “&amp;args” 是它的模式
+}
+
+g(1, 0.2, "a"); // Ts... args 会展开成 int E1, double E2, const char* E3
+                // &amp;args... 会展开成 &amp;E1, &amp;E2, &amp;E3
+                // Us... 会展开成 int* E1, double* E2, const char** E3
+}}
+
+如果两个形参包在同一模式中出现，那么它们同时展开而且长度必须相同：
+
+{{source|
+template&lt;typename...&gt;
+struct Tuple {};
+
+template&lt;typename T1, typename T2&gt;
+struct Pair {};
+
+template&lt;class... Args1&gt;
+struct zip
+{
+    template&lt;class... Args2&gt;
+    struct with
+    {
+        typedef Tuple&lt;Pair&lt;Args1, Args2&gt;...&gt; type;
+        // Pair&lt;Args1, Args2&gt;... 是包展开
+        // Pair&lt;Args1, Args2&gt; 是模式
+    };
+};
+
+typedef zip&lt;short, int&gt;::with&lt;unsigned short, unsigned&gt;::type T1;
+// Pair&lt;Args1, Args2&gt;... 会展开成
+// Pair&lt;short, unsigned short&gt;, Pair&lt;int, unsigned int&gt; 
+// T1 是 Tuple&lt;Pair&lt;short, unsigned short&gt;, Pair&lt;int, unsigned&gt;&gt;
+
+// typedef zip&lt;short&gt;::with&lt;unsigned short, unsigned&gt;::type T2;
+// 错误：包展开中的形参包包含不同长度
+}}
+
+如果包展开内嵌于另一个包展开中，那么它所展开的是在最内层包展开出现的形参包，并且在外围（而非最内层）的包展开中必须提及其它形参包：
+
+{{source|
+template&lt;class... Args&gt;
+void g(Args... args)
+{
+    f(const_cast&lt;const Args*&gt;(&amp;args)...); 
+    // const_cast&lt;const Args*&gt;(&amp;args) 是模式，它同时展开两个包（Args 与 args）
+
+    f(h(args...) + args...); // 嵌套包展开：
+    // 内层包展开是 “args...”，它首先展开
+    // 外层包展开是 h(E1, E2, E3) + args 它其次被展开
+    // （成为 h(E1, E2, E3) + E1, h(E1, E2, E3) + E2, h(E1, E2, E3) + E3）
+}
+}}
+
+若包中的元素个数为零（空包），则包展开的实例化不会改变其外围构造的语法判读，即使某些情况中完全忽略包展开则非良构或者会造成语法歧义也是如此。其实例化生成一个空列表。
+
+{{source|
+template&lt;class... Bases&gt; 
+struct X : Bases... { };
+
+template&lt;class... Args&gt; 
+void f(Args... args) 
+{
+    X&lt;Args...&gt; x(args...);
+}
+
+template void f&lt;&gt;(); // OK，X&lt;&gt; 没有基类
+                     // x 是值初始化的 X&lt;&gt; 类型的对象
+}}
+
+===展开场所===
+展开所产生的逗号分隔（{{ls|#对齐说明符}}以空格分隔）列表按发生展开的各个场所可以是不同种类的列表：函数形参列表，成员初始化器列表，属性列表，等等。以下列出了所有允许的语境。
+
+====函数实参列表====
+包展开可以在函数调用运算符的括号内出现，此时省略号左侧的最大表达式或{{rlp|initialization|花括号包围的初始化器列表}}是被展开的模式：
+
+{{source|
+f(args...);              // 展开成 f(E1, E2, E3)
+f(&amp;args...);             // 展开成 f(&amp;E1, &amp;E2, &amp;E3)
+f(n, ++args...);         // 展开成 f(n, ++E1, ++E2, ++E3);
+f(++args..., n);         // 展开成 f(++E1, ++E2, ++E3, n);
+
+f(const_cast&lt;const Args*&gt;(&amp;args)...);
+// f(const_cast&lt;const E1*&gt;(&amp;X1), const_cast&lt;const E2*&gt;(&amp;X2), const_cast&lt;const E3*&gt;(&amp;X3))
+
+f(h(args...) + args...); // 展开成
+// f(h(E1, E2, E3) + E1, h(E1, E2, E3) + E2, h(E1, E2, E3) + E3)
+}}
+
+====有括号初始化器====
+包展开可以在{{rlp|direct initialization|直接初始化器}}，{{rlp|explicit cast|函数式转型}}及其他语境（{{rlp|initializer list|成员初始化器}}，{{rlp|new|new 表达式}}等）的括号内出现，这种情况下的规则与适用于上述函数调用表达式的规则相同：
+
+{{source|1=
+Class c1(&amp;args...);             // 调用 Class::Class(&amp;E1, &amp;E2, &amp;E3)
+Class c2 = Class(n, ++args...); // 调用 Class::Class(n, ++E1, ++E2, ++E3);
+
+::new((void *)p) U(std::forward&lt;Args&gt;(args)...) // std::allocator::allocate
+}}
+
+====花括号包围的初始化器====
+在花括号包围的初始化器列表中，也可以出现包展开：
+
+{{source|1=
+template&lt;typename... Ts&gt;
+void func(Ts... args)
+{
+    const int size = sizeof...(args) + 2;
+    int res[size] = {1, args..., 2};
+    
+    // 因为初始化器列表保证顺序，所以这可以用来对包的每个元素按顺序调用函数：
+    int dummy[sizeof...(Ts)] = {(std::cout &lt;&lt; args, 0)...};
+}
+}}
+
+====模板实参列表====
+包展开可以在模板实参列表的任何位置使用，前提是模板拥有与该展开相匹配的形参：
+
+{{source|
+template&lt;class A, class B, class... C&gt;
+void func(A arg1, B arg2, C... arg3)
+{
+    container&lt;A, B, C...&gt; t1; // 展开成 container&lt;A, B, E1, E2, E3&gt; 
+    container&lt;C..., A, B&gt; t2; // 展开成 container&lt;E1, E2, E3, A, B&gt; 
+    container&lt;A, C..., B&gt; t3; // 展开成 container&lt;A, E1, E2, E3, B&gt; 
+}
+}}
+
+====函数形参列表====
+在函数形参列表中，如果省略号在某个形参声明中（无论它是否指名函数形参包（例如在 {{spar|Args}} {{ttb|...}} {{spar|args}} 中）出现，那么该形参声明是模式：
+{{source|
+template&lt;typename... Ts&gt;
+void f(Ts...) {}
+
+f('a', 1); // Ts... 会展开成 void f(char, int)
+f(0.1);    // Ts... 会展开成 void f(double)
+
+template&lt;typename... Ts, int... N&gt;
+void g(Ts (&amp;...arr)[N]) {}
+
+int n[1];
+
+g&lt;const char, int&gt;("a", n); // Ts (&amp;...arr)[N] 会展开成 
+                            // const char (&amp;)[2], int(&amp;)[1]
+}}
+注意：在模式 {{tt|Ts (&amp;...arr)[N]}} 中，省略号是最内层的元素，而不是像所有其他包展开中一样是最后的元素。
+
+注意：不能用 {{tt|Ts (&amp;...)[N]}}，因为 C++11 语法要求带括号的省略号形参拥有名字：{{cwg|1488}}。
+
+====模板形参列表====
+包展开可以在模板形参列表中出现：
+
+{{source|
+template&lt;typename... T&gt;
+struct value_holder
+{
+    template&lt;T... Values&gt; // 会展开成非类型模板形参列表，
+    struct apply {};      // 例如 &lt;int, char, int(&amp;)[5]&gt;
+};
+}}
+
+====基类说明符与成员初始化器列表====
+包展开可以用于指定{{rlp|class|类声明}}中的基类列表。通常这也意味着它的构造函数也需要在{{rlp|initializer list|成员初始化器列表}}中使用包展开，以调用这些基类的构造函数：
+
+{{source|
+template&lt;class... Mixins&gt;
+class X : public Mixins...
+{
+public:
+    X(const Mixins&amp;... mixins) : Mixins(mixins)... {}
+};
+}}
+
+====lambda 捕获====
+包展开可以在 {{rlp|lambda}} 表达式的捕获子句中出现：
+{{source|1=
+template&lt;class... Args&gt;
+void f(Args... args)
+{
+    auto lm = [&amp;, args...] { return g(args...); };
+    lm();
+}
+}}
+
+===={{c/core|sizeof...}} 运算符====
+{{rlpt|sizeof...}} 也被归类为包展开：
+
+{{source|1=
+template&lt;class... Types&gt;
+struct count
+{
+    static const std::size_t value = sizeof...(Types);
+};
+}}
+
+{{rrev|until=c++17|
+====动态异常说明====
+{{rlp|except spec|动态异常说明}}中的异常列表也可以是包展开：
+
+{{source|
+template&lt;class... X&gt;
+void func(int arg) throw(X...)
+{
+    // ... 在不同情形下抛出不同的 X
+}
+}}
+}}
+
+====对齐说明符====
+包展开可以在关键词 {{rlpt|alignas}} 所用的类型列表和表达式列表中使用。实例以空格分隔：
+{{source|
+template&lt;class... T&gt;
+struct Align
+{
+    alignas(T...) unsigned char buffer[128];
+};
+
+Align&lt;int, short&gt; a; // 展开后的对齐说明符是 alignas(int) alignas(short)
+                     // （中间没有逗号）
+}}
+
+====属性列表====
+包展开可以在{{rlp|attributes|属性}}列表中使用，如 {{c|[[attributes...]]}}。例如：
+{{source|
+template&lt;int... args&gt;
+[[vendor::attr(args)...]] void* f();
+}}
+
+{{rrev|since=c++17|
+====折叠表达式====
+在{{rlp|fold|折叠表达式}}中，模式是不包含未展开的形参包的整个子表达式。
+
+====using 声明====
+在 {{rlp|using declaration|using 声明}}中，省略号可以在声明符列表内出现，这对于从一个形参包进行派生时有用：
+{{source|
+template&lt;typename... bases&gt;
+struct X : bases...
+{
+    using bases::g...;
+};
+X&lt;B, D&gt; x; // OK：引入 B::g 与 D::g
+}}
+}}
+
+
+{{rrev|since=c++26|
+====包索引====
+在{{rlp|pack indexing|包索引}}中，包扩展是包紧随省略号和下标。包索引表达式的模式为{{spar sep|标识符}}，而包索引说明符的模式为 {{spar|typedef 名}}。
+
+{{source|1=
+consteval auto first_plus_last(auto... args)
+{
+    return args...[0] + args...[sizeof...(args) - 1];
+}
+
+static_assert(first_plus_last(5) == 10);
+static_assert(first_plus_last(5, 4) == 9);
+static_assert(first_plus_last(5, 6, 2) == 7);
+}}
+
+====友元声明====
+在类{{rlp|friend|友元声明}}中，每个类型说明符都可以后随一个省略号：
+
+{{source|
+struct C {};
+struct E { struct Nested; };
+
+template&lt;class... Ts&gt;
+class R
+{
+    friend Ts...;
+};
+
+template&lt;class... Ts, class... Us&gt;
+class R&lt;R&lt;Ts...&gt;, R&lt;Us...&gt;&gt;
+{
+    friend Ts::Nested..., Us...;
+};
+
+R&lt;C, E&gt; rce;           // 类 C 和 E 都是 R&lt;C, E&gt; 的友元
+R&lt;R&lt;E&gt;, R&lt;C, int&gt;&gt; rr; // E::Nested 和 C 都是 R&lt;R&lt;E&gt;, R&lt;C, int&gt;&gt; 的友元
+}}
+
+====折叠展开约束====
+在{{rlps|constraints#折叠展开约束}}中，模式是该折叠展开约束中的约束。
+
+折叠展开约束不会被实例化。
+}}
+
+===注解===
+{{todo|关于部分特化和其他访问单独元素方式的一些话？提及递归 vs 对数 vs 短路，例如折叠表达式}}
+{{ftm begin|sort=yes}}
+{{ftm|__cpp_variadic_templates|std=C++11|value=200704L|{{ls|#变参模板}}}}
+{{ftm|__cpp_pack_indexing|std=C++26|value=202311L|{{ls|#包索引}}}}
+{{ftm end}}
+
+===示例===
+下面的例子定义了类似 {{lc|std::printf}} 的函数，并以一个值替换格式字符串中字符 {{tt|%}} 的每次出现。
+
+首个重载在仅传递格式字符串且无形参展开时调用。
+
+第二个重载中分别包含针对实参头的一个模板形参和一个形参包，这样就可以在递归调用中只传递形参的尾部，直到它变为空。
+
+{{ttb|Targs}} 是模板形参包而 {{ttb|Fargs}} 是函数形参包。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+void tprintf(const char* format) // 基础函数
+{
+    std::cout &lt;&lt; format;
+}
+
+template&lt;typename T, typename... Targs&gt;
+void tprintf(const char* format, T value, Targs... Fargs) // 递归变参函数
+{
+    for (; *format != '\0'; format++)
+    {
+        if (*format == '%')
+        {
+            std::cout &lt;&lt; value;
+            tprintf(format + 1, Fargs...); // 递归调用
+            return;
+        }
+        std::cout &lt;&lt; *format;
+    }
+}
+
+int main()
+{
+    tprintf("% world% %\n", "Hello", '!', 123);
+}
+|output=
+Hello world! 123
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1533|std=C++11|before=包展开可以在对于成员的成员初始化器中发生|after=已禁止}}
+{{dr list item|wg=cwg|dr=2717|std=C++11|before=对齐说明符实例以逗号分隔|after=以空格分隔}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc|{{rlp|function template|函数模板}}|定义一族函数}}
+{{dsc|{{rlp|class template|类模板}}|定义一族类}}
+{{dsc|{{rlpt|sizeof...}}|查询形参包中的元素数量}}
+{{dsc|[[cpp/utility/variadic|C 风格的变参函数]]|接受可变数量的实参}}
+{{dsc|[[cpp/preprocessor/replace|预处理器宏]]|也可以是变参的}}
+{{dsc|{{rlp|fold|折叠表达式}}|在二元运算符上归约形参包}}
+{{dsc|{{rlp|pack indexing|包索引}}|通过指定的索引访问形参包元素。}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|ja|ru}}

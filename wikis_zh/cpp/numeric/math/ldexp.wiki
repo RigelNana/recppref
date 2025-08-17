@@ -1,0 +1,126 @@
+{{cpp/title|ldexp|ldexpf|ldexpl}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|dcl1=
+float       ldexp ( float num, int exp );
+double      ldexp ( double num, int exp );
+long double ldexp ( long double num, int exp );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            ldexp ( /* floating-point-type */ num, int exp );
+}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+float       ldexpf( float num, int exp );
+}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+long double ldexpl( long double num, int exp );
+}}
+{{dcl h|[[#注解|额外重载]] {{mark since c++11}}}}
+{{dcl header|cmath}}
+{{dcl|num=A|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class Integer &gt;
+double      ldexp ( Integer num, int exp );
+}}
+{{dcl end}}
+
+@1-3@ 将浮点数 {{c|num}} 乘以 2 的 {{c|exp}} 次幂。{{rev inl|since=c++23|标准库提供所有以无 cv 限定的浮点数类型作为实参 {{c|num}} 的类型的 {{tt|std::ldexp}} 重载。}}
+
+{{rrev|since=c++11|
+@A@ 为所有整数类型提供额外重载，将它们当做 {{c/core|double}}。
+}}
+
+===参数===
+{{par begin}}
+{{par|num|浮点数或整数}}
+{{par|exp|整数}}
+{{par end}}
+
+===返回值===
+如果没有发生错误，那么返回 {{c|num}} 乘 2 的 {{c|exp}} 次幂（{{math|num&amp;times;2{{su|p=exp}}}}）。
+
+如果发生上溢导致的值域错误，那么返回 {{tt|±HUGE_VAL}}、{{tt|±HUGE_VALF}} 或 {{tt|±HUGE_VALL}}。
+
+如果发生下溢导致的值域错误，那么返回（舍入后的）正确结果。
+
+===错误处理===
+报告 {{lc|math_errhandling}} 中指定的错误。
+
+如果实现支持 IEEE 浮点数算术（IEC 60559），那么
+* 决不引发 {{lc|FE_INEXACT}}，除非出现值域错误（结果准确）
+* 忽略[[cpp/numeric/fenv/FE_round|当前舍入模式]]，除非出现值域错误
+* 如果 {{c|num}} 是 ±0，那么返回不修改的该值
+* 如果 {{c|num}} 是 ±∞，那么返回不修改的该值
+* 如果 {{c|exp}} 是 0，那么返回不修改的 {{c|num}}
+* 如果 {{c|num}} 是 NaN，那么返回 NaN
+
+===注解===
+在二进制系统上（其中 {{lc|FLT_RADIX}} 是 {{c|2}}），{{tt|std::ldexp}} 等价于 {{lc|std::scalbn}}。
+
+函数 {{tt|std::ldexp}}（“加载指数”）与它的对偶 {{lc|std::frexp}} 能一同用于操纵浮点数的表示，而无需直接进行位操作。
+
+多数实现上，{{tt|std::ldexp}} 效率低于用通常算术运算符乘或除以二的幂。
+
+{{cpp/numeric/math/additional integer overload note|ldexp}}
+
+对于 2 的浮点数指数次幂，可以使用 {{lc|std::exp2}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cerrno&gt;
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+// #pragma STDC FENV_ACCESS ON
+
+int main()
+{
+    std::cout
+        &lt;&lt; "ldexp(5, 3) = 5 * 8 = " &lt;&lt; std::ldexp(5, 3) &lt;&lt; '\n'
+        &lt;&lt; "ldexp(7, -4) = 7 / 16 = " &lt;&lt; std::ldexp(7, -4) &lt;&lt; '\n'
+        &lt;&lt; "ldexp(1, -1074) = " &lt;&lt; std::ldexp(1, -1074)
+        &lt;&lt; "（最小的正次正规 float64_t）\n"
+        &lt;&lt; "ldexp(nextafter(1,0), 1024) = "
+        &lt;&lt; std::ldexp(std::nextafter(1,0), 1024)
+        &lt;&lt; "（最大的有限 float64_t）\n";
+    
+    // 特殊值
+    std::cout &lt;&lt; "ldexp(-0, 10) = " &lt;&lt; std::ldexp(-0.0, 10) &lt;&lt; '\n'
+              &lt;&lt; "ldexp(-Inf, -1) = " &lt;&lt; std::ldexp(-INFINITY, -1) &lt;&lt; '\n';
+    
+    // 错误处理
+    std::feclearexcept(FE_ALL_EXCEPT);
+    errno = 0;
+    const double inf = std::ldexp(1, 1024);
+    const bool is_range_error = errno == ERANGE;
+    
+    std::cout &lt;&lt; "ldexp(1, 1024) = " &lt;&lt; inf &lt;&lt; '\n';
+    if (is_range_error)
+        std::cout &lt;&lt; "    errno == ERANGE: " &lt;&lt; std::strerror(ERANGE) &lt;&lt; '\n';
+    if (std::fetestexcept(FE_OVERFLOW))
+        std::cout &lt;&lt; "    发生 FE_OVERFLOW\n";
+}
+|p=true
+|output=
+ldexp(5, 3) = 5 * 8 = 40
+ldexp(7, -4) = 7 / 16 = 0.4375
+ldexp(1, -1074) = 4.94066e-324（最小的正次正规 float64_t）
+ldexp(nextafter(1,0), 1024) = 1.79769e+308（最大的有限 float64_t）
+ldexp(-0, 10) = -0
+ldexp(-Inf, -1) = -inf
+ldexp(1, 1024) = inf
+    errno == ERANGE: Numerical result out of range
+    发生 FE_OVERFLOW
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc frexp}}
+{{dsc inc|cpp/numeric/math/dsc scalbn}}
+{{dsc inc|cpp/numeric/math/dsc exp2}}
+{{dsc see c|c/numeric/math/ldexp}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,513 @@
+{{title|无限定的名字查找}}
+{{cpp/language/basics/navbar}}
+
+''无限定''{{sep}}名字是未出现在作用域解析运算符 {{ttb|::}} 右边的名字，对它的名字查找按下文所述检查各个{{rlp|scope|作用域}}，只要找到任何种类的至少一个声明就停止查找，即不再继续检查别的作用域。（注意：在某些语境中所进行的查找会忽略掉一些声明，例如，对用在 {{ttb|::}} 左边的名字的查找会忽略函数、变量和枚举项的声明，而对用作基类说明符的名字的查找会忽略所有的非类型的声明。）
+
+为了进行无限定的名字查找，来自 {{rlp|namespace|using 指令}}所指名的命名空间中的所有声明，都被当成如同处于同时直接或间接包含这条 using 指令和所指名的命名空间的最内层的外围命名空间之中。
+
+对函数调用运算符左边所使用的名字（等价地也包括表达式中的运算符）所进行的无限定的名字查找，在{{rlp|adl|实参依赖查找}}中说明。
+
+===文件作用域===
+对于在全局（顶层命名空间）作用域中，且在任何函数、类或用户声明的命名空间之外所使用的名字，检查全局作用域中这次名字的使用之前的部分：
+{{source|1=
+int n = 1;     // n 的声明
+int x = n + 1; // OK：找到 ::n
+
+int z = y - 1; // 错误：查找失败
+int y = 2;     // y 的声明
+}}
+
+===命名空间作用域===
+对于在用户声明的命名空间中，且在任何函数或类之外所使用的名字，首先会查找该命名空间中名字的这次使用之前的部分，然后查找外围命名空间在声明该命名空间之前的部分，以此类推，直到抵达全局命名空间。
+{{source|1=
+int n = 1; // 声明
+
+namespace N
+{
+    int m = 2;
+    
+    namespace Y
+    {
+        int x = n; // OK，找到 ::n
+        int y = m; // OK，找到 ::N::m
+        int z = k; // 错误：查找失败
+    }
+    
+    int k = 3;
+}
+}}
+
+===在命名空间外进行定义===
+当某个命名空间的成员变量在该命名空间外被定义时，该定义中用到的名字的查找会以与在命名空间之内使用的名字相同的方式进行：
+{{source|1=
+namespace X
+{
+    extern int x; // 声明，不是定义
+    int n = 1;    // 找到第一个
+};
+
+int n = 2;        // 找到第二个
+int X::x = n;     // 找到了 X::n，设 X::x 为 1
+}}
+
+===非成员函数的定义===
+在某个用户声明的或者全局的命名空间的成员函数定义中，对于在该函数的函数体或者作为默认实参的一部分而使用的名字，首先会查找包含这次名字使用的块中这次使用之前的部分，然后查找外围块在该块开头之前的部分，以此类推，直到抵达函数体对应的块。然后查找声明该函数的作用域在该函数定义（不是声明）之前的部分，再然后查找外围作用域中函数定义之前的部分，以此类推。
+{{source|1=
+namespace A
+{
+    namespace N
+    {
+        void f();
+        int i = 3; // 找到第三个（如果第二个没找到）
+    }
+    
+    int i = 4;     // 找到第四个（如果第三个没找到）
+}
+
+int i = 5;         // 找到第五个（如果第四个没找到）
+
+void A::N::f()
+{
+    int i = 2;     // 找到第二个（如果第一个没找到）
+    
+    while (true)
+    {
+        int i = 1; // 找到第一个：查找结束
+        std::cout &lt;&lt; i;
+    }
+}
+
+// int i;          // 找不到这个
+
+namespace A
+{
+    namespace N
+    {
+        // int i;  // 找不到这个
+    }
+}
+}}
+
+===类的定义===
+对于在{{rlp|class|类的定义}}中所使用的名字（包括基类说明符和嵌套类定义），当出现于成员函数体、成员函数的默认实参、成员函数的异常规定、默认成员初始化式（其中该成员可能属于定义在外围类体内的嵌套类）以外的任何位置时，要在下列作用域中查找：
+@a@ 类体之中直到这次使用点之前的部分
+@b@ （各个）基类的整个类体，找不到声明时，递归到基类的基类中
+@c@ 当该类是{{rlp|nested types|嵌套类}}时，它的外围类的类体中该类的定义之前的部分以及外围类的（各个）基类
+@d@ 当该类是{{rlp|class#局部类|局部类}}或局部类的嵌套类时，定义了该类的块作用域中直到该类的定义点之前的部分
+@e@ 当该类是某个命名空间的成员，某个命名空间的成员类的嵌套类，或者某个命名空间的成员函数的局部类时，分别在该命名空间作用域中该类，该类所在的外围类，或者该类所在的外围函数的定义之前的部分进行查找；然后查找外围命名空间的这些部分，以此类推，直到抵达全局命名空间。
+
+对于{{rlp|friend|友元}}声明，确定它所指代的先前声明的实体的查找按上述方式继续，除了在最内层的外围命名空间后停止。
+{{source|1=
+namespace M
+{
+    // const int i = 1;                // 找不到这个
+    
+    class B
+    {
+        // static const int i = 3;     // 找到了第三个（但无法通过访问检查）
+    };
+}
+
+// const int i = 5;                    // 找到了第五个
+
+namespace N
+{
+    // const int i = 4;                // 找到了第四个
+    
+    class Y : public M::B
+    {
+        // static const int i = 2;     // 找到了第二个(c)
+        
+        class X
+        {
+            // static const int i = 1; // 找到了第一个
+            int a[i]; // i 的使用
+            // static const int i = 1; // 找不到这个
+        };
+        
+        // static const int i = 2;     // 找不到这个
+    };
+    
+    // const int i = 4;                // 找不到这个
+}
+
+// const int i = 5;                    // 找不到这个
+}}
+
+===注入类名===
+对于在类或类模板或其派生类或类模板中所使用的这个类或类模板的名字，无限定名字查找将会找到当前进行定义的类，如同它的名字是由成员声明（以公开成员访问）的方式所引入的一样。更多细节见{{rlp|injected-class-name|注入类名}}。
+
+===成员函数的定义===
+对于在成员函数体、成员函数的默认实参、成员函数的异常说明或默认成员初始化器中所使用的名字，进行查找的各个作用域和{{lsd|#类的定义}}中的相同，但要考虑这个类的整个作用域，而不只是使用了这个名字的声明之前的部分。对于嵌套类来说，它的外围类的整个类体都要进行查找。
+{{source|1=
+class B
+{
+    // int i;         // 找到第三个
+};
+
+namespace M
+{
+    // int i;         // 找到第五个
+    
+    namespace N
+    {
+        // int i;     // 找到第四个
+        
+        class X : public B
+        {
+            // int i; // 找到第二个
+            void f();
+            // int i; // 也找到第二个
+        };
+        
+        // int i;     // 找到第四个
+    }
+}
+
+// int i;             // 找到第六个
+
+void M::N::X::f()
+{
+    // int i;         // 找到第一个
+    i = 16;
+    // int i;         // 找不到这个
+}
+
+namespace M
+{
+    namespace N
+    {
+        // int i;     // 找不到这个
+    }
+}
+}}
+
+: 无论哪种方式，当检查派生类的基类时，需要遵守下列规则，它们有时被称为[[enwiki:Dominance_(C++)|虚继承中的优先性]]：
+{{rev begin}}
+{{rev|until=c++11|当子对象 {{tt|A}} 是子对象 {{tt|B}} 的基类子对象时，子对象 {{tt|B}} 中找到的成员的名字将隐藏掉子对象 {{tt|A}} 中相同的成员名。（但要注意这并不会隐藏继承晶格中 {{tt|B}} 的基类以外的任何其他的 {{tt|A}} 的非虚副本。这条规则只有在虚继承时有效。）由 using 声明所引入的名字会被当成是包含这个声明的类中的名字来处理。检查各个基类之后，它的结果集合必须包含来自同一个类型的子对象的静态成员的声明或者来自同一个子对象的非静态成员的声明。}}
+{{rev|since=c++11|构造一个''查找集合''，它由一些声明和在其中找到了这些声明的子对象所构成。using 声明被替换成它们所代表的成员，类型声明（包括注入类名）被替换成它们所代表的类型。如果类 {{tt|C}} 在它的作用域中使用了这个名字，那么首先检查 {{tt|C}}。如果 {{tt|C}} 中的声明列表为空，那么对它的每个直接基类 {{tt|Bi}} 各自构造查找集合（当 {{tt|Bi}} 自身也有基类时，递归地应用这条规则）。构造完成后，将每个直接基类的查找集合根据以下规则合并为 {{tt|C}} 的查找集合：
+:* 如果 {{tt|Bi}} 中的声明集合为空，那么它会被丢弃
+:* 如果目前所构建的 {{tt|C}} 的查找集合仍为空，那么它会被替换成 {{tt|Bi}} 的查找集合
+:* 如果 {{tt|Bi}} 的查找集合中的每个子对象都是已经加入到 {{tt|C}} 的查找集合中至少一个子对象的基类子对象，那么丢弃 {{tt|Bi}} 的查找集合
+:* 如果已经加入到 {{tt|C}} 的查找集合中的每个子对象都是 {{tt|Bi}} 的查找集合中至少一个子对象的基类子对象，那么 {{tt|C}} 的查找集合会被丢弃并被替换成 {{tt|Bi}} 的查找集合
+:* 否则，如果 {{tt|Bi}} 和 {{tt|C}} 中的声明集合不同，那么合并的结果有歧义：{{tt|C}} 的新查找集合包含一个无效声明以及之前合并入 {{tt|C}} 中的各子对象和由 {{tt|Bi}} 所引入的子对象的并集。这个无效的查找集合如果在之后被丢弃了，那么它并不会导致错误。
+:* 否则，{{tt|C}} 的新查找集合具有共同的声明集合和之前合并入 {{tt|C}} 和由 {{tt|Bi}} 所引入的子对象的并集}}
+{{rev end}}
+{{source|
+struct X { void f(); };
+
+struct B1: virtual X { void f(); };
+
+struct B2: virtual X {};
+
+struct D : B1, B2
+{
+    void foo()
+    {
+        X::f(); // OK，调用了 X::f（有限定查找）
+        f();    // OK，调用了 B1::f（无限定查找）
+    }
+};
+
+// C++98 规则：B1::f 隐藏 X::f，因此即使 X::f 可以通过
+// B2 从 D 访问，它也不能被 D 中的名字查找所找到。
+
+// C++11 规则：在 D 中对 f 的查找集合并未找到任何东西，继续处理它的基类
+//  在 B1 中对 f 的查找集合找到了 B1::f 并完成
+// 合并时替换了空集，此时在 D 中 对 f 的查找集合包含 B1 中的 B1::f
+//  在 B2 中对 f 的查找集合并未找到任何东西，继续处理它的基类
+//    在 X 中对 f 的查找找到了 X::f
+//  合并时替换了空集，此时在 B2 中对 f 的查找集合包含 X 中的 X::f
+// 当向 D 中合并时发现在 B2 的查找集合中的每个子对象（X）都是
+// 已经合并的各个子对象（B1）的基类，因此 B2 的集合被丢弃
+// D 剩下来的就是在 B1 中所找到的 B1::f
+// (如果使用 struct D : B2, B1，那么最后的合并将会*替换* D 此时
+//  已经合并的 X 中的 X::f，因为已经加入到 D 中的每个子对象（就是 X）
+//  都是新集合（B1）中的至少一个子对象的基类，
+//  它们的最终结果是一样的：D 的查找集合只包含在 B1 中找到的 B1::f）
+}}
+: 如果无限定的名字查找找到了 {{tt|B}} 的静态成员，{{tt|B}} 的嵌套类型或在 {{tt|B}} 中声明的枚举项，那么即便在所检查的类的继承树中有多个 {{tt|B}} 类型的非虚基类子对象，它也没有歧义：
+{{source|1=
+struct V { int v; };
+
+struct B
+{
+    int a;
+    static int s;
+    enum { e };
+};
+
+struct B1 : B, virtual V {};
+struct B2 : B, virtual V {};
+struct D : B1, B2 {};
+
+void f(D&amp; pd)
+{
+    ++pd.v;       // OK：只有一个 v，因为只有一个虚基类子对象
+    ++pd.s;       // OK：只有一个静态的 B::s，即便在 B1 和 B2 中都找到了它
+    int i = pd.e; // OK：只有一个枚举项 B::e，即便在 B1 和 B2 中都找到了它
+    ++pd.a;       // 错误，有歧义：B1 中的 B1::a 和 B2 中的 B::a
+}
+}}
+
+===友元函数的定义===
+对于在授予友元关系的类体之中的{{rlp|friend|友元}}函数的定义中所使用的名字，无限定的名字查找按照与成员函数相同的方式进行。对于定义于类体之外的{{rlp|friend|友元}}函数中所使用的名字，无限定的名字查找按照与命名空间中的函数相同的方式进行。
+{{source|1=
+int i = 3;                     // f1 找到的第三个，f2 找到的第二个
+
+struct X
+{
+    static const int i = 2;    // f1 找到的第二个，f2 找不到这个
+    
+    friend void f1(int x)
+    {
+        // int i;              // 找到第一个
+        i = x;                 // 找到并修改 X::i
+    }
+    
+    friend int f2();
+    
+    // static const int i = 2; // f1 在类作用域中的任何地方找到第二个
+};
+
+void f2(int x)
+{
+    // int i;                  // 找到第一个
+    i = x;                     // 找到并修改 ::i
+}
+}}
+
+===友元函数的声明===
+对于在使来自其他类的成员函数为友元的{{rlp|friend|友元}}函数声明的声明符中所使用的名字，如果该名字不是{{rlp|declarations#声明符|声明符}}中的标识符中的任何模板实参的一部分，那么无限定的查找首先检查成员函数所在类的整个作用域。如果在这个作用域中没有找到（或者如果这个名字是声明符中的标识符中的模板实参的一部分），那么继续以如同对授予友元关系的类的成员函数进行查找的方式继续查找。
+{{source|1=
+template&lt;class T&gt;
+struct S;
+ 
+// 这个类的成员函数被作为友元
+struct A
+{
+    typedef int AT;
+ 
+    void f1(AT);
+    void f2(float);
+ 
+    template&lt;class T&gt;
+    void f3();
+ 
+    void f4(S&lt;AT&gt;);
+};
+
+// 这个类为 f1，f2 和 f3 授予友元关系
+struct B
+{
+    typedef char AT;
+    typedef float BT;
+    
+    friend void A::f1(AT);    // 对 AT 的查找找到的是 A::AT（在 A 中找到 AT）
+    friend void A::f2(BT);    // 对 BT 的查找找到的是 B::BT（在 A 中找不到 BT）
+    friend void A::f3&lt;AT&gt;();  // 对 AT 的查找找到的是 B::AT （不在 A 中进行查找，
+                              //     因为 AT 在声明符中的标识符 A::f3&lt;AT&gt; 中）
+};
+ 
+// 这个类模板为 f4 授予友元关系
+template&lt;class AT&gt;
+struct C
+{
+    friend void A::f4(S&lt;AT&gt;); // 对 AT 的查找找到的是 A::AT 
+                              // （AT 不在声明符中的标识符 A::f4 中）
+};
+}}
+
+===默认实参===
+对于在函数声明的{{rlp|default arguments|默认实参}}中所使用的名字，或者在构造函数的{{rlp|initializer list|成员初始化器}}的 {{spar|表达式}} 部分所使用的名字，在检查它外围的块、类或命名空间作用域之前，首先会检查函数形参的名字：
+{{source|1=
+class X
+{
+    int a, b, i, j;
+public:
+    const int&amp; r;
+    
+    X(int i): r(a),      // 将 X::r 初始化为指代 X::a
+              b(i),      // 将 X::b 初始化为形参 i 的值
+              i(i),      // 将 X::i 初始化为形参 i 的值
+              j(this-&gt;i) // 将 X::j 初始化为 X::i 的值
+    {}
+}
+
+int a;
+int f(int a, int b = a); // 错误：对 a 的查找找到了形参 a，而不是 ::a
+                         // 但在默认实参中不允许使用形参
+}}
+
+===静态数据成员的定义===
+对于在{{rlp|static|静态数据成员}}的定义中所使用的名字，它的查找按照与对成员函数的定义中所使用的名字相同的方式进行。
+{{source|1=
+struct X
+{
+    static int x;
+    static const int n = 1; // 找到第一个
+};
+
+int n = 2;                  // 找到第二个
+int X::x = n;               // 找到了 X::n，将 X::x 设为 1 而不是 2
+}}
+
+===枚举项的声明===
+对于在{{rlp|enum|枚举项的声明}}的初始化器部分中所使用的名字，在无限定的名字查找处理它外围的块、类或命名空间作用域之前，会首先检查同一个枚举中之前所声明的枚举项。
+{{source|1=
+const int RED = 7;
+
+enum class color
+{
+    RED,
+    GREEN = RED + 2, // RED 找到了 color::RED，而不是 ::RED，所以 GREEN = 2
+    BLUE = ::RED + 4 // 有限定查找找到 ::RED，BLUE = 11
+};
+}}
+
+{{anchor|函数 try 块的处理块}}
+===函数 {{c/core|try}} 块的处理块===
+对于在{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}的{{rlp|catch|处理块}}中所使用的名字，它的查找按照如同对在函数体的最外层块的最开始处使用的名字一样进行（特别是，函数形参是可见的，但这个最外层块中声明的名字则不可见）。
+{{source|1=
+int n = 3;          // 找到第三个
+int f(int n = 2)    // 找到第二个
+
+try
+{
+    int n = -1;     // 找不到这个
+}
+catch(...)
+{
+    // int n = 1;   // 找到第一个
+    assert(n == 2); // 对 n 的查找找到了函数形参 f
+    throw;
+}
+}}
+
+===重载的运算符===
+对于在表达式中所使用的{{rlps|expressions#运算符}}（比如在 {{c|a + b}} 中使用的 {{c/core|operator+}}），它的查找规则和对在如 {{c|operator+(a, b)}} 这样的显式函数调用表达式中所使用的运算符是有所不同的：当处理表达式时要分别进行两次查找：对非成员的运算符重载，也对成员运算符重载（对于同时允许两种形式的运算符）。然后按{{rlp|overload resolution|重载解析}}所述将这两个集合与内建的运算符重载以平等的方式合并到一起。而当使用显式函数调用语法时，会进行常规的无限定名字查找：
+{{source|1=
+struct A {};
+void operator+(A, A);  // 用户定义的非成员 operator+
+
+struct B
+{
+    void operator+(B); // 用户定义的成员 operator+
+    void f();
+};
+
+A a;
+
+void B::f() // B 的成员函数定义
+{
+    operator+(a, a); // 错误：在成员函数中的常规名字查找
+                     // 找到了 B 的作用域中的 operator+ 的声明
+                     // 并于此停下，而不会达到全局作用域
+    
+    a + a; // OK：成员查找找到了 B::operator+，非成员查找
+           // 找到了 ::operator+(A, A)，重载决议选中了 ::operator+(A, A)
+}
+}}
+
+===模板的定义===
+对于在模板的定义中所使用的{{rlp|dependent name|非待决名}}，当检查该模板的定义时将进行无限定的名字查找。在这个位置与声明之间的绑定并不会受到在实例化点可见的声明的影响。而对于在模板定义中所使用的{{rlp|dependent name|待决名}}，它的查找会推迟到得知它的模板实参之时。此时，{{rlp|adl|ADL}} 将同时在模板的定义语境和在模板的实例化语境中检查可见的{{rev inl|until=c++11|具有外部连接的}}函数声明，而非 ADL 的查找只会检查在模板的定义语境中可见的{{rev inl|until=c++11|具有外部连接的}}函数声明。（换句话说，在模板定义之后添加新的函数声明，除非通过 ADL 否则仍是不可见的。）如果在 ADL 查找所检查的命名空间中，在某个别的翻译单元中声明了一个具有外部连接的更好的匹配声明，或者如果当同样检查这些翻译单元时其查找会导致歧义，那么行为未定义。无论哪种情况，如果某个基类取决于某个模板形参，那么无限定名字查找不会检查它的作用域（在定义点和实例化点都不会）。
+{{source|1=
+void f(char); // f 的第一个声明
+
+template&lt;class T&gt; 
+void g(T t)
+{
+    f(1);    // 非待决名：名字查找找到了 ::f(char) 并在此时绑定
+    f(T(1)); // 待决名：查找推迟
+    f(t);    // 待决名：查找推迟
+//  dd++;    // 非待决名：名字查找未找到声明
+}
+
+enum E { e };
+void f(E);   // f 的第二个声明
+void f(int); // f 的第三个声明
+double dd;
+
+void h()
+{
+    g(e);  // 实例化 g&lt;E&gt;，此处
+           // 对 'f' 的第二次和第三次使用
+           // 进行查找并找到了 ::f(char)（常规查找）和 ::f(E)（ADL）
+           // 然后重载解析选择了 ::f(E)。
+           // 这调用了 f(char)，然后两次调用 f(E)
+    
+    g(32); // 实例化 g&lt;int&gt;，此处
+           // 对 'f' 的第二次和第三次使用
+           // 进行了查找仅找到了 ::f(char)
+           // 然后重载解析选择了 ::f(char)
+           // 这三次调用了 f(char)
+}
+
+typedef double A;
+
+template&lt;class T&gt;
+class B
+{
+    typedef int A;
+};
+
+template&lt;class T&gt;
+struct X : B&lt;T&gt;
+{
+    A a; // 对 A 的查找找到了 ::A (double)，而不是 B&lt;T&gt;::A
+};
+}}
+注：关于这条规则的相关缘由和其影响，请参见{{rlp|dependent name#查找规则|待决名的查找规则}}。
+
+===模板名===
+{{todo|模板名后的 -&gt; 和 . 的双作用域查找&lt;!-- 这有意义的示例见 http://stackoverflow.com/a/10426708/273767 --&gt;}}
+
+===模板外的类模板成员===
+{{todo}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=490|std=C++98|before=在友元成员函数声明中，所有模板实参内的名字&lt;br&gt;都不会在该成员函数所在的类作用域中进行查找|after=只对这些声明中的声明符中的&lt;br&gt;标识符中的这些名字应用此规则}}
+{{dr list item|wg=cwg|dr=514|std=C++98|before=在命名空间作用域使用的无限定名&lt;br&gt;都会先在对应命名空间进行查找|after=当某个命名空间的成员变量在该命名空间外被定义时，&lt;br&gt;该定义中用到的无限定名会先在该命名空间查找}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=6.5|title=Name lookup|id=basic.lookup|p=44-45}}
+{{ref std|section=6.5.2|title=Member name lookup|id=class.member.lookup|p=45-47}}
+{{ref std|section=13.8|title=Name resolution|id=temp.res|p=399-403}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.5|title=Name lookup|id=basic.lookup|p=38-50}}
+{{ref std|section=11.8|title=Member name lookup|id=class.member.lookup|p=283-285}}
+{{ref std|section=13.8|title=Name resolution|id=temp.res|p=385-400}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.4|title=Name lookup|id=basic.lookup|p=50-63}}
+{{ref std|section=13.2|title=Member name lookup|id=class.member.lookup|p=259-262}}
+{{ref std|section=17.6|title=Name resolution|id=temp.res|p=375-378}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.4|title=Name lookup|id=basic.lookup|p=42-56}}
+{{ref std|section=10.2|title=Member name lookup|id=class.member.lookup|p=233-236}}
+{{ref std|section=14.6|title=Name resolution|id=temp.res|p=346-359}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.4|title=Name lookup|id=basic.lookup}}
+{{ref std|section=10.2|title=Member name lookup|id=class.member.lookup}}
+{{ref std|section=14.6|title=Name resolution|id=temp.res}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.4|title=Name lookup|id=basic.lookup}}
+{{ref std|section=10.2|title=Member name lookup|id=class.member.lookup}}
+{{ref std|section=14.6|title=Name resolution|id=temp.res}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|qualified lookup|有限定名字查找}} 
+* {{rlp|scope|作用域}} 
+* {{rlp|adl|实参依赖查找}} 
+* {{rlp|function template|模板实参推导}}
+* {{rlp|overload resolution|重载决议}}
+
+{{langlinks|en|es|ja|ru}}

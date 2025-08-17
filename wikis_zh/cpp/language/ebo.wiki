@@ -1,0 +1,143 @@
+{{title|空基类优化}}
+{{cpp/language/classes/navbar}}
+允许空的基类子对象大小为零。
+
+===解释===
+为保证同一类型的不同对象地址始终有别，要求任何{{rlp|object|对象}}或成员子对象的大小至少为 1，即使该类型是空的{{rlp|class|类类型}}（即没有非静态数据成员的类或结构体）{{rev inl|since=c++20|（，除非它带有 {{attr|no_unique_address}}，见下文）}}。
+
+然而，基类子对象不受这种制约，而且可以完全从对象布局中被优化掉：
+
+{{example|code=
+struct Base {}; // 空类
+
+struct Derived1 : Base
+{
+    int i;
+};
+
+int main()
+{
+    // 任何空类类型的对象大小至少为 1
+    static_assert(sizeof(Base) &gt;= 1);
+    
+    // 应用空基类优化
+    static_assert(sizeof(Derived1) == sizeof(int));
+}
+}}
+
+如果首个非静态数据成员的类型与一个空基类的类型相同或者由该空基类派生，那么禁用空基类优化，因为要求两个同类型基类子对象在最终派生类型的对象表示中必须拥有不同地址。
+
+这种情况的典例是 {{lc|std::reverse_iterator}} 的朴素实现（派生自空基类 {{lc|std::iterator}}），它持有其底层迭代器（同样派生自 {{lc|std::iterator}}）为其首个非静态数据成员。 
+
+{{example|code=
+struct Base {}; // 空类
+
+struct Derived1 : Base
+{
+    int i;
+};
+
+struct Derived2 : Base
+{
+    Base c; // Base，占用 1 个字节，后随对 i 的填充
+    int i;
+};
+
+struct Derived3 : Base
+{
+    Derived1 c; // 从 Base 派生，占用 sizeof(int) 个字节
+    int i;
+};
+
+int main()
+{
+    // 不应用空基类优化，
+    // 基类占用 1 个字节，Base 成员占用 1 个字节
+    // 后随 2 个填充字节以满足 int 的对齐要求
+    static_assert(sizeof(Derived2) == 2*sizeof(int));
+    
+    // 不应用空基类优化，
+    // 基类占用至少 1 个字节加填充，
+    // 以满足首个成员的对齐要求（其对齐要求与 int 相同）
+    static_assert(sizeof(Derived3) == 3*sizeof(int));
+}
+}}
+
+如果发生多重继承，那么具体的优化措施是特定于编译器的。
+* 在 MSVC 中，有且仅有最后一个空基类应用空基类优化，其余空基类均不应用空基类优化，并分配一个字节。
+* 在 GCC 中，无论存在多少个空基类，空基类均应用空基类优化，不分配任何空间，空基类地址与派生类对象首地址相同。
+
+{{rev begin}}
+{{rev|since=c++11|
+{{named req|StandardLayoutType|标准布局类型}}''必须''应用空基类优化以维持指向标准布局对象的指针在用 {{rlp|reinterpret_cast}} 转换后还指向其首成员，这是标准要求标准布局类型“在同一个类中声明所有非静态数据成员（全在派生类或全在某个基类）”，并且“不能有与首个非静态数据成员类型相同的基类”的原因。
+}}
+{{rev end}}
+
+{{rev begin}}
+{{rev|since=c++20|
+如果空成员子对象使用属性 {{attr|no_unique_address}}，那么允许像空基类一样优化掉它们。取这种成员的地址会产生可能等于同一个对象的某个其他成员的地址。
+{{example|code=
+struct Empty {}; // 空类
+
+struct X
+{
+    int i;
+    [[no_unique_address]] Empty e;
+};
+
+int main()
+{
+    // 任何空类类型对象的大小至少为 1
+    static_assert(sizeof(Empty) &gt;= 1);
+    
+    // 空成员被优化掉
+    static_assert(sizeof(X) == sizeof(int));
+}
+}}
+}}
+{{rev end}}
+
+===注解===
+空基类优化常用于具分配器的标准库类（{{lc|std::vector}}、{{lc|std::function}}、{{lc|std::shared_ptr}} 等），使得当分配器无状态时可避免为其分配器成员占用任何额外存储。这是通过将必要的数据成员之一（例如 vector 的 begin、end 或 capacity 指针）与分配器一起，在 [https://www.boost.org/doc/libs/release/libs/utility/doc/html/utility/utilities/compressed_pair.html boost::compressed_pair] 的某种等价物中存储而实现的。
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.6.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=7.6.2.5|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=11|title=Classes|id=class}}
+{{ref std|section=11.4|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=7.6.2.4|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=11|title=Classes|id=class}}
+{{ref std|section=11.4|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=8.3.3|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=12|title=Classes|id=class}}
+{{ref std|section=12.2|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.10|title=Equality operators|id=expr.eq}}
+{{ref std|section=5.3.3|title=Sizeof|id=expr.sizeof}}
+{{ref std|section=9|title=Classes|id=class}}
+{{ref std|section=9.2|title=Class members|id=class.mem}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.10|title=Equality operators|id=expr.eq|p=2}}
+{{ref std|section=5.3.3|title=Sizeof|id=expr.sizeof|p=2}}
+{{ref std|section=9|title=Classes|id=class|p=4,7}}
+{{ref std|section=9.2|title=Class members|id=class.mem|p=20}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.10|title=Equality operators|id=expr.eq|p=2}}
+{{ref std|section=5.3.3|title=Sizeof|id=expr.sizeof|p=2}}
+{{ref std|section=9|title=Classes|id=class|p=3}}
+{{ref std end}}
+
+===外部链接===
+{{eli|[https://en.wikibooks.org/wiki/More_C%2B%2B_Idioms/Empty_Base_Optimization More C++ Idioms/Empty Base Optimization] &amp;mdash; A wikibook}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

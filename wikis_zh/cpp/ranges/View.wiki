@@ -1,0 +1,76 @@
+{{cpp/ranges/title|view|enable_view|view_base}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt;class T&gt;
+concept view = ranges::range&lt;T&gt; &amp;&amp; std::movable&lt;T&gt; &amp;&amp; ranges::enable_view&lt;T&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt;class T&gt;
+constexpr bool enable_view =
+    std::derived_from&lt;T, view_base&gt; {{!!}} /*is-derived-from-view-interface*/&lt;T&gt;;
+}}
+{{dcl|num=3|since=c++20|
+struct view_base { };
+}}
+{{dcl end}}
+
+@1@ {{tt|view}} 概念指定拥有适合用于构造范围适配器管道的语义属性的 {{lconcept|range}} 类型（例如一对迭代器或按需创建其元素的生成器 {{lconcept|range}}。
+
+@2@ {{tt|enable_view}} 变量模板用于指示 {{lconcept|range}} 是否为 {{tt|view}}。当且仅当 {{tt|T}} 准确拥有一个对于某类型 {{tt|U}} 的公开基类 {{c|ranges::view_interface&lt;U&gt;}}，且 {{tt|T}} 无任何对于其他类型 {{tt|V}} 的基类 {{c|ranges::view_interface&lt;V&gt;}} 时，{{c|/*is-derived-from-view-interface*/&lt;T&gt;}} 为 {{c/core|true}}。
+&lt;br&gt;用户可以针对要实现 {{tt|view}} 的无 cv 限定的程序定义类型，将 {{tt|enable_view}} 特化为 {{c|true}}，而对不实现的类型特化为 {{c|false}}。这些特化应当[[cpp/language/constant expression#可用于常量表达式|可用于常量表达式]]并拥有 {{c/core|const bool}} 类型。
+
+@3@ 从 {{tt|view_base}} 派生会允许 {{lconcept|range}} 类型实现 {{tt|view}}。
+
+===语义要求===
+@1@ {{tt|T}} 实现 {{tt|view}}，仅若：
+* {{tt|T}} 的移动构造拥有常数时间复杂度，且
+* 若从保有 {{mathjax-or|\(\scriptsize M\)|M}} 个元素的 {{tt|T}} 对象作出 {{mathjax-or|\(\scriptsize N\)|N}} 次复制与/或移动，则这 {{mathjax-or|\(\scriptsize N\)|N}} 个对象拥有 {{mathjax-or|\(\scriptsize \mathcal{O}{(N+M)}\)|𝓞(N+M)}} 时间复杂度的析构（这意味着被移动的 {{tt|view}} 对象拥有 {{mathjax-or|\(\scriptsize \mathcal{O}{(1)}\)|𝓞(1)}} 析构），且
+* {{c|std::copy_constructible&lt;T&gt;}} 为 {{c|false}}，或 {{tt|T}} 的复制构造拥有常数时间复杂度，且
+* {{c|std::copyable&lt;T&gt;}} 为 {{c|false}}，或 {{tt|T}} 拥有不多于析构后随复制构造的时间复杂度。
+
+===特化===
+针对以下各标准模板的所有特化，{{tt|enable_view}} 的特化均被定义为 {{c|true}}：
+* {{ltt|cpp/string/basic_string_view|std::basic_string_view}}
+* {{ltt|cpp/container/span|std::span}}
+{{rrev|since=c++26|1=
+* {{ltt|cpp/utility/optional|std::optional}}
+}}
+
+===注解===
+{{tt|view}} 类型的示例为：
+* 包装一对迭代器的 {{lconcept|range}} 类型，例如 {{c|std::ranges::subrange&lt;I&gt;}}。
+* 通过 {{lc|std::shared_ptr}} 持有其元素并与所有副本共享所有权的 {{lconcept|range}} 类型。
+* 按需生成其元素的 {{lconcept|range}} 类型，例如 {{lc|std::ranges::iota_view}}。
+
+诸如 {{c|std::vector&lt;std::string&gt;}} 的可复制容器通常不符合 {{tt|view}} 的语义要求，因为复制容器会复制其所有元素，这无法在常数时间内完成。
+
+视图原先被描述成可廉价复制并且为非占有的范围，不过不要求实现 {{tt|view}} 的类型为可复制或非占有。然而，它必须仍然有廉价的复制（凡在可能时）、移动、赋值及析构，以令{{ls|cpp/ranges#范围适配器}}不会拥有不期待的复杂度。
+
+实现 {{lconcept|movable}} 和 {{lconcept|range}} 的类型默认被认为是视图，若它公开且无歧义地派生自 {{tt|view_base}} 或恰好一个 {{lc|ranges::view_interface}} 的特化。
+
+===示例===
+最小化的视图。
+
+{{source|1=
+#include &lt;ranges&gt;
+
+struct ArchetypalView : std::ranges::view_interface&lt;ArchetypalView&gt;
+{
+    int* begin();
+    int* end();
+};
+
+static_assert(std::ranges::view&lt;ArchetypalView&gt;);
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2325R3|std=C++20|before={{tt|view}} 要求 {{lconcept|default_initializable}}|after=不要求}}
+{{dr list item|wg=lwg|dr=3549|std=C++20|before={{tt|enable_view}} 不检测来自 {{tt|view_interface}} 的继承|after=检测}}
+{{dr list item|paper=P2415R2|std=C++20|before=析构的时间复杂度上的限制过于严格|after=已放松}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

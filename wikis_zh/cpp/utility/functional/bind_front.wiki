@@ -1,0 +1,265 @@
+{{cpp/title|bind_front|bind_back}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|functional}}
+{{dcl h|{{tt|std::bind_front}}}}
+{{dcla|num=1|since=c++20|
+template&lt; class F, class... Args &gt;
+constexpr /* 未指明 */ bind_front( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcla|num=2|since=c++26|
+template&lt; auto ConstFn, class... Args &gt;
+constexpr /* 未指明 */ bind_front( Args&amp;&amp;... args );
+}}
+{{dcl h|{{tt|std::bind_back}}}}
+{{dcla|num=3|since=c++23|
+template&lt; class F, class... Args &gt;
+constexpr /* 未指明 */ bind_back( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcla|num=4|since=c++26|
+template&lt; auto ConstFn, class... Args &gt;
+constexpr /* 未指明 */ bind_back( Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+函数模板 {{tt|std::bind_front}} 和 {{tt|std::bind_back}} 生成一个完美转发调用包装器，允许将 {{v|1,2}} 前 {{v|3,4}} 后 {{c|sizeof...(Args)}} 个形参绑定到 {{c|args}} 来调用可调用目标。
+
+@1,3@ 调用包装器保存了一个目标可调用对象 {{c|f}} 的副本。
+@2,4@ 调用包装器不持有可调用目标（它是静态确定的）。
+
+@1@ {{c|std::bind_front(f, bound_args...)(call_args...)}} [[cpp/language/expressions#表达式等价|表达式等价]]于
+@@ {{c|std::invoke(f, bound_args..., call_args...)}}。
+
+@2@ {{c|std::bind_front&lt;ConstFn&gt;(bound_args...)(call_args...)}} [[cpp/language/expressions#表达式等价|表达式等价]]于
+@@ {{c|std::invoke(ConstFn, bound_args..., call_args...)}}。
+
+@3@ {{c|std::bind_back(f, bound_args...)(call_args...)}} [[cpp/language/expressions#表达式等价|表达式等价]]于
+@@ {{c|std::invoke(f, call_args..., bound_args...)}}。
+
+@4@ {{c|std::bind_back&lt;ConstFn&gt;(bound_args...)(call_args...)}} [[cpp/language/expressions#表达式等价|表达式等价]]于
+@@ {{c|std::invoke(ConstFn, call_args..., bound_args...)}}。
+
+下列条件都必须为 {{c/core|true}}，否则程序非良构：
+
+* {{v|1,3}} {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}}，
+* {{v|1,3}} {{c|std::is_move_constructible_v&lt;std::decay_t&lt;F&gt;&gt;}}，
+* {{v|2,4}} 如果 {{c|decltype(ConstFn)}} 是指针或者成员指针则 {{tt|ConstFn}} 不是空指针。
+* {{c|(std::is_constructible_v&lt;std::decay_t&lt;Args&gt;, Args&gt; &amp;&amp; ...)}}，
+* {{c|(std::is_move_constructible_v&lt;std::decay_t&lt;Args&gt;&gt; &amp;&amp; ...)}}。
+
+===参数===
+{{par begin}}
+{{par|f|将绑定到某些实参的{{named req|Callable}}对象（函数对象、函数指针、函数引用、成员函数指针或数据成员指针）}}
+{{par|args|要绑定到可调用目标的 {{vl|1,2}} 前或 {{vl|3,4}} 后 {{tt|sizeof...(Args)}} 个形参的实参的列表}}
+{{par hreq}}
+{{par req named|{{c|std::decay_t&lt;F&gt;}}|MoveConstructible}}
+{{par req named|{{c|std::decay_t&lt;Args&gt;...}}|MoveConstructible}}
+{{par req named|{{c|decltype(ConstFn)}}|Callable}}
+{{par end}}
+
+===返回值===
+类型为未指定的 {{tt|T}} 的函数对象（调用包装器），但通过相同实参两次调用 {{tt|std::bind_front}} 或 {{tt|std::bind_back}} 返回的对象的类型相同。
+
+令 {{tti|bind-partial}} 表示 {{tt|std::bind_front}} 或 {{tt|std::bind_back}}。
+
+返回的对象有下列属性：
+{{member|''{{small|bind-partial}} 的返回类型'' | 2=
+
+====成员对象====
+返回的对象表现为如同它持有：
+@1,3@ 从 {{c|std::forward&lt;F&gt;(f)}} 直接非列表初始化的一个 {{c|std::decay_t&lt;F&gt;}} 类型的成员对象 {{tt|fd}}，以及
+@1-4@ 用 {{c|std::tuple&lt;std::decay_t&lt;Args&gt;...&gt;(std::forward&lt;Args&gt;(args)...)}} 构造的 {{lc|std::tuple}} 对象 {{tt|tup}}，但未指定返回对象的赋值行为，且其名称仅用于阐释。
+
+====构造函数====
+{{tti|bind-partial}} 的返回类型表现为其复制/移动构造函数进行逐成员复制/移动。若其所有成员对象（指定如上）都为{{named req|CopyConstructible}})则它为{{named req/core|CopyConstructible}}，否则为{{named req|MoveConstructible}}。
+
+====成员函数 {{tt|operator()}}====
+给定先前调用 {{vl|1,3}} {{tt|''bind-partial''(f,args...)}} 或 {{vl|2,4}} {{tt|''bind-partial''&lt;ConstFn&gt;(args...)}} 获得的对象 {{tt|G}}，在函数调用表达式 {{c|g(call_args...}}} 中调用指定 {{tt|G}} 的泛左值 {{tt|g}} 时，就会发生对存储的对象的调用，如同：
+@1@ {{c|std::invoke(g.fd, std::get&lt;Ns&gt;(g.tup)..., call_args...)}}，如果 {{tti|bind-partial}} 是 {{tt|std::bind_front}}，
+@2@ {{c|std::invoke(ConstFn, std::get&lt;Ns&gt;(g.tup)..., call_args...)}}，如果 {{tti|bind-partial}} 是 {{tt|std::bind_front}}，
+@3@ {{c|std::invoke(g.fd, call_args..., std::get&lt;Ns&gt;(g.tup)...)}}，如果 {{tti|bind-partial}} 是 {{tt|std::bind_back}}，
+@4@ {{c|std::invoke(ConstFn, call_args..., std::get&lt;Ns&gt;(g.tup)...)}}，如果 {{tti|bind-partial}} 是 {{tt|std::bind_back}}，
+
+其中：
+:* {{tt|Ns}} 是整数包 {{tt|0, 1, ..., (sizeof...(Args) - 1)}}，
+:* {{tt|g}} 若在调用表达式中是左值，则在 {{lc|std::invoke}} 表达式中是左值，否则是右值。从而 {{c|std::move(g)(call_args...)}} 能够把绑定的实参移动到调用中，而 {{c|g(call_args...)}} 会复制。
+
+若 {{tt|g}} 拥有 volatile 限定的类型则程序非良构。
+
+若其所调用的 {{lc|std::invoke}} 表达式为 noexcept，则成员 {{c|operator()}} 为 {{ltt|cpp/language/noexcept}}（换言之，它保持底层调用运算符的异常说明）。
+}}
+
+===异常===
+@1,3@ 抛出调用存储函数对象构造函数时抛出的任何异常。
+@1-4@ 抛出调用任何绑定实参的构造函数时抛出的任何异常。
+
+===注解===
+有意令此类函数取代 {{lc|std::bind}}。不同于 {{tt|std::bind}}，它们不支持任意实参重排，而且不特别处理嵌套的绑定表达式或 {{lc|std::reference_wrapper}}。另一方面，它们注重调用包装器对象的值类别，并传播底层调用运算符的异常说明。
+
+如 {{lc|std::invoke}} 中所述，调用指向非静态成员函数的指针或指向非静态数据成员的指针时，首个实参必须是指向要访问其成员的对象的引用或指针（可以包含智能指针，如 {{lc|std::shared_ptr}} 与 {{lc|std::unique_ptr}}）。
+
+传给 {{tt|std::bind_front}} 或 {{tt|std::bind_back}} 的实参被复制或移动，而决不按引用传递，除非用 {{lc|std::ref}} 或 {{lc|std::cref}} 包装它们。
+
+通常情况下，使用 {{vl|1}} {{tt|std::bind_front}} 和 {{vl|3}} {{tt|std::bind_back}} 将实参绑定到函数或成员函数上时，需要将函数指针与实参一起存储，即使语言无需解引用这个指针就已经精确知道要调用哪个函数也是如此。为了保证这种情况下的“零成本”，C++26 引入了 {{vl|2,4}} 版本（它接受可调用对象作为 {{lsd|cpp/language/template parameters#非类型模板形参}}的实参）。
+
+{{ftm begin|std=1|comment=yes}}
+{{ftm|std=C++20|value=201907L|__cpp_lib_bind_front|rowspan="2"|{{tt|std::bind_front}}, {{vl|1}}}}
+{{ftm|std=C++26|value=202306L|-|允许将可调用对象作为非类型模板实参传递给 {{tt|std::bind_front}}, {{vl|2}}}}
+{{ftm|std=C++23|value=202202L|__cpp_lib_bind_back|rowspan="2"|{{tt|std::bind_back}}, {{vl|3}}}}
+{{ftm|std=C++26|value=202306L|-|允许将可调用对象作为非类型模板实参传递给 {{tt|std::bind_back}}, {{vl|4}}}}
+{{ftm end}}
+
+===可能的实现===
+{{eq impl
+|title1=(2) bind_front|ver1=2|1=
+namespace detail
+{
+    template&lt;class T, class U&gt;
+    struct copy_const
+        : std::conditional&lt;std::is_const_v&lt;T&gt;, U const, U&gt; {};
+
+    template&lt;class T, class U,
+             class X = typename copy_const&lt;std::remove_reference_t&lt;T&gt;, U&gt;::type&gt;
+    struct copy_value_category
+        : std::conditional&lt;std::is_lvalue_reference_v&lt;T&amp;&amp;&gt;, X&amp;, X&amp;&amp;&gt; {};
+
+    template &lt;class T, class U&gt;
+    struct type_forward_like
+        : copy_value_category&lt;T, std::remove_reference_t&lt;U&gt;&gt; {};
+
+    template &lt;class T, class U&gt;
+    using type_forward_like_t = typename type_forward_like&lt;T, U&gt;::type;
+}
+
+template&lt;auto ConstFn, class... Args&gt;
+constexpr auto bind_front(Args&amp;&amp;... args)
+{
+    using F = decltype(ConstFn);
+
+    if constexpr (std::is_pointer_v&lt;F&gt; or std::is_member_pointer_v&lt;F&gt;)
+        static_assert(ConstFn != nullptr);
+
+    return
+        [... bound_args(std::forward&lt;Args&gt;(args))]&lt;class Self, class... T&gt;
+        (
+            this Self&amp;&amp;, T&amp;&amp;... call_args
+        )
+        noexcept
+        (
+            std::is_nothrow_invocable_v&lt;F,
+                detail::type_forward_like_t&lt;Self, std::decay_t&lt;Args&gt;&gt;..., T...&gt;
+        )
+        -&gt; std::invoke_result_t&lt;F,
+                detail::type_forward_like_t&lt;Self, std::decay_t&lt;Args&gt;&gt;..., T...&gt;
+        {
+            return std::invoke(ConstFn, std::forward_like&lt;Self&gt;(bound_args)...,
+                               std::forward&lt;T&gt;(call_args)...);
+        };
+}
+|title2=(4) bind_back|ver2=4|2=
+namespace detail { /* 与上面相同 */ }
+
+template&lt;auto ConstFn, class... Args&gt;
+constexpr auto bind_back(Args&amp;&amp;... args)
+{
+    using F = decltype(ConstFn);
+
+    if constexpr (std::is_pointer_v&lt;F&gt; or std::is_member_pointer_v&lt;F&gt;)
+        static_assert(ConstFn != nullptr);
+
+    return
+        [... bound_args(std::forward&lt;Args&gt;(args))]&lt;class Self, class... T&gt;
+        (
+            this Self&amp;&amp;, T&amp;&amp;... call_args
+        )
+        noexcept
+        (
+            std::is_nothrow_invocable_v&lt;F,
+                detail::type_forward_like_t&lt;Self, T..., std::decay_t&lt;Args&gt;&gt;...&gt;
+        )
+        -&gt; std::invoke_result_t&lt;F,
+                detail::type_forward_like_t&lt;Self, T..., std::decay_t&lt;Args&gt;&gt;...&gt;
+        {
+            return std::invoke(ConstFn, std::forward&lt;T&gt;(call_args)...,
+                               std::forward_like&lt;Self&gt;(bound_args)...);
+        };
+}
+
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+
+int minus(int a, int b)
+{
+    return a - b;
+}
+
+struct S
+{
+    int val;
+    int minus(int arg) const noexcept { return val - arg; }
+};
+
+int main()
+{
+    auto fifty_minus = std::bind_front(minus, 50);
+    assert(fifty_minus(3) == 47); // 等价于: minus(50, 3) == 47
+
+    auto member_minus = std::bind_front(&amp;S::minus, S{50});
+    assert(member_minus(3) == 47); //: S tmp{50}; tmp.minus(3) == 47
+
+    // noexcept 说明被保留:
+    static_assert(!noexcept(fifty_minus(3)));
+    static_assert(noexcept(member_minus(3)));
+
+    // 绑定 lambda:
+    auto plus = [](int a, int b) { return a + b; };
+    auto forty_plus = std::bind_front(plus, 40);
+    assert(forty_plus(7) == 47); // 等价于: plus(40, 7) == 47
+
+#if __cpp_lib_bind_front &gt;= 202306L
+    auto fifty_minus_cpp26 = std::bind_front&lt;minus&gt;(50);
+    assert(fifty_minus_cpp26(3) == 47);
+
+    auto member_minus_cpp26 = std::bind_front&lt;&amp;S::minus&gt;(S{50});
+    assert(member_minus_cpp26(3) == 47);
+
+    auto forty_plus_cpp26 = std::bind_front&lt;plus&gt;(40);
+    assert(forty_plus(7) == 47);
+#endif
+
+#if __cpp_lib_bind_back &gt;= 202202L
+    auto madd = [](int a, int b, int c) { return a * b + c; };
+    auto mul_plus_seven = std::bind_back(madd, 7);
+    assert(mul_plus_seven(4, 10) == 47); //: madd(4, 10, 7) == 47
+#endif
+
+#if __cpp_lib_bind_back &gt;= 202306L
+    auto mul_plus_seven_cpp26 = std::bind_back&lt;madd&gt;(7);
+    assert(mul_plus_seven_cpp26(4, 10) == 47);
+#endif
+}
+}}
+
+===引用===
+{{ref std c++26}}
+{{ref std|title=Function templates bind_front and bind_back|id=func.bind.partial|section=TBD}}
+{{ref std end}}
+{{ref std c++23}}
+{{ref std|title=Function templates bind_front and bind_back|id=func.bind.partial|section=22.10.14}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|title=Function template bind_front|id=func.bind.front|section=20.14.14}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc bind}}
+{{dsc inc|cpp/utility/functional/dsc mem_fn}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

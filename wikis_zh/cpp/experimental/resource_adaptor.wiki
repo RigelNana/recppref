@@ -1,0 +1,122 @@
+{{title|{{small|std::experimental::pmr::}}resource_adaptor, {{small|std::pmr::experimental::}}resource_adaptor}}
+{{cpp/experimental/lib extensions/pmr/navbar}}
+{{dcl begin}}
+{{dcl header | experimental/memory_resource}}
+{{dcl | since=libfund_ts | 1=
+template&lt; class Alloc &gt;
+using resource_adaptor = /*resource-adaptor-imp*/&lt;
+                             typename std::allocator_traits&lt;Alloc&gt;::
+                             template rebind_alloc&lt;char&gt;&gt;;
+}}
+{{dcl | since=libfund_ts |
+template&lt; class Alloc &gt;
+class /*resource-adaptor-imp*/ : public memory_resource; // 仅用于阐释
+}}
+{{dcl end}}
+
+别名模版 {{tt|resource_adaptor}} 将分配器类型 {{tt|Allocator}} 与 {{tt|memory_resource}} 接口适配。在实际适配前（用 ''{{tt|resource-adaptor-imp}}'' 类模板）将分配器重绑定到 {{tt|char}} 类型，故适配同一分配器的模板特化总是生成同一类型，无关乎分配器模板原先实例化所用的值类型。
+
+{{rrev multi
+|since1=libfund_ts|rev1=
+{{tt|resource_adaptor}} 定义于命名空间 {{tt|std::experimental::pmr}}，而此页面中的基类 {{tt|memory_resorce}} 为 {{lc|std::experimental::pmr::memory_resource}}。
+|since2=libfund_ts_3|rev2=
+{{tt|resource_adaptor}} 定义于命名空间 {{tt|std::pmr::experimental}}，而此页面中的基类 {{tt|memory_resorce}} 为 {{lc|std::pmr::memory_resource}}。
+}}
+
+''{{tt|resource-adaptor-imp}}'' 是类模板，成员描述如下。名称 ''{{tt|resource-adaptor-imp}}'' 仅为阐释用途，而非强制规定。
+
+除了符合{{named req|Allocator}}要求， {{tt|Alloc}} 还必须额外满足下列要求：
+
+* {{c|std::allocator_traits&lt;Alloc&gt;::pointer}} 应当等同于 {{c|Alloc::value_type*}}。
+* {{c|std::allocator_traits&lt;Alloc&gt;::const_pointer}} 应当等同于 {{c|Alloc::value_type const*}}。
+* {{c|std::allocator_traits&lt;Alloc&gt;::void_pointer}} 应当等同于 {{c|void*}}。
+* {{c|std::allocator_traits&lt;Alloc&gt;::const_void_pointer}} 应当等同于 {{c|void const*}}。
+
+===''resource-adaptor-imp'' 的成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc | {{tt|allocator_type}} | {{tt|Alloc}}}}
+{{dsc end}}
+
+===''resource-adaptor-imp'' 的成员函数===
+{{member|{{small|''resource-adaptor-imp''::}}''resource-adaptor-imp''
+|
+{{dcl begin}}
+{{dcl| num = 1 |  since=libfund_ts |1=
+/*resource-adaptor-imp*/() = default;
+}}
+{{dcl | num = 2 |  since=libfund_ts |1=
+/*resource-adaptor-imp*/(const /*resource-adaptor-imp*/&amp; other)
+    = default;
+}}
+{{dcl | num = 3 |  since=libfund_ts |1=
+/*resource-adaptor-imp*/(/*resource-adaptor-imp*/&amp;&amp; other)
+    = default;
+}}
+{{dcl | num = 4 |  since=libfund_ts |1=
+explicit /*resource-adaptor-imp*/(const Alloc&amp; a2);
+}}
+{{dcl | num = 5 |  since=libfund_ts |1=
+explicit /*resource-adaptor-imp*/(Alloc&amp;&amp; a2);
+}}
+{{dcl end}}
+@1@ 默认构造函数。默认构造被包装分配器。
+@2@ 复制构造函数。从 {{tt|other}} 所包装的分配器复制构造被包装分配器。
+@3@ 移动构造函数。从 {{tt|other}} 所包装的分配器移动构造被包装分配器。
+@4@ 以 {{tt|a2}} 初始化被包装分配器。
+@5@ 以 {{c|std::move(a2)}} 初始化被包装分配器。
+
+====参数====
+{{par begin}}
+{{par | other |复制或移动来源的另一 ''{{tt|resource-adaptor-imp}}'' 对象}}
+{{par | a2 |复制或移动来源的另一 {{tt|Alloc}} 对象}}
+{{par end}}
+}}
+
+{{member|{{small|''resource-adaptor-imp''::}}get_allocator
+|
+{{ddcl |  since=libfund_ts |1=
+allocator_type get_allocator() const; 
+}}
+返回被包装分配器的副本。
+}}
+
+{{member|{{small|''resource-adaptor-imp''::}}operator{{=}}
+|
+{{ddcl |  since=libfund_ts |1=
+/*resource-adaptor-imp*/&amp; operator=(const /*resource-adaptor-imp*/&amp; other)
+    = default; 
+}}
+默认化的复制赋值运算符。从 {{tt|other}} 的被包装分配器复制赋值被包装分配器。
+}}
+
+{{member|{{small|''resource-adaptor-imp''::}}do_allocate
+|
+{{ddcl |  since=libfund_ts |1=
+protected:
+virtual void* do_allocate(std::size_t bytes, std::size_t alignment);
+}}
+用被包装分配器的 {{tt|allocate}} 成员函数分配内存。
+}}
+
+{{member|{{small|''resource-adaptor-imp''::}}do_deallocate
+|
+{{ddcl |  since=libfund_ts |
+protected:
+virtual void do_deallocate(void *p, std::size_t bytes, std::size_t alignment);
+}}
+用被包装分配器的 {{tt|deallocate}} 成员函数解分配 {{tt|p}} 所指向的存储。
+
+{{tt|p}} 必须已经用比较等于被包装分配器的分配器的 {{tt|allocate}} 成员函数分配，而且之后必须未被解分配。
+}}
+
+{{member|{{small|''resource-adaptor-imp''::}}do_is_equal
+|
+{{ddcl |  since=libfund_ts |
+protected:
+virtual bool do_is_equal(const memory_resource&amp; other) const noexcept;
+}}
+令 {{tt|p}} 为 {{c|dynamic_cast&lt;const /*resource-adaptor-imp*/*&gt;(&amp;other)}}。若 {{tt|p}} 为空指针值则返回 {{c|false}} 。否则返回用 {{c|1=operator==}} 比较 {{c|*p}} 和 {{c|*this}} 所包装的分配器的结果。
+}}
+
+{{langlinks|de|en|es|ja|ru}}

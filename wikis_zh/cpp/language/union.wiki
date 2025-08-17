@@ -1,0 +1,275 @@
+{{title|联合体声明}}
+{{cpp/language/classes/navbar}}
+
+联合体是特殊的类类型，它在一个时刻只能保有其一个非静态{{rlp|data_members|数据成员}}。
+
+===语法===
+联合体声明的类说明符与{{rlp|class|类或结构体}}的声明相似：
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|union}} {{spar|属性}} {{spar|类头名}} {{ttb|{&lt;!----&gt;}} {{spar|成员说明}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量{{rlp|attributes|属性}}的可选序列}}
+{{par|{{spar|类头名}}|所定义的联合体的名字。可以前附{{spar|嵌套名说明符}}（名字与作用域解析运算符的序列，以作用域解析运算符结尾）。可以忽略名字，此时联合体是{{i|无名}}的}}
+{{par|{{spar|成员说明}}|访问说明符、成员对象和成员函数的声明与定义的列表。}}
+{{par end}}
+
+联合体可以拥有成员函数（包含构造函数和析构函数），但不能有虚函数。
+
+联合体不能有基类且不能用作基类。
+
+{{rrev|since=c++11|
+最多只有一个[[#联合体式的类|变体成员]]可以拥有{{rlp|data members#成员初始化|默认成员初始化器}}。
+}}
+
+联合体不能拥有引用类型的非静态数据成员。
+
+{{rev begin}}
+{{rev|until=c++11|
+联合体不能含有带非平凡的{{rlps|member functions#特殊成员函数}}的非静态数据成员。
+}}
+{{rev|since=c++11|
+如果联合体含有带非平凡的{{rlps|member functions#特殊成员函数}}的非静态数据成员，那么该联合体的对应特殊成员函数可能会被定义为弃置，详情见对应的特殊成员函数页面。
+}}
+
+正如{{rlp|classes|结构体的}}声明中一般，联合体的默认成员访问是 {{rlp|access|public}}。
+
+===解释===
+联合体的大小至少足以保有其最大的数据成员，但通常不会更大。其他数据成员特意分配于该最大成员的一部分相同的字节之中。分配的细节是实现定义的，但所有非静态数据成员均拥有相同的地址。读取并非最近写入的联合体成员是未定义行为。许多编译器以非标准语言扩展实现读取联合体的不活跃成员的能力。
+
+{{example
+|code=
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+union S
+{
+    std::int32_t n;     // 占用 4 字节
+    std::uint16_t s[2]; // 占用 4 字节
+    std::uint8_t c;     // 占用 1 字节
+};                      // 整个联合体占用 4 字节
+
+int main()
+{
+    S s = {0x12345678}; // 初始化首个成员，s.n 现在是活跃成员
+    // 在此点，从 s.s 或 s.c 读取是未定义行为，但大多数编译器都对其有定义。
+    std::cout &lt;&lt; std::hex &lt;&lt; "s.n = " &lt;&lt; s.n &lt;&lt; '\n';
+    s.s[0] = 0x0011; // s.s 现在是活跃成员
+    // 在此点，从 s.n 或 s.c 读取是未定义行为，但大多数编译器都对其有定义。
+    std::cout &lt;&lt; "s.c 现在是 " &lt;&lt; +s.c &lt;&lt; '\n' // 11 或 00，取决于平台
+              &lt;&lt; "s.n 现在是 " &lt;&lt; s.n &lt;&lt; '\n'; // 12340011 或 00115678
+}
+|p=true
+|output=
+s.n = 12345678
+s.c 现在是 0
+s.n 现在是 115678 &lt;!-- 有意选择较少见的输出 --&gt;
+}}
+
+每个成员的分配都如同它是类的唯一成员一样来进行。
+
+{{rrev|since=c++11|
+如果联合体的成员是拥有用户定义的构造函数和析构函数的类，那么切换其活跃成员通常需要显式析构函数和布置 new：
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+union S
+{
+    std::string str;
+    std::vector&lt;int&gt; vec;
+    ~S() {} // 需要知道哪个成员活跃，只能在联合体式的类中做到
+};          // 整个联合体占有 max(sizeof(string), sizeof(vector&lt;int&gt;)) 的内存
+
+int main()
+{
+    S s = {"Hello, world"};
+    // 在此点，从 s.vec 读取是未定义行为
+    std::cout &lt;&lt; "s.str = " &lt;&lt; s.str &lt;&lt; '\n';
+    s.str.~basic_string();
+    new (&amp;s.vec) std::vector&lt;int&gt;;
+    // 现在，s.vec 是联合体的活跃成员
+    s.vec.push_back(10);
+    std::cout &lt;&lt; s.vec.size() &lt;&lt; '\n';
+    s.vec.~vector();
+}
+|output=s.str = Hello, world
+1
+}}
+}}
+
+如果两个联合体成员都是[[cpp/named req/StandardLayoutType|标准布局类型]]，那么在任何编译器上检验其公共子序列都有良好定义。
+
+====成员生存期====
+联合体成员的{{rlp|lifetime|生存期}}从该成员被设为活跃时开始。如果之前已经有另一成员活跃，那么此前已有的这一成员生存期终止。
+
+当联合体的活跃成员通过形式为 {{c|1=E1 = E2}} 的复制表达式（使用内建赋值运算符或平凡的赋值运算符）切换时，对于 {{c|E1}} 中的各个成员访问和数组下标子表达式中出现的，其类型并非拥有非平凡或弃置的默认构造函数的类的每个联合体成员 {{tt|X}}，如果 {{tt|X}} 的修改在类型别名使用规则下会具有未定义行为，那么在所指名的存储中隐式创建一个 {{tt|X}} 类型的对象；不进行初始化，且其生存期的开始按顺序晚于其左右的操作数的值计算，而早于赋值。 
+{{source|1=
+union A { int x; int y[4]; };
+struct B { A a; };
+union C { B b; int k; };
+
+int f()
+{
+    C c;               // 不开始任何联合体成员的生存期
+    c.b.a.y[3] = 4;    // OK："c.b.a.y[3]" 指名联合体成员 c.b 与 c.b.a.y;
+                       // 这创建对象以保有联合体成员 c.b 和 c.b.a.y
+    return c.b.a.y[3]; // OK：c.b.a.y 指代新创建的对象
+}
+
+struct X { const int a; int b; };
+union Y { X x; int k; };
+
+void g()
+{
+    Y y = {&lt;!----&gt;{1, 2}&lt;!----&gt;}; // OK，y.x 是联合体的活跃成员
+    int n = y.x.a;
+    y.k = 4;   // OK：结束 y.x 的生存期，y.k 是联合体的活跃成员
+    y.x.b = n; // 未定义行为：y.x.b 在其生存期外被修改，
+               // "y.x.b" 指名 y.x，但 X 的默认构造函数被弃置，
+               // 所以联合体成员 y.x 的生存期不会隐式开始
+}
+}}
+
+联合体类型的平凡{{rev inl|since=c++11|移动构造函数、移动赋值运算符、}}复制构造函数和复制赋值运算符复制对象表示。如果源与目标不是同一对象，那么这些特殊成员函数在复制前开始每个内嵌于目标的并对应内嵌于源的对象（除了既非目标的子对象亦不拥有{{rlps|lifetime#隐式生存期类型}}的对象&lt;!-- 不在标准中，但其生存期不能以此方式开始 --&gt;）的生存期。否则，它们不做任何事。在经由平凡特殊成员函数构造或赋值后，两个联合体对象拥有相同的对应活跃成员（如果存在）。
+
+====匿名联合体====
+{{i|匿名联合体}}是不同时定义任何变量（包括联合体类型的对象、引用或指向联合体的指针）的无名的联合体定义。
+
+{{sdsc begin}}
+{{sdsc|1=
+{{ttb|union}} {{ttb|{}} {{spar|成员说明}} {{ttb|}&lt;!----&gt;}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+匿名联合体有更多限制：它们不能有成员函数，不能有静态数据成员，且所有数据成员必须公开。只能声明非静态数据成员{{rev inl|since=c++11|，外加{{rlpt|static_assert}} 声明}}。
+
+匿名联合体的成员被注入到它的外围作用域中（而且不得与其中声明的其他名字冲突）。
+
+{{source|1=
+int main()
+{
+    union
+    {
+        int a;
+        const char* p;
+    };
+    a = 1;
+    p = "Jennifer";
+}
+}}
+
+命名空间作用域的匿名联合体必须声明为 {{c/core|static}}，除非它们在无名命名空间出现。
+
+====联合体式的类====
+{{i|联合体式的类}}是联合体，或是至少拥有一个匿名联合体成员的（非联合）类。联合体式的类拥有一组''变体成员''：
+* 其成员匿名联合体的非静态数据成员；
+* 另外，如果联合体式的类是联合体，那么是其并非匿名联合体的非静态数据成员。
+
+联合体式的类可用于实现{{enwiki|tagged union|带标签联合体}}。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+// S 拥有一个非静态数据成员（tag），三个枚举项成员（CHAR、INT、DOUBLE），
+// 和三个变体成员（c、i、d）
+struct S
+{
+    enum{CHAR, INT, DOUBLE} tag;
+    union
+    {
+        char c;
+        int i;
+        double d;
+    };
+};
+
+void print_s(const S&amp; s)
+{
+    switch(s.tag)
+    {
+        case S::CHAR: std::cout &lt;&lt; s.c &lt;&lt; '\n'; break;
+        case S::INT: std::cout &lt;&lt; s.i &lt;&lt; '\n'; break;
+        case S::DOUBLE: std::cout &lt;&lt; s.d &lt;&lt; '\n'; break;
+    }
+}
+
+int main()
+{
+    S s = {S::CHAR, 'a'};
+    print_s(s);
+    s.tag = S::INT;
+    s.i = 123;
+    print_s(s);
+}
+|output=
+a
+123
+}}
+
+{{rrev|since=c++17|
+C++ 标准库包含 {{lc|std::variant}}，它可以取代联合体和联合体式的类的大多数用途。上例可重写为
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;variant&gt;
+
+int main()
+{
+    std::variant&lt;char, int, double&gt; s = 'a';
+    std::visit([](auto x){ std::cout &lt;&lt; x &lt;&lt; '\n';}, s);
+    s = 123;
+    std::visit([](auto x){ std::cout &lt;&lt; x &lt;&lt; '\n';}, s);
+}
+|output=
+a
+123
+}}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/union}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1940|std=c++11|before=匿名联合体只允许非静态数据成员|after=也允许 {{tt|static_assert}}}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=11.5|title=Unions|id=class.union}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11.5|title=Unions|id=class.union}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=12.3|title=Unions|id=class.union}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=9.5|title=Unions|id=class.union}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=9.5|title=Unions|id=class.union}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=9.5|title=Unions|id=class.union}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=9.5|title=Unions|id=class.union}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc variant}}
+{{dsc see c|c/language/union|联合体声明|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,229 @@
+{{title|资源包含 {{mark since c++26}}}}
+{{cpp/preprocessor/navbar}}
+
+{{c/core|#embed}} 是用于包含{{ls|#资源}}的预处理器指令。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|#embed &amp;lt;}} {{spar|h字符序列}} {{ttb|&amp;gt;}} {{spar|记号序列}} {{spar|换行}}}}
+{{sdsc|num=2|{{ttb|#embed "}} {{spar|q字符序列}} {{ttb|"}} {{spar|记号序列}} {{spar|换行}}}}
+{{sdsc|num=3|{{ttb|#embed}} {{spar|记号序列}} {{spar|换行}}}}
+{{sdsc|num=4|{{ttb|__has_embed}} {{ttb|(}} {{spar|平衡记号序列}} {{ttb|)}}}}
+{{sdsc end}}
+
+@1@ 搜索由{{spar sep|h字符序列}}唯一识别的资源，并将该指令替换为这个资源的全部内容。
+
+@2@ 搜索由{{spar sep|q字符序列}}识别的资源，并将该指令替换为这个资源的全部内容。可能退回至语法 {{v|1}} 并将{{spar sep|q字符序列}}视为资源标识符。
+
+@3@ 如果 {{v|1}} 和 {{v|2}} 都不匹配，{{spar sep|记号序列}}会经历宏替换。该指令在替换后会再次尝试匹配 {{v|1}} 和 {{v|2}}。
+
+@4@ 检查是否可以以指定[[#嵌入参数|嵌入参数]]包含一个资源。
+
+{{par begin}}
+{{par|{{spar|换行}}|换行字符}}
+{{par|{{spar|h字符序列}}|一个或多个{{spar sep|h字符}}的序列（见 {{rlpt|include|#include}}）}}
+{{par|{{spar|q字符序列}}|一个或多个{{spar sep|q字符}}的序列（见 {{rlpt|include|#include}}）}}
+{{par|{{spar|记号序列}}|一个或多个{{ls|cpp/language/translation phases#预处理记号}}的序列}}
+{{par|{{spar|平衡记号序列}}|一个或多个预处理记号的序列，其中每个 {{c|(}}、{{c|[}} 和 {{c|{}} 都有正确关闭}}
+{{par end}}
+
+===解释===
+@1@ 在一系列地点中搜索由{{spar sep|h字符序列}}唯一识别的资源，并将该指令替换为这个资源的全部内容。由实现定义如何指定这些地点和识别标头。
+
+@2@ 将该指令替换为由{{spar sep|q字符序列}}识别的资源的全部内容。所指名的资源通过由实现定义的方式进行搜索。
+@@ 如果不支持这种搜索或者搜索失败，该指令按语法 {{v|1}} 重新处理，将原指令中包含的序列（包括 {{c|&gt;}} 字符，如果存在）作为语法 {{v|1}} 中所需的序列。
+
+@3@ 该指令中 {{ttb|embed}} 后面的预处理记号会按在正常文本中进行处理（即每个目前定义为宏名的标识符都会被替换为它的预处理记号替换列表）。
+@@ 如果在所有替换都完成后生成的指令不匹配前面两种语法，那么行为未定义。
+@@ 将在一对预处理记号 {{c|&lt;}} 和 {{c|&gt;}} 之间或一对 {{c|"}} 字符之前的预处理记号序列合并为单个资源预处理记号的方法由实现定义。
+
+@4@ 将{{spar sep|平衡记号序列}}用作具有语法 {{v|3}} 的某个虚设 {{c/core|#embed}} 指令的{{spar sep|记号序列}}并搜索资源。
+* 如果刚才的语法 {{v|3}} 指令不满足 {{c/core|#embed}} 指令的语法要求，那么程序非良构。
+* 否则，如果资源搜索成功且所有给定的[[#嵌入参数|嵌入参数]]均受支持，那么 {{tt|__has_embed}} 表达式在资源非空时求值为 {{c|__STDC_EMBED_FOUND__}}，在资源为空时求值为 {{c|__STDC_EMBED_EMPTY__}}。
+* 否则 {{tt|__has_embed}} 表达式求值为 {{c|__STDC_EMBED_NOT_FOUND__}}。
+
+===资源===
+{{i|资源}}是可以从翻译环境访问的数据源。资源具有''实现资源宽度''，它是由实现定义的以位表示的资源大小。如果实现资源宽度不是 {{c|CHAR_BIT}} 的整数倍数，那么程序非良构。
+
+设{{i|实现资源计数}}为实现资源宽度除以 {{c|CHAR_BIT}} 的结果。每个资源也具有''资源计数''，它是实现资源计数本身，除非提供了 [[#limit 参数|{{tt|limit}}]] 嵌入参数。
+
+如果资源计数为零，那么该资源为''空''。
+
+{{source|
+// 实现资源宽度是 6 位时程序非良构
+#embed "6_bits.bin"
+}}
+
+===嵌入资源===
+除非另有修改，{{c/core|#embed}} 指令会被替换为逗号分隔的 {{c/core|int}} 类型{{lt|cpp/language/integer literal|整数字面量}}。
+
+该逗号分隔列表中的整数字面量对应从作为二进制文件的资源连续调用资源计数次 {{lc|std::fgetc}}。如果其中一次 {{lc|std::fgetc}} 调用返回 {{c|EOF}}，那么程序非良构。
+
+{{source|1=
+int i =
+{
+#embed "i.dat"
+}; // i.dat 产生单个值的情况下良构
+
+int i2 =
+#embed "i.dat"
+; // i.dat 产生单个值的情况下也良构
+
+struct T
+{
+    double a, b, c;
+    struct { double e, f, g; } x;
+    double h, i, j;
+};
+T x =
+{
+// 指令产生九个值或更少的情况下良构
+#embed "s.dat"
+};
+}}
+
+===嵌入参数===
+如果语法 {{v|1}} 或语法 {{v|2}} 中有出现{{spar|记号序列}}，那么它会按在正常文本中进行处理。处理后的{{spar sep|记号序列}}应组成一个{{i|嵌入参数}}序列，否则程序非良构。嵌入参数具有以下语法：
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|limit}} {{ttb|(}} {{spar|平衡记号序列}} {{ttb|)}}}}
+{{sdsc|num=2|{{ttb|prefix}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}}}}
+{{sdsc|num=3|{{ttb|suffix}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}}}}
+{{sdsc|num=4|{{ttb|if_empty}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}}}}
+{{sdsc|num=5|{{spar|标识符}} {{ttb|::}} {{spar|标识符}}}}
+{{sdsc|num=6|{{spar|标识符}} {{ttb|::}} {{spar|标识符}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}}}}
+{{sdsc end}}
+
+@1-4@ 标准嵌入参数。
+:@1@ 限制嵌入的资源的资源计数。
+:@2@ 向嵌入的非空资源添加前缀。
+:@3@ 向嵌入的非空资源添加后缀。
+:@4@ 在嵌入的资源为空时将其替换。
+
+@5,6@ 非标准嵌入参数。这种参数受条件性支持，并具有由实现定义的语义。
+
+{{anchor|limit 参数}}
+===={{tt|limit}} 参数====
+形式为 {{ttb|limit}} {{ttb|(}} {{spar|平衡记号序列}} {{ttb|)}} 的嵌入参数在每个 {{c/core|#embed}} 指令中最多只能出现一次。
+
+{{spar sep|平衡记号序列}}会按在正常文本中进行处理以组成[[cpp/language/constant expression|常量表达式]]，但不会对 {{tt|defined}}、{{tt|__has_include}}、{{tt|__has_cpp_attribute}} 和 {{tt|__has_embed}} 表达式求值。
+
+组成的常量表达式必须是具有非负值的{{ls|cpp/language/constant expression#整数常量表达式}}：
+* 如果该常量表达式的值大于实现资源计数，那么资源计数依然是实现资源计数。
+* 否则资源计数就是该常量表达式的值。
+
+{{source|1=
+constexpr unsigned char sound_signature[] =
+{
+// 某个能够展开为至少是个元素的假想资源
+#embed &lt;sdk/jump.wav&gt; limit(2 + 2)
+};
+
+static_assert(sizeof(sound_signature) == 4);
+
+// 等价于 to #embed &lt;data.dat&gt; limit(10)
+#define DATA_LIMIT 10
+#embed &lt;data.dat&gt; limit(DATA_LIMIT)
+
+// 非良构
+#embed &lt;data.dat&gt; limit(__has_include("a.h"))
+}}
+
+{{anchor|prefix 参数}}
+===={{tt|prefix}} 参数====
+形式为 {{ttb|prefix}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}} 的嵌入参数在每个 {{c/core|#embed}} 指令中最多只能出现一次。
+
+如果资源为空，那么忽略此嵌入参数。否则将{{spar sep|平衡记号序列}}放在紧接在逗号分隔的整数字面量列表之前的位置。
+
+{{anchor|suffix 参数}}
+===={{tt|suffix}} 参数====
+形式为 {{ttb|suffix}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}} 的嵌入参数在每个 {{c/core|#embed}} 指令中最多只能出现一次。
+
+如果资源为空，那么忽略此嵌入参数。否则将{{spar sep|平衡记号序列}}放在紧接在逗号分隔的整数字面量列表之后的位置。
+
+{{source|1=
+constexpr unsigned char whl[] =
+{
+#embed "chess.glsl" \
+    prefix(0xEF, 0xBB, 0xBF, ) /∗ 直接序列 ∗/ \
+    suffix(,)
+    0
+};
+
+// 始终空终止，并且在序列非空时包含该序列
+
+constexpr bool is_empty = sizeof(whl) == 1 &amp;&amp; whl[0] == '\0';
+
+constexpr bool is_not_empty = sizeof(whl) &gt;= 4
+    &amp;&amp; whl[sizeof(whl) - 1] == '\0'
+    &amp;&amp; whl[0] == '\xEF' &amp;&amp; whl[1] == '\xBB' &amp;&amp; whl[2] == '\xBF';
+
+static_assert(is_empty {{!!}} is_not_empty);
+}}
+
+{{anchor|if_empty 参数}}
+===={{tt|if_empty}} 参数====
+形式为 {{ttb|if_empty}} {{ttb|(}} {{spar optional|平衡记号序列}} {{ttb|)}} 的嵌入参数在每个 {{c/core|#embed}} 指令中最多只能出现一次。
+
+如果资源'''不'''为空，那么忽略此嵌入参数。否则以{{spar sep|平衡记号序列}}替换该 {{c/core|#embed}} 指令。
+
+{{source|
+// 无论 /owo/uwurandom 有什么内容都会展开为 42203
+#embed &lt;/owo/uwurandom&gt; if_empty(42203) limit(0)
+}}
+
+===注解===
+{{feature test macro|__cpp_pp_embed|{{c/core|#embed}} 指令|value=202502L|std=C++26}}
+
+===示例===
+演示 {{c/core|#embed}} 的效果。如果在翻译环境中可以将 {{tt|data.dat}} 作为资源嵌入，那么以下程序中的所有断言都不会失败。
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstring&gt;
+#include &lt;fstream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    constexpr unsigned char d[]
+    {
+#embed &lt;data.dat&gt;
+    };
+    
+    const std::vector&lt;unsigned char&gt; vec_d
+    {
+#embed &lt;data.dat&gt;
+    };
+
+    constexpr std::size_t expected_size = sizeof(d);
+    // 与在执行环境中嵌入的文件相同
+    std::ifstream f_source("data.dat", std::ios_base::binary {{!}} std::ios_base::in);
+    unsigned char runtime_d[expected_size];
+
+    char* ifstream_ptr = reinterpret_cast&lt;char*&gt;(runtime_d);
+    assert(!f_source.read(ifstream_ptr, expected_size));
+
+    std::size_t ifstream_size = f_source.gcount();
+    assert(ifstream_size == expected_size);
+
+    int is_same = std::memcmp(&amp;d[0], ifstream_ptr, ifstream_size);
+    assert(is_same == 0);
+
+    int is_same_vec = std::memcmp(vec_d.data(), ifstream_ptr, ifstream_size);
+    assert(is_same_vec == 0);
+}
+}}
+
+===引用===
+{{ref std c++26}}
+{{ref std|section=15.4|title=Resource inclusion|id=cpp.embed}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+* [[cpp/preprocessor/include|源文件包含]]
+{{dsc see c|c/preprocessor/embed|二进制资源包含 {{mark since c23}}|nomono=true}}
+{{dsc end}}
+
+{{langlinks|ar|de|en|es|fr|it|ja|pl|pt|ru}}

@@ -1,0 +1,105 @@
+{{cpp/io/basic_osyncstream/title|basic_osyncstream}}
+{{cpp/io/basic_osyncstream/navbar}}
+{{dcl begin}}
+{{dcl|num=1|1=
+basic_osyncstream( streambuf_type* buf, const Allocator&amp; a );
+}}
+{{dcl|num=2|1=
+explicit basic_osyncstream( streambuf_type* buf );
+}}
+{{dcl|num=3|1=
+basic_osyncstream( std::basic_ostream&lt;CharT, Traits&gt;&amp; os, const Allocator&amp; a );
+}}
+{{dcl|num=4|1=
+explicit basic_osyncstream( std::basic_ostream&lt;CharT, Traits&gt;&amp; os );
+}}
+{{dcl|num=5|1=
+basic_osyncstream( std::basic_osyncstream&amp;&amp; other ) noexcept;
+}}
+{{dcl end}}
+
+构造新的同步输出流。
+
+@1-4@ 以提供的缓冲区和分配器构造私有成员 {{c|std::basic_syncbuf}}，并以指向成员 {{c|std::basic_streambuf}} 的指针初始化基类。
+@5@ 移动构造函数。从 {{c|other}} 的对应子对象移动构造 {{c|std::basic_ostream}} 基类和 {{c|std::basic_syncbuf}} 成员，然后以指向新构造的底层 {{c|std::basic_syncbuf}} 的指针调用 {{ltt|cpp/io/basic_ios/set_rdbuf|set_rdbuf}} 以完成基类的初始化。此移动构造函数后，{{c|other.get_wrapped()}} 返回 {{c|nullptr}}，而 {{tt|other}} 的析构不产生输出。
+
+===参数===
+{{par begin}}
+{{par | buf |指向将被包装的 {{lc|std::basic_streambuf}} 的指针}}
+{{par | os |到 {{lc|std::basic_ostream}} 的引用，将包装其 rdbuf()}}
+{{par | a |传递给成员 {{lc|std::basic_syncbuf}} 的构造函数的分配器}}
+{{par | other |移动来源的另一 osyncstream}}
+{{par end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+
+void worker(const int id, std::ostream &amp;os)
+{
+    std::string_view block;
+    switch (id)
+    {
+        default: [[fallthrough]];
+        case 0: block = "██";
+                break;
+        case 1: block = "▓▓";
+                break;
+        case 2: block = "▒▒";
+                break;
+        case 3: block = "░░";
+                break;
+    }
+    for (int i = 1; i &lt;= 50; ++i)
+        os &lt;&lt; block &lt;&lt; std::flush;
+    os &lt;&lt; std::endl;
+}
+
+int main()
+{
+    std::cout &lt;&lt; "同步输出应当不造成任何交错：" &lt;&lt; std::endl;
+    {
+        auto scout1 = std::osyncstream{std::cout};
+        auto scout2 = std::osyncstream{std::cout};
+        auto scout3 = std::osyncstream{std::cout};
+        auto scout4 = std::osyncstream{std::cout};
+        auto w1 = std::jthread{worker, 0, std::ref(scout1)};
+        auto w2 = std::jthread{worker, 1, std::ref(scout2)};
+        auto w3 = std::jthread{worker, 2, std::ref(scout3)};
+        auto w4 = std::jthread{worker, 3, std::ref(scout4)};
+    }
+
+    std::cout &lt;&lt; "\n缺乏同步可能造成输出发生一些交错："
+              &lt;&lt; std::endl;
+    {
+        auto w1 = std::jthread{worker, 0, std::ref(std::cout)};
+        auto w2 = std::jthread{worker, 1, std::ref(std::cout)};
+        auto w3 = std::jthread{worker, 2, std::ref(std::cout)};
+        auto w4 = std::jthread{worker, 3, std::ref(std::cout)};
+    }
+}
+|p=true
+|output=
+同步输出应当不造成任何交错：
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+████████████████████████████████████████████████████████████████████████████████████████████████████
+
+缺乏同步可能造成输出发生一些交错：
+████▓▓██▒▒▒▒▓▓██░░▒▒██░░▒▒░░░░▒▒░░▓▓▒▒██░░████████████▓▓██████▓▓▒▒▓▓██░░████▓▓▓▓██▒▒░░░░░░░░▓▓░░▓▓██▒▒▒▒▒▒▒▒▓▓██▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░▒▒▒▒░░▒▒▒▒▒▒▒▒▒▒▓▓▒▒▒▒▒▒▒▒▒▒▒▒██░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓████████▓▓▓▓▓▓▓▓▓▓▓▓░░▓▓▓▓
+▒▒▒▒██░░██████████████████████████░░░░░░░░░░░░░░██░░▒▒░░░░░░██████████████████
+▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒
+░░░░░░
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_syncbuf/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

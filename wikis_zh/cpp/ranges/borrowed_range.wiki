@@ -1,0 +1,126 @@
+{{cpp/ranges/title|borrowed_range|enable_borrowed_range}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class R &gt;
+concept borrowed_range =
+    ranges::range&lt;R&gt; &amp;&amp;
+    (std::is_lvalue_reference_v&lt;R&gt; {{!!}}
+     ranges::enable_borrowed_range&lt;std::remove_cvref_t&lt;R&gt;&gt;);
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class R &gt;
+constexpr bool enable_borrowed_range = false;
+}}
+{{dcl end}}
+
+@1@ 概念 {{tt|borrowed_range}} 定义对范围的要求，使得函数能按值接收它，并返回从它获得的迭代器，而无悬垂之虞。
+@2@ {{tt|enable_borrowed_range}} 变量模板用于指示一个 {{lconcept|range}} 是否为 {{tt|borrowed_range}}。主模板定义为 {{c|false}}。
+
+===语义要求===
+令 {{tt|U}} 当 {{tt|T}} 为右值引用类型时是 {{c/core|std::remove_reference_t&lt;T&gt;}}，否则是 {{tt|T}}。给定 {{tt|U}} 类型的变量 {{c|u}}，只有在从 {{c|u}} 获得的迭代器的有效性不绑定到该变量的生存期时 {{tt|T}} 才会实现 {{tt|borrowed_range}}。&lt;!-- LWG 3361 --&gt;
+
+===特化===
+程序可以对要实现 {{tt|borrowed_range}} 的无 cv 限定的{{ls|cpp/language/type#由程序定义的类型}}把 {{tt|enable_borrowed_range}} 特化为 {{c|true}}，而对不实现它的类型特化为 {{c|false}}。这些特化可用于[[cpp/language/constant expression|常量表达式]]并拥有 {{c/core|const bool}} 类型。
+
+====标准库中的无条件借用范围====
+{{tt|enable_borrowed_range}} 对下列标准模板的所有特化都定义为 {{c|true}}：
+* {{ltt|cpp/string/basic_string_view#辅助模板|std::basic_string_view}}
+* {{ltt|cpp/container/span#辅助模板|std::span}}
+* {{ltt|cpp/ranges/subrange#辅助模板|std::ranges::subrange}}
+* {{ltt|cpp/ranges/ref_view#辅助模板|std::ranges::ref_view}}
+* {{ltt|cpp/ranges/empty_view#辅助模板|std::ranges::empty_view}}
+* {{ltt|cpp/ranges/iota_view#辅助模板|std::ranges::iota_view}}
+
+====标准库中的有条件借用范围====
+&lt;!-- P2017R1 / LWG 3494 --&gt;{{tt|enable_borrowed_range}} 对下列标准范围适配器定义为 {{c|true}} 当且仅当 {{c|std::ranges::enable_borrowed_range&lt;V&gt;}} 为 {{c|true}}，其中 {{tt|V}} 是底层视图类型：
+{{rrev|since=c++23|
+* {{ltt|cpp/ranges/adjacent_view#辅助模板|std::ranges::adjacent_view}}
+* {{ltt|cpp/ranges/as_const_view#辅助模板|std::ranges::as_const_view}}
+* {{ltt|cpp/ranges/as_rvalue_view#辅助模板|std::ranges::as_rvalue_view}}
+* {{ltt|cpp/ranges/chunk_view#辅助模板|std::ranges::chunk_view}} &lt;ref&gt;底层视图 {{tt|V}} 必须也满足 {{lconcept|forward_range}}。&lt;/ref&gt;
+}}
+* {{ltt|cpp/ranges/common_view#辅助模板|std::ranges::common_view}}
+* {{ltt|cpp/ranges/drop_view#辅助模板|std::ranges::drop_view}}
+* {{ltt|cpp/ranges/drop_while_view#辅助模板|std::ranges::drop_while_view}}
+* {{ltt|cpp/ranges/elements_view#辅助模板|std::ranges::elements_view}}
+{{rrev|since=c++23|
+* {{ltt|cpp/ranges/enumerate_view#辅助模板|std::ranges::enumerate_view}}
+}}
+* {{ltt|cpp/ranges/owning_view#辅助模板|std::ranges::owning_view}}
+* {{ltt|cpp/ranges/reverse_view#辅助模板|std::ranges::reverse_view}}
+{{rrev|since=c++23|
+* {{ltt|cpp/ranges/slide_view#辅助模板|std::ranges::slide_view}}
+* {{ltt|cpp/ranges/stride_view#辅助模板|std::ranges::stride_view}}
+}}
+* {{ltt|cpp/ranges/take_view#辅助模板|std::ranges::take_view}}
+{{rrev|since=c++26|
+* {{ltt|cpp/ranges/to_input_view#辅助模板|std::ranges::to_input_view}}
+}}
+&lt;references/&gt;
+
+{{rrev|since=c++23|
+对于 {{tt|enable_borrowed_range}} 针对下列标准范围适配器的特化，当且仅当 {{c|(std::ranges::enable_borrowed_range&lt;Vs&gt; &amp;&amp; ...)}} 为 {{c|true}} 时，其被定义为 {{c|true}}，其中 {{tt|Vs...}} 是它所适配的所有视图类型：
+* {{ltt|cpp/ranges/zip_view#辅助模板|std::ranges::zip_view}}
+}}
+
+===示例===
+{{example
+|演示 {{tt|enable_borrowed_range}} 对程序定义类型的特化。这种特化防御潜在悬垂的结果。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;span&gt;
+#include &lt;type_traits&gt;
+
+template&lt;typename T, std::size_t N&gt;
+struct MyRange : std::array&lt;T, N&gt; {};
+
+template&lt;typename T, std::size_t N&gt;
+constexpr bool std::ranges::enable_borrowed_range&lt;MyRange&lt;T, N&gt;&gt; = false;
+
+template&lt;typename T, std::size_t N&gt;
+struct MyBorrowedRange : std::span&lt;T, N&gt; {};
+
+template&lt;typename T, std::size_t N&gt;
+constexpr bool std::ranges::enable_borrowed_range&lt;MyBorrowedRange&lt;T, N&gt;&gt; = true;
+
+int main()
+{
+    static_assert(std::ranges::range&lt;MyRange&lt;int, 8&gt;&gt;);
+    static_assert(std::ranges::borrowed_range&lt;MyRange&lt;int, 8&gt;&gt; == false);
+    static_assert(std::ranges::range&lt;MyBorrowedRange&lt;int, 8&gt;&gt;);
+    static_assert(std::ranges::borrowed_range&lt;MyBorrowedRange&lt;int, 8&gt;&gt; == true);
+    
+    auto getMyRangeByValue = []{ return MyRange&lt;int, 4&gt;{&lt;!----&gt;{1, 2, 42, 3}&lt;!----&gt;}; };
+    auto dangling_iter = std::ranges::max_element(getMyRangeByValue());
+    static_assert(std::is_same_v&lt;std::ranges::dangling, decltype(dangling_iter)&gt;);
+    // *dangling_iter; // 编译错误（即悬垂保护生效。）
+    
+    auto my = MyRange&lt;int, 4&gt;{&lt;!----&gt;{1, 2, 42, 3}&lt;!----&gt;};
+    auto valid_iter = std::ranges::max_element(my);
+    std::cout &lt;&lt; *valid_iter &lt;&lt; ' '; // OK: 42
+    
+    auto getMyBorrowedRangeByValue = []
+    {
+        static int sa[4]{1, 2, 42, 3};
+        return MyBorrowedRange&lt;int, std::size(sa)&gt;{sa};
+    };
+    auto valid_iter2 = std::ranges::max_element(getMyBorrowedRangeByValue());
+    std::cout &lt;&lt; *valid_iter2 &lt;&lt; '\n'; // OK ： 42
+}
+|output=
+42 42
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc dangling}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

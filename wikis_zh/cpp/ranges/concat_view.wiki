@@ -1,0 +1,184 @@
+{{cpp/ranges/view title|concat}}
+{{cpp/ranges/concat_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++26|
+template&lt; ranges::input_range... Views &gt;
+    requires (ranges::view&lt;Views&gt; &amp;&amp; ...) &amp;&amp; (sizeof...(Views) &gt; 0) &amp;&amp;
+              /*concatable*/&lt;Views...&gt;
+class concat_view
+    : public ranges::view_interface&lt;concat_view&lt;Views...&gt;&gt;
+}}
+{{dcl|num=2|since=c++26|1=
+namespace views {
+    inline constexpr /* 未指定 */ concat = /* 未指定 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++26|
+template&lt; ranges::viewable_range... Rs &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto concat( Rs&amp;&amp;... rs );
+}}
+{{dcl h|辅助类型别名}}
+{{dcla|num=3|expos=yes|anchor=concat-reference-t|1=
+template&lt; class... Rs &gt;
+using /*concat-reference-t*/ =
+    ranges::common_reference_t&lt;ranges::range_reference_t&lt;Rs&gt;...&gt;;
+}}
+{{dcla|num=4|expos=yes|anchor=concat-value-t|1=
+template&lt; class... Rs &gt;
+using /*concat-value-t*/ = std::common_type_t&lt;ranges::range_value_t&lt;Rs&gt;...&gt;;
+}}
+{{dcla|num=5|expos=yes|anchor=concat-rvalue-reference-t|1=
+template&lt; class... Rs &gt;
+using /*concat-rvalue-reference-t*/ =
+    ranges::common_reference_t&lt;ranges::range_rvalue_reference_t&lt;Rs&gt;...&gt;;
+}}
+{{dcl h|辅助概念}}
+{{dcla|num=6|expos=yes|anchor=concat-indirectly-readable|1=
+template&lt; class Ref, class RRef, class It &gt;
+concept /*concat-indirectly-readable-impl*/ = /* 见描述 */;
+}}
+{{dcla|num=7|expos=yes|anchor=concatable|1=
+template&lt; class... Rs &gt;
+concept /*concatable*/ = /* 见描述 */;
+}}
+{{dcl end}}
+
+{{tt|concat_view}} 表现为一个 {{lconcept|view}} 工厂，它接受任意数量的范围和一个实参列表，其所提供的视图开始于首个范围的首个元素并结束于最末范围的最末元素，其间的所有范围元素都按照实参中给出的相应顺序排列，相当于将各实参范围拼接到一起。
+
+@1@ 此类模板有一个 {{lconcept|view}} 的非空包模板形参，其中每一个都至少实现 {{lconcept|input_range}} 且为 {{lsi|#concatable}} {{v|7}}。
+
+@2@ {{c|views::concat}} 是一个定制化点对象。
+给定子表达式包 {{c|exprs}}，表达式 {{c|views::concat(exprs...)}}
+* 在 {{c|exprs}} 是只包含一个元素的包，并且该元素的类型实现了 {{lconcept|input_range}} 时{{ls|cpp/language/expressions#表达式等价}}于 {{c|views::all(exprs...)}}，
+* 否则表达式等价于 {{c|concat_view(exprs...)}}。
+
+@3@ 代表引用类型。需要一项额外约束以保证每个底层范围的 {{c/core|ranges::range_reference_t}} 都可以转换为 {{c/core|ranges::common_reference_t}}。
+
+@4@ {{rlt|iterator#嵌套类型|''iterator''::value_type}}，它还额外关注各底层范围的 {{tt|value_type}}，以支持底层范围具有代理迭代器的情况。
+
+@5@ 右值引用，它还正确地支持底层迭代器定制了 {{tt|iter_move}} 的情况。
+
+@6@ 针对 {{rli|iterator}} 定义了 {{tti|indirectly-readable}} 概念，以使 {{tt|concat_view}} 可以实现 {{lconcept|input_range}}。
+@@ 等价于：{{source|1=
+template&lt; class... Rs &gt;
+concept /*concat-indirectly-readable*/ = // 仅用于阐述
+    std::common_reference_with&lt;/*concat-reference-t*/&lt;Rs...&gt;&amp;&amp;,
+                               /*concat-value-t*/&lt;Rs...&gt;&amp;&gt; &amp;&amp;
+    std::common_reference_with&lt;/*concat-reference-t*/&lt;Rs...&gt;&amp;&amp;,
+                               /*concat-rvalue-reference-t*/&lt;Rs...&gt;&amp;&amp;&gt; &amp;&amp;
+    std::common_reference_with&lt;/*concat-rvalue-reference-t*/&lt;Rs...&gt;&amp;&amp;,
+                               /*concat-value-t*/&lt;Rs...&gt; const&amp;&gt; &amp;&amp;
+    (/*concat-indirectly-readable-impl*/&lt;/*concat-reference-t*/&lt;Rs...&gt;,
+                                         /*concat-rvalue-reference-t*/&lt;Rs...&gt;,
+                                         ranges::iterator_t&lt;Rs&gt;&gt; &amp;&amp; ...);
+}}
+@@ 其中仅用于阐述的概念 {{c/core|/*concat-indirectly-readable-impl*/}} 是
+{{source|1=
+template&lt; class Ref, class RRef, class It &gt;
+concept /*concat-indirectly-readable-impl*/ = // 仅用于阐述
+    requires(const It it) {
+        { *it } -&gt; std::convertible_to&lt;&lt;!--6_6--&gt;Ref&lt;!--9_9--&gt;&gt;;
+        { ranges::iter_move(it)} -&gt; std::convertible_to&lt;RRef&gt;;
+    };
+}}
+
+@7@ 确定任意两个或更多的不同范围是否可以被适配为一个自身实现了范围的序列。等价于：{{source|1=
+template&lt; class... Rs &gt;
+concept /*concatable*/ {{=}} requires { // 仅用于阐述
+        typename /*concat-reference-t*/&lt;Rs...&gt;;
+        typename /*concat-value-t*/&lt;Rs...&gt;;
+        typename /*concat-rvalue-reference-t*/&lt;Rs...&gt;;
+    } &amp;&amp; /*concat-indirectly-readable*/&lt;Rs...&gt;;
+}}
+
+{{tt|concat_view}} 总是实现 {{lconcept|input_range}}，且当所适配的每个 {{lconcept|view}} 类型都实现 {{lconcept|forward_range}}、{{lconcept|bidirectional_range}}、{{lconcept|random_access_range}} 或 {{lconcept|sized_range}} 时也实现相应的概念。
+
+当最末底层范围实现 {{lconcept|common_range}} 时 {{tt|concat_view}} 可以是 {{lconcept|common_range}}。
+
+{{cpp/ranges/cpo|views|concat}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|spec={{c/core|std::tuple&lt;Views...&gt;}}|views_|id=views|所有适配的视图对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|concat_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|concat_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|concat_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|concat_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===嵌套类===
+{{dsc begin}}
+{{dsc hitem|类名|定义}}
+{{dsc expos mem tclass|cpp/ranges/concat_view/iterator|迭代器类型}}
+{{dsc end}}
+
+===辅助模板===
+没有针对 {{tt|concat_view}} 的 {{c/core|ranges::enable_borrowed_range}} 特化，因为它要求它的迭代器的实现中从始至终包含所有底层范围的所有迭代器和哨位的副本。
+
+===注解===
+没有实参的 {{c|views::concat()}} 是非良构的，因为不存在确定一种元素类型 {{tt|T}} 的合理方法。单个实参的 {{c|views::concat(r)}} 表达式等价于 {{c|views::all(r)}}。
+
+{{feature test macro|__cpp_lib_ranges_concat|std=C++26|value=202403L|{{tt|std::ranges::concat_view}}}}
+
+===示例===
+{{example
+|初步版本可以在 [https://godbolt.org/z/o84hc69o9 Compiler Explorer] 上测试。
+|code=
+#include &lt;cassert&gt;
+#include &lt;list&gt;
+#include &lt;print&gt;
+#include &lt;ranges&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v0{1, 2, 3}, v1{4, 5};
+    int a[]{6, 7};
+    int i{8};
+    auto ie{std::views::single(i)};
+    
+    auto con = std::views::concat(v0, v1, a, ie);
+    assert(con.size() == v0.size() + v1.size() + std::size(a) + ie.size());
+    std::println("con.size()：{}", con.size());
+    std::println("con：{}", con);
+    con[6] = 42; // con 是 random_access_range, operator[] 返回引用
+    assert(a[1] == 42); // 经由 con[6] 改动 a[1]
+    std::println("con：{}", con);
+    
+    std::list&lt;int&gt; l{7, 8}; // list 是双向范围
+    auto cat = std::views::concat(v0, l);
+    std::println("cat：{}", cat);
+    // cat[0] = 13; // 编译时错误：cat 是双向的 =&gt; 没有 operator[]
+}
+|output=
+con.size()：8
+con：[1, 2, 3, 4, 5, 6, 7, 8]
+con：[1, 2, 3, 4, 5, 6, 42, 8]
+cat：[1, 2, 3, 7, 8]
+}}
+
+===引用===
+{{ref std c++26}}
+{{ref std|title=Concat view|id=range.concat|section=26.7.18}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc join_view}}
+{{dsc inc|cpp/ranges/dsc join_with_view}}
+{{dsc inc|cpp/ranges/dsc zip_view}}
+{{dsc inc|cpp/ranges/dsc cartesian_product_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

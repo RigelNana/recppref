@@ -1,0 +1,103 @@
+{{cpp/title|common_reference}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++20|1=
+template&lt; class... T &gt;
+struct common_reference;
+}}
+{{dcl end}}
+
+确定类型 {{tt|T...}} 的公共引用类型，即 {{tt|T...}} 中所有类型能转换或绑定到的类型。若这种类型存在（如按照后述规则所确定），则成员 {{tt|type}} 指名该类型。否则，无成员 {{tt|type}}。若 {{tt|T...}} 中的任何类型为（可有 cv 限定的）{{c|void}} 以外的不完整类型，则行为未定义。
+
+当给定引用类型时，{{tt|common_reference}} 尝试寻找所提供的所有引用类型都能绑定到的引用类型，但若找不到这种引用类型，则可能返回非引用类型。
+
+* 若 {{c|sizeof...(T)}} 为零，则无成员 {{tt|type}}。
+* 若 {{c|sizeof...(T)}} 为一（即 {{tt|T...}} 仅含一个类型 {{tt|T0}}），则成员 {{tt|type}} 指名与 {{c|T0}} 相同的类型。
+* 若 {{c|sizeof...(T)}} 为二（即 {{tt|T...}} 含两个类型 {{tt|T1}} 和 {{tt|T2}}），则：
+** 令类型 {{tt|S}} 为 {{tt|T1}} 和 {{tt|T2}} 的''简单公共引用类型''（定义如下）。则当满足以下所有条件时，成员类型 {{tt|type}} 指名 {{tt|S}}：
+*** {{tt|T1}} 和 {{tt|T2}} 都是引用类型
+*** {{tt|S}} 良构
+{{rrev|since=c++23|
+::* {{c|std::is_convertible_v&lt;std::add_pointer_t&lt;T1&gt;, std::add_pointer_t&lt;S&gt;&gt;}} 和 {{c|std::is_convertible_v&lt;std::add_pointer_t&lt;T2&gt;, std::add_pointer_t&lt;S&gt;&gt;}} 都为 {{c|true}}
+}}
+:* 否则，若 {{c|std::basic_common_reference&lt;std::remove_cvref_t&lt;T1&gt;, std::remove_cvref_t&lt;T2&gt;, T1Q, T2Q&gt;::type}} 存在，其中 {{tt|TiQ}} 是一元别名模板，满足 {{c|TiQ&lt;U&gt;}} 为 {{tt|U}} 带上 {{tt|Ti}} 的 cv 及引用限定符，则成员类型 {{tt|type}} 指名该类型；
+** 否则，若 {{c|decltype(false? val&lt;T1&gt;() : val&lt;T2&gt;())}} 是合法类型，其中 {{tt|val}} 为函数模板 {{c|template&lt;class T&gt; T val();}}，则成员类型 {{tt|type}} 指名该类型；
+** 否则，若 {{c|std::common_type_t&lt;T1, T2&gt;}} 为合法类型，则成员类型 {{tt|type}} 指名该类型；
+** 否则，无成员 {{tt|type}}。
+* 若 {{c|sizeof...(T)}} 大于二（即 {{tt|T...}} 由 {{tt|T1, T2, R...}} 组成），则若 {{c|std::common_reference_t&lt;T1, T2&gt;}} 存在，且 {{c|std::common_reference_t&lt;std::common_reference_t&lt;T1, T2&gt;, R...&gt;}} 存在，则成员类型 {{tt|type}} 指代它。所有其他情况下，无成员类型 {{tt|type}}。
+
+两个引用类型 {{tt|T1}} 和 {{tt|T2}} 的''简单公共引用类型''{{sep}}定义如下：
+* 若 {{tt|T1}} 为 {{tt|''cv1'' X &amp;}} 而 {{tt|T2}} 为 {{tt|''cv2'' Y &amp;}}（即都是左值引用类型）：则其简单公共引用类型为 {{c|decltype(false? std::declval&lt;cv12 X &amp;&gt;() : std::declval&lt;cv12 Y &amp;&gt;())}}，其中 ''cv12'' 为 ''cv1'' 与 ''cv2'' 的并，若该类型存在且为引用类型；
+* 若 {{tt|T1}} 与 {{tt|T2}} 均为右值引用类型：若 {{tt|T1 &amp;}} 和 {{tt|T2 &amp;}} 的简单公共引用类型（按照前一条确定）存在，则令 {{tt|C}} 代表该类型的对应右值引用类型。若 {{c|std::is_convertible_v&lt;T1, C&gt;}} 与 {{c|std::is_convertible_v&lt;T2, C&gt;}} 均为 {{c|true}}，则 {{tt|T1}} 与 {{tt|T2}} 的简单公共引用类型为 {{tt|C}}。
+* 否则，两个类型之一必须为左值引用类型 {{tt|A &amp;}} 而另一个必须为右值引用类型 {{tt|B &amp;&amp;}}（{{tt|A}} 与 {{tt|B}} 可为 cv 限定）。令 {{tt|D}} 代表 {{c|A &amp;}} 与 {{c|B const &amp;}} 的简单公共引用类型，若它存在。若 {{c|D}} 存在且 {{c|std::is_convertible_v&lt;B &amp;&amp;, D&gt;}} 为 {{tt|true}}，则简单公共引用类型为 {{tt|D}}。
+* 否则，无简单公共引用类型。
+
+对于类似上文所用到的表达式 {{c|false ? X : Y}} 的类型的定义，参见{{lt|cpp/language/operator_other#条件运算符|条件运算符}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|名称|定义}}
+{{dsc|{{tt|type}}|所有 {{tt|T...}} 的公共引用类型}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|1=
+template&lt; class... T &gt;
+using common_reference_t = std::common_reference&lt;T...&gt;::type;
+}}
+{{dcl|1=
+template&lt; class T, class U, template&lt;class&gt; class TQual, template&lt;class&gt; class UQual &gt;
+struct basic_common_reference {};
+}}
+{{dcl end}}
+
+类模板 {{tt|basic_common_reference}} 是一个定制点，允许用户影响 {{tt|common_reference}} 对用户定义类型（常为代理引用）的结果。主模板为空。
+
+===特化===
+若 {{c|std::is_same_v&lt;T, std::decay_t&lt;T&gt;&gt;}} 与 {{c|std::is_same_v&lt;U, std::decay_t&lt;U&gt;&gt;}} 皆为 {{c|true}}，且它们至少有一个依赖于程序定义类型，则程序可以在前两个形参 {{tt|T}} 和 {{tt|U}} 上特化 {{c|std::basic_common_reference&lt;T, U, TQual, UQual&gt;}}。
+
+若这种特化拥有名为 {{tt|type}} 的成员，则限定标识 {{c|std::basic_common_reference&lt;T, U, TQual, UQual&gt;::type}} 必须合法并指名 {{c|TQual&lt;T&gt;}} 和 {{c|UQual&lt;U&gt;}} 都能转换到的类型的公开且无歧义的成员类型。另外，{{c|std::basic_common_reference&lt;T, U, TQual, UQual&gt;::type}} 和 {{c|std::basic_common_reference&lt;U, T, UQual, TQual&gt;::type}} 必须代表同一类型。
+
+程序不可在第三或第四形参上特化 {{tt|basic_common_reference}}，亦不可特化 {{tt|common_reference}} 自身。以违背这些规则的方式添加特化的程序拥有未定义行为。
+
+标准库提供下列 {{tt|basic_common_reference}} 的特化：
+{{dsc begin}}
+{{dsc inc|cpp/utility/pair/dsc basic_common_reference}}
+{{dsc inc|cpp/utility/tuple/dsc basic_common_reference}}
+{{dsc inc|cpp/utility/functional/reference_wrapper/dsc basic_common_reference}}
+{{dsc end}}
+
+===注解===
+{{feature test macro|__cpp_lib_common_reference|std=C++23|value=202302L|{{lc|std::reference_wrapper}} 的 {{lc|std::common_reference_t}} 是引用类型}}
+
+===示例===
+{{example
+|code=
+#include &lt;concepts&gt;
+#include &lt;type_traits&gt;
+
+static_assert(
+    std::same_as&lt;
+        int&amp;,
+        std::common_reference_t&lt;
+            std::add_lvalue_reference_t&lt;int&gt;,
+            std::add_lvalue_reference_t&lt;int&gt;&amp;,
+            std::add_lvalue_reference_t&lt;int&gt;&amp;&amp;,
+            std::add_lvalue_reference_t&lt;int&gt;const,
+            std::add_lvalue_reference_t&lt;int&gt;const&amp;
+        &gt;
+    &gt;
+);
+
+int main() {}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc common_type}}
+{{dsc inc|cpp/concepts/dsc common_reference_with}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

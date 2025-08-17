@@ -1,0 +1,149 @@
+{{cpp/title|size|ssize}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{cpp/iterator/range access headers}}
+{{dcla|num=1|since=c++17|
+template&lt; class C &gt;
+constexpr auto size( const C&amp; c ) -&gt; decltype(c.size());
+}}
+{{dcla|num=2|since=c++20|
+template&lt; class C &gt;
+constexpr auto ssize( const C&amp; c )
+    -&gt; std::common_type_t&lt;std::ptrdiff_t,
+                          std::make_signed_t&lt;decltype(c.size())&gt;&gt;;
+}}
+{{dcla|num=3|since=c++17|
+template&lt; class T, std::size_t N &gt;
+constexpr std::size_t size( const T (&amp;array)[N] ) noexcept;
+}}
+{{dcla|num=4|since=c++20|
+template&lt; class T, std::ptrdiff_t N &gt;
+constexpr std::ptrdiff_t ssize( const T (&amp;array)[N] ) noexcept;
+}}
+{{dcl end}}
+
+返回给定范围的大小。
+
+@1,2@ 返回 {{c|c.size()}}，需要时转换到返回类型。
+@3,4@ 返回 {{c|N}}。
+
+===参数===
+{{par begin}}
+{{par|c|拥有 {{tt|size}} 成员函数的容器或视图}}
+{{par|array|任意类型的数组}}
+{{par end}}
+
+===返回值===
+@1@ {{c|c.size()}}
+@2@ {{c multi|static_cast&lt;std::common_type_t&lt;std::ptrdiff_t,|                               std::make_signed_t&lt;decltype(c.size())&gt;&gt;&gt;(c.size())}}
+@3,4@ {{c|N}}
+
+===异常===
+@1,2@ {{cpp/impldef exception item}}
+
+===重载===
+可以为未暴露适合的 {{tt|size()}} 成员函数的类或枚举提供 {{tt|size}} 的自定义重载，从而能检测它。
+
+{{rrev|since=c++20|
+[[cpp/language/adl|实参依赖查找]]所找到的 {{tt|size}} 重载可用于定制 {{c/core|std::ranges::size}}、{{c/core|std::ranges::ssize}} 及 {{c/core|std::ranges::empty}} 的行为。
+}}
+
+===可能的实现===
+{{eq impl
+|title1=size (1)|ver1=1|1=
+template&lt;class C&gt;
+constexpr auto size(const C&amp; c) -&gt; decltype(c.size())
+{
+    return c.size();
+}
+|title2=ssize (2)|ver2=2|2=
+template&lt;class C&gt;
+constexpr auto ssize(const C&amp; c)
+    -&gt; std::common_type_t&lt;std::ptrdiff_t,
+                          std::make_signed_t&lt;decltype(c.size())&gt;&gt;
+{
+    using R = std::common_type_t&lt;std::ptrdiff_t,
+                                 std::make_signed_t&lt;decltype(c.size())&gt;&gt;;
+    return static_cast&lt;R&gt;(c.size());
+}
+|title3=size (3)|ver3=3|3=
+template&lt;class T, std::size_t N&gt;
+constexpr std::size_t size(const T (&amp;array)[N]) noexcept
+{
+    return N;
+}
+|title4=ssize (4)|ver4=4|4=
+template&lt;class T, std::ptrdiff_t N&gt;
+constexpr std::ptrdiff_t ssize(const T (&amp;array)[N]) noexcept
+{
+    return N;
+}
+}}
+
+===注解===
+{{ftm begin|std=1|comment=1}}
+{{ftm|std=C++17|value=201411L|__cpp_lib_nonmember_container_access|{{tt|std::size()}}, {{lc|std::data}} 和 {{lc|std::empty}}}}
+{{ftm|std=C++20|value=201902L|__cpp_lib_ssize|{{tt|std::ssize()}} {{vl|2,4}} 和无符号的 {{ltf|cpp/container/span/size|std::span::size}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    // 对容器工作
+    std::vector&lt;int&gt; v{3, 1, 4};
+    assert(std::size(v) == 3);
+    
+    // 对内建数组也能工作
+    int a[]{-5, 10, 15};
+    // 返回元素数量（而非字节数），与 sizeof 不同
+    assert(std::size(a) == 3);
+    std::cout &lt;&lt; "size of a[]: " &lt;&lt; sizeof a &lt;&lt; '\n'; // 12, 若 sizeof(int) == 4
+    
+    // 提供一种获取字符串缓冲区大小的安全方法（与 sizeof 相比）
+    const char str[] = "12345";
+    // 这些方法可以得到正确结果
+    assert(std::size(str) == 6);
+    assert(sizeof(str) == 6);
+    
+    // 而此处使用 sizeof 则是一种常见 BUG 来源
+    const char* str_decayed = "12345";
+    // std::cout &lt;&lt; std::size(str_decayed) &lt;&lt; '\n'; // 编译失败
+    std::cout &lt;&lt; sizeof(str_decayed) &lt;&lt; '\n'; // 打印的是指针的大小！
+    
+    // C++20 起可以使用有符号大小 (std::ssize)
+    auto i = std::ssize(v);
+    for (--i; i != -1; --i)
+        std::cout &lt;&lt; v[i] &lt;&lt; (i ? ' ' : '\n');
+    assert(i == -1);
+
+    // 注意，字符串字面量中包含末尾的空字符，它也是所构造字符数组的一部分。
+    // 这使得 std::size 与 std::strlen 和 std::string::size 有不同表现：
+    constexpr char symbols[] = "0123456789";
+
+    static_assert(std::size(symbols) == 11);
+    static_assert(std::string(symbols).size() == 10);
+    assert(std::strlen(symbols) == 10);
+}
+|p=true&lt;!--指针和 int 的大小--&gt;
+|output=
+size of a[]: 12
+8
+4 1 3
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc ptrdiff_t}}
+{{dsc inc|cpp/types/dsc size_t}}
+{{dsc inc|cpp/ranges/dsc size}}
+{{dsc inc|cpp/ranges/dsc ssize}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

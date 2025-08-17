@@ -1,0 +1,38 @@
+{{cpp/memory/inout_ptr_t/title|~inout_ptr_t}}
+{{cpp/memory/inout_ptr_t/navbar}}
+{{ddcl | since=c++23 |
+~inout_ptr_t();
+}}
+
+以修改的 {{tt|Pointer}} 对象（或若调用了 {{c|operator void**()}} 则为 {{c|void*}} 对象）的值捕获的实参重设适配的 {{tt|Smart}} 对象。可能在适配的 {{tt|Smart}} 对象上调用 {{c|release()}}，若构造函数未调用它。
+
+令
+* {{tt|s}} 代表适配的 {{tt|Smart}} 对象，
+* {{tt|args...}} 代表捕获的实参，
+* {{tt|p}} 代表存储的 {{tt|Pointer}} 的值，或若调用了 {{c|operator void**}} 则为 {{c|static_cast&lt;Pointer&gt;(*operator void**())}}，
+* {{tt|SP}} 为
+** {{c|Smart::pointer}}，若它合法并代表类型，否则为
+** {{c|Smart::element_type*}}，若 {{c|Smart::element_type}} 并代表类型，否则为
+** {{c|std::pointer_traits&lt;Smart&gt;::element_type*}}，若 {{c|std::pointer_traits&lt;Smart&gt;::element_type}} 合法并代表类型，否则为
+** {{tt|Pointer}} 
+* {{c|/*do-release*/}} 代表 {{c|s.release()}}，若{{rlp|inout_ptr_t|构造函数}}不调用 {{c|release()}}，否则为空。
+
+若 {{tt|Smart}} 为指针类型，则析构函数进行
+:{{c|1=s = static_cast&lt;Smart&gt;(p);}}，而若 {{c|sizeof...(Args) &gt; 0}} 则程序非良构；
+否则，若 {{c|s.reset(static_cast&lt;SP&gt;(p), std::forward&lt;Args&gt;(args)...)}} 为良构，则析构函数进行
+:{{c|/*do-release*/; if (p) { s.reset(static_cast&lt;SP&gt;(p), std::forward&lt;Args&gt;(args)...); } }}；
+否则，若 {{c|std::is_constructible_v&lt;Smart, SP, Args...&gt;}} 为 {{c|true}}，则析构函数进行
+:{{c|1=/*do-release*/; if (p) { s = Smart(static_cast&lt;SP&gt;(p), std::forward&lt;Args&gt;(args)...); } }}；
+否则程序非良构。
+
+===注解===
+实现可能在构造时分配 {{tt|Smart}} 所需的数据结构（例如控制块）的存储，以将不抛出的工作留给析构函数。
+
+在重设后销毁按值捕获的实参。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3897|std=C++23|before=析构函数不会更新裸指针为空值|after=它会}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

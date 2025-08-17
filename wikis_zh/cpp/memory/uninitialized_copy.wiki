@@ -1,0 +1,130 @@
+{{cpp/title|uninitialized_copy}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcla|num=1|constexpr=c++26| 
+template&lt; class InputIt, class NoThrowForwardIt &gt;
+NoThrowForwardIt uninitialized_copy( InputIt first, InputIt last,
+                                     NoThrowForwardIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt,
+          class NoThrowForwardIt &gt;
+NoThrowForwardIt uninitialized_copy( ExecutionPolicy&amp;&amp; policy,
+                                     ForwardIt first, ForwardIt last,
+                                     NoThrowForwardIt d_first );}}
+{{dcl end}}
+
+@1@ 如同用以下方式将范围 {{range|first|last}} 中的元素复制到从 {{c|d_first}} 开始的未初始化内存：
+{{box|
+{{c/core|1=for (; first != last; ++d_first, (void) ++first)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{rlpi|voidify}}{{c/core|(*d_first))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type(*first);}}
+}}
+@@ 如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。
+
+@2@ 同 {{v|1}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+
+{{rrev|since=c++20|
+如果 {{counted range|d_first|std::distance(first, last)}} 与 {{range|first|last}} 有重叠，那么行为未定义。
+}}
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的}}
+{{par|d_first|目标范围的起始}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|NoThrowForwardIt|ForwardIterator}}
+{{par req |通过 {{tt|NoThrowForwardIt}} 合法实例的自增、赋值、比较或间接均不可抛异常。{{rev inl|until=c++11|将 {{c/core|&amp;*}} 应用到 {{tt|NoThrowForwardIt}} 值的情况下必须产生指向它的值类型的指针。}}}}
+{{par end}}
+
+===返回值===
+指向最后复制的元素后一元素的迭代器。
+
+===复杂度===
+与 {{c|first}} 和 {{c|last}} 间的距离成线性。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior}}
+
+===注解===
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的 [[cpp/memory#未初始化内存算法|特化的内存算法]], {{vl|1}}}}
+
+===可能的实现===
+{{eq fun|1=
+template&lt;class InputIt, class NoThrowForwardIt&gt;
+constexpr NoThrowForwardIt uninitialized_copy(InputIt first, InputIt last,
+                                              NoThrowForwardIt d_first)
+{
+    using T = typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type;
+    NoThrowForwardIt current = d_first;
+    try
+    {
+        for (; first != last; ++first, (void) ++current)
+            ::new (static_cast&lt;void*&gt;(std::addressof(*current))) T(*first);
+        return current;
+    }
+    catch (...)
+    {
+        for (; d_first != current; ++d_first)
+            d_first-&gt;~T();
+        throw;
+    }
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+ 
+int main()
+{
+    const char *v[] = {"This", "is", "an", "example"};
+    
+    auto sz = std::size(v);
+    
+    if (void *pbuf = std::aligned_alloc(alignof(std::string), sizeof(std::string) * sz))
+    {
+        try
+        {
+            auto first = static_cast&lt;std::string*&gt;(pbuf);
+            auto last = std::uninitialized_copy(std::begin(v), std::end(v), first);
+            
+            for (auto it = first; it != last; ++it)
+                std::cout &lt;&lt; *it &lt;&lt; '_';
+            std::cout &lt;&lt; '\n';
+            
+            std::destroy(first, last);
+        }
+        catch (...) {}
+        std::free(pbuf);
+    }
+}
+|output=
+This_is_an_example_ 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=866|std=C++98|before=给定 {{tt|T}} 为 {{tt|NoThrowForwardIt}} 的值类型，如果&lt;br&gt;存在 {{c/core|T::operator new}}，那么程序可能会非良构|after=改用全局的布置 new}}
+{{dr list item|wg=lwg|dr=2133|std=C++98|before=效果描述用到了迭代表达式是 {{c|++d_first, ++first}} 的&lt;br&gt;{{c/core|for}} 循环，该表达式会进行 {{c/core|operator,}} 的实参依赖查找|after=丢弃其中一个操作数的值&lt;br&gt;以禁用该实参依赖查找}}
+{{dr list item|wg=lwg|dr=2433|std=C++11|before=此算法可能被重载的 {{c/core|operator&amp;}} 劫持|after=使用 {{lc|std::addressof}}}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可以在 {{c/core|const}} 存储上创建对象|after=保持不允许}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc uninitialized_copy_n}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

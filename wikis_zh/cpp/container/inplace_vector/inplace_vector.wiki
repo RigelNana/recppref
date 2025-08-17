@@ -1,0 +1,180 @@
+{{cpp/container/inplace_vector/title|inplace_vector}}
+{{cpp/container/inplace_vector/navbar}}
+{{dcl begin}}
+{{dcl|since=c++26|num=1|
+constexpr inplace_vector() noexcept;
+}}
+{{dcl|since=c++26|num=2|
+constexpr explicit inplace_vector( size_type count );
+}}
+{{dcl|since=c++26|num=3|
+constexpr inplace_vector( size_type count, const T&amp; value );
+}}
+{{dcl|since=c++26|num=4|
+template&lt; class InputIt &gt;
+constexpr inplace_vector( InputIt first, InputIt last );
+}}
+{{dcl|since=c++26|num=5|
+template&lt; /*container-compatible-range*/&lt;T&gt; R &gt;
+constexpr inplace_vector( std::from_range_t, R&amp;&amp; rg );
+}}
+{{dcl|since=c++26|num=6|
+constexpr inplace_vector( const inplace_vector&amp; other );
+}}
+{{dcl|since=c++26|num=7|1=
+constexpr inplace_vector( inplace_vector&amp;&amp; other )
+    noexcept(N == 0 {{!!}} std::is_nothrow_move_constructible_v&lt;T&gt;);
+}}
+{{dcl|since=c++26|num=8|
+constexpr inplace_vector( std::initializer_list&lt;T&gt; init );
+}}
+{{dcl end}}
+
+从多种数据来源构造新的 {{tt|inplace_vector}}。
+
+@1@ 构造空的 {{tt|inplace_vector}}，它的 {{c|1=data() == nullptr}} 且 {{c|1=size() == 0}}。
+
+@2@ 构造带有 {{c|count}} 个默认插入元素的 {{tt|inplace_vector}}。
+
+@3@ 构造带有 {{c|count}} 个值为 {{c|value}} 的元素副本的 {{tt|inplace_vector}}。
+
+@4@ 构造具有范围 {{range|first|last}} 的内容的 {{tt|inplace_vector}}。
+
+@5@ 构造具有范围 {{c|rg}} 的内容的 {{tt|inplace_vector}}。
+@@ {{c/core|/*container-compatible-range*/}} 的定义见 {{l2tt|cpp/ranges/to}}。
+
+@6@ {{lt|cpp/language/copy constructor|复制构造函数}}。构造具有 {{c|other}} 的内容副本的 {{tt|inplace_vector}}。
+@@ 如果 {{c|N &gt; 0}} 和 {{c|std::is_trivially_copy_constructible_v&lt;T&gt;}} 都是 {{c|true}}，那么此构造函数是{{ls|cpp/language/copy constructor#平凡复制构造函数}}。
+
+@7@ {{lt|cpp/language/move constructor|移动构造函数}}。使用移动语义构造具有 {{c|other}} 的内容的 {{tt|inplace_vector}}。
+@@ 如果 {{c|N &gt; 0}} 和 {{c|std::is_trivially_move_constructible_v&lt;T&gt;}} 都是 {{c|true}}，那么此构造函数是{{ls|cpp/language/move constructor#平凡移动构造函数}}。
+
+@8@ 构造具有初始化器列表 {{c|init}} 的内容的 {{tt|inplace_vector}}。
+
+===参数===
+{{par begin}}
+{{par|count|容器的大小}}
+{{par|value|用以初始化容器元素的值}}
+{{par range|3=要复制的|range=源}}
+{{par|rg|包含用以初始化容器元素的值的范围}}
+{{par|other|用以初始化容器元素的来源的另一个 {{tt|inplace_vector}}}}
+{{par|init|用以初始化容器元素的初始化器列表}}
+{{par hreq}}
+{{par req named|T|DefaultInsertable|overloads=2,3}}
+{{par end}}
+
+===复杂度===
+@1@ 常数。
+@2,3@ 与 {{c|count}} 成线性。
+@4@ 与 {{c|std::distance(first, last)}} 成线性。
+@5@ 与 {{c|std::ranges::distance(rg)}} 成线性。
+@6,7@ 与 {{c|other}} 的大小成线性。
+@8@ 与 {{c|init}} 的大小成线性。
+
+===异常===
+@2,3@ 当 {{c|count &gt; N}} 时抛出 {{lc|std::bad_alloc}}。
+@5@ 当 {{c|std::ranges::size(rg) &gt; N}} 时抛出 {{lc|std::bad_alloc}}。
+@8@ 当 {{c|init.size() &gt; N}} 时抛出 {{lc|std::bad_alloc}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;initializer_list&gt;
+#include &lt;inplace_vector&gt;
+#include &lt;new&gt;
+#include &lt;print&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    std::inplace_vector&lt;int, 4&gt; v1; // 重载 (1)
+    assert(v1.size() == 0 &amp;&amp; v1.capacity() == 4);
+    
+    std::inplace_vector&lt;int, 0&gt; v2; // 重载 (1)，允许 N == 0
+    assert(v2.size() == 0 &amp;&amp; v2.capacity() == 0);
+    
+    std::inplace_vector&lt;int, 5&gt; v3(3); // 重载 (2)
+    assert(v3.size() == 3 &amp;&amp; v3.capacity() == 5);
+    std::println("v3 = {}", v3);
+    
+    try
+    {
+        std::inplace_vector&lt;int, 3&gt; v(4); // 重载 (2)，count &gt; N 时抛出
+    }
+    catch(const std::bad_alloc&amp; ex1)
+    {
+        std::println("ex1.what(): {}", ex1.what());
+    }
+    
+    std::inplace_vector&lt;int, 5&gt; v4(3, 8); // 重载 (3)
+    assert(v4.size() == 3 &amp;&amp; v4.capacity() == 5);
+    std::println("v4 = {}", v4);
+    
+    try
+    {
+        std::inplace_vector&lt;int, 3&gt; v(4, 2); // 重载 (3)，count &gt; N 时抛出
+    }
+    catch(const std::bad_alloc&amp; ex2)
+    {
+        std::println("ex2.what(): {}", ex2.what());
+    }
+    
+    const auto init = {1, 2, 3};
+    
+    std::inplace_vector&lt;int, 4&gt; v5(init.begin(), init.end()); // 重载 (4)
+    assert(v5.size() == 3 &amp;&amp; v5.capacity() == 4);
+    std::println("v5 = {}", v5);
+    
+    std::inplace_vector&lt;int, 4&gt; v6(std::from_range, init); // 重载 (5)
+    assert(v6.size() == 3 &amp;&amp; v6.capacity() == 4);
+    std::println("v6 = {}", v6);
+    
+    std::inplace_vector&lt;int, 4&gt; v7(v6); // 重载 (6)
+    assert(v7.size() == 3 &amp;&amp; v7.capacity() == 4);
+    std::println("v7 = {}", v7);
+    assert(v6.size() == 3);
+    
+    std::inplace_vector&lt;int, 4&gt; v8(std::move(v6)); // 重载 (7)
+    // 注意，移动后 v6 处于有效但不确定的状态。
+    assert(v8.size() == 3 &amp;&amp; v8.capacity() == 4);
+    std::println("v8 = {}", v8);
+    
+    std::inplace_vector&lt;int, 4&gt; v9(init); // 重载 (8)
+    assert(v9.size() == 3 &amp;&amp; v9.capacity() == 4);
+    std::println("v9 = {}", v9);
+    
+    try
+    {
+        std::inplace_vector&lt;int, 2&gt; v(init); // 重载 (8)，init.size() &gt; N 时抛出
+    }
+    catch(const std::bad_alloc&amp; ex3)
+    {
+        std::println("ex3.what(): {}", ex3.what());
+    }
+}
+|p=true
+|output=
+v3 = [0, 0, 0]
+ex1.what(): std::bad_alloc
+v4 = [42, 42, 42]
+ex2.what(): std::bad_alloc
+v5 = [1, 2, 3]
+v6 = [1, 2, 3]
+v7 = [1, 2, 3]
+v8 = [1, 2, 3]
+v9 = [1, 2, 3]
+ex3.what(): std::bad_alloc
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc operator{{=}}|inplace_vector}}
+{{dsc inc|cpp/container/dsc capacity|inplace_vector}}
+{{dsc inc|cpp/container/dsc data|inplace_vector}}
+{{dsc inc|cpp/container/dsc size|inplace_vector}}
+{{dsc inc|cpp/iterator/dsc size}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pl|pt|ru}}

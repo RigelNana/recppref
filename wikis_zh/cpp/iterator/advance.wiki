@@ -1,0 +1,143 @@
+{{cpp/title|advance}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl|until=c++17|
+template&lt; class InputIt, class Distance &gt;
+void advance( InputIt&amp; it, Distance n );
+}}
+{{dcl|since=c++17|
+template&lt; class InputIt, class Distance &gt;
+constexpr void advance( InputIt&amp; it, Distance n );
+}}
+{{dcl end}}
+
+增加给定的迭代器 {{c|it}} 向前 {{c|n}} 个元素。
+
+如果 {{c|n}} 为负，那么迭代器会自减。此时 {{tt|InputIt}} 必须满足{{named req|BidirectionalIterator}}，否则行为未定义。
+
+===参数===
+{{par begin}}
+{{par|it|要推进的迭代器 }}
+{{par|n|{{c|it}} 应推进的元素数}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===返回值===
+（无）
+
+===复杂度===
+线性。
+
+然而，如果 {{tt|InputIt}} 额外满足{{named req|RandomAccessIterator}}，那么复杂度是常数。
+
+===注解===
+如果指定的自增或自减序列要求一个不可自增迭代器（例如尾后迭代器）自增，或不可自减迭代器（例如首迭代器或持有{{rlp|/#可解性与有效性|奇异值}}的迭代器）自减，那么行为未定义。
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_iterator_base_funcs.h#L200 libstdc++] 与 [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/iterator#L582 libc++] 中的实现。
+
+{{eq impl
+|title1=非 constexpr 版本|ver1=1|1=
+namespace detail
+{
+    template&lt;class It&gt;
+    void do_advance(It&amp; it, typename std::iterator_traits&lt;It&gt;::difference_type n,
+                    std::input_iterator_tag)
+    {
+        while (n &gt; 0)
+        {
+            --n;
+            ++it;
+        }
+    }
+    
+    template&lt;class It&gt;
+    void do_advance(It&amp; it, typename std::iterator_traits&lt;It&gt;::difference_type n,
+                    std::bidirectional_iterator_tag)
+    {
+        while (n &gt; 0)
+        {
+            --n;
+            ++it;
+        }
+        while (n &lt; 0)
+        {
+            ++n;
+            --it;
+        }
+    }
+    
+    template&lt;class It&gt;
+    void do_advance(It&amp; it, typename std::iterator_traits&lt;It&gt;::difference_type n,
+                    std::random_access_iterator_tag)
+    {
+        it += n;
+    }
+} // namespace detail
+
+template&lt;class It, class Distance&gt;
+void advance(It&amp; it, Distance n)
+{
+    detail::do_advance(it, typename std::iterator_traits&lt;It&gt;::difference_type(n),
+                       typename std::iterator_traits&lt;It&gt;::iterator_category());
+}
+|title2=constexpr 版本|ver2=2|2=
+template&lt;class It, class Distance&gt;
+constexpr void advance(It&amp; it, Distance n)
+{
+    using category = typename std::iterator_traits&lt;It&gt;::iterator_category;
+    static_assert(std::is_base_of_v&lt;std::input_iterator_tag, category&gt;);
+    
+    auto dist = typename std::iterator_traits&lt;It&gt;::difference_type(n);
+    if constexpr (std::is_base_of_v&lt;std::random_access_iterator_tag, category&gt;)
+        it += dist;
+    else
+    {
+        while (dist &gt; 0)
+        {
+            --dist;
+            ++it;
+        }
+        if constexpr (std::is_base_of_v&lt;std::bidirectional_iterator_tag, category&gt;)
+            while (dist &lt; 0)
+            {
+                ++dist;
+                --it;
+            }
+    }
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main() 
+{
+    std::vector&lt;int&gt; v{3, 1, 4};
+    
+    auto vi = v.begin();
+    std::advance(vi, 2);
+    std::cout &lt;&lt; *vi &lt;&lt; ' ';
+    
+    vi = v.end();
+    std::advance(vi, -2);
+    std::cout &lt;&lt; *vi &lt;&lt; '\n';
+}
+|output=4 1
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc next}}
+{{dsc inc|cpp/iterator/dsc prev}}
+{{dsc inc|cpp/iterator/dsc distance}}
+{{dsc inc|cpp/iterator/ranges/dsc advance}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

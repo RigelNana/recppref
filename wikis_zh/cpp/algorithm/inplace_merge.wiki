@@ -1,0 +1,125 @@
+{{cpp/title|inplace_merge}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|constexpr=c++26|
+template&lt; class BidirIt &gt;
+void inplace_merge( BidirIt first, BidirIt middle, BidirIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class BidirIt &gt;
+void inplace_merge( ExecutionPolicy&amp;&amp; policy,
+                    BidirIt first, BidirIt middle, BidirIt last );
+}}
+{{dcla|num=3|constexpr=c++26|
+template&lt; class BidirIt, class Compare &gt;
+void inplace_merge( BidirIt first, BidirIt middle, BidirIt last,
+                    Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class BidirIt, class Compare &gt;
+void inplace_merge( ExecutionPolicy&amp;&amp; policy,
+                    BidirIt first, BidirIt middle, BidirIt last,
+                    Compare comp );
+}}
+{{dcl end}}
+
+将两个相继的有序范围 {{range|first|middle}} 和 {{range|middle|last}} 归并为一个有序范围 {{range|first|last}}。
+
+@1@ 如果 {{range|first|middle}} 或 {{range|middle|last}} 没有按 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} {{rlp|/#要求|排序}}，那么行为未定义。
+
+@3@ 如果 {{range|first|middle}} 或 {{range|middle|last}} 没有按 {{c|comp}} 排序，那么行为未定义。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+此合并函数是稳定的，意思是对于两个原范围中的等价元素，来自第一范围的元素（保持原来的顺序）先于来自第二范围的元素（保持原来的顺序）。
+
+如果满足以下任意条件，那么行为未定义：
+* {{range|first|middle}} 或 {{range|middle|last}} 不是[[cpp/iterator#范围|有效范围]]。
+{{rev begin}}
+{{rev|until=c++11|
+* {{c|*first}} 的类型不{{named req|Swappable}}。
+}}
+{{rev|since=c++11|
+* {{tt|BiditIt}} 不{{named req|ValueSwappable}}。
+* {{c|*first}} 的类型不{{named req|MoveConstructible}}。
+* {{c|*first}} 的类型不{{named req|MoveAssignable}}。
+}}
+{{rev end}}
+
+===参数===
+{{par begin}}
+{{par|first|第一个有序范围的起始}}
+{{par|middle|第一个有序范围的结尾及第二个有序范围的起始}}
+{{par|last|第二个有序范围的结尾}}
+{{par exec pol}}
+{{par cmp ord|comp|p1=BidirIt}} 
+{{par hreq}}
+{{par req named|BidirIt|BidirectionalIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+
+@1@ 在额外内存足够时应用 {{mathjax-or|\(\scriptsize N-1\)|N-1}} 次 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行比较，否则应用 {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N⋅log(N))}} 次。
+
+@2@ 应用 {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N⋅log(N))}} 次 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行比较。
+
+@3@ 在额外内存足够时最多应用 {{mathjax-or|\(\scriptsize N-1\)|N-1}} 次比较函数 {{c|comp}}，否则应用 {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N⋅log(N))}} 次。
+
+@4@ 应用 {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N⋅log(N))}} 次比较函数 {{c|comp}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L2508 libstdc++] 与 [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L4452 libc++] 中的实现。
+
+===注解===
+此函数试图分配临时缓冲区。如果分配失败，那么就会选择较低效的算法。
+
+{{feature test macro|__cpp_lib_constexpr_algorithms|{{c/core|constexpr}} 原地归并 {{vl|1}}, {{vl|3}}|value=202306L|std=C++26}}
+
+===示例===
+{{example
+|下列代码是归并排序的一种实现。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+template&lt;class Iter&gt;
+void merge_sort(Iter first, Iter last)
+{
+    if (last - first &gt; 1)
+    {
+        Iter middle = first + (last - first) / 2;
+        merge_sort(first, middle);
+        merge_sort(middle, last);
+        std::inplace_merge(first, middle, last);
+    }
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{8, 2, -2, 0, 11, 11, 1, 7, 3};
+    merge_sort(v.begin(), v.end());
+    for (const auto&amp; n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+-2 0 1 2 3 7 8 11 11
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc merge}}
+{{dsc inc|cpp/algorithm/dsc sort}}
+{{dsc inc|cpp/algorithm/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc inplace_merge}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

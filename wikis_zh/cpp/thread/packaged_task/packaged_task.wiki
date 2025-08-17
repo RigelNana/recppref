@@ -1,0 +1,101 @@
+{{cpp/thread/packaged_task/title|packaged_task}}
+{{cpp/thread/packaged_task/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+packaged_task() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class F &gt;
+explicit packaged_task( F&amp;&amp; f );
+}}
+{{dcl|num=3|since=c++11|until=c++17|
+template&lt; class F, class Allocator &gt;
+explicit packaged_task( std::allocator_arg_t, const Allocator&amp; a, F&amp;&amp; f );
+}}
+{{dcl|num=4|since=c++11|1=
+packaged_task( const packaged_task&amp; ) = delete;
+}}
+{{dcl|num=5|since=c++11|
+packaged_task( packaged_task&amp;&amp; rhs ) noexcept;
+}}
+{{dcl end}}
+
+构造新的 {{tt|std::packaged_task}} 对象。
+
+@1@ 构造无任务且无共享状态的 {{tt|std::packaged_task}} 对象。
+
+@2,3@ 构造拥有 {{c/core|std::decay&lt;F&gt;::type}} 类型任务和共享状态的 {{tt|std::packaged_task}} 对象，以 {{c|std::forward&lt;F&gt;(f)}} 初始化任务并存储。
+{{rev begin}}
+{{rev|until=c++20|
+{{cpp/enable if|plural=yes|{{c/core|std::decay&lt;F&gt;::type}} 和 {{c/core|std::packaged_task&lt;R(Args...)&gt;}} 不是同一类型}}。
+
+设 {{c|t1}}、{{c|t2}}、...、{{c|tN}} 为 {{tt|Args}} 中对应类型的值，如果 {{box|{{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}{{c/core|(f, t1, t2, ..., tN)}}}} 不是合法的表达式，那么程序非良构。
+}}
+{{rev|since=c++20|
+{{cpp/enable if|{{c/core|std::remove_cvref_t&lt;F&gt;}} 和 {{c/core|std::packaged_task&lt;R(Args...)&gt;}} 不是同一类型}}。
+
+如果 {{c|std::is_invocable_r_v&lt;R, std::decay_t&lt;F&gt;&amp;, Args...&gt;}} 是 {{c|false}}，那么程序非良构。
+}}
+{{rev end}}
+:@3@ 用分配器 {{c|a}} 分配存储任务所需的内存。
+
+@4@ 复制构造函数被弃置，{{tt|std::packaged_task}} 只能移动。
+
+@5@ 以 {{c|rhs}} 之前所占有的共享状态和任务构造 {{tt|std::packaged_task}}，令 {{c|rhs}} 留在无共享状态且拥有被移动后的任务的状态。
+
+===参数===
+{{par begin}}
+{{par|f|要执行的可调用目标}}
+{{par|a|存储任务时所用的分配器}}
+{{par|rhs|要从之移动的 {{tt|std::packaged_task}}}}
+{{par end}}
+
+===异常===
+@2@ {{c|f}} 的复制/移动构造函数所抛的任何异常，在内存分配失败时可能是 {{lc|std::bad_alloc}}。
+
+@3@ {{c|f}} 的复制/移动构造函数，在内存分配失败时有分配器的 {{tt|allocate}} 函数所抛的任何异常。
+
+===示例===
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int fib(int n)
+{
+    if (n &lt; 3)
+        return 1;
+    else
+        return fib(n - 1) + fib(n - 2);
+}
+
+int main()
+{
+    std::packaged_task&lt;int(int)&gt; fib_task(&amp;fib); 
+    
+    std::cout &lt;&lt; "开始任务\n";
+    auto result = fib_task.get_future();
+    std::thread t(std::move(fib_task), 42);
+    
+    std::cout &lt;&lt; "等待任务结束..." &lt;&lt; std::endl;
+    std::cout &lt;&lt; result.get() &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "任务完成\n";
+    t.join();
+}
+|output=
+开始任务
+等待任务结束...
+267914296
+任务完成
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2067|std=C++11|before=复制构造函数的参数类型是 {{tt|packaged_task&amp;}}|after=添加 {{c/core|const}}}}
+{{dr list item|wg=lwg|dr=2097|std=C++11|before=对于重载 {{v|2,3}}，{{tt|F}} 可以是 {{lc|std::packaged_task&lt;R(Args...)&gt;}}|after=对 {{tt|F}} 进行约束}}
+{{dr list item|wg=lwg|dr=4154|std=C++11|before=重载 {{v|2,3}} 未考虑退化|after=考虑退化}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

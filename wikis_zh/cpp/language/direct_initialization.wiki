@@ -1,0 +1,167 @@
+{{title|直接初始化}}
+{{cpp/language/initialization/navbar}}
+以一组明确的构造函数实参对对象进行初始化。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|T}} {{spar|对象}} {{ttb|(}} {{spar|实参}} {{ttb|);}}
+{{spar|T}} {{spar|对象}} {{ttb|(}} {{spar|实参1, 实参2, ...}} {{ttb|);}}
+}}
+{{sdsc|num=2|{{spar|T}} {{spar|对象}} {{ttb|{}} {{spar|实参}} {{ttb|};}}
+|notes={{mark since c++11}}}}
+{{sdsc|num=3|{{spar|T}} {{ttb|(}} {{spar|其他对象}} {{ttb|)}}
+{{spar|T}} {{ttb|(}} {{spar|实参1, 实参2, ...}} {{ttb|)}}}}
+{{sdsc|num=4|{{ttb|static_cast&lt;}} {{spar|T}} {{ttb|&gt;(}} {{spar|其他对象}} {{ttb|)}}}}
+{{sdsc|num=5|{{ttb|new}} {{spar|T}}{{ttb|(}}{{spar|实参列表, ...}}{{ttb|)}}}}
+{{sdsc|num=6|{{spar|类}}{{ttb|::}}{{spar|类}}{{ttb|()}} {{ttb|:}} {{spar|成员}}{{ttb|(}}{{spar|实参列表, ...}}{{ttb|)}} {{ttb|{}} {{spar|...}} {{ttb|}&lt;!-- --&gt;}}}}
+{{sdsc|num=7|{{ttb|[}}{{spar|实参}}{{ttb|](){}} {{spar|...}} {{ttb|}&lt;!-- --&gt;}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+===解释===
+在下列场合进行直接初始化：
+@1@ 以表达式{{rev inl|since=c++11|或花括号初始化列表}}的非空带括号列表初始化。
+@2@ 以花括号环绕的单个初始化器初始化一个非类类型对象（注意：对于类类型和其他使用花括号初始化列表的初始化，见{{rlp|list initialization|列表初始化}}）。
+@3@ 用{{rlp|explicit cast|函数风格转换}}或以带括号的表达式列表初始化{{rev inl|until=c++17|纯右值临时量}}{{rev inl|since=c++17|纯右值的结果对象}}。
+@4@ 用 {{rlp|static_cast}} 表达式初始化{{rev inl|until=c++17|纯右值临时量}}{{rev inl|since=c++17|纯右值的结果对象}}。
+@5@ 用带有非空初始化器的 new 表达式初始化具有动态存储期的对象。
+@6@ 用构造函数{{rlp|initializer list|初始化器列表}}初始化基类或非静态成员。
+@7@ 在 lambda 表达式中从按复制捕获的变量初始化闭包对象的成员。
+
+直接初始化的效果是：
+
+* 如果 {{tt|T}} 是数组类型，那么
+{{rev begin}}
+{{rev|until=c++20|
+:* 程序非良构。
+}}
+{{rev|since=c++20|
+:* 按{{rlp|aggregate initialization|聚合初始化}}初始化数组，但允许窄化转换，并{{rlp|value initialization|值初始化}}任何不带初始化器的元素。
+{{source|1=
+struct A
+{
+    explicit A(int i = 0) {}
+};
+
+A a[2](A(1)); // OK：以 A(1) 初始化 a[0] 并以 A() 初始化 a[1]
+A b[2]{A(1)}; // 错误：从 {} 隐式复制初始化 b[1] 选择了 explicit 构造函数
+}}
+}}
+{{rev end}}
+
+* 如果 {{tt|T}} 是类类型， 
+
+{{rev begin}}
+{{rev|since=c++17|
+:* 如果初始化器是{{rlp|value category|纯右值}}表达式且类型与 {{tt|T}} 为相同的类（忽略 cv 限定），则用初始化器表达式自身，而非从它实质化的临时量，初始化目标对象：&lt;br&gt;（C++17 前，编译器可以在此情况下消除源自纯右值的构造，但适合的构造函数仍必须可访问：参阅{{rlp|copy elision|复制消除}}）
+}}
+{{rev end}}
+:* 检验 {{tt|T}} 的构造函数并由重载决议选取最佳匹配。然后调用该构造函数以初始化对象。
+{{rrev|since=c++20|
+:* 否则，如果目标类型是（可能有 cv 限定）的聚合类，则按{{rlp|aggregate initialization|聚合初始化}}中所述进行初始化，但允许窄化转换，不允许使用指派初始化器，不延长引用所绑定到的临时量的生存期，不进行花括号消除，并{{rlp|value initialization|值初始化}}任何无初始化器的元素。
+{{source|1=&lt;!-- 来自 p0960r3 的示例 --&gt;
+struct B
+{
+    int a;
+    int&amp;&amp; r;
+};
+
+int f();
+int n = 10;
+
+B b1{1, f()};            // OK：延长生存期
+B b2(1, f());            // 良构，但有悬垂引用
+B b3{1.0, 1};            // 错误：窄化转换
+B b4(1.0, 1);            // 良构，但有悬垂引用
+B b5(1.0, std::move(n)); // OK
+}}
+}}
+* 否则，如果 {{tt|T}} 是非类类型但源类型是类类型，则检验源类型及其各基类的转换函数，并由重载决议选取最佳匹配。然后用选取的用户定义转换，将初始化器表达式转换为所初始化的对象。
+* 否则，如果 {{tt|T}} 是 {{c|bool}} 而原类型是 {{lc|std::nullptr_t}}，则被初始化对象的值为 {{c|false}}。&lt;!--- CWG 1781 ---&gt;
+* 否则，在必要时使用{{rlp|implicit conversion|标准转换}}，转换 {{spar|其他对象}} 的值为 {{tt|T}} 的无 cv 限定版本，而所初始化的对象的初值为（可能为转换后的）该值。
+
+===注解===
+直接初始比复制初始化更宽松：复制初始化仅考虑非{{rlp|explicit|显式}}的构造函数和非显式的用户定义{{rlp|cast operator|转换函数}}，而直接初始化考虑所有构造函数和所有用户定义转换函数。
+
+在使用直接初始化语法 {{v|1}}（带圆括号）的变量声明和{{rlp|function|函数声明}}之间有歧义的情况下，编译器始终选择函数声明。此消歧义规则有时是反直觉的，并且已被称为{{enwiki|most vexing parse|最烦人的分析}}。
+{{example|code=
+#include &lt;fstream&gt;
+#include &lt;iterator&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::ifstream file("data.txt");
+
+    // 下面是函数声明：
+    std::string foo1(std::istreambuf_iterator&lt;char&gt;(file),
+                     std::istreambuf_iterator&lt;char&gt;());
+    // 它声明名为 str 的函数，其返回类型为 std::string，
+    // 第一参数拥有 std::istreambuf_iterator&lt;char&gt; 类型和名称 "file"
+    // 第二参数无名称并拥有类型 std::istreambuf_iterator&lt;char&gt;()，
+    // 它被重写成函数指针类型 std::istreambuf_iterator&lt;char&gt;(*)()
+    
+    // C++11 前的修正（用以声明变量）：用额外括号环绕其中一个实参
+    std::string str1((std::istreambuf_iterator&lt;char&gt;(file)),
+                      std::istreambuf_iterator&lt;char&gt;());
+    
+    // C++11 后的修正（用以声明变量）：对任意实参使用列表初始化
+    std::string str2(std::istreambuf_iterator&lt;char&gt;{file}, {});
+}
+}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+struct Foo
+{
+    int mem;
+    explicit Foo(int n) : mem(n) {}
+};
+
+int main()
+{
+    std::string s1("test"); // 自 const char* 的构造函数
+    std::string s2(10, 'a');
+
+    std::unique_ptr&lt;int&gt; p(new int(1));  // OK：允许 explicit 构造函数
+//  std::unique_ptr&lt;int&gt; p = new int(1); // 错误：构造函数为 explicit
+
+    Foo f(2); // f 被直接初始化：
+              // 构造函数形参 n 从右值 2 复制初始化
+              // f.mem 从形参 n 直接初始化
+//  Foo f2 = 2; // 错误：构造函数为 explicit
+
+    std::cout &lt;&lt; s1 &lt;&lt; ' ' &lt;&lt; s2 &lt;&lt; ' ' &lt;&lt; *p &lt;&lt; ' ' &lt;&lt; f.mem  &lt;&lt; '\n';
+}
+|output=
+test aaaaaaaaaa 1 2
+}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+* {{rlp|converting constructor|转换构造函数}}
+* {{rlp|copy assignment|复制赋值}}
+* {{rlp|copy constructor|复制构造函数}}
+* {{rlp|default constructor|默认构造函数}}
+* {{rlp|destructor|析构函数}}
+* {{rlpt|explicit}}
+* {{rlp|initialization|初始化}}
+** {{rlp|aggregate initialization|聚合初始化}}
+** {{rlp|constant initialization|常量初始化}}
+** {{rlp|default initialization|默认初始化}}
+** {{rlp|direct initialization|直接初始化}}
+** {{rlp|initializer list|初始化器列表}}
+** {{rlp|list initialization|列表初始化}}
+** {{rlp|reference initialization|引用初始化}}
+** {{rlp|value initialization|值初始化}}
+** {{rlp|zero initialization|零初始化}}
+* {{rlp|move assignment|移动赋值}}
+* {{rlp|move constructor|移动构造函数}}
+* {{rlpt|new}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

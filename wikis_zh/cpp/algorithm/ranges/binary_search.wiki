@@ -1,0 +1,158 @@
+{{cpp/ranges/title|binary_search}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=版本_1|since=c++20|until=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr bool binary_search( I first, S last, const T&amp; value,
+                              Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;I, Proj&gt;,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr bool binary_search( I first, S last, const T&amp; value,
+                              Comp comp = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++20|until=c++26|1=
+template&lt; ranges::forward_range R,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr bool binary_search( R&amp;&amp; r, const T&amp; value,
+                              Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::forward_range R,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr bool binary_search( R&amp;&amp; r, const T&amp; value,
+                              Comp comp = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+@1@ 检查范围 {{range|first|last}} 内是否出现等价于 {{c|value}} 的经投影元素。
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{tt|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+欲成功进行 {{tt|ranges::binary_search}}，范围 {{range|first|last}} 必须至少以相对 {{c|value}} 部分有序，即它必须满足下列要求：
+* 相对于 {{c|std::invoke(comp, std::invoke(proj, element), value)}} 已划分（即该表达式对其为 {{c|true}} 的所有元素处于该表达式对其为 {{c|false}} 的所有元素之前）。
+* 相对于 {{c|!std::invoke(comp, value, std::invoke(proj, element))}} 已划分。
+* 对于所有元素，若 {{c|std::invoke(comp, std::invoke(proj, element), value)}} 为 {{c|true}} 则 {{c|!std::invoke(comp, value, std::invoke(proj, element))}} 为 {{c|true}}。
+
+完全有序的范围符合这些判别标准。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的|sentinel=yes}}
+{{par|r|要检验的元素范围}}
+{{par|value|与元素比较的值}}
+{{par|comp|应用到经投影元素的比较函数}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+若找到等于 {{c|value}} 的元素则为 {{c|true}}，否则为 {{c|false}} 。
+
+===复杂度===
+进行的比较与投影次数与 {{c|first}} 和 {{c|last}} 间的距离成对数（至多 {{math|log{{su|b=2}}(last - first) + O(1)}} 次投影与比较）。然而，对于不实现 {{lc|std::random_access_iterator}} 的迭代器，迭代器自增次数为线性。
+
+===注解===
+{{tt|std::ranges::binary_search}} 在找到投影等于 {{c|value}} 的元素时并不会返回指向所找到元素的迭代器。如果需要迭代器，应当代之以使用 {{lc|std::ranges::lower_bound}}。
+
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|1,2}}}}
+
+===可能的实现===
+{{eq fun|1=
+struct binary_search_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Proj = std::identity, class T = std::projected_value_t&lt;I, Proj&gt;,
+             std::indirect_strict_weak_order
+                 &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr bool operator()(I first, S last, const T&amp; value,
+                              Comp comp = {}, Proj proj = {}) const
+    {
+        auto x = ranges::lower_bound(first, last, value, comp, proj);
+        return (!(x == last) &amp;&amp; !(std::invoke(comp, value, std::invoke(proj, *x))));
+    }
+    
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;,
+             std::indirect_strict_weak_order
+                 &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                           Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr bool operator()(R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), value,
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr binary_search_fn binary_search;
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    constexpr static auto haystack = {1, 3, 4, 5, 9};
+    static_assert(std::ranges::is_sorted(haystack));
+    
+    for (const int needle : std::views::iota(1)
+                          {{!}} std::views::take(3))
+    {
+        std::cout &lt;&lt; "寻找 " &lt;&lt; needle &lt;&lt; ": ";
+        std::ranges::binary_search(haystack, needle)
+            ? std::cout &lt;&lt; "找到了 " &lt;&lt; needle &lt;&lt; '\n'
+            : std::cout &lt;&lt; "未命中!\n";
+    }
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{&lt;!----&gt;{1, 1}, {2, 3}, {4, 2}, {4, 3}&lt;!----&gt;};
+    auto cmpz = [](CD x, CD y){ return abs(x) &lt; abs(y); };
+    #ifdef __cpp_lib_algorithm_default_value_type
+        assert(std::ranges::binary_search(nums, {4, 2}, cmpz));
+    #else
+        assert(std::ranges::binary_search(nums, CD{4, 2}, cmpz));
+    #endif
+}
+|output=
+寻找 for 1: 找到了 1
+寻找 for 2: 未命中!
+寻找 for 3: 找到了 3
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal_range}}
+{{dsc inc|cpp/algorithm/ranges/dsc lower_bound}}
+{{dsc inc|cpp/algorithm/ranges/dsc upper_bound}}
+{{dsc inc|cpp/algorithm/ranges/dsc contains}}
+{{dsc inc|cpp/algorithm/dsc binary_search}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

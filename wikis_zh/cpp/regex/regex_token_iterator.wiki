@@ -1,0 +1,106 @@
+{{cpp/title|regex_token_iterator}}
+{{cpp/regex/regex_token_iterator/navbar}}
+{{ddcl|header=regex|since=c++11|1=
+template&lt;
+    class BidirIt,
+    class CharT = typename std::iterator_traits&lt;BidirIt&gt;::value_type,
+    class Traits = std::regex_traits&lt;CharT&gt;
+&gt; class regex_token_iterator
+}}
+
+{{tt|std::regex_token_iterator}} 是访问底层字符序列内每个正则表达式匹配的单独子匹配的只读{{named req|ForwardIterator}}。它也可以用于访问没有匹配到给定的正则表达式的序列部分（例如作为记号化器）。
+
+构造时，它构造一个 {{lc|std::regex_iterator}}，而在每次自增时，它越过请求的来自当前匹配结果的子匹配，并在自增离开上个子匹配时自增底层的 {{lc|std::regex_iterator}}。
+
+默认构造的 {{tt|std::regex_token_iterator}} 是序列尾迭代器。在抵达最后匹配的最后子匹配自增合法的 {{tt|std::regex_token_iterator}} 时，它变得等于序列尾迭代器。进一步解引用或自增它会引发未定义行为。
+
+在恰好变成序列尾迭代器前，如果请求的子匹配下标列表中出现了 {{c|-1}}（非匹配片段），那么 {{tt|std::regex_token_iterator}} 可成为''后缀迭代器''。解引用这种迭代器会返回对应最后匹配和序列结尾之间的字符序列的 {{tt|match_results}}。
+
+{{tt|std::regex_token_iterator}} 的典型实现保有底层的 {{lc|std::regex_iterator}}、请求的子匹配下标的容器（例如 {{c/core|std::vector&lt;int&gt;}}）、等于子匹配下标的内部计数器、指向当前匹配的当前子匹配的指向 {{lc|std::sub_match}} 指针和含有最近非匹配字符序列的 {{lc|std::match_results}} 对象（用于记号化器模式）。
+
+===类型要求===
+{{par begin}}
+{{par req named|BidirIt|BidirectionalIterator}}
+{{par end}}
+
+===特化===
+对常用字符序列类型定义了数个特化：
+{{dsc begin}}
+{{dsc header|regex}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{ttb|std::cregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;const char*&gt;}}}}
+{{dsc|{{ttb|std::wcregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;const wchar_t*&gt;}}}}
+{{dsc|{{ttb|std::sregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;std::string}}{{c/core|::const_iterator&gt;}}}}
+{{dsc|{{ttb|std::wsregex_token_iterator}}|{{c/core|std::regex_token_iterator&lt;std::wstring}}{{c/core|::const_iterator&gt;}}}}
+{{dsc end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem |成员类型|定义}}
+{{dsc|{{tt|value_type}}|{{c/core|std::sub_match&lt;BidirIt&gt;}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|pointer}}|{{c/core|const value_type*}}}}
+{{dsc|{{tt|reference}}|{{c/core|const value_type&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::forward_iterator_tag}}}}
+{{dsc|{{tt|iterator_concept}} {{mark c++20}}|{{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|regex_type}}|{{c/core|std::basic_regex&lt;CharT, Traits&gt;}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc constructor}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc destructor}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator{{=}}}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator cmp}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator*}}
+{{dsc inc|cpp/regex/regex_token_iterator/dsc operator arith}}
+{{dsc end}}
+
+===注解===
+程序员负责确保传递给迭代器构造函数的 {{lc|std::basic_regex}} 对象活得久于迭代器。因为迭代器存储 {{lc|std::regex_iterator}}，它存储指向正则表达式的指针，所以在销毁正则表达式后自增迭代器会导致未定义行为。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;regex&gt;
+
+int main()
+{
+    // 记号化（不匹配片段）
+    // 注意正则表达式仅匹配了两次：在获得第三个值时迭代器是后缀迭代器。
+    const std::string text = "Quick brown fox.";
+    const std::regex ws_re("\\s+"); // 空白符
+    std::copy(std::sregex_token_iterator(text.begin(), text.end(), ws_re, -1),
+              std::sregex_token_iterator(),
+              std::ostream_iterator&lt;std::string&gt;(std::cout, "\n"));
+    
+    std::cout &lt;&lt; '\n';
+    
+    // 迭代首个子匹配
+    const std::string html = R"(&lt;p&gt;&lt;a href="http://google.com"&gt;google&lt;/a&gt; )"
+                             R"(&lt; a HREF ="http://cppreference.com"&gt;cppreference&lt;/a&gt;\n&lt;/p&gt;)";
+    const std::regex url_re(R"!!(&lt;\s*A\s+[^&gt;]*href\s*=\s*"([^"]*)")!!", std::regex::icase);
+    std::copy(std::sregex_token_iterator(html.begin(), html.end(), url_re, 1),
+              std::sregex_token_iterator(),
+              std::ostream_iterator&lt;std::string&gt;(std::cout, "\n"));
+}
+|output=
+Quick
+brown
+fox.
+
+http://google.com
+http://cppreference.com
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3698|paper=P2770R0|std=C++20|before={{tt|regex_token_iterator}} 是贮藏迭代器，但它是 {{lconcept|forward_iterator}}|after=使之为 {{lconcept|input_iterator}}&lt;ref&gt;解决方案没有修改 {{tt|iterator_category}}，因为把它改成 {{lc|std::input_iterator_tag}} 会影响到很多现有代码。&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

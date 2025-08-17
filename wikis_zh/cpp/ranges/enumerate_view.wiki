@@ -1,0 +1,135 @@
+{{cpp/ranges/view title|enumerate}}
+{{cpp/ranges/enumerate_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::view V &gt;
+    requires /*range-with-movable-references*/&lt;V&gt;
+class enumerate_view :
+    public ranges::view_interface&lt;enumerate_view&lt;V&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /* 未指定 */ enumerate = /* 未指定 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R &gt;
+    requires /* 见下文 */
+constexpr /* 见下文 */ enumerate( R&amp;&amp; r );
+}}
+{{dcl h|辅助概念}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class R &gt;
+    concept /*range-with-movable-references*/ =
+        ranges::input_range&lt;R&gt; &amp;&amp;
+        std::move_constructible&lt;ranges::range_reference_t&lt;R&gt;&gt; &amp;&amp;
+        std::move_constructible&lt;ranges::range_rvalue_reference_t&lt;R&gt;&gt;;
+}}
+{{dcl end}}
+
+@1@ {{tt|enumerate_view}} 是一个范围适配器，其接受 {{lconcept|view}} 并产生 {{lc|std::tuple|tuple}} 的视图。结果序列中第 {{tt|i}} 个元素 (元组) 持有：
+* 等于 {{tt|i}} 的值，其为底层序列从零开始的索引，及
+* 到底层元素的引用。
+
+@2@ 名字 {{tt|views::enumerate}} 代表一个{{named req|RangeAdaptorObject}}。给定子表达式 {{c|e}}，表达式 {{c|views::enumerate(e)}} 对于任意合适的子表达式 {{c|e}} 都[[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|enumerate_view&lt;views::all_t&lt;decltype((e))&gt;&gt;(e)}}。
+
+@3@ 保证底层类型的引用可以被移动。
+
+当底层视图 {{tt|V}} 实现概念 {{lconcept|random_access_range}}、{{lconcept|bidirectional_range}}、{{lconcept|forward_range}}、{{lconcept|input_range}}、{{lconcept|common_range}} 和 {{lconcept|sized_range}} 时，{{tt|enumerate_view}} 也实现相应的概念。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|base_|id=base|spec={{tt|V}}|指向底层 {{lconcept|view}} 的迭代器}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|enumerate_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|enumerate_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|enumerate_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|enumerate_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|enumerate_view|notes}}
+{{dsc inc|cpp/ranges/adaptor/dsc reserve_hint|enumerate_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/enumerate_view/iterator|迭代器类型|notes={{mark c++23}}}}
+{{dsc expos mem tclass|cpp/ranges/enumerate_view/sentinel|哨位类型|notes={{mark c++23}}}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++23|1=
+template&lt; class View &gt;
+constexpr bool enable_borrowed_range&lt;ranges::enumerate_view&lt;View&gt;&gt; =
+    ranges::enable_borrowed_range&lt;View&gt;;
+}}
+此 {{lc|ranges::enable_borrowed_range}} 的特化使得当底层视图满足 {{lconcept|borrowed_range}} 时，{{tt|enumerate_view}} 也满足它。
+
+===注解===
+{{feature test macro|__cpp_lib_ranges_enumerate|std=C++23|value=202302L|{{tt|std::ranges::enumerate_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;ranges&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    constexpr static auto v = {'A', 'B', 'C', 'D'};
+
+    for (auto const [index, letter] : std::views::enumerate(v))
+        std::cout &lt;&lt; '(' &lt;&lt; index &lt;&lt; ':' &lt;&lt; letter &lt;&lt; ") ";
+    std::cout &lt;&lt; '\n';
+
+#if __cpp_lib_ranges_to_container
+    // 使用每个元素的位置作为键值创建的 map
+    auto m = v {{!}} std::views::enumerate {{!}} std::ranges::to&lt;std::map&gt;();
+
+    for (auto const [key, value] : m)
+        std::cout &lt;&lt; '[' &lt;&lt; key &lt;&lt; "]:" &lt;&lt; value &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+#endif
+
+    std::vector&lt;int&gt; numbers{1, 3, 5, 7};
+
+    // num 即便有 const 也是可改动的，它并不会传播给引用
+    // 为使其为 const，应使用 `std::views::enumerate(numbers) {{!}} std::views::as_const`
+    // 或者 `std::views::enumerate(std::as_const(numbers))`
+    for (auto const [index, num] : std::views::enumerate(numbers))
+    {
+        ++num; // 类型为 int&amp;
+        std::cout &lt;&lt; numbers[index] &lt;&lt; ' ';
+    }
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+(0:A) (1:B) (2:C) (3:D)
+[0]:A [1]:B [2]:C [3]:D
+2 4 6 8
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Enumerate view|id=range.enumerate|section=26.7.23}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc iota_view}}
+{{dsc inc|cpp/ranges/dsc zip_view}}
+{{dsc inc|cpp/ranges/dsc elements_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

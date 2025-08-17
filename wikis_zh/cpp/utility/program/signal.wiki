@@ -1,0 +1,167 @@
+{{cpp/title|signal}}
+{{cpp/utility/program/navbar}}
+{{dcl begin}}
+{{dcl header|csignal}}
+{{dcl|num=1|
+/* signal-handler */* signal( int sig, /* signal-handler */* handler );
+}}
+{{dcl|num=2|notes={{mark expos}}|1=
+extern "C" using /* signal-handler */ = void(int);
+}}
+{{dcl end}}
+
+改变信号 {{c|sig}} 的处理。取决于 {{c|handler}}，信号可以被忽略，设为默认，或由用户定义的函数处理。
+
+&lt;!--C11's 7.14.1p3--&gt;当信号处理函数被设为函数，且信号发生时，在信号处理函数开始之前是否立即执行 {{c|std::signal(sig, SIG_DFL)}} 是由实现定义的。而且实现可以避免由实现定义的一组信号在信号处理函数运行时出现。
+
+对于某些信号，实现可能会在程序开始时调用 {{c|std::signal(sig, SIG_IGN)}}。对于其余函数，实现必须调用 {{c|std::signal(sig, SIG_DFL)}}。
+
+（注意：POSIX 引入了 [https://pubs.opengroup.org/onlinepubs/9699919799/functions/sigaction.html {{tt|sigaction}}] 以标准化这些由实现定义的行为）
+
+===参数===
+{{par begin}}
+{{par|sig|要设置信号处理函数的信号。它可以是实现定义值或下例值之一： 
+{{dsc begin}}
+{{dsc inc|cpp/utility/program/dsc SIG_types}}
+{{dsc end}}}}
+{{par|handler|信号处理函数。值必须是下列之一：
+* {{lc|SIG_DFL}} 宏。信号处理函数被设为默认信号处理函数。
+* {{lc|SIG_IGN}} 宏。忽略信号。
+* 指向函数的指针。该函数的签名必须等价于：
+{{ddcl|extern "C" void fun(int sig);}}
+}}
+{{par end}}
+
+===返回值===
+成功时返回先前的信号处理函数，失败时返回 {{lc|SIG_ERR}}（某些实现上能禁用设置信号处理函数）。
+
+===信号处理函数===
+下列限制被加诸被安装为信号处理函数的用户定义函数。
+
+{{rev begin}}
+{{rev|until=c++17|
+如果信号处理函数不作为 {{lc|std::abort}} 或 {{lc|std::raise}}（异步信号）的结果调用，那么在以下情况下行为未定义：
+* 信号处理函数调用任何标准库中的函数，除了
+:* {{lc|std::abort}}
+:* {{lc|std::_Exit}}
+:* {{lc|std::quick_exit}}
+:* {{tt|std::signal}}，以当前处理的信号的数字作为第一个实参（异步处理函数能重注册它自身，但不能注册其他函数）。
+* 信号处理函数涉及任何拥有静态存储期的对象，且它的类型不是{{rev inl|since=c++11| {{lc|std::atomic}} 或}} {{c/core|volatile std::sig_atomic_t}}。
+}}
+{{rev|since=c++17|
+''普通免锁原子操作''{{sep}}是满足以下条件之一的对来自 {{header|atomic}}{{rev inl|since=c++23| 或 {{header|stdatomic.h}}}} 的函数 {{c|f}} 的调用：
+* {{c|f}} 是 {{lc|std::atomic_is_lock_free}}
+* {{c|f}} 是成员函数 {{tt|is_lock_free}}（例如 {{l2tf std|cpp/atomic/atomic/is_lock_free}}）
+* {{c|f}} 是 {{lc|std::atomic_flag}} 的非静态成员函数
+* {{c|f}} 是非成员函数，并且 {{c|f}} 的第一个形参的类型是 ''cv'' {{c/core|std::atomic_flag*}}
+* {{c|f}} 是在对象 {{c|obj}} 上调用的非静态成员函数，并且 {{c|obj.is_lock_free()}} 会产生 {{c|true}}
+* {{c|f}} 是非成员函数，并且对于每个传递给 {{c|f}} 的指向 {{lc|std::atomic}} 的实参 {{c|arg}}，{{c|std::atomic_is_lock_free(arg)}} 都会产生 {{c|true}}
+
+如果任何信号处理函数进行任何下列操作，那么行为未定义：
+* 调用任何库函数，除非该调用是普通免锁不可分割操作，或者调用的是下列''信号安全''函数（尤其注意动态分配函数不是信号安全的）：
+:* {{tt|std::signal}}，以当前处理的信号的数字作为第一个参数（异步处理函数能重注册它自身，但不能注册其他函数）。
+:* {{lc|std::numeric_limits}} 的函数
+:* {{lc|std::_Exit}}
+:* {{lc|std::abort}}
+:* {{lc|std::quick_exit}}
+:* {{lc|std::initializer_list}} 的成员函数及 {{lc|std::begin}} 与 {{lc|std::end}} 的 {{tt|std::initializer_list}} 重载 
+:* {{lc|std::forward}}、{{lc|std::move}}、{{lc|std::move_if_noexcept}}
+:* 所有来自 {{header|type_traits}} 的函数
+:* {{lc|std::memcpy}} 与 {{lc|std::memmove}}
+* 访问拥有线程存储期的对象
+* {{ltt|cpp/language/dynamic_cast}} 表达式
+* {{ltt|cpp/language/throw}} 表达式
+* 进入 {{ltt|cpp/language/try|{{c/core|try}} 块}}
+* 初始化进行[[cpp/language/initialization#非局部变量|动态非局部初始化]]的静态变量（包含延迟直至首次 ODR 式使用者）
+* 等待任何有静态存储期变量的初始化完成，由于另一线程共时初始化之
+}}
+{{rev end}}
+
+&lt;!--C11's 7.14.1p3--&gt;如果在处理 {{lc|SIGFPE}}、{{lc|SIGILL}}、{{lc|SIGSEGV}} 或任何实现定义的指定计算性异常的其他信号时用户定义函数返回，那么行为未定义。
+
+&lt;!--C11's 7.14.1p4--&gt;如果信号处理函数作为 {{lc|std::abort}} 或 {{lc|std::raise}}（异步调用）的结果调用，那么在信号处理函数调用 {{lc|std::raise}} 时行为未定义。
+
+{{rev begin}}
+{{rev|until=c++14|
+&lt;!--C++11 [intro.execution]p6, C11 5.1.2.3p5--&gt;在信号处理函数入口，[[cpp/numeric/fenv|浮点环境]]的状态和所有对象的值都是未指定的，除了
+* {{c/core|volatile std::sig_atomic_t}} 类型的对象
+{{rrev|since=c++11|
+* 无锁 {{lc|std::atomic}} 类型的对象
+&lt;!--[atomics.fences]p6--&gt;* 通过 {{lc|std::atomic_signal_fence}} 设为可见的副效应
+}}
+
+从信号处理函数返回时，任何信号处理函数所修改的，非 {{c/core|volatile std::sig_atomic_t}} 或免锁 {{lc|std::atomic}} 的对象的值都是不确定的。
+}}
+{{rev|since=c++14|
+对函数 {{tt|signal()}} 的调用[[cpp/atomic/memory_order|同步于]]所造成的任何信号处理函数调用。
+
+若信号处理函数作为对 {{lc|std::raise}} 的调用结果（同步）执行，则处理函数的执行''后序于'' {{tt|std::raise}} 的调用并''先序于''从它返回，并与 {{lc||std::raise}} 运行于同一线程。其他信号处理函数的执行对于程序其余部分是''无序''的，并且运行于未指定的线程。
+
+若对同一 {{c/core|volatile std::sig_atomic_t}} 类型对象的两次访问发生于同一线程，则它们不导致数据竞争，即使一或多次是在信号处理函数中发生也是如此。
+对每次信号处理函数调用，调用信号处理函数的线程所进行的求值可分为两组 A 与 B，满足 B 中没有求值''先发生于'' A 中的求值，且这种 {{c/core|volatile std::sig_atomic_t}} 对象的求值所取的值，如同 A 中所有求值[[cpp/atomic/memory_order|先发生于]]信号函数的执行，且信号函数的求值''先发生于'' B 中所有求值。
+}}
+{{rev end}}
+
+===注解===
+POSIX 要求 {{tt|signal}} 线程安全，且[https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html#tag_15_04 指定了一个异步信号安全库函数的列表]，它们能从任何信号处理函数调用。
+
+信号处理函数被期待拥有 [[cpp/language/language_linkage|C 链接]]，而且通常只使用 C 与 C++ 的公共子集。拥有 C++ 链接的函数能否用作信号处理函数由实现定义。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;csignal&gt;
+#include &lt;iostream&gt;
+
+namespace
+{
+    volatile std::sig_atomic_t gSignalStatus;
+}
+
+void signal_handler(int signal)
+{
+    gSignalStatus = signal;
+}
+
+int main()
+{
+    // 安装信号处理函数
+    std::signal(SIGINT, signal_handler);
+    
+    std::cout &lt;&lt; "信号值：" &lt;&lt; gSignalStatus &lt;&lt; '\n';
+    std::cout &lt;&lt; "发送信号 " &lt;&lt; SIGINT &lt;&lt; '\n';
+    std::raise(SIGINT);
+    std::cout &lt;&lt; "信号值：" &lt;&lt; gSignalStatus &lt;&lt; '\n';
+}
+|p=true
+|output=
+信号值：0
+发送信号 2
+信号值：2
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=17.13.5|title=Signal handlers|id=support.signal}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=17.13.5|title=Signal handlers|id=support.signal}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=21.10.4|title=Signal handlers|id=support.signal}}
+{{ref std end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3756|std=C++17|before=不明确 {{lc|std::atomic_flag}} 是否信号安全|after=它是信号安全的}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/program/dsc raise}}
+{{dsc inc|cpp/atomic/dsc atomic_signal_fence}}
+{{dsc see c|c/program/signal}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

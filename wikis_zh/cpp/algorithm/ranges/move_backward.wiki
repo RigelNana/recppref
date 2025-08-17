@@ -1,0 +1,146 @@
+{{cpp/ranges/title|move_backward|move_backward_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::bidirectional_iterator I2 &gt;
+requires std::indirectly_movable&lt;I1, I2&gt;
+constexpr move_backward_result&lt;I1, I2&gt;
+    move_backward( I1 first, S1 last, I2 d_last );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::bidirectional_range R, std::bidirectional_iterator I &gt;
+requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+constexpr move_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+    move_backward( R&amp;&amp; r, I d_last );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I, class O &gt;
+using move_backward_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ 从 {{range|first|last}} 所定义的范围移动元素到另一范围 {{range|d_last - N|result}}，其中 {{c|1=N = ranges::distance(first, last)}}。按逆序移动元素（首先移动末元素），但保持其相对顺序。若 {{c|d_last}} 在 {{tt|'''('''first, last''']'''}} 内则行为未定义。此情况下可用 {{lc|ranges::move}} 代替。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+''被移动''范围的元素将仍然含有适当类型的合法值，但不必为与移动前相同的值，如同对每个 {{c|1=0 ≤ n &lt; N}} 中的整数 {{tt|n}} 使用 {{c|1=*(d_last - n) = ranges::iter_move(last - n)}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要移动的|sentinel=yes}}
+{{par|r|要移动的元素范围}}
+{{par|d_last|目标范围的末尾}}
+{{par end}}
+
+===返回值===
+{{c|{last, d_last - N} }}。
+
+===复杂度===
+@1@ 准确 {{c|N}} 次移动赋值。
+
+@2@ 准确 {{c|ranges::distance(r)}} 次移动赋值。
+
+===注解===
+移动重叠的范围时，{{lc|ranges::move}} 适合向左移动（目标范围的起始在源范围外），而 {{tt|ranges::move_backward}} 适合向右移动（目标范围的末尾在源范围外）。
+
+===可能的实现===
+{{eq fun|1=
+struct move_backward_fn
+{
+    template&lt;std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::bidirectional_iterator I2&gt;
+    requires std::indirectly_movable&lt;I1, I2&gt;
+    constexpr ranges::move_backward_result&lt;I1, I2&gt;
+        operator()(I1 first, S1 last, I2 d_last) const
+    {
+        auto i {last};
+        for (; i != first; *--d_last = ranges::iter_move(--i))
+        {}
+        return {std::move(last), std::move(d_last)};
+    }
+
+    template&lt;ranges::bidirectional_range R, std::bidirectional_iterator I&gt;
+    requires std::indirectly_movable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+    constexpr ranges::move_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+        operator()(R&amp;&amp; r, I d_last) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(d_last));
+    }
+};
+
+inline constexpr move_backward_fn move_backward {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+using Vec = std::vector&lt;std::string&gt;;
+
+void print(std::string_view rem, Vec const&amp; vec)
+{
+    std::cout &lt;&lt; rem &lt;&lt; "[" &lt;&lt; vec.size() &lt;&lt; "]: ";
+    for (const std::string&amp; s : vec)
+        std::cout &lt;&lt; (s.size() ? s : std::string{"·"}) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    Vec a{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"};
+    Vec b(a.size());
+
+    print("Before move:\n" "a", a);
+    print("b", b);
+
+    std::ranges::move_backward(a, b.end());
+
+    print("\n" "Move a &gt;&gt; b:\n" "a", a);
+    print("b", b);
+
+    std::ranges::move_backward(b.begin(), b.end(), a.end());
+    print("\n" "Move b &gt;&gt; a:\n" "a", a);
+    print("b", b);
+
+    std::ranges::move_backward(a.begin(), a.begin()+3, a.end());
+    print("\n" "Overlapping move a[0, 3) &gt;&gt; a[5, 8):\n" "a", a);
+}
+|p=true &lt;!-- the state of RHS object after move is unspecified --&gt;
+|output=
+Before move:
+a[8]: ▁ ▂ ▃ ▄ ▅ ▆ ▇ █
+b[8]: · · · · · · · ·
+
+Move a &gt;&gt; b:
+a[8]: · · · · · · · ·
+b[8]: ▁ ▂ ▃ ▄ ▅ ▆ ▇ █
+
+Move b &gt;&gt; a:
+a[8]: ▁ ▂ ▃ ▄ ▅ ▆ ▇ █
+b[8]: · · · · · · · ·
+
+Overlapping move a[0, 3) &gt;&gt; a[5, 8):
+a[8]: · · · ▄ ▅ ▁ ▂ ▃
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_backward}}
+{{dsc inc|cpp/algorithm/dsc move}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

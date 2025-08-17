@@ -1,0 +1,160 @@
+{{cpp/named req/title|AllocatorAwareContainer|notes={{mark since c++11}}}}
+{{cpp/named req/navbar}}
+
+{{named req|AllocatorAwareContainer}}是{{named req|Container}}，其保有一个{{named req|Allocator}}实例，并于其所有成员函数中用该实例来分配及解分配内存，并于这个内存中构造及销毁对象（这种对象可以是容器元素，节点，或对于无序容器为桶数组）{{rev inl|since=c++23|，但 {{lc|std::basic_string}} 的特化不用分配器构造/析构它的元素}}。
+
+下列规则适用于容器的构造：
+* {{named req/core|AllocatorAwareContainer}}的复制构造函数，通过在正在复制的容器的分配器上调用 {{c/core|std::allocator_traits&lt;allocator_type&gt;::select_on_container_copy_construction}} 获得自己的分配器实例。
+* 移动构造函数通过从属于旧容器的分配器进行移动构造，获得其自己的分配器实例。
+* 所有其他构造函数均接收一个 {{c/core|const allocator_type&amp;}} 形参。
+
+{{anchor|替换分配器}}
+仅有的替换分配器的方式是进行移动赋值、复制赋值及交换：
+* 只有在 {{c|std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_copy_assignment::value}} 是 {{c|true}} 时，复制赋值才会替换分配器。
+* 只有在 {{c|std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_move_assignment::value}} 是 {{c|true}} 时，移动赋值才会替换分配器 。
+* 只有在 {{c|std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value}} 是 {{c|true}} 时，交换才会替换分配器。特别是它将通过对非成员函数 {{tt|swap}} 的无限定的调用来交换分配器实例，见{{named req|Swappable}}。
+
+注：如果 {{tt|propagate_on_container_swap}} 是 {{c|false}}，那么交换两个拥有不相等分配器的容器的行为未定义。
+
+* 访问器 {{tt|get_allocator()}} 获得构造容器时所用的，或为最近的分配器替换操作所安装的分配器的一个副本。
+
+===要求===
+一个类型满足{{named req/core|AllocatorAwareContainer}}的条件是，它满足{{named req|Container}}，并且给定以下类型和值，它也满足下方表格列出的语义和复杂度要求：
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|X}}|{{named req/core|AllocatorAwareContainer}}类型}}
+{{dsc|{{tt|T}}|{{tt|X}} 的 {{tt|value_type}}}}
+{{dsc|{{tt|A}}|{{tt|X}} 使用的分配器类型}}
+{{dsc hitem|值|定义}}
+{{dsc|{{c|a}}, {{c|b}}|{{tt|X}} 类型非 const 左值}}
+{{dsc|{{c|c}}|{{c/core|const X}} 类型左值}}
+{{dsc|{{c|t}}|{{tt|X}} 左值或 const 右值}}
+{{dsc|{{c|rv}}|{{tt|X}} 类型非 const 右值}}
+{{dsc|{{c|m}}|{{tt|A}} 类型的值}}
+{{dsc end}}
+
+====类型====
+{|class=wikitable
+!名字
+!{{nbsp}}类型{{nbsp}}
+!要求
+|-
+|{{c/core|typename X::allocator_type}}{{nbsp}}
+|{{tt|A}}
+|{{tt|X::allocator_type::value_type}} 与 {{tt|X::value_type}} 相同。
+|}
+
+====语句====
+{|class=wikitable
+!语句
+!colspan=2|语义
+!复杂度
+|-
+|rowspan=2|{{c|X u;}}&lt;br&gt;{{c|1=X u = X();}}
+|style="word-break: keep-all;"|前条件{{nbsp}}
+|{{tt|A}} {{named req|DefaultConstructible}}。
+|rowspan=2|常数
+|-
+|后条件
+|{{c|u.empty()}} 和 {{c|1=u.get_allocator() == A()}} 都是 {{c|true}}。
+|-
+|{{c|X u(m);}}
+|后条件
+|{{c|u.empty()}} 和 {{c|1=u.get_allocator() == m}} 都是 {{c|true}}。
+|常数
+|-
+|rowspan=2|{{c|X u(t, m);}}
+|前条件
+|{{tt|T}} {{named req|CopyInsertable}}到 {{tt|X}} 中。
+|rowspan=2|线性
+|-
+|后条件
+|{{c|1=u == t}} 和 {{c|1=u.get_allocator() == m}} 都是 {{c|true}}。
+|-
+|{{c|X u(rv);}}
+|后条件
+|
+* {{c|u}} 包含的元素和 {{c|rv}} 在该构造前包含的元素相同。
+* {{c|u.get_allocator()}} 的值和 {{c|rv.get_allocator()}} 在该构造前的值相同。
+|常数
+|-
+|rowspan=2|{{c|X u(rv, m);}}
+|前条件
+|{{tt|T}} {{named req|MoveInsertable}}到 {{tt|X}} 中。
+|rowspan=2|
+* {{c|1=m == rv.get_allocator()}} 是 {{c|true}}时是常数。
+* 否则是线性。
+|-
+|后条件
+|
+* {{c|u}} 包含的元素和 {{c|rv}} 在该构造前包含的元素相同，或者是那些元素的副本。
+* {{c|1=u.get_allocator() == m}} 是 {{c|true}}。
+|}
+
+====表达式====
+{|class=wikitable
+!表达式
+!类型
+!colspan=2|语义
+!style="word-break: keep-all;"|{{nbsp}}复杂度{{nbsp}}
+|-
+|{{c|c.get_allocator()}}
+|{{tt|A}}
+|colspan=2|没有直接语义要求。
+|常数
+|-
+|rowspan=2|{{c|1=a = t}}
+|rowspan=2|{{tt|X&amp;}}
+|style="word-break: keep-all;"|前条件{{nbsp}}
+|{{tt|T}} {{named req|CopyInsertable}}到 {{tt|X}} 中，并且{{named req|CopyAssignable}}。
+|rowspan=2|线性
+|-
+|后条件
+|{{c|1=a == t}} 是 {{c|true}}。
+|-
+|rowspan=3|{{c|1=a = rv}}
+|rowspan=3|{{tt|X&amp;}}
+|前条件
+|如果分配器'''不会'''被移动赋值替换（见[[#替换分配器|上文]]），那么 {{tt|T}} {{named req|MoveInsertable}}到 {{tt|X}} 中，并且{{named req|MoveAssignable}}。
+|rowspan=3|线性
+|-
+|效果
+|{{c|a}} 先前的所有元素都会被移动赋值或销毁。
+|-
+|后条件
+|如果 {{c|a}} 和 {{c|rv}} 不指代统一对象，那么 {{c|a}} 的值和 {{c|rv}} 在该构造前的值相等。
+|-
+|{{c|a.swap(b)}}
+|{{c/core|void}}{{nbsp}}
+|效果
+|交换 {{c|a}} 和 {{c|b}}。
+|常数
+|}
+
+===注解===
+{{named req/core|AllocatorAwareContainer}}始终调用 {{c|std::allocator_traits&lt;A&gt;::construct(m, p, args)}} 在 {{c|p}} 中用 {{c|args}} 来构造一个 {{tt|A}} 类型的对象，其中 {{c|1=m == get_allocator()}}。{{rev inl|until=c++20|{{lc|std::allocator}} 中默认的 {{tt|construct}} 调用 {{c|::new((void*)p) T(args)}}}}{{rev inl|since=c++20|{{lc|std::allocator}} 无 {{tt|construct}} 成员，而在构造元素时 {{c|std::construct_at(p, args)}} 得到调用}}，但特化的分配器可以选择不同的定义。
+
+===标准库===
+所有标准库的字符串类型和容器（除了 {{lc|std::array}} 和 {{c/core|std::inplace_vector}}）都是{{named req/core|AllocatorAwareContainer}}：
+{{dsc begin}}
+{{dsc inc|cpp/string/dsc basic_string}}
+{{dsc inc|cpp/container/dsc deque}}
+{{dsc inc|cpp/container/dsc forward_list}}
+{{dsc inc|cpp/container/dsc list}}
+{{dsc inc|cpp/container/dsc vector}}
+{{dsc inc|cpp/container/dsc map}}
+{{dsc inc|cpp/container/dsc multimap}}
+{{dsc inc|cpp/container/dsc set}}
+{{dsc inc|cpp/container/dsc multiset}}
+{{dsc inc|cpp/container/dsc unordered_map}}
+{{dsc inc|cpp/container/dsc unordered_multimap}}
+{{dsc inc|cpp/container/dsc unordered_set}}
+{{dsc inc|cpp/container/dsc unordered_multiset}}
+{{dsc end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2839|std=C++11|before=不允许标准容器的自移动赋值|after=容许但结果未指定}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

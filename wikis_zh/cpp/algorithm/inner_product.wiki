@@ -1,0 +1,120 @@
+{{cpp/title|inner_product}}
+{{cpp/algorithm/numeric/navbar}}
+{{dcl begin}}
+{{dcl header|numeric}}
+{{dcla|num=1|constexpr=c++20|
+template&lt; class InputIt1, class InputIt2, class T &gt;
+T inner_product( InputIt1 first1, InputIt1 last1,
+                 InputIt2 first2, T init );
+}}
+{{dcla|num=2|constexpr=c++20|
+template&lt; class InputIt1, class InputIt2, class T,
+          class BinaryOp1, class BinaryOp2 &gt;
+T inner_product( InputIt1 first1, InputIt1 last1,
+                 InputIt2 first2, T init,
+                 BinaryOp1 op1, BinaryOp2 op2 );
+}}
+{{dcl end}}
+
+在范围 {{range|first1|last1}} 和从 {{c|first2}} 开始的包含 {{c|std::distance(first1, last1)}} 个元素的范围上计算内积（即积之和）或进行有序映射/规约操作。
+
+@1@ 以初值 {{c|init}} 初始化（具有 {{tt|T}} 类型的）累加器 {{c|acc}}，然后按顺序对范围 {{range|first1|last1}} 的每个迭代器 {{c|i1}} 和它在从 {{c|first2}} 开始的范围中对应的迭代器 {{c|i2}} 通过 表达式 {{rev inl|until=c++20|{{c|1=acc = acc + (*i1) * (*i2)}}}}{{rev inl|since=c++20|{{c|1=acc = std::move(acc) + (*i1) * (*i2)}}}} 予以修改（进行累加）。对于 {{tt|+}} 与 {{tt|*}} 的内建含义，此算法计算两个范围的内积。
+
+@2@ 以初值 {{c|init}} 初始化（具有 {{tt|T}} 类型的）累加器 {{c|acc}}，然后按顺序对范围 {{range|first1|last1}} 的每个迭代器 {{c|i1}} 和它在从 {{c|first2}} 开始的范围中对应的迭代器 {{c|i2}} 通过 表达式 {{rev inl|until=c++20|{{c|1=acc = op1(acc, op2(*i1, *i2))}}}}{{rev inl|since=c++20|{{c|1=acc = op1(std::move(acc), op2(*i1, *i2))}}}} 予以修改（进行累加）。
+
+给定 {{c|last2}} 为 {{c|first2}} 的下 {{c|std::distance(first1, last1)}} 个迭代器，如果满足以下任意条件，那么行为未定义：
+* {{tt|T}} 不{{named req|CopyConstructible}}。
+* {{tt|T}} 不{{named req|CopyAssignable}}。
+* {{c|op1}} 或 {{c|op2}} 会修改 {{range|first1|last1}} 或 {{range|first2|last2}} 的元素。
+* {{c|op1}} 或 {{c|op2}} 会使 {{closed range|first1|last1}} 或 {{closed range|first2|last2}} 中的迭代器或子范围失效。
+
+===参数===
+{{par begin}}
+{{par range|first1|last1}}
+{{par|first2|第二个元素范围的起始}}
+{{par|init|积的和的初值}}
+{{par op2|op1|此“求和”函数接收 {{c|op2}} 所返回的值和当前累加器的值，并产生向累加器存储的新值。|t1=T|t2=Type3|rt=T}}
+{{par op2|op2|此“求积”函数从每个范围接收一个值并产生新值。|p1=InputIt1|p2=InputIt2|rt=Type3}}
+{{par hreq}}
+{{par req named|InputIt1, InputIt2|InputIterator}}
+{{par end}}
+
+===返回值===
+完成所有修改后的 {{c|acc}}。
+
+===可能的实现===
+{{eq impl
+|title1=inner_product (1)|ver1=1|1=
+template&lt;class InputIt1, class InputIt2, class T&gt;
+constexpr // C++20 起
+T inner_product(InputIt1 first1, InputIt1 last1, InputIt2 first2, T init)
+{
+    while (first1 != last1)
+    {
+        init = std::move(init) + (*first1) * (*first2); // C++20 起有 std::move
+        ++first1;
+        ++first2;
+    }
+    
+    return init;
+}
+|title2=inner_product (2)|ver2=2|2=
+template&lt;class InputIt1, class InputIt2, class T,
+         class BinaryOp1, class BinaryOp2&gt;
+constexpr // C++20 起
+T inner_product(InputIt1 first1, InputIt1 last1, InputIt2 first2, T init,
+                BinaryOp1 op1, BinaryOp2 op2)
+{
+    while (first1 != last1)
+    {
+        init = op1(std::move(init), op2(*first1, *first2)); // C++20 起有 std::move
+        ++first1;
+        ++first2;
+    }
+    
+    return init;
+}
+}}
+
+===注意===
+此算法的可并行版本 {{lc|std::transform_reduce}} 要求 {{c|op1}} 与 {{c|op2}} 具有可交换性和可结合性，但 {{tt|std::inner_product}} 不作这种要求，且始终以给定顺序进行操作。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; a{0, 1, 2, 3, 4};
+    std::vector&lt;int&gt; b{5, 4, 2, 3, 1};
+    
+    int r1 = std::inner_product(a.begin(), a.end(), b.begin(), 0);
+    std::cout &lt;&lt; "a 和 b 的内积：" &lt;&lt; r1 &lt;&lt; '\n';
+    
+    int r2 = std::inner_product(a.begin(), a.end(), b.begin(), 0,
+                                std::plus&lt;&gt;(), std::equal_to&lt;&gt;());
+    std::cout &lt;&lt; "a 和 b 中匹配的对数：" &lt;&lt;  r2 &lt;&lt; '\n';
+}
+|output=
+a 和 b 的内积：21
+a 和 b 中匹配的对数：2
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=242|std=C++98|before={{c|op1}} 和 {{c|op2}} 不能有任何副作用|after=它们不能修改涉及到的范围}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc transform_reduce}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc partial_sum}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

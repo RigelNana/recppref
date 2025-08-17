@@ -1,0 +1,146 @@
+{{cpp/title|is_convertible|is_nothrow_convertible}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcla|since=c++11|num=1|1=
+template&lt; class From, class To &gt;
+struct is_convertible;
+}}
+{{dcla|since=c++20|num=2|1=
+template&lt; class From, class To &gt;
+struct is_nothrow_convertible;
+}}
+{{dcl end}}
+
+@1@ 如果虚构的函数定义 {{c|To test() { return std::declval&lt;From&gt;(); }&lt;!----&gt;}} 良构，（即 {{c|std::declval&lt;From&gt;()}} 能用[[cpp/language/implicit_conversion|隐式转换]]转换为 {{tt|To}}，或 {{tt|From}} 和 {{tt|To}} 均为可有 cv 限定的 {{c/core|void}}），那么提供的成员常量 {{c|value}} 等于 {{c|true}}。否则，{{c|value}} 等于 {{c|false}}。对于此项检查而言，不认为返回语句中的 {{lc|std::declval}} 是 {{ls|cpp/language/definition#ODR 使用}}。
+{{rrev|since=c++26|
+如果 {{tt|To}} 为引用类型且在绑定 {{c|std::declval&lt;From&gt;()}} 到 {{tt|To}} 时会创建[[cpp/language/reference initialization#临时量的生存期|临时对象]]，则认为虚构函数中的 {{c/core|return}} 语句良构，即使这种绑定在实际的函数中为非良构。
+}}
+@@ 如同从无关乎任一类型的语境中进行[[cpp/language/access|访问检查]]。仅考虑返回语句中的表达式（包含转换到返回类型）的立即语境的合法性。
+@2@ 同 {{v|1}}，但转换是 {{c/core|noexcept}}。
+
+{{cpp/types/cvaub|type1=From|type2=To}}
+
+{{cpp/types/nospec|any}}
+
+===辅助变量模板===
+{{dcl begin}}
+{{dcl|since=c++17|1=
+template&lt; class From, class To &gt;
+constexpr bool is_convertible_v = is_convertible&lt;From, To&gt;::value;
+}}
+{{dcl|since=c++20|1=
+template&lt; class From, class To &gt;
+constexpr bool is_nothrow_convertible_v = is_nothrow_convertible&lt;From, To&gt;::value;
+}}
+{{dcl end}}
+{{cpp/types/integral_constant/inherit|{{tt|From}} 可转换为 {{tt|To}}}}
+
+===可能的实现===
+{{eq impl
+|title1={{tt|is_convertible}} (1)|ver1=1|1=
+namespace detail
+{
+    template&lt;class T&gt;
+    auto test_returnable(int) -&gt; decltype(
+        void(static_cast&lt;T(*)()&gt;(nullptr)), std::true_type{}
+    );
+    template&lt;class&gt;
+    auto test_returnable(...) -&gt; std::false_type;
+
+    template&lt;class From, class To&gt;
+    auto test_implicitly_convertible(int) -&gt; decltype(
+        void(std::declval&lt;void(&amp;)(To)&gt;()(std::declval&lt;From&gt;())), std::true_type{}
+    );
+    template&lt;class, class&gt;
+    auto test_implicitly_convertible(...) -&gt; std::false_type;
+} // namespace detail
+
+template&lt;class From, class To&gt;
+struct is_convertible : std::integral_constant&lt;bool,
+    (decltype(detail::test_returnable&lt;To&gt;(0))::value &amp;&amp;
+     decltype(detail::test_implicitly_convertible&lt;From, To&gt;(0))::value) {{!!}}
+    (std::is_void&lt;From&gt;::value &amp;&amp; std::is_void&lt;To&gt;::value)
+&gt; {};
+|title2={{tt|is_nothrow_convertible}} (2)|ver2=2|2=
+template&lt;class From, class To&gt;
+struct is_nothrow_convertible : std::conjunction&lt;std::is_void&lt;From&gt;, std::is_void&lt;To&gt;&gt; {};
+
+template&lt;class From, class To&gt;
+    requires
+        requires
+        {
+            static_cast&lt;To(*)()&gt;(nullptr);
+            { std::declval&lt;void(&amp;)(To) noexcept&gt;()(std::declval&lt;From&gt;()) } noexcept;
+        }
+struct is_nothrow_convertible&lt;From, To&gt; : std::true_type {};
+}}
+
+===注解===
+对引用类型、{{tt|void}} 类型、数组类型和函数类型给出良好定义的结果。
+
+当前标准未指定是否认为转换所产生的对象（结果对象或绑定到引用的临时量）的析构是转换的一部分。此为 {{lwg|3400}}。
+
+所有已知实现都将析构当作转换的一部分，如 {{stddoc|P0758R1#Appendix|P0758R1}} 中提议。
+
+{{feature test macro|__cpp_lib_is_nothrow_convertible|{{tt|std::is_nothrow_convertible}}|value=201806L|std=C++20}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+
+class E { public: template&lt;class T&gt; E(T&amp;&amp;) {} };
+
+int main()
+{
+    class A {};
+    class B : public A {};
+    class C {};
+    class D { public: operator C() { return c; } C c; };
+
+    static_assert(std::is_convertible_v&lt;B*, A*&gt;);
+    static_assert(!std::is_convertible_v&lt;A*, B*&gt;);
+    static_assert(std::is_convertible_v&lt;D, C&gt;);
+    static_assert(!std::is_convertible_v&lt;B*, C*&gt;);
+    // 注意，完美转发构造函数使类 E 能从任何类型“转换”。因此 A 可以替换为 B, C, D..：
+    static_assert(std::is_convertible_v&lt;A, E&gt;);
+
+    static_assert(!std::is_convertible_v&lt;std::string_view, std::string&gt;);
+    static_assert(std::is_convertible_v&lt;std::string, std::string_view&gt;);
+
+    auto stringify = []&lt;typename T&gt;(T x)
+    {
+        if constexpr (std::is_convertible_v&lt;T, std::string&gt; or
+                      std::is_convertible_v&lt;T, std::string_view&gt;)
+            return x;
+        else
+            return std::to_string(x);
+    };
+
+    using std::operator "" s, std::operator "" sv;
+    const char* three = "three";
+
+    std::cout &lt;&lt; std::quoted(stringify("one"s)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify("two"sv)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify(three)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify(42)) &lt;&lt; ' '
+              &lt;&lt; std::quoted(stringify(42.0)) &lt;&lt; '\n';
+}
+|output=
+"one" "two" "three" "42" "42.000000"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_base_of}}
+{{dsc inc|cpp/types/dsc is_pointer_interconvertible_base_of}}
+{{dsc inc|cpp/types/dsc is_pointer_interconvertible_with_class}}
+{{dsc inc|cpp/concepts/dsc convertible_to}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

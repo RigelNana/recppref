@@ -1,0 +1,155 @@
+{{cpp/title|gslice}}
+{{cpp/numeric/valarray/navbar}}
+{{ddcl|header=valarray|
+class gslice;
+}}
+
+{{tt|std::gslice}} 是标识 {{lc|std::valarray}} 索引子集的选择器，定义为多层的跨度和大小集合。 {{tt|std::gslice}} 类型的对象可用作 {{tt|valarray}} 的 {{c/core|operator[]}} 下标，例如，用于选择表示为 {{tt|valarray}} 的多维数组的列。
+
+给定起始值 {{math|s}}、跨度列表 {{math|i{{su|b=j}}}} 及大小列表 {{math|d{{su|b=j}}}}，从这些值构造的 {{tt|std::gslice}} 选择索引集 {{math|k{{su|b=j}}{{=}}s+Σ{{su|b=j}}(i{{su|b=j}}d{{su|b=j}})}}。
+
+例如拥有始于索引 {{tt|3}}，跨度为 {{tt|{19,4,1}}} 长度为 {{tt|{2,4,3} }} 的 {{tt|gslice}} 生成下列 {{tt|24{{=}}2*4*3}} 个索引的集合：
+
+{{cc|1=
+3 + 0*19 + 0*4 + 0*1 = 3,
+3 + 0*19 + 0*4 + 1*1 = 4,
+3 + 0*19 + 0*4 + 2*1 = 5,
+3 + 0*19 + 1*4 + 0*1 = 7,
+3 + 0*19 + 1*4 + 1*1 = 8,
+3 + 0*19 + 1*4 + 2*1 = 9,
+3 + 0*19 + 2*4 + 0*1 = 11,
+...
+3 + 1*19 + 3*4 + 1*1 = 35,
+3 + 1*19 + 3*4 + 2*1 = 36}} 
+
+可以构造选择某些索引多于一次的 {{tt|std::gslice}} 对象：如果上述示例使用跨度 {{tt|{1,1,1}&lt;!----&gt;}}，那么索引将是 {{tt|{3, 4, 5, 4, 5, 6, ...}&lt;!----&gt;}}。这种 {{tt|gslice}} 只可用于 {{rlpt|operator at|std::valarray::operator[]}} 的 const 版本的实参，否则行为未定义。
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|cpp/numeric/valarray/gslice|inlinemem=true|构造通用切片}}
+{{dsc mem fun|cpp/numeric/valarray/gslice|title=start&lt;br&gt;size&lt;br&gt;stride|inlinemem=true|返回切片的参数}}
+{{dsc end}}
+
+{{member|{{small|std::gslice::}}gslice|
+{{dcl begin}}
+{{dcl|
+gslice()
+}}
+{{dcl|
+gslice( std::size_t start, const std::valarray&lt;std::size_t&gt;&amp; sizes,
+                           const std::valarray&lt;std::size_t&gt;&amp; strides );
+}}
+{{dcl|
+gslice( const gslice&amp; other );
+}}
+{{dcl end}}
+
+构造新的通用切片。
+
+@1@ 默认构造函数。等价于 {{c|gslice(0, std::valarray&lt;std::size_t&gt;(), std::valarray&lt;std::size_t&gt;())}}。此构造函数的存在只为允许构造数组切片。
+
+@2@ 以参数 {{c|start}}、{{c|sizes}}、{{c|strides}} 构造新切片。
+
+@3@ 构造 {{c|other}} 的副本。
+
+===参数===
+{{par begin}}
+{{par|start|首元素的位置}}
+{{par|sizes|定义每个维度元素数量的数组}}
+{{par|strides|定义每个维度中前后元素间的位置差数的数组}}
+{{par|other|要复制的另一切片}}
+{{par end}}
+}}
+
+{{member|{{small|std::slice::}}start, size, stride|
+{{dcl begin}}
+{{dcl|num=1|
+std::size_t start() const;
+}}
+{{dcl|num=2|
+std::valarray&lt;std::size_t&gt; size() const;
+}}
+{{dcl|num=3|
+std::valarray&lt;std::size_t&gt; stride() const;
+}}
+{{dcl end}}
+
+返回构造时传递给切片的参数——分别是起点、大小和跨度。
+
+===参数===
+（无）
+
+===返回值===
+切片的参数——分别是起点、大小及跨度。
+
+===复杂度===
+常数。
+}}
+
+===示例===
+{{example
+|演示使用 {{tt|gslice}} 定位三维数组的列：
+|code=
+#include &lt;iostream&gt;
+#include &lt;valarray&gt;
+
+void test_print(std::valarray&lt;int&gt;&amp; v, int planes, int rows, int cols)
+{
+    for (int r = 0; r &lt; rows; ++r)
+    {
+        for (int z = 0; z &lt; planes; ++z)
+        {
+            for (int c = 0; c &lt; cols; ++c)
+                std::cout &lt;&lt; v[z * rows * cols + r * cols + c] &lt;&lt; ' ';
+            std::cout &lt;&lt; "  ";
+        }
+        std::cout &lt;&lt; '\n';
+    }
+}
+
+int main()
+{
+    std::valarray&lt;int&gt; v = // 3d 数组：2 x 4 x 3 元素
+        {111,112,113 , 121,122,123 , 131,132,133 , 141,142,143,
+         211,212,213 , 221,222,223 , 231,232,233 , 241,242,243};
+    // int ar3d[2][4][3]
+    std::cout &lt;&lt; "初始 2x4x3 数组：\n";
+    test_print(v, 2, 4, 3);
+
+    // 更新两个平面第一列的每个值
+    v[std::gslice(0, {2, 4}, {4 * 3, 3})] = 1; // 二层的一个 12 元素跨度
+                                               // 然后是四层的二个 3 元素跨度
+
+    // 从第一平面的第二列减去第三列的值
+    v[std::gslice(1, {1, 4}, {4 * 3, 3})] -= v[std::gslice(2, {1, 4}, {4 * 3, 3})];
+
+    std::cout &lt;&lt; "\n" "在列操作后：\n";
+    test_print(v, 2, 4, 3);
+}
+|output=
+初始 2x4x3 数组：
+111 112 113   211 212 213
+121 122 123   221 222 223
+131 132 133   231 232 233
+141 142 143   241 242 243
+
+在列操作后：
+1 -1 113   1 212 213
+1 -1 123   1 222 223
+1 -1 133   1 232 233
+1 -1 143   1 242 243
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=543|std=C++98|before=不明确默认构造的通用切片是否可用|after=（作为空子集）可用}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/valarray/dsc operator at}}
+{{dsc inc|cpp/numeric/valarray/dsc slice}}
+{{dsc inc|cpp/numeric/valarray/dsc gslice_array}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

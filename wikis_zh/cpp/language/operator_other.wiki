@@ -1,0 +1,425 @@
+{{title|其他运算符}}
+{{cpp/language/expressions/navbar}}
+{|class="wikitable" style="font-size: 85%;"
+|-
+!rowspan="2"|{{nbsp}}运算符名{{nbsp}}
+!rowspan="2"|语法
+!rowspan="2"|{{nbsp}}{{rlp|operators|可重载}}{{nbsp}}
+!colspan="2"|原型示例（对于 {{c/core|class T}}）
+|-
+!类内定义
+!类外定义
+|-
+|函数调用
+|{{tt|a(a1, a2)}}
+|{{yes}}
+|{{c|R T::operator()(Arg1 &amp;a1, Arg2 &amp;a2, ...);}}
+|{{n/a}}
+|-
+|逗号
+|{{tt|a, b}}
+|{{yes}}
+|{{c|T2&amp; T::operator,(T2 &amp;b);}}
+|{{c|T2&amp; operator,(const T &amp;a, T2 &amp;b);}}
+|-
+|条件
+|{{tt|a ? b : c}}
+|{{no}}
+|{{n/a}}
+|{{n/a}}
+|}
+
+{{i|函数调用}}运算符为任何对象提供函数语义。
+
+{{i|条件}}运算符（通俗地称为“三元条件”）检查第一表达式的布尔值，然后根据它的结果值，求值并返回第二或第三表达式。
+
+===内建的函数调用运算符===
+函数调用表达式的形式为
+{{sdsc begin}}
+{{sdsc|{{spar sep|函数}}{{ttb|(}}{{spar|实参1}}{{ttb|,}} {{spar|实参2}}{{ttb|,}} {{spar|实参3}}{{ttb|,}}... {{ttb|)}}}} 
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar sep|函数}}|具有函数或函数指针类型的表达式}}
+{{par|{{spar|实参1}}{{ttb|,}} {{spar|实参2}}{{ttb|,}} {{spar|实参3}}{{ttb|,}}...|可以为空的任意表达式{{rev inl|since=c++11|或{{rlp|initialization|花括号包围的初始化器列表}}}}的列表，但为避免歧义顶层不能出现逗号运算符}}
+{{par end}}
+
+在调用非成员函数或静态成员函数的情况下，{{spar sep|函数}}可以是指代函数的左值（此时会抑制{{rlps|implicit conversion#函数到指针转换}}），也可以是具有函数指针类型的纯右值。
+
+由{{spar sep|函数}}所指代的函数（或成员）名可以是重载的，用{{rlp|overload resolution|重载决议}}规则决定要调用哪个重载。
+
+如果{{spar sep|函数}}指定成员函数，那么它可以是虚函数，这种情况下将以运行时的动态派发调用该函数的最终覆盖函数。
+
+为调用该函数，
+{{rrev multi|until1=c++17|rev1=
+以任意顺序对{{spar sep|函数}}和作为实参所提供的所有表达式{{spar|实参1}}、{{spar|实参2}}、{{spar sep|实参3}}等进行求值，它们互相是{{rlp|eval order|无顺序的}}。
+|rev2=
+{{spar sep|函数}}按顺序早于表达式{{spar|实参1}}、{{spar|实参2}}、{{spar sep|实参3}}以及各{{rlp|default arguments|默认实参}}（如果存在）。以任意顺序求值各实参表达式，它们互相是{{rlp|eval order|顺序不确定的}}。
+}}
+
+各个函数形参以它对应的实参（经过可能需要的{{rlp|implicit conversion|隐式转换}}后）初始化。
+* 如果没有对应的实参，那么使用对应的{{rlp|default arguments|默认实参}}，如果还没有默认实参，那么程序非良构。
+* 如果调用的是成员函数，那么将指向当前对象的 {{c|this}} 指针，如同使用显式转换一般，转换到函数所期待的 {{c|this}} 指针。
+* 各个形参的初始化和销毁是在函数调用出现的{{rlps|expressions#完整表达式}}的语境中进行的，这意味着，例如当某个形参的构造函数或析构函数抛出异常时，不会考虑被调用函数的{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}。
+
+如果函数是变参函数，那么就会对省略号形参所匹配的所有实参实施{{rlp|variadic arguments#默认转换|默认实参提升}}。
+
+由实现定义形参是在从它的定义所在的函数退出时销毁还是在包围它的完整表达式的末尾销毁。形参会按它们构造的逆序销毁
+
+函数调用表达式的返回类型是被选择函数的返回类型，以静态绑定决定（忽略 {{c/core|virtual}} 关键词），即使实际调用的覆盖函数返回不同的类型。覆盖函数因此可以返回引用或指针，指向派生于基类函数所返回类型的类，即 C++ 支持{{enwiki|Covariant return type|协变返回类型}}。如果{{spar sep|函数}}指定的是析构函数，那么返回类型是 {{c/core|void}}。
+
+{{rrev|since=c++17|
+当一个类类型 {{tt|X}} 的对象被传递给函数，或从函数被返回时，如果 {{tt|X}} 的每个复制构造函数、移动构造函数和析构函数都是平凡或被弃置的，并且 {{tt|X}} 拥有至少一个未被弃置的复制或移动构造函数，那么实现可以创建保有函数形参或结果对象的临时对象。
+
+临时对象分别从函数实参或返回值构造，而函数的形参或返回对象的初始化，如同使用未被弃置的平凡构造函数对临时对象进行复制一样进行（即使该构造函数无法访问，或进行对象的复制或移动时的重载决议不会选择它）。
+
+这样小的类类型（如 {{lc|std::complex}} 或 {{tt|std::span}}）就可以在寄存器中传递给函数或从函数返回。
+}}
+
+如果函数返回左值引用或到函数的右值引用，那么函数调用表达式的值类别是左值，如果函数返回到对象的右值引用，那么值类别是亡值，否则值类别是纯右值。如果函数调用表达式是对象类型的纯右值，那么它必须拥有{{rlp|type#不完整类型|完整}}的对象类型{{rev inl|since=c++11|，除非用作 {{rlpt|decltype}} 的操作数，或用作作为 {{c/core|decltype}} 操作数的[[#内建的逗号运算符|内建逗号运算符]]的右操作数}}。
+
+{{rrev|since=c++26|
+当被调用的函数正常退出时，会{{rlps|contracts#依次求值}}该函数的所有{{rlps|function#后条件断言}}。如果实现引入{{rlp|lifetime#临时对象的生存期|临时对象}}来持有结果值，那么对于每个后条件断言的求值 {{tt|E}}：
+* {{tt|E}} 对于那些临时对象和结果对象的初始化都是{{rlp|eval order|顺序不确定的}}。
+* {{tt|E}} {{rlp|eval order|按顺序早于}}任何函数形参的销毁。
+}}
+
+函数调用表达式在语法上与值初始化 {{c|T()}}，{{rlp|explicit cast|函数风格转换}}表达式 {{c|T(A1)}}，以及临时量的直接初始化 {{c|T(A1, A2, A3, ...)}} 相似，其中 {{tt|T}} 是一个类型的名称。
+
+{{example
+|code=
+#include &lt;cstdio&gt;
+
+struct S
+{
+    int f1(double d)
+    {
+        return printf("%f \n", d); // 变参函数调用
+    }
+    
+    int f2()
+    {
+        return f1(7); // 成员函数调用，同 this-&gt;f1()
+                      // 整数形参会转换到 double
+    }
+};
+
+void f()
+{
+    puts("函数已调用"); // 函数调用
+}
+
+int main()
+{
+    f();    // 函数调用
+    S s;
+    s.f2(); // 成员函数调用
+}
+|output=
+函数已调用
+7.000000 
+}}
+
+===内建的逗号运算符===
+逗号运算符表达式的形式为
+{{sdsc begin}}
+{{sdsc|{{spar|表达式1}} {{ttb|,}} {{spar|表达式2}}}} 
+{{sdsc end}}
+
+在逗号表达式 {{c|E1, E2}} 中，对 {{c|E1}} 求值并{{rlp|expressions#弃值表达式|舍弃}}它的结果（尽管当它具有类类型时，直到{{rlp|lifetime#临时对象的生存期|包含它的全表达式的结尾}}之前都不会销毁它），它的副作用在表达式 {{tt|E2}} 的求值开始前完成{{rev inl|until=c++17|（注意，用户定义的 {{tt|operator,}} 不能保证定序）}}。
+
+逗号表达式结果的类型、值和值类别和它的第二操作数 {{c|E2}} 的类型、值和值类别完全相同。如果 {{c|E2}} 是临时量{{rev inl|since=c++17|表达式}}，那么表达式的结果是该临时量{{rev inl|since=c++17|表达式}}。如果 {{c|E2}} 是位域，那么结果是位域。
+
+各种逗号分隔列表，例如函数实参列表 {{c|f(a, b, c)}} 和初始化式列表 {{c|1=int a[] = {1, 2, 3} }}，其中的逗号都不是逗号运算符。如果需要在这种语境中使用逗号运算符，就必须加括号：{{c|f(a, (n++, n + b), c)}}。
+
+{{rrev multi
+|since1=c++20|rev1=
+以无括号的逗号表达式作为{{rlp|operator member access#内建的下标运算符|下标运算符}}的第二（右）操作数是被弃用的。
+
+例如，{{c|a[b, c]}} 被弃用而 {{c|a[(b, c)]}} 未被弃用。
+|since2=c++23|rev2=
+无括号的逗号表达式不能作为{{rlp|operator member access#内建的下标运算符|下标运算符}}的第二（右）参数。例如 {{c|a[b, c]}} 要么非良构，要么等价于 {{c|a.operator[](b, c)}}。
+
+为将逗号表达式用作下标需要括号，例如 {{c|a[(b, c)]}}。
+}}
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+int main()
+{
+    // 逗号通常用于在语言的文法仅允许一个表达式之处执行多个表达式
+    
+    // * 在 for 循环的第三部分中
+    for (int i = 0, j = 10; i &lt;= j; ++i, --j)
+    //            ^ 列表分隔符           ^ 逗号运算符
+        std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; " j = " &lt;&lt; j &lt;&lt; '\n';
+    
+    // * 在返回语句中
+    // return log("an error!"), -1;
+    
+    // * 在初始化式表达式中
+    // MyClass(const Arg&amp; arg)
+    // : member{ throws_if_bad(arg), arg }
+    
+    // 等等。
+    
+    // 逗号运算符可以串联；最后一个（最右侧）表达式的结果是整个串联的结果：
+    int n = 1;
+    int m = (++n, std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; '\n', ++n, 2 * n);
+    
+    // m 现在是 6
+    std::cout &lt;&lt; "m = " &lt;&lt; (++m, m) &lt;&lt; '\n';
+}
+|output=
+i = 0 j = 10
+i = 1 j = 9
+i = 2 j = 8
+i = 3 j = 7
+i = 4 j = 6
+i = 5 j = 5
+n = 2
+m = 7
+}}
+
+===条件运算符===
+条件运算符表达式的形式为
+{{sdsc begin}}
+{{sdsc|{{spar|表达式1}} {{ttb|?}} {{spar|表达式2}} {{ttb|:}} {{spar|表达式3}}}} 
+{{sdsc end}}
+
+对{{spar sep|表达式1}}求值并将它{{rlp|implicit conversion|按语境转换}}到 {{c/core|bool}}，如果结果是 {{c|true}}，那么求值{{spar|表达式2}}；否则求值{{spar|表达式3}}。
+
+条件表达式 {{c|E1 ? E2 : E3}} 的类型和值类别按照下列规则确定：
+
+====阶段 1====
+如果 {{c|E2}} 和 {{c|E3}} 都具有 {{c/core|void}} 类型，那么结果是 {{c/core|void}} 类型的纯右值。
+
+如果 {{c|E2}} 和 {{c|E3}} 其中恰好有一个具有 {{c/core|void}} 类型，那么：
+* 如果具有 {{c/core|void}} 类型的那个操作数是（可以括号包围的）{{rlp|throw|{{c/core|throw}} 表达式}}，那么结果具有另一操作数的类型和值类别&lt;ref&gt;这种条件运算符常用于 C++14 之前的 C++11 {{rlp|constexpr|constexpr 编程}}。&lt;/ref&gt;。如果另一操作数是{{rlp|bit field|位域}}，那么结果也是位域。
+* 否则程序非良构。
+
+如果 {{c|E2}} 和 {{c|E3}} 都不具有 {{c/core|void}} 类型，那么进入下一阶段。
+
+{{source|1=
+2 + 2 == 4 ? throw 123 : throw 456; // 结果具有 “void” 类型
+
+2 + 2 != 4 ? "OK" : throw "error";  // 结果具有 “const char[3]” 类型
+                                    // 即使始终会抛出异常
+}}
+
+====阶段 2====
+如果 {{c|E2}} 或 {{c|E3}} 都是{{rev inl|until=c++11|左值位域}}{{rev inl|since=c++11|值类别相同的泛左值位域}}，并且它们的类型分别是 ''cv1'' {{tt|T}} 和 ''cv2'' {{tt|T}}，那么在剩余流程中认为这些操作数都拥有 ''cv'' {{tt|T}} 类型，其中 ''cv'' 是 ''cv1'' 与 ''cv2'' 的并。
+
+如果 {{c|E2}} 和 {{c|E3}} 拥有不同类型，并且满足以下任意条件，那么进入阶段 3：
+* {{c|E2}} 和 {{c|E3}} 至少有一个具有（可有 cv 限定的）类类型。
+* {{c|E2}} 和 {{c|E3}} 都是除了 cv 限定性之外类型相同{{rev inl|until=c++11|的左值}}{{rev inl|since=c++11|且值类别也相同的泛左值}}。
+
+否则进入阶段 4。
+
+====阶段 3====
+按以下方式尝试组成从 {{tt|TX}} 类型的操作数表达式 {{c|X}} 到与操作数表达式 {{c|Y}} 的类型 {{tt|TY}} 有关联的某个{{i|目标类型}}的{{rlp|implicit conversion|隐式转换序列}}。&lt;ref&gt;其中忽略{{rlp|access|成员访问}}{{rev inl|since=c++11|，或转换函数是否被弃置，}}以及操作数是否为位域。&lt;/ref&gt;：
+* 如果 {{c|Y}} 是左值，那么目标类型是 {{tt|TY&amp;}}，但是只有在引用能{{rlps|reference initialization#直接绑定}}到{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}的情况下才会组成隐式转换序列。
+{{rrev|since=c++11|
+* 如果 {{c|Y}} 是亡值，那么目标类型是 {{tt|TY&amp;&amp;}}，但是只有在引用能直接绑定的情况下才会组成隐式转换序列。
+}}
+* 如果 {{c|Y}} 是{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}或者两个转换序列都无法组成，并且 {{tt|TX}} 和 {{tt|TY}} 至少有一个是（可有 cv 限定的）类类型，那么：
+** 如果 {{tt|TX}} 和 {{tt|TY}}（忽略 cv 限定性）是相同的类类型：
+*** 如果 {{tt|TY}} 至少有 {{tt|TX}} 的 cv 限定，那么目标类型是 {{tt|TY}}。
+*** 否则不会组成转换序列。
+** 否则，如果 {{tt|TY}} 是 {{tt|TX}} 的基类，那么目标类型是带有 {{tt|TX}} 的 cv 限定符的 {{tt|TY}}。
+** 否则目标类型是 {{c|Z}} 的类型，其中 {{c|Z}} 是 {{c|Y}} 在应用左值到右值、数组到指针和函数到指针{{rlp|implicit conversion|标准转换}}后的值。
+* 否则不会组成转换序列。
+
+通过此流程确定是否可以从 {{c|E2}} 到为 {{c|E3}} 确定的目标类型组成隐式转换序列，反之亦然。
+* 如果不能组成转换序列，那么进入下一阶段。
+* 如果刚好可以组成一个转换序列，那么：
+** 如果转换序列有歧义，那么程序非良构。
+** 否则就会对选择的操作数应用该转换，并且在剩余流程中会以转换后的操作数取代原来的操作数，然后进入下一阶段。
+* 如果可以组成两个转换序列，那么程序非良构。
+
+{{source|1=
+struct A {};
+
+struct B : A {};
+
+using T = const B;
+
+A a = true ? A() : T(); // Y = A(), TY = A, X = T(), TX = const B. 目标类型 = const A
+}}
+
+====阶段 4====
+{{rev begin}}
+{{rev|until=c++11|
+如果 {{c|E2}} 和 {{c|E3}} 是同类型的左值，那么结果是具有该类型的左值。如果 {{c|E2}} 和 {{c|E3}} 至少有一个是位域，那么结果是位域。
+}}
+{{rev|since=c++11|
+如果 {{c|E2}} 和 {{c|E3}} 是同类型和同值类别的泛左值，那么结果具有相同的类型和值类别。如果 {{c|E2}} 和 {{c|E3}} 至少有一个是位域，那么结果是位域。
+}}
+{{rev end}}
+
+否则，结果是{{rev inl|until=c++11|右值}}{{rev inl|since=c++11|纯右值}}。
+* 如果 {{c|E2}} 和 {{c|E3}} 具有不同类型，且其中一个拥有（可有 cv 限定的）类类型，那么进入阶段 5。
+* 否则进入阶段 6。
+
+====阶段 5====
+尝试用[[#重载|内建候选函数]]将操作数转换到内建类型，并为此实施{{rlp|overload resolution|重载决议}}：
+* 如果重载决议失败，那么程序非良构。
+* 否则应用所选择的转换，并且在剩余流程中会以转换后的操作数取代原来的操作数。进入下一阶段。
+
+====阶段 6====
+对 {{c|E2}} 和 {{c|E3}} 应用数组到指针和函数到指针转换。转换后必须满足以下条件之一，否则程序非良构：
+* {{c|E2}} 和 {{c|E3}} 具有相同的类型。此时结果从选择的那个操作数进行复制初始化。
+* {{c|E2}} 和 {{c|E3}} 都具有算术或枚举类型。此时应用{{rlp|usual arithmetic conversions|一般算术转换}}将它们变成公共类型，而结果具有该类型。
+* {{c|E2}} 和 {{c|E3}} 至少有一个是指针。此时应用左值到右值转换、指针转换{{rev inl|since=c++17|、函数指针转换}}和限定性转换，将它们变成它们的{{rlps|pointer#合成指针类型}}，而结果具有该类型。
+* {{c|E2}} 和 {{c|E3}} 至少有一个是成员指针。此时应用左值到右值转换、成员指针转换{{rev inl|since=c++17|、函数指针转换}}和限定性转换，将它们变成它们的合成指针类型，而结果即具有该类型。
+{{rrev|since=c++11|
+* {{c|E2}} 和 {{c|E3}} 都是空指针常量，且其中至少有一个具有 {{lc|std::nullptr_t}} 类型。此时结果类型是 {{lc|std::nullptr_t}}。
+}}
+
+{{source|1=
+int* intPtr;
+
+using Mixed = decltype(true ? nullptr : intPtr);
+
+static_assert(std::is_same_v&lt;Mixed, int*&gt;); // nullptr 变为 int*
+
+struct A
+{
+    int* m_ptr;
+} a;
+
+int* A::* memPtr = &amp;A::m_ptr; // memPtr 是指向 A 的成员 m_ptr 的成员指针
+
+// memPtr 使 nullptr 成为指向 A 的成员 m_ptr 的成员指针类型
+static_assert(std::is_same_v&lt;decltype(false ? memPtr : nullptr), int*A::*&gt;);
+
+// a.*memPtr 现在恰为指向 int 的指针，nullptr 也变为指向 int 的指针
+static_assert(std::is_same_v&lt;decltype(false ? a.*memPtr : nullptr), int*&gt;);
+}}
+
+&lt;references/&gt;
+
+{{rrev|since=c++11|
+条件运算符的返回类型也能作为二元类型特性 {{lc|std::common_type}} 访问。
+}}
+
+====重载====
+对于每对提升后的算术类型 {{tt|L}} 和 {{tt|R}} 并对于每个类型 {{tt|P}}，其中 {{tt|P}} 具有指针、成员指针或有作用域枚举类型，下列函数签名参与重载决议：
+{{dcl begin}}
+{{dcl|LR operator?:(bool, L, R);}}
+{{dcl|P operator?:(bool, P, P);}}
+{{dcl end}}
+其中 LR 是 {{tt|L}} 和 {{tt|R}} 上进行的{{rlp|operator arithmetic|一般算术转换}}的结果。不能重载运算符 “?:”，这些函数签名只为重载决议的目的存在。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+struct Node
+{
+    Node* next;
+    int data;
+    
+    // 深复制的复制构造函数
+    Node(const Node&amp; other)
+      : next(other.next ? new Node(*other.next) : NULL)
+      , data(other.data)
+    {}
+    
+    Node(int d) : next(NULL), data(d) {}
+    
+    ~Node() { delete next ; }
+};
+
+int main()
+{   
+    // 简单的右值示例
+    int n = 1 &gt; 2 ? 10 : 11; // 1 &gt; 2 为 false，所以 n = 11
+    
+    // 简单的左值示例
+    int m = 10;
+    (n == m ? n : m) = 7; // n == m 为 false，所以 m = 7
+    
+    // 输出结果
+    std::cout &lt;&lt; "n = " &lt;&lt; n &lt;&lt; "\nm = " &lt;&lt; m;
+}
+|output=
+n = 11
+m = 7
+}}
+
+===标准库===
+标准库中许多类都重载了 {{tt|operator()}}，以使其能被用作函数对象。
+{{dsc begin}}
+{{dsc inc|cpp/memory/default_delete/dsc operator()}}
+{{dsc inc|cpp/utility/functional/plus/dsc operator()}}
+{{dsc inc|cpp/utility/functional/minus/dsc operator()}}
+{{dsc inc|cpp/utility/functional/multiplies/dsc operator()}}
+{{dsc inc|cpp/utility/functional/divides/dsc operator()}}
+{{dsc inc|cpp/utility/functional/modulus/dsc operator()}}
+{{dsc inc|cpp/utility/functional/negate/dsc operator()}}
+{{dsc inc|cpp/utility/functional/equal_to/dsc operator()}}
+{{dsc inc|cpp/utility/functional/not_equal_to/dsc operator()}}
+{{dsc inc|cpp/utility/functional/greater/dsc operator()}}
+{{dsc inc|cpp/utility/functional/less/dsc operator()}}
+{{dsc inc|cpp/utility/functional/greater_equal/dsc operator()}}
+{{dsc inc|cpp/utility/functional/less_equal/dsc operator()}}
+{{dsc inc|cpp/utility/functional/logical_and/dsc operator()}}
+{{dsc inc|cpp/utility/functional/logical_or/dsc operator()}}
+{{dsc inc|cpp/utility/functional/logical_not/dsc operator()}}
+{{dsc inc|cpp/utility/functional/bit_and/dsc operator()}}
+{{dsc inc|cpp/utility/functional/bit_or/dsc operator()}}
+{{dsc inc|cpp/utility/functional/bit_xor/dsc operator()}}
+{{dsc inc|cpp/utility/functional/unary_negate/dsc operator()}}
+{{dsc inc|cpp/utility/functional/binary_negate/dsc operator()}}
+{{dsc inc|cpp/utility/functional/reference_wrapper/dsc operator()}}
+{{dsc inc|cpp/utility/functional/function/dsc operator()}}
+{{dsc inc|cpp/utility/functional/move_only_function/dsc operator()}}
+{{dsc inc|cpp/utility/functional/copyable_function/dsc operator()}}
+{{dsc inc|cpp/coroutine/coroutine_handle/dsc operator()}}
+{{dsc inc|cpp/locale/locale/dsc operator()}}
+{{dsc inc|cpp/container/value_compare/dsc operator()|map}}
+{{dsc inc|cpp/container/value_compare/dsc operator()|multimap}}
+{{dsc inc|cpp/thread/packaged_task/dsc operator()}}
+{{dsc inc|cpp/numeric/random/engine/dsc operator()|linear_congruential_engine}}&lt;!-- 及所有其他引擎 --&gt;
+{{dsc inc|cpp/numeric/random/distribution/dsc operator()|uniform_int_distribution}}&lt;!-- 及所有其他分布 --&gt;
+{{dsc end}}
+
+标准库中的所有类都没有重载逗号运算符。boost 库将 {{tt|operator,}} 用于 [https://www.boost.org/doc/libs/release/libs/assign/doc/index.html#intro boost.assign]、[https://www.boost.org/doc/libs/release/libs/spirit/doc/html/index.html boost.spirit] 和其他库。数据库访问库 [http://soci.sourceforge.net/doc.html SOCI] 也重载了 {{tt|operator,}}。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=446|std=C++98|before=未指明条件运算符中发生的左值到右值转换是否会创建临时量|after=返回类右值时总会创建}}
+{{dr list item|wg=cwg|dr=462|std=C++98|before=如果逗号运算符的第二个操作数是临时量，那么它的生存期在&lt;br&gt;该逗号表达式的结果被绑定到某个引用时未指明是否会延长|after=此时该逗号表达式会返回那个&lt;br&gt;临时量（也就是说生存期会延长）}}
+{{dr list item|wg=cwg|dr=587|std=C++98|before=当条件运算符的第二和第三操作数是只有 cv 限定不同的相同类型的左值时，&lt;br&gt;该条件表达式的结果在这两个操作数具有类类型时是左值，否则是右值|after=此时结果（不管操作数是否&lt;br&gt;具有类类型）总会是左值}}
+{{dr list item|wg=cwg|dr=1029|std=C++98|before=未指明析构函数调用表达式的返回类型|after=指定为 {{c/core|void}}}}
+{{dr list item|wg=cwg|dr=1550|std=C++98|before=当另一操作数不是 {{c/core|void}} 时条件表达式中不能有括号的 throw 表达式|after=接受有括号的 throw 表达式}}
+{{dr list item|wg=cwg|dr=1560|std=C++98|before=条件运算符的 {{c/core|void}} 操作数导致另一操作数上&lt;br&gt;无理由的左值到右值转换，始终产生右值|after=带 {{c/core|void}} 的条件表达式可以是左值}}
+{{dr list item|wg=cwg|dr=1642|std=C++98|before=函数调用表达式中的{{spar sep|函数}}可以是函数指针左值|after=已禁止}}
+{{dr list item|wg=cwg|dr=1805|std=C++98|before=在为隐式转换序列确定目标类型时从 {{c|Y}} 到 {{c|Z}} 的转换方式不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=1895|std=C++98&lt;br&gt;C++11|before=不明确弃置（C++11）或不可访问（C++98）的转换函数是否会&lt;br&gt;阻止条件表达式的转换，且未考虑从基类到派生类纯右值的转换&lt;!-- 或总结于 https://github.com/llvm-mirror/clang/blob/0d385d/test/SemaCXX/conditional-expr.cpp#L115 “对于右值，层级优先于其他转换” --&gt;|after=与重载决议相似的方式处理}}
+{{dr list item|wg=cwg|dr=1932|std=C++98|before=条件表达式中缺失同类型位域|after=以底层类型处理}}
+{{dr list item|wg=cwg|dr=2226|std=C++11|before=在决定条件运算符另一操作数的目标类型时无法在它是左值时将引用绑定到亡值|after=可以绑定}}
+{{dr list item|wg=cwg|dr=2283|std=C++17|before={{stddoc|P0135R1}} 意外移除了函数调用运算符的类型完整性要求|after=恢复该要求}}
+{{dr list item|wg=cwg|dr=2321|std=C++11|before=在决定条件运算符另一操作数的目标类型时无法将&lt;br&gt;派生类类型转换到具有更少 cv 限定的基类类型|after=可以转换到具有派生类操作数&lt;br&gt;的 cv 限定的基类类型}}
+{{dr list item|wg=cwg|dr=2715|std=C++98|before=形参的初始化和销毁在调用方的语境中进行，但调用方不一定存在&lt;ref&gt;例如函数可以在命名空间作用域变量的初始化器中被调用，此时该语境中就没有“调用方”。&lt;/ref&gt;|after=在外围完整表达式的语境中进行}}
+{{dr list item|wg=cwg|dr=2850|std=C++98|before=形参的销毁顺序不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=2865|std=C++98|before=即使 {{tt|TX}} 和 {{tt|TY}} 是相同的类类型且 {{tt|TX}} 比 {{tt|TY}} 具有更多的&lt;br&gt;cv 限定，依然也可以从纯右值 {{c|Y}} 组成隐式转换序列|after=此时不会组成转换序列}}
+{{dr list item|wg=cwg|dr=2906|std=C++98|before=在条件运算符的结果是右值的情况下会无条件应用左值到右值转换|after=只会在特定情况下应用}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{rlp|operator precedence|运算符优先级}}&lt;br&gt;
+{{rlp|operators|运算符重载}}
+
+{{cpp/language/operators}}
+
+{{dsc begin}}
+{{dsc see c|c/language/operator other|其他运算符|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

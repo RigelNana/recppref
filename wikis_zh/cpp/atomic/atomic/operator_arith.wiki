@@ -1,0 +1,158 @@
+{{cpp/atomic/atomic/title|1=operator++,++{{small|(int)}},--,--{{small|(int)}}}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl h|{{tt|atomic&lt;}}''整数类型''{{sep}}{{tt|&gt;}} 特化才有的成员}}
+{{dcl|num=1|since=c++11|
+T operator++() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+T operator++() volatile noexcept;
+}}
+{{dcl|num=3|since=c++11|
+T operator++( int ) noexcept;
+}}
+{{dcl|num=4|since=c++11|
+T operator++( int ) volatile noexcept;
+}}
+{{dcl|num=5|since=c++11|
+T operator--() noexcept;
+}}
+{{dcl|num=6|since=c++11|
+T operator--() volatile noexcept;
+}}
+{{dcl|num=7|since=c++11|
+T operator--( int ) noexcept;
+}}
+{{dcl|num=8|since=c++11|
+T operator--( int ) volatile noexcept;
+}}
+{{dcl h|{{tt|atomic&lt;T*&gt;}} 部分特化才有的成员}}
+{{dcl|num=9|since=c++11|
+T* operator++() noexcept;
+}}
+{{dcl|num=10|since=c++11|
+T* operator++() volatile noexcept;
+}}
+{{dcl|num=11|since=c++11|
+T* operator++( int ) noexcept;
+}}
+{{dcl|num=12|since=c++11|
+T* operator++( int ) volatile noexcept;
+}}
+{{dcl|num=13|since=c++11|
+T* operator--() noexcept;
+}}
+{{dcl|num=14|since=c++11|
+T* operator--() volatile noexcept;
+}}
+{{dcl|num=15|since=c++11|
+T* operator--( int ) noexcept;
+}}
+{{dcl|num=16|since=c++11|
+T* operator--( int ) volatile noexcept;
+}}
+{{dcl end}}
+
+原子地自增或自减当前值。操作为读-修改-写操作。
+* {{c/core|operator++()}} 进行原子的前自增。等价于 {{c|return fetch_add(1) + 1;}}。
+* {{c/core|operator++(int)}} 进行原子的后自增。等价于 {{c|return fetch_add(1);}}。
+* {{c/core|operator--()}} 进行原子的前自减。等价于 {{c|return fetch_sub(1) - 1;}}。
+* {{c/core|operator--(int)}} 进行原子的后自减。等价于 {{c|return fetch_sub(1);}}。
+
+@1-8@ 对于有符号整数类型，算术定义为使用补码表示。没有未定义的结果。
+
+@9-16@ 结果可能是未定义地址，但此外这些操作不会有未定义行为。
+@@ 如果 {{tt|T}} 不是完整对象类型，那么程序非良构。
+
+{{rrev|since=c++20|
+{{c/core|volatile}} 重载在参与重载决议且 {{c|std::atomic&lt;T&gt;::is_always_lock_free}} 是 {{c|false}} 时被弃用。
+}}
+
+===返回值===
+{{c/core|operator++()}} 和 {{c/core|operator--()}} 返回修改后的原子变量的值。正式地说，{{c|*this}} 的{{ls|cpp/atomic/memory order#修改顺序}}中紧接此函数生效前的值的自增/自减的结果。
+
+{{c/core|operator++(int)}} 和 {{c/core|operator--(int)}} 返回修改前的原子变量的值。正式地说，{{c|*this}} 的{{ls|cpp/atomic/memory order#修改顺序}}中紧接此函数生效前的值。
+
+===注解===
+与大多数前自增和自减运算符不同，原子类型的前自增和自减运算符不返回被修改对象的引用。它们代之以返回存储值的副本。
+
+===示例===
+{{example|code=
+#include &lt;atomic&gt;
+#include &lt;chrono&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;random&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::atomic&lt;int&gt; atomic_count{0};
+
+std::mutex cout_mutex;
+int completed_writes{0};
+
+constexpr int global_max_count{72};
+constexpr int writes_per_line{8};
+constexpr int max_delay{100};
+
+template&lt;int Max&gt;
+int random_value()
+{
+    static std::uniform_int_distribution&lt;int&gt; distr{1, Max};
+    static std::random_device engine;
+    static std::mt19937 noise{engine()};
+    static std::mutex rand_mutex;
+    std::lock_guard lock{rand_mutex};
+    return distr(noise);
+}
+
+int main()
+{
+    auto work = [](const std::string id)
+    {
+        for (int count{}; (count = ++atomic_count) &lt;= global_max_count;)
+        {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(random_value&lt;max_delay&gt;()));
+            
+            // 打印线程的 id 和 count 值
+            {
+                std::lock_guard lock{cout_mutex};
+                
+                const bool new_line = ++completed_writes % writes_per_line == 0;
+                
+                std::cout &lt;&lt; id &lt;&lt; std::setw(3) &lt;&lt; count &lt;&lt; "  "
+                          &lt;&lt; (new_line ? "\n" : "") &lt;&lt; std::flush;
+            }
+        }
+    };
+
+    std::jthread j1(work, "░"), j2(work, "▒"), j3(work, "▓"), j4(work, "█");
+}
+|p=true
+|output=
+▒  2  ░  1  ▒  5  ▒  7  █  4  ░  6  ▓  3  ▒  8  
+▓ 11  █  9  ▓ 13  ░ 10  █ 14  ▒ 12  ░ 16  ░ 19  
+▓ 15  ▒ 18  ▓ 21  ▒ 22  █ 17  █ 25  ▒ 24  █ 26  
+░ 20  ░ 29  ▒ 27  ▓ 23  ▒ 31  ▒ 33  ▓ 32  █ 28  
+░ 30  ░ 37  ▒ 34  ▓ 35  █ 36  █ 41  ▓ 40  ▒ 39  
+░ 38  ▓ 43  █ 42  ▓ 46  ▓ 48  █ 47  █ 50  ░ 45  
+▒ 44  ▒ 53  ▒ 54  ▓ 49  ▒ 55  █ 51  ▒ 57  █ 58  
+░ 52  ▓ 56  ░ 61  ▒ 59  █ 60  ▓ 62  ▒ 64  ░ 63  
+░ 68  ▓ 66  █ 65  █ 71  ▒ 67  ▓ 70  ░ 69  █ 72
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P0558R1|std=c++11|before=允许进行指向（可有 cv 限定的）{{c/core|void}} 或函数的指针运算|after=使之非良构}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_add}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_sub}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith2}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith3}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

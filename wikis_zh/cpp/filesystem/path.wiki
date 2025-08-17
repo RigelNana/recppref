@@ -1,0 +1,144 @@
+{{cpp/filesystem/title|path}}
+{{cpp/filesystem/path/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|since=c++17|
+class path;
+}}
+{{dcl end}}
+
+类型 {{tt|path}} 的对象表示文件系统上的路径。只有路径的语法外观得到处理：路径名可能表示不存在的路径，或甚至不允许存在于当前文件系统或操作系统的路径。
+
+路径名拥有下列语法：
+# {{spar|根名}}{{mark optional}}：标识具有多根的文件系统（如 {{c|"C:"}} 或 {{c|"//myserver"}}）的根。有歧义的情况下，将组成合法 {{spar|根名}} 的最长序列当做 {{spar|根名}}。标准库可以在 OS API 所了解的 {{spar|根名}} 外，定义额外的 {{spar|根名}}。
+# {{spar|根目录}}{{mark optional}}：目录分隔符，若存在，则标记此路径为''绝对''。若缺失（且异于根名的首元素是文件名），则路径为''相对''且要求另一路径作为解决此文件名的起始位置。
+# 零或多个下列者：
+:* {{spar|文件名}}：不由目录分隔符或偏好目录分隔符组成的字符序列（操作系统或文件系统可能加上附加限制）。此名称可能标识一个文件、硬链接或目录。辨别两种特殊的 {{spar|文件名}}：
+::* {{spar|点}}：由单个点字符 {{c|.}} 构成的文件名是指代当前目录的目录名
+::* {{spar|点点}}：由两个点字符 {{c|..}} 构成的文件名是指代父目录的目录名。
+:* {{spar|目录分隔符}}：正斜杠字符 {{c|/}} 或作为 {{tt|path::preferred_separator}} 提供的另一种字符。若重复此字符，则它被处理成单个目录分隔符：{{c|/usr///////lib}} 与 {{c|/usr/lib}} 相同。
+
+路径能以下列算法''正常化''：
+# 若路径为空，则停止（空路径的正常形式是空路径）。
+# 替换每个 {{spar|目录分隔符}}（可以由多重斜杠组成）为单个 {{tt|path::preferred_separator}}。
+# 替换 {{spar|根名}} 中的每个斜杠字符为 {{tt|path::preferred_separator}}。
+# 移除每个 {{spar|点}} 和立即后随的 {{spar|目录分隔符}}。
+# 移除每个立即后随 {{spar|目录分隔符}} 和一个 {{spar|点点}} 的非 {{spar|点点}} 文件名，还有立即跟随的 {{spar|目录分隔符}}。
+# 若存在 {{spar|根目录}}，则移除立即跟随它们的所有 {{spar|点点}} 及任何 {{spar|目录分隔符}}。
+# 若最终文件名是 {{spar|点点}}，则移除任何尾随的 {{spar|目录分隔符}}。
+# 若路径为空，则添加一个 {{spar|点}}（{{c|./}} 的正常形式是 {{c|.}}）。
+
+路径可由 {{lc|begin()}} 与 {{lc|end()}} 函数返回的迭代器逐元素进行遍历，这会以通用格式查看路径，并在根名、根目录及后继文件名元素上迭代（跳过目录分隔符，除了标识根目录者）。若路径中的最后元素是目录分隔符，则最后的迭代器将解引用为空元素。
+
+调用任何的 {{tt|path}} 非 const 成员函数会令所有引用该对象元素的迭代器失效。
+
+若 OS 使用异于上述可移植''通用''语法的''原生''语法，则库函数被定义为接受“受检测格式”，以接受两种格式的路径名：当且仅当受检测格式匹配通用格式，但不为操作系统作为原生路径接受，才采用受检测格式参数。原生格式在目录路径名和文件路径名有别的 OS 上，若通用路径名以目录分隔符终止，则将它当做目录路径，否则当做常规文件。
+
+任何情况下，path 类表现如同它以原生格式存储路径名，并自动于所需场合转换它为通用格式（每个成员函数都指定它转译的路径格式）。
+
+POSIX 系统上，通用格式就是原生格式，并且没有必要区别或转换它们。
+
+路径可隐式转换自及转换成 {{lc|std::basic_string}}，这使得在文件 API 上使用它们可行。
+
+{{rl|operator_ltltgtgt|流运算符}}使用 {{lc|std::quoted}} 以使空白不会导致其后通过{{rl|operator_ltltgtgt|流输入运算符}}的读取发生截断。
+
+[[#分解|分解成员函数]]（如 {{lc|extension}}）返回 {{tt|filesystem::path}} 对象而不是如其他 API 那样返回字符串对象。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|文件系统原生编码所用的字符类型：POSIX 上为 {{c/core|char}}，Windows 上为 {{c/core|wchar_t}}}}
+{{dsc|{{tt|string_type}}|{{c/core|std::basic_string&lt;value_type&gt;}}}}
+{{dsc|{{tt|const_iterator}}|{{tt|value_type}} 为 {{tt|path}} 的常量{{named req|InputIterator}}，符合{{named req|BidirectionalIterator}}的所有要求，但对于两个相等且可解引用的 {{tt|const_iterator}} 类型的迭代器 {{tt|a}} 与 {{tt|b}}，不要求 {{c|*a}} 与 {{c|*b}} 指代同一对象。
+
+{{tt|const_iterator}} 是否实际为{{named req|BidirectionalIterator}}是未指定的。}}
+{{dsc|{{tt|iterator}}|{{tt|const_iterator}}}}
+{{dsc mem enum|cpp/filesystem/path/format|确定如何解读路径名的字符串表示
+
+亦定义下列枚举项：
+{{dsc begin}}
+{{dsc hitem|名称|解释}}
+{{dsc|{{ltt|cpp/filesystem/path/format|native_format}}|原生路径格式}}
+{{dsc|{{ltt|cpp/filesystem/path/format|generic_format}}|通用路径格式}}
+{{dsc|{{ltt|cpp/filesystem/path/format|auto_format}}|实现定义格式，如果可能就自动检测}}
+{{dsc end}}}}
+{{dsc end}}
+
+===成员常量===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/path/dsc preferred_separator}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/path/dsc constructor}}
+{{dsc inc|cpp/filesystem/path/dsc destructor}}
+{{dsc inc|cpp/filesystem/path/dsc operator{{=}}}}
+{{dsc inc|cpp/filesystem/path/dsc assign}}
+
+{{dsc h2|连接}}
+{{dsc inc|cpp/filesystem/path/dsc append}}
+{{dsc inc|cpp/filesystem/path/dsc concat}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/filesystem/path/dsc clear}}
+{{dsc inc|cpp/filesystem/path/dsc make_preferred}}
+{{dsc inc|cpp/filesystem/path/dsc remove_filename}}
+{{dsc inc|cpp/filesystem/path/dsc replace_filename}}
+{{dsc inc|cpp/filesystem/path/dsc replace_extension}}
+{{dsc inc|cpp/filesystem/path/dsc swap}}
+
+{{dsc h2|格式观察器}}
+{{dsc inc|cpp/filesystem/path/dsc native}}
+{{dsc inc|cpp/filesystem/path/dsc string}}
+{{dsc inc|cpp/filesystem/path/dsc generic_string}}
+
+{{dsc h2|比较}}
+{{dsc inc|cpp/filesystem/path/dsc compare}}
+
+{{dsc h2|生成}}
+{{dsc inc|cpp/filesystem/path/dsc lexically_normal}}
+
+{{dsc h2|分解}}
+{{dsc inc|cpp/filesystem/path/dsc root_name}}
+{{dsc inc|cpp/filesystem/path/dsc root_directory}}
+{{dsc inc|cpp/filesystem/path/dsc root_path}}
+{{dsc inc|cpp/filesystem/path/dsc relative_path}}
+{{dsc inc|cpp/filesystem/path/dsc parent_path}}
+{{dsc inc|cpp/filesystem/path/dsc filename}}
+{{dsc inc|cpp/filesystem/path/dsc stem}}
+{{dsc inc|cpp/filesystem/path/dsc extension}}
+
+{{dsc h2|查询}}
+{{dsc inc|cpp/filesystem/path/dsc empty}}
+{{dsc inc|cpp/filesystem/path/dsc has_path}}
+{{dsc inc|cpp/filesystem/path/dsc is_absrel}}
+
+{{dsc h2|迭代器}}
+{{dsc inc|cpp/filesystem/path/dsc begin}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc namespace|std::filesystem}}
+{{dsc inc|cpp/filesystem/path/dsc swap2}}
+{{dsc inc|cpp/filesystem/path/dsc hash_value}}
+{{dsc inc|cpp/filesystem/path/dsc operator_cmp}}
+{{dsc inc|cpp/filesystem/path/dsc operator/}}
+{{dsc inc|cpp/filesystem/path/dsc operator_ltltgtgt}}
+{{dsc inc|cpp/filesystem/path/dsc u8path}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc namespace|std}}
+{{dsc inc|cpp/filesystem/path/dsc hash}}
+{{dsc inc|cpp/filesystem/path/dsc formatter}}
+{{dsc end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3657|std=C++17|before={{tt|path}} 的 {{rlt|hash}} 被禁用|after=已启用}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

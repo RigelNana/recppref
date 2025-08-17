@@ -1,0 +1,180 @@
+{{cpp/title|common_type}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|1=
+template&lt; class... T &gt;
+struct common_type;
+}}
+{{dcl end}}
+
+确定所有类型 {{tt|T...}} 的公共类型，即所有 {{tt|T...}} 都能显式转换到的类型。如果这种类型（根据以下规则确定）存在，那么成员 {{tt|type}} 指名该类型。否则，没有成员 {{tt|type}}。
+
+* 如果 {{c|sizeof...(T)}} 是零，那么无成员 {{tt|type}}。
+* 如果 {{c|sizeof...(T)}} 是一（即 {{tt|T...}} 只含一个类型 {{tt|T0}}），那么成员 {{tt|type}} 指名与 {{c/core|std::common_type&lt;T0, T0&gt;::type}} 相同的类型，如果存在；否则没有成员 {{tt|type}}。
+* 如果 {{c/core|sizeof...(T)}} 是二（即 {{tt|T...}} 正好包含两个成员 {{tt|T1}} 和 {{tt|T2}}），那么：
+:* 如果应用 {{lc|std::decay}} 到 {{tt|T1}} 与 {{tt|T2}} 中至少一个类型后产生了不同的类型，那么成员 {{tt|type}} 指名与 {{c/core|std::common_type&lt;std::decay&lt;T1&gt;::type, std::decay&lt;T2&gt;::type&gt;::type}} 相同的类型（如果存在）；不存在时没有成员 {{tt|type}}。
+:* 否则，如果有对 {{c/core|std::common_type&lt;T1, T2&gt;}} 的用户定义特化，那么使用该特化。
+:* 否则，如果 {{c/core|std::decay&lt;decltype(false ? std::declval&lt;T1&gt;() : std::declval&lt;T2&gt;())&gt;::type}} 是合法类型，那么成员 {{tt|type}} 代表该类型，参见[[cpp/language/operator_other#条件运算符|条件运算符]]。
+{{rrev|since=c++20|1=
+:* 否则，如果 {{c/core|std::decay&lt;decltype(false ? std::declval&lt;CR1&gt;() : std::declval&lt;CR2&gt;())&gt;::type}} 是合法类型，其中 {{tt|CR1}} 与 {{tt|CR2}} 分别是 {{c/core|const std::remove_reference_t&lt;T1&gt;&amp;}} 与 {{c/core|const std::remove_reference_t&lt;T2&gt;&amp;}}，那么成员 {{tt|type}} 代表该类型。
+}}
+:* 否则，没有成员 {{tt|type}}。
+* 如果 {{c|sizeof...(T)}} 大于二（即 {{tt|T...}} 由类型 {{tt|T1, T2, R...}} 组成），那么 {{c/core|std::common_type&lt;T1, T2&gt;::type}} 存在时成员 {{tt|type}} 指代 {{c/core|std::common_type&lt;std::common_type&lt;T1, T2&gt;::type, R...&gt;::type}}（如果存在这种类型）。其他所有情况下，没有成员 {{tt|type}}。
+
+{{cpp/types/cvaub|pack=T|packonly=yes}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|名字|定义}}
+{{dsc|{{tt|type}}|所有 {{tt|T...}} 的公共类型}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|since=c++14|1=
+template&lt; class... T &gt;
+using common_type_t = typename common_type&lt;T...&gt;::type;
+}}
+{{dcl end}}
+
+===特化===
+用户可为类型 {{tt|T1}} 与 {{tt|T2}} 特化 {{tt|common_type}}，只要
+* {{tt|T1}} 与 {{tt|T2}} 至少一个依赖于用户定义类型，且
+* {{lc|std::decay}} 对于 {{tt|T1}} 和 {{tt|T2}} 都是同等变换。
+
+如果这种特化拥有名为 {{tt|type}} 的成员，那么限定标识 {{c/core|std::common_type&lt;T1, T2&gt;::type}} 必须合法并指名一个 {{tt|T1}} 和 {{tt|T2}} 都能显式转换到的，无 cv 限定且非引用的类型。而且，{{c/core|std::common_type&lt;T1, T2&gt;::type}} 与 {{c/core|std::common_type&lt;T2, T1&gt;::type}} 必须指代同一类型。
+
+以违背这些规则的方式添加 {{tt|common_type}} 特化的程序拥有未定义行为。
+
+注意添加特化到来自 {{tt|&lt;type_traits&gt;}} 的任何其他模板{{rev inl|since=c++20|（除了 {{ltt|cpp/types/common_reference|std::basic_common_reference}}）}}的程序行为未定义。
+
+标准库已提供下列特化：
+{{dsc begin}}
+{{dsc inc|cpp/chrono/duration/dsc common_type}}
+{{dsc inc|cpp/chrono/time_point/dsc common_type}}
+{{dsc inc|cpp/utility/pair/dsc common_type}}
+{{dsc inc|cpp/utility/tuple/dsc common_type}}
+{{dsc inc|cpp/iterator/basic_const_iterator/dsc common_type}}
+{{dsc end}}
+
+===可能的实现===
+{{eq fun
+|1=
+// 主模板（用于零个类型）
+template&lt;class...&gt;
+struct common_type {};
+
+// 一个类型
+template&lt;class T&gt;
+struct common_type&lt;T&gt; : common_type&lt;T, T&gt; {};
+
+namespace detail
+{
+    template&lt;class...&gt;
+    using void_t = void;
+    
+    template&lt;class T1, class T2&gt;
+    using conditional_result_t = decltype(false ? std::declval&lt;T1&gt;() : std::declval&lt;T2&gt;());
+    
+    template&lt;class, class, class = void&gt;
+    struct decay_conditional_result {};
+    template&lt;class T1, class T2&gt;
+    struct decay_conditional_result&lt;T1, T2, void_t&lt;conditional_result_t&lt;T1, T2&gt;&gt;&gt;
+        : std::decay&lt;conditional_result_t&lt;T1, T2&gt;&gt; {};
+    
+    template&lt;class T1, class T2, class = void&gt;
+    struct common_type_2_impl : decay_conditional_result&lt;const T1&amp;, const T2&amp;&gt; {};
+    
+    // C++11 实现：
+    // template&lt;class, class, class = void&gt;
+    // struct common_type_2_impl {};
+    
+    template&lt;class T1, class T2&gt;
+    struct common_type_2_impl&lt;T1, T2, void_t&lt;conditional_result_t&lt;T1, T2&gt;&gt;&gt;
+        : decay_conditional_result&lt;T1, T2&gt; {};
+}
+
+// 两个类型
+template&lt;class T1, class T2&gt;
+struct common_type&lt;T1, T2&gt; 
+    : std::conditional&lt;std::is_same&lt;T1, typename std::decay&lt;T1&gt;::type&gt;::value &amp;&amp;
+                       std::is_same&lt;T2, typename std::decay&lt;T2&gt;::type&gt;::value,
+                       detail::common_type_2_impl&lt;T1, T2&gt;,
+                       common_type&lt;typename std::decay&lt;T1&gt;::type,
+                                   typename std::decay&lt;T2&gt;::type&gt;&gt;::type {};
+
+// 三个及以上类型
+namespace detail
+{
+    template&lt;class AlwaysVoid, class T1, class T2, class... R&gt;
+    struct common_type_multi_impl {};
+    template&lt;class T1, class T2, class...R&gt;
+    struct common_type_multi_impl&lt;void_t&lt;typename common_type&lt;T1, T2&gt;::type&gt;, T1, T2, R...&gt;
+        : common_type&lt;typename common_type&lt;T1, T2&gt;::type, R...&gt; {};
+}
+
+template&lt;class T1, class T2, class... R&gt;
+struct common_type&lt;T1, T2, R...&gt;
+    : detail::common_type_multi_impl&lt;void, T1, T2, R...&gt; {};
+}}
+
+===注解===
+对于不提升的算术类型，共用类型可视为如 {{c|T0() + T1() + ... + Tn()}} 的（可以为混合模式的）算术表达式的类型。
+
+===示例===
+{{example
+|演示由程序定义的类上的混合模式算术：
+|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+template&lt;class T&gt;
+struct Number { T n; };
+
+template&lt;class T, class U&gt;
+constexpr Number&lt;std::common_type_t&lt;T, U&gt;&gt;
+    operator+(const Number&lt;T&gt;&amp; lhs, const Number&lt;U&gt;&amp; rhs)
+{
+    return {lhs.n + rhs.n};
+}
+
+void describe(const char* expr, const Number&lt;int&gt;&amp; x)
+{
+    std::cout &lt;&lt; expr &lt;&lt; "  是  Number&lt;int&gt;{" &lt;&lt; x.n &lt;&lt; "}\n";
+}
+
+void describe(const char* expr, const Number&lt;double&gt;&amp; x)
+{
+    std::cout &lt;&lt; expr &lt;&lt; "  是  Number&lt;double&gt;{" &lt;&lt; x.n &lt;&lt; "}\n";
+}
+
+int main()
+{
+    Number&lt;int&gt; i1 = {1}, i2 = {2};
+    Number&lt;double&gt; d1 = {2.3}, d2 = {3.5};
+    describe("i1 + i2", i1 + i2);
+    describe("i1 + d2", i1 + d2);
+    describe("d1 + i2", d1 + i2);
+    describe("d1 + d2", d1 + d2);
+}
+|output=
+i1 + i2  是  Number&lt;int&gt;{3}
+i1 + d2  是  Number&lt;double&gt;{4.5}
+d1 + i2  是  Number&lt;double&gt;{4.3}
+d1 + d2  是  Number&lt;double&gt;{5.8}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|std=C++11|dr=2141|before=条件运算符的结果类型没有退化|after=退化结果类型}}
+{{dr list item|wg=lwg|std=C++11|dr=2408|before={{tt|common_type}} SFINAE 不友好|after= 使之 SFINAE 友好}}
+{{dr list item|wg=lwg|std=C++11|dr=2460|before=几乎不可能写出 {{tt|common_type}} 的特化|after=减少需要的特化数量}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/concepts/dsc common_with}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

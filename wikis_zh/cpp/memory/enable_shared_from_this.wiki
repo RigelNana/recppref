@@ -1,0 +1,153 @@
+{{cpp/title|enable_shared_from_this}}
+{{cpp/memory/enable_shared_from_this/navbar}}
+{{ddcl|header=memory|since=c++11|1=
+template&lt; class T &gt;
+class enable_shared_from_this;
+}}
+
+{{tt|std::enable_shared_from_this}} 能让它的一个已被 {{lc|std::shared_ptr}} 类型对象 {{c|pt}} 管理的对象 {{c|t}} 安全地生成其他额外的 {{lc|std::shared_ptr}} 实例 {{c|pt1}}、{{c|pt2}} 等等，它们都与 {{c|pt}} 共享对象 {{c|t}} 的所有权。
+
+如果类 {{tt|T}} 公开继承了 {{tt|std::enable_shared_from_this&lt;T&gt;}}，那么就会为该类 {{tt|T}} 提供成员函数 {{tt|shared_from_this}}。
+当 {{tt|T}} 类型对象 {{c|t}} 被 {{c/core|std::shared_ptr&lt;T&gt;}} 类对象 {{c|pt}} 管理时，调用 {{tt|T::shared_from_this}} 成员函数会返回一个新的 {{c/core|std::shared_ptr&lt;T&gt;}} 对象，它与 {{c|pt}} 共享 {{c|t}} 的所有权。
+
+===成员对象===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|spec={{c/core|mutable std::weak_ptr&lt;T&gt;}}|weak_this|id=weak_this|追踪 {{c|*this}} 的首个共享占有者的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc prot mem ctor|cpp/memory/enable_shared_from_this/enable_shared_from_this|构造 {{tt|enable_shared_from_this}} 对象}}
+{{dsc prot mem dtor|cpp/memory/enable_shared_from_this/~enable_shared_from_this|销毁 {{tt|enable_shared_from_this}} 对象}}
+{{dsc prot mem fun|cpp/memory/enable_shared_from_this/operator{{=}}|返回到 {{c|*this}} 的引用}}
+{{dsc mem fun|cpp/memory/enable_shared_from_this/shared_from_this|返回共享 {{c|*this}} 所有权的 {{lc|std::shared_ptr}}}}
+{{dsc mem fun|cpp/memory/enable_shared_from_this/weak_from_this|返回共享 {{c|*this}} 所有权的 {{lc|std::weak_ptr}}|notes={{mark c++17}}}}
+{{dsc end}}
+
+===注解===
+{{lc|std::shared_ptr}} 的构造函数会检测无歧义且可访问的 {{tt|enable_shared_from_this}} 基类（即强制公开继承），并且在 {{tti|weak_this}} 未被生存的 {{lc|std::shared_ptr}} 占有时将新建的 {{lc|std::shared_ptr}} 赋给 {{tti|weak_this}}{{sep}}。对已经由另一 {{lc|std::shared_ptr}} 所管理的对象构造一个 {{lc|std::shared_ptr}} 不会考虑 {{tti|weak_this}}{{sep}}，从而将导致未定义行为。
+
+只容许在先前已由 {{c/core|std::shared_ptr&lt;T&gt;}} 管理的对象上调用 {{tt|shared_from_this}}。否则抛出 {{lc|std::bad_weak_ptr}} 异常（通过 {{lc|std::shared_ptr}} 的构造函数，来源为默认构造的 {{tti|weak_this}}{{sep}}）。
+
+{{tt|enable_shared_from_this}} 提供安全的替用方案，以替代 {{c|std::shared_ptr&lt;T&gt;(this)}} 这样的表达式（这种不安全的表达式可能会导致 {{c|this}} 被多个互不知晓的所有者析构，见下方示例）。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+ 
+class Good : public std::enable_shared_from_this&lt;Good&gt;
+{
+public:
+    std::shared_ptr&lt;Good&gt; getptr()
+    {
+        return shared_from_this();
+    }
+};
+
+class Best : public std::enable_shared_from_this&lt;Best&gt;
+{
+    struct Private{ explicit Private() = default; };
+    
+public:
+    // 只有自己可以使用构造函数
+    Best(Private) {}
+    
+    // 其他地方都必须使用此工厂函数
+    // 因此所有 Best 对象均将被 shared_ptr 容纳
+    static std::shared_ptr&lt;Best&gt; create()
+    {
+        return std::make_shared&lt;Best&gt;(Private());
+    }
+    
+    std::shared_ptr&lt;Best&gt; getptr()
+    {
+        return shared_from_this();
+    }
+};
+
+struct Bad
+{
+    std::shared_ptr&lt;Bad&gt; getptr()
+    {
+        return std::shared_ptr&lt;Bad&gt;(this);
+    }
+    ~Bad() { std::cout &lt;&lt; "调用 Bad::~Bad()\n"; }
+};
+
+void testGood()
+{
+    // 好：两个 shared_ptr 共享同一对象
+    std::shared_ptr&lt;Good&gt; good0 = std::make_shared&lt;Good&gt;();
+    std::shared_ptr&lt;Good&gt; good1 = good0-&gt;getptr();
+    std::cout &lt;&lt; "good1.use_count() = " &lt;&lt; good1.use_count() &lt;&lt; '\n';
+}
+
+void misuseGood()
+{
+    // 坏：调用 shared_from_this 但没有 std::shared_ptr 占有调用者
+    try
+    {
+        Good not_so_good;
+        std::shared_ptr&lt;Good&gt; gp1 = not_so_good.getptr();
+    }
+    catch (std::bad_weak_ptr&amp; e)
+    {
+        // 未定义行为（C++17 前）/ 抛出 std::bad_weak_ptr（C++17 起）
+        std::cout &lt;&lt; e.what() &lt;&lt; '\n';    
+    }
+}
+
+void testBest()
+{
+    // 最好：同上但无法栈分配它：
+    std::shared_ptr&lt;Best&gt; best0 = Best::create();
+    std::shared_ptr&lt;Best&gt; best1 = best0-&gt;getptr();
+    std::cout &lt;&lt; "best1.use_count() = " &lt;&lt; best1.use_count() &lt;&lt; '\n';
+    
+    // Best stackBest; // &lt;- 不会通过编译，因为 Best::Best() 为私有。
+}
+
+void testBad()
+{
+    // 不好，每个 shared_ptr 都认为它是对象的唯一所有者
+    std::shared_ptr&lt;Bad&gt; bad0 = std::make_shared&lt;Bad&gt;();
+    std::shared_ptr&lt;Bad&gt; bad1 = bad0-&gt;getptr();
+    std::cout &lt;&lt; "bad1.use_count() = " &lt;&lt; bad1.use_count() &lt;&lt; '\n';
+} // 未定义行为：Bad 的二次删除
+
+int main()
+{
+    testGood();
+    misuseGood();
+    
+    testBest();
+    
+    testBad();
+}
+|p=true
+|output=
+good1.use_count() = 2
+bad_weak_ptr
+best1.use_count() = 2
+bad1.use_count() = 1
+调用 Bad::~Bad()
+调用 Bad::~Bad()
+*** glibc detected *** ./test: double free or corruption 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2179|paper=P0033R1|std=C++11|before=给定从 {{tt|enable_shared_from_this}} 派生的类型 {{tt|T}}，&lt;br&gt;从同一 {{c/core|T*}} 对象构造两个 {{c/core|std::shared_ptr&lt;T&gt;}} 的行为不明确|after=此时行为未定义}}
+{{dr list item|wg=lwg|dr=2529|paper=P0033R1|std=C++11|before=不明确如何更新底层 {{lc|std::weak_ptr}}|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

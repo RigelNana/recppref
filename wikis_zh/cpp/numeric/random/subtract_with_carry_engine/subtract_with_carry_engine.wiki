@@ -1,0 +1,87 @@
+{{cpp/numeric/random/subtract_with_carry_engine/title|subtract_with_carry_engine}}
+{{cpp/numeric/random/subtract_with_carry_engine/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+subtract_with_carry_engine() : subtract_with_carry_engine(0u) {}
+}}
+{{dcl|num=2|since=c++11|
+explicit subtract_with_carry_engine( result_type value );
+}}
+{{dcl|num=3|since=c++11|
+template&lt; class SeedSeq &gt;
+explicit subtract_with_carry_engine( SeedSeq&amp; seq );
+}}
+{{dcl|num=4|since=c++11|notes={{mark implicit}}|
+subtract_with_carry_engine( const subtract_with_carry_engine&amp; other );
+}}
+{{dcl end}}
+
+构造伪随机数引擎。
+
+@1@ 默认构造函数。
+* 如果默认构造的引擎具有 {{tt|std::ranlux24_base}} 类型，那么对它连续调用 10000 次产生的值是 {{c|7937952}}。
+* 如果默认构造的引擎具有 {{tt|std::ranlux48_base}} 类型，那么对它连续调用 10000 次产生的值是 {{c|61839128582725}}。
+
+@2@ 以种子值 {{c|value}} 构造引擎。引擎的初始{{rlp|/#生成器属性|状态}}中的序列 {{c|X}} 通过以下方式确定：
+# 以实参 {{c|1=value == 0u ? default_seed : static_cast&lt;std::uint_least32_t&gt;(value % 2147483563u)}} 构造 {{c/core|std::linear_congruential_engine&lt;std::uint_least32_t, 40014u, 0u, 2147483563u&gt;}} 类型对象 {{c|e}}。
+# 设 {{c|n}} 为 {{c|std::size_t(w / 32) + 1}}。
+# 按顺序设置值 {{mathjax-or|\(\scriptsize X_{-r} \)|X{{su|b=-r}}}}，...，{{mathjax-or|\(\scriptsize X_{-1} \)|X{{su|b=-1}}}}。按以下方式设置每个值 {{mathjax-or|\(\scriptsize X_i \)|X{{su|b=i}}}}：
+:# 对 {{c|e}} 连续调用 {{c|n}} 次，以 {{mathjax-or|\(\scriptsize z_0 \)|z{{su|b=0}}}} ... {{mathjax-or|\(\scriptsize z_{n-1} \)|z{{su|b=n-1}}}} 表示这些调用的返回值。
+:# 将 {{mathjax-or|\(\scriptsize X_i \)|X{{su|b=i}}}} 设为 {{mathjax-or|1=\(\scriptsize (\sum^{n-1}_{j=0} z_j \cdot 2^{32j}) \mod m \)|2=(∑{{su|p=n-1|b=j=0}} z{{su|b=j}}·2{{su|p=32j}}) mod m}}。
+@@ 如果 {{mathjax-or|\(\scriptsize X_{-1} \)|X{{su|b=-1}}}} 是 {{c|0}}，那么将初始状态中的进位值 {{c|c}} 设为 {{c|1}}。否则将 {{c|c}} 设为 {{c|0}}。
+
+@3@ 以种子序列 {{c|seq}} 构造引擎。给定 {{c|std::size_t(w / 32) + 1}} 为 {{c|k}}，引擎的初始{{rlp|/#生成器属性|状态}}中的序列 {{c|X}} 通过以下方式确定：
+# 创建一个长度是 {{c|r * k}} 的虚设数组对象。
+# 调用 {{c|seq.generate(a + 0, a + r * k)}}。
+# 对于 {{closed range|-r|-1}} 中的每个整数 {{c|i}}，将 {{mathjax-or|\(\scriptsize X_{i} \)|X{{su|b=i}}}} 设为 {{mathjax-or|1=\(\scriptsize (\sum^{k-1}_{j=0} a_{k(i+r)+j} \cdot 2^{32j}) \mod m \)|2=(∑{{su|p=k-1|b=j=0}} a{{su|b=k(i+r)+j}}·2{{su|p=32j}}) mod m}}。
+@@ 如果 {{mathjax-or|\(\scriptsize X_{-1} \)|X{{su|b=-1}}}} 是 {{c|0}}，那么将初始状态中的进位值 {{c|c}} 设为 {{c|1}}。否则将 {{c|c}} 设为 {{c|0}}。
+@@ {{cpp/enable if| {{tt|SeedSeq}} 满足{{named req|SeedSequence}}的要求}}。
+
+@4@ 复制构造函数。构造完成时 {{c|1=*this == other}} 是 {{c|true}}。
+
+===参数===
+{{par begin}}
+{{par|value|用于内部状态初始化的种子值}}
+{{par|seq|用于内部状态初始化的种子序列}}
+{{par end}}
+
+===复杂度===
+@1,2@ 对 {{c|e}} 进行 {{c|(std::size_t(w / 32) + 1) * r}} 次调用。
+@3@ 与 {{tt|seq.generate}} 调用的复杂度相同。
+@4@ {{mathjax-or|\(\scriptsize O(r) \)|O(r)}}。
+
+===异常===
+@3@ 如果 {{tt|SeedSeq}} 不是 {{lc|std::seed_seq}}，那么就会抛出 {{tt|seq.generate}} 调用抛出的异常。
+
+===示例===
+{{example
+|{{todo|demos for overloads (2-4) required}}
+|code=
+#include &lt;cassert&gt;
+#include &lt;random&gt;
+
+int main()
+{
+    std::ranlux24_base gen24; // 重载 (1)
+    std::ranlux48_base gen48; // 重载 (1)
+    gen24.discard(10000 - 1);
+    gen48.discard(10000 - 1);
+    assert(gen24() == 7'937'952);
+    assert(gen48() == 61'839'128'582'725);
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2181|std=C++11|before=即使 {{tt|seq.generate}} 调用抛出了异常，重载 {{vl|3}} 也不会抛出异常|after=会传播该异常}}
+{{dr list item|wg=lwg|dr=3809|std=C++11|before=在 {{tt|result_type}} 是 {{lc|std::uint16_t}} 时无法构造 {{c|e}}|after=此时可以构造 {{c|e}}}}
+{{dr list item|wg=lwg|dr=4014|std=C++11|before={{lwg|3809}} 的解决方案导致中间 {{lc|std::linear_congruential_engine}}&lt;br&gt;的初始种子具有与引擎的 {{tt|result_type}} 不同的类型|after=截短并转换 {{c|value}}}}
+{{dr list item|paper=P0935R0|std=C++11|before=默认构造函数是显式的|after=改成隐式的}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/random/engine/dsc seed|subtract_with_carry_engine}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

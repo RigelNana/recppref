@@ -1,0 +1,132 @@
+{{cpp/title|addressof}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++11|notes={{mark constexpr since c++17}}|
+template&lt; class T &gt;
+T* addressof( T&amp; arg ) noexcept;
+}}
+{{dcl|since=c++11|num=2|1=
+template&lt; class T &gt;
+const T* addressof( const T&amp;&amp; ) = delete;
+}}
+{{dcl end}}
+
+@1@ 获得对象或函数 {{c|arg}} 的实际地址，即使存在 {{tt|operator&amp;}} 的重载也是如此。
+@2@ 右值重载被弃置，以避免取 {{c|const}} 右值的地址。
+
+{{rrev|since=c++17|
+若 {{tt|E}} 是左值常量子表达式，则表达式 {{tt|std::addressof(E)}} 是一个[[cpp/language/constant_expression|常量表达式]]。
+}}
+
+{{rrev|since=c++23|
+{{tt|std::addressof}} [[cpp/freestanding|独立]]。
+}}
+
+===参数===
+{{par begin}}
+{{par|arg|对象或函数左值}}
+{{par end}}
+
+===返回值===
+指向 {{c|arg}} 的指针。
+
+===可能的实现===
+以下实现不是 {{c|constexpr}}，因为 {{c|reinterpret_cast}} 不能用于常量表达式。需要编译器支持（见后述）。
+{{eq fun
+|1=
+template&lt;class T&gt;
+typename std::enable_if&lt;std::is_object&lt;T&gt;::value, T*&gt;::type addressof(T&amp; arg) noexcept
+{
+    return reinterpret_cast&lt;T*&gt;(
+               &amp;const_cast&lt;char&amp;&gt;(
+                   reinterpret_cast&lt;const volatile char&amp;&gt;(arg)));
+}
+
+template&lt;class T&gt;
+typename std::enable_if&lt;!std::is_object&lt;T&gt;::value, T*&gt;::type addressof(T&amp; arg) noexcept
+{
+    return &amp;arg;
+}
+}}
+
+此函数的正确实现要求编译器支持：[https://github.com/gcc-mirror/gcc/blob/b8806796ec64585de39ca6ee3b7b30cc08f27d62/libstdc++-v3/include/bits/move.h#L47-L50 GNU libstdc++]、[https://github.com/llvm/llvm-project/blob/5146b57b403b3a512dc64e766695b13803ef3b54/libcxx/include/__memory/addressof.h#L21-L28 LLVM libc++]、[https://github.com/microsoft/STL/blob/1e312b38db8df1dfbea17adc344454feb8d00dd9/stl/inc/type_traits#L1548-L1551 Microsoft STL]。
+
+===注解===
+{{feature test macro|__cpp_lib_addressof_constexpr|std=C++17|value=201603L|{{c|constexpr}} {{tt|std::addressof}}}}
+
+{{tt|addressof}} 的 {{c|constexpr}} 是由 {{wg21|LWG2296}} 添加的，而 MSVC STL 将该更改作为缺陷报告应用到 C++14 模式。
+
+在一些怪异的情况下，[[cpp/language/adl|实参依赖查找]]导致使用内建 {{c|operator&amp;}} 为非良构，即使它未被重载，而 {{tt|std::addressof}} 能用作替代。
+
+{{source|1=
+template&lt;class T&gt;
+struct holder { T t; };
+
+struct incomp;
+
+int main()
+{
+    holder&lt;holder&lt;incomp&gt;*&gt; x{};
+    // &amp;x; // 错误：实参依赖查找试图实例化 holder&lt;incomp&gt;
+    std::addressof(x); // OK
+}
+}}
+
+===示例===
+{{example
+|可以为指针封装器类重载 {{c|operator&amp;}}，以获得指向指针的指针：
+|p=true
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+template&lt;class T&gt;
+struct Ptr
+{
+    T* pad; // 增加填充以显示‘this’和‘data’的区别
+    T* data;
+    Ptr(T* arg) : pad(nullptr), data(arg) 
+    {
+        std::cout &lt;&lt; "Ctor this = " &lt;&lt; this &lt;&lt; '\n';
+    }
+
+    ~Ptr() { delete data; }
+    T** operator&amp;() { return &amp;data; }
+};
+
+template&lt;class T&gt;
+void f(Ptr&lt;T&gt;* p) 
+{
+    std::cout &lt;&lt; "Ptr   overload called with p = " &lt;&lt; p &lt;&lt; '\n';
+}
+
+void f(int** p) 
+{
+    std::cout &lt;&lt; "int** overload called with p = " &lt;&lt; p &lt;&lt; '\n';
+}
+
+int main() 
+{
+    Ptr&lt;int&gt; p(new int(42));
+    f(&amp;p);                 // 调用 int** 重载
+    f(std::addressof(p));  // 调用 Ptr&lt;int&gt;* 重载，（= this）
+}
+|output=
+Ctor this = 0x7fff59ae6e88
+int** overload called with p = 0x7fff59ae6e90
+Ptr   overload called with p = 0x7fff59ae6e88
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2598|std=C++11|before={{c|std::addressof&lt;const T&gt;}} 能取右值的地址|after=由被删除的重载禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator}}
+{{dsc inc|cpp/memory/pointer_traits/dsc pointer_to}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

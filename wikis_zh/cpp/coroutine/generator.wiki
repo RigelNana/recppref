@@ -1,0 +1,153 @@
+{{cpp/title|generator}}
+{{cpp/coroutine/generator/navbar}}
+{{dcl begin}}
+{{dcl header|generator}}
+{{dcl|num=1|since=c++23|1=
+template&lt;
+    class Ref,
+    class V = void,
+    class Allocator = void &gt;
+class generator
+    : public ranges::view_interface&lt;generator&lt;Ref, V, Allocator&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace pmr {
+    template&lt; class Ref, class V = void &gt;
+    using generator =
+        std::generator&lt;Ref, V, std::pmr::polymorphic_allocator&lt;&gt;&gt;;
+}
+}}
+{{dcl end}}
+
+@1@ 类模板 {{tt|std::generator}} 表示对{{lt|cpp/language/coroutines|协程}}求值返回的元素的 {{lconcept|view}}。
+
+@2@ 为使用{{lt|cpp/memory/polymorphic allocator|多态分配器}}的 {{tt|generator}} 提供的便利别名模板。
+
+{{tt|std::generator}} 通过反复恢复可返回值的协程以生成元素的序列。
+每当 {{c/core|co_yield}} 语句被求值，协程就产生序列的一个元素。
+当 {{c/core|co_yield}} 语句具有形式 {{c|co_yield ranges::elements_of(rng)}} 时，{{lconcept|range}} {{c|rng}} 中的每个元素作为序列的一个元素被依次生成。
+
+{{tt|std::generator}} 实现 {{lconcept|view}} 及 {{lconcept|input_range}}。
+
+为 {{tt|std::generator}} 添加特化的程序行为未定义。
+
+===模板形参===
+{{par begin}}
+{{par|Ref|生成器的引用类型（{{lc|ranges::range_reference_t}}）。如果 {{tt|V}} 是 {{c/core|void}}，则值类型和引用类型均从 {{tt|Ref}} 推导}}
+{{par|V|生成器的值类型（{{lc|ranges::range_value_t}}），或者为 {{c/core|void}}}}
+{{par|Allocator|分配器类型或者 {{c/core|void}}}}
+{{par end}}
+
+若 {{tt|Allocator}} 不是 {{c/core|void}}，则当 {{tt|Allocator}} 不满足{{named req|Allocator}}的要求时其行为未定义。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem type|value|private=yes|{{c/core|std::conditional_t&lt;std::is_void_v&lt;V&gt;, std::remove_cvref_t&lt;{{void}}Ref&gt;, V&gt;;}}}}
+{{dsc expos mem type|reference|private=yes|{{c/core|std::conditional_t&lt;std::is_void_v&lt;V&gt;, Ref&amp;&amp;, Ref&gt;;}}}}
+{{dsc|{{anchor|yielded}}{{tt|yielded}}|{{box/core|{{c/core|std::conditional_t&lt;std::is_reference_v&lt;}}{{tti|reference}}{{sep}}{{c/core|&gt;,}}{{nbspt|1}}{{tti|reference}}{{c/core|, const}}{{nbspt|1}}{{tti|reference}}{{sep}}{{c/core|&amp;&gt;}}}}}}
+{{dsc end}}
+
+{{par begin}}
+{{par hreq}}
+{{par req|{{c/core|std::allocator_traits&lt;Allocator&gt;::pointer}} 是指针类型。}}
+{{par req|{{tti|value}} 是无 cv 限定的对象类型。}}
+{{par req|{{tti|reference}} 是引用类型或者无 cv 限定的实现 {{lconcept|copy_constructible}} 的对象类型。}}
+{{par req|令 {{tti|RRef}} 表示：{{box/core|{{c/core|std::remove_reference_t&lt;}}{{tti|reference}}{{sep}}{{c/core|&gt;&amp;&amp;}}}}，若 {{tti|reference}} 是引用类型，否则是 {{tti|reference}}。
+* 实现 {{box/core|{{c/core|std::common_reference_with&lt;}}{{tti|reference}}{{sep}}{{c/core|&amp;&amp;,}}{{nbspt|1}}{{tti|value}}{{sep}}{{c/core|&amp;&gt;}}}}。
+* 实现 {{box/core|{{c/core|std::common_reference_with&lt;}}{{tti|reference}}{{sep}}{{c/core|&amp;&amp;,}}{{nbspt|1}}{{tti|RRef}}{{sep}}{{c/core|&amp;&amp;&gt;}}}}。
+* 实现 {{box/core|{{c/core|std::common_reference_with&lt;}}{{tti|RRef}}{{sep}}{{c/core|&amp;&amp;, const}}{{nbspt|1}}{{tti|value}}{{sep}}{{c/core|&amp;&gt;}}}}。
+}}
+{{par end}}
+
+若这些类型规定中有任何一个未能满足，则程序非良构。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem obj|active_|id=active|private=yes|
+每个 {{tt|std::generator}} 的活动实例内部都关联一个栈（如同以类型 {{c/core|std::unique_ptr&lt;std::stack&lt;std::coroutine_handle&lt;&gt;&gt;&gt; 的对象持有}}）。
+* 当调用 {{rlt|begin}} 时，建立新栈且将该生成器加入到这个栈中。
+* 当 {{c|co_yield ranges::elements_of(rng)}} 语句在生成器体中求值时，将 {{c|rng}} 转换为生成器且加入到包含外围生成器的栈中。
+* 当生成器的迭代器{{rl|iterator#自增|自增}}时，恢复关联栈栈顶的协程。
+* 当生成器完成时 (也就是 {{l2tt|cpp/coroutine/generator/promise_type/final_suspend}} 被调用时)，从此栈中移除它。}}
+{{dsc expos mem obj|coroutine_|id=coroutine|private=yes|{{c/core|std::coroutine_handle&lt;promise_type&gt;}} 类型的句柄}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/coroutine/generator/dsc constructor}}
+{{dsc inc|cpp/coroutine/generator/dsc destructor}}
+{{dsc inc|cpp/coroutine/generator/dsc operator{{=}}}}
+{{dsc inc|cpp/coroutine/generator/dsc begin}}
+{{dsc inc|cpp/coroutine/generator/dsc end}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|front=invalid|back=invalid|data=invalid|size=invalid|operator[]=invalid}}
+{{dsc end}}
+
+===嵌套类===
+{{dsc begin}}
+{{dsc mem class|cpp/coroutine/generator/promise_type|承诺类型}}
+{{dsc expos mem class|cpp/coroutine/generator/iterator|迭代器类型}}
+{{dsc end}}
+
+===注解===
+{{feature test macro|value=202207L|std=C++23|__cpp_lib_generator|{{ttt|std::generator}} &amp;ndash; 适用于{{lt|cpp/ranges|范围}}的同步{{rlp|/|协程}}生成器}}
+
+===示例===
+{{example
+|code=
+#include &lt;generator&gt;
+#include &lt;iostream&gt;
+
+template&lt;typename T&gt;
+struct Tree
+{
+    T value;
+    Tree *left{}, *right{};
+
+    std::generator&lt;const T&amp;&gt; traverse_inorder() const
+    {
+        if (left)
+            co_yield std::ranges::elements_of(left-&gt;traverse_inorder());
+
+        co_yield value;
+
+        if (right)
+            co_yield std::ranges::elements_of(right-&gt;traverse_inorder());
+    }
+};
+
+int main()
+{
+    Tree&lt;char&gt; tree[]
+    {
+                                    {'D', tree + 1, tree + 2},
+        //                            │
+        //            ┌───────────────┴────────────────┐
+        //            │                                │
+                    {'B', tree + 3, tree + 4},       {'F', tree + 5, tree + 6},
+        //            │                                │
+        //  ┌─────────┴─────────────┐      ┌───────────┴─────────────┐
+        //  │                       │      │                         │
+          {'A'},                  {'C'}, {'E'},                    {'G'}
+    };
+
+    for (char x : tree-&gt;traverse_inorder())
+        std::cout &lt;&lt; x &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+A B C D E F G
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Range generators|id=coro.generator|section=26.8}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/coroutine/dsc noop_coroutine}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

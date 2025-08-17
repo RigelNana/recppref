@@ -1,0 +1,89 @@
+{{cpp/title|from_chars}}
+{{cpp/text/navbar}}
+{{dcl begin}}
+{{dcl header|charconv}}
+{{dcl|num=1|since=c++17|notes={{mark constexpr since c++23}}|1=
+std::from_chars_result
+    from_chars( const char* first, const char* last,
+                /* 整数类型 */&amp; value, int base = 10 );
+}}
+{{dcl|num=2|since1=c++17|1=
+std::from_chars_result
+    from_chars( const char* first, const char* last,
+                /* 浮点数类型 */&amp; value,
+                std::chars_format fmt = std::chars_format::general );
+}}
+{{dcl end}}
+
+按照后述模式分析字符序列 {{range|first|last}}。如果没有字符与模式匹配或按照分析匹配字符获得的值不能以 {{c|value}} 的类型表示，那么不会修改 {{c|value}}，否则将与模式匹配的字符转译成算术值的文本表示，并将值存储到 {{c|value}}。
+
+@1@ 整数分析函数：期待等同于 {{lc|std::strtol}} 在默认（"C"）本地环境所使用者相同的模式，并给定非零整数底，除了
+* 在 {{c|base}} 是 16 时不识别 "0x" 或 "0X" 前缀
+* 只识别负号（不识别正号），而且只针对 {{c|value}} 的有符号整数类型。
+* 不忽略前导空白。
+标准库提供所有以{{rev inl|since=c++23|无 cv 限定的}}有符号和无符号整数类型和 {{c/core|char}} 作为形参 {{c|value}} 的被引用类型的重载。
+
+@2@ 浮点数分析函数：期待期待等同于 {{lc|std::strtod}} 在默认（"C"）本地环境所使用者相同的模式，除了
+* 不识别指数外的正号（在起始位置只允许出现负号）&lt;!-- LWG 3080 ---&gt;
+* 如果 {{c|fmt}} 设置了 {{ltt|cpp/utility/chars_format|std::chars_format::scientific}} 但没设置 {{ltt|cpp/utility/chars_format|std::chars_format::fixed}}，那么要求指数部分（否则可选）
+* 如果 {{c|fmt}} 设置了 {{ltt|cpp/utility/chars_format|std::chars_format::fixed}} 但没设置 {{ltt|cpp/utility/chars_format|std::chars_format::scientific}}，那么不允许可选的指数部分
+* 如果 {{c|fmt}} 是 {{ltt|cpp/utility/chars_format|std::chars_format::hex}}，那么不允许前缀 "0x" 或 "0X"（字符串 "0x123" 分析为值 "0" 和未分析的剩余 "x123"）。
+* 不忽略前导空白。
+
+@@ 任何情况下，按照 {{lc|std::round_to_nearest}} 舍入后，结果值是最多两个最接近匹配模式的字符串的值的浮点数之一。
+
+@@ 标准库提供所有以无 cv 限定的{{rev inl|until=c++23|标准}}浮点数类型作为形参 {{c|value}} 的被引用类型的重载。
+
+===参数===
+{{par begin}}
+{{par|first, last|要分析的有效字符范围}}
+{{par|value|用于在分析成功时存储被分析值的输出形参}}
+{{par|base|使用的整数底数：为 2 与 36 间的值（含上下限）。}}
+{{par|fmt|使用的浮点数格式，为 {{ltt std|cpp/utility/chars_format}} 类型的位掩码}}
+{{par end}}
+
+===返回值===
+成功时，返回 {{ltt std|cpp/utility/from_chars_result}} 类型的值，它的 {{tt|ptr}} 指向首个与模式不匹配的字符，或者在所有字符都匹配时指向拥有等于 {{c|last}} 的值，并值初始化 {{tt|ec}}。
+
+如果没有匹配到任何模式，那么返回 {{ltt std|cpp/utility/from_chars_result}} 类型的值，它的 {{tt|ptr}} 等于 {{c|first}} 且 {{tt|ec}} 等于 {{lc|std::errc::invalid_argument}}。不修改 {{c|value}}。
+
+如果匹配到模式，但被分析值不在 {{c|value}} 的类型所表示的范围内，那么返回 {{ltt std|cpp/utility/from_chars_result}} 类型的值，它的 {{tt|ec}} 等于 {{lc|std::errc::result_out_of_range}} 且 {{tt|ptr}} 指向首个不匹配模式的字符。不修改 {{c|value}}。
+
+===异常===
+不抛出。
+
+===注解===
+与 C++ 和 C 库中的其他格式化函数不同，{{tt|std::from_chars}} 是独立于本地环境、不分配、不抛出的。它只提供其他库（例如 {{lc|std::sscanf}}）所用策略的一个小子集。它的目的是在常见的高吞吐量环境，例如基于文本的交换（{{enwiki|JSON}} 或 {{enwiki|XML}}）中，允许尽可能快的实现。
+
+只有在两个函数都来自同一实现的情况下，才保证 {{tt|std::from_chars}} 能恢复每个由 {{ltt std|cpp/utility/to_chars}} 格式化的浮点数。
+
+由无后随数位的符号组成的模式被当做不匹配任何内容的模式。
+
+{{ftm begin|std=yes}}
+{{ftm|std=C++17|value=201611L|__cpp_lib_to_chars|rowspan="2"|初等字符串转换（{{tt|std::from_chars}}，{{ltt std|cpp/utility/to_chars}}）}}
+{{ftm|std=C++26|value=202306L|-|检测 {{header|charconv}} 函数是否成功}}
+{{ftm|std=C++23|value=202207L|__cpp_lib_constexpr_charconv|向 {{tt|std::from_chars}} 和 {{ltt std|cpp/utility/to_chars}} 对于整数类型的重载添加 {{co|constexpr}} 修饰符}}
+{{ftm end}}
+
+===示例===
+{{cpp/utility/example_from_chars}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2955|std=C++17|before=此函数在 {{header|utility}} 并使用 {{lc|std::error_code}}|after=移动到 {{header|charconv}} 并使用 {{lc|std::errc}}}}
+{{dr list item|wg=lwg|dr=3373|std=C++17|before={{tt|std::from_chars_result}} 可能拥有额外的成员|after=禁止额外的成员}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc from_chars_result}}
+{{dsc inc|cpp/utility/dsc to_chars}}
+{{dsc inc|cpp/string/basic_string/dsc stol}}
+{{dsc inc|cpp/string/basic_string/dsc stof}}
+{{dsc inc|cpp/string/byte/dsc strtol}}
+{{dsc inc|cpp/string/byte/dsc strtof}}
+{{dsc inc|cpp/io/c/dsc fscanf}}
+{{dsc inc|cpp/io/basic_istream/dsc operator_gtgt}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

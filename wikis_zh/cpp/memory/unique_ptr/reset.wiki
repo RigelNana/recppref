@@ -1,0 +1,98 @@
+{{cpp/memory/unique_ptr/title|reset}}
+{{cpp/memory/unique_ptr/navbar}}
+{{dcl begin}}
+{{dcl h|主模板 unique_ptr&lt;T&gt; 的成员}}
+{{dcla|num=1|constexpr=c++23|1=
+void reset( pointer ptr = pointer() ) noexcept;
+}}
+{{dcl h|特化 unique_ptr&lt;T[]&gt; 的成员}}
+{{dcla|num=2|constexpr=c++23|1=
+template&lt; class U &gt; 
+void reset( U ptr ) noexcept;
+}}
+{{dcla|num=3|constexpr=c++23|1=
+void reset( std::nullptr_t = nullptr ) noexcept;
+}}
+{{dcl end}}
+
+替换被管理对象。
+
+@1,2@ 等价于 {{c multi
+|auto old_ptr {{=}} get();
+|/* 将 “ptr” 赋给存储的指针 */
+|if (old_ptr)
+|    get_deleter()(old_ptr);
+}}。
+@@ 如果 {{c|get_deleter()(old_ptr)}} 抛出异常，那么行为未定义。
+:@2@ {{cpp/enable if| {{tt|U}} 与 {{tt|pointer}} 是同一类型，或者满足以下所有条件}}：
+* {{tt|pointer}} 与 {{tt|element_type*}} 是同一类型。
+* {{tt|U}} 是指针类型 {{tt|V*}}，并且 {{tt|V(*)[]}} 可隐式转换到 {{tt|element_type(*)[]}}。
+
+@3@ 等价于 {{c|reset(pointer())}}。
+
+===参数===
+{{par begin}}
+{{par|ptr|指向要管理的新对象的指针}}
+{{par end}}
+
+===注解===
+为在提供新删除器时替换被管理对象，可能使用移动赋值运算符。
+
+不进行自重置测试，即检查 {{c|ptr}} 是否指向已由 {{c|*this}} 管理的对象，除非此测试作为编译器扩展，或调试断言提供。注意如 {{c|p.reset(p.release())}} 的代码不涉及自重置，只有类似 {{c|p.reset(p.get())}} 的代码才是。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo // 要管理的对象
+{
+    Foo() { std::cout &lt;&lt; "Foo...\n"; }
+    ~Foo() { std::cout &lt;&lt; "~Foo...\n"; }
+};
+
+struct D // 删除器
+{
+    void operator() (Foo* p)
+    {
+        std::cout &lt;&lt; "为 Foo 对象调用 delete... \n";
+        delete p;
+    }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "创建新的 Foo...\n";
+    std::unique_ptr&lt;Foo, D&gt; up(new Foo(), D()); // up 占有 Foo 指针（删除器 D）
+    
+    std::cout &lt;&lt; "以新的 Foo 替换所拥有的 Foo...\n";
+    up.reset(new Foo());  // 调用旧者的删除器
+    
+    std::cout &lt;&lt; "释放并删除所拥有的 Foo...\n";
+    up.reset(nullptr);
+}
+|output=
+创建新的 Foo...
+Foo...
+以新的 Foo 替换所拥有的 Foo...
+Foo...
+为 Foo 对象调用 delete...
+~Foo...
+释放并删除所拥有的 Foo...
+为 Foo 对象调用 delete...
+~Foo...
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before={{tt|1=unique_ptr&lt;T[]&gt;::reset}} 拒绝限定性转换|after=接受}}
+{{dr list item|wg=lwg|dr=2169|std=C++11|before=存在重载 {{tt|1=unique_ptr&lt;T[]&gt;::reset(pointer)}}|after=移除该重载}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/unique_ptr/dsc release}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

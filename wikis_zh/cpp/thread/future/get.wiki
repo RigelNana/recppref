@@ -1,0 +1,110 @@
+{{cpp/thread/future/title|get}}
+{{cpp/thread/future/navbar}}
+
+{{dcl begin}}
+{{dcl h|主模板}}
+{{dcl|num=1|since=c++11|
+T get();
+}}
+{{dcl h|{{c/core|std::future&lt;T&amp;&gt;}} 特化}}
+{{dcl|num=2|since=c++11|
+T&amp; get();
+}}
+{{dcl h|{{c/core|std::future&lt;void&gt;}} 特化}}
+{{dcl|num=3|since=c++11|
+void get();
+}}
+{{dcl end}}
+
+{{tt|get}} 成员函数在共享状态准备就绪前（通过调用 {{lc|wait()}}）等待，然后获取共享状态中存储的值（如果存在）。调用该函数后，{{lc|valid()}} 是 {{c|false}}。
+
+如果在调用此函数前 {{lc|valid()}} 是 {{c|false}}，那么行为未定义。
+
+===返回值===
+@1@ 以 {{c|std::move(v)}} 返回在共享状态中存储的值 {{c|v}}。
+@2@ 在共享状态中作为值存储的引用。
+@3@ （无）
+
+===异常===
+如果 future 引用的共享状态中存储了异常（例如，通过调用 {{l2tf std|cpp/thread/promise/set_exception}}），那么就会抛出该异常。
+
+===注解===
+C++ 标准建议实现在调用前检测 {{lc|valid()}} 是 {{c|false}} 的情况，并抛出以 {{lc|std::future_errc::no_state}} 作为错误条件的 {{lc|std::future_error}}。
+
+===示例===
+{{example|code=
+#include &lt;chrono&gt;
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::string time()
+{
+    static auto start = std::chrono::steady_clock::now();
+    std::chrono::duration&lt;double&gt; d = std::chrono::steady_clock::now() - start;
+    return "[" + std::to_string(d.count()) + "s]";
+}
+
+int main()
+{
+    using namespace std::chrono_literals;
+    
+    {
+        std::cout &lt;&lt; time() &lt;&lt; " 启动线程\n";
+        std::future&lt;int&gt; f = std::async(std::launch::async, []
+        {
+            std::this_thread::sleep_for(1s);
+            return 7;
+        });
+        std::cout &lt;&lt; time() &lt;&lt; " 等待 future，f.valid() = "
+                  &lt;&lt; f.valid() &lt;&lt; '\n';
+        int n = f.get();
+        std::cout &lt;&lt; time() &lt;&lt; " future.get() 返回 " &lt;&lt; n &lt;&lt; "，f.valid() = "
+                  &lt;&lt; f.valid() &lt;&lt; '\n';
+    }
+    
+    {
+        std::cout &lt;&lt; time() &lt;&lt; " 启动线程\n";
+        std::future&lt;int&gt; f = std::async(std::launch::async, []
+        {
+            std::this_thread::sleep_for(1s);
+            return true ? throw std::runtime_error("7") : 7;
+        });
+        std::cout &lt;&lt; time() &lt;&lt; " 等待 future，f.valid() = "
+                  &lt;&lt; f.valid() &lt;&lt; '\n';
+        
+        try
+        {
+            int n = f.get();
+            std::cout &lt;&lt; time() &lt;&lt; " future.get() 返回 " &lt;&lt; n
+                      &lt;&lt; "，f.valid() = " &lt;&lt; f.valid() &lt;&lt; '\n';
+        }
+        catch (const std::exception&amp; e)
+        {
+            std::cout &lt;&lt; time() &lt;&lt; " 捕获到异常 " &lt;&lt; e.what()
+                      &lt;&lt; "，f.valid() = " &lt;&lt; f.valid() &lt;&lt; '\n';
+        }
+    }
+}
+|p=true
+|output=
+[0.000004s] 启动线程
+[0.000461s] 等待 future，f.valid() = 1
+[1.001156s] future.get() 返回 7，f.valid() = 0
+[1.001192s] 启动线程
+[1.001275s] 等待 future，f.valid() = 1
+[2.002356s] 捕获到异常 7，f.valid() = 0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2096|std=C++11|before=重载 {{v|1}} 需要检查 {{tt|T}} 是否{{named req|MoveAssignable}}|after=不需要}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/future/dsc valid|future}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

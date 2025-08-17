@@ -1,0 +1,151 @@
+{{cpp/title|uninitialized_move}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcla|num=1|since=c++17|constexpr=c++26|
+template&lt; class InputIt, class NoThrowForwardIt &gt;
+NoThrowForwardIt uninitialized_move( InputIt first, InputIt last,
+                                     NoThrowForwardIt d_first );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt, class NoThrowForwardIt &gt;
+NoThrowForwardIt uninitialized_move( ExecutionPolicy&amp;&amp; policy,
+                                     ForwardIt first, ForwardIt last,
+                                     NoThrowForwardIt d_first );}}
+{{dcl end}}
+
+@1@ 如同用以下方式将范围 {{range|first|last}} 中的元素复制到从 {{c|d_first}} 开始的未初始化内存区域（符合条件时使用移动语义）：
+{{box|
+{{c/core|1=for (; first != last; ++d_first, (void) ++first)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{rlpi|voidify}}{{c/core|(*d_first))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type(/* value */);}}&lt;br&gt;
+{{c/core|return d_first;}}
+}}
+@@ 其中 {{c|/* value */}} 在 {{c|*first}} 具有左值引用类型时是 {{c|std::move(*first)}}，否则是 {{c|*first}}。
+@@ 如果初始化中抛出了异常，那么 {{range|first|last}} 中的某些对象会留在合法但未指定的状态，并且以未指定的顺序销毁已构造的对象。
+
+@2@ 同 {{v|1}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+
+{{rrev|since=c++20|
+如果 {{counted range|d_first|std::distance(first, last)}} 与 {{range|first|last}} 有重叠，那么行为未定义。
+}}
+
+===参数===
+{{par begin}}
+{{par range|3=要移动的}}
+{{par|d_first|目标范围的起始}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|NoThrowForwardIt|ForwardIterator}}
+{{par req|通过 {{tt|NoThrowForwardIt}} 合法实例的自增、赋值、比较或间接不可抛出异常。}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+与 {{c|first}} 和 {{c|last}} 的距离成线性。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===注解===
+当输入迭代器解引用到右值时，{{tt|std::uninitialized_move}} 的行为同 {{lc|std::uninitialized_copy}}。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1}}}}
+
+===可能的实现===
+{{eq fun|1=
+template&lt;class InputIt, class NoThrowForwardIt&gt;
+constexpr NoThrowForwardIt uninitialized_move(InputIt first, InputIt last,
+                                              NoThrowForwardIt d_first)
+{
+    using ValueType = typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type;
+    auto current = d_first;
+    try
+    {
+        for (; first != last; ++first, (void) ++current)
+        {
+            auto addr = static_cast&lt;void*&gt;(std::addressof(*current));
+            if constexpr (std::is_lvalue_reference_v&lt;decltype(*first)&gt;)
+                ::new (addr) ValueType(std::move(*first));
+            else
+                ::new (addr) ValueType(*first);
+        }
+        return current;
+    }
+    catch (...)
+    {
+        std::destroy(d_first, current);
+        throw;
+    }
+}
+}}
+
+===示例===
+{{example|code=
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+void print(auto rem, auto first, auto last)
+{
+    for (std::cout &lt;&lt; rem; first != last; ++first)
+        std::cout &lt;&lt; std::quoted(*first) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string in[]{"Home", "Work!"};
+    print("起初，in：", std::begin(in), std::end(in));
+    
+    if (constexpr auto sz = std::size(in);
+        void* out = std::aligned_alloc(alignof(std::string), sizeof(std::string) * sz))
+    {
+        try
+        {
+            auto first{static_cast&lt;std::string*&gt;(out)};
+            auto last{first + sz};
+            std::uninitialized_move(std::begin(in), std::end(in), first);
+            
+            print("移动后，in：", std::begin(in), std::end(in));
+            print("移动后，out：", first, last);
+            
+            std::destroy(first, last);
+        }
+        catch (...)
+        {
+            std::cout &lt;&lt; "异常！\n";
+        }
+        std::free(out);
+    }
+}
+|p=true&lt;!-- 移动结果不确定 --&gt;
+|output=
+起初，in："Home" "Work!"
+移动后，in："" ""
+移动后，out："Home" "Work!"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可能在 {{c/core|const}} 存储上创建对象|after=保持不允许}}
+{{dr list item|wg=lwg|dr=3918|std=C++17|before=在输入迭代器解引用为纯右值时要求额外的临时量实质化|after=此时直接复制}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc uninitialized_copy}}
+{{dsc inc|cpp/memory/dsc uninitialized_move_n}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_move}}
+{{dsc end}}
+
+{{langlinks|en|es|ru|ja}}

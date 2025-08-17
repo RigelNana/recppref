@@ -1,0 +1,194 @@
+{{title|节点句柄 {{mark c++17}}}}
+{{cpp/container/navbar}}
+
+{{dcl begin }}
+{{dcla|anchor=no|since=c++17|expos=yes|
+template&lt;/* 未指定 */&gt;
+class /*node-handle*/;
+}} 
+{{dcl end}}
+
+关联容器 {{lc|std::set}}、{{lc|std::map}}、{{lc|std::multiset}}、{{lc|std::multimap}}、{{lc|std::unordered_set}}、{{lc|std::unordered_map}}、{{lc|std::unordered_multiset}}、{{lc|std::unordered_multimap}} 是基于节点的数据结构，并且可以将这些容器的节点作为具有称作{{sep}}''节点句柄''{{sep}}的未指定类型的对象提取出来。
+
+节点句柄是仅移动类型，它拥有并提供对节点中存储的元素（{{tt|value_type}}）的访问，也提供对元素键部分（{{tt|key_type}}）和被映射部分（{{tt|mapped_type}}）的非 const 访问。如果节点句柄在持有节点时析构，那么就会用容器的分配器正确地析构节点。节点句柄含有容器分配器的副本，这是节点句柄能在容器生存期外存在所必需的。
+
+节点句柄的确切类型（此处显示为 {{c/core|/*node-handle*/}}）是未指定的，但每个容器通过它的成员 {{tt|node_type}} 暴露它的节点句柄类型。
+
+节点句柄能用于在两个有相同键、值和分配器类型（忽略比较或散列/相等性）的关联容器间传递节点的所有权，而无需调用任何容器元素上的复制/移动操作（这种操作被称为“接合”）。在唯一和非唯一容器间传递也是容许的：来自 {{lc|std::map}} 的节点句柄可被插入 {{lc|std::multimap}}，但不能插入 {{lc|std::unordered_map}} 或 {{lc|std::set}}。
+
+节点句柄可以为空，这种情况下它不保有元素和分配器。默认构造和被移动后的节点句柄是空的。另外，空的节点句柄可由对容器成员函数 {{tt|extract}} 的失败调用产生。
+
+如果成功将元素插入容器，那么在该元素被节点句柄占有期间获得的到该元素的引用或指针会失效。
+
+对于所有 {{tt|key_type}} 是 {{tt|K}} 而 {{tt|mapped_type}} 是 {{tt|T}} 的映射容器（{{lc|std::map}}、{{lc|std::multimap}}、{{lc|std::unordered_map}} 及 {{lc|std::unordered_multimap}}），如果对 {{c/core|std::pair&lt;K, T&gt;}} 或 {{c/core|std::pair&lt;const K, T&gt;}} 存在 {{lc|std::pair}} 的用户定义特化，那么涉及节点句柄的操作行为未定义。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc inc|cpp/container/dsc key_type|node_handle}}
+{{dsc inc|cpp/container/dsc mapped_type|node_handle}}
+{{dsc inc|cpp/container/dsc value_type|node_handle}}
+{{dsc inc|cpp/container/dsc allocator_type|node_handle}}
+{{dsc expos mem type|container_node_type|private=yes|未指明类型的容器节点}}
+{{dsc expos mem type|ator_traits|id=ator_traits|private=yes|{{c/core|std::allocator_traits&lt;allocator_type&gt;}} 类型的分配器特征}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem obj|ptr_|id=ptr|maybe=yes|spec={{cc multi
+|typename ator_traits::template
+|    rebind_traits&lt;container_node_type&gt;::pointer}}|TODO}}
+{{dsc expos mem obj|alloc_|id=alloc|maybe=yes|spec={{c/core|std::optional&lt;allocator_type&gt;}}|TODO}}
+{{dsc end}}
+
+===成员函数===
+{{member|构造函数|2=
+{{dcl begin}}
+{{dcl|num=1|
+constexpr /*node-handle*/() noexcept;
+}}
+{{dcl|num=2|
+/*node-handle*/ (/*node-handle*/&amp;&amp; nh) noexcept;
+}}
+{{dcl end}}
+@1@ 默认构造函数初始化节点句柄为空状态。
+@2@ 移动构造函数从 {{c|nh}} 取走容器元素所有权，移动构造成员分配器，并令 {{c|nh}} 留在空状态。
+
+===参数===
+{{par begin}}
+{{par|nh|同类型的节点句柄（不必属于相同容器）}}
+{{par end}}
+
+===注解===
+节点句柄是仅移动的，不定义复制构造函数。
+}}
+
+{{member|operator{{=}}|2=
+{{ddcl|1=
+/*node-handle*/&amp; operator=(/*node-handle*/&amp;&amp; nh);
+}}
+* 如果节点句柄非空， 
+:* 那么通过调用 {{c/core|ator_traits::destroy}} 销毁此节点句柄管理的容器元素对象中的 {{tt|value_type}} 子对象；
+:* 通过调用 {{c/core|ator_traits::rebind_traits&lt;/*container-node-type*/&gt;::deallocate}} 解分配容器元素；
+* 从 {{c|nh}} 获得容器元素的所有权；
+* 如果节点句柄为空（从而不含分配器）或 {{c/core|ator_traits::propagate_on_container_move_assignment}} 是 {{c|true}}，那么从 {{c|nh}} 移动赋值分配器；
+* 设置 {{c|nh}} 为空状态。
+
+如果节点非空且 {{c/core|ator_traits::propagate_on_container_move_assignment}} 是 {{c|false}} 且分配器比较不相等，那么行为未定义。
+
+===参数===
+{{par begin}}
+{{par|nh|同类型的节点句柄（不必属于相同容器）}}
+{{par end}}
+
+===返回===
+{{c|*this}}
+
+===异常===
+不抛出。
+
+===注解===
+节点句柄是仅移动的，不定义复制赋值。
+}}
+
+{{member|析构函数|2=
+{{ddcl|
+~/*node-handle*/();
+}}
+
+* 如果节点句柄非空, 
+:* 那么通过调用 {{c/core|ator_traits::destroy}}，销毁此节点句柄管理的容器元素对象中的 {{tt|value_type}} 子对象；
+:* 通过调用 {{c/core|ator_traits::rebind_traits&lt;/*container-node-type*/&gt;::deallocate}} 解分配容器元素。
+}}
+
+{{member|empty|2=
+{{ddcl|
+bool empty() const noexcept;
+}}
+
+节点句柄为空时返回 {{c|true}}，否则返回 {{c|false}}。
+}}
+
+{{member|operator bool|2=
+{{ddcl|
+explicit operator bool() const noexcept;
+}}
+
+节点句柄为空时转换成 {{c|false}}，否则转换成 {{c|true}}。
+}}
+
+{{member|get_allocator|2=
+{{ddcl|
+allocator_type get_allocator() const;
+}}
+
+返回存储的分配器（它是源容器的分配器副本）的副本。节点句柄为空时行为未定义。
+
+===异常===
+不抛出。
+}}
+
+{{member|value|2=
+{{ddcl|notes={{mark|仅限集合容器}}|
+value_type&amp; value() const;
+}}
+
+返回到此节点句柄管理的容器元素对象中的 {{tt|value_type}} 子对象的引用。节点句柄为空时行为未定义。
+
+===异常===
+不抛出。
+}}
+
+{{member|key|2=
+{{ddcl|notes={{mark|仅限映射容器}}|
+key_type&amp; key() const;
+}}
+
+返回到此节句柄柄管理的容器元素对象中的 {{tt|value_type}} 子对象的 {{tt|key_type}} 成员的非 const 引用。节点句柄为空时行为未定义。
+
+===异常===
+不抛出。
+
+===注解===
+此函数使得能够修改从映射提取的节点的键，再重新插入到映射，而无需复制或移动元素。
+}}
+
+{{member|mapped|2=
+{{ddcl|notes={{mark|仅限映射容器}}|
+mapped_type&amp; mapped() const;
+}}
+
+返回到此节点句柄管理的容器元素对象中的 {{tt|value_type}} 子对象的 {{tt|mapped_type}} 成员的引用。节点句柄为空时行为未定义。
+
+===异常===
+不抛出。
+}}
+
+{{member|swap|2=
+{{ddcl|
+void swap(/*node-handle*/&amp; nh) noexcept(/* 见下文 */);
+}}
+
+* 交换容器节点的所有权；
+* 如果一个节点为空或两个节点均为非空且 {{c/core|ator_traits::propagate_on_container_swap}} 是 {{c|true}}，那么一同交换分配器。
+
+如果两个节点均为非空且 {{c/core|ator_traits::propagate_on_container_swap}} 是 {{c|false}} 而分配器比较不相等，那么行为未定义。
+
+===异常===
+{{noexcept|ator_traits::propagate_on_container_swap::value {{!!}}
+         ator_traits::is_always_equal::value}}
+}}
+
+===非成员函数===
+{{member|swap|2=
+{{ddcl|
+friend void swap(/*node-handle*/&amp; x, /*node-handle*/&amp; y) noexcept(noexcept(x.swap(y)));
+}}
+
+实际上执行 {{c|x.swap(y)}}。
+
+{{cpp/hidden friend|{{tti|node-handle}}}}
+}}
+
+{{langlinks|en|es|ja}}

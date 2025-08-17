@@ -1,0 +1,148 @@
+{{cpp/ranges/title|minmax_element|minmax_element_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr minmax_element_result&lt;I&gt;
+    minmax_element( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::forward_range R, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr minmax_element_result&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;
+    minmax_element( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I &gt;
+using minmax_element_result = ranges::min_max_result&lt;I&gt;;
+}}
+{{dcl end}}
+
+@1@ 寻找范围 {{range|first|last}} 中的最小与最大元素。
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的|sentinel=yes}}
+{{par|r|待检验 {{lconcept|range}}}}
+{{par|comp|应用到投影后元素的谓词}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+由指向最小元素的迭代器作为第一元素，指向最大元素的迭代器作为第二元素组成的对象。若范围为空则返回 {{c|{first, first} }}。若数个元素等价于最小元素，则返回指向首个这种元素的迭代器。若数个元素等价于最大元素，则返回指向最后一个这种元素的迭代器。
+
+===复杂度===
+至多应用 {{c|std::max(std::floor(1.5 * (N − 1)), 0.0)}} 次比较和两倍次数的投影，其中 {{c|1=N = ranges::distance(first, last)}}。
+
+===可能的实现===
+{{eq fun
+|1=
+struct minmax_element_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::minmax_element_result&lt;I&gt;
+        operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        auto min = first, max = first;
+
+        if (first == last {{!!}} ++first == last)
+            return {min, max};
+
+        if (std::invoke(comp, std::invoke(proj, *first),
+                              std::invoke(proj, *min)))
+            min = first;
+        else
+            max = first;
+
+        while (++first != last)
+        {
+            auto i = first;
+            if (++first == last)
+            {
+                if (std::invoke(comp, std::invoke(proj, *i),
+                                      std::invoke(proj, *min)))
+                    min = i;
+                else if (!(std::invoke(comp, std::invoke(proj, *i),
+                                             std::invoke(proj, *max))))
+                    max = i;
+                break;
+            }
+            else
+            {
+                if (std::invoke(comp, std::invoke(proj, *first),
+                                      std::invoke(proj, *i)))
+                {
+                  if (std::invoke(comp, std::invoke(proj, *first),
+                                        std::invoke(proj, *min)))
+                      min = first;
+                  if (!(std::invoke(comp, std::invoke(proj, *i),
+                                          std::invoke(proj, *max))))
+                      max = i;
+                }
+                else
+                {
+                    if (std::invoke(comp, std::invoke(proj, *i),
+                                          std::invoke(proj, *min)))
+                        min = i;
+                    if (!(std::invoke(comp, std::invoke(proj, *first),
+                                            std::invoke(proj, *max))))
+                        max = first;
+                }
+            }
+        }
+        return {min, max};
+    }
+
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;
+                 std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::minmax_element_result&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::ref(comp), std::ref(proj));
+    }
+};
+
+inline constexpr minmax_element_fn minmax_element;
+}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+namespace ranges = std::ranges;
+
+int main()
+{
+    const auto v = {3, 9, 1, 4, 1, 2, 5, 9};
+    const auto [min, max] = ranges::minmax_element(v);
+    std::cout
+        &lt;&lt; "min = " &lt;&lt; *min &lt;&lt; ", 位于 [" &lt;&lt; ranges::distance(v.begin(), min) &lt;&lt; "]\n"
+        &lt;&lt; "max = " &lt;&lt; *max &lt;&lt; ", 位于 [" &lt;&lt; ranges::distance(v.begin(), max) &lt;&lt; "]\n";
+}
+|output=
+min = 1, 位于 [2]
+max = 9, 位于 [7]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc min_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc max_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc minmax}}
+{{dsc inc|cpp/algorithm/dsc minmax_element}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,159 @@
+{{cpp/memory/pmr/title|set_default_resource}}
+{{cpp/memory/navbar}}
+{{ddcl|header=memory_resource|since=c++17|
+std::pmr::memory_resource* set_default_resource( std::pmr::memory_resource* r ) noexcept;
+}}
+
+若 {{c|r}} 非空，则设置默认内存资源指针为 {{c|r}}；否则，设置默认内存资源指针为 {{c|std::pmr::new_delete_resource()}}。
+
+''默认内存资源指针''为某些设施在未显式提供内存资源使所用。初始的默认内存资源指针是 {{lc|std::pmr::new_delete_resource}} 的返回值。
+
+此函数是线程安全的。每个对 {{lc|std::pmr::set_default_resource}} 的调用''同步于''（见 {{lc|std::memory_order}}）后继的 {{tt|std::pmr::set_default_resource}} 及 {{tt|std::pmr::get_default_resource}} 调用。
+
+=== 返回值 ===
+返回先前默认内存资源指针的值。
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;memory_resource&gt;
+#include &lt;vector&gt;
+
+class noisy_allocator : public std::pmr::memory_resource
+{
+    void* do_allocate(std::size_t bytes, std::size_t alignment) override
+    {
+        std::cout &lt;&lt; "+ 分配 " &lt;&lt; bytes &lt;&lt; " 字节 @ ";
+        void* p = std::pmr::new_delete_resource()-&gt;allocate(bytes, alignment);
+        std::cout &lt;&lt; p &lt;&lt; '\n';
+        return p;
+    }
+
+    void do_deallocate(void* p, std::size_t bytes, std::size_t alignment) override
+    {
+        std::cout &lt;&lt; "- 解分配 " &lt;&lt; bytes &lt;&lt; " 字节 @ " &lt;&lt; p &lt;&lt; '\n';
+        return std::pmr::new_delete_resource()-&gt;deallocate(p, bytes, alignment);
+    }
+
+    bool do_is_equal(const std::pmr::memory_resource&amp; other) const noexcept override
+    {
+        return std::pmr::new_delete_resource()-&gt;is_equal(other);
+    }
+};
+
+int main()
+{
+    constexpr int push_back_limit{16};
+    noisy_allocator mem;
+    std::pmr::set_default_resource(&amp;mem);
+
+    {
+        std::cout &lt;&lt; "进入作用域 #1 (没有栈缓冲区)...\n";
+        std::cout &lt;&lt; "创建 vector v...\n";
+        std::pmr::vector&lt;std::uint16_t&gt; v{1, 2, 3, 4};
+        std::cout &lt;&lt; "v.data() @ " &lt;&lt; v.data() &lt;&lt; '\n';
+
+        std::cout &lt;&lt; "继续请求...\n";
+        for (int i{0}; i != push_back_limit; ++i)
+        {
+            v.push_back(i);
+            std::cout &lt;&lt; "v.size(): " &lt;&lt; v.size() &lt;&lt; '\n';
+        }
+        std::cout &lt;&lt; "退出作用域 #1...\n";
+    }
+
+    std::cout &lt;&lt; '\n';
+
+    {
+        std::cout &lt;&lt; "进入作用域 #2 (有栈缓冲区)...\n";
+
+        std::uint8_t buffer[16];
+        std::cout &lt;&lt; "分配栈上缓冲区: " &lt;&lt; sizeof buffer &lt;&lt; " 字节 @ "
+                  &lt;&lt; static_cast&lt;void*&gt;(buffer) &lt;&lt; '\n';
+        std::pmr::monotonic_buffer_resource mem_res{std::data(buffer), std::size(buffer)};
+
+        std::cout &lt;&lt; "创建 vector v...\n";
+        std::pmr::vector&lt;std::uint16_t&gt; v{&lt;!----&gt;{1, 2, 3, 4}, &amp;mem_res&lt;!----&gt;};
+        std::cout &lt;&lt; "v.data() @ " &lt;&lt; v.data() &lt;&lt; '\n'; // equals to `buffer` address
+
+        std::cout &lt;&lt; "继续请求...\n";
+        for (int i{0}; i != push_back_limit; ++i)
+        {
+            v.push_back(i);
+            std::cout &lt;&lt; "v.size(): " &lt;&lt; v.size() &lt;&lt; '\n';
+        }
+        std::cout &lt;&lt; "退出作用域 #2...\n";
+    }
+}
+|p=true
+|output=
+进入作用域 #1 (没有栈缓冲区)...
+创建 vector v...
++ 分配 8 字节 @ 0x1f75c30
+v.data() @ 0x1f75c30
+继续请求...
++ 分配 16 字节 @ 0x1f75c50
+- 解分配 8 字节 @ 0x1f75c30
+v.size(): 5
+v.size(): 6
+v.size(): 7
+v.size(): 8
++ 分配 32 字节 @ 0x1f75c70
+- 解分配 16 字节 @ 0x1f75c50
+v.size(): 9
+v.size(): 10
+v.size(): 11
+v.size(): 12
+v.size(): 13
+v.size(): 14
+v.size(): 15
+v.size(): 16
++ 分配 64 字节 @ 0x1f75ca0
+- 解分配 32 字节 @ 0x1f75c70
+v.size(): 17
+v.size(): 18
+v.size(): 19
+v.size(): 20
+退出作用域 #1...
+- 解分配 64 字节 @ 0x1f75ca0
+
+进入作用域 #2 (有栈缓冲区)...
+分配栈上缓冲区: 16 字节 @ 0x7fffbe9f8240
+创建 vector v...
+v.data() @ 0x7fffbe9f8240
+继续请求...
++ 分配 64 字节 @ 0x1f75ca0
+v.size(): 5
+v.size(): 6
+v.size(): 7
+v.size(): 8
+v.size(): 9
+v.size(): 10
+v.size(): 11
+v.size(): 12
+v.size(): 13
+v.size(): 14
+v.size(): 15
+v.size(): 16
++ 分配 128 字节 @ 0x1f75cf0
+v.size(): 17
+v.size(): 18
+v.size(): 19
+v.size(): 20
+退出作用域 #2...
+- 解分配 128 字节 @ 0x1f75cf0
+- 解分配 64 字节 @ 0x1f75ca0
+}}
+
+=== 参阅 ===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc get_default_resource}}
+{{dsc inc|cpp/memory/dsc new_delete_resource}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

@@ -1,0 +1,74 @@
+{{cpp/title|clock}}
+{{cpp/chrono/c/navbar}}
+{{ddcl|header=ctime|
+std::clock_t clock();
+}}
+
+返回进程所用的粗略处理器时间，它从与该程序执行有关的某个由实现定义时期的开始计算。为转换结果为秒数，可将它除以 {{lc|CLOCKS_PER_SEC}}。
+
+只有两次对 {{tt|std::clock}} 不同调用的返回值的差才有意义，因为 {{tt|std::clock}} 时期的开始不必与程序的起始一致。
+
+{{tt|std::clock}} 可能前进快于或慢于现实时间，取决于操作系统给予程序的执行资源。例如，如果与其他进程共享 CPU，那么 {{tt|std::clock}} 时间的前进就可能会慢于现实时间。另一方面，如果当前进程为多线程，且多于一个执行核心可用，那么 {{tt|std::clock}} 时间的前进就可能会快于现实时间。
+
+===返回值===
+程序迄今为止所用的处理器时间。
+* 如果处理器时间不可用，那么就会返回 {{c|(std::clock_t)(-1)}}。
+* 如果处理器时间的值无法以 {{lc|std::clock_t}} 表示，那么就会返回一个未指定的值。
+
+===异常===
+不抛出。
+
+===注解===
+在兼容 POSIX 的系统上，带时钟 id {{c|CLOCK_PROCESS_CPUTIME_ID}} 的 {{posix|clock_getres|clock_gettime}} 提供更高的解析度。
+
+{{tt|clock()}} 返回的值会在一些实现上回卷。例如在某种实现上，如果 {{lc|std::clock_t}} 是有符号 32 位整数而 {{lc|CLOCKS_PER_SEC}} 是 {{c|1'000'000}}，那么它将在约 2147 秒（约 36 分）后回卷。
+
+===示例===
+{{example
+|此示例演示 {{tt|clock()}} 时间与真实时间的差异。
+|code=
+#include &lt;chrono&gt;
+#include &lt;ctime&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+// 函数 f() 做一些耗时工作
+void f()
+{
+    volatile double d = 0;
+    for (int n = 0; n != 10000; ++n)
+        for (int m = 0; m != 10000; ++m)
+            d += d * n * m;
+}
+
+int main()
+{
+    const std::clock_t c_start = std::clock();
+    auto t_start = std::chrono::high_resolution_clock::now();
+    std::thread t1(f);
+    std::thread t2(f); // 在两个线程上调用 f()
+    t1.join();
+    t2.join();
+    std::clock_t c_end = std::clock();
+    auto t_end = std::chrono::high_resolution_clock::now();
+    
+    std::cout &lt;&lt; std::fixed &lt;&lt; std::setprecision(2) &lt;&lt; "CPU time used: "
+              &lt;&lt; 1000.0 * (c_end - c_start) / CLOCKS_PER_SEC &lt;&lt; "ms\n"
+              &lt;&lt; "Wall clock time passed: "
+              &lt;&lt; std::chrono::duration&lt;double, std::milli&gt;(t_end - t_start) &lt;&lt; '\n';
+}
+|p=true
+|output=
+CPU time used: 1590.00ms
+Wall clock time passed: 808.23ms
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/c/dsc ctime}}
+{{dsc inc|cpp/chrono/c/dsc time}}
+{{dsc see c|c/chrono/clock}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

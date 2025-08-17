@@ -1,0 +1,198 @@
+{{cpp/ranges/title|equal_range}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=版本_1|since=c++20|until=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::subrange&lt;I&gt; equal_range( I first, S last, const T&amp; value,
+                                           Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;I, Proj&gt;,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::subrange&lt;I&gt; equal_range( I first, S last, const T&amp; value,
+                                           Comp comp = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++20|until=c++26|1=
+template&lt; ranges::forward_range R,
+          class T, class Proj = std::identity,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    equal_range( R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::forward_range R,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;,
+          std::indirect_strict_weak_order
+              &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                        Proj&gt;&gt; Comp = ranges::less &gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    equal_range( R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+@1@ 返回范围 {{range|first|last}} 中含有所有等价于 {{c|value}} 的元素的范围的视图。
+
+范围 {{range|first|last}} 必须至少相对于 {{c|value}} 有序，即它必须满足下列所有要求：
+* 已相对 {{c|element &lt; value}} 或 {{c|comp(element, value)}} 划分（即所有令该表达式为 {{c|true}} 的元素必须前趋所有令此表达式为 {{c|false}} 的元素）。
+* 已相对 {{c|!(value &lt; element)}} 或 {{c|!comp(value, element)}} 划分。
+* 对于所有元素，若 {{c|element &lt; value}} 或 {{c|comp(element, value)}} 为 {{c|true}}，则 {{c|!(value &lt; element)}} 或 {{c|!comp(value, element)}} 亦为 {{c|true}}。
+完全排序的范围满足这些判别标准。
+
+返回从两个迭代器构造的视图，第一个指向首个''不小于'' {{c|value}} 的元素，而第二个指向首个''大于'' {{c|value}} 的元素。可代之以用 {{lc|std::ranges::lower_bound()}} 获得第一迭代器，用 {{lc|std::ranges::upper_bound()}} 获得第二迭代器。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的|sentinel=yes}}
+{{par|r|要检验的元素范围}}
+{{par|value|要比较的元素}}
+{{par|comp|第一实参是否''小于''（即先序于）第二个}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+含有定义所需范围的迭代器对的 {{lc|std::ranges::subrange}}，第一迭代器指向首个''不小于'' {{c|value}} 的元素而第二迭代器指向首个''大于'' {{c|value}} 的元素。
+
+若无元素''小于'' {{c|value}}，则返回尾迭代器（等于 {{c|last}} 或 {{c|ranges::end(r)}} 的迭代器）作为第一迭代器。类似地若无元素''大于'' {{c|value}}，则返回尾迭代器作为第二迭代器。
+
+===复杂度===
+进行的比较次数与 {{c|first}} 与 {{c|last}} 间的距离成对数（至多 {{math|2 * log{{su|b=2}}(last - first) + O(1)}} 次比较）。然而，对于不实现 {{lconcept|random_access_iterator}} 的迭代器，迭代器自增次数为线性。
+
+===可能的实现===
+{{eq fun|1=
+struct equal_range_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Proj = std::identity, class T = std::projected_value_t&lt;I, Proj&gt;,
+             std::indirect_strict_weak_order
+                 &lt;const T*, std::projected&lt;I, Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, S last, const T&amp; value, Comp comp = {}, Proj proj = {}) const
+    {
+        return ranges::subrange
+        (
+            ranges::lower_bound(first, last, value, std::ref(comp), std::ref(proj)),
+            ranges::upper_bound(first, last, value, std::ref(comp), std::ref(proj))
+        );
+    }
+ 
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;,
+             std::indirect_strict_weak_order
+                 &lt;const T*, std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                                           Proj&gt;&gt; Comp = ranges::less&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, const T&amp; value, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), value,
+                       std::ref(comp), std::ref(proj));
+    }
+};
+ 
+inline constexpr equal_range_fn equal_range;
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|1,2}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;compare&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct S
+{
+    int number {};
+    char name {};
+    // 注：这些比较运算符忽略 name
+    friend bool operator==  ( const S s1, const S s2 ) { return s1.number == s2.number; }
+    friend auto operator&lt;=&gt; ( const S s1, const S s2 ) { return s1.number &lt;=&gt; s2.number; }
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, S o)
+    {
+        return os &lt;&lt; '{' &lt;&lt; o.number &lt;&lt; ", '" &lt;&lt; o.name &lt;&lt; "'}";
+    }
+};
+
+void println(auto rem, const auto&amp; v)
+{
+    for (std::cout &lt;&lt; rem; const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    // 注：非有序，仅按照如下定义的 S 划分
+    std::vector&lt;S&gt; vec
+    {
+        {1,'A'}, {2,'B'}, {2,'C'}, {2,'D'}, {4, 'D'}, {4,'G'}, {3,'F'}
+    };
+
+    const S value{2, '?'};
+
+    namespace ranges = std::ranges;
+
+    auto a = ranges::equal_range(vec, value);
+    println("1. ", a);
+
+    auto b = ranges::equal_range(vec.begin(), vec.end(), value);
+    println("2. ", b);
+
+    auto c = ranges::equal_range(vec, 'D', ranges::less {}, &amp;S::name);
+    println("3. ", c);
+
+    auto d = ranges::equal_range(vec.begin(), vec.end(), 'D', ranges::less {}, &amp;S::name);
+    println("4. ", d);
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{&lt;!----&gt;{1, 0}, {2, 2}, {2, 1}, {3, 0}, {3, 1}&lt;!----&gt;};
+    auto cmpz = [](CD x, CD y) { return x.real() &lt; y.real(); };
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto p3 = ranges::equal_range(nums, {2, 0}, cmpz);
+    #else
+        auto p3 = ranges::equal_range(nums, CD{2, 0}, cmpz);
+    #endif
+    println("5. ", p3);
+}
+|output=
+1. {2, 'B'} {2, 'C'} {2, 'D'}
+2. {2, 'B'} {2, 'C'} {2, 'D'}
+3. {2, 'D'} {4, 'D'}
+4. {2, 'D'} {4, 'D'}
+5. (2,2) (2,1)
+}}
+
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc lower_bound}}
+{{dsc inc|cpp/algorithm/ranges/dsc upper_bound}}
+{{dsc inc|cpp/algorithm/ranges/dsc binary_search}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal}}
+{{dsc inc|cpp/algorithm/dsc equal_range}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

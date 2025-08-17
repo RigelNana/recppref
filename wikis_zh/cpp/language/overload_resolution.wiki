@@ -1,0 +1,739 @@
+{{title|重载决议}}
+{{cpp/language/functions/navbar}}
+
+为了编译函数调用，编译器必须首先进行{{rlp|lookup|名字查找}}，对于函数可能涉及{{rlp|adl|实参依赖查找}}，而对于函数模板可能后随{{rlp|template argument deduction|模板实参推导}}。
+
+如果找到的名字指代了多个实体，那么该名字被''重载''，并且编译器必须决定要调用哪个重载。简单来说，决定调用的是各形参与各实参之间的匹配最紧密的重载。
+
+具体来说，重载决议通过以下几个步骤进行：
+# 建立[[#候选函数|候选函数]]集合。
+# 从该集合去除函数，只保留[[#可行函数|可行函数]]。
+# 分析可行函数集合，以确定唯一的[[#最佳可行函数|最佳可行函数]]（可能会涉及[[#隐式转换序列的分级|隐式转换序列的分级]]）。
+
+{{source|
+void f(long);
+void f(float);
+
+f(0L); // 调用 f(long)
+f(0);  // 错误：重载有歧义
+}}
+
+除函数调用外，其他语境可以出现重载函数名的语境，此时应用的规则不同，见{{rlp|overloaded address|重载函数的地址}}。
+
+如果函数无法被重载决议选择（例如它是有未被满足的{{rlp|constraints|约束}}的{{rlps|templates#模板化实体}}），那么不能使用它。
+
+===候选函数===
+在重载决议开始前，将名字查找和模板实参推导所选择的函数组成''候选函数''{{sep}}的集合。确切的判别标准取决于发生重载决议的语境。
+
+====调用具名函数====
+如果 {{c|E}} 在{{rlp|operator other#内建的函数调用运算符|函数调用表达式}} {{c|E(args)}} 中指名重载的函数和/或函数模板（但非可调用对象）的集合，那么遵循下列规则：
+* 如果表达式 {{c|E}} 具有 {{c|PA-&gt;B}} 或 {{c|A.B}} 的形式（其中 {{c|A}} 具有类类型 ''cv'' {{tt|T}}），那么将 {{c|B}} 作为 {{tt|T}} 的成员函数{{rlp|lookup|查找}}。该查找所找到的函数声明都是候选函数。就重载决议而言，实参列表拥有 ''cv'' {{tt|T}} 类型的隐含对象实参。
+* 如果表达式 {{c|E}} 是{{rlps|expressions#初等表达式}}，那么遵循函数调用的正常规则{{rlp|lookup|查找}}它的名字（可能涉及 {{rlp|adl|实参依赖查找}}）。该查找所找到的函数声明（取决于查找的工作方式）是下列之一：
+:a) 全部是非成员函数（该情况下，就重载决议而言，实参列表正是函数调用表达式中所用的实参列表）
+:b) 全部是某个类 {{tt|T}} 的成员函数，该情况下，如果 {{c|this}} 在作用域中且它是指向 {{tt|T}} 或从 {{tt|T}} 派生的类的指针，那么以 {{c|*this}} 作为隐含对象实参。否则（如果 {{c|this}} 不在作用域中或不指向 {{tt|T}}），以一个 {{tt|T}} 类型的虚假对象作为隐含对象实参，而如果重载决议继而选择了非静态成员函数，那么程序非良构。
+
+====调用类对象====
+如果 {{c|E}} 在{{rlp|operator other#内建的函数调用运算符|函数调用表达式}} {{c|E(args)}} 中拥有类型 ''cv'' {{tt|T}}，那么
+* 在表达式 {{c|(E).operator()}} 的语境中，对名字进行 {{c/core|operator()}} 的通常{{rlp|lookup|查找}}获得 {{tt|T}} 的函数调用运算符，并把每个找到的函数声明添加到候选函数集。
+* 对于 {{tt|T}} 或 {{tt|T}} 的基类中每个（未被隐藏的）非 {{rlpt|explicit}} 的{{rlp|cast operator|用户定义转换函数}}，且它的 cv 限定符与 {{tt|T}} 的 cv 限定符相同或更多，并且该转换函数转换到：
+:* 函数指针
+:* 函数指针的引用
+:* 函数的引用
+:那么将一个拥有独有名称的''代表调用函数''{{sep}}添加到候选函数集，该函数的首个形参作为转换结果，剩余各形参作为转换结果所接受的形参列表，而它的返回类型作为转换结果的返回类型。如果后继的重载决议选择此代表函数，那么将调用用户定义转换函数，然后调用转换的结果。
+
+任何情况下，就重载决议而言的实参列表，是函数调用表达式的实参列表，前面加上隐含对象实参 {{c|E}}（匹配到代表函数时，用户定义转换将自动将隐含对象实参转换成代表函数的首个实参）。
+{{source|1=
+int f1(int);
+int f2(float);
+
+struct A
+{
+    using fp1 = int(*)(int);
+    operator fp1() { return f1; } // 转换到函数指针的转换函数
+    using fp2 = int(*)(float);
+    operator fp2() { return f2; } // 转换到函数指针的转换函数
+} a;
+
+int i = a(1); // 通过转换函数返回的指针调用 f1
+}}
+
+====调用重载运算符====
+如果表达式中某个运算符的至少一个实参具有类类型或枚举类型，那么{{rlp|expressions#运算符|内建运算符}}和{{rlp|operators|用户定义的运算符重载}}都参与重载决议，所选择的候选函数集如下：
+
+对于实参具有类型 {{tt|T1}}（移除 cv 限定后）的一元运算符 {{ttb|@}}，或左操作数具有类型 {{tt|T1}} 而右操作数具有类型 {{tt|T2}}（移除 cv 限定后）的二元运算符 {{ttb|@}}，准备下列候选函数集：
+@1@ ''成员候选''：如果 {{tt|T1}} 是完整类或当前正在定义的类，那么成员候选集是对 {{tt|T1::operator@}} 进行{{rlp|lookup|有限定的名字查找}}的结果。所有其他情况下，成员候选集为空。
+@2@ ''非成员候选''：对于{{rlp|operators|运算符重载}}容许非成员形式的运算符，为在表达式的语境中对 {{tt|operator@}} 进行{{rlp|lookup|无限定名字查找}}（可能涉及 {{rlp|adl|实参依赖查找}}）所找到的所有声明，但忽略成员函数声明而且它不会阻止到下个外围作用域中继续进行查找。如果二元运算符的两个操作数，或一元运算符的唯一操作数具有枚举类型，那么只查找有形参具有该枚举类型（或到该枚举类型引用）的函数，成为非成员候选函数。
+@3@ ''内建候选''：对于 {{c/core|operator,}}、一元 {{c/core|operator&amp;}} 和 {{c/core|operator-&gt;}}，内建候选集为空。对于其他运算符，内建候选是{{rlp|expressions#运算符|内建运算符页面}}中列出的函数，只要所有操作数都能隐式转换成它的各个形参。如果有任何内建候选拥有的形参列表与某个并非函数模板特化的非成员候选{{rev inl|since=c++20|或非成员重写候选}}相同，那么该内建候选不会添加到内建候选列表。当考虑内建的赋值运算符时，限制从它的首个形参进行的转换：只考虑{{rlp|implicit conversion|标准转换序列}}。
+
+{{rrev|since=c++20|1=
+@4@ ''重写候选''：
+* 对于四个关系运算符表达式 {{c|x &lt; y}}、{{c|1=x &lt;= y}}、{{c|x &gt; y}} 及 {{c|1=x &gt;= y}}，添加所有找到的成员、非成员及内建 {{c/core|1=operator&lt;=&gt;}} 到集合。
+* 对于四个关系运算符表达式 {{c|x &lt; y}}、{{c|1=x &lt;= y}}、{{c|x &gt; y}} 及 {{c|1=x &gt;= y}} 还有三路比较运算符表达式 {{c|1=x &lt;=&gt; y}}，对每个找到的成员、非成员及内建 {{c/core|1=operator&lt;=&gt;}} 添加两个形参顺序相反的对应合成候选。
+* 对于 {{c|1=x != y}}，在没有匹配的 {{c/core|1=operator!=}} 的情况下添加所有找到的成员、非成员及内建 {{c/core|1=operator==}} 到集合。
+* 对于相等运算符表达式 {{c|1=x == y}} 与 {{c|1=x != y}}，在没有匹配的 {{c/core|1=operator!=}} 的情况下对每个找到的成员、非成员及内建 {{c/core|1=operator==}} 添加两个形参顺序相反的对应合成候选。
+
+@@ 所有情况下，在重写表达式的语境中不考虑重写候选。对于所有其他运算符，重写候选集为空。
+}}
+
+提交给重载决议的候选函数集合是以上集合的并集。就重载决议而言的实参列表由运算符的各操作数组成，除了 {{tt|operator-&gt;}} 的情况，它的第二个操作数并非函数调用的实参（见{{rlp|operator member access#内建的成员访问运算符|成员访问运算符}}）。
+{{source|
+struct A
+{
+    operator int();              // 用户定义转换
+};
+A operator+(const A&amp;, const A&amp;); // 非成员用户定义运算符
+
+void m()
+{
+    A a, b;
+    a + b; // 成员候选：无
+           // 非成员候选：operator+(a, b)
+           // 内建候选：int(a) + int(b)
+           // 重载决议选择 operator+(a, b)
+}
+}}
+
+如果重载决议选择了内建候选，那么从类类型的操作数进行的{{rlp|implicit conversion|用户定义转换序列}}不允许拥有第二个标准转换序列：用户定义转换函数必须直接给出期待的操作数类型：
+{{source|1=
+struct Y { operator int*(); }; // Y 可转换到 int*
+int *a = Y() + 100.0;          // 错误：指针和 double 之间没有 operator+
+}}
+
+对于 {{c/core|operator,}}、一元 {{c/core|operator&amp;}} 和 {{c/core|operator-&gt;}}，如果候选函数集中没有可行函数（见后述），那么将运算符解释为内建运算符。
+
+{{rrev|since=c++20|
+如果对运算符 {{tt|@}} 的重载决议选择了重写的 {{c/core|1=operator&lt;=&gt;}} 候选，那么用重写的 {{c/core|1=operator&lt;=&gt;}} 候选将 {{c|x @ y}} 解释为重写的表达式：当所选择的候选是具有逆序形参的合成候选时，解释为 {{c|1=0 @ (y &lt;=&gt; x)}}，否则为 {{c|1=(x &lt;=&gt; y) @ 0}}。
+
+如果对运算符（{{tt|1===}} 或 {{tt|1=!=}}）的重载决议选择了重写 {{c/core|1=operator==}} 候选，那么它的返回类型必须是（可有 cv 限定的）{{c/core|bool}}，并使用选择的重写 {{c/core|1=operator==}} 候选解释 {{c|x @ y}} 作为重写表达式：如果选择的候选是拥有逆序形参的合成候选时是 {{c|1=y == x}} 或 {{c|1=!(y == x)}}，否则是 {{c|1=!(x == y)}}。
+
+这种情况下的重载决议有一条决胜规则：非重写候选优于重写候选，且非合成重写候选优于合成重写候选。
+
+这种具有逆序实参的查找使得可以只写 {{c/core|1=operator&lt;=&gt;(std::string, const char*)}} 与 {{c/core|1=operator==(std::string, const char*)}} 就生成 {{lc|std::string}} 和 {{c/core|const char*}} 间的所有双向比较。更多细节见{{rlp|default comparisons|默认比较}}。
+}}
+
+====由构造函数初始化====
+当对类类型的对象进行{{rlp|direct initialization|直接初始化}}或{{rlp|default initialization|默认初始化}}时{{rev inl|since=c++11|（包括在{{rlp|list initialization|复制列表初始化}}的语境中的默认初始化）}}，候选函数是正在初始化的类的所有构造函数。实参列表是初始化器的表达式列表。
+
+否则，候选函数是正在初始化的类的所有{{rlp|converting constructor|转换构造函数}}。实参列表是初始化器的表达式。
+
+{{rrev|since=c++11|
+对于在复制列表初始化的语境中的默认初始化，如果选择了 {{rlpt|explicit}} 构造函数，那么初始化非良构。
+}}
+
+====通过转换进行复制初始化====
+如果类类型对象的{{rlp|copy initialization|复制初始化}}要求调用某个用户定义转换以将 ''cv'' {{tt|S}} 类型的初始化器表达式转换到正在初始化的对象的 ''cv'' {{tt|T}} 类型，那么下列函数是候选函数：
+* {{tt|T}} 的所有{{rlp|converting constructor|转换构造函数}}
+* 从 {{tt|S}} 及它的各基类（除非隐藏）到 {{tt|T}} 或 {{tt|T}} 的派生类或到它们的引用的非 {{rlpt|explicit}} 转换函数。如果此复制初始化是（可有 cv 限定的）{{tt|T}} 的直接初始化序列的一部分（对于接受一个到 ''cv'' {{tt|T}} 的引用的构造函数，初始化要绑定到它的首个形参的引用），那么也会考虑 explicit 转换函数。
+
+无论哪种方式，就重载决议而言的实参列表均由单个实参组成，即初始化器表达式，它将会与构造函数的首个实参或转换函数的隐式对象实参相比较。
+
+====通过转换进行非类初始化====
+当非类类型 ''cv1'' {{tt|T}} 对象的初始化要求某个{{rlp|cast operator|用户定义转换函数}}，以从类类型 ''cv'' {{tt|S}} 的初始化器表达式转换时，下列函数是候选：
+* {{tt|S}} 及它的基类（除非隐藏）中的，产生 {{tt|T}} 类型，或可由{{rlp|implicit conversion|标准转换序列}}转换到 {{tt|T}} 的类型，或到这些类型的引用的非 explicit 用户定义转换函数。对于选择候选函数而言，忽略返回类型上的 cv 限定符。
+* 如果这是{{rlp|direct initialization|直接初始化}}，那么也会考虑 {{tt|S}} 及它的基类（除非隐藏）中的，产生 {{tt|T}} 类型，或可由{{rlp|implicit conversion|限定性转换}}转换到 {{tt|T}} 的类型，或到这些类型的引用的 explicit 用户定义转换函数。
+
+无论哪种方式，就重载决议而言的实参列表均由单个实参组成，即初始化器表达式，它将会与转换函数的隐含对象实参相比较。
+
+====通过转换进行引用初始化====
+在将指代 ''cv1'' {{tt|T}} 的引用绑定到从初始化器表达式转换到类类型 ''cv2'' {{tt|S}} 的左值或右值结果的{{rlp|reference initialization|引用初始化}}期间，为候选集选择下列函数：
+* {{tt|S}} 及它的基类（除非隐藏）中的到以下类型的非 explicit 用户定义转换函数：
+:* （当转换到左值时）到 ''cv2'' {{tt|T2}} 的左值引用
+:* （当转换到右值或函数左值时）''cv2'' {{tt|T2}} 或到 ''cv2'' {{tt|T2}} 的右值引用
+: 其中 ''cv2'' {{tt|T2}} {{rlp|reference initialization#定义|引用兼容}} ''cv1'' {{tt|T}}。
+* 对于直接初始化，如果 {{tt|T2}} 与 {{tt|T}} 类型相同或能以限定性转换转换到 {{tt|T}}，那么也会考虑 explicit 用户定义转换函数。
+
+无论哪种方式，就重载决议而言的实参列表均由单个实参组成，即初始化器表达式，它将会与转换函数的隐含对象实参相比较。
+
+====列表初始化====
+当非聚合类类型 {{tt|T}} 的对象进行{{rlp|list initialization|列表初始化}}时，进行两阶段的重载决议。
+* 在阶段 1，候选函数是 {{tt|T}} 的所有初始化器列表构造函数，而就重载决议而言的实参列表由单个初始化器列表实参组成
+* 如果阶段 1 的重载决议失败，那么进入阶段 2，其中候选函数是 {{tt|T}} 的所有构造函数，而就重载决议而言的实参列表由初始化器列表的各个单独元素所组成。
+
+如果初始化器列表为空而 {{tt|T}} 拥有默认构造函数，那么跳过阶段 1。
+
+在复制列表初始化中，如果阶段 2 选择 explicit 构造函数，那么初始化非良构（与复制初始化的总体相反，它们甚至不考虑 explicit 构造函数）。
+
+====函数模板候选的额外规则====
+如果名字查找找到了函数模板，那么为找到能在此时使用的模板实参值（如果存在）会进行{{rlp|template argument deduction|模板实参推导}}和显式模板实参检查：
+
+* 如果两者都成功，那么找到的模板实参会用来合成对应的函数模板特化的声明，那么这些特化会加入候选集，并且在决胜规则指定的情况以外都会被视为非模板的函数。
+* 如果模板实参推导失败或合成的函数模板特化非良构，那么这些函数不会加入候选集（参见 {{rlp|sfinae|SFINAE}}）。
+
+如果一个名字指代一个或多个函数模板，并且同时指代重载的非模板的函数，那么这些函数和从模板生成的特化都是候选。
+
+更多细节见{{rlps|function template#函数模板重载}}。
+
+{{rrev|since=c++20|
+如果构造函数模板或转换函数模板有{{rlp|dependent name#值待决表达式|值待决}}的{{rlp|explicit|条件性 explicit 说明符}}，如果在推导后上下文要求候选不是 explicit 的而生成的特化是 explicit 的，那么它会从候选函数集合排除。
+}}
+
+====构造函数候选的额外规则====
+{{rrev|since=c++11|
+被定义为弃置的预置{{rlp|move constructor|移动构造函数}}和{{rlp|move assignment|移动赋值运算符}}会从候选函数集合排除。。
+
+在构造类型 {{tt|D}} 的对象时，如果满足以下所有条件，那么从类类型 {{tt|C}} {{rlp|using declaration#继承构造函数|继承}}的首个形参类型是“到 {{tt|P}} 的引用”的构造函数（包括从模板实例化的此类构造函数）会从候选函数集合排除：
+* 实参列表只有一个实参。
+* {{tt|C}} {{rlp|reference initialization#定义|引用关联于}} {{tt|P}}。
+* {{tt|P}} 引用关联于 {{tt|D}}。
+}}
+
+====成员函数候选的额外规则====
+如果有候选函数是除构造函数外{{rev inl|since=c++23|且没有{{rlp|member functions#显式对象形参|显式对象形参}}}}的{{rlp|member functions|成员函数}}（静态或非静态），那么将它当做如同它有一个额外形参（''隐式对象形参''），代表调用函数所用的对象，并出现在首个实际形参之前。
+
+类似地，调用成员函数所用的对象会作为''隐含对象实参''{{sep}}前附于实参列表。
+
+对于类 {{tt|X}} 的成员函数，隐含对象形参的类型受成员函数的 cv 限定和引用限定影响，如{{rlp|member functions|成员函数}}中所述。
+
+就确定''隐式对象形参''{{sep}}类型而言，用户定义转换函数被认为是''隐含对象实参''{{sep}}的成员。
+
+就确定''隐式对象形参''{{sep}}类型而言，由 using 声明引入到派生类中的成员函数被认为是派生类的成员。
+
+{{rrev|until=c++23|对于静态成员函数，它的''隐式对象形参''{{sep}}被认为匹配任何对象：不检验它的类型，且不会为它尝试转换序列。}}
+
+对于重载决议的剩余部分，''隐含对象实参''{{sep}}与其他实参没有区别，但下列特殊规则适用于''隐式对象形参''：
+&lt;!-- C++17 中 p0135r1 移除，注解是这始终是冗余的，但在 p0135r1 使得 a().b() 从 a() 实质化出临时量前无害
+@1@ 不能在临时对象中保有隐式对象形参的实参。
+--&gt;
+@1@ 不能对隐式对象形参运用用户定义转换。
+
+@2@ 右值能绑定到非 const 的隐式对象形参{{rev inl|since=c++11|（除非是对引用限定的成员函数）}}，且不影响隐式转换的等级。
+{{source|
+struct B { void f(int); };
+struct A { operator B&amp;(); };
+
+A a;
+a.B::f(1); // 错误：不能对隐式对象形参运用用户定义转换
+static_cast&lt;B&amp;&gt;(a).f(1); // OK
+}}
+
+===可行函数===
+给定以上述方式构造的候选函数集，重载决议的下一步骤是检验各个实参与形参，并将集合缩减为''可行函数''{{sep}}的集合。
+
+为了被包含在可行函数集中，候选函数必须满足下列条件：
+@1@ 如果有 {{tt|M}} 个实参，那么刚好具有 {{tt|M}} 个形参的候选函数可行。
+@2@ 如果有 {{tt|M}} 个实参且候选函数的形参少于 {{tt|M}} 个，但具有一个{{rlp|variadic arguments|省略号形参}}，那么它可行。
+@3@ 如果有 {{tt|M}} 个实参且候选函数的形参多于 {{tt|M}} 个，但是第 {{tt|M+1}} 个形参和所有后随形参都具有默认实参，那么它可行。对于剩余的重载决议，形参列表被截断到 {{tt|M}}。
+
+{{rrev|since=c++20|
+@4@ 如果函数拥有关联的{{rlp|constraints|约束}}，那么必须满足它。
+}}
+@5@ 对于每个实参，必须至少存在一个隐式转换序列将它转换到对应的形参。
+@6@ 如果任何形参具有引用类型，那么这一步负责引用绑定：如果右值实参对应非 const 左值引用形参，或左值实参对应右值引用形参，那么函数不可行。
+
+用户定义的转换（{{rlp|converting constructor|转换构造函数}}和{{rlp|cast operator|用户定义转换函数}}）不参与可能会应用多于一个用户定义的转换的隐式转换序列。具体而言，一个用户定义的转换不会被考虑，如果它的转换目标是一个构造函数的首个形参或用户定义转换函数的隐式对象参数，且这个构造函数/用户定义转换函数是下列初始化的候选函数：
+* [[#通过转换进行复制初始化|通过用户定义转换进行复制初始化]]
+* [[#通过转换进行非类初始化|通过转换函数进行非类类型的初始化]]
+* [[#通过转换进行引用初始化|为直接引用绑定的通过转换函数进行的初始化]]
+* 在类的{{rlp|copy initialization|复制初始化}}的第二步（直接初始化）期间[[#由构造函数初始化|通过构造函数所作的初始化]]
+{{rrev|since=c++11|
+* 由列表初始化所作的初始化，其中的初始化器列表刚好拥有一个元素，且它自身是一个初始化器列表，且目标是类 {{tt|X}} 的构造函数的首个实参，而该转换是到 {{tt|X}} 或到（可有 cv 限定的）{{tt|X}} 的引用的转换：
+{{source|1=
+struct A { A(int); };
+struct B { B(A); };
+
+B b{&lt;!-- --&gt;{0}&lt;!-- --&gt;}; // B 的列表初始化
+
+// 候选：B(const B&amp;)、B(B&amp;&amp;)、B(A)
+// {0} -&gt; B&amp;&amp; 不可行：要调用 B(A)
+// {0} -&gt; const B&amp; ：不可行：要绑定到右值，要调用 B(A)
+// {0} -&gt; A 可行。调用 A(int)：不禁止到 A 的用户定义转换
+}}
+}}
+
+===最佳可行函数===
+对于每对可行函数 {{tt|F1}} 和 {{tt|F2}}，对从第 {{tt|i}} 实参到第 {{tt|i}} 形参的转换做排行，以确定哪一个更好（除了首个实参，静态成员函数的''隐式对象实参''{{sep}}在排行上没有影响）。
+
+如果 {{tt|F1}} 的所有实参的隐式转换''不劣于'' {{tt|F2}} 的所有实参的隐式转换，且满足下列条件，那么确定 {{tt|F1}} 是优于 {{tt|F2}} 的函数：
+
+@1@ 至少存在一个 {{tt|F1}} 的实参，它的隐式转换''优于'' {{tt|F2}} 的该实参的对应的隐式转换，或若非如此，
+
+@2@ （只在通过转换进行非类初始化的语境中，）从 {{tt|F1}} 的返回类型到要初始化的类型的标准转换序列''优于''{{sep}}从 {{tt|F2}} 的返回类型到该类型的标准转换序列，或若非如此，
+
+{{rrev|since=c++11|
+@3@ （仅在对函数类型的引用进行直接引用绑定所作的，通过转换函数进行初始化的语境中，）{{tt|F1}} 的返回类型是与正在初始化的引用相同种类的引用（左值或右值），而 {{tt|F2}} 的返回类型不是，或若非如此，
+}}
+
+@4@ {{tt|F1}} 是非模板的函数而 {{tt|F2}} 是模板特化，或若非如此，
+
+@5@ {{tt|F1}} 与 {{tt|F2}} 都是模板特化，且按照{{rlp|function template#函数模板重载|模板特化的偏序规则}}，{{tt|F1}} 更特殊，或若非如此，
+
+{{rrev|since=c++20|
+@6@ {{tt|F1}} 与 {{tt|F2}} 都是非模板函数，并且 {{tt|F1}} 比 {{tt|F2}} {{rlp|constraints#约束的偏序|更受偏序约束}}：
+{{source|1=
+template&lt;typename T = int&gt;
+struct S
+{
+    constexpr void f(); // #1
+    constexpr void f(this S&amp;) requires true; // #2
+};
+
+void test()
+{
+    S&lt;&gt; s;
+    s.f(); // 调用 #2
+}
+}}
+
+@@，或若非如此，
+}}
+
+
+{{rrev|since=c++11|
+@7@ {{tt|F1}} 是类 {{tt|D}} 的构造函数，{{tt|F2}} 是 {{tt|D}} 的基类 {{tt|B}} 的构造函数，且对应每个实参的 {{tt|F1}} 和 {{tt|F2}} 的形参均具有相同类型：
+{{source|1=
+struct A
+{
+    A(int = 0);
+};
+ 
+struct B: A
+{
+    using A::A;
+    
+    B();
+};
+ 
+B b; // OK，B::B()
+}}
+
+@@ ，或若非如此，
+}}
+
+
+{{rrev|since=c++20|
+@8@ {{tt|F2}} 是重写的候选而 {{tt|F1}} 不是，或若非如此，
+
+@9@ {{tt|F1}} 和 {{tt|F2}} 都是重写候选，但 {{tt|F2}} 是带逆序形参的合成重写候选而 {{tt|F1}} 不是，或若非如此，
+}}
+
+
+{{rrev|since=c++17|
+@10@ {{tt|F1}} 是从{{rlps|class template argument deduction#用户定义推导指引}}所生成的而 {{tt|F2}} 不是，或若非如此，
+
+@11@ {{tt|F1}} 是{{rlp|class template argument deduction#用户定义推导指引|复制推导候选}}而 {{tt|F2}} 不是，或若非如此，
+
+@12@ {{tt|F1}} 是从非模板构造函数生成而 {{tt|F2}} 是从构造函数模板生成：
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    using value_type = T;
+    A(value_type);  // #1
+    A(const A&amp;);    // #2
+    A(T, T, int);   // #3
+    
+    template&lt;class U&gt;
+    A(int, T, U);   // #4
+};                  // #5 是 A(A)，它是复制推导候选
+
+A x(1, 2, 3); // 使用 #3，从非模板构造函数生成
+
+template&lt;class T&gt;
+A(T) -&gt; A&lt;T&gt;;       // #6，不如 #5 特殊
+
+A a(42); // 使用 #6 推出 A&lt;int&gt; 并用 #1 初始化
+A b = a; // 使用 #5 推出 A&lt;int&gt; 并用 #2 初始化
+
+template&lt;class T&gt;
+A(A&lt;T&gt;) -&gt; A&lt;A&lt;T&gt;&gt;; // #7，和 #5 一样特殊
+A b2 = a; // 使用 #7 推出 A&lt;A&lt;int&gt;&gt; 并用 #1 初始化
+}}
+}}
+
+对所有可行函数进行这些逐对比较。如果刚好有一个可行函数优于所有其他函数，那么重载决议成功并调用该函数。否则编译失败。
+
+{{source|1=
+void Fcn(const int*, short); // 重载 #1
+void Fcn(int*, int);         // 重载 #2
+
+int i;
+short s = 0;
+
+void f()
+{
+    Fcn(&amp;i, 1L);  // 第 1 个实参：&amp;i -&gt; int* 优于 &amp;i -&gt; const int*
+                  // 第 2 个实参：1L -&gt; short 与 1L -&gt; int 等价
+                  // 调用 Fcn(int*, int)
+    
+    Fcn(&amp;i, 'c'); // 第 1 个实参：&amp;i -&gt; int* 优于 &amp;i -&gt; const int*
+                  // 第 2 个实参：'c' -&gt; int 优于 'c' -&gt; short
+                  // 调用 Fcn(int*, int)
+    
+    Fcn(&amp;i, s);   // 第 1 个实参：&amp;i -&gt; int* 优于 &amp;i -&gt; const int*
+                  // 第 2 个实参：s -&gt; short 优于 s -&gt; int
+                  // 无胜者，编译错误
+}
+}}
+
+如果最佳可行函数决议到了一个可以找到多个声明的函数，且这些声明其中的两个存在于不同的作用域并指定了使得该函数可行的默认参数，那么程序非良构。
+
+{{source|1=
+namespace A
+{
+    extern "C" void f(int = 5);
+}
+ 
+namespace B
+{
+    extern "C" void f(int = 5);
+}
+ 
+using A::f;
+using B::f;
+ 
+void use()
+{
+    f(3); // OK，默认实参不会用于使函数可行
+    f();  // 错误：找到两次默认实参
+}
+}}
+
+===隐式转换序列的分级===
+重载决议所考虑的实参-形参隐式转换序列与{{rlp|copy initialization|复制初始化}}中（对于非引用形参）所用的{{rlp|implicit conversion|隐式转换}}对应，但在到隐含对象形参或到赋值运算符的左侧操作数的转换时不考虑创建临时对象的转换。{{rev inl|since=c++23|当形参为静态成员函数的隐式对象形参时，隐式转换序列是与任何其他标准转换序列相比既不更好也不更差的标准转换序列。}}
+
+每种{{rlp|implicit conversion|标准转换序列的类型}}都被赋予三个等级之一：
+@1@ '''准确匹配'''：不要求转换、左值到右值转换、限定性转换、{{rev inl|since=c++17|函数指针转换、}}类类型到相同类的用户定义转换
+@2@ '''提升'''：整数提升、浮点数提升
+@3@ '''转换'''：整数转换、浮点数转换、浮点数整数转换、指针转换、成员指针转换、布尔转换、派生类到它的基类的用户定义转换
+
+标准转换序列的等级是它包含的标准转换（至多可有{{rlp|implicit conversion|三次转换}}）中的最差等级。
+
+直接绑定引用形参到实参表达式是''恒等''{{sep}}或派生类到基类''转换''：
+{{source|1=
+struct Base {};
+struct Derived : Base {} d;
+
+int f(Base&amp;);    // 重载 #1
+int f(Derived&amp;); // 重载 #2
+
+int i = f(d); // d -&gt; Derived&amp; 拥有“准确匹配”等级
+              // d -&gt; Base&amp; 拥有“转换”等级
+              // 调用 f(Derived&amp;)
+}}
+因为转换序列的分级只会操作类型和值类别，所以就分级而言，{{rlp|bit field|位域}}能绑定到引用形参，但如果选择了这个函数，那么程序非良构。
+
+@1@ 标准转换序列始终''优于''{{sep}}用户定义转换序列或省略号转换序列。
+
+@2@ 用户定义转换序列始终''优于''{{sep}}{{rlp|variadic arguments|省略号转换}}序列。
+
+@3@ 标准转换序列 {{tt|S1}} ''优于''{{sep}}标准转换序列 {{tt|S2}}，条件是
+:@a@ {{tt|S1}} 是 {{tt|S2}} 的真子序列，排除左值变换；恒等转换序列被认为是任何非恒等转换的子序列，或若非如此，
+:@b@ {{tt|S1}} 的等级优于 {{tt|S2}} 的等级，或若非如此，
+:@c@ {{tt|S1}} 和 {{tt|S2}} 都绑定到某个引用形参，而它并非某个引用限定的成员函数的隐式对象形参，且 {{tt|S1}} 绑定右值引用到右值而 {{tt|S2}} 绑定左值引用到右值：
+{{source|1=
+int i;
+int f1();
+
+int g(const int&amp;);  // 重载 #1
+int g(const int&amp;&amp;); // 重载 #2
+
+int j = g(i);    // 左值 int -&gt; const int&amp; 是仅有的合法转换
+int k = g(f1()); // 右值 int -&gt; const int&amp;&amp; 优于 右值 int -&gt; const int&amp;
+}}
+:@@ 或若非如此，
+:@d@ {{tt|S1}} 和 {{tt|S2}} 都绑定到引用形参，且 {{tt|S1}} 绑定左值引用到函数而 {{tt|S2}} 绑定右值引用到函数：
+{{source|1=
+int f(void(&amp;)());  // 重载 #1
+int f(void(&amp;&amp;)()); // 重载 #2
+
+void g();
+int i1 = f(g); // 调用 #1
+}}
+:@@ 或若非如此，
+:@e@ {{tt|S1}} 与 {{tt|S2}} 仅在限定性转换有区别，且
+{{rrev multi|until1=c++20|rev1={{tt|S1}} 的结果的 cv 限定是 {{tt|S2}} 的结果的 cv 限定的真子集{{rev inl|until=c++11|，并且 {{tt|S1}} 不是{{rlp|string literal#注解|已弃用的字符串字面量数组到指针转换}}}}。|rev2=能通过限定性转换将 {{tt|S1}} 的结果转换为 {{tt|S2}} 的结果。}}
+{{source|1=
+int f(const int*);
+int f(int*);
+
+int i;
+int j = f(&amp;i); // &amp;i -&gt; int* 优于 &amp;i -&gt; const int*，调用 f(int*)
+}}
+:@@ 或若非如此，
+:@f@ {{tt|S1}} 和 {{tt|S2}} 都绑定到仅在顶层 cv 限定性有别的引用形参，而 {{tt|S1}} 的类型比 {{tt|S2}} 的 cv 限定性''更少''：
+{{source|1=
+int f(const int &amp;); // 重载 #1
+int f(int &amp;);       // 重载 #2（都是引用）
+
+int g(const int &amp;); // 重载 #1
+int g(int);         // 重载 #2
+
+int i;
+int j = f(i); // 左值 i -&gt; int&amp; 优于 左值 int -&gt; const int&amp;
+              // 调用 f(int&amp;)
+int k = g(i); // 左值 i -&gt; const int&amp; 排行为准确匹配
+              // 左值 i -&gt; 右值 int 排行为准确匹配
+              // 有歧义的重载：编译错误
+}}
+:@@ 或若非如此，
+:@g@ {{tt|S1}} 和 {{tt|S2}} 都绑定相同的引用类型“到 {{tt|T}} 的引用”，并分别具有源类型 {{tt|V1}} 和 {{tt|V2}}，且从 {{tt|V1*}} 到 {{tt|T*}} 的标准转换序列优于从 {{tt|V2*}} 到 {{tt|T*}} 的标准转换序列：
+{{source|1=
+struct Z {};
+
+struct A
+{
+    operator Z&amp;();
+    operator const Z&amp;();  // 重载 #1
+};
+
+struct B
+{
+    operator Z();
+    operator const Z&amp;&amp;(); // 重载 #2
+};
+
+const Z&amp; r1 = A();        // OK，使用 #1
+const Z&amp;&amp; r2 = B();       // OK，使用 #2
+}}
+
+@4@ 用户定义转换序列 {{tt|U1}} ''优于''{{sep}}用户定义转换序列 {{tt|U2}}，如果它们调用相同的构造函数/用户定义转换函数，或以聚合初始化初始化相同的类，而任一情况下 {{tt|U1}} 中的第二标准转换序列优于 {{tt|U2}} 中的第二标准转换序列：
+{{source|1=
+struct A
+{
+    operator short(); // 用户定义转换函数
+} a;
+
+int f(int);   // 重载 #1
+int f(float); // 重载 #2
+
+int i = f(a); // A -&gt; short，后随 short -&gt; int（等级为‘提升’）
+              // A -&gt; short，后随 short -&gt; float（等级为‘转换’）
+              // 调用 f(int)
+}}
+
+@5@ 列表初始化序列 {{tt|L1}} ''优于''{{sep}}列表初始化序列 {{tt|L2}}，如果 {{tt|L1}} 初始化 {{lc|std::initializer_list}} 形参而 {{tt|L2}} 没有。
+{{source|1=
+void f1(int);                                 // #1
+void f1(std::initializer_list&lt;long&gt;);         // #2
+void g1() { f1({42}); }                       // 选择 #2
+
+void f2(std::pair&lt;const char*, const char*&gt;); // #3
+void f2(std::initializer_list&lt;std::string&gt;);  // #4
+void g2() { f2({"foo","bar"}); }              // 选择 #4
+}}
+
+{{rrev multi|
+|since1=c++11|rev1=
+@6@ 列表初始化序列 {{tt|L1}} ''优于''{{sep}}列表初始化序列 {{tt|L2}}，如果对应形参是到数组的引用且 L1 转换到“N1 个 T 的数组”，L2 转换到“N2 个 T 的数组”，而 N1 小于 N2。
+|since2=c++20|rev2=
+@6@ 列表初始化序列 {{tt|L1}} ''优于''{{sep}}列表初始化序列 {{tt|L2}}，如果 L1 与 L2 均转换到相同元素类型的数组，且
+* L1 所初始化的元素数 N1 小于 L2 所初始化的元素数 N2，或 
+* N1 等于 N2，但 L2 转换到未知边界数组而 L1 没有。
+{{source|1=
+void f(int    (&amp;&amp;)[] ); // 重载 #1
+void f(double (&amp;&amp;)[] ); // 重载 #2
+void f(int    (&amp;&amp;)[2]); // 重载 #3
+
+f({1});        // #1：由于转换优于 #2，由于边界优于 #3
+f({1.0});      // #2：double -&gt; double 优于 double -&gt; int
+f({1.0, 2.0}); // #2：double -&gt; double 优于 double -&gt; int
+f({1, 2});     // #3：-&gt; int[2] 优于 -&gt; int[]，
+               //     而 int -&gt; int 优于 int -&gt; double
+}}
+}}
+
+如果两个转换序列因为拥有相同等级而不可区分，那么应用下列额外规则：
+@1@ 不涉及指针到 {{c/core|bool}} 或成员指针到 {{c/core|bool}} 的转换优于涉及这些的转换。&lt;!-- 无 nullptr_t，见 CWG 1781 --&gt;
+
+{{rrev|since=c++11|
+@2@ 如果底层类型固定的{{rlp|enum|枚举}}的底层类型与经提升后的底层类型不同，那么提升到它的底层类型的转换优于提升到提升后底层类型的转换。
+{{source|1=
+enum num : char { one = '0' };
+std::cout &lt;&lt; num::one; // '0'，而不是 48
+}}
+}}
+
+
+{{rrev|since=c++23|
+@3@ 在浮点类型 {{tt|FP1}} 和浮点类型 {{tt|FP2}} 之间任一方向的转换，在满足以下条件时优于 {{tt|FP1}} 和算术类型 {{tt|T3}} 之间相同方向的转换：
+* {{tt|FP1}} 的{{rlps|usual arithmetic conversions#浮点转换等级}}等于 {{tt|FP2}} 的浮点转换等级，并且
+** {{tt|T3}} 不是浮点类型，或者
+** {{tt|T3}} 是浮点转换等级与 {{tt|FP1}} 的浮点转换等级不同的浮点类型，或者
+** {{tt|FP2}} 的{{rlps|usual arithmetic conversions#浮点转换子等级}}高于 {{tt|T3}} 的浮点转换子等级。
+{{source|1=
+int f(std::float32_t);
+int f(std::float64_t);
+int f(long long);
+ 
+float x;
+std::float16_t y;
+ 
+int i = f(x); // 在 float 和 std::float32_t 的转换等级相等的实现中会调用 f(std::float32_t)
+int j = f(y); // 错误：有歧义，没有相等的转换等级
+}}
+}}
+
+@4@ 派生类指针到基类指针的转换优于派生类指针到 {{c/core|void}} 指针的转换，而基类指针到 {{c/core|void}} 的转换优于派生类指针到 {{c/core|void}} 指针的转换。
+
+@5@ 如果 {{tt|Mid}}（直接或间接）从 {{tt|Base}} 派生，而 {{tt|Derived}}（直接或间接）从 {{tt|Mid}} 派生，那么
+:@a@ {{tt|Derived*}} 到 {{tt|Mid*}} 优于 {{tt|Derived*}} 到 {{tt|Base*}}
+:@b@ {{tt|Derived}} 到 {{tt|Mid&amp;}} 或 {{tt|Mid&amp;&amp;}} 优于 {{tt|Derived}} 到 {{tt|Base&amp;}} 或 {{tt|Base&amp;&amp;}}
+:@c@ {{tt|Base::*}} 到 {{tt|Mid::*}} 优于 {{tt|Base::*}} 到 {{tt|Derived::*}}
+:@d@ {{tt|Derived}} 到 {{tt|Mid}} 优于 {{tt|Derived}} 到 {{tt|Base}}
+:@e@ {{tt|Mid*}} 到 {{tt|Base*}} 优于 {{tt|Derived*}} 到 {{tt|Base*}}
+:@f@ {{tt|Mid}} 到 {{tt|Base&amp;}} 或 {{tt|Base&amp;&amp;}} 优于 {{tt|Derived}} 到 {{tt|Base&amp;}} 或 {{tt|Base&amp;&amp;}}
+:@g@ {{tt|Mid::*}} 到 {{tt|Derived::*}} 优于 {{tt|Base::*}} 到 {{tt|Derived::*}}
+:@h@ {{tt|Mid}} 到 {{tt|Base}} 优于 {{tt|Derived}} 到 {{tt|Base}}
+
+对有歧义的转换序列的分级与用户定义转换序列相同，因为一个实参的多个转换序列只有在它们涉及不同的用户定义转换时才能存在：
+{{source|1=
+class B;
+
+class A { A (B&amp;);};         // 转换构造函数
+class B { operator A (); }; // 用户定义转换函数
+class C { C (B&amp;); };        // 转换构造函数
+
+void f(A) {} // 重载 #1
+void f(C) {} // 重载 #2
+
+B b;
+f(b); // B -&gt; A 经由构造函数或 B -&gt; A 经由函数（有歧义转换）
+      // b -&gt; C 经由构造函数（用户定义转换）
+      // 重载 #1 和 #2 的转换无法辨别；编译失败
+}}
+
+===列表初始化中的隐式转换序列===
+在{{rlp|list initialization|列表初始化}}中，实参是 {{spar|花括号初始化器列表}}，但它不是表达式，所以到就重载决议而言的形参类型的隐式转换序列以下列规则决定：
+* 如果形参类型是某聚合体 {{tt|X}} 且初始化器列表确切地由一个同类型或它的派生类（可有 cv 限定）的元素组成，那么隐式转换序列是将该元素转换到形参类型所要求的序列。
+* 否则，如果形参类型是到字符数组的引用且初始化器列表拥有单个元素，元素是类型适当的字符串字面量，那么隐式转换序列是恒等转换。
+* 否则，如果形参类型是 {{c/core|std::initializer_list&lt;X&gt;}} 且存在从每个初始化器列表元素到 {{tt|X}} 的非窄化隐式转换，那么就重载决议而言的隐式转换序列是所需的最坏转换。如果 {{spar|花括号初始化器列表}} 为空，那么转换序列是恒等转换。
+{{source|1=
+struct A
+{
+    A(std::initializer_list&lt;double&gt;);          // #1
+    A(std::initializer_list&lt;complex&lt;double&gt;&gt;); // #2
+    A(std::initializer_list&lt;std::string&gt;);     // #3
+};
+A a{1.0, 2.0};     // 选择 #1（右值 double -&gt; double：恒等转换）
+
+void g(A);
+g({"foo", "bar"}); // 选择 #3（左值 const char[4] -&gt; std::string：用户定义转换）
+}}
+* 否则，如果形参类型是“N 个 T 的数组”（这只对到数组的引用发生），那么初始化器列表必须有 N 个或更少的元素，且所用的隐式转换序列是将列表（或空花括号对，如果 {{tt|{}&lt;!----&gt;}} 小于 N）的每个元素转换到 {{tt|T}} 所需的最坏隐式转换序列。
+{{rrev|since=c++20|
+* 否则，如果形参类型是“T 的未知边界数组”（这只对到数组的引用发生），那么所用的隐式转换序列是将列表的每个元素转换到 {{tt|T}} 所需的最坏隐式转换序列。
+}}
+{{source|1=
+typedef int IA[3];
+
+void h(const IA&amp;);
+void g(int (&amp;&amp;)[])
+
+h({1, 2, 3}); // int -&gt; int 恒等转换
+g({1, 2, 3}); // C++20 起同上
+}}
+* 否则，如果形参类型是非聚合类类型 {{tt|X}}，那么重载决议选取 X 的构造函数 C 以从实参初始化器列表初始化
+:* 如果 C 是非 initializer_list 构造函数且而该初始化器列表拥有单个元素，它的类型是可有 cv 限定的 X，那么隐式转换序列具有''准确匹配''{{sep}}等级。如果该初始化器列表拥有单个元素，它具有可有 cv 限定的派生自 X 的类型，那么隐式转换序列具有''转换''{{sep}}等级。（注意它和聚合体的区别：聚合体在考虑{{rlp|aggregate initialization|聚合初始化}}前直接从单元素初始化器列表进行初始化，而非聚合体在考虑任何其他构造函数之前先考虑 initializer_list 构造函数）
+:* 否则，隐式转换序列是以恒等转换作为第二标准转换序列的用户定义转换序列。
+
+如果有多个构造函数可行，但是没有一个优于其他所有构造函数，那么隐式转换序列是有歧义的转换序列。
+{{source|1=
+struct A { A(std::initializer_list&lt;int&gt;); };
+void f(A);
+
+struct B { B(int, double); };
+void g(B);
+
+g({'a', 'b'});    // 调用 g(B(int,double))，用户定义转换
+// g({1.0, 1,0}); // 错误：double-&gt;int 是窄化转换，不能在列表初始化中出现
+
+void f(B);
+// f({'a', 'b'}); // f(A) 与 f(B) 都是用户定义转换
+}}
+* 否则，如果形参类型是可按照{{rlp|aggregate initialization|聚合初始化}}从初始化器列表初始化的聚合体，那么隐式转换序列是以恒等转换作为第二标准转换序列的用户定义转换序列：
+{{source|1=
+struct A { int m1; double m2; };
+
+void f(A);
+f({'a', 'b'}); // 调用 f(A(int, double))，用户定义转换
+}}
+* 否则，如果形参是引用，那么应用引用初始化规则：
+{{source|1=
+struct A { int m1; double m2; };
+
+void f(const A&amp;);
+f({'a', 'b'}); // 创建临时量，调用 f(A(int, double))。用户定义转换
+}}
+* 否则，如果形参类型不是类且初始化器列表拥有一个元素，那么隐式转换序列是将该元素转换到形参类型所要求者。
+* 否则，如果形参类型不是类且初始化器列表没有元素，那么隐式转换序列是恒等转换。
+
+{{rrev|since=c++20|
+如果实参是指派初始化器列表，并且形参不是引用，那么只有在形参拥有聚合类型且该类型能按照{{rlp|aggregate initialization|聚合初始化}}的规则从初始化器列表初始化时，转换才可行。此时隐式转换序列是以恒等转换作为第二标准转换序列的用户定义转换序列。
+
+如果在重载决议后，聚合体各成员的声明顺序与所选择的重载不匹配，那么形参的初始化非良构。
+{{source|1=
+struct A { int x, y; };
+struct B { int y, x; };
+
+void f(A a, int); // #1
+void f(B b, ...); // #2
+void g(A a);      // #3
+void g(B b);      // #4
+
+void h()
+{
+    f({.x = 1, .y = 2}, 0); // OK：调用 #1
+    f({.y = 2, .x = 1}, 0); // 错误：选择 #1，初始化由于不匹配的成员顺序失败
+    g({.x = 1, .y = 2});    // 错误：在 #3 和 #4 间有歧义
+}
+}}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1|std=C++98|before=选择可能有（来自不同作用域的）不同默认实参的相同函数时的行为未指明|after=此时程序非良构}}
+{{dr list item|wg=cwg|dr=83|std=C++98|before=从字符串字面量到 {{c/core|char*}} 的转换序列优于从它&lt;br&gt;到 {{c/core|const char*}} 的转换序列，即使前者已弃用|after=降低该已弃用的转换序列的排行&lt;br&gt;（该隐式转换已在 C++11 移除）}}
+{{dr list item|wg=cwg|dr=162|std=C++98|before=在 {{tt|&amp;F(args)}} 的场合下，{{tt|F}} 命名的重载集包含非静态成员函数时不合法|after=该场合下在重载决议选择了&lt;br&gt;非静态成员函数时才不合法}}
+{{dr list item|wg=cwg|dr=233|std=C++98|before=在带用户定义转换的重载决议中对引用和指针的处理方式不一致|after=处理方式保持一致}}
+{{dr list item|wg=cwg|dr=280|std=C++98|before=不会将在不可访问基类中声明的转换函数&lt;br&gt;对应的代表调用函数添加到候选函数集|after=移除该访问约束，但如果重载决议&lt;br&gt;选中了代表调用函数而它对应的转换&lt;br&gt;函数无法被调用，那么程序非良构}}
+{{dr list item|wg=cwg|dr=415|std=C++98|before=当函数模板成为候选时，它的特化会通过模板实参推导进行实例化|after=此时不会进行实例化，&lt;br&gt;改为合成这些特化的声明}}
+{{dr list item|wg=cwg|dr=495|std=C++98|before=但实参的隐式转换一样好时，非模板转换函数总是&lt;br&gt;优于转换函数模板，即使后者的标准转换序列更好|after=先比较标准转换序列，&lt;br&gt;再比较特化程度}}
+{{dr list item|wg=cwg|dr=1307|std=C++11|before=未指定基于数组大小的重载决议|after=可能时较短的数组较好}}
+{{dr list item|wg=cwg|dr=1328|std=C++11|before=在绑定引用到转换结果时，候选函数的确定方法不明确|after=使之明确}}
+{{dr list item|wg=cwg|dr=1374|std=C++98|before=在比较标准转换序列时会先检查限定性转换，再检查引用绑定|after=调换顺序}}
+{{dr list item|wg=cwg|dr=1385|std=C++11|before=声明带有引用限定符的非 explicit 的用户定义转换函数没有对应的代表函数|after=它现在有对应的代表函数}}
+{{dr list item|wg=cwg|dr=1467|std=C++11|before=略去了聚合体和数组的同类型列表初始化|after=定义这种初始化}}
+{{dr list item|wg=cwg|dr=1601|std=C++11|before=从 enum 转换到它的底层类型不偏好固定的底层类型|after=底层类型比提升后的该类型更受偏好}}
+{{dr list item|wg=cwg|dr=1608|std=C++98|before=实参类型是 {{tt|T1}} 的一元运算符 {{tt|@}} 的成员&lt;br&gt;候选集在 {{tt|T1}} 是当前正在定义的类时为空|after=此时该集是 {{tt|T1::operator@}}&lt;br&gt;的有限定名字查找的结果}}
+{{dr list item|wg=cwg|dr=1687|std=C++98|before=当重载决议选中内建候选时，操作数的转换没有限制|after=只转换类类型操作数，并&lt;br&gt;禁用第二段标准转换序列}}
+{{dr list item|wg=cwg|dr=2052|std=C++98|before=非良构的合成函数模板特化也会加入候选集，导致程序非良构|after=不会加入候选集}}
+{{dr list item|wg=cwg|dr=2076|std=C++11|before={{cwg|1467}} 的解决方案导致列表初始化中双层&lt;br&gt;初始化器列表中的单个初始化器也适用用户定义转换|after=此时不适用用户定义转换}}
+{{dr list item|wg=cwg|dr=2137|std=C++11|before=从 {{c|{X}&lt;!----&gt;}} 列表初始化 {{tt|X}} 时，初始化器列表构造函数输给复制构造函数|after=非聚合体首先考虑初始化器列表}}
+{{dr list item|wg=cwg|dr=2273|std=C++11|before=继承和非继承构造函数之间没有决胜规则|after=非继承构造函数胜出}}
+{{dr list item|wg=cwg|dr=2673|std=C++20|before=拥有的形参列表与非成员重写候选的相同的内建候选会添加到内建候选列表|after=不会添加}}
+{{dr list item|wg=cwg|dr=2712|std=C++98|before=当考虑内建的赋值运算符时，要求首个形参&lt;br&gt;不能绑定临时量，但实际上已经无法绑定&lt;ref&gt;内建的赋值运算符的首个形参的类型是“到可有 volatile 限定的类型 {{tt|T}} 的引用”。具有该类型的引用无法绑定临时量。&lt;/ref&gt;|after=移除该多余要求}}
+{{dr list item|wg=cwg|dr=2713|std=C++20|before=有关指派初始化器列表的转换限制即使在形参是引用时也会应用|after=此时不会限制}}
+{{dr list item|wg=cwg|dr=2789|std=C++23|before=在比较形参类型列表时也会包含显式对象形参|after=不包含}}
+{{dr list item|wg=cwg|dr=2856|std=C++11|before=对于在复制列表初始化的语境中的默认&lt;br&gt;初始化的重载决议只会考虑转换构造函数|after=会考虑所有构造函数}}
+{{dr list item|wg=cwg|dr=2919|std=C++98|before=通过转换进行引用初始化的候选集取决于初始化的目标类型|after=取决于转换的目标类型}}
+{{dr list item|paper=P2468R2|std=C++20|before={{c|1=a != b}} 即使在有匹配的 {{c/core|1=operator!=}} 的&lt;br&gt;情况下也会添加基于 {{c/core|1=operator==}} 的重写候选|after=此时不会添加重写候选}}
+{{dr list end}}
+&lt;references/&gt;
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=12.2|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=12.4|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=16.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=13.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=13.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=13.3|title=Overload resolution|id=over.match}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|lookup|名字查找}} 
+* {{rlp|adl|实参依赖查找}} 
+* {{rlp|template argument deduction|模板实参推导}}
+* {{rlp|sfinae|SFINAE}}
+
+{{langlinks|de|en|es|ja|ru}}

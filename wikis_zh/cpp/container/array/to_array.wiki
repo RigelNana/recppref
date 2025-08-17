@@ -1,0 +1,134 @@
+{{cpp/title|to_array}}
+{{cpp/container/array/navbar}}
+
+{{dcl begin}}
+{{dcl header|array}}
+{{dcla|num=1|since=c++20|
+template&lt; class T, std::size_t N &gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array( T (&amp;a)[N] );
+}}
+{{dcla|num=2|since=c++20|
+template&lt; class T, std::size_t N &gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array( T (&amp;&amp;a)[N] );
+}}
+{{dcl end}}
+
+从一维内建数组 {{tt|a}} 创建 {{lc|std::array}}。从 {{tt|a}} 的对应元素复制初始化 {{tt|std::array}} 的各元素。不支持复制或移动多维内建数组。
+
+@1@ 对 {{tt|0, ..., N - 1}} 中的每个 {{tt|i}}，以 {{c|a[i]}} 复制初始化结果的对应元素。若 {{c|std::is_constructible_v&lt;T, T&amp;&gt;}} 为 {{c|false}} 则此重载非良构。
+@2@ 对 {{tt|0, ..., N - 1}} 中的每个 {{tt|i}}，以 {{c|std::move(a[i])}} 移动初始化结果的对应元素。若 {{c|std::is_move_constructible_v&lt;T&gt;}} 为 {{c|false}} 则此重载非良构。
+
+{{c|std::is_array_v&lt;T&gt;}} 为 {{c|true}} 时两个重载均非良构。
+
+===参数===
+{{par begin}}
+{{par | a |要转换成 {{lc|std::array}} 的内建数组}}
+{{par hreq}}
+{{par req named | T |CopyConstructible|overload=1}}
+{{par req named | T |MoveConstructible|overload=2}}
+{{par end}}
+
+===返回值===
+@1@ {{c|std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;{ a[0], ..., a[N - 1] } }}
+@2@ {{c|std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;{ std::move(a[0]), ..., std::move(a[N - 1]) } }}
+
+===注解===
+有一些不能使用 {{lc|std::array}} 的[[cpp/language/class template argument deduction|类模板实参推导]]而 {{tt|to_array}} 可用的情况：
+* {{tt|to_array}} 能在手工指定 {{tt|std::array}} 的元素类型并推导长度时指定，这在想要隐式转换时会更好。
+* {{tt|to_array}} 能复制字符串字面量，而类模板实参推导构造单个指向其首字符的 {{tt|std::array}}。
+
+{{source|1=
+std::to_array&lt;long&gt;({3, 4}); // OK ：隐式转换
+// std::array&lt;long&gt;{3, 4};   // 错误：模板实参太少
+std::to_array("foo");        // 创建 std::array&lt;char, 4&gt;{'f', 'o', 'o', '\0'}
+std::array{"foo"};           // 创建 std::array&lt;const char*, 1&gt;{"foo"}
+}}
+
+{{feature test macro|__cpp_lib_to_array|std=C++20|value=201907L|{{tt|std::to_array}}}}
+
+===可能的实现===
+{{eq impl
+|title1=to_array (1)|ver1=1|1=
+namespace detail
+{
+    template&lt;class T, std::size_t N, std::size_t... I&gt;
+    constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;
+        to_array_impl(T (&amp;a)[N], std::index_sequence&lt;I...&gt;)
+    {
+        return {&lt;!----&gt;{a[I]...}&lt;!----&gt;};
+    }
+}
+
+template&lt;class T, std::size_t N&gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array(T (&amp;a)[N])
+{
+    return detail::to_array_impl(a, std::make_index_sequence&lt;N&gt;{});
+}
+|title2=to_array (2)|ver2=2|2=
+namespace detail
+{
+    template&lt;class T, std::size_t N, std::size_t... I&gt;
+    constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt;
+        to_array_impl(T (&amp;&amp;a)[N], std::index_sequence&lt;I...&gt;)
+    {
+        return {&lt;!----&gt;{std::move(a[I])...}&lt;!----&gt;};
+    }
+}
+
+template&lt;class T, std::size_t N&gt;
+constexpr std::array&lt;std::remove_cv_t&lt;T&gt;, N&gt; to_array(T (&amp;&amp;a)[N])
+{
+    return detail::to_array_impl(std::move(a), std::make_index_sequence&lt;N&gt;{});
+}
+}}
+
+===示例===
+{{example|code=
+#include &lt;array&gt;
+#include &lt;memory&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+// 创建 string_view 的 constexpr 数组
+constexpr auto w1n = std::to_array&lt;std::string_view&gt;({
+    "Mary", "Patricia", "Linda", "Barbara", "Elizabeth", "Jennifer"
+});
+static_assert(std::is_same_v&lt;decltype(w1n), const std::array&lt;std::string_view, 6&gt;&gt;);
+static_assert(w1n.size() == 6 and w1n[5] == "Jennifer");
+
+int main()
+{
+    // 复制字符串字面量
+    auto a1 = std::to_array("foo");
+    static_assert(a1.size() == 4);
+
+    // 推导元素类型和长度
+    auto a2 = std::to_array({0, 2, 1, 3});
+    static_assert(std::is_same_v&lt;decltype(a2), std::array&lt;int, 4&gt;&gt;);
+
+    // 推导长度而元素类型指定
+    // 发生隐式转换
+    auto a3 = std::to_array&lt;long&gt;({0, 1, 3});
+    static_assert(std::is_same_v&lt;decltype(a3), std::array&lt;long, 3&gt;&gt;);
+
+    auto a4 = std::to_array&lt;std::pair&lt;int, float&gt;&gt;(
+        {&lt;!----&gt;{3, 0.0f}, {4, 0.1f}, {4, 0.1e23f}&lt;!----&gt;});
+    static_assert(a4.size() == 3);
+
+    // 创建不可复制的 std::array
+    auto a5 = std::to_array({std::make_unique&lt;int&gt;(3)});
+    static_assert(a5.size() == 1);
+
+    // 错误：不支持复制多维数组
+    // char s[2][6] = {"nice", "thing"};
+    // auto a6 = std::to_array(s);
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/dsc make_array}}
+{{dsc end}}
+
+{{langlinks|en|ja|ru}}

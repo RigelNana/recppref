@@ -1,0 +1,205 @@
+{{cpp/title|remove|remove_if}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=版本_1|constexpr=c++20|until=c++26|
+template&lt; class ForwardIt, class T &gt;
+ForwardIt remove( ForwardIt first, ForwardIt last, const T&amp; value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ForwardIt, class T = typename std::iterator_traits
+                                         &lt;ForwardIt&gt;::value_type &gt;
+constexpr ForwardIt remove( ForwardIt first, ForwardIt last,
+                            const T&amp; value );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++17|until=c++26|
+template&lt; class ExecutionPolicy, class ForwardIt, class T &gt;
+ForwardIt remove( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt last, const T&amp; value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ExecutionPolicy, class ForwardIt,
+          class T = typename std::iterator_traits
+                        &lt;ForwardIt&gt;::value_type &gt;
+ForwardIt remove( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt last, const T&amp; value );
+}}
+{{dcl rev end}}
+{{dcla|num=3|constexpr=c++20|
+template&lt; class ForwardIt, class UnaryPred &gt;
+ForwardIt remove_if( ForwardIt first, ForwardIt last, UnaryPred p );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt, class UnaryPred &gt;
+ForwardIt remove_if( ExecutionPolicy&amp;&amp; policy,
+                     ForwardIt first, ForwardIt last, UnaryPred p );
+}}
+{{dcl end}}
+
+从范围 {{range|first|last}} 移除所有满足特定判别标准的元素，并返回范围新结尾的尾后迭代器。
+
+@1@ 移除所有等于（用 {{c/core|1=operator==}} 比较）{{c|value}} 的元素。
+
+@3@ 移除所有 {{c|p}} 对于它返回 {{c|true}} 的元素。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+
+{{rev begin}}
+{{rev|until=c++11|
+如果 {{tt|ForwardIt}} 的[[cpp/iterator#类型与可写性|值类型]]不{{named req|CopyAssignable}}，那么行为未定义。
+}}
+{{rev|since=c++11|
+如果 {{c|*first}} 的类型不{{named req|MoveAssignable}}，那么行为未定义。
+}}
+{{rev end}}
+
+===解释===
+移除元素是通过将范围内的元素移动位置，使得不需要被移除的元素会在范围的开头出现的方式实现的。
+* 元素通过{{rev inl|until=c++11|[[cpp/language/copy assignment|复制赋值]]}}{{rev inl|since=c++11|[[cpp/language/move assignment|移动赋值]]}}实现。
+* 移除操作是稳定的：不需要被移除的元素的相对顺序保持不变。
+* 移除操作不会缩短 {{range|first|last}} 的底层序列。给定 {{c|result}} 为返回的迭代器：
+:* {{range|result|last}} 中的所有迭代器仍然[[cpp/iterator#可解性与有效性|可解引用]]。
+{{rrev|since=c++11|
+:* {{range|result|last}} 的所有元素都具有有效但未指定的状态，这是因为移动赋值会通过将原来在该范围内的元素移走的方式来销毁元素。
+}}
+
+===参数===
+{{par begin}}
+{{par range|3=要处理的}}
+{{par|value|要移除的元素值}}
+{{par exec pol}}
+{{par pred1|p|如果应该移除元素|p1=ForwardIt}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|UnaryPredicate|Predicate}}
+{{par end}}
+
+===返回值===
+新范围的尾后迭代器（如果它不是 {{c|end}}，那么它指向未指定值，而此迭代器与 {{c|end}} 之间的迭代器所指向的任何值也是这样）。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+@1,2@ 应用 {{mathjax-or|\(\scriptsize N\)|N}} 次 {{c/core|1=operator==}} 进行比较。
+@3,4@ 应用 {{mathjax-or|\(\scriptsize N\)|N}} 次谓词 {{c|p}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=remove (1)|ver1=1|1=
+template&lt;class ForwardIt, class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type&gt;
+ForwardIt remove(ForwardIt first, ForwardIt last, const T&amp; value)
+{
+    first = std::find(first, last, value);
+    if (first != last)
+        for (ForwardIt i = first; ++i != last;)
+            if (!(*i == value))
+                *first++ = std::move(*i);
+    return first;
+}
+|title2=remove_if (3)|ver2=3|2=
+template&lt;class ForwardIt, class UnaryPred&gt;
+ForwardIt remove_if(ForwardIt first, ForwardIt last, UnaryPred p)
+{
+    first = std::find_if(first, last, p);
+    if (first != last)
+        for (ForwardIt i = first; ++i != last;)
+            if (!p(*i))
+                *first++ = std::move(*i);
+    return first;
+}
+}}
+
+===注解===
+调用 {{tt|remove}} 之后通常跟随调用容器的 {{tt|erase}} 成员函数来从容器中实际移除元素。这两个调用一并被称为{{enwiki|erase-remove idiom|擦除移除手法}}。
+
+{{rrev|since=c++20|
+以下非成员函数也可以达到相同的效果：
+* {{lc|std::erase}}，它对所有标准序列容器都有[[cpp/container#非成员函数表|重载]]。
+* {{lc|std::erase_if}}，它对所有标准容器都有[[cpp/container#非成员函数表|重载]]。
+}}
+
+同名的容器[[cpp/container#成员函数表|成员函数]] {{l2tt|cpp/container/list/remove}}、{{l2tt|cpp/container/list/remove|remove_if}}、{{l2tt|cpp/container/forward_list/remove}} 和 {{l2tt|cpp/container/forward_list/remove|remove_if}} 擦除被移除的元素。
+
+这些算法通常不能用于如 {{lc|std::set}} 与 {{lc|std::map}} 的关联容器，因为它们的迭代器类型并不解引用为{{named req|MoveAssignable}}类型（这些容器中的键不可修改）。
+
+标准库也在 {{header|cstdio}} 中定义了一个 {{ltt std|cpp/io/c/remove}} 重载，它接收的是 {{c/core|const char*}} 并用于删除文件。
+
+因为 {{tt|std::remove}} 以引用接收 {{c|value}}，如果它引用了范围 {{range|first|last}} 中的元素，那么它可能有预期外的行为。
+
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|1,2}}}}
+
+===示例===
+{{example
+|下列代码从字符串移除所有空格，通过迁移所有非空格字符到左侧，再擦除其他内容。这是{{enwiki|erase-remove idiom|擦除移除手法}}的样例。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;cctype&gt;
+#include &lt;complex&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::string str1{"Quick  Red  Dog"};
+    std::cout &lt;&lt; "1) " &lt;&lt; std::quoted(str1) &lt;&lt; '\n';
+    const auto noSpaceEnd = std::remove(str1.begin(), str1.end(), ' ');
+    std::cout &lt;&lt; "2) " &lt;&lt; std::quoted(str1) &lt;&lt; '\n';
+    
+    // 空格只是逻辑上从字符串被移除。
+    // 通过视图可以发现原始字符串并没有缩小：
+    std::cout &lt;&lt; "3) " &lt;&lt; std::quoted(std::string_view(str1.begin(), noSpaceEnd))
+              &lt;&lt; "，大小：" &lt;&lt; str1.size() &lt;&lt; '\n';
+    
+    str1.erase(noSpaceEnd, str1.end());
+    
+    // 物理移除字符串中的空格。
+    std::cout &lt;&lt; "4) " &lt;&lt; std::quoted(str1) &lt;&lt; "，大小：" &lt;&lt; str1.size() &lt;&lt; '\n';
+
+    std::string str2 = "Jumped\n Over\tA\vLazy \t  Fox\r\n";
+    str2.erase(std::remove_if(str2.begin(), 
+                              str2.end(),
+                              [](unsigned char x){ return std::isspace(x); }),
+               str2.end());
+    std::cout &lt;&lt; "5) " &lt;&lt; std::quoted(str2) &lt;&lt; '\n';
+
+    std::vector&lt;std::complex&lt;double&gt;&gt; nums{&lt;!----&gt;{2, 2}, {1, 3}, {4, 8}&lt;!----&gt;};
+    #ifdef __cpp_lib_algorithm_default_value_type
+        nums.erase(std::remove(nums.begin(), nums.end(), {1, 3}), nums.end());
+    #else
+        nums.erase(std::remove(nums.begin(), nums.end(), std::complex&lt;double&gt;{1, 3}),
+                   nums.end());
+    #endif
+    assert((nums == std::vector&lt;std::complex&lt;double&gt;&gt;{&lt;!----&gt;{2, 2}, {4, 8}&lt;!----&gt;}));
+}
+|output=
+1) "Quick  Red  Dog"
+2) "QuickRedDog Dog"
+3) "QuickRedDog"，大小：15
+4) "QuickRedDog"，大小：11
+5) "JumpedOverALazyFox"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=283|std=C++98|before={{tt|T}} 需要是{{named req|EqualityComparable}}&lt;br&gt;的，但是 {{tt|ForwardIt}} 的值类型不一定是 {{tt|T}}|after=改成要求 {{tt|ForwardIt}} 的值类型是&lt;br&gt;{{named req|CopyAssignable}}的}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/dsc unique}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

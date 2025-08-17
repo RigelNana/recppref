@@ -1,0 +1,294 @@
+{{title|{{tt|constexpr}} 说明符 {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+:*{{ttb|constexpr}} - 指定变量{{rev inl|since=c++26|、{{rlp|structured binding|结构化绑定}}}}或函数的值可以在{{rlp|constant expression|常量表达式}}中出现
+
+===解释===
+{{c/core|constexpr}} 说明符声明可以在编译时对实体求值。这些实体（给定了合适的函数实参的情况下）即可用于需要编译期{{rlp|constant expression|常量表达式}}的地方。
+
+对象{{rev inl|until=c++14|或非静态成员函数}}声明中的 {{c/core|constexpr}} 说明符蕴含 {{c/core|const}}。
+
+函数{{rev inl|since=c++17|或{{rlp|static|静态}}数据成员}}首个声明中的 {{c/core|constexpr}} 说明符蕴含 {{c/core|inline}}。如果函数或函数模板的一个声明拥有 {{c/core|constexpr}} 说明符，那么它的所有声明都必须含有该说明符。
+
+{{anchor|constexpr 变量}}
+==={{c/core|constexpr}} 变量===
+如果以下条件都满足，那么变量{{rev inl|since=c++14|或变量模板}}可声明为 {{c/core|constexpr}}：
+* 该条声明是{{rlp|definition|定义}}。
+* 它具有{{rlps|constant expression#字面类型}}。
+* 它被（这条声明）初始化。
+{{rev begin}}
+{{rev|until=c++26|
+* 它的初始化的{{rlps|expressions#完整表达式}}是{{rlp|constant expression|常量表达式}}。
+}}
+{{rev|since=c++26|
+* 它{{rlp|constant expression#常量初始化实体|可常量初始化}}。
+}}
+{{rev end}}
+{{rrev|since=c++20|{{anchor|常量析构}}
+* 它具有常量析构，即满足以下条件之一：
+:* 它不是类类型或它的（可能多维的）数组。
+:* 它是带有 {{c/core|constexpr}} 析构函数的类类型或它的（可能多维的）数组，并且对于作用仅为销毁该对象的虚设表达式 {{c|e}}，如果该对象与它的非 mutable 子对象（但不含它的 mutable 子对象）的生存期始于 {{c|e}} 内，那么 {{c|e}} 是{{rlps|constant expression#核心常量表达式}}。
+
+如果 {{c/core|constexpr}} 变量不是{{rlp|tu local|翻译单元局部}}的，那么它不应被初始化为指代可用于常量表达式的翻译单元局部实体，也不能有指代这种实体的子对象。这种初始化在{{rlp|modules|模块接口单元}}（在它的{{rlps|modules#私有模块片段}}外，如果存在）或模块分区中被禁止，并在任何其他语境中被弃用。
+}}
+
+{{anchor|constexpr 函数}}
+==={{c/core|constexpr}} 函数===
+函数或函数模板可以声明为 {{c/core|constexpr}}。
+
+满足以下全部条件时，函数''适于 constexpr''：
+{{rev begin}}
+{{rev|until=c++20|
+* 它不是{{rlp|virtual|虚}}函数。
+}}
+{{rev|until=c++23|
+* 它的返回类型（如果存在）是{{rlps|constant expression#字面类型}}。
+* 它的每个形参类型都是字面类型。
+}}
+{{rev|since=c++20|
+* 它不是{{rlp|coroutines|协程}}。
+}}
+* 如果它是构造函数{{rev inl|since=c++20|或析构函数}}，那么它的类没有任何{{rlps|derived class#虚基类}}。
+{{rev end}}
+{{rev begin}}
+{{rev|until=c++14|
+* 它的函数体是 {{c|1== default}}、{{c|1== delete}} 或者只{{rlp|statements#子语句|包围}}下列内容的复合语句：
+:* {{rlp|statements#表达式语句|空语句}}
+:* {{rlpt|static_assert}} 声明
+:* 不定义类或枚举的 {{rlpt|typedef}} 声明及{{rlp|type alias|别名}}声明
+:* {{rlp|namespace#using 声明|{{c/core|using}} 声明}}
+:* {{rlp|namespace#using 指令|{{c/core|using}} 指令}}
+:* 当函数不是构造函数时，有恰好一条 {{rlpt|return}} 语句
+}}
+{{rev|since=c++14|until=c++23|
+* 它的函数体是 {{c|1== default}}、{{c|1== delete}} 或者'''不'''{{rlp|statements#子语句|包围}}下列内容的复合语句：
+:* {{rlp|goto}} 语句
+:* 带有除 {{c/core|case}} 和 {{c/core|default}} 之外的{{rlp|statements#带标号语句|标号}}的语句
+{{rrev|until=c++20|
+:* {{rlp|try|{{c/core|try}} 块}}
+:* {{rlp|asm|内联汇编}}声明
+:* {{rlp|default initialization|不进行初始化}}的变量定义
+}}
+:* 非字面类型的变量定义
+:* 静态或线程{{rlp|storage duration|存储期}}变量的定义
+}}
+{{rev end}}
+
+除了实例化的 {{c/core|constexpr}} 函数之外，非模板化的 {{c/core|constexpr}} 函数必须适于 constexpr。
+
+{{rrev|until=c++23|
+对于既未预置也未弃置的非构造函数 {{c/core|constexpr}} 函数，如果不存在可使得函数调用可作为{{rlps|constant expression#核心常量表达式}}的子表达式而求值的实参值，那么程序非良构，不要求诊断。
+
+对于模板化的 {{c/core|constexpr}} 函数，如果该函数/类模板不存在可使得该模板化的函数被当做非模板化函数时适于 constexpr 的特化，则程序非良构，不要求诊断。
+}}
+
+在给定语境中调用 {{c/core|constexpr}} 函数所产生的结果，与在相同语境中调用等价的非 {{c/core|constexpr}} 函数的结果，除了以下方面外都相同：
+* {{c/core|constexpr}} 函数的调用可以出现在{{rlp|constant expression|常量表达式}}中。
+* 常量表达式中不会进行{{rlp|copy elision|复制消除}}。
+
+{{anchor|constexpr 构造函数}}
+==={{c/core|constexpr}} 构造函数===
+在 {{c/core|constexpr}} 函数的要求之上，构造函数还要满足以下所有条件使其适于 constexpr：
+{{rrev|until=c++23|
+* 它的函数体是 {{c|1== delete;}}，或者满足下列额外要求：
+{{rrev|until=c++20|
+:* 如果所属类是带有变体成员的{{rlp|union|联合体}}，那么恰好有一个变体成员被初始化。
+:* 如果所属类是个{{rlp|union#联合体式的类|联合体式的类}}，但并非联合体，那么它的每个带有变体成员的匿名联合体成员都恰好有一个成员被初始化。
+:* 它的每个非变体非静态数据成员和基类子对象都被初始化。
+}}
+:* 如果该构造函数是个{{rlps|constructor#委托构造函数}}，那么它的目标构造函数是 {{c/core|constexpr}} 构造函数。
+:* 如果该构造函数是个非委托构造函数，那么所选中的每个用以初始化非静态数据成员和基类子对象的构造函数都是 {{c/core|constexpr}} 构造函数。
+}}
+* 所属类没有任何{{rlps|derived class#虚基类}}。
+
+{{rrev|until=c++23|
+对于既不是预置的也未被模板化的 {{c/core|constexpr}} 构造函数，如果不存在可使得函数调用可作为属于{{rlp|constant expression|常量表达式}}的某个对象的初始化完整表达式的子表达式而求值的实参值，那么程序非良构，不要求诊断。
+}}
+
+{{anchor|constexpr 析构函数}}
+==={{c/core|constexpr}} 析构函数===
+{{rev begin}}
+{{rev|until=c++20|
+析构函数不能是 {{c/core|constexpr}} 的，但能在常量表达式中隐式调用{{rlp|destructor#平凡析构函数|平凡析构函数}}。
+}}
+{{rev|since=c++20|
+在 {{c/core|constexpr}} 函数的要求之上，析构函数还要满足以下所有条件使其适于 constexpr：
+
+{{rrev|until=c++23|
+* 对于类类型或它的（可能多维的）数组的每个子对象，该类类型有一个 {{c/core|constexpr}} 析构函数。
+}}
+* 所属类没有任何虚基类。
+}}
+{{rev end}}
+
+===注解===
+{{rrev|until=c++17|
+因为 {{rlpt|noexcept}} 运算符始终对常量表达式返回 {{c|true}}，所以它可以用于检查具体特定的 {{c/core|constexpr}} 函数调用是否采用常量表达式分支：
+{{source|1=
+constexpr int f(); 
+constexpr bool b1 = noexcept(f()); // false，constexpr 函数未定义
+constexpr int f() { return 0; }
+constexpr bool b2 = noexcept(f()); // true，f() 是常量表达式
+}}
+}}
+
+{{rrev|since=c++23|
+可以写出所有调用都不满足核心常量表达式要求的 {{c/core|constexpr}} 函数：
+
+{{source|1=
+void f(int&amp; i) // 不是 constexpr 函数
+{
+    i = 0;
+}
+
+constexpr void g(int&amp; i) // C++23 起良构
+{
+    f(i); // 无条件调用 f，不可能是常量表达式
+}
+}}
+}}
+
+{{c/core|constexpr}} 构造函数允许用于非字面类型的类。例如，{{lc|std::shared_ptr}} 的默认构造函数是 {{c/core|constexpr}} 的，允许进行{{rlp|constant initialization|常量初始化}}。
+
+引用变量可声明为 {{c/core|constexpr}}（它的初始化式必须是{{rlp|constant expression#常量表达式|引用常量表达式}}）：
+{{source|1=
+static constexpr int const&amp; x = 42; // 到 const int 对象的 constexpr 引用
+                                    // （该对象拥有静态存储期，因为静态引用延长了生存期）
+}}
+
+{{rrev|since=c++20|1=
+尽管在 {{c/core|constexpr}} 函数中允许 {{c/core|try}} 块与内联汇编，但是常量表达式中仍然不允许抛出{{rev inl|since=c++26|未捕获}}异常或执行汇编。
+
+如果变量拥有常量析构，那么无需为调用它的析构函数而生成机器码，即使它的析构函数不平凡。
+
+非 lambda、非特殊成员且非模板化的 {{c/core|constexpr}} 函数不能隐式变为立即函数。用户需要将之显式标为 {{c/core|consteval}} 以使这样的函数定义良构。
+}}
+{{ftm begin|core=1|std=1|comment=1|sort=1}}
+{{ftm|value=200704L|std=C++11|__cpp_constexpr|rowspan="9"|{{c/core|constexpr}}}}
+{{ftm|value=201304L|std=C++14|-|[[#relaxed-constexpr|放宽 {{c/core|constexpr}}]]、[[#constexpr-method-is-const|非 {{c/core|const}} 的 {{c/core|constexpr}} 方法]]}}
+{{ftm|value=201603L|std=C++17|-|{{c/core|constexpr}} {{rlp|lambda|lambda 表达式}}}}
+{{ftm|value=201907L|std=C++20|-| {{c/core|constexpr}} 函数中的平凡{{rlp|default initialization|默认初始化}}和{{rlp|asm|汇编声明}}}}
+{{ftm|value=202002L|std=C++20|-|在常量求值中改变联合体的活跃成员}}
+{{ftm|value=202110L|std=C++23|-|{{c/core|constexpr}} 函数中的非{{rlps|constant expression#字面类型}}变量、标号和 {{ltt|cpp/language|goto}} 语句}}
+{{ftm|value=202207L|std=C++23|-|放宽一些 {{c/core|constexpr}} 限制}}
+{{ftm|value=202211L|std=C++23|-|{{c/core|constexpr}} 函数中允许 {{c/core|static}} 的{{c/core|constexpr}} 变量}}
+{{ftm|value=202306L|std=C++26|-|从 {{c/core|void*}} 进行 {{c/core|constexpr}} 转型：走向 {{c/core|constexpr}} 类型擦除}}
+{{ftm|value=201711L|std=C++11)&lt;br&gt;(DR|__cpp_constexpr_in_decltype|当{{rlp|constant expression#常量求值所需要的函数与变量|被常量求值所需要}}时，生成函数或变量的定义}}
+{{ftm|value=201907L|std=C++20|__cpp_constexpr_dynamic_alloc|{{c/core|constexpr}} 函数中的动态存储期操作}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/constexpr}}
+
+===示例===
+{{example
+|定义 C++11/14 的 {{c/core|constexpr}} 函数用以计算阶乘；定义扩展字符串字面量的字面类型：
+|code=
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+// C++11 constexpr 函数使用递归而非迭代
+constexpr int factorial(int n)
+{
+    return n &lt;= 1 ? 1 : (n * factorial(n - 1));
+}
+
+// C++14 constexpr 函数可使用局部变量和循环
+#if __cplusplus &gt;= 201402L
+constexpr int factorial_cxx14(int n)
+{
+    int res = 1;
+    while (n &gt; 1)
+        res *= n--;
+    return res;
+}
+#endif // C++14
+
+// 字面类
+class conststr
+{
+    const char* p;
+    std::size_t sz;
+public:
+    template&lt;std::size_t N&gt;
+    constexpr conststr(const char(&amp;a)[N]): p(a), sz(N - 1) {}
+    
+    // constexpr 函数通过抛异常来提示错误
+    // C++11 中，它们必须用条件运算符 ?: 来这么做
+    constexpr char operator[](std::size_t n) const
+    {
+        return n &lt; sz ? p[n] : throw std::out_of_range("");
+    }
+    
+    constexpr std::size_t size() const { return sz; }
+};
+
+// C++11 constexpr 函数必须把一切放在单条 return 语句中
+// （C++14 无此要求）
+constexpr std::size_t countlower(conststr s, std::size_t n = 0,
+                                             std::size_t c = 0)
+{
+    return n == s.size() ? c :
+        'a' &lt;= s[n] &amp;&amp; s[n] &lt;= 'z' ? countlower(s, n + 1, c + 1)
+                                   : countlower(s, n + 1, c);
+}
+
+// 输出要求编译时常量的函数，用于测试
+template&lt;int n&gt;
+struct constN
+{
+    constN() { std::cout &lt;&lt; n &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "4! = ";
+    constN&lt;factorial(4)&gt; out1; // 在编译时计算
+    
+    volatile int k = 8; // 使用 volatile 防止优化
+    std::cout &lt;&lt; k &lt;&lt; "! = " &lt;&lt; factorial(k) &lt;&lt; '\n'; // 运行时计算
+    
+    std::cout &lt;&lt; "\"Hello, world!\" 里小写字母的个数是 ";
+    constN&lt;countlower("Hello, world!")&gt; out2; // 隐式转换为 conststr
+    
+    constexpr int a[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+    constexpr int length_a = sizeof a / sizeof(int); // C++17 中为 std::size(a)，
+                                                      // C++20 中为 std::ssize(a)
+    std::cout &lt;&lt; "长度为 " &lt;&lt; length_a &lt;&lt; " 的数组中各元素为：";
+    for (int i = 0; i &lt; length_a; ++i)
+        std::cout &lt;&lt; a[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+4! = 24
+8! = 40320
+"Hello, world!" 里小写字母的个数是 9
+长度为 12 的数组中各元素为：0 1 2 3 4 5 6 7 8 0 0 0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1358|std=c++11|before=模板化的 {{c/core|constexpr}} 函数也需要有至少一个有效实参值|after=不需要}}
+{{dr list item|wg=cwg|dr=1359|std=c++11|before={{c/core|constexpr}} 联合体构造函数必须初始化所有数据成员|after=非空联合体初始化恰好一个数据成员}}
+{{dr list item|wg=cwg|dr=1366|std=c++11|before=函数体是 {{c|1== default}} 或 {{c|1== delete}} 的&lt;br&gt;{{c/core|constexpr}} 构造函数的类可以有虚基类|after=这些类也不能有虚基类}}
+{{dr list item|wg=cwg|dr=1595|std=c++11|before={{c/core|constexpr}} 委托构造函数要求涉及的所有构造函数都是 {{c/core|constexpr}} 函数|after=仅要求目标构造函数是 {{c/core|constexpr}} 函数}}
+{{dr list item|wg=cwg|dr=1712|std=C++14|before={{c/core|constexpr}} 变量模板的所有声明都需要包含 {{c/core|constexpr}} 说明符&lt;ref&gt;此要求是多余的，因为每个变量模板最多只有一条带有 {{c/core|constexpr}} 说明符的声明。&lt;/ref&gt;|after=不再需要}}
+{{dr list item|wg=cwg|dr=1911|std=C++11|before=非字面类型不允许拥有 {{c/core|constexpr}} 构造函数|after=在常量初始化中允许}}
+{{dr list item|wg=cwg|dr=2004|std=C++11|before=在常量表达式中允许复制/移动有 mutable 成员的联合体|after=mutable 变体现在无法被隐式复制/移动}}
+{{dr list item|wg=cwg|dr=2022|std=C++98|before=等价的 {{c/core|constexpr}} 和非 {{c/core|constexpr}} 函数是否&lt;br&gt;产生相等结果可能会取决于是否进行复制消除|after=假设始终会进行复制消除}}
+{{dr list item|wg=cwg|dr=2163|std=C++14|before={{c/core|constexpr}} 函数中禁止 {{c/core|goto}} 语句，但允许标号|after=标号也被禁止}}
+{{dr list item|wg=cwg|dr=2268|std=C++11|before={{cwg|2004}} 禁止了复制/移动有 mutable 成员的联合体|after=在该对象在常量表达式中创建的情况下允许}}
+{{dr list item|wg=cwg|dr=2278|std=C++98|before={{cwg|2022}} 的解决方案无法实现|after=假设始终不会进行复制消除}}
+{{dr list item|wg=cwg|dr=2531|std=c++11|before=当非内联变量以 {{c/core|constexpr}} 重新声明后变为内联|after=不会变为内联}}
+&lt;!-- CWG 2602 对 constexpr 函数本身的行为没有影响，但是依然会追溯适用它的解决方案（即以“适于 constexpr”替代“满足 constexpr 函数的要求”） --&gt;
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc|{{rlp|constant expression|常量表达式}}|定义可在编译时求值的{{rlp|expressions|表达式}}}}
+{{dsc inc|cpp/language/dsc consteval}}
+{{dsc inc|cpp/language/dsc constinit}}
+{{dsc see c|c/language/constexpr}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

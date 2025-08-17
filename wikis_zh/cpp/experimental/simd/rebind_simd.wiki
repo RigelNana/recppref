@@ -1,0 +1,87 @@
+{{cpp/experimental/title|rebind_simd|resize_simd}}
+{{cpp/experimental/simd/navbar}}
+
+{{dcl begin}}
+{{dcl header|experimental/simd}}
+{{dcl|num=1|since=parallelism_ts_2|
+template&lt; class T, class V &gt;
+struct rebind_simd;
+}}
+{{dcl|num=2|since=parallelism_ts_2|
+template&lt; int N, class V &gt;
+struct resize_simd;
+}}
+{{dcl end}}
+
+创建拥有不同元素类型或大小的 {{rlpt|simd}} 或 {{rlpt|simd_mask}} 类型。新类型可能使用异于 {{tt|V::abi_type}} 的 ABI 标签类型。
+
+@1@ 更改元素类型为 {{tt|T}} 并保持大小不变。
+@2@ 更改大小为 {{tt|N}} 并保持元素类型不变。
+
+===模板形参===
+{{par begin}}
+{{par | T | 新元素类型；{{tt|bool}} 以外的算术类型}}
+{{par | N | 新的元素数}}
+{{par | V | {{c|simd}} 或 {{c|simd_mask}} 类型}}
+{{par end}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem | 名称 | 定义}}
+{{dsc | {{tt|type}} | 拥有不同元素类型 {{v|1}} 或大小 {{v|2}} 的 {{tt|simd}} 或 {{tt|simd_mask}} 类型}}
+{{dsc end}}
+
+=== 辅助类型 ===
+{{dcl begin}}
+{{dcl|since=parallelism_ts_2|1=
+template&lt; class T, class V &gt;
+using rebind_simd_t = typename rebind_simd&lt;T, V&gt;::type;
+}}
+{{dcl|since=parallelism_ts_2|1=
+template&lt; int N, class V &gt;
+using resize_simd_t = typename resize_simd&lt;N, V&gt;::type;
+}}
+{{dcl end}}
+
+===示例===
+{{example
+|code=
+#include &lt;experimental/simd&gt;
+#include &lt;iostream&gt;
+
+namespace stdx = std::experimental;
+using floatv = stdx::native_simd&lt;float&gt;;
+ 
+// 内部使用双精度
+floatv dp(floatv x)
+{
+    using doublev = stdx::rebind_simd_t&lt;double, floatv&gt;;
+    return stdx::static_simd_cast&lt;floatv&gt;(stdx::simd_cast&lt;doublev&gt;(x) - 1.234);
+}
+ 
+template&lt;class T&gt;
+stdx::resize_simd_t&lt;T::size() / 2, T&gt; partial_reduction(T x)
+{
+    auto [lo, hi] = stdx::split&lt;stdx::resize_simd_t&lt;T::size() / 2, T&gt;&gt;(x);
+    return lo + hi;
+}
+ 
+int main() 
+{
+    floatv x([](auto i) { return 1.234f + std::numeric_limits&lt;float&gt;::epsilon() * i; });
+    x = dp(x);
+    const auto y = partial_reduction(x);
+    for (unsigned i = 0; i &lt; y.size(); ++i)
+        std::cout &lt;&lt; y[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=1.73569e-07 4.11987e-07
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/dsc deduce}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

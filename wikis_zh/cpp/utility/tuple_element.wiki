@@ -1,0 +1,157 @@
+{{cpp/title|tuple_element}}
+{{cpp/utility/navbar}}
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl header|array}}
+{{dcl header|utility}}
+{{dcl header|ranges|notes={{mark since c++20}}}}
+{{dcl header|complex|notes={{mark since c++26}}}}
+{{dcl|num=1|since=c++11|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element; // 不定义
+}}
+{{dcl|num=2|since=c++11|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element&lt; I, const T &gt; {
+    using type = typename
+        std::add_const&lt;typename std::tuple_element&lt;I, T&gt;::type&gt;::type;
+};
+}}
+{{dcl|num=3|since=c++11|deprecated=c++20|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element&lt; I, volatile T &gt; {
+    using type = typename
+        std::add_volatile&lt;typename std::tuple_element&lt;I, T&gt;::type&gt;::type;
+};
+}}
+{{dcl|num=4|since=c++11|deprecated=c++20|1=
+template&lt; std::size_t I, class T &gt;
+struct tuple_element&lt; I, const volatile T &gt; {
+    using type = typename
+        std::add_cv&lt;typename std::tuple_element&lt;I, T&gt;::type&gt;::type;
+};
+}}
+{{dcl end}}
+
+提供对元组式类型的元素类型的编译时索引访问。
+
+@1@ 不定义主模板。为使类型成为元组式，需要进行显式（全）或部分特化。
+
+@2-4@ 对 cv 限定类型的特化默认单纯地添加对应的 cv 限定符。
+
+{{rrev|since=c++17|
+{{tt|std::tuple_element}} 与核心语言交互：它能对元组式类型提供[[cpp/language/structured binding|结构化绑定]]支持。
+}}
+
+===特化===
+标准库为标准库类型提供下列特化：
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_element}}
+{{dsc inc|cpp/utility/pair/dsc tuple_element}}
+{{dsc inc|cpp/container/array/dsc tuple_element}}
+{{dsc inc|cpp/ranges/subrange/dsc tuple_element}}
+{{dsc inc|cpp/numeric/complex/dsc tuple_element}}
+{{dsc end}}
+
+用户可以对程序定义类型特化 {{tt|std::tuple_size}} 以令它们为元组式。
+
+在 {{tt|get}} 函数返回引用成员或到子对象的引用的通常情况下，只需要自定义针对无 cv 限定类型的特化。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|type|对于标准特化，为{{lt|cpp/utility/tuple/tuple-like|元组式}}类型 {{tt|T}} 的第 {{tt|I}} 个元素的类型，其中 {{tt|I}} 在 {{range|0|std::tuple_size&lt;T&gt;::value}} 中}}
+{{dsc end}}
+
+===辅助类型===
+{{ddcl|header=tuple|since=c++14|1=
+template&lt; std::size_t I, class T &gt;
+using tuple_element_t = typename tuple_element&lt;I, T&gt;::type;
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_tuple_element_t|{{tt|std::tuple_element_t}}|value=201402L|std=C++14}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;tuple&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+template&lt;typename T1, typename T2, typename T3&gt;
+struct Triple
+{
+    T1 t1;
+    T2 t2;
+    T3 t3;
+};
+
+// std::tuple_element 针对程序定义类型 Triple 的特化：
+template&lt;std::size_t I, typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;I, Triple&lt;T1, T2, T3&gt;&gt;
+    { static_assert(false, "无效索引"); }; &lt;!-- CWG2518 --&gt;
+template&lt;typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;0, Triple&lt;T1, T2, T3&gt;&gt; { using type = T1; };
+template&lt;typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;1, Triple&lt;T1, T2, T3&gt;&gt; { using type = T2; };
+template&lt;typename T1, typename T2, typename T3&gt;
+    struct std::tuple_element&lt;2, Triple&lt;T1, T2, T3&gt;&gt; { using type = T3; };
+
+
+template&lt;typename... Args&gt; struct TripleTypes
+{
+    static_assert(3 == sizeof...(Args), "期待恰好 3 个类型名");
+    template&lt;std::size_t N&gt;
+    using type = typename std::tuple_element_t&lt;N, Triple&lt;Args...&gt;&gt;;
+};
+
+int main()
+{
+    TripleTypes&lt;char, int, float&gt;::type&lt;1&gt; i{42};
+    std::cout &lt;&lt; i &lt;&lt; '\n';
+
+    using Tri = Triple&lt;int, char, short&gt;; //&lt; 程序定义类型
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Tri&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Tri&gt;, char&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;2, Tri&gt;, short&gt;);
+
+    using Tuple = std::tuple&lt;int, char, short&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Tuple&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Tuple&gt;, char&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;2, Tuple&gt;, short&gt;);
+
+    using Array3 = std::array&lt;int, 3&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Array3&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Array3&gt;, int&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;2, Array3&gt;, int&gt;);
+
+    using Pair = std::pair&lt;Tuple, Tri&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Pair&gt;, Tuple&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Pair&gt;, Tri&gt;);
+
+    using Sub = std::ranges::subrange&lt;int*, int*&gt;;
+    static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, Sub&gt;, int*&gt; &amp;&amp;
+                  std::is_same_v&lt;std::tuple_element_t&lt;1, Sub&gt;, int*&gt;);
+}
+|output=
+42
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2212|std=C++11|before=未在某些头文件中要求对 cv 类型的特化，这导致歧义|after=已要求}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc structured binding}}
+{{dsc inc|cpp/utility/dsc tuple_size}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_cat}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

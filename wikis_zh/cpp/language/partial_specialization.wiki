@@ -1,0 +1,230 @@
+{{title|部分模板特化}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+允许为给定的模板实参的类别定制类模板{{rev inl|since=c++14|或变量模板}}。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|类关键词}} {{spar|类头名}} {{ttb|&lt;}} {{spar|实参列表}} {{ttb|&gt;}} {{spar|声明}}
+}}
+{{sdsc|num=2|notes={{mark since c++14}}|1=
+{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|声明说明符序列}} {{spar|声明符}} {{ttb|&lt;}} {{spar|实参列表}} {{ttb|&gt;}} {{spar|初始化器}}{{mark optional}}
+}}
+{{sdsc end}}
+
+其中 {{spar|类头名}} 标识先前声明的{{rlp|class template|类模板}}{{rev inl|since=c++14|，而 {{spar|声明符}} 标识先前声明的{{rlp|variable template|变量模板}}{{mark unreviewed dr|CWG|1711}}{{mark unreviewed dr|CWG|2330}}}}。
+
+部分特化可以在任何可以定义它的主模板的作用域中声明（可以与定义它的主模板的作用域不同；例如同{{rlp|member template|成员模板}}的类外特化）。部分特化必须在非特化模板声明后出现。
+
+例如，
+{{source|
+template&lt;class T1, class T2, int I&gt;
+class A {};             // 主模板
+
+template&lt;class T, int I&gt;
+class A&lt;T, T*, I&gt; {};   // #1：部分特化，其中 T2 是指向 T1 的指针
+
+template&lt;class T, class T2, int I&gt;
+class A&lt;T*, T2, I&gt; {};  // #2：部分特化，其中 T1 是指针
+
+template&lt;class T&gt;
+class A&lt;int, T*, 5&gt; {}; // #3：部分特化，其中 T1 是 int，I 是 5，T2 是指针
+
+template&lt;class X, class T, int I&gt;
+class A&lt;X, T*, I&gt; {};   // #4：部分特化，其中 T2 是指针
+}}
+
+标准库中的部分特化的例子包括 {{c|std::unique_ptr}}，它对数组类型有部分特化。
+
+===实参列表===
+下列限制会应用到部分模板特化的 {{spar|实参列表}}：
+@1@ 实参列表不能与非特化的实参列表相同（它必须有所特化）：
+{{source|
+template&lt;class T1, class T2, int I&gt; class B {};        // 主模板
+template&lt;class X, class Y, int N&gt; class B&lt;X, Y, N&gt; {}; // 错误
+}}
+{{rrev|since=c++11|{{mark unreviewed dr|CWG|1495}}
+此外，特化必须比主模板更特殊：
+{{source|1=
+template&lt;int N, typename T1, typename... Ts&gt; struct B;
+template&lt;typename... Ts&gt; struct B&lt;0, Ts...&gt; {}; // 错误：没有更特殊
+}}
+}}
+
+@2@ 实参列表中不能出现默认实参
+@3@ 如果有实参是包展开，那么它必须是列表中最后的实参
+@4@ 非类型实参表达式可以使用模板形参，只要形参在{{rlp|template_argument_deduction#不推导语境|不推导语境}}之外至少出现一次（注意当前只有 clang 支持此特性）：
+{{source|1=
+template&lt;int I, int J&gt; struct A {};
+template&lt;int I&gt; struct A&lt;I+5, I*2&gt; {};  // 错误：I 不可推导
+
+template&lt;int I, int J, int K&gt; struct B {};
+template&lt;int I&gt; struct B&lt;I, I*2, 2&gt; {}; // OK：首个形参可以推导
+}}
+@5@ 非类型模板实参不能特化类型【依赖该特化的形参】的模板形参：
+{{source|1=
+template&lt;class T, T t&gt; struct C {}; // 主模板
+template&lt;class T&gt; struct C&lt;T, 1&gt;;   // 错误：1 的类型是 T，它依赖形参 T
+
+template&lt;int X, int (*array_ptr)[X]&gt; class B {}; // 主模板
+int array[5];
+template&lt;int X&gt; class B&lt;X,&amp;array&gt; {}; // 错误：实参类型 &amp;array 是 int(*)[X]，依赖形参 X
+}}
+
+===名字查找===
+名字查找不会找到部分模板特化。只有在主模板被名字查找所找到时才会考虑它的部分特化。特别是使得主模板可见的 using 声明，也会使得部分特化可见：
+{{source|1=
+namespace N
+{
+    template&lt;class T1, class T2&gt; class Z {}; // 主模板
+}
+using N::Z; // 指代主模板
+
+namespace N
+{
+    template&lt;class T&gt; class Z&lt;T, T*&gt; {};     // 部分特化
+}
+Z&lt;int, int*&gt; z; // 名字查找找到 N::Z（主模板），然后使用带 T = int 的部分特化
+}}
+
+===偏序===
+当实例化类模板{{rev inl|since=c++14|或变量模板}}，且有部分特化可用时，编译器必须决定是继续使用主模板还是使用其中一个部分特化。
+
+@1@ 如果只有一个特化与模板实参匹配，那么使用该特化
+@2@ 如果有多于一个特化匹配，那么就用偏序规则确定哪个特化更加特殊。然后使用其中最特殊的特化（如果它不唯一，那么程序无法编译）
+@3@ 如果没有匹配的特化，那么使用主模板
+{{source|1=
+// 给定上面定义的模板 A
+A&lt;int, int, 1&gt; a1;   // 没有匹配的特化，使用主模板
+A&lt;int, int*, 1&gt; a2;  // 用部分特化 #1，(T=int, I=1)
+A&lt;int, char*, 5&gt; a3; // 用部分特化 #3，(T=char)
+A&lt;int, char*, 1&gt; a4; // 用部分特化 #4，(X=int, T=char, I=1)
+A&lt;int*, int*, 2&gt; a5; // 错误：匹配 #2 (T=int, T2=int*, I=2) 和
+                     //      匹配 #4 (X=int*, T=int, I=2) 都不比对方更特殊
+}}
+
+非正式而言，“A 比 B 更特殊”的意思是“A 接受 B 所接受类型的子集”。
+
+正式而言，为在部分特化之间建立“更特殊”关系，首先将其中每一个都转换成下列的虚设函数模板：
+* 第一个函数模板拥有与第一个部分特化相同的模板形参，且只有一个函数形参，它的类型是带有所有来自第一个部分特化的模板实参的类模板特化
+* 第二个函数模板拥有与第二个部分特化相同的模板形参，且只有一个函数形参，它的类型是带有所有来自第二个部分特化的模板实参的类模板特化。
+
+然后，如同为{{rlp|function template#函数模板重载|函数模板重载}}所做的一样，对函数模板排行。
+
+{{source|1=
+template&lt;int I, int J, class T&gt; struct X { }; // 主模板
+template&lt;int I, int J&gt;          struct X&lt;I, J, int&gt;
+{
+    static const int s = 1;
+}; // 部分特化 #1
+// #1 的虚设函数模板是
+// template&lt;int I, int J&gt; void f(X&lt;I, J, int&gt;); #A
+
+template&lt;int I&gt;                 struct X&lt;I, I, int&gt;
+{
+    static const int s = 2;
+}; // 部分特化 #2
+// #2 的虚设函数模板是
+// template&lt;int I&gt;        void f(X&lt;I, I, int&gt;); #B
+
+int main()
+{
+    X&lt;2, 2, int&gt; x; // #1 和 #2 都匹配
+// 函数模板的偏序处理：
+// 从 #B 到 #A：从 void(X&lt;U1, U1, int&gt;) 到 void(X&lt;I,J,int&gt;)：推导 OK
+// 从 #A 到 #B：从 void(X&lt;U1, U2, int&gt;) 到 void(X&lt;I,I,int&gt;)：推导失败
+// #B 更特殊
+// #2 是被实例化的特化
+    std::cout &lt;&lt; x.s &lt;&lt; '\n'; // 打印 2
+}
+}}
+
+===部分特化的成员===
+部分特化的成员的模板形参列表和模板实参列表必须与部分特化的形参列表和实参列表相匹配。
+
+正如主模板的成员一样，它们只有在程序中使用时才需要定义。
+
+部分特化的成员与主模板的成员无关。
+
+部分特化的成员的显式（全）特化以与主模板的显式特化相同的方式声明。
+
+{{source|1=
+template&lt;class T, int I&gt; // 主模板
+struct A
+{
+    void f(); // 成员声明
+};
+
+template&lt;class T, int I&gt;
+void A&lt;T, I&gt;::f() {}      // 主模板成员定义
+
+// 部分特化
+template&lt;class T&gt;
+struct A&lt;T, 2&gt;
+{
+    void f();
+    void g();
+    void h();
+};
+
+// 部分特化的成员
+template&lt;class T&gt;
+void A&lt;T, 2&gt;::g() {}
+
+// 部分特化的成员的显式（全）特化
+template&lt;&gt;
+void A&lt;char, 2&gt;::h() {}
+
+int main()
+{
+    A&lt;char, 0&gt; a0;
+    A&lt;char, 2&gt; a2;
+    a0.f(); // OK，用主模板的成员定义
+    a2.g(); // OK，用部分特化的成员定义
+    a2.h(); // OK，用部分特化的成员的全特化定义
+    a2.f(); // 错误：部分特化 A&lt;T, 2&gt; 中没有 f() 的定义（没有使用主模板）
+}
+}}
+
+如果主模板是另一个类模板的成员，那么它的部分特化也是外围类模板的成员。如果外围类模板被实例化，那么每个成员部分特化的声明也会被实例化（模板的所有其他成员的声明（但非其定义）也是以相同方式实例化的）
+
+如果针对外围类模板的给定（隐式）特化进行主成员模板的显式（全）特化，那么对外围类模板的这个特化忽略该成员模板的部分特化。
+
+如果针对外围类模板的给定（隐式）特化进行成员模板的某个部分特化的显式特化，那么对外围类模板的这个特化仍然考虑主成员模板及它的其他部分特化。
+
+{{source|1=
+template&lt;class T&gt; struct A // 外围类模板
+{
+    template&lt;class T2&gt;
+    struct B {};      // 主成员模板
+    template&lt;class T2&gt;
+    struct B&lt;T2*&gt; {}; // 成员模板的部分特化
+};
+
+template&lt;&gt;
+template&lt;class T2&gt;
+struct A&lt;short&gt;::B {}; // 主成员模板的全特化（忽略部分特化）
+
+A&lt;char&gt;::B&lt;int*&gt; abcip;  // 使用部分特化 T2=int
+A&lt;short&gt;::B&lt;int*&gt; absip; // 使用主模板的全特化（忽略部分特化）
+A&lt;char&gt;::B&lt;int&gt; abci;    // 使用主模板
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=727|std=C++98|before=部分特化和全特化不允许在类作用域|after=允许在任何作用域}}
+{{dr list item|wg=cwg|dr=1315|std=C++98|before=不能在除标识表达式之外的非类型模板实参中使用模板形参|after=只要能推导，表达式就 OK}}
+{{dr list item|wg=cwg|dr=1495|std=C++11|before=涉及形参包时规范不明确|after=特化必须更为特殊}}
+{{dr list item|wg=cwg|dr=1711|std=C++14|before=缺失对变量模板部分特化的规范|after=添加对变量模板的支持}}
+{{dr list item|wg=cwg|dr=1819|std=C++98|before=允许部分特化存在的作用域|after=使部分特化能在任何主模板的作用域声明}}
+{{dr list item|wg=cwg|dr=2330|std=C++14|before=缺失对变量模板的引用|after=添加对变量模板的支持}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|templates|模板}}
+* {{rlp|class template|类模板}}
+* {{rlp|function template|函数模板}}
+* {{rlp|template specialization|显式（全）特化}}
+
+{{langlinks|en|es|ja|ru}}

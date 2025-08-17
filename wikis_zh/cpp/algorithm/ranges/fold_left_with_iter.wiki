@@ -1,0 +1,197 @@
+{{cpp/ranges/title|fold_left_with_iter|fold_left_with_iter_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=1|since=c++23|until=c++26|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, class T,
+          /* indirectly-binary-left-foldable */&lt;T, I&gt; F &gt;
+constexpr /* 见描述 */
+    fold_left_with_iter( I first, S last, T init, F f );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          class T = std::iter_value_t&lt;I&gt;,
+          /* indirectly-binary-left-foldable */&lt;T, I&gt; F &gt;
+constexpr /* 见描述 */
+    fold_left_with_iter( I first, S last, T init, F f );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++23|until=c++26|1=
+template&lt; ranges::input_range R, class T,
+          /* indirectly-binary-left-foldable */
+              &lt;T, ranges::iterator_t&lt;R&gt;&gt; F &gt;
+constexpr /* 见描述 */
+    fold_left_with_iter( R&amp;&amp; r, T init, F f );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::input_range R, class T = ranges::range_value_t&lt;R&gt;,
+          /* indirectly-binary-left-foldable */
+              &lt;T, ranges::iterator_t&lt;R&gt;&gt; F &gt;
+constexpr /* 见描述 */
+    fold_left_with_iter( R&amp;&amp; r, T init, F f );
+}}
+{{dcl rev end}}
+{{dcl h|辅助概念}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class F, class T, class I &gt;
+concept /* indirectly-binary-left-foldable */ = /* 见描述 */;
+}}
+{{dcl h|辅助类模板}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class I, class T &gt;
+using fold_left_with_iter_result = ranges::in_value_result&lt;I, T&gt;;
+}}
+{{dcl end}}
+
+左{{enwiki|Fold (higher-order function)|折叠}}给定范围的元素，当 {{tt|x{{sub|1}}}}, {{tt|x{{sub|2}}}}, ..., {{tt|x{{sub|n}}}} 为范围内元素时返回链式表达式 {{tt|f(f(f(f(init, x{{sub|1}}), x{{sub|2}}), ...), x{{sub|n}})}} 的求值结果。
+
+非正式的说，{{tt|ranges::fold_left_with_iter}} 的行为类似 {{lc|std::accumulate}} 接受二元谓词的重载。
+
+如果 {{range|first|last}} 不是有效范围则行为未定义。
+
+@1@ 范围为 {{range|first|last}}。
+
+@2@ 同 {{v|1}}，但使用 {{c|r}} 作为其范围，如同使用 {{c|ranges::begin(r)}} 作为 {{c|first}} 且使用 {{c|ranges::end(r)}} 作为 {{c|last}}。
+
+{{ranges_fold_algos_helper_concepts}}
+@4@ 返回类型的别名，详情见“{{ls|#返回值}}”。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要折叠的|sentinel=yes}}
+{{par|r|应用折叠的范围}}
+{{par|init|折叠的初值}}
+{{par|f|二元{{named req|FunctionObject|函数对象}}}}
+{{par end}}
+
+===返回值===
+令 {{c|U}} 为 {{c|std::decay_t&lt;std::invoke_result_t&lt;F&amp;, T, std::iter_reference_t&lt;I&gt;&gt;&gt;}}。
+
+@1@ 对象类型 {{c|ranges::fold_left_with_iter_result&lt;I, U&gt;}}。
+* 成员 {{c|ranges::in_value_result::in}} 持有范围尾部的迭代器。
+* 成员 {{c|ranges::in_value_result::value}} 持有给定范围内执行 {{c|f}} 的左{{enwiki|Fold (higher-order function)|折叠}}的结果。 
+如果范围为空，经过表达式获得的返回值等价于 {{c|return {std::move(first), U(std::move(init))};}}。
+
+@2@ 除返回值为 {{c|ranges::fold_left_with_iter_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, U&gt;}} 外同 {{v|1}}。
+
+===可能的实现===
+{{eq fun|1=
+class fold_left_with_iter_fn
+{
+    template&lt;class O, class I, class S, class T, class F&gt;
+    constexpr auto impl(I&amp;&amp; first, S&amp;&amp; last, T&amp;&amp; init, F f) const
+    {
+        using U = std::decay_t&lt;std::invoke_result_t&lt;F&amp;, T, std::iter_reference_t&lt;I&gt;&gt;&gt;;
+        using Ret = ranges::fold_left_with_iter_result&lt;O, U&gt;;
+        if (first == last)
+            return Ret{std::move(first), U(std::move(init))};
+        U accum = std::invoke(f, std::move(init), *first);
+        for (++first; first != last; ++first)
+            accum = std::invoke(f, std::move(accum), *first);
+        return Ret{std::move(first), std::move(accum)};
+    }
+public:
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, class T = std::iter_value_t&lt;I&gt;,
+             /* indirectly-binary-left-foldable */&lt;T, I&gt; F&gt;
+    constexpr auto operator()(I first, S last, T init, F f) const
+    {
+        return impl&lt;I&gt;(std::move(first), std::move(last), std::move(init), std::ref(f));
+    }
+    
+    template&lt;ranges::input_range R, class T = ranges::range_value_t&lt;R&gt;,
+             /* indirectly-binary-left-foldable */&lt;T, ranges::iterator_t&lt;R&gt;&gt; F&gt;
+    constexpr auto operator()(R&amp;&amp; r, T init, F f) const
+    {
+        return impl&lt;ranges::borrowed_iterator_t&lt;R&gt;&gt;
+        (
+            ranges::begin(r), ranges::end(r), std::move(init), std::ref(f)
+        );
+    }
+};
+
+inline constexpr fold_left_with_iter_fn fold_left_with_iter;
+}}
+
+===复杂度===
+准确应用 {{c|ranges::distance(first, last)}} 次函数对象 {{c|f}}。
+
+===注解===
+{{ranges_fold_algos_table}}
+
+{{ftm begin}}
+{{ftm|__cpp_lib_ranges_fold|std=C++23|value=202207L|{{tt|std::ranges}} [[cpp/algorithm/ranges#受约束的折叠操作|折叠算法]]}}
+{{ftm|__cpp_lib_algorithm_default_value_type|value=202403L|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|1,2}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;functional&gt;
+#include &lt;ranges&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    namespace ranges = std::ranges;
+
+    std::vector v{1, 2, 3, 4, 5, 6, 7, 8};
+    
+    auto sum = ranges::fold_left_with_iter(v.begin(), v.end(), 6, std::plus&lt;int&gt;());
+    assert(sum.value == 42);
+    assert(sum.in == v.end());
+    
+    auto mul = ranges::fold_left_with_iter(v, 0X69, std::multiplies&lt;int&gt;());
+    assert(mul.value == 4233600);
+    assert(mul.in == v.end());
+    
+    // 获得 vector 中的所有 pair 的 pair::second 的乘积：
+    std::vector&lt;std::pair&lt;char, float&gt;&gt; data {&lt;!----&gt;{'A', 2.f}, {'B', 3.f}, {'C', 3.5f}&lt;!----&gt;};
+    auto sec = ranges::fold_left_with_iter
+    (
+        data {{!}} ranges::views::values, 2.0f, std::multiplies&lt;&gt;()
+    );
+    assert(sec.value == 42);
+    
+    // 使用程序定义的函数对象（lambda-表达式）：
+    auto lambda = [](int x, int y){ return x + 0B110 + y; };
+    auto val = ranges::fold_left_with_iter(v, -42, lambda);
+    assert(val.value == 42);
+    assert(val.in == v.end());
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{&lt;!----&gt;{1, 1}, {2, 0}, {3, 0}&lt;!----&gt;};
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto res = ranges::fold_left_with_iter(nums, {7, 0}, std::multiplies{});
+    #else
+        auto res = ranges::fold_left_with_iter(nums, CD{7, 0}, std::multiplies{});
+    #endif
+    assert((res.value == CD{42, 42}));
+}
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Fold|id=alg.fold|section=27.6.18}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left_first}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_right}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_right_last}}
+{{dsc inc|cpp/algorithm/ranges/dsc fold_left_first_with_iter}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc reduce}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|en}}

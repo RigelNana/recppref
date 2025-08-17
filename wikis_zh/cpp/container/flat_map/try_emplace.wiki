@@ -1,0 +1,126 @@
+{{cpp/container/flat_map/title|try_emplace}}
+{{cpp/container/flat_map/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|
+template&lt; class... Args &gt;
+std::pair&lt;iterator, bool&gt; try_emplace( const key_type&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++23|
+template&lt; class... Args &gt;
+std::pair&lt;iterator, bool&gt; try_emplace( key_type&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcla|num=3|since=c++23|
+template&lt; class K, class... Args &gt;
+std::pair&lt;iterator, bool&gt; try_emplace( K&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++23|
+template&lt; class... Args &gt;
+iterator try_emplace( const_iterator hint, const key_type&amp; k, Args&amp;&amp;... args );
+}}
+{{dcla|num=5|since=c++23|
+template&lt; class... Args &gt;
+iterator try_emplace( const_iterator hint, key_type&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl|num=6|since=c++23|
+template&lt; class K, class... Args &gt;
+iterator try_emplace( const_iterator hint, K&amp;&amp; k, Args&amp;&amp;... args );
+}}
+{{dcl end}}
+
+如果容器中已经存在定价与 {{c|k}} 的键，则不做任何事。否则，以键 {{c|k}} 和从 {{c|args}} 构造的值向底层容器 {{rlpi|/#成员对象|c}} 插入一个新元素。
+
+@1,2,4,5@ 等价于：{{source|1=
+auto key_it = ranges::upper_bound(c.keys, k, compare);
+auto value_it = c.values.begin() + std::distance(c.keys.begin(), key_it);
+c.keys.insert(key_it, std::forward&lt;decltype(k)&gt;(k));
+c.values.emplace(value_it, std::forward&lt;Args&gt;(args)...);
+}}
+
+@3,6@ 等价于：{{source|1=
+auto key_it = ranges::upper_bound(c.keys, k, compare);
+auto value_it = c.values.begin() + std::distance(c.keys.begin(), key_it);
+c.keys.emplace(key_it, std::forward&lt;K&gt;(k));
+c.values.emplace(value_it, std::forward&lt;Args&gt;(args)...);
+}}
+
+@@ 从 {{c|k}} 转换为 {{tt|key_type}} 必然构造一个对象 {{c|u}}，使得 {{c|1=find(k) == find(u)}} 为 {{c|true}}。否则，其行为未定义。
+
+@@ {{cpp/enable if|：
+* 限定标识 {{tt|Compare::is_transparent}} 有效且代表一个类型。
+* {{c|std::is_constructible_v&lt;key_type, K&gt;}} 为 {{c|true}}。
+* {{c|std::is_assignable_v&lt;mapped_type&amp;, Args...&gt;}} 为 {{c|true}}。
+* 仅对于 {{v|3}}，{{c|std::is_convertible_v&lt;K&amp;&amp;, const_iterator&gt;}} 和 {{c|std::is_convertible_v&lt;K&amp;&amp;, iterator&gt;}} 均为 {{c|false}}。
+|plural=yes}}。
+{{cpp/container/note iterator invalidation|flat_map|try_emplace}}
+
+===参数===
+{{par begin}}
+{{par|k|用于查找且用于当未找到时进行插入的键}}
+{{par|hint|指向在其之前插入新元素的位置的迭代器}}
+{{par|args|要转发给元素构造函数的实参}}
+{{par end}}
+
+===返回值===
+@1-3@ 与 {{rlpt|emplace}} 的相同。
+@4-6@ 与 {{rlpt|emplace_hint}} 的相同。
+
+===复杂度===
+@1-3@ 与 {{rlpt|emplace}} 的相同。
+@4-6@ 与 {{rlpt|emplace_hint}} 的相同。
+
+===注解===
+与 {{rlpt|insert}} 和 {{rlpt|emplace}} 不同，这些函数在未发生插入时不会从右值实参移动，这使得更易于操作值为仅移动类型的映射，诸如 {{c/core|std::flat_map&lt;std::string, std::unique_ptr&lt;foo&gt;&gt;}}。此外，{{tt|try_emplace}} 对键和传给 {{tt|mapped_type}} 的实参是分别对待的，这与 {{rlpt|emplace}} 不同，它要求以各实参构造一个 {{tt|value_type}}（即 {{lc|std::pair}}）。
+
+重载 {{vl|3,6}} 可以不构造 {{tt|key_type}} 类型的对象进行调用。
+
+===示例===
+{{example
+|code=
+#include &lt;flat_map&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+void print_node(const auto&amp; node)
+{
+    std::cout &lt;&lt; '[' &lt;&lt; node.first &lt;&lt; "] = " &lt;&lt; node.second &lt;&lt; '\n';
+}
+
+void print_result(auto const&amp; pair)
+{
+    std::cout &lt;&lt; (pair.second ? "插入: " : "忽略: ");
+    print_node(*pair.first);
+}
+
+int main()
+{
+    using namespace std::literals;
+    std::{{{1|map}}}&lt;std::string, std::string&gt; m;
+
+    print_result(m.try_emplace( "a", "a"s));
+    print_result(m.try_emplace( "b", "abcd"));
+    print_result(m.try_emplace( "c", 10, 'c'));
+    print_result(m.try_emplace( "c", "Won't be inserted"));
+
+    for (const auto&amp; p : m)
+        print_node(p);
+}
+|output =
+插入: [a] = a
+插入: [b] = abcd
+插入: [c] = cccccccccc
+忽略: [c] = cccccccccc
+[a] = a
+[b] = abcd
+[c] = cccccccccc
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc emplace|flat_map}}
+{{dsc inc|cpp/container/dsc emplace_hint|flat_map}}
+{{dsc inc|cpp/container/dsc insert|flat_map}}
+{{dsc inc|cpp/container/dsc insert_or_assign|flat_map}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

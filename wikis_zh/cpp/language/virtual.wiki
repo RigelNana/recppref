@@ -1,0 +1,378 @@
+{{title|{{tt|virtual}} 函数说明符}}
+{{cpp/language/classes/navbar}}
+
+指定非静态{{rlp|member functions|成员函数}}为{{i|虚}}函数并支持动态调用派发。它只能在非静态成员函数的首个声明（即当它在类定义中声明时）的{{spar sep|声明说明符序列}}中出现。
+
+===解释===
+虚函数是一种成员函数，其行为可以在派生类中被覆盖。与非虚函数相反，即使没有关于该类实际类型的编译时信息，覆盖行为仍然被保留。当使用基类的指针或引用来处理派生类时，对被覆盖的虚函数的调用，将会调用在派生类中定义的行为。这种函数调用被称为{{i|虚函数调用}}或''虚调用''。虚函数调用在使用{{rlp|lookup|有限定名字查找}}（即函数名出现在作用域解析运算符 {{tt|::}} 的右侧）时被抑制。
+
+{{example|code=
+#include &lt;iostream&gt;
+
+struct Base
+{
+    virtual void f()
+    {
+        std::cout &lt;&lt; "基\n";
+    }
+};
+
+struct Derived : Base
+{
+    void f() override // 'override' 可选
+    {
+        std::cout &lt;&lt; "派生\n";
+    }
+};
+
+int main()
+{
+    Base b;
+    Derived d;
+
+    // 通过引用调用虚函数
+    Base&amp; br = b; // br 的类型是 Base&amp;
+    Base&amp; dr = d; // dr 的类型也是 Base&amp;
+    br.f(); // 打印 "基"
+    dr.f(); // 打印 "派生"
+
+    // 通过指针调用虚函数
+    Base* bp = &amp;b; // bp 的类型是 Base*
+    Base* dp = &amp;d; // dp 的类型也是 Base*
+    bp-&gt;f(); // 打印 "基"
+    dp-&gt;f(); // 打印 "派生"
+
+    // 非虚函数调用
+    br.Base::f(); // 打印 "基"
+    dr.Base::f(); // 打印 "基"
+}
+}}
+
+===细节===
+如果某个成员函数 {{tt|vf}} 在类 {{tt|Base}} 中被声明为 {{tt|virtual}}，且某个直接或间接派生于 {{tt|Base}} 的类 {{tt|Derived}} 拥有一个成员函数声明，且该声明的下列几项与 {{tt|vf}} 相同：
+* 名字
+* 形参列表（但非返回类型）
+* cv 限定符
+* 引用限定符
+那么 {{tt|vf}} 在类 {{tt|Derived}} 中也是{{i|虚}}函数（无论其声明中是否使用关键词 {{tt|virtual}}）并''覆盖'' {{tt|Base::vf}}（无论其声明中是否使用说明符 {{tt|override}}）。
+
+要覆盖的 {{tt|Base::vf}} 不需要可访问或可见。（{{tt|Base::vf}} 能声明为私有或者私有继承 {{tt|Base}}。 {{tt|Derived}} 的基类中的任何同名成员不妨碍覆盖确定，即使在名字查找时它们会隐藏 {{tt|Base::vf}}。）
+
+{{source|1=
+class B
+{
+    virtual void do_f(); // 私有成员
+public:
+    void f() { do_f(); } // 公开接口
+};
+
+struct D : public B
+{
+    void do_f() override; // 覆盖 B::do_f
+};
+
+int main()
+{
+    D d;
+    B* bp = &amp;d;
+    bp-&gt;f(); // 内部调用 D::do_f();
+}
+}}
+
+每个虚函数都有''最终覆盖函数''，它是进行虚函数调用时所执行的函数。基类 {{tt|Base}} 的虚成员函数 {{tt|vf}} 是最终覆盖函数，除非派生类声明或（通过多重继承）继承了覆盖 {{tt|vf}} 的另一个函数。
+
+{{source|1=
+struct A { virtual void f(); };     // A::f 是虚函数
+struct B : A { void f(); };         // B 中的 B::f 覆盖 A::f
+struct C : virtual B { void f(); }; // C 中的 C::f 覆盖 A::f
+
+struct D : virtual B {}; // D 不引入覆盖函数，最终覆盖函数是 B::f
+
+struct E : C, D          // E 不引入覆盖函数，最终覆盖函数是 C::f
+{
+    using A::f; // 非函数声明，只为了让 A::f 能被查找到
+};
+
+int main()
+{
+    E e;
+    e.f();    // 虚调用 e 中的最终覆盖函数 C::f
+    e.E::f(); // 非虚调用调用在 E 中可见的 A::f
+}
+}}
+
+如果一个函数拥有多于一个最终覆盖函数，那么程序非良构：
+{{source|1=
+struct A
+{
+    virtual void f();
+};
+
+struct VB1 : virtual A
+{
+    void f(); // 覆盖 A::f
+};
+
+struct VB2 : virtual A
+{
+    void f(); // 覆盖 A::f
+};
+
+// struct Error : VB1, VB2
+// {
+//     // 错误：A::f 在 Error 中拥有两个最终覆盖函数
+// };
+
+struct Okay : VB1, VB2
+{
+    void f(); // OK：这是 A::f 的最终覆盖函数
+};
+
+struct VB1a : virtual A {}; // 不声明覆盖函数
+
+struct Da : VB1a, VB2
+{
+    // 在 Da 中，A::f 的最终覆盖函数是 VB2::f
+};
+}}
+
+名字相同但形参列表不同的函数并不覆盖同名的基类函数，但会{{i|隐藏}}它：在{{rlp|lookup|无限定名字查找}}检查派生类的作用域时，查找找到该声明后就不会再检查基类。
+
+{{source|1=
+struct B
+{
+    virtual void f();
+};
+
+struct D : B
+{
+    void f(int); // D::f 隐藏 B::f（错误的形参列表）
+};
+
+struct D2 : D
+{
+    void f(); // D2::f 覆盖 B::f（不管它是否可见）
+};
+
+int main()
+{
+    B b;
+    B&amp; b_as_b = b;
+    
+    D d;
+    B&amp; d_as_b = d;
+    D&amp; d_as_d = d;
+    
+    D2 d2;
+    B&amp; d2_as_b = d2;
+    D&amp; d2_as_d = d2;
+    
+    b_as_b.f();  // 调用 B::f()
+    d_as_b.f();  // 调用 B::f()
+    d2_as_b.f(); // 调用 D2::f()
+
+    d_as_d.f();  // 错误：D 中的查找只找到 f(int)
+    d2_as_d.f(); // 错误：D 中的查找只找到 f(int)
+}
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+如果函数以说明符 {{tt|override}} 声明，但不覆盖任何虚函数，那么程序非良构：
+{{source|1=
+struct B
+{
+    virtual void f(int);
+};
+
+struct D : B
+{
+    virtual void f(int) override;  // OK，D::f(int) 覆盖 B::f(int)
+    virtual void f(long) override; // 错误：f(long) 不覆盖 B::f(int)
+};
+}}
+
+如果函数以说明符 {{tt|final}} 声明，而被另一函数试图覆盖，那么程序非良构：
+{{source|1=
+struct B
+{
+    virtual void f() const final;
+};
+
+struct D : B
+{
+    void f() const; // 错误：D::f 试图覆盖 final B::f
+};
+}}
+}}
+{{rev end}}
+
+非成员函数和静态成员函数不能是虚函数。
+
+函数模板不能被声明为 {{tt|virtual}}。这只适用于自身是模板的函数——类模板的常规成员函数可以被声明为虚函数。
+
+{{rrev|since=c++20|
+虚函数（无论是声明为 virtual 者还是覆盖函数）不能有任何关联约束。
+{{source|1=
+struct A
+{
+    virtual void f() requires true; // 错误：受约束的虚函数
+};
+}}
+
+{{rlpt|consteval}} 虚函数不能覆盖非 {{tt|consteval}} 虚函数或被它覆盖。
+}}
+
+在编译时替换虚函数的{{rlp|default arguments|默认实参}}。
+
+====协变返回类型====
+如果函数 {{tt|Derived::f}} 覆盖 {{tt|Base::f}}，那么它的返回类型必须要么相同，要么为''协变（covariant）''。当满足以下所有要求时，两个类型为协变：
+
+* 两个类型都是到类的指针或引用（都是左值引用，或都是右值引用）。不允许多级指针。
+* {{tt|Base::f()}} 的返回类型中被引用/指向的类，必须是 {{tt|Derived::f()}} 的返回类型中被引用/指向的类的无歧义且可访问的直接或间接基类。
+* {{tt|Derived::f()}} 的返回类型必须有相对于 {{tt|Base::f()}} 的返回类型的相等或较少的 {{rlp|cv|cv 限定}}。
+
+{{tt|Derived::f}} 的返回类型中的类必须要么是 {{tt|Derived}} 自身，要么必须是在 {{tt|Derived::f}} 声明点的某个{{rlp|incomplete type|完整类型}}。
+
+进行虚函数调用时，最终覆盖函数的返回类型被{{rlp|implicit conversion|隐式转换}}成所调用的被覆盖函数的返回类型：
+
+{{source|1=
+class B {};
+
+struct Base
+{
+    virtual void vf1();
+    virtual void vf2();
+    virtual void vf3();
+    virtual B* vf4();
+    virtual B* vf5();
+};
+
+class D : private B
+{
+    friend struct Derived; // 在 Derived 中，B 是 D 的可访问基类
+};
+
+class A; // 前置声明的类是不完整类型
+
+struct Derived : public Base
+{
+    void vf1();    // 虚函数，覆盖 Base::vf1()
+    void vf2(int); // 非虚函数，隐藏 Base::vf2()
+//  char vf3();    // 错误：覆盖 Base::vf3，但具有不同且非协变的返回类型
+    D* vf4();      // 覆盖 Base::vf4() 并具有协变的返回类型
+//  A* vf5();      // 错误：A 是不完整类型
+};
+
+int main()
+{
+    Derived d;
+    Base&amp; br = d;
+    Derived&amp; dr = d;
+
+    br.vf1(); // 调用 Derived::vf1()
+    br.vf2(); // 调用 Base::vf2()
+//  dr.vf2(); // 错误：vf2(int) 隐藏 vf2()
+
+    B* p = br.vf4(); // 调用 Derived::vf4() 并将结果转换为 B*
+    D* q = dr.vf4(); // 调用 Derived::vf4() 但不将结果转换为 B*
+}
+}}
+
+====虚析构函数====
+虽然析构函数不会继承，但是如果基类将其析构函数声明为 {{tt|virtual}}，那么派生的析构函数始终覆盖它。这样就可以通过指向基类的指针 delete 动态分配的多态类型对象。
+
+{{source|1=
+class Base
+{
+public:
+    virtual ~Base() { /* 释放 Base 的资源 */ }
+};
+
+class Derived : public Base
+{
+    ~Derived() { /* 释放 Derived 的资源 */ }
+};
+
+int main()
+{
+    Base* b = new Derived;
+    delete b; // 进行对 Base::~Base() 的虚函数调用
+              // 由于它是虚函数，因此它调用的是 Derived::~Derived()，
+              // 这就能释放派生类的资源，然后遵循通常的析构顺序
+              // 调用 Base::~Base()
+}
+}}
+
+此外，如果基类的析构函数非虚，则通过指向该基类的指针删除派生类对象是''未定义行为''，无论不调用派生的析构函数时是否会导致资源泄漏{{rev inl|since=c++20|，除非选择的解分配函数是销毁的 {{lc|operator delete}}}}。
+
+一条有用的方针是，凡是当涉及 delete 表达式{{rev inl|since=c++11|，例如在 {{lc|std::unique_ptr}} 中隐式使用}}时，任何基类的析构函数必须为[https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#discussion-make-base-class-destructors-public-and-virtual-or-protected-and-nonvirtual 公开且虚，或受保护且非虚]。
+
+===在构造和析构期间===
+当从构造函数或从析构函数中直接或间接调用虚函数（包括在类的非静态数据成员的构造或析构期间，例如在成员{{rlp|initializer list|初始化式列表}}中），且对其实施调用的对象是正在构造或析构中的对象（即{{c|*this}}）时，为了防止通过虚函数访问已处于{{rlp|lifetime|生存期}}之外的派生类数据成员，所调用的虚函数是该构造函数或析构函数所在类中的最终覆盖函数，而非进一步的派生类中的覆盖函数。 
+换言之，在构造和析构期间，进一步的派生类并不存在，如同{{c|*this}}的动态类型是正在构造的类的静态类型（动态派发不在继承层级下传）。
+
+当构建具有多个分支的复杂类时，在属于一个分支的构造函数内，多态被限制到该类及其基类：如果它获得了指向这个子层级之外的某个基类子对象的指针或引用并试图进行虚函数调用（例如通过显式成员访问），那么行为未定义：
+
+{{source|1=
+struct V
+{
+    virtual void f();
+    virtual void g();
+};
+
+struct A : virtual V
+{
+    virtual void f(); // 在 A 中，V::f 的最终覆盖函数是 A::f
+};
+
+struct B : virtual V
+{
+    virtual void g(); // 在 B 中，V::g 的最终覆盖函数是 B::g
+    B(V*, A*);
+};
+
+struct D : A, B
+{
+    virtual void f(); // 在 D 中，V::f 的最终覆盖函数是 D::f
+    virtual void g(); // 在 D 中，V::g 的最终覆盖函数是 D::g
+
+    // 注意：A 在 B 之前初始化
+    D() : B((A*) this, this) {}
+};
+
+// B 的构造函数，从 D 的构造函数调用 
+B::B(V* v, A* a)
+{
+    f(); // 对 V::f 的虚调用（尽管 D 拥有最终覆盖函数，D 也不存在）
+    g(); // 对 B::g 的虚调用，在 B 中是最终覆盖函数
+
+    v-&gt;g(); // v 的类型 V 是 B 的基类，虚调用像之前一样调用 B::g
+
+    a-&gt;f(); // a 的类型 A 不是 B 的基类，它属于层级中的不同分支。
+            // 尝试通过这个分支进行虚调用导致未定义行为，
+            // 即使此时 A 已完成构造
+            // （它在 B 之前构造，因为它在 D 的基类列表中在 B 前面出现）
+            // 实践中，对 A::f 的虚调用会试图使用 B 的虚成员函数表，
+            // 因为它在 B 的构造期间是活跃的
+}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/virtual}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=258|std=C++98|before=派生类的非 const 成员函数可能会因为它的基类的 const 成员虚函数也变成虚函数|after=虚拟性也要求 cv 限定性一致}}
+{{dr list item|wg=cwg|dr=477|std=C++98|before=友元声明可以包含 {{c/core|virtual}} 说明符|after=禁止这种情况}}
+{{dr list item|wg=cwg|dr=1516|std=C++98|before=未提供术语“虚函数调用”和“虚调用”的定义|after=已提供}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc|{{rlp|derived_class|派生类与继承模式}}}}
+{{dsc inc|cpp/language/dsc override}}
+{{dsc inc|cpp/language/dsc final}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,124 @@
+{{title|一般算术转换}}
+{{cpp/language/expressions/navbar}}
+
+许多期待具有{{rlp|type|算术类型}}或{{rlp|enum|枚举类型}}的操作数的二元运算符会以相似的方法进行转换并产生结果类型。这样做的目的是产生公共类型，也就是结果类型。该模式被称为'''一般算术转换'''。
+
+===定义===
+一般算数转换定义如下：
+====阶段 1====
+对两个操作数进行{{rlps|implicit conversion#左值到右值转换}}，在后续过程中将转换结果纯右值代替原操作数。
+
+====阶段 2====
+{{rrev|since=c++11|
+* 如果有一个操作数具有{{rlp|enum#有作用域枚举|有作用域枚举类型}}，那么不会进行任何转换；如果另一个操作数的类型不同，那么表达式非良构。
+* 否则进入下一阶段。
+}}
+
+====阶段 3====
+{{rrev|since=c++26|
+* 如果有一个操作数具有{{rlp|enum|枚举类型}}，而另一个操作数具有另一个枚举类型或浮点数类型，那么表达式非良构。
+* 否则进入下一阶段。
+}}
+
+====阶段 4====
+* 如果有一个操作数具有{{rlps|types#浮点数类型}}，那么应用以下规则：
+:* 如果两个操作数具有相同类型，那么后续不会进行任何转换。
+:* 否则，如果有一个操作数具有非浮点数类型，那么该操作数会转换到另一个操作数具有的（浮点数）类型。
+:* 否则，如果两个操作数具有的类型的{{ls|#浮点数转换等级}}{{rev inl|since=c++23|有序但}}不相等，那么具有更低浮点数转换等级的类型的操作数会转换到另一个操作数具有的（浮点数转换等级更高的）类型。
+{{rrev|since=c++23|
+:* 否则，如果两个操作数具有的类型的浮点数转换等级相等，那么具有更低{{ls|#浮点数转换子等级}}的类型的操作数会转换到另一个操作数具有的（浮点数转换子等级更高的）类型。
+:* 否则，表达式非良构。
+}}
+* 否则，两个操作数都具有整数类型，进入下一阶段。
+
+====阶段 5====
+将两个操作数都转换到公共类型 {{tt|C}}。给定类型 {{tt|T1}} 和 {{tt|T2}} 为两个操作数的（在{{rlps|implicit conversion#整数提升|整数提升}}规则下的）提升后类型，应用以下规则确定 {{tt|C}}：
+* 如果 {{tt|T1}} 和 {{tt|T2}} 是相同类型，那么 {{tt|C}} 是该类型。
+* 否则，如果 {{tt|T1}} 和 {{tt|T2}} 都是有符号整数类型或者都是无符号整数类型，那么 {{tt|C}} 是具有更高[[#整数转换等级|整数转换等级]]的类型。
+* 否则，{{tt|T1}} 和 {{tt|T2}} 之中的一个类型是有符号整数类型 {{tt|S}}，而另一个类型是无符号整数类型 {{tt|U}}。应用以下规则：
+:* 如果 {{tt|U}} 的整数转换等级高于或等于 {{tt|S}} 的整数转换等级，那么 {{tt|C}} 是 {{tt|U}}。
+:* 否则，如果 {{tt|S}} 可以表示 {{tt|U}} 的所有值，那么 {{tt|C}} 是 {{tt|S}}。
+:* 否则，{{tt|C}} 是与 {{tt|S}} 对应的无符号整数类型。
+
+{{rrev|since=c++20|until=c++26|
+如果一个操作数具有枚举类型，而另一个操作数具有另一个枚举类型或浮点数类型，那么行为被弃用。
+}}
+
+===整数转换等级===
+每个{{rlp|types#整数类型|整数类型}}都有一个''整数转换等级''，定义如下：
+* 除了 {{c/core|char}} 和 {{c/core|signed char}}（如果 {{c/core|char}} 有符号）以外的所有有符号整数类型的等级都不相同，即使它们的表示相同。
+* 对于两个有符号整数类型，宽度更小的类型的等级低于宽度更大的类型的等级。
+* 以下整数类型的等级递减：
+{{rrev|since=c++11|
+:* {{c/core|long long}}
+}}
+:* {{c/core|long}}
+:* {{c/core|int}}
+:* {{c/core|short}}
+:* {{c/core|signed char}}
+* 每个无符号整数类型的等级都等于对应的有符号整数类型的等级。
+{{rrev|since=c++11|
+* 每个标准整数类型的等级都高于具有相同宽度的扩展整数类型的等级。
+}}
+* {{c/core|bool}} 的等级低于所有标准整数类型的等级。
+* 编码字符类型（{{c/core|char}}{{rev inl|since=c++20|、{{c/core|char8_t}}}}{{rev inl|since=c++11|、{{c/core|char16_t}}、{{c/core|char32_t}}}} 和 {{c/core|wchar_t}} 的等级等于它们的{{rlp|types#字符类型|底层类型}}的等级，也就是说：
+:* {{c/core|char}} 的等级等于 {{c/core|signed char}} 和 {{c/core|unsigned char}} 的等级。
+{{rev begin}}
+{{rev|since=c++20|
+:* {{c/core|char8_t}} 的等级等于 {{c/core|unsigned char}} 的等级。
+}}
+{{rev|since=c++11|
+:* {{c/core|char16_t}} 的等级等于 {{lc|std::uint_least16_t}} 的等级。
+:* {{c/core|char32_t}} 的等级等于 {{lc|std::uint_least32_t}} 的等级。
+}}
+{{rev end}}
+:* {{c/core|wchar_t}} 的等级等于它的由实现定义的底层类型的等级。
+{{rrev|since=c++11|
+* 扩展有符号整数类型的等级，相对于另一相同宽度的扩展有符号整数类型的高低由实现定义，但不能违背确定整数转换等级的其他规则。
+}}
+* 对于所有整数类型 {{tt|T1}}、{{tt|T2}} 和 {{tt|T3}}，如果 {{tt|T1}} 的等级高于 {{tt|T2}} 的等级，并且 {{tt|T2}} 的等级高于 {{tt|T3}} 的等级，那么 {{tt|T1}} 的等级高于 {{tt|T3}} 的等级。
+
+整数转换等级也用于定义{{rlps|implicit conversion#整数提升}}。
+
+===浮点数转换等级与子等级===
+====浮点数转换等级====
+每个{{rlps|types#浮点数类型}}都有一个''浮点数转换等级''，定义如下：
+* 以下标准浮点数类型的等级依次递减：
+** {{c/core|long double}}
+** {{c/core|double}}
+** {{c/core|float}}
+{{rrev|since=c++23|
+* 对于每对浮点数类型 {{tt|T1}} 和 {{tt|T2}}，如果 {{tt|T1}} 能表示的所有值的集合是 {{tt|T2}} 能表示的所有值的集合的真子集，那么 {{tt|T1}} 的等级低于 {{tt|T2}}。
+* 两个能表示的值的集合相同的扩展浮数点类型的等级相等。
+* 如果一个扩展浮点数类型能表示的所有值的集合与正好一个无 cv 限定的标准浮点数类型能表示的所有值的集合相同，那么该扩展浮点数类型的等级等于该标准浮点数类型的等级。
+* 如果一个扩展浮点数类型能表示的所有值的集合与两个或更多无 cv 限定的标准浮点数类型能表示的所有值的集合相同，那么该扩展浮点数类型的等级等于 {{c/core|double}} 的等级。
+}}
+
+
+{{rrev|since=c++23|
+====浮点数转换子等级====
+浮点数转换等级相等的浮点数类型按''浮点数转换子等级''{{sep}}有序。该子等级在所有等级相等的类型中组成全序。
+
+{{tt|std::float16_t}}、{{tt|std::float32_t}}、{{tt|std::float64_t}} 和 {{tt|std::float128_t}} 类型（[[cpp/types/floating-point|定宽浮点数类型]]）的浮点数转换子等级大于所有浮点数转换等级相等的标准整数类型的浮点数转换子等级。否则，浮点数转换子等级的高低由实现定义。
+}}
+
+====用途====
+浮点数转换等级和子等级也用于：
+* 确定不同浮点数类型之间的转换是否{{rlp|implicit conversion#浮点数转换|可以是隐式的}}，或者是不是{{rlps|list initialization#窄化转换}}
+* 在重载决议中{{rlp|overload resolution#隐式转换序列的分级|区分转换序列}}
+{{rrev|since=c++23|
+* 在使用 {{ltt|cpp/io/basic_istream/operator gtgt|std::basic_istream::operator&gt;&gt;}} 提取扩展浮点数类型时确定用 {{l2tf std|cpp/locale/num_get/get}} 实际提取的类型
+* 在使用 {{ltt|cpp/io/basic_ostream/operator ltlt|std::basic_ostream::operator&lt;&lt;}} 插入扩展浮点数类型时确定用 {{l2tf std|cpp/locale/num_put/put}} 实际插入的类型
+}}
+* 确定 {{lc|std::complex}} 的 [[cpp/numeric/complex/complex|转换构造函数]]是不是显式的
+* 在传递具有不同浮点数类型的实参到[[cpp/numeric/math|常用]]或[[cpp/numeric/special functions|特殊]]数学函数时确定公共浮点数类型
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1642|std=C++98|before=一般算数转换可能会涉及左值|after=先应用左值到右值转换}}
+{{dr list item|wg=cwg|dr=2528|std=C++20|before={{c/core|unsigned char}} 和 {{c/core|unsigned int}} 之间&lt;br&gt;的三路比较因为中途的整数提升而非良构&lt;ref&gt;在缺陷解决前，{{c/core|unsigned char}} 会在阶段 5 开始时提升到 {{c/core|int}}，然后再转换到 {{c/core|unsigned int}}。然而后者是窄化转换，导致三路比较非良构。&lt;/ref&gt;|after=在实际没有进行整数提升的情况下&lt;br&gt;根据提升后类型确定公共类型&lt;ref&gt;在缺陷解决后，公共类型还是 {{c/core|unsigned int}}。但不同的地方在于 {{c/core|unsigned char}} 会在中途没有整数提升的情况下直接转换到 {{c/core|unsigned int}}。该转换不是窄化转换，因此三路比较良构。&lt;/ref&gt;}}
+{{dr list item|wg=cwg|dr=2892|std=C++98|before=当两个操作数具有相同类型时，“后续不需要再进行转换”的含义不明确|after=改成“后续不会进行任何转换”}}
+{{dr list end}}
+&lt;references/&gt;
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,110 @@
+{{cpp/io/basic_stringbuf/title|overflow}}
+{{cpp/io/basic_stringbuf/navbar}}
+{{ddcl|1=
+protected:
+virtual int_type overflow ( int_type c = Traits::eof() );
+}}
+
+后附字符 {{c|c}} 到输出字符序列。
+
+如果 {{c|c}} 是文件尾指示符（{{c|1=traits::eq_int_type(c, traits::eof()) == true}}），那么不会后附字符。函数不做任何操作并返回 {{c|traits::eof()}} 以外的未指定值。
+
+否则，如果输出序列有可用的写位置，或此函数成功令一个写位置可用，那么就会调用 {{c|sputc(c)}} 并返回 {{c|c}}。
+
+如果 {{lc|std::stringbuf}} 为输出打开（{{c|1=mode &amp; ios_base::out) != 0}}），那么此函数能令写位置可用：此时它会重分配（或在最初分配）足够大的缓冲区，以保有整个当前缓冲区加上至少一个字符。如果 {{lc|std::stringbuf}} 也为输入打开（{{c|1=(mode &amp; ios_base::in) != 0}}），那么 {{tt|overflow}} 也会通过移动 {{lc|egptr()}} 到指向恰好越过新放置区的位置，来增加读取区域的大小。
+
+===参数===
+{{par begin}}
+{{par|c|要在写入区域存储的字符}}
+{{par end}}
+
+===返回值===
+失败时返回指示失败的 {{c|Traits::eof()}}。成功后附字符 {{c|c}} 时返回 {{c|c}}。或以 {{c|Traits::eof()}} 为实参调用时返回某个 {{c|Traits::eof()}} 以外的值。
+
+===注解===
+此函数与典型的 {{tt|overflow()}} 不同，后者移动缓冲区的内容到关联字符序列，因为 {{lc|std::basic_stringbuf}} 的缓冲区和关联序列是同一序列。
+
+===示例===
+{{example
+|在用于执行此示例的实现（如 GCC-4.9）中，{{tt|overflow()}} 过分配写入区域为 512 字节：调用 {{lc|str()}} 只会返回四个初始字节，但剩下的 508 次对 {{lc|sputc()}} 的调用不会要求对 {{tt|overflow()}} 的新调用。
+|code=
+#include &lt;sstream&gt;
+#include &lt;iostream&gt;
+
+struct mybuf : std::stringbuf
+{
+    mybuf(const std::string&amp; new_str,
+          std::ios_base::openmode which = std::ios_base::in {{!}} std::ios_base::out)
+        : std::stringbuf(new_str, which) {}
+    
+    int_type overflow(int_type c = EOF) override
+    {
+        std::cout &lt;&lt; "调用 stringbuf::overflow('" &lt;&lt; char(c) &lt;&lt; "'\n"
+                  &lt;&lt; "调用前：读取区域大小：" &lt;&lt; egptr() - eback() &lt;&lt; '\n'
+                  &lt;&lt; "       写入区域大小：" &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        
+        int_type ret = std::stringbuf::overflow(c);
+        
+        std::cout &lt;&lt; "调用后：读取区域大小：" &lt;&lt; egptr() - eback() &lt;&lt; '\n'
+                  &lt;&lt; "       写入区域大小：" &lt;&lt; epptr() - pbase() &lt;&lt; '\n';
+        
+        return ret;
+    }
+};
+
+int main()
+{
+    std::cout &lt;&lt; "读写流：\n";
+    mybuf sbuf("   "); // 读写流
+    std::iostream stream(&amp;sbuf);
+    stream &lt;&lt; 1234;
+    std::cout &lt;&lt; sbuf.str() &lt;&lt; '\n';
+    
+    std::cout &lt;&lt; "\n只读流：\n";
+    mybuf ro_buf("   ", std::ios_base::in); // 只读流
+    std::iostream ro_stream(&amp;ro_buf);
+    ro_stream &lt;&lt; 1234;
+    
+    std::cout &lt;&lt; "\n只写流：\n";
+    mybuf wr_buf("   ", std::ios_base::out); // 只写流
+    std::iostream wr_stream(&amp;wr_buf);
+    wr_stream &lt;&lt; 1234;
+}
+|p = true
+|output=
+读写流：
+调用 stringbuf::overflow('4')
+调用前：读取区域大小：3
+       写入区域大小：3
+调用后：读取区域大小：4
+       写入区域大小：512
+1234
+
+只读流：
+调用 stringbuf::overflow('1')
+调用前：读取区域大小：3
+       写入区域大小：0
+调用后：读取区域大小：3
+       写入区域大小：0
+
+只写流：
+调用 stringbuf::overflow('4')
+调用前：读取区域大小：0
+       写入区域大小：3
+调用后：读取区域大小：0
+       写入区域大小：512
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=169|std=C++98|before=（重）分配的缓冲区只能额外持有一个字符|after=可以额外持有多个字符}}
+{{dr list item|wg=lwg|dr=432|std=C++98|before={{tt|std::stringbuf}} 为输入打开时 {{tt|overflow}} 会移动 {{lc|epptr()}} 到指向恰好越过新放置区的位置|after=不会移动它}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc overflow}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc underflow}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

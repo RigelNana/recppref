@@ -1,0 +1,179 @@
+{{title|翻译单元局部实体 {{mark since c++20}}}}
+{{cpp/language/declarations/navbar}}
+翻译单元局部（TU 局部）实体是为阻止假定为局部（不用于任何其他翻译单元）的实体暴露且用于其他翻译单元而引入的。
+
+来自[https://vector-of-bool.github.io/2019/03/31/modules-2.html 了解 C++ 模块：部分 2] 的例子描绘了不约束暴露的问题：
+{{source|1=
+// 无 TU 局部约束的模块单元
+export module Foo;
+
+import &lt;iostream&gt;;
+
+namespace
+{
+   class LolWatchThis {        // 内部链接，不能导出
+       static void say_hello()
+       {
+           std::cout &lt;&lt; "Hello, everyone!\n";
+       }
+   };
+}
+
+export LolWatchThis lolwut() { // LolWatchThis 被暴露为返回类型
+    return LolWatchThis();
+}
+}}
+{{source|1=
+// main.cpp
+import Foo;
+
+int main()
+{
+    auto evil = lolwut();        // 'evil' 拥有 'LolWatchThis' 类型
+    decltype(evil)::say_hello(); // 'LolWatchThis' 的定义不再为内部
+}
+}}
+
+===TU 局部实体===
+一个实体为 ''TU 局部''，若它为
+# 类型、函数、变量或模板，且
+## 拥有带{{rlp|storage duration#内部连接|内部链接}}的名字，或
+## 无拥有内部链接的名字，且在 TU 局部实体之内声明或由 {{rlp|lambda|lambda 表达式}}引入、
+# 定义在{{rlp|class|类说明符}}、函数体或初始化器外，或由用于声明仅 TU 局部实体的定义类型说明符（类型说明符、类说明符或枚举说明符）引入、
+# TU 局部模板的特化、
+# 有任何 TU 局部模板实参的模板特化，或
+# 其声明为暴露（定义后述）的（可能实例化的）模板特化。
+{{source|1=
+// 拥有内部链接的 TU 局部实体
+namespace { // 声明于无名命名空间的所有名字均拥有内部链接
+    int tul_var = 1;                          // TU 局部变量
+    int tul_func() { return 1; }              // TU 局部函数
+    struct tul_type { int mem; };             // TU 局部（类）类型
+}
+template&lt;typename T&gt;
+static int tul_func_temp() { return 1; }      // TU 局部模板
+
+// TU 局部模板特化
+template&lt;&gt;
+static int tul_func_temp&lt;int&gt;() { return 3; } // TU 局部特化
+
+// 有 TU 局部模板实参的模板特化
+template &lt;&gt; struct std::hash&lt;tul_type&gt; {      // TU 局部特化
+    std::size_t operator()(const tul_type&amp; t) const { return 4u; }
+};
+}}
+
+{{todo|缺少规则 #1.2、 #2 及 #5 的示例}}
+
+值或对象为 ''TU 局部''，若它
+# 是 TU 局部的函数或与 TU 局部变量关联的对象，或是指向它的指针，或者
+# 是类或数组类型对象，而其任一{{rlp|object#子对象|子对象}}，或其引用类型非静态数据成员所引用的对象或函数，为 TU 局部并且{{rlp|constant expression#可用于常量表达式|可用于常量表达式}}。
+{{source|1=
+static int tul_var = 1;             // TU 局部变量
+static int tul_func() { return 1; } // TU 局部函数
+
+int* tul_var_ptr = &amp;tul_var;        // TU 局部：指向 TU 局部变量的指针
+int (* tul_func_ptr)() = &amp;tul_func; // TU 局部：指向 TU 局部函数的指针
+
+constexpr static int tul_const = 1; // TU 局部变量可用于常量表达式
+int tul_arr[] = { tul_const };      // TU 局部：constexpr TU 局部对象的数组
+struct tul_class { int mem; };
+tul_class tul_obj{tul_const};       // TU 局部：拥有成员 constexpr TU 局部对象
+}}
+
+===暴露===
+声明 D ''指名''实体 E ，若
+# D 含有闭包类型为 E 的 lambda 表达式、
+# E 不是函数或函数模板且 D 含有指代 E 的标识表达式、类型说明符、嵌套类型说明符、模板名或概念名，或
+# E 是函数或函数模板且 D 含有指名 E 的表达式或指代含有 E 的重载集的标识表达式。
+{{source|1=
+// lambda 指名
+auto x = [] {}; // 指名 decltype(x)
+
+// 非函数（模板）指名
+int y1 = 1;                      // 指名 y1 （标识表达式）
+struct y2 { int mem; };
+y2 y2_obj{1};                    // 指名 y2 （类型说明符）
+struct y3 { int mem_func(); };
+int y3::mem_func() { return 0; } // 指名 y3 （嵌套类型说明符）
+template&lt;typename T&gt; int y4 = 1;
+int var = y4&lt;y2&gt;;                // 指名 y4 （模板名）
+template&lt;typename T&gt; concept y5 = true;
+template&lt;typename T&gt; void func(T&amp;&amp;) requires y5&lt;T&gt;; // 指名 y5 （概念名）
+
+// 函数（模板）指名
+int z1(int arg)      { std::cout &lt;&lt; "no overload"; return 0; }
+int z2(int arg)      { std::cout &lt;&lt; "overload 1";  return 1; }
+int z2(double arg)   { std::cout &lt;&lt; "overload 2";  return 2; }
+
+int val1 = z1(0); // 指名 z1
+int val2 = z2(0); // 指名 z2（int z2(int)）
+}}
+
+一个声明是''暴露''，若它要么指名一个 TU 局部实体，不过忽略
+# 非 inline 函数或函数模板的函数体（但非用{{rlp|auto|占位符类型}}声明返回类型的函数的（可能实例化的）定义的推导返回类型），
+# 变量或变量模板的初始化器（但非变量类型），
+# 类定义中的友元声明，及
+# 任何到拥有内部链接或无链接的、以非 {{rlp|definition#ODR 使用|odr 使用}}的常量表达式初始化的非 volatile 的 const 对象或引用的引用，
+这些情况，要么定义以 TU 局部值初始化的 constexpr 变量。
+
+{{todo|缺少暴露的示例}}
+
+===TU 局部约束===
+若{{rlp|modules|模块接口单元}}（在可能有的私有模块片段外）或模块划分中的非 TU 局部实体的（可能实例化的）{{rlp|declarations|声明}}或{{rlp|class template argument deduction#类模板的推导|推导指引}}为暴露，则程序非良构。这种声明在在任何其他语境中被弃用。
+
+若出现于一个翻译单元中的声明指名在另一非头文件单元的翻译单元中声明的 TU 局部实体，则程序非良构。为模板特化实例化的声明出现在特化的实例化点。
+
+{{todo|缺少约束的示例}}
+
+===示例===
+翻译单元 #1：
+{{source|1=
+export module A;
+static void f() {}
+inline void it() { f(); }         // 错误：为 f 的暴露
+static inline void its() { f(); } // OK
+template&lt;int&gt; void g() { its(); } // OK
+template void g&lt;0&gt;();
+
+decltype(f) *fp;                             // 错误： f （尽管不是其类型）为 TU 局部
+auto &amp;fr = f;                                // OK
+constexpr auto &amp;fr2 = fr;                    // 错误：为 f 的暴露
+constexpr static auto fp2 = fr;              // OK
+struct S { void (&amp;ref)(); } s{f};            // OK： value 为 TU 局部
+constexpr extern struct W { S &amp;s; } wrap{s}; // OK： value 非 TU 局部 TU-local
+
+static auto x = []{f();}; // OK
+auto x2 = x;              // 错误：闭包类型为 TU 局部
+int y = ([]{f();}(),0);   // 错误：闭包类型非 TU 局部
+int y2 = (x,0);           // OK
+
+namespace N
+{
+    struct A {};
+    void adl(A);
+    static void adl(int);
+}
+void adl(double);
+
+inline void h(auto x) { adl(x); } // OK ，但特化可能为暴露
+}}
+
+翻译单元 #2：
+{{source|1=
+module A;
+void other()
+{
+    g&lt;0&gt;();                  // OK：显式实例化特化
+    g&lt;1&gt;();                  // 错误：实例化使用其 TU 局部实体
+    h(N::A{});               // 错误：重载集含 TU 局部的 N::adl(int)
+    h(0);                    // OK：调用 adl(double)
+    adl(N::A{});             // OK：找不到 N::adl(int) ，调用 N::adl(N::A)
+    fr();                    // OK：调用 f
+    constexpr auto ptr = fr; // 错误：此处 fr 不可用于常量表达式
+}
+}}
+
+{{todo|示例太复杂，需要更好的安排}}
+
+{{langlinks|en|es|ja|ru}}

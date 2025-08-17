@@ -1,0 +1,145 @@
+{{cpp/named req/title|RandomAccessIterator}}
+{{cpp/named req/navbar}}
+
+{{named req|RandomAccessIterator}}是能在常数时间内移动到指向任何元素的{{named req|BidirectionalIterator}}。
+
+如果某个{{named req|RandomAccessIterator}} {{c|it}} 源自某个{{named req|Container}}，则 {{c|it}} 与该容器的 {{tt|value_type}} 相同，因此解引用 ({{c|*it}}) 会获得该容器的 {{tt|value_type}}。
+
+指向数组元素的指针满足所有{{named req/core|RandomAccessIterator}}的要求。
+
+===要求===
+类型 {{tt|It}} 满足{{named req/core|RandomAccessIterator}}，如果
+
+* 类型 {{tt|It}} 满足{{named req|BidirectionalIterator}}
+
+且给定
+* {{tt|value_type}}，{{c/core|std::iterator_traits&lt;It&gt;::value_type}} 所指代的类型
+* {{tt|difference_type}}，{{c/core|std::iterator_traits&lt;It&gt;::difference_type}} 所指代的类型
+* {{tt|reference}}，{{c/core|std::iterator_traits&lt;It&gt;::reference}} 所指代的类型
+* {{c|i}}、{{c|a}}、{{c|b}}，{{tt|It}} 或 {{c/core|const It}} 类型的对象
+* {{c|r}}，{{tt|It&amp;}} 类型的值
+* {{c|n}}，{{tt|difference_type}} 类型的整数
+
+那么下列表达式必须合法且拥有其指定的效果：
+{|table class="wikitable"
+|-
+!表达式||返回类型||操作语义||注意
+|-
+|{{c|1=r += n}}
+|{{tt|It&amp;}}
+|{{c|1=difference_type m = n;
+if (m &gt;= 0) while (m--) ++r;
+else while (m++) --r;
+return r;}}
+|
+*{{c|n}} 可为正或负
+*复杂度为常数（即实现不能真的执行操作语义所示的 while 循环）
+|-
+|{{c|a + n}}
+{{c|n + a}}
+|{{tt|It}}
+|{{c|1=It temp = a;
+return temp += n;}} 
+|
+*{{c|n}} 可为正或负
+*{{c|1=a + n == n + a}}
+|-
+|{{c|1=r -= n}}||{{tt|It&amp;}}||{{c|return r +{{=}} -n;}}
+|{{c|n}} 的绝对值必须在 {{tt|difference_type}} 的可表示值范围内。{{mark unreviewed dr|LWG|2519}}
+|-
+|{{c|i - n}}||{{tt|It}}||{{c|1=It temp = i;
+return temp -= n;}}
+|
+|-
+|{{c|b - a}}||{{tt|difference_type}}||{{c|return n;}}&lt;br&gt;（见前条件）||
+前条件：
+* 存在 {{tt|difference_type}} 类型的值 {{c|n}} 满足 {{c|1=a + n == b}}
+后条件：
+* {{c|1=b == a + (b - a)}}
+|-
+|{{c|i[n]}}||可转换到 {{tt|reference}}||{{c|*(i + n)}}||
+|-
+|{{c|a &lt; b}}
+|{{rrev multi|noborder=true
+|rev1=符合{{named req|BooleanTestable}}
+|since2=c++20|rev2=实现 {{lconcept|boolean-testable}}
+}}
+|等价于 {{c|return b - a &gt; 0;}}
+|前条件：
+* 同 {{c|b - a}}&lt;!-- LWG3236 --&gt;
+严格全序关系：
+* {{c|!(a &lt; a)}}
+* 如果 {{c|a &lt; b}}，那么{{c|!(b &lt; a)}}
+* 如果 {{c|a &lt; b}} 且 {{c|b &lt; c}}，那么{{c|a &lt; c}}
+* {{c|a &lt; b}} 或 {{c|b &lt; a}} 或 {{c|1=a == b}} &lt;br&gt;（恰有一个表达式为 {{c|true}}）
+|-
+|{{c|a &gt; b}}
+|{{rrev multi|noborder=true
+|rev1=符合{{named req|BooleanTestable}}
+|since2=c++20|rev2=实现 {{lconcept|boolean-testable}}
+}}
+|{{c|b &lt; a}}
+|与 {{c|a &lt; b}} 相反的全序关系
+|-
+|{{c|1=a &gt;= b}}
+|{{rrev multi|noborder=true
+|rev1=符合{{named req|BooleanTestable}}
+|since2=c++20|rev2=实现 {{lconcept|boolean-testable}}
+}}
+|{{c|!(a &lt; b)}}
+|
+|-
+|{{c|1=a &lt;= b}}
+|{{rrev multi|noborder=true
+|rev1=符合{{named req|BooleanTestable}}
+|since2=c++20|rev2=实现 {{lconcept|boolean-testable}}
+}}
+|{{c|!(a &gt; b)}}
+|
+|}
+
+上述规则隐含了{{named req/core|RandomAccessIterator}}也实现{{named req|LessThanComparable}}。
+
+''可变（mutable）''{{named req/core|RandomAccessIterator}}是还额外满足{{named req|OutputIterator}}要求的{{named req/core|RandomAccessIterator}}。
+
+{{rrev|since=c++20|
+===概念===
+为了定义 {{lc|std::iterator_traits}}，定义了以下仅用于阐释的概念：
+
+{{dcl begin}}
+{{dcl|1=
+template&lt;class I&gt;
+concept __LegacyRandomAccessIterator&lt;!-- 标准中称为 cpp17-random-access-iterator --&gt; =
+    __LegacyBidirectionalIterator&lt;I&gt; &amp;&amp; std::totally_ordered&lt;I&gt; &amp;&amp;
+        requires(I i, typename std::incrementable_traits&lt;I&gt;::difference_type n)
+        {
+            { i += n } -&gt; std::same_as&lt;I&amp;&gt;;
+            { i -= n } -&gt; std::same_as&lt;I&amp;&gt;;
+            { i +  n } -&gt; std::same_as&lt;I&gt;;
+            { n +  i } -&gt; std::same_as&lt;I&gt;;
+            { i -  n } -&gt; std::same_as&lt;I&gt;;
+            { i -  i } -&gt; std::same_as&lt;decltype(n)&gt;;
+            {  i[n]  } -&gt; std::convertible_to&lt;std::iter_reference_t&lt;I&gt;&gt;;
+        };
+}}
+{{dcl end}}
+
+其中仅用于阐释的概念 {{tt|__LegacyBidirectionalIterator}} 在 {{rlp|BidirectionalIterator#概念|LegacyBidirectionalIterator}}描述。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=299|paper=N3066|std=C++98|before={{c|a[n]}} 的返回类型需要可转换到 {{c/core|const value_type&amp;}}|after=返回类型需要可转换到 {{tt|reference}}}}
+{{dr list item|wg=lwg|dr=448|std=C++98|before={{c|a[n]}} 的返回类型需要可转换到 {{tt|value_type}}|after=返回类型需要可转换到 {{c/core|const value_type&amp;}}&lt;ref&gt;此问题解决后，{{lwg|299}} 重新打开了。&lt;/ref&gt;}}
+{{dr list item|wg=lwg|dr=1079|std=C++98|before={{c|b - a}} 的定义用到了 {{c|a &lt; b}}，导致循环定义|after=从定义中移除 {{c|a &lt; b}}}}
+{{dr list item|wg=lwg|dr=2114|paper=P2167R3|std=C++98|before=到 {{c/core|bool}} 的按语境可转换性过于弱而无法反映实现的期待|after=加强要求}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc random_access_iterator}}
+{{see_also_iterator_library}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

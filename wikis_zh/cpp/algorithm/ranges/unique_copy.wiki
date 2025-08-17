@@ -1,0 +1,176 @@
+{{cpp/ranges/title|unique_copy|unique_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O,
+          class Proj = std::identity,
+          std::indirect_equivalence_relation&lt;std::projected&lt;I, Proj&gt;&gt;
+              C = ranges::equal_to &gt;
+requires std::indirectly_copyable&lt;I, O&gt; &amp;&amp; (std::forward_iterator&lt;I&gt; {{!!}}
+             (std::input_iterator&lt;O&gt; &amp;&amp; std::same_as&lt;std::iter_value_t&lt;I&gt;,
+                 std::iter_value_t&lt;O&gt;&gt;) {{!!}} std::indirectly_copyable_storable&lt;I, O&gt;)
+constexpr unique_copy_result&lt;I, O&gt;
+    unique_copy( I first, S last, O result, C comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R, std::weakly_incrementable O,
+          class Proj = std::identity,
+          std::indirect_equivalence_relation&lt;std::projected&lt;ranges::iterator_t&lt;R&gt;,
+              Proj&gt;&gt; C = ranges::equal_to &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt; &amp;&amp;
+             (std::forward_iterator&lt;ranges::iterator_t&lt;R&gt;&gt; {{!!}}
+             (std::input_iterator&lt;O&gt; &amp;&amp; std::same_as&lt;ranges::range_value_t&lt;R&gt;,
+                 std::iter_value_t&lt;O&gt;&gt;) {{!!}}
+             std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;, O&gt;)
+constexpr unique_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    unique_copy( R&amp;&amp; r, O result, C comp = {}, Proj proj = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using unique_copy_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+@1@ 从源范围 {{range|first|last}} 复制元素到始于 {{c|result}} 的目标范围，使得无连续的元素比较相等。只复制每群相等元素中的第一个。
+
+@@ 范围 {{range|first|last}} 与 {{range|result|result + N}} 必须不重叠。{{c|1= N = ranges::distance(first, last)}}。
+
+@@ 若 {{c|1=std::invoke(comp, std::invoke(proj, *(i - 1)), std::invoke(proj, *i)) == true}}，其中 {{tt|i}} 为范围 {{range|first + 1|last}} 中的迭代器，则认为两个连续元素 {{c|*(i - 1)}} 与 {{c|*i}} 比较相等。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要处理的|range=源|sentinel=yes}}
+{{par|r|要处理的源元素范围}}
+{{par|result|目标元素范围}}
+{{par|comp|比较投影后元素的谓词}}
+{{par|proj|应用到谓词的投影}}
+{{par end}}
+
+===返回值===
+{{c|{last, result + N} }}
+
+===复杂度===
+准确应用对应的谓词 {{c|comp}} {{c|N - 1}} 次，并应用投影 {{c|proj}} 的次数不多于其二倍。
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/master/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1198-L1276 libstdc++] 与 [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L4022-L4113 MSVC STL]（及第三方库： [https://github.com/CaseyCarter/cmcstl2/blob/master/include/stl2/detail/algorithm/unique_copy.hpp cmcstl2]、[https://github.com/tcbrindle/NanoRange/blob/master/include/nanorange/algorithm/unique_copy.hpp NanoRange] 和 [https://github.com/ericniebler/range-v3/blob/master/include/range/v3/algorithm/unique_copy.hpp range-v3]）中的实现。
+{{eq fun|1=
+struct unique_copy_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O,
+             class Proj = std::identity,
+             std::indirect_equivalence_relation&lt;std::projected&lt;I,
+                 Proj&gt;&gt; C = ranges::equal_to&gt;
+    requires std::indirectly_copyable&lt;I, O&gt; &amp;&amp; (std::forward_iterator&lt;I&gt; {{!!}}
+                 (std::input_iterator&lt;O&gt; &amp;&amp; std::same_as&lt;std::iter_value_t&lt;I&gt;,
+                     std::iter_value_t&lt;O&gt;&gt;) {{!!}} std::indirectly_copyable_storable&lt;I, O&gt;)
+    constexpr ranges::unique_copy_result&lt;I, O&gt;
+        operator()(I first, S last, O result, C comp = {}, Proj proj = {}) const
+    {
+        if (!(first == last))
+        {
+            std::iter_value_t&lt;I&gt; value = *first;
+            *result = value;
+            ++result;
+            while (!(++first == last))
+            {
+                auto&amp;&amp; value2 = *first;
+                if (!std::invoke(comp, std::invoke(proj, value2),
+                        std::invoke(proj, value)))
+                {
+                    value = std::forward&lt;decltype(value2)&gt;(value2);
+                    *result = value;
+                    ++result;
+                }
+            }
+        }
+
+        return {std::move(first), std::move(result)};
+    }
+
+    template&lt;ranges::input_range R, std::weakly_incrementable O,
+             class Proj = std::identity,
+             std::indirect_equivalence_relation&lt;std::projected&lt;ranges::iterator_t&lt;R&gt;,
+                 Proj&gt;&gt; C = ranges::equal_to&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt; &amp;&amp;
+                 (std::forward_iterator&lt;ranges::iterator_t&lt;R&gt;&gt; {{!!}}
+                 (std::input_iterator&lt;O&gt; &amp;&amp; std::same_as&lt;ranges::range_value_t&lt;R&gt;,
+                     std::iter_value_t&lt;O&gt;&gt;) {{!!}}
+                 std::indirectly_copyable_storable&lt;ranges::iterator_t&lt;R&gt;, O&gt;)
+    constexpr ranges::unique_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, O result, C comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(result),
+                       std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr unique_copy_fn unique_copy {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;list&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+void print(const auto&amp; rem, const auto&amp; v)
+{
+    using V = std::remove_cvref_t&lt;decltype(v)&gt;;
+    constexpr bool sep{std::is_same_v&lt;typename V::value_type, int&gt;};
+    std::cout &lt;&lt; rem &lt;&lt; std::showpos;
+    for (const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; (sep ? " " : "");
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string s1{"The      string    with many       spaces!"};
+    print("s1: ", s1);
+
+    std::string s2;
+    std::ranges::unique_copy(
+        s1.begin(), s1.end(), std::back_inserter(s2),
+        [](char c1, char c2) { return c1 == ' ' &amp;&amp; c2 == ' '; }
+    );
+    print("s2: ", s2);
+
+    const auto v1 = {-1, +1, +2, -2, -3, +3, -3};
+    print("v1: ", v1);
+    std::list&lt;int&gt; v2;
+    std::ranges::unique_copy(
+        v1, std::back_inserter(v2),
+        {}, // 默认比较器 std::ranges::equal_to
+        [](int x) { return std::abs(x); } // 投影
+    );
+    print("v2: ", v2);
+}
+|output=
+s1: The      string    with many       spaces!
+s2: The string with many spaces!
+v1: -1 +1 +2 -2 -3 +3 -3 
+v2: -1 +2 -3 
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/dsc unique_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

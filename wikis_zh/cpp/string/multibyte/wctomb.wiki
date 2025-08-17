@@ -1,0 +1,80 @@
+{{cpp/title|wctomb}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cstdlib|
+int wctomb( char* s, wchar_t wc );
+}}
+
+转换宽字符 {{c|wc}} 为多字节编码并存储之（包含任何迁移序列）于首元素为 {{c|s}} 所指向的字符数组。不存储多于 {{c|MB_CUR_MAX}} 个字符。转换受当前本地环境的 LC_CTYPE 类别影响。
+
+若 {{c|wc}} 是空字符，则将空字节写入 {{c|s}}，前附任何需要恢复到初始迁移状态的迁移序列。
+
+若 {{c|s}} 是空指针，则重置全局转换状态并确定是否使用迁移序列。
+
+===参数===
+{{par begin}}
+{{par|s|指向输出的字符数组的指针}}
+{{par|wc|要转换的宽字符}}
+{{par end}}
+
+===返回值===
+若 {{c|s}} 不是空指针，则返回 {{c|wc}} 的多字节表示中的字节数，或若 {{c|wc}} 不是合法字符则为 {{c|-1}}。
+
+若 {{c|s}} 是空指针，则重置其内部转换状态为表示初始迁移状态，且若当前多字节编码不依赖状态（不使用迁移序列）则返回 {{c|0}}，或若当前多字节编码以来状态（使用迁移序列）则返回非零值。
+
+===注解===
+每次到 {{tt|wctomb}} 的调用更新全局转换状态（{{lc|std::mbstate_t}} 类型静态对象，仅为此函数所知）。若多字节编码使用迁移状态，则此函数不可重入。任何情况下，多个线程不应调用 {{tt|wctomb}} 而不同步：可用 {{lc|std::wcrtomb}} 替代。
+
+===示例===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+void print_wide(const std::wstring&amp; wstr)
+{
+    bool shifts = std::wctomb(nullptr, 0); // 重置转换状态
+    std::cout &lt;&lt; (shifts ? "" : "不" )
+              &lt;&lt; "使用迁移序列\n" &lt;&lt; std::uppercase &lt;&lt; std::setfill('0');
+    for (const wchar_t wc : wstr)
+    {
+        std::string mb(MB_CUR_MAX, '\0');
+        const int ret = std::wctomb(&amp;mb[0], wc);
+        // const char* s = ret &gt; 1 ? "s" : "";
+        std::cout &lt;&lt; "多字节字符 '" &lt;&lt; mb &lt;&lt; "' 有 " &lt;&lt; ret
+                  &lt;&lt; " 个字节" &lt;&lt; ": [" &lt;&lt; std::hex;
+        for (int i{0}; i != ret; ++i)
+        {
+            const int c = 0xFF &amp; mb[i];
+            std::cout &lt;&lt; (i ? " " : "") &lt;&lt; std::setw(2) &lt;&lt; c;
+        }
+        std::cout &lt;&lt; "]\n" &lt;&lt; std::dec;
+    }
+}
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    // UTF-8 窄多字节编码
+    std::wstring wstr = L"z\u00df\u6c34\U0001d10b"; // 或 L"zß水𝄋"
+    print_wide(wstr);
+}
+|output=
+不使用迁移序列
+多字节字符 'z' 有 1 个字节: [7A]
+多字节字符 'ß' 有 2 个字节: [C3 9F]
+多字节字符 '水' 有 3 个字节: [E6 B0 B4]
+多字节字符 '𝄋' 有 4 个字节: [F0 9D 84 8B]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbtowc}}
+{{dsc inc|cpp/string/multibyte/dsc wcrtomb}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc see c|c/string/multibyte/wctomb}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

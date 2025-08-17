@@ -1,0 +1,158 @@
+{{title|契约断言 {{mark since c++26}}}}
+{{cpp/language/basics/navbar}}
+
+契约断言允许程序员指定程序在执行中的特定时间点的状态应有的属性。
+
+===解释===
+{{i|契约断言}}由{{rlps|function#函数契约标识符}}和 {{rlpt|contract_assert}} 语句引入。每个契约断言都有一个''谓词''，它是 {{c/core|bool}} 类型的表达式。
+
+===对契约断言求值===
+对契约断言求值会使用以下求值语义之一：
+{|class="wikitable" style="text-align: center;"
+!{{nbsp}}求值语义{{nbsp}}
+!{{nbsp}}是否为检查语义{{nbsp}}
+!{{nbsp}}是否为终止语义{{nbsp}}
+|-
+|忽略
+|
+|
+|-
+|观察
+|{{yes}}
+|
+|-
+|强制
+|{{yes}}
+|{{yes}}
+|-
+|快速强制
+|{{yes}}
+|{{yes}}
+|}
+
+每次对契约断言求值时使用的求值语义都由实现定义。同一个契约断言的多次求值（包括在常量求值过程中的求值）也可以使用不同的求值语义。
+
+如果使用“忽略”语义，那么对契约断言求值没有效果。
+
+如果使用检查语义，那么对契约断言的求值 {{tt|E}} 会确定谓词的值。未指定是否会对谓词求值。如果满足以下任意条件，那么就会发生''契约违背''：
+* 假如对谓词求值，那么结果会是 {{c|false}}。
+* 对谓词的求值会以异常退出。
+* 对谓词的求值在{{rlp|constant expression#明显常量求值的表达式|明显常量求值}}语境中进行，而谓词不是{{rlps|constant expression#核心常量表达式}}。
+
+存在一个先发生于 {{tt|E}} 的{{rlp|as if|可观察检查点}} {{tt|CP}}，使得先发生于 {{tt|A}} 的任何其他操作 {{tt|OP}} 也先发生于 {{tt|CP}}。
+
+{{source|1=
+int num = 0;
+void f() pre((num++, false));
+
+f(); // 即使使用检查语义，也不一定会自增 “num”
+}}
+
+===处理契约违背===
+如果在明显常量求值语境中发生了契约违背，那么：
+* 如果求值语义是“观察”，那么会产生一条诊断信息。
+* 如果求值语义是某个终止语义，那么程序非良构。
+
+如果在明显常量求值语境以外的语境中发生了契约违背，那么：
+* 如果求值语义是“快速强制”，那么程序会被契约终止。
+* 如果求值语义是“强制”或“观察”，那么会以一个指代包含了契约违背信息的 {{c/core|const std::contracts::contract_violation}} 类型对象 {{c|obj}} 的左值调用契约违背处理函数。
+** {{c|obj}} 使用的存储会以未指定的方式分配，但保证不会调用全局[[cpp/memory/new/operator new|分配函数]]。
+** {{c|obj}} 的生存期会在契约违背处理函数的整个调用期间持续。
+
+====被契约终止的程序====
+当程序被{{i|契约终止}}时，由实现定义（取决于语境）
+* 是否会调用 {{lc|std::terminate}}，
+* 是否会调用 {{lc|std::abort}}，以及
+* 是否会终止执行（后续不会再有{{rlp|multithread#进展保证|执行步骤}}发生）
+
+====契约违背处理函数====
+每个程序都有一个名为 {{c|::handle_contract_violation}} 的''契约违背处理函数'':
+
+{{ddcl|since=c++26|notes={{mark|可为 noexcept}}|
+void handle_contract_violation( std::contracts::contract_violation );
+}}
+
+由实现（而不是某个标准库标头）提供契约违背处理函数的某个被称为{{i|默认契约违背处理函数}}的定义。
+
+契约违背处理函数是否{{rlp|replacement function|可替换}}由实现定义。如果契约违背处理函数不可替换，那么契约违背处理函数的任何声明都非良构，不要求诊断。
+
+当契约违背处理函数正常返回时：
+* 如果求值语义是“观察”，那么控制流会从对契约断言的求值之后继续流动。
+* 如果求值语义是“强制”，那么程序会被契约终止。
+
+存在一个后发生于契约违背处理函数正常返回时的{{rlp|as if|可观察检查点}} {{tt|CP}}，使得后发生于该契约违背处理函数返回时的任何其他操作 {{tt|OP}} 也后发生于 {{tt|CP}}。
+
+====从断言处理异常====
+如果契约违背因为以异常退出谓词求值而发生，并且求值语义是“观察”或“强制”，那么会从为该异常隐式创建的一个活跃{{rlp|catch|处理块}}中调用契约违背处理函数。
+
+当契约违背处理函数正常返回时：
+* 如果求值语义是“观察”，那么该隐式处理块不再活跃。
+* 如果求值语义是“强制”，那么该隐式处理块在契约终止时保持活跃。
+
+在契约违背处理函数中可以使用 {{lc|std::current_exception()}} 检查或重抛当前异常。
+
+===依次求值===
+对包含契约断言的列表 {{tt|R}} 通过以下方式''依次求值''：
+
+@1@ 构造满足以下所有条件的契约断言列表 {{tt|S}}：
+* {{tt|S}} 包含 {{tt|R}} 的所有元素。
+* {{tt|R}} 的每个元素都可以在 {{tt|S}} 中重复由实现定义的次数。
+* 如果在 {{tt|R}} 中契约断言 {{tt|A}} 先序于另一契约断言 {{tt|B}}，那么在 {{tt|S}} 中契约断言 {{tt|A}} 的首次出现也先序于另一契约断言 {{tt|B}} 的首次出现。
+
+@2@ 对 {{tt|S}} 中的每个元素进行求值，使得如果在 {{tt|S}} 中契约断言 {{tt|A}} 先序于另一契约断言 {{tt|B}}，那么对 {{tt|A}} 的求值{{rlp|eval order|按顺序早于}}对 {{tt|B}} 的求值。
+
+{{source|
+void f(int i)
+{
+    contract_assert(i &gt; 0);  // #1
+    contract_assert(i &lt; 10); // #2
+    // 合法求值序列：#1 #2       （不重复）
+    // 合法求值序列：#1 #1 #2 #2 （依次重复）
+    // 合法求值序列：#1 #2 #1 #2 （轮流重复）
+    // 合法求值序列：#1 #2 #2 #1 （第二次出现可以不按顺序）
+    // 非法求值序列：#2 #1       （第一次出现必须按顺序）
+}
+}}
+
+===注解===
+可选择的求值语义的范围和灵活度取决于实现，并且不需要可选择所有四种求值语义。
+
+如果在不同翻译单元中对同一契约断言选择不同的求值语义，那么在契约断言具有可以改变常量表达式产生的值的副作用的情况下会违反{{rlp|definition#ODR|单一定义规则}}：
+{{source|
+constexpr int f(int i)
+{
+    contract_assert((++const_cast&lt;int&amp;&gt;(i), true));
+    return i;
+}
+
+inline void g()
+{
+    int a[f(1)]; // 大小取决于以上 contract_assert 的求值语义
+}
+}}
+
+在假如对谓词求值时结果是 {{c|true}} 的情况下不会发生契约违背，并且控制流会从对契约断言的求值之后继续流动。
+
+如果对谓词的求值以{{ls|cpp/utility/program#非局部跳转}}或终止程序来退出，那么也不会发生契约违背。
+
+C++ 标准推荐默认契约违背处理函数以合适的方式格式化实参的最相关内容，并以该内容产生诊断输出（在有潜在的重复契约违背时控制输出频率），然后正常返回。
+
+{{feature test macro|__cpp_contracts|value=202502L|std=C++26|契约}}
+
+===关键词===
+{{ltt|cpp/keyword/contract_assert}},
+{{ltt|cpp/identifier with special meaning/pre}},
+{{ltt|cpp/identifier with special meaning/post}}
+
+===支持状态===
+{{compiler support|std=c++26|hide=yes|nocollapse=yes|
+{{cpp/compiler_support/26/contracts}}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc contract_assert}}
+{{dsc inc|cpp/language/functions/dsc function_contract_specifiers}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

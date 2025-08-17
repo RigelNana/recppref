@@ -1,0 +1,83 @@
+{{cpp/ranges/title|constant_range}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; class T &gt;
+concept constant_range =
+    ranges::input_range&lt;T&gt; &amp;&amp;
+    /*constant-iterator*/&lt;ranges::iterator_t&lt;T&gt;&gt;;
+}}
+{{dcl h|辅助概念}}
+{{dcla|anchor=no|num=2|expos=yes|1=
+template&lt; class T &gt;
+concept /*constant-iterator*/ =
+    std::input_iterator&lt;T&gt; &amp;&amp;
+    std::same_as&lt;std::iter_const_reference_t&lt;T&gt;, std::iter_reference_t&lt;T&gt;&gt;;
+}}
+{{dcl end}}
+
+@1@ 概念 {{tt|constant_range}} 是概念 {{lconcept|range}} 的精化。对于满足它的范围，{{tt|ranges::begin}} 返回[[cpp/iterator#迭代器分类|常量迭代器]]。
+
+@2@ 当输入迭代器的间接操作结果是其常引用（隐含只读）时，概念 {{c/core|/*constant-iterator*/&lt;T&gt;}} 得到满足。
+
+===示例===
+{{example
+|code=
+#include &lt;ranges&gt;
+#include &lt;span&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+// 确保参数为常量范围的机制
+// 1) 重载集，其中可变版本委托给常量版本
+template &lt;std::ranges::constant_range R&gt;
+void takes_any_range1(R&amp;&amp; r)
+{
+    // R 必定为常量范围
+}
+
+template &lt;std::ranges::range R&gt;
+void takes_any_range1(R&amp;&amp; r)
+{
+    takes_any_range1(std::views::as_const(std::forward&lt;R&gt;(r)));
+}
+
+// 2) 一个掩蔽其形参的函数模板
+template &lt;std::ranges::range R&gt;
+void takes_any_range2(R&amp;&amp; _r)
+{
+    auto r = std::views::as_const(std::forward&lt;R&gt;(_r));
+
+    // r 必定为常量范围
+    // 不再使用 _r
+}
+
+// 3) 一个递归调用自身的函数模板
+template &lt;std::ranges::range R&gt;
+void takes_any_range3(R&amp;&amp; r)
+{
+    if constexpr (std::ranges::constant_range&lt;R&gt;)
+    {
+        // R 必定为常量范围
+        // 放置实现于此
+    }
+    else
+        takes_any_range3(std::views::as_const(std::forward&lt;R&gt;(r)));
+}
+
+static_assert
+(
+        std::ranges::constant_range&lt;const std::vector&lt;int&gt;&gt; and
+    not std::ranges::constant_range&lt;std::vector&lt;int&gt;&gt; and
+        std::ranges::constant_range&lt;std::string_view&gt; and
+    not std::ranges::constant_range&lt;std::span&lt;int&gt;&gt; and
+        std::ranges::constant_range&lt;std::span&lt;const int&gt;&gt; and
+    not std::ranges::constant_range&lt;const std::span&lt;int&gt;&gt;
+);
+
+int main() {}
+}}
+
+{{langlinks|en|es|ja}}

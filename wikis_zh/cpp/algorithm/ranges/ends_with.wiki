@@ -1,0 +1,147 @@
+{{cpp/ranges/title|ends_with}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++23|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires (std::forward_iterator&lt;I1&gt; {{!!}} std::sized_sentinel_for&lt;S1, I1&gt;) &amp;&amp;
+         (std::forward_iterator&lt;I2&gt; {{!!}} std::sized_sentinel_for&lt;S2, I2&gt;) &amp;&amp;
+         std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr bool ends_with( I1 first1, S1 last1,
+                          I2 first2, S2 last2, Pred pred = {},
+                          Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcla|num=2|since=c++23|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires (ranges::forward_range&lt;R1&gt; {{!!}} ranges::sized_range&lt;R1&gt;) &amp;&amp;
+         (ranges::forward_range&lt;R2&gt; {{!!}} ranges::sized_range&lt;R2&gt;) &amp;&amp;
+         std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                    ranges::iterator_t&lt;R2&gt;,
+                                    Pred, Proj1, Proj2&gt;
+constexpr bool ends_with( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                          Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+检查第二范围是否匹配第一范围的后缀。
+
+@1@ 设 {{c|N1}} 为 {{c|ranges::distance(first1, last1)}}，{{c|N2}} 为 {{c|ranges::distance(first2, last2)}}：
+* 如果 {{c|N1 &lt; N2}} 是 {{c|true}}，那么返回 {{c|false}}。
+* 否则返回 {{c multi|ranges::equal(std::move(first1) + (N1 - N2), last1,|              std::move(first2), last2, pred, proj1, proj2)}}。
+
+@2@ 设 {{c|N1}} 为 {{c|ranges::distance(r1)}}，{{c|N2}} 为 {{c|ranges::distance(r2)}}：
+* 如果 {{c|N1 &lt; N2}} 是 {{c|true}}，那么返回 {{c|false}}。
+* 否则返回 {{c multi|ranges::equal(views::drop(ranges::ref_view(r1),|                          N1 - static_cast&lt;decltype(N1)&gt;(N2)),|              r2, pred, proj1, proj2)}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|要检验的|sentinel=yes}}
+{{par|r1|要检验的元素范围}}
+{{par range|first2|last2|要用作后缀的|sentinel=yes}}
+{{par|r2|要用作后缀的元素范围}}
+{{par|pred|比较投影后元素的二元谓词}}
+{{par|proj1|应用到要检验的元素范围的投影}}
+{{par|proj2|应用到要用作后缀的元素范围的投影}}
+{{par end}}
+
+===返回值===
+在第二范围匹配第一范围的后缀时返回 {{c|true}}，否则返回 {{c|false}}。
+
+===复杂度===
+通常是线性：至多应用 {{mathjax-or|\(\scriptsize \min(N1,N2) \)|min(N1,N2)}} 次谓词和两个投影。在 {{c|N1 &lt; N2}} 是 {{c|true}} 时不会应用谓词和两个投影。
+
+如果 {{c|N1}} 与 {{c|N2}} 都能以常数时间计算（即两个迭代器-哨位类型对均实现 {{lconcept|sized_sentinel_for}}，或两个范围类型都实现了 {{lconcept|sized_range}}）且 {{c|N1 &lt; N2}} 是 {{c|true}}，那么时间复杂度是常数。
+
+===可能的实现===
+{{eq fun|1=
+struct ends_with_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires (std::forward_iterator&lt;I1&gt; {{!!}} std::sized_sentinel_for&lt;S1, I1&gt;) &amp;&amp;
+             (std::forward_iterator&lt;I2&gt; {{!!}} std::sized_sentinel_for&lt;S2, I2&gt;) &amp;&amp;
+             std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr bool operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        const auto n1 = ranges::distance(first1, last1);
+        const auto n2 = ranges::distance(first2, last2);
+        if (n1 &lt; n2)
+            return false;
+        ranges::advance(first1, n1 - n2);
+        return ranges::equal(std::move(first1), last1,
+                             std::move(first2), last2,
+                             pred, proj1, proj2);
+    }
+    
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires (ranges::forward_range&lt;R1&gt; {{!!}} ranges::sized_range&lt;R1&gt;) &amp;&amp;
+             (ranges::forward_range&lt;R2&gt; {{!!}} ranges::sized_range&lt;R2&gt;) &amp;&amp;
+             std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                        ranges::iterator_t&lt;R2&gt;,
+                                        Pred, Proj1, Proj2&gt;
+    constexpr bool operator()(R1&amp;&amp; r1, R2&amp;&amp; r2,
+                              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        const auto n1 = ranges::distance(r1);
+        const auto n2 = ranges::distance(r2);
+        if (n1 &lt; n2)
+            return false;
+        return ranges::equal(views::drop(ranges::ref_view(r1),
+                                         n1 - static_cast&lt;decltype(n1)&gt;(n2)),
+                             r2, pred, proj1, proj2);
+    }
+};
+
+inline constexpr ends_with_fn ends_with{};
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_ranges_starts_ends_with|std=C++23|value=202106L|{{lc|std::ranges::starts_with}}, {{tt|std::ranges::ends_with}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+
+static_assert
+(
+    ! std::ranges::ends_with("for", "cast") &amp;&amp;
+    std::ranges::ends_with("dynamic_cast", "cast") &amp;&amp;
+    ! std::ranges::ends_with("as_const", "cast") &amp;&amp;
+    std::ranges::ends_with("bit_cast", "cast") &amp;&amp;
+    ! std::ranges::ends_with("to_underlying", "cast") &amp;&amp;
+    std::ranges::ends_with(std::array{1, 2, 3, 4}, std::array{3, 4}) &amp;&amp;
+    ! std::ranges::ends_with(std::array{1, 2, 3, 4}, std::array{4, 5})
+);
+ 
+int main() {}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=4105|std=C++23|before=重载 {{vl|2}} 通过 {{c|N1 - N2}}&lt;ref&gt;它的结果可能是[[cpp/iterator/is-integer-like|整数类类型]]，此时无法构造 {{lc|ranges::drop_view}}。&lt;/ref&gt; 计算两个范围大小的差|after=改成 {{c|N1 - static_cast&lt;decltype(N1)&gt;(N2)}}}}
+{{dr list end}}
+&lt;references/&gt;
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc starts_with}}
+{{dsc inc|cpp/string/basic_string/dsc ends_with}}
+{{dsc inc|cpp/string/basic_string_view/dsc ends_with}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

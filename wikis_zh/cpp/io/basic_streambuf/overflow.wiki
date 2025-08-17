@@ -1,0 +1,120 @@
+{{cpp/io/basic_streambuf/title|overflow}}
+{{cpp/io/basic_streambuf/navbar}}
+{{ddcl|1=
+protected:
+virtual int_type overflow( int_type ch = Traits::eof() );
+}}
+
+此函数的目的是将字符从流缓冲区的[[cpp/io/basic_streambuf|放置区]]转移到[[cpp/io/basic_streambuf|关联字符序列]]。
+
+正式而言，此函数确保放置区有至少一个字符的空间。基类版本始终会失败，只能在派生类中提供会成功的版本（见[[#实现要求|实现要求]]）。标准库提供了 {{rev inl|until=c++26|{{lc|std::strstreambuf::overflow()}}、}}{{lc|std::basic_stringbuf::overflow()}} 和 {{l2tf std|cpp/io/basic_filebuf/overflow}}。
+
+===参数===
+{{par begin}}
+{{par|ch|要在放置区存储的字符}}
+{{par end}}
+
+===返回值===
+{{c|Traits::eof()}}
+
+===实现要求===
+此虚函数的所有覆盖定义都必须遵循以下约束，否则行为未定义：
+* 函数的效果是消耗{{i|等候序列}}中的某个初始子序列中的字符。等候序列定义为以下序列的拼接：
+** 放置区（正式而言，{{lc|pbase()}} 为空时是空序列，否则是从 {{lc|pbase()}} 开始的 {{c|pptr() - pbase()}} 个字符）。
+** 字符 {{c|ch}}，或当 {{c|ch}} 为 EOF（正式而言，{{c|Traits::eq_int_type(ch, Traits::eof())}} 返回 {{c|true}}）时返回空。
+* 消耗字符后，放置区指针被更新为使之保有剩余字符（如果有）。正式而言，设 {{c|r}} 为等候序列中'''未'''被消耗的字符个数：
+** 如果 {{c|r}} 非零，那么设置 {{lc|pbase()}} 和 {{lc|pptr()}} 以满足以下条件：
+*** {{c|pptr() - pbase()}} 是 {{c|r}}。
+*** 从 {{lc|pbase()}} 开始的 {{c|r}} 的字符是关联的输出流。
+** 如果 {{c|r}} 为零（消耗了等候序列中的所有字符），那么要么 {{lc|pbase()}} 被设为空值，要么 {{lc|pbase()}} 和 {{lc|pptr()}} 都被设为相同的非空值。
+* 函数可能在无法将字符后附到关联的输出流或无法按上述规则建立 {{lc|pbase()}} 和 {{lc|pptr()}} 时失败。
+* 如果函数成功，那么返回 {{c|Traits::eof()}} 以外的某个值。通常情况下会返回 {{c|ch}} 以表示成功，除了在 {{c|Traits::eq_int_type(ch, Traits::eof())}} 返回 {{c|true}} 的情况下会返回 {{c|Traits::not_eof(ch)}}。
+* 如果函数失败，那么返回 {{c|Traits::eof()}} 或抛出异常。
+
+===注解===
+{{lc|sputc()}} 和 {{lc|sputn()}} 在可能上溢的情况（{{c|1=pptr() == nullptr}} 或 {{c|1=pptr() &gt;= epptr()}}）下调用此函数。
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+
+// 以 std::array 实现的 std::ostream 缓冲区
+template&lt;std::size_t size, class CharT = char&gt;
+struct ArrayedStreamBuffer : std::basic_streambuf&lt;CharT&gt;
+{
+    using Base = std::basic_streambuf&lt;CharT&gt;;
+    using char_type = typename Base::char_type;
+    using int_type = typename Base::int_type;
+    
+    ArrayedStreamBuffer()
+    {
+        // 设置 std::basic_streambuf 放置区指针以 'buffer_' 工作
+        Base::setp(buffer.data(), buffer.data() + size);
+    }
+    
+    int_type overflow(int_type ch) 
+    {
+        std::cout &lt;&lt; "overflow\n";
+        return Base::overflow(ch);
+    }
+    
+    void print_buffer()
+    {
+         for (char_type i : buffer)
+        {
+            if (i == 0)
+                std::cout &lt;&lt; "\\0";
+            else
+                std::cout &lt;&lt; i;
+            std::cout &lt;&lt; ' ';
+        }
+        std::cout &lt;&lt; '\n';
+    }
+    
+private:
+    std::array&lt;char_type, size&gt; buffer{}; // 值初始化 buffer
+};
+
+int main()
+{
+    ArrayedStreamBuffer&lt;10&gt; streambuf;
+    std::ostream stream(&amp;streambuf);
+    
+    stream &lt;&lt; "hello";
+    streambuf.print_buffer();
+    if (stream.good())
+        std::cout &lt;&lt; "流正常\n";
+    
+    stream &lt;&lt; "world";
+    streambuf.print_buffer();
+    if (stream.good())
+        std::cout &lt;&lt; "流正常\n";
+    
+    stream &lt;&lt; "!";
+    streambuf.print_buffer();
+    if (!stream.good())
+        std::cout &lt;&lt; "流异常\n";
+}
+|output=
+h e l l o \0 \0 \0 \0 \0
+流正常
+h e l l o w o r l d 
+流正常
+overflow
+h e l l o w o r l d 
+流异常
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc uflow}}
+{{dsc inc|cpp/io/basic_streambuf/dsc underflow}}
+{{dsc inc|cpp/io/basic_filebuf/dsc overflow}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc overflow}}
+{{dsc inc|cpp/io/strstreambuf/dsc overflow}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

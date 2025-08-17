@@ -1,0 +1,141 @@
+{{cpp/title|printf|fprintf|sprintf|snprintf}}
+{{cpp/io/c/navbar}}
+{{dcl begin}}
+{{dcl header|cstdio}}
+{{dcl|num=1|
+int printf( const char* format, ... );
+}}
+{{dcl|num=2|
+int fprintf( std::FILE* stream, const char* format, ... );
+}}
+{{dcl|num=3|
+int sprintf( char* buffer, const char* format, ... );
+}}
+{{dcl|num=4|since=c++11|
+int snprintf( char* buffer, std::size_t buf_size, const char* format, ... );
+}}
+{{dcl end}}
+
+从给定位置加载数据，转换为字符串等价版本，并将结果写入各种池。
+
+@1@ 写结果到 {{lc|stdout}}。
+@2@ 写结果到文件流 {{c|stream}}。
+@3@ 写结果到字符串 {{c|buffer}}。
+@4@ 写结果到字符串 {{c|buffer}}。至多写 {{c|buf_size - 1}} 个字符。产生的字符串会以空字符终止，除非 {{c|buf_size}} 为零。若 {{c|buf_size}} 为零，则不写入任何内容，且 {{c|buffer}} 可以是空指针，然而依旧计算返回值（会写入的字符数，不包含空终止符）并返回。
+
+若调用 {{tt|sprintf}} 或 {{tt|snprintf}} 导致在重叠的对象间发生复制，则行为未定义。（例如 {{c|sprintf(buf, "%s text", buf);}}）。
+
+===参数===
+{{par begin}}
+{{par|stream|要写入的输出文件流}}
+{{par|buffer|指向要写入的字符串的指针}}
+{{par|buf_size|写入至多 buf_size - 1 个字符，再加上空终止符}}
+{{par|format|指向空终止多字节字符串的指针，指定如何判读数据}}
+{{par|...|指定要打印数据的实参。若任何{{lsd|cpp/language/variadic_arguments#默认实参提升}}后的参数不拥有对应转换说明所期待的类型（期待类型是提升后的类型或者提升后类型的兼容类型），或若实参数量少于 {{c|format}} 的要求，则行为未定义。若有多于 {{c|format}} 要求的实参，则求值并忽略多出的实参}}
+{{par end}}
+
+{{cpp/io/c/printf format}}
+
+===返回值===
+@1,2@ 若成功则为写入的字符数，若发生错误则为负值。
+
+@3@ 若成功则为写入的字符数（不包含空终止字符），若发生错误则为负值。
+
+@4@ 若成功则为会写入充分大缓冲区的字符数（不包含空终止字符），若发生错误则为负值。从而，当且仅当返回值非负且小于 {{c|buf_size}} 才完全写入（空终止）。
+
+===注解===
+{{cpp/io/c/printf posix note}}
+
+以零 {{c|buf_size}} 和用空指针作为 {{c|buffer}} 调用 {{tt|std::snprintf}} 可用于确定容纳输出的所需缓冲区大小：
+{{source|1=
+auto fmt = "sqrt(2) = %f";
+int sz = std::snprintf(nullptr, 0, fmt, std::sqrt(2));
+std::vector&lt;char&gt; buf(sz + 1); // 注意为空终止符 +1
+std::sprintf(buf.data(), fmt, std::sqrt(2)); // 确定可以放入
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cinttypes&gt;
+#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;limits&gt;
+
+int main()
+{
+    const char s[] = "Hello";
+    std::printf("字符串:\n"); // 同 std::puts("字符串:");
+    std::printf("\t[%10s]\n", s);
+    std::printf("\t[%-10s]\n", s);
+    std::printf("\t[%*s]\n", 10, s);
+    std::printf("\t[%-10.*s]\n", 4, s);
+    std::printf("\t[%-*.*s]\n", 10, 4, s);
+
+    std::printf("字符:\t%c %%\n", 65);
+
+    std::printf("整数:\n");
+    std::printf("\t十进制:    \t%i %d %.6i %i %.0i %+i %i\n",
+                                  1, 2,   3, 0,   0,  4,-4);
+    std::printf("\t十六进制:\t%x %x %X %#x\n",
+                                  5,10,10,  6);
+    std::printf("\t八进制:      \t%o %#o %#o\n",
+                                 10, 10,  4);
+
+    std::printf("浮点数:\n");
+    std::printf("\t舍入:\t\t%f %.0f %.32f\n", 1.5, 1.5, 1.3);
+    std::printf("\t填充:\t\t%05.2f %.2f %5.2f\n", 1.5, 1.5, 1.5);
+    std::printf("\t科学表示:\t%E %e\n", 1.5, 1.5);
+    std::printf("\t十六进制:\t%a %A\n", 1.5, 1.5);
+    std::printf("\t特殊值:\t\t0/0=%g 1/0=%g\n", 0.0/0.0, 1.0/0.0);
+
+    std::printf("变量宽度控制:\n");
+    std::printf("\t右对齐变量宽度: '%*c'\n", 5, 'x');
+    int r = std::printf("\t左对齐变量宽度: '%*c'\n", -5, 'x');
+    std::printf("(最后一次 printf 打印了 %d 个字符)\n", r);
+
+    std::printf("固定宽度类型:\n");
+    std::uint32_t val = std::numeric_limits&lt;std::uint32_t&gt;::max();
+    std::printf("\t最大的 32 位值为 %" PRIu32 " 或 %#" PRIx32 "\n",
+                                        val,            val);
+}
+|p=true
+|output=
+字符串:
+	[     Hello]
+	[Hello     ]
+	[     Hello]
+	[Hell      ]
+	[Hell      ]
+字符:	A %
+整数:
+	十进制:    	1 2 000003 0  +4 -4
+	十六进制:	5 a A 0x6
+	八进制:      	12 012 04
+浮点数:
+	舍入:		1.500000 2 1.30000000000000004440892098500626
+	填充:		01.50 1.50  1.50
+	科学表示:	1.500000E+00 1.500000e+00
+	十六进制:	0x1.8p+0 0X1.8P+0
+	特殊值:		0/0=-nan 1/0=inf
+变量宽度控制:
+	右对齐变量宽度: '    x'
+	左对齐变量宽度: 'x    '
+(最后一次 printf 打印了 32 个字符)
+固定宽度类型:
+	最大的 32 位值为 4294967295 或 0xffffffff
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc fwprintf}}
+{{dsc inc|cpp/io/c/dsc vfprintf}}
+{{dsc inc|cpp/io/c/dsc fputs}}
+{{dsc inc|cpp/io/c/dsc fscanf}}
+{{dsc inc|cpp/utility/dsc to_chars}}
+{{dsc inc|cpp/io/dsc print}}
+{{dsc inc|cpp/io/dsc println}}
+{{dsc see c|c/io/fprintf|printf|fprintf|sprintf|snprintf}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,93 @@
+{{cpp/title|make_tuple}}
+{{cpp/utility/tuple/navbar}}
+{{dcl begin}}
+{{dcl header|tuple}}
+{{dcl|since=c++11|notes={{mark|C++14 起为 constexpr}}|1=
+template&lt; class... Types &gt;
+std::tuple&lt;VTypes...&gt; make_tuple( Types&amp;&amp;... args );
+}}
+{{dcl end}}
+
+创建元组对象，从实参类型推导目标类型。
+
+对于 {{tt|Types...}} 中的每个 {{tt|Ti}}，{{tt|Vtypes...}} 中的对应类型 {{tt|Vi}} 为 {{c|std::decay&lt;Ti&gt;::type}}，除非应用 {{lc|std::decay}} 对某些类型 {{tt|X}} 导致 {{c|std::reference_wrapper&lt;X&gt;}}，该情况下推导的类型为 {{tt|X&amp;}}。
+
+===参数===
+{{par begin}}
+{{par|args|为之构造元组的零或更多实参}}
+{{par end}}
+
+===返回值===
+含给定值的 {{lc|std::tuple}} 对象，如同用 {{c|std::tuple&lt;VTypes...&gt;(std::forward&lt;Types&gt;(t)...)}} 创建。
+
+===可能的实现===
+{{eq fun|1=
+template &lt;class T&gt;
+struct unwrap_refwrapper
+{
+    using type = T;
+};
+
+template &lt;class T&gt;
+struct unwrap_refwrapper&lt;std::reference_wrapper&lt;T&gt;&gt;
+{
+    using type = T&amp;;
+};
+
+template &lt;class T&gt;
+using unwrap_decay_t = typename unwrap_refwrapper&lt;typename std::decay&lt;T&gt;::type&gt;::type;
+// 或使用 std::unwrap_ref_decay_t（C++20 起）
+
+template &lt;class... Types&gt;
+constexpr // C++14 起
+std::tuple&lt;unwrap_decay_t&lt;Types&gt;...&gt; make_tuple(Types&amp;&amp;... args)
+{
+    return std::tuple&lt;unwrap_decay_t&lt;Types&gt;...&gt;(std::forward&lt;Types&gt;(args)...);
+}
+}}
+
+===示例===
+{{example|
+|code=
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+#include &lt;functional&gt;
+
+std::tuple&lt;int, int&gt; f() // 此函数返回多值
+{
+    int x = 5;
+    return std::make_tuple(x, 7); // C++17 中可以为 return {x,7};
+}
+
+int main()
+{
+    // 异质元组的构造
+    int n = 1;
+    auto t = std::make_tuple(10, "Test", 3.14, std::ref(n), n);
+    n = 7;
+    std::cout &lt;&lt; "t 的值为 ("
+              &lt;&lt; std::get&lt;0&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;1&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;2&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;3&gt;(t) &lt;&lt; ", "
+              &lt;&lt; std::get&lt;4&gt;(t) &lt;&lt; ")\n";
+
+    // 返回多值的函数
+    int a, b;
+    std::tie(a, b) = f();
+    std::cout &lt;&lt; a &lt;&lt; ' ' &lt;&lt; b &lt;&lt; '\n';
+}
+|output=
+t 的值为 (10, Test, 3.14, 7, 1)
+5 7
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tie}}
+{{dsc inc|cpp/utility/tuple/dsc forward_as_tuple}}
+{{dsc inc|cpp/utility/tuple/dsc tuple_cat}}
+{{dsc inc|cpp/utility/dsc apply}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

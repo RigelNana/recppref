@@ -1,0 +1,144 @@
+{{title|{{tt|sizeof}} 运算符}}
+{{cpp/language/expressions/navbar}}
+查询对象或类型的大小。
+
+在需要知道对象的实际大小时使用。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|sizeof(}} {{spar|类型}} {{ttb|)}}}}
+{{sdsc|num=2|{{ttb|sizeof}} {{spar|表达式}} {{ttb|}}}}
+{{sdsc end}}
+
+@1@ 产生{{spar sep|类型}}的{{rlp|object|对象表示}}的字节数。
+@2@ 产生{{spar sep|表达式}}的类型的对象表示的字节数，假如该表达式被求值。
+
+{{par begin}}
+{{par|{{spar|类型}}|{{spar|类型标识}}（见{{rlps|type#类型的命名}}）}}
+{{par|{{spar|表达式}}|{{rlp|operator precedence|运算符优先级}}不低于 {{tt|sizeof}} 的表达式（例如 {{c|sizeof a + b}} 会解析成 {{c|(sizeof a) + b}} 而不是 {{c|sizeof (a + b)}}）}}
+{{par end}}
+
+{{tt|sizeof}} 表达式的结果是一个 {{lc|std::size_t}} 类型的{{rlp|constant expression|常量表达式}}。
+
+===注解===
+取决于计算机架构，{{enwiki|byte|字节}}可能具有 8 或更多位，确切的位数记录于 {{lc|CHAR_BIT}}。
+
+下列 {{tt|sizeof}} 表达式始终求值为 {{c|1}}：
+* {{c|sizeof(char)}}
+* {{c|sizeof(signed char)}}
+* {{c|sizeof(unsigned char)}}
+{{rev begin}}
+{{rev|since=c++17|
+* {{c|sizeof(std::byte)}}
+}}
+{{rev|since=c++20|
+* {{c|sizeof(char8_t)}}
+}}
+{{rev end}}
+
+不能对函数类型、不完整类型或位域{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}使用 {{tt|sizeof}}。
+
+当应用于引用类型时，结果是被引用类型的大小。
+
+当应用于类类型时，结果是该类的完整对象所占据的字节数，包括这种对象放入数组时所需的任何额外填充。{{rlp|object#子对象|潜在重叠的子对象}}所占据的字节数可以小于该对象的大小。
+
+{{tt|sizeof}} 的结果始终非零，即使应用于空类。
+
+当应用于某个表达式时，{{tt|sizeof}} {{rlp|expressions#潜在求值表达式|并不对表达式进行求值}}{{rev inl|since=c++11|（即该表达式是不求值操作数）}}，并且即便表达式代表多态对象，它的结果也是该表达式的静态类型的大小。不进行左值向右值、数组向指针和函数向指针转换。{{rev inl|since=c++17|不过，它在形式上对纯右值实参进行{{rlp|implicit_conversion#临时量实质化|临时量实质化}}：实参不可析构时程序非良构。}}
+
+===关键词===
+{{ltt|cpp/keyword/sizeof}}
+
+===示例===
+{{example
+|本示例的输出对应于具有 64 位指针和 32 位 int 的系统（亦称为 {{rlp|types#数据模型|'''LP64''' 或 '''LLP64'''}}）。
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+
+struct Empty          { };
+struct Base           { int a; };
+struct Derived : Base { int b; };
+struct Bit            { unsigned bit: 1; };
+struct CharChar       { char c; char c2; };
+struct CharCharInt    { char c; char c2; int i; };
+struct IntCharChar    { int i;  char c;  char c2; };
+struct CharIntChar    { char c; int i;   char c2; };
+struct CharShortChar  { char c; short s; char c2; };
+
+int main()
+{
+    Empty e;
+    Derived d;
+    Base&amp; b = d;
+    [[maybe_unused]] Bit bit;
+    int a[10];
+
+    auto f = [&amp;]() { return sizeof(int[10]) == sizeof a ? throw 1 : e; };
+//  f(); // 返回类型是 Empty，但是必然会抛出 1
+ 
+    auto println = [](auto rem, std::size_t size) { std::cout &lt;&lt; rem &lt;&lt; size &lt;&lt; '\n'; };
+ 
+    println( "1) 空类的大小：                        ", sizeof e                     );
+    println( "2) 指针的大小：                        ", sizeof &amp;e                    );
+    println( "3) sizeof(Bit)    -类：               ", sizeof(Bit)                  );
+    println( "4) sizeof(int[10])-含有10个 int 的数组：", sizeof(int[10])              );
+    println( "5) sizeof a       -含有10个 int 的数组：", sizeof a                     );
+    println( "6) 含有10个 int 的数组的长度：           ", ((sizeof a) / (sizeof *a))   );
+    println( "7) 含有10个 int 的数组的长度 (2)：       ", ((sizeof a) / (sizeof a[0])) );
+    println( "8) Derived 的大小：                    ", sizeof d                     );
+    println( "9) 通过 Base 获取 Derived 的大小：      ", sizeof b                     );
+    println( "A) sizeof(unsigned)：                 ", sizeof(unsigned)             );
+    println( "B) sizeof(int)：                      ", sizeof(int)                  );
+    println( "C) sizeof(short)：                    ", sizeof(short)                );
+    println( "D) sizeof(char)：                     ", sizeof(char)                 );
+    println( "E) sizeof(CharChar)：                 ", sizeof(CharChar)             );
+    println( "F) sizeof(CharCharInt)：              ", sizeof(CharCharInt)          );
+    println( "G) sizeof(IntCharChar)：              ", sizeof(IntCharChar)          );
+    println( "H) sizeof(CharIntChar)：              ", sizeof(CharIntChar)          );
+    println( "I) sizeof(CharShortChar)：            ", sizeof(CharShortChar)        );
+    println( "J) f() 的大小：                        ", sizeof f()                   );
+    println( "K) Base::a 的大小：                    ", sizeof Base::a               );
+    
+//  println( "函数的大小：     ", sizeof(void()) ); // 错误
+//  println( "不完整类型的大小：", sizeof(int[])  ); // 错误
+//  println( "位域的大小：     ", sizeof bit.bit ); // 错误
+}
+|p=true
+|output=
+1) 空类的大小：                        1
+2) 指针的大小：                        8
+3) sizeof(Bit)    -类：               4
+4) sizeof(int[10])-含有10个 int 的数组：40
+5) sizeof a       -含有10个 int 的数组：40
+6) 含有10个 int 的数组的长度：           10
+7) 含有10个 int 的数组的长度 (2)：       10
+8) Derived 的大小：                    8
+9) 通过 Base 获取 Derived 的大小：      4
+A) sizeof(unsigned)：                 4
+B) sizeof(int)：                      4
+C) sizeof(short)：                    2
+D) sizeof(char)：                     1
+E) sizeof(CharChar)：                 2
+F) sizeof(CharCharInt)：              8
+G) sizeof(IntCharChar)：              8
+H) sizeof(CharIntChar)：              12
+I) sizeof(CharShortChar)：            6
+J) f() 的大小：                        1
+K) Base::a 的大小：                    4
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1553|std=C++11|before=可以对位域亡值使用 {{tt|sizeof}}|after=已禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignof}}
+{{dsc inc|cpp/language/dsc sizeof...}}
+{{dsc inc|cpp/types/dsc numeric_limits}}
+{{dsc see c|c/language/sizeof}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

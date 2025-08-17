@@ -1,0 +1,166 @@
+{{title|dynamic_cast 转换}}
+{{cpp/language/expressions/navbar}}
+沿继承层级向上、向下及侧向，安全地转换到其他类的指针和引用。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|dynamic_cast&lt;}} {{spar|目标类型}} {{ttb|&gt;(}} {{spar|表达式}} {{ttb|)}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|目标类型}}|指向完整类类型的指针，到完整类类型的引用，或指向（可有 cv 限定的）{{c/core|void}} 的指针}}
+{{par|{{spar|表达式}}|如果{{spar sep|目标类型}}是引用，那么是完整类类型的{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}表达式，如果{{spar sep|目标类型}}是指针，那么是指向完整类类型的指针纯右值}}
+{{par end}}
+
+===解释===
+为描述方便起见，“{{spar sep|表达式}}或结果是到 {{tt|T}} 的引用”表示“它是 {{tt|T}} 类型的泛左值”{{rev inl|until=c++11|，这遵循 {{rlpt|decltype}} 的约定}}。
+
+只有下列转换在不{{rlps|const_cast#移除常量性}}（或易变性）的场合才能用 {{c/core|dynamic_cast}} 进行。
+
+@1@ 如果{{spar sep|表达式}}的类型刚好是{{spar sep|目标类型}}或{{spar sep|目标类型}}的更少 cv 限定版本，那么结果是{{spar sep|表达式}}具有{{spar sep|目标类型}}类型的值。也就是说，{{c/core|dynamic_cast}} 可以用来'''添加常量性'''。隐式转换和 {{c/core|static_cast}} 也能进行此转换。
+
+@2@ 如果{{spar sep|目标类型}}是“到（可有 cv 限定的）{{tt|Base}} 的指针”、{{spar sep|表达式}}的类型是“到（可有 cv 限定的）{{tt|Derived}} 的指针”，并且 {{tt|Base}} 是 {{tt|Derived}} 的基类，那么：
+* 如果{{spar sep|表达式}}是空指针值，那么结果也是空指针值。
+* 否则，结果是到{{spar sep|表达式}}指向的 {{tt|Derived}} 对象的唯一 {{tt|Base}} {{rlps|object#子对象}}的指针。换言之，{{c/core|dynamic_cast}} 可以用于从派生类到基类'''向上转换'''指针。隐式转换和 {{c/core|static_cast}} 也能进行此转换。
+
+@3@ 如果{{spar sep|目标类型}}是“到（可有 cv 限定的）{{tt|Base}} 的引用”、{{spar sep|表达式}}的类型是“到（可有 cv 限定的）{{tt|Derived}} 的引用”，并且 {{tt|Base}} 是 {{tt|Derived}} 的基类，那么结果是到{{spar sep|表达式}}指向的 {{tt|Derived}} 对象的唯一 {{tt|Base}} {{rlps|object#子对象}}的引用。换言之，{{c/core|dynamic_cast}} 可以用于从派生类到基类'''向上转换'''引用。隐式转换和 {{c/core|static_cast}} 也能进行此转换。
+
+@4@ 如果{{spar sep|表达式}}是{{rlp|object#多态对象|多态类型}}的空指针值，那么结果是{{spar sep|目标类型}}类型的空指针值。
+
+@5@ 否则，{{spar sep|表达式}}必须为指针或引用，且指代类型与{{spar sep|表达式}}的类型{{rlp|implicit conversion#相似类型|相似}}的对象，并且该对象必须在自己的{{rlp|lifetime|生存期}}内或者正在构造或析构（否则行为未定义）。
+:@a@ 如果{{spar sep|表达式}}是“到（可有 cv 限定的）{{c/core|void}} 的指针”，那么结果是指向{{spar sep|表达式}}所指向的{{rlp|object#子对象|最终派生对象}}的指针。
+:@b@ 否则，会进行运行时检查以确认{{spar sep|表达式}}指向/引用的对象是否可以转换到{{spar sep|目标类型}}指向/引用的类型。
+::@i@ 在{{spar sep|表达式}}指向/引用的最终派生对象中，如果{{spar sep|表达式}}指向/引用某个{{spar sep|目标类型}} 类型对象的某个公开基类子对象，并且只有一个{{spar sep|目标类型}} 对象从该子对象派生，那么转换结果会指向/引用该 {{spar sep|目标类型}}对象。换言之，{{c/core|dynamic_cast}} 可以用于从基类到派生类的'''向下转换'''。
+::@ii@ 否则，如果{{spar sep|表达式}}指向/引用某个最终派生对象的公开基类子对象，并且该最终派生对象拥有无歧义公开基类{{spar sep|目标类型}}，那么转换结果会指向/引用该最终派生对象的 {{spar sep|目标类型}}子对象。换言之，{{c/core|dynamic_cast}} 可以用于在同一基类的两个派生类型之间的'''横跨转换'''（或侧向转换）。
+::@iii@ 否则，运行时检查失败。
+* 如果{{spar sep|目标类型}}是指针类型，那么就会返回{{spar sep|目标类型}}类型的空指针值。
+* 如果{{spar sep|目标类型}}是引用类型，那么就会抛出可以与 {{lc|std::bad_cast}} 类型{{rlp|catch|处理块}}匹配的异常。
+
+当在构造函数或析构函数中（直接或间接地）使用 {{c/core|dynamic_cast}}，且{{spar sep|表达式}}指代正在构造/销毁的对象时，该对象被认为是最终派生对象。如果{{spar sep|目标类型}}不是到构造函数/析构函数自身的类或它的基类的指针或引用，那么行为未定义。
+
+与其他转换表达式相似：
+{{rev begin}}
+{{rev|until=c++11|
+* 当{{spar sep|目标类型}}是引用类型时，结果是左值。
+* 当{{spar sep|目标类型}}是指针类型时，结果是右值。
+}}
+{{rev|since=c++11|
+* 当{{spar sep|目标类型}}是左值引用类型（{{spar sep|表达式}}必然是左值）时，结果是左值。
+* 当{{spar sep|目标类型}}是右值引用类型（{{spar sep|表达式}}是完整类类型，{{rev inl|until=c++17|可以是左值或右值}}{{rev inl|since=c++17|必然是泛左值（纯右值被{{rlp|implicit conversion#临时量实质化|实质化}}）}}）时，结果是亡值。
+* 当{{spar sep|目标类型}}是指针类型时，结果是纯右值。
+}}
+{{rev end}}
+
+===注解===
+{{c/core|static_cast}} 也能用来进行向下转换，它不会有运行时检查的开销，但只有在程序（通过某些其他逻辑）能够保证{{spar sep|表达式}}指向的对象肯定是 {{tt|Derived}} 时才是安全的。
+
+某些形式的 {{c/core|dynamic_cast}} 依赖于{{enwiki|Run-time type information|运行时类型鉴别}}，即编译的程序中关于每个多态类的信息。编译器通常有选项禁用此信息。
+
+===关键词===
+{{ltt|cpp/keyword/dynamic_cast}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct V
+{
+    virtual void f() {} // 必须为多态，以使用带运行时检查的 dynamic_cast
+};
+
+struct A : virtual V {};
+
+struct B : virtual V
+{
+    B(V* v, A* a)
+    {
+        // 构造中转换（见后述 D 的构造函数中的调用）
+        dynamic_cast&lt;B*&gt;(v); // 良好定义：v 有类型 V*，V 是 B 的基类，产生 B*
+        dynamic_cast&lt;B*&gt;(a); // 未定义行为：a 有类型 A*，A 不是 B 的基类
+    }
+};
+
+struct D : A, B
+{
+    D() : B(static_cast&lt;A*&gt;(this), this) {}
+};
+
+struct Base
+{
+    virtual ~Base() {}
+};
+
+struct Derived: Base
+{
+    virtual void name() {}
+};
+
+int main()
+{
+    D d; // 最终派生对象
+    A&amp; a = d; // 向上转换，可以用 dynamic_cast，但不是必须的
+    
+    [[maybe_unused]]
+    D&amp; new_d = dynamic_cast&lt;D&amp;&gt;(a); // 向下转换
+    [[maybe_unused]]
+    B&amp; new_b = dynamic_cast&lt;B&amp;&gt;(a); // 侧向转换
+    
+    Base* b1 = new Base;
+    if (Derived* d = dynamic_cast&lt;Derived*&gt;(b1); d != nullptr)
+    {
+        std::cout &lt;&lt; "成功从 b1 向下转换到 d\n";
+        d-&gt;name(); // 可以安全调用
+    }
+    
+    Base* b2 = new Derived;
+    if (Derived* d = dynamic_cast&lt;Derived*&gt;(b2); d != nullptr)
+    {
+        std::cout &lt;&lt; "成功从 b2 向下转换到 d\n";
+        d-&gt;name(); // 可以安全调用
+    }
+    
+    delete b1;
+    delete b2;
+}
+|output=
+成功从 b2 向下转换到 d
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1269|std=C++11|before=在{{spar sep|目标类型}}是右值引用类型时不会为亡值{{spar sep|表达式}}进行运行时检查|after=此时会进行运行时检查}}
+{{dr list item|wg=cwg|dr=2861|std=C++98|before={{spar sep|表达式}}可以指向/指代类型不可访问的对象|after=此时行为未定义}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.6.1.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.6|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.7|title=Dynamic cast|id=expr.dynamic.cast}}
+{{ref std end}}
+
+===参阅===
+* {{rlpt|const_cast}}
+* {{rlpt|static_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast|显式转换}}
+* {{rlp|implicit conversion|隐式转换}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

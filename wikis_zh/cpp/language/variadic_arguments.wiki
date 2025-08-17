@@ -1,0 +1,95 @@
+{{title|变长实参}}
+{{cpp/language/functions/navbar}}
+
+允许函数接受任意数量的额外实参。
+
+变参函数的{{rlps|function#形参列表}}的最后一个形参是省略号（{{c|...}}）。
+
+{{rev begin}}
+&lt;tr class="t-rev"&gt;
+&lt;td&gt;位于省略号之前的逗号可以省略。&lt;/td&gt;
+&lt;td&gt;{{mark deprecated c++26}}&lt;/td&gt;
+&lt;/tr&gt;
+{{rev end}}
+
+{{source|1=
+// 函数声明如下
+int printx(const char* fmt, ...);
+int printx(const char* fmt...); // 同上，但 C++26 起被弃用
+
+// 能以一个或多个实参调用：
+printx("hello world");
+printx("a=%d b=%d", a, b);
+
+int printy(..., const char* fmt); // 错误：... 只能是最后一个形参
+int printz(...); // 合法，但无法以可移植的方式访问实参
+}}
+
+{{rrev|since=c++11|
+这与函数{{rlp|parameter pack|形参包}}展开不同，形参包展开是由作为形参声明符一部分的省略号指定的，而非以省略号表示整个形参。形参包展开和“变参”省略号都能出现在函数模板声明中，如 {{lc|std::is_function}} 的情况。
+}}
+
+===默认实参提升===
+调用变参函数时，进行左值到右值、数组到指针及函数到指针的{{rlp|implicit conversion#值变换|转换}}后，可变实参列表中的每个实参都要经过称为''默认实参提升''{{sep}}的额外转换： 
+
+{{rrev|since=c++11|
+* 转换 {{lc|std::nullptr_t}} 到 {{c/core|void*}}。
+}}
+* 转换 {{c/core|float}} 到 {{c/core|double}}，如同{{rlps|implicit conversion#浮点数提升}}。
+* 转换 {{c/core|bool}}、{{c/core|char}}、{{c/core|short}} 及{{rev inl|since=c++11|无作用域}}枚举到 {{c/core|int}} 或更宽的整数类型，如同{{rlps|implicit conversion#整数提升}}。
+
+{{rev inl|until=c++11|非 POD 类类型}}{{rev inl|since=c++11|有作用域枚举，和拥有合格的非平凡复制构造函数、合格的非平凡移动构造函数或非平凡析构函数的类类型}}在潜在求值的调用中是以实现定义的语义条件性支持的（这些类型在{{rlp|expressions#潜在求值表达式|不求值调用}}中始终支持）。
+
+因为变长形参对于{{rlp|overload resolution|重载决议}}而言具有最低的优先级，所以它们常被用作 {{rlp|sfinae|SFINAE}} 中的万应后备。
+
+在使用变长实参的函数体内，可以用一些 [[cpp/utility/variadic|{{tt|&lt;cstdarg&gt;}} 库设施]]访问这些实参的值：
+{{dsc begin}}
+{{dsc header|cstdarg}}
+{{dsc inc|cpp/utility/variadic/dsc va_start}}
+{{dsc inc|cpp/utility/variadic/dsc va_arg}}
+{{dsc inc|cpp/utility/variadic/dsc va_copy}}
+{{dsc inc|cpp/utility/variadic/dsc va_end}}
+{{dsc inc|cpp/utility/variadic/dsc va_list}}
+{{dsc end}}
+
+如果省略号前的最后一个形参具有引用类型，或者它的类型与默认实参提升所产生的各种类型不{{lt|c/language/type#兼容类型|兼容}}，那么 {{lc|va_start}} 宏的行为未定义。
+
+{{rrev|since=c++11|
+如果在 {{lc|va_start}} 中以{{rlps|parameter pack#包展开}}或源自 {{rlpsd|lambda#Lambda 捕获}}的实体为最后的形参，那么程序非良构，不要求诊断。
+}}
+
+===替代方案===
+{{rrev|since=c++11|
+* {{rlp|parameter pack|变参模板}}也可以用来创建接受可变数量实参的函数。它们通常是更好的选择，因为它们对实参类型不施加任何制约，不进行整数和浮点数提升，且类型安全。
+* 当所有变长实参均为相同类型时，{{lc|std::initializer_list}} 提供了一种访问变长实参的便利机制。不过这种情况下不能修改各个实参，因为 {{lc|std::initializer_list}} 仅提供指向它的各个元素的 const 指针。
+}}
+
+===注解===
+因为在 C23 前的 C 编程语言中，省略号前必须至少出现一个具名形参，所以 {{c|R printz(...);}} 在 C23 前非法。C++ 中允许这种形式，尽管无法访问传递给这种函数的实参，此形式常用作 {{rlp|sfinae|SFINAE}} 的后备重载，它利用了{{rlp|overload resolution|重载决议}}中省略号转换的最低优先级。
+
+变长实参的语法在 1983 年引入 C++，省略号前没有逗号。C89 从 C++ 接受函数原型时，它以要求逗号的语法替换了该语法。为了兼容，C++98 一并接受 C++ 风格 {{c|f(int n...)}} 和 C 风格 {{c|f(int n, ...)}}。原本的 C++ 风格语法从 C++26 起被弃用。
+
+{{rrev|since=c++20|
+可以在简写函数模板中使用逗号，将省略号标示为变参函数而非变参模板：
+
+{{c multi
+|void f1(auto...);   // 同 template&lt;class... Ts&gt; void f3(Ts...)
+|void f2(auto, ...); // 同 template&lt;class T&gt; void f3(T...)
+}}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=506|std=C++98|before=传递非 POD 类实参给省略号会导致未定义行为|after=传递此类参数受条件性支持，并且语义由实现定义}}
+{{dr list item|wg=cwg|dr=634|std=C++98|before=条件性支持的类类型使某些 SFINAE 手法无法起效|after=如果不求值则始终支持}}
+{{dr list item|wg=cwg|dr=2247|std=C++11|before=不限制传递形参包或 lambda 捕获给 {{tt|va_start}}|after=改为非良构，不要求诊断}}
+{{dr list item|wg=cwg|dr=2347|std=C++11|before=不明确传递有作用域枚举给省略号是否适用默认实参提升|after=传递有作用域枚举受条件性支持，并且语义由实现定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/variadic|变长实参|nomono=true}}
+{{dsc see c|c/language/conversion|隐式转换|nomono=true}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,105 @@
+{{cpp/memory/polymorphic_allocator/title|construct}}
+{{cpp/memory/polymorphic_allocator/navbar}}
+{{dcl begin}}
+{{dcl|since=c++17|num=1|
+template&lt; class U, class... Args &gt;
+void construct( U* p, Args&amp;&amp;... args );
+}}
+{{dcl|since=c++17|until=c++20|num=2|
+template&lt; class T1, class T2, class... Args1, class... Args2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p,
+                std::piecewise_construct_t,
+                std::tuple&lt;Args1...&gt; x,
+                std::tuple&lt;Args2...&gt; y );
+}}
+{{dcl|since=c++17|until=c++20|num=3|
+template&lt; class T1, class T2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p );
+}}
+{{dcl|since=c++17|until=c++20|num=4|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, U&amp;&amp; x, V&amp;&amp; y );
+}}
+{{dcl|since=c++17|until=c++20|num=5|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, const std::pair&lt;U, V&gt;&amp; xy );
+}}
+{{dcl|since=c++17|until=c++20|num=6|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, std::pair&lt;U, V&gt;&amp;&amp; xy );
+}}
+{{dcl|num=7|since=c++17|until=c++20|
+template&lt; class T1, class T2, class NonPair &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, NonPair&amp;&amp; non_pair );
+}}
+{{dcl end}}
+
+在 {{c|p}} 所指的，分配但未初始化的存储上，以提供的构造函数实参构造一个对象。若对象自身拥有使用分配器的类型，或它是 {{tt|std::pair}}，则传递 {{c|*this}} 给被构造的对象。
+
+@1@ 以[[cpp/memory/uses_allocator#使用分配器构造|使用分配器构造]]的手段在 {{spar|p}} 所指示的未初始化内存位置，以 {{c|*this}} 为分配器创建给定类型 {{tt|U}} 的对象。{{rev inl|until=c++20|{{cpp/enable if| {{tt|U}} 不是 {{lc|std::pair}} 的特化}}。}}
+
+{{rrev|until=c++20|
+@2@ 首先，若 {{tt|T1}} 或 {{tt|T2}} 之一具分配器，则修改元组 {{c|x}} 与 {{c|y}} 以包含 {{tt|this-&gt;resource()}}，产生两个新元组 {{tt|xprime}} 与 {{tt|yprime}}，其中遵循以下三条规则：
+:@2a@ 若 {{tt|T1}} 不具分配器（{{c|1=std::uses_allocator&lt;T1, polymorphic_allocator&gt;::value==false}}）且 {{c|1=std::is_constructible&lt;T1, Args1...&gt;::value==true}}，则 {{tt|xprime}} 是未修改的 {{tt|x}}。
+:@2b@ 若 {{tt|T1}} 具分配器（{{c|1=std::uses_allocator&lt;T1, polymorphic_allocator&gt;::value==true}}），且其构造函数使用分配器标签（{{c|1=std::is_constructible&lt;T1, std::allocator_arg_t, polymorphic_allocator, Args1...&gt;::value==true}}），则 {{tt|xprime}} 是
+{{c|std::tuple_cat(std::make_tuple(std::allocator_arg, *this), std::move(x))}}
+:@2c@ 若 {{tt|T1}} 具分配器（{{c|1=std::uses_allocator&lt;T1, polymorphic_allocator&gt;::value==true}}），且其构造函数接受分配器为最后实参（{{c|1=std::is_constructible&lt;T1, Args1..., polymorphic_allocator&gt;::value==true}}），则 {{tt|xprime}} 是 {{c|std::tuple_cat(std::move(x), std::make_tuple(*this))}}。
+:@2d@ 否则程序非良构。
+@@ 同样的规则应用于 {{tt|T2}} 及以 {{tt|yprime}} 替换 {{c|y}} 的情况。
+@@ 一旦构造了 {{tt|xprime}} 和 {{tt|yprime}}，就如同以用 {{c|::new((void *) p) pair&lt;T1, T2&gt;(std::piecewise_construct, std::move(xprime), std::move(yprime));}} 于分配的存储构造对偶 {{c|p}}。
+@3@ 等价于 {{c|construct(p, std::piecewise_construct, std::tuple&lt;&gt;(), std::tuple&lt;&gt;())}}，即将内存资源传递到对偶的成员类型上，若它接受它们。
+@4@ 等价于
+{{source|
+construct(p, std::piecewise_construct, std::forward_as_tuple(std::forward&lt;U&gt;(x)),
+                                       std::forward_as_tuple(std::forward&lt;V&gt;(y)))
+}}
+@5@等价于
+{{source|
+construct(p, std::piecewise_construct, std::forward_as_tuple(xy.first),
+                                       std::forward_as_tuple(xy.second))
+}}
+@6@等价于
+{{source|
+construct(p, std::piecewise_construct, std::forward_as_tuple(std::forward&lt;U&gt;(xy.first)),
+                                       std::forward_as_tuple(std::forward&lt;V&gt;(xy.second)))
+}}
+@7@ {{cpp/enable_if|给定仅用于阐释的函数模板
+{{source|template&lt; class A, class B &gt;
+void /*deduce-as-pair*/( const std::pair&lt;A, B&gt;&amp; );
+}}
+，{{c|/*deduce-as-pair*/(non_pair)}} 在当作不求值操作数时非良构}}。等价于
+{{source|1=
+construct&lt;T1, T2, T1, T2&gt;(p, std::forward&lt;NonPair&gt;(non_pair));
+}}
+}}
+
+===参数===
+{{par begin}}
+{{par|p|指向分配而未初始化存储的指针}}
+{{par|args...|传递给 {{tt|T}} 构造函数的构造函数实参}}
+{{par|x|传递给 {{tt|T1}} 构造函数的构造函数实参}}
+{{par|y|传递给 {{tt|T2}} 构造函数的构造函数实参}}
+{{par|xy|成员是 {{tt|T1}} 与 {{tt|T2}} 构造函数实参的对偶}}
+{{par|non_pair| 转换成 {{tt|pair}} 以进行进一步构造的非对偶实参}}
+{{par end}}
+
+===返回值===
+（无）
+
+===注解===
+此函数为任何具分配器对象调用（通过 {{lc|std::allocator_traits}}），例如 {{lc|std::pmr::vector}}（或另一个给定了 {{tt|std::pmr::polymorphic_allocator}} 作为所用分配器的 {{lc|std::vector}}）。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2969|std=C++17|before=uses-allocator 构造传递 {{tt|resource()}}|after=传递 {{tt|*this}}}}
+{{dr list item|wg=lwg|dr=2975|std=C++17|before=某些情况下 pair 构造错误地使用第一重载|after=制约为不接受 pair}}
+{{dr list item|wg=lwg|dr=3525|std=C++11|before=没有能处理可转换到 {{tt|pair}} 的非 {{tt|pair}} 类型|after=添加了重构的重载}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator_traits/dsc construct}}
+{{dsc inc|cpp/memory/allocator/dsc construct}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

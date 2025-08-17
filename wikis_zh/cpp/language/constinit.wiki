@@ -1,0 +1,95 @@
+{{title|{{tt|constinit}} 说明符 {{mark since c++20}}}}
+{{cpp/language/declarations/navbar}}
+
+:* {{ttb|constinit}} - 断言变量拥有静态初始化，即{{rlp|zero initialization|零初始化}}与{{rlp|constant initialization|常量初始化}}，否则程序非良构。
+
+===解释===
+{{c/core|constinit}} 说明符声明拥有静态或线程{{rlp|storage duration|存储期}}的变量。
+
+{{rrev|since=c++26|
+{{c/core|constinit}} 说明符也可以应用到{{rlp|structured binding|结构化绑定}}声明。此时 {{c/core|constinit}} 也会应用到该声明引入的{{rlp|structured binding#绑定过程|唯一命名的变量}}。
+}}
+
+如果变量以 {{c/core|constinit}} 声明，那么它的{{rlp|initialization|初始化声明}}必须应用 {{c/core|constinit}}。如果以 {{c/core|constinit}} 声明的变量拥有{{rlp|initialization#动态初始化|动态初始化}}（即使{{rlp|initialization#提早动态初始化|作为静态初始化}}执行），那么程序非良构。
+
+如果在初始化声明点没有可达的 {{c/core|constinit}} 声明，那么程序非良构，不需要诊断。
+
+{{c/core|constinit}} 不能和 {{c/core|constexpr}} 一同使用。当声明的变量为引用时，{{c/core|constinit}} 等价于 {{c/core|constexpr}}。当声明的变量为对象时，{{c/core|constexpr}} 强制对象必须拥有静态初始化和常量析构，并使对象有 const 限定，然而 {{c/core|constinit}} 不强制常量析构和 const 限定。结果是拥有 constexpr 构造函数但没有 constexpr 析构函数的类型（例如 {{c/core|std::shared_ptr&lt;T&gt;}}）的对象可能可以用 {{c/core|constinit}}，但不能用 {{c/core|constexpr}} 声明。
+
+{{source|1=
+const char* g() { return "动态初始化"; }
+constexpr const char* f(bool p) { return p ? "常量初始化器" : g(); }
+
+constinit const char* c = f(true);     // OK
+// constinit const char* d = f(false); // 错误
+}}
+
+{{c/core|constinit}} 也能用于非初始化声明，以告知编译器 {{c/core|thread_local}} 变量已被初始化，以减少隐藏的防卫变量所致的{{rlp|storage duration#静态局部变量|开销}}。
+
+{{source|1=
+extern thread_local constinit int x;
+int f() { return x; } // 无需检查防卫变量
+}}
+
+===注解===
+{{feature test macro|std=C++20|value=201907L|__cpp_constinit|{{c/core|constinit}}}}
+
+===关键词===
+{{ltt|cpp/keyword/constinit}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+
+constexpr int square(int i)
+{
+    return i * i;
+}
+
+int twice(int i)
+{
+    return i + i;
+}
+
+constinit int sq = square(2);    // OK：编译时完成初始化
+// constinit int x_x = twice(2); // 错误：需要编译时初始化器
+
+int square_4_gen()
+{
+    static constinit int pow = square(4);
+    
+    // constinit int prev = pow; // 错误：constinit 只能应用于具有静态或线程存储期的变量
+    
+    int prev = pow;
+    pow = pow * pow;
+    return prev;
+}
+
+int main()
+{
+    assert(sq == 4);
+    sq = twice(1); // 与 constexpr 不同，可以随后在运行时改变它的值
+    assert(sq == 2);
+    
+    assert(square_4_gen() == 16);
+    assert(square_4_gen() == 256);
+    assert(square_4_gen() == 65536);
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2543|std=C++20|before=声明为 {{c/core|constinit}} 的变量以静态初始化的一部分被动态初始化时的行为不明确|after=此时程序非良构}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc consteval}}
+{{dsc inc|cpp/language/dsc constexpr}}
+{{dsc|{{rlp|constant expression|常量表达式}}|定义可以在编译时求值的{{rlp|expressions|表达式}}}}
+{{dsc|{{rlp|constant initialization|常量初始化}}|将{{rlp|storage duration|静态}}变量的初始值设为编译期常量}}
+{{dsc|{{rlp|zero initialization|零初始化}}|将对象的初始值设为零}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

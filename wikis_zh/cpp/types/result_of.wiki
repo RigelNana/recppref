@@ -1,0 +1,214 @@
+{{cpp/title|result_of|invoke_result}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|deprecated=c++17|removed=c++20|num=1|
+template&lt; class &gt;
+class result_of; // 不定义
+
+template&lt; class F, class... ArgTypes &gt;
+class result_of&lt;F(ArgTypes...)&gt;;
+}}
+{{dcl|since=c++17|num=2|
+template&lt; class F, class... ArgTypes &gt;
+class invoke_result;
+}}
+{{dcl end}}
+
+在编译时推导 [[cpp/utility/functional|{{tti|INVOKE}} 表达式]]的返回类型。
+
+{{rrev multi|since1=c++11|rev1=
+{{tt|F}} 必须是可调用类型、到函数的引用或到可调用类型的引用。以 {{tt|ArgTypes...}} 调用 {{tt|F}} 必须是良构表达式。
+|since2=c++14|rev2=
+{{tt|F}} 和 {{tt|ArgTypes}} 中的每个类型都可以是任何完整类型、未知边界数组或（可有 cv 限定的）{{tt|void}}。
+}}
+
+{{cpp/types/nospec|any}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc|{{tt|type}}|当以实参 {{tt|ArgTypes...}} 调用{{named req|Callable}}类型 {{tt|F}} 时的返回类型。{{rev inl|since=c++14|仅若 {{tt|F}} 能以实参 {{tt|ArgTypes...}} 在不求值语境中调用才有定义。}}}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|since=c++14|num=1|deprecated=c++17|removed=c++20|1=
+template&lt; class T &gt;
+using result_of_t = typename result_of&lt;T&gt;::type;
+}}
+{{dcl|since=c++17|num=2|1=
+template&lt; class F, class... ArgTypes &gt;
+using invoke_result_t = typename invoke_result&lt;F, ArgTypes...&gt;::type;
+}}
+{{dcl end}}
+
+===可能的实现===
+{{source|1=
+namespace detail
+{
+    template&lt;class T&gt;
+    struct is_reference_wrapper : std::false_type {};
+    template&lt;class U&gt;
+    struct is_reference_wrapper&lt;std::reference_wrapper&lt;U&gt;&gt; : std::true_type {};
+ 
+    template&lt;class T&gt;
+    struct invoke_impl
+    {
+        template&lt;class F, class... Args&gt;
+        static auto call(F&amp;&amp; f, Args&amp;&amp;... args)
+            -&gt; decltype(std::forward&lt;F&gt;(f)(std::forward&lt;Args&gt;(args)...));
+    };
+
+    template&lt;class B, class MT&gt;
+    struct invoke_impl&lt;MT B::*&gt;
+    {
+        template&lt;class T, class Td = typename std::decay&lt;T&gt;::type,
+            class = typename std::enable_if&lt;std::is_base_of&lt;B, Td&gt;::value&gt;::type&gt;
+        static auto get(T&amp;&amp; t) -&gt; T&amp;&amp;;
+
+        template&lt;class T, class Td = typename std::decay&lt;T&gt;::type,
+            class = typename std::enable_if&lt;is_reference_wrapper&lt;Td&gt;::value&gt;::type&gt;
+        static auto get(T&amp;&amp; t) -&gt; decltype(t.get());
+
+        template&lt;class T, class Td = typename std::decay&lt;T&gt;::type,
+            class = typename std::enable_if&lt;!std::is_base_of&lt;B, Td&gt;::value&gt;::type,
+            class = typename std::enable_if&lt;!is_reference_wrapper&lt;Td&gt;::value&gt;::type&gt;
+        static auto get(T&amp;&amp; t) -&gt; decltype(*std::forward&lt;T&gt;(t));
+
+        template&lt;class T, class... Args, class MT1,
+            class = typename std::enable_if&lt;std::is_function&lt;MT1&gt;::value&gt;::type&gt;
+        static auto call(MT1 B::*pmf, T&amp;&amp; t, Args&amp;&amp;... args)
+            -&gt; decltype((invoke_impl::get(
+                std::forward&lt;T&gt;(t)).*pmf)(std::forward&lt;Args&gt;(args)...));
+
+        template&lt;class T&gt;
+        static auto call(MT B::*pmd, T&amp;&amp; t)
+            -&gt; decltype(invoke_impl::get(std::forward&lt;T&gt;(t)).*pmd);
+    };
+
+    template&lt;class F, class... Args, class Fd = typename std::decay&lt;F&gt;::type&gt;
+    auto INVOKE(F&amp;&amp; f, Args&amp;&amp;... args)
+        -&gt; decltype(invoke_impl&lt;Fd&gt;::call(std::forward&lt;F&gt;(f),
+            std::forward&lt;Args&gt;(args)...));
+} // namespace detail
+
+// 最小 C++11 实现：
+template&lt;class&gt; struct result_of;
+template&lt;class F, class... ArgTypes&gt;
+struct result_of&lt;F(ArgTypes...)&gt;
+{
+    using type = decltype(detail::INVOKE(std::declval&lt;F&gt;(), std::declval&lt;ArgTypes&gt;()...));
+};
+
+// 符合 C++14 的实现（亦为合法的 C++11 实现）：
+namespace detail
+{
+    template&lt;typename AlwaysVoid, typename, typename...&gt;
+    struct invoke_result {};
+    template&lt;typename F, typename...Args&gt;
+    struct invoke_result&lt;
+        decltype(void(detail::INVOKE(std::declval&lt;F&gt;(), std::declval&lt;Args&gt;()...))),
+            F, Args...&gt;
+    {
+        using type = decltype(detail::INVOKE(std::declval&lt;F&gt;(), std::declval&lt;Args&gt;()...));
+    };
+} // namespace detail
+
+template&lt;class&gt; struct result_of;
+template&lt;class F, class... ArgTypes&gt;
+struct result_of&lt;F(ArgTypes...)&gt; : detail::invoke_result&lt;void, F, ArgTypes...&gt; {};
+
+template&lt;class F, class... ArgTypes&gt;
+struct invoke_result : detail::invoke_result&lt;void, F, ArgTypes...&gt; {};
+}}
+
+===注解===
+在 C++11 中予以规范时，{{tt|std::result_of}} 的行为在 {{tt|INVOKE(std::declval&lt;F&gt;(), std::declval&lt;ArgTypes&gt;()...)}} 非良构时（例如 {{tt|F}} 根本不是可调用类型时）是未定义的。C++14 更改为 [[cpp/language/sfinae|SFINAE]]（{{tt|F}} 不可调用时，{{tt|std::result_of&lt;F(ArgTypes...)&gt;}} 只是没有 {{tt|type}} 成员）。
+
+{{tt|std::result_of}} 背后的动机是为了确定调用{{named req|Callable}}类型的结果，尤其是结果类型对不同实参集不同的情况。
+
+{{c|F(Args...)}} 是以 {{tt|Args...}} 为实参类型而以 {{tt|F}} 为返回类型的函数类型。因而，{{tt|std::result_of}} 承受了许多怪异，导致它在 C++17 中被 {{tt|std::invoke_result}} 取代而被弃用：
+* {{tt|F}} 不能是函数类型或数组类型（但可以是到它们的引用）；
+* 若 {{tt|Args}} 中的任何类型是“{{tt|T}} 的数组”类型或函数类型 {{tt|T}}，则它被自动调整为 {{tt|T*}}；
+* {{tt|F}} 或 {{tt|Args...}} 中的任何类型都不能是抽象类类型；
+* 若 {{tt|Args...}} 中的任何类型拥有顶层 cv 限定符，则舍弃之；
+* {{tt|Args...}} 均不可为 {{c|void}}。
+
+为避免这些怪异，常以 {{tt|F}} 和 {{tt|Args...}} 的引用类型使用 {{tt|result_of}}。例如：
+
+{{source|
+template&lt;class F, class... Args&gt;
+std::result_of_t&lt;F&amp;&amp;(Args&amp;&amp;...)&gt; // 替代错误的 std::result_of_t&lt;F(Args...)&gt;
+    my_invoke(F&amp;&amp; f, Args&amp;&amp;... args)
+    {
+        /* 实现 */
+    }
+}}
+
+===注解===
+{{ftm begin|std=1|comment=1}}
+{{ftm|std=C++14|value=201210L|__cpp_lib_result_of_sfinae|{{tt|std::result_of}} 和 [[cpp/language/sfinae|SFINAE]]}}
+{{ftm|std=C++17|value=201703L|__cpp_lib_is_invocable|{{ltt std|cpp/types/is_invocable}}, {{tt|std::invoke_result}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+struct S
+{
+    double operator()(char, int&amp;);
+    float operator()(int) { return 1.0; }
+};
+
+template&lt;class T&gt;
+typename std::result_of&lt;T(int)&gt;::type f(T&amp; t)
+{
+    std::cout &lt;&lt; "f 针对可调用的 T 的重载\n";
+    return t(0);
+}
+
+template&lt;class T, class U&gt;
+int f(U u)
+{
+    std::cout &lt;&lt; "f 针对不可调用的 T 的重载\n";
+    return u;
+}
+
+int main()
+{
+    // 以 char 和 int&amp; 实参调用 S 的结果是 double
+    std::result_of&lt;S(char, int&amp;)&gt;::type d = 3.14; // d 拥有 double 类型
+    static_assert(std::is_same&lt;decltype(d), double&gt;::value, "");
+
+    // std::invoke_result 使用不同的语法（没有括号）
+    std::invoke_result&lt;S,char,int&amp;&gt;::type b = 3.14;
+    static_assert(std::is_same&lt;decltype(b), double&gt;::value, "");
+
+    // 以 int 实参调用 S 的结果是 float
+    std::result_of&lt;S(int)&gt;::type x = 3.14; // x 拥有 float 类型
+    static_assert(std::is_same&lt;decltype(x), float&gt;::value, "");
+
+    // result_of 能以成员函数指针以如下方式使用
+    struct C { double Func(char, int&amp;); };
+    std::result_of&lt;decltype(&amp;C::Func)(C, char, int&amp;)&gt;::type g = 3.14;
+    static_assert(std::is_same&lt;decltype(g), double&gt;::value, "");
+
+    f&lt;C&gt;(1); // C++11 中可能编译失败；C++14 中调用不可调用重载
+&lt;!-- TODO: 用参数推导使之可使用： f(C{}) and f(S{}) 都应该运行 --&gt;
+}
+|output=
+f 针对不可调用的 T 的重载
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc invoke}}
+{{dsc inc|cpp/types/dsc is_invocable}}
+{{dsc inc|cpp/utility/dsc declval}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

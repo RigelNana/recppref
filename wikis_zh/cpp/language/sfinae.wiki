@@ -1,0 +1,310 @@
+{{title|SFINAE}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+“替换失败不是错误” (Substitution Failure Is Not An Error)
+
+
+在函数模板的重载决议中会应用此规则：当模板形参在{{rlp|function_template#模板实参替换|替换}}成显式指定的类型或{{rlp|template argument deduction|推导出的类型}}失败时，从{{rlp|overload resolution|重载集}}中丢弃这个特化，而非导致编译失败。
+
+此特性被用于模板元编程。
+
+===解释===
+对函数模板形参进行两次替换（由模板实参所替代）：
+
+* 在模板实参推导前，对显式指定的模板实参进行替换
+* 在模板实参推导后，对推导出的实参和从默认项获得的实参进行替换
+
+替换发生于
+* 函数类型中使用的所有类型（包括返回类型和所有形参的类型）
+* 各个模板形参声明中使用的所有类型
+* 部分特化的模板实参列表中使用的所有类型
+{{rrev|since=c++11|
+* 函数类型中使用的所有表达式
+* 各个模板形参声明中使用的所有表达式
+* 部分特化的模板实参列表中使用的所有表达式
+}}
+{{rrev|since=c++20|
+* {{rlp|explicit|explicit 说明符}}中使用的所有表达式
+}}
+
+以上类型或表达式在以用来替换的实参写出时非良构（并带有必要的诊断）的任何场合，都是''替换失败''。
+
+只有在函数类型或其模板形参类型{{rev inl|since=c++20|或其 {{rlp|explicit|explicit 说明符}}}}的''立即语境''中的类型与表达式中的失败，才是 SFINAE 错误。如果对替换后的类型/表达式的求值导致副作用，例如实例化某模板特化、生成某隐式定义的成员函数等，那么这些副作用中的错误都被当做硬错误。{{rev inl|since=c++20|{{rlp|lambda|lambda 表达式}}不被当作是立即语境的一部分。}}
+{{todo|含有此类影响的小示例}}
+
+替换按词法顺序进行，并在遇到失败时终止。
+
+{{rrev|since=c++11|
+如果多个声明具有不同的词法顺序（例如，某个函数模板声明为具有尾随返回类型，它在某个形参之后替换，然后被重声明为具有常规返回类型，它则在该形参之前替换），而这会导致模板实例化以不同顺序出现或完全不出现，那么程序非良构；不要求诊断。
+}}
+{{source|1=
+template&lt;typename A&gt;
+struct B { using type = typename A::type; };
+ 
+template&lt;
+    class T,
+    class U = typename T::type,    // 如果 T 没有成员 type 那么就是 SFINAE 失败
+    class V = typename B&lt;T&gt;::type&gt; // 如果 T 没有成员 type 那么就是硬错误
+                                   // （经由 CWG 1227 保证不出现，
+                                   // 因为到 U 的默认模板实参中的替换会首先失败）
+void foo (int);
+
+template&lt;class T&gt;
+typename T::type h(typename B&lt;T&gt;::type);
+
+template&lt;class T&gt;
+auto h(typename B&lt;T&gt;::type) -&gt; typename T::type; // 重声明
+
+template&lt;class T&gt;
+void h(...) {}
+
+using R = decltype(h&lt;int&gt;(0));     // 非良构，不要求诊断
+}}
+
+====类型 SFINAE====
+下列类型的错误是 SFINAE 错误：
+
+{{rrev|since=c++11|
+* 试图实例化含有多个不同长度的包的包展开
+}}
+* 试图创建 void 的数组，引用的数组，函数的数组，负大小的数组，非整型大小的数组，或者零大小的数组：
+{{source|1=
+template&lt;int I&gt;
+void div(char(*)[I % 2 == 0] = 0)
+{
+    // 当 I 是偶数时选择这个重载
+}
+
+template&lt;int I&gt;
+void div(char(*)[I % 2 == 1] = 0)
+{
+    // 当 I 是奇数时选择这个重载
+}
+}}
+* 试图在作用域解析运算符 {{ttb|::}} 左侧使用类和枚举以外的类型：
+{{source|1=
+template&lt;class T&gt;
+int f(typename T::B*);
+
+template&lt;class T&gt;
+int f(T);
+
+int i = f&lt;int&gt;(0); // 使用第二个重载
+}}
+* 试图使用类型的成员，其中
+:* 类型不包含指定成员
+:* 在要求类型的地方，指定成员不是类型
+:* 在要求模板的地方，指定成员不是模板
+:* 在要求非类型的地方，指定成员不是非类型
+{{source|1=
+template &lt;int I&gt;
+struct X {};
+
+template&lt;template&lt;class T&gt; class&gt;
+struct Z {};
+
+template&lt;class T&gt;
+void f(typename T::Y*) {}
+
+template&lt;class T&gt;
+void g(X&lt;T::N&gt;*) {}
+
+template&lt;class T&gt;
+void h(Z&lt;T::template TT&gt;*) {}
+
+struct A {};
+struct B { int Y; };
+struct C { typedef int N; };
+struct D { typedef int TT; };
+struct B1 { typedef int Y; };
+struct C1 { static const int N = 0; };
+struct D1
+{ 
+    template&lt;typename T&gt;
+    struct TT {}; 
+};
+
+int main()
+{
+    // 下列各个情况推导失败：
+    f&lt;A&gt;(0); // 不含成员 Y
+    f&lt;B&gt;(0); // B 的 Y 成员不是类型
+    g&lt;C&gt;(0); // C 的 N 成员不是非类型
+    h&lt;D&gt;(0); // D 的 TT 成员不是模板
+
+    // 下列各个情况推导成功：
+    f&lt;B1&gt;(0); 
+    g&lt;C1&gt;(0); 
+    h&lt;D1&gt;(0);
+}
+// 未完成：需要演示重载决议，而不只是失败
+}}
+* 试图创建指向引用的指针
+* 试图创建到 void 的引用
+* 试图创建指向 T 的成员的指针，其中 T 不是类类型：
+{{source|1=
+template&lt;typename T&gt;
+class is_class
+{
+    typedef char yes[1];
+    typedef char no[2];
+    
+    template&lt;typename C&gt;
+    static yes&amp; test(int C::*); // 如果 C 是类类型就选择它
+    
+    template&lt;typename C&gt;
+    static no&amp; test(...);       // 否则选择它
+public:
+    static bool const value = sizeof(test&lt;T&gt;(0)) == sizeof(yes);
+};
+}}
+* 试图将非法类型给予非类型模板形参：
+{{source|1=
+template&lt;class T, T&gt;
+struct S {};
+
+template&lt;class T&gt;
+int f(S&lt;T, T()&gt;*);
+
+struct X {};
+int i0 = f&lt;X&gt;(0);
+// 未完成：需要演示重载决议，而不只是失败
+}}
+* 试图在以下语境中进行非法转换：
+:* 模板实参表达式
+:* 函数声明中使用的表达式：
+{{source|1=
+template&lt;class T, T*&gt; int f(int);
+int i2 = f&lt;int,1&gt;(0); // 不能将 1 转换为 int*
+// 未完成：需要演示重载决议，而非仅是失败
+}}
+* 试图创建形参类型为 void 的函数类型
+* 试图创建返回数组类型或函数类型的函数类型
+&lt;!-- 由 Jax-2018 中作为 DR 接受的 p0929r2 移除 {{rrev|since=c++11|
+* 试图创建形参类型或返回类型为{{rlp|abstract class|抽象类}}的函数类型。
+}}--&gt;
+
+====表达式 SFINAE====
+{{rev begin}}
+{{rev|until=c++11|
+C++11 前，只有在类型中使用的常量表达式（例如数组边界）才要求被当做 SFINAE（而非硬错误）。
+}}
+{{rev|since=c++11|
+下列表达式错误是 SFINAE 错误：
+
+* 模板形参类型中使用的非良构表达式
+* 函数类型中使用的非良构表达式
+{{source|1=
+struct X {};
+struct Y { Y(X){} }; // X 可以转换到 Y
+
+template&lt;class T&gt;
+auto f(T t1, T t2) -&gt; decltype(t1 + t2); // 重载 #1
+
+X f(Y, Y);                               // 重载 #2
+
+X x1, x2;
+X x3 = f(x1, x2);  // 推导在 #1 上失败（表达式 x1+x2 非良构）
+                   // 重载集中只有 #2，调用它
+}}
+
+}}
+{{rev end}}
+
+====部分特化中的 SFINAE====
+在确定一个类{{rev inl|since=c++14|或变量}}模板的特化是由{{rlp|partial specialization|部分特化}}还是主模板生成的时候也会出现推导与替换。在这种确定期间，部分特化的替换失败不会被当作硬错误，而是像涉及函数模板的重载决议中一样使得对应的部分特化声明被忽略。
+
+{{source|1=
+// 主模板处理无法引用的类型：
+template&lt;class T, class = void&gt;
+struct reference_traits
+{
+    using add_lref = T;
+    using add_rref = T;
+};
+
+// 特化识别可以引用的类型：
+template&lt;class T&gt;
+struct reference_traits&lt;T, std::void_t&lt;T&amp;&gt;&gt;
+{
+    using add_lref = T&amp;;
+    using add_rref = T&amp;&amp;;
+};
+
+template&lt;class T&gt;
+using add_lvalue_reference_t = typename reference_traits&lt;T&gt;::add_lref;
+
+template&lt;class T&gt;
+using add_rvalue_reference_t = typename reference_traits&lt;T&gt;::add_rref;
+}}
+
+===库支持===
+{{rrev|since=c++11|
+标准库组件 {{lc|std::enable_if}} 允许创建替换失败，以基于某个在编译时求值的条件来启用或禁用特定的重载。
+
+另外，许多{{lsd|cpp/meta#类型特征}}在适合的编译器扩展不可用时必须以 SFINAE 实现。
+}}
+{{rrev|since=c++17|
+标准库组件 {{lc|std::void_t}} 是另一个简化部分特化 SFINAE 的应用的工具元函数。
+}}
+
+===替代方案===
+只要可用，[[cpp/iterator/iterator_tags#示例|标签派发]]{{rev inl|since=c++17|、{{rlpt|if#constexpr if|if constexpr}} }}{{rev inl|since=c++20|以及{{rlp|constraints|概念}}}}通常都比直接使用 SFINAE 更好。
+
+{{rrev|since=c++11|如果只想要条件性的编译时错误，{{rlpt|static_assert}} 通常比 SFINAE 更适合。}}
+
+===示例===
+{{example
+|一种常见手法，是在返回类型上使用表达式 SFINAE，其中表达式使用逗号运算符，其左子表达式是所检验的（转型到 void 以确保不会选择返回类型上的用户定义逗号运算符），而右子表达式具有期望函数返回的类型。
+|code=
+#include &lt;iostream&gt;
+
+// 如果 C 是类或者类的引用类型且 F 是指向 C 的成员函数的指针，
+// 那么这个重载会被添加到重载集
+template&lt;class C, class F&gt;
+auto test(C c, F f) -&gt; decltype((void)(c.*f)(), void())
+{
+    std::cout &lt;&lt; "(1) 调用了类/类引用重载\n";
+}
+
+// 如果 C 是类的指针类型且 F 是指向 C 的成员函数的指针，
+// 那么这个重载会被添加到重载集
+template&lt;class C, class F&gt;
+auto test(C c, F f) -&gt; decltype((void)((c-&gt;*f)()), void())
+{
+    std::cout &lt;&lt; "(2) 调用了指针重载\n";
+}
+
+// 此重载始终在重载集中：
+// 省略号形参对于重载决议具有最低等级
+void test(...)
+{
+    std::cout &lt;&lt; "(3) 调用了保底重载\n";
+}
+
+int main()
+{
+    struct X { void f() {} };
+    X x;
+    X&amp; rx = x;
+    test(x, &amp;X::f);  // (1)
+    test(rx, &amp;X::f); // (1), 创建了 x 的副本
+    test(&amp;x, &amp;X::f); // (2)
+    test(42, 1337);  // (3)
+}
+|output=
+(1) 调用了类/类引用重载
+(1) 调用了类/类引用重载
+(2) 调用了指针重载
+(3) 调用了保底重载
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=295|std=c++98|before=创建 cv 限定的函数类型可能会导致替换失败|after=使之不是失败，舍弃 cv 限定}}
+{{dr list item|wg=cwg|dr=1227|std=c++98|before=替换顺序未指明|after=与词法顺序相同}}
+{{dr list item|wg=cwg|dr=2054|std=c++98|before=部分特化中的替换未被正确指定|after=已指定}}
+{{dr list item|wg=cwg|dr=2322|std=c++11|before=不同词法顺序的声明会导致模板实例化以不同顺序或完全不出现|after=这种情况非良构，不要求诊断}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

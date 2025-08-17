@@ -1,0 +1,83 @@
+{{cpp/io/ios_base/title|iword}}
+{{cpp/io/ios_base/navbar}}
+{{ddcl|
+long&amp; iword( int index );
+}}
+
+首先，充分地分配或重置能确保 {{c|index}} 是有效索引的私有存储（{{c|long}} 的动态数组或其他可索引数据结构），然后返回到带索引 {{c|index}} 的私有存储的 {{c|long}} 元素的引用。
+
+此 {{tt|ios_base}} 对象上任何其他操作都可能使返回的引用失效，包含对 {{tt|iword()}} 的另一调用，但存储的值会保持，使得以相同下标从 {{c|iword(index)}} 读取将产生相同值，直到下次调用 {{lc|std::basic_ios::copyfmt()}}。此值可用于任何目的。必须通过先前的 {{lc|xalloc()}} 调用获得元素下标，否则行为未定义&lt;!--LWG 3083--&gt;。新元素初始化为 {{lc|0}}。
+
+如果函数失败（可能由分配失败导致）并且 {{c|*this}} 是一个 {{tt|basic_ios&lt;&gt;}} 对象或子对象的基类子对象，那么调用 {{c|std::basic_ios&lt;&gt;::setstate(badbit)}}，其可能会抛出 {{lc|std::ios_base::failure}}。
+
+===注解===
+iword 存储的典型用法是从用户定义的 I/O 操纵符向用户定义的 {{tt|operator&lt;&lt;}} 和 {{tt|operator&gt;&gt;}} 或者向标准流中浸染的用户定义的格式化刻面传递信息（比如自定义格式化标记）。
+
+===参数===
+{{par begin}}
+{{par|index|元素的索引值}}
+{{par end}}
+
+===返回值===
+到元素的引用。
+
+===异常===
+设置 badbit 时可能会抛出 {{lc|std::ios_base::failure}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+struct Foo
+{
+    static int foo_xalloc;
+    std::string data; 
+    
+    Foo(const std::string&amp; s) : data(s) {}
+};
+
+// 分配 Foo 对象所用的 iword 存储
+int Foo::foo_xalloc = std::ios_base::xalloc();
+
+// 如果 iword 保有 1，那么此用户定义 operator&lt;&lt; 以逆序打印字符串
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, Foo&amp; f)
+{
+    if(os.iword(Foo::foo_xalloc) == 1)
+        return os &lt;&lt; std::string(f.data.rbegin(), f.data.rend());
+    else
+        return os &lt;&lt; f.data;
+}
+
+// 此输入/输出操纵符在 0 与 1 间翻转在 iword 存储的数字
+std::ios_base&amp; rev(std::ios_base&amp; os)
+{
+    os.iword(Foo::foo_xalloc) = !os.iword(Foo::foo_xalloc);
+    return os;
+}
+
+int main()
+{
+    Foo f("example");
+    std::cout &lt;&lt; f &lt;&lt; '\n' &lt;&lt; rev &lt;&lt; f &lt;&lt; '\n' &lt;&lt; rev &lt;&lt; f &lt;&lt; '\n';
+}
+|output=
+example
+elpmaxe
+example
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=36|std=C++98|before=存储的值在返回的引用失效的情况下不一定会保持|after=存储的值在下次调用 {{tt|copyfmt()}} 前会一直保持}}
+{{dr list item|wg=lwg|dr=41|std=C++98|before=此函数在失败时会自己设置 badbit，&lt;br&gt;但 {{tt|ios_base}} 没有提供这样的接口|after=由 {{tt|basic_ios}} 设置 badbit&lt;br&gt;（如果 {{c|*this}} 是它的基类子对象）}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/ios_base/dsc pword}}
+{{dsc inc|cpp/io/ios_base/dsc xalloc}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,119 @@
+{{cpp/title|is_destructible|is_trivially_destructible|is_nothrow_destructible}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcla|since=c++11|num=1|1=
+template&lt; class T &gt;
+struct is_destructible;
+}}
+{{dcla|since=c++11|num=2|1=
+template&lt; class T &gt;
+struct is_trivially_destructible;
+}}
+{{dcla|since=c++11|num=3|1=
+template&lt; class T &gt;
+struct is_nothrow_destructible;
+}}
+{{dcl end}}
+
+@1@ 如果 {{tt|T}} 是引用类型，则提供的成员常量 {{c|value}} 等于 {{c|true}}。
+
+@@ 如果 {{tt|T}} 是（可以有 cv 限定的）{{c/core|void}}、函数类型或未知边界的数组，则 {{c|value}} 等于 {{c|false}}。
+
+@@ 如果 {{tt|T}} 是对象类型，则对于作为 {{c|std::remove_all_extents&lt;T&gt;::type}} 的类型 {{tt|U}}，如果表达式 {{c|std::declval&lt;U&amp;&gt;().~U()}} 在不求值语境中良构，则 {{c|value}} 等于 {{c|true}}。否则，{{c|value}} 等于 {{c|false}}。
+
+@2@ 同 {{v|1}}，并且 {{c|std::remove_all_extents&lt;T&gt;::type}} 要么是非类类型，要么是拥有[[cpp/language/destructor#平凡析构函数|平凡析构函数]]的类类型。
+
+@3@ 同 {{v|1}}，但析构函数为 {{c/core|noexcept}}。
+
+{{cpp/types/cvaub}}
+
+{{cpp/types/nospec|any}}
+
+===辅助变量模板===
+{{dcl begin}}
+
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+constexpr bool is_destructible_v = is_destructible&lt;T&gt;::value;
+}}
+
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+constexpr bool is_trivially_destructible_v = is_trivially_destructible&lt;T&gt;::value;
+}}
+
+{{dcl|since=c++17|1=
+template&lt; class T &gt;
+constexpr bool is_nothrow_destructible_v = is_nothrow_destructible&lt;T&gt;::value;
+}}
+{{dcl end}}
+{{cpp/types/integral_constant/inherit|{{tt|T}} 可析构}}
+
+===注解===
+因为析构函数在栈回溯中抛出异常则 C++ 程序终止（通常是无法预期的），所以所有实用的析构函数均为不抛出，即使它们不声明为 noexcept。所有 C++ 标准库中析构函数都是不抛出的。
+
+[[cpp/language/destructor#平凡析构函数|可平凡析构]]对象所占用的存储[[cpp/language/lifetime#存储的重用|可以重用]]而无需调用析构函数。
+
+===可能的实现===
+{{eq impl
+|title1=is_destructible (1)|ver1=1|1=
+// 要求 C++20
+template&lt;typename t&gt;
+struct is_destructible
+    : std::integral_constant&lt;bool, requires(t object) { object.~t(); }&gt;
+{};
+|title2=is_trivially_destructible (2)|ver2=2|2=
+// 不是真正的 C++。应当采纳 P2996，才能使以下实现可用：
+template&lt;typename t&gt;
+struct is_trivially_destructible
+    : std::integral_constant&lt;bool, std::meta::type_is_trivially_destructible(^t)&gt;
+{};
+|title3=is_nothrow_destructible (3)|ver3=3|3=
+// 要求 C++20
+template&lt;typename t&gt;
+struct is_nothrow_destructible
+    : std::integral_constant&lt;bool, requires(t object) { {object.~t()} noexcept; }&gt;
+{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+struct Foo
+{
+    std::string str;
+    ~Foo() noexcept {};
+};
+
+struct Bar
+{
+    ~Bar() = default;
+};
+
+static_assert(std::is_destructible&lt;std::string&gt;::value == true);
+static_assert(std::is_trivially_destructible_v&lt;Foo&gt; == false);
+static_assert(std::is_nothrow_destructible&lt;Foo&gt;() == true);
+static_assert(std::is_trivially_destructible&lt;Bar&gt;{} == true);
+
+int main() {}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2049|std=c++11|before=规范无法完整，由于虚构的包装结构体|after=使之完整}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_constructible}}
+{{dsc inc|cpp/types/dsc has_virtual_destructor}}
+{{dsc inc|cpp/concepts/dsc destructible}}
+{{dsc inc|cpp/language/dsc destructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

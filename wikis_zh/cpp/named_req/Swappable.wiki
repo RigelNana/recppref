@@ -1,0 +1,95 @@
+{{cpp/named req/title|Swappable}}
+{{cpp/named req/navbar}}
+在 {{lc|std::swap}} 与用户定义 {{c|swap()}} 均可见的语境中，此类型的任何左值或右值能与某个其他类型的任何左值或右值，可以用非限定函数调用 {{c|swap()}} 来进行交换。
+
+===要求===
+若对于任意 U 类型的对象 u 和任意 T 类型的对象 t，满足以下情况，则类型 U 与类型 T 可交换：
+
+{|table class=wikitable
+|-
+!表达式||要求||语义
+|-
+| {{c|#include &lt;algorithm&gt; // C++11 前
+#include &lt;utility&gt; // C++11 起
+swap(u, t);}}
+|调用后，{{tt|t}} 的值是 {{tt|u}} 在调用前保有的值，而 {{tt|u}} 的值是 {{tt|t}} 在调用前保有的值。
+|调用名为 {{c|swap()}} 的函数，它是在由[[cpp/language/adl|实参依赖查找]]所找到的所有具有这个名字的函数，和定义于头文件 {{rev inl|until=c++11|{{header|algorithm}}}}{{rev inl|since=c++11|{{header|utility}}}} 中的两个 {{lc|std::swap}} 模板中，由重载决议所找到的函数。
+|-
+| {{c|#include &lt;algorithm&gt; // C++11 前
+#include &lt;utility&gt; // C++11 起
+swap(t, u);}}
+| 同上
+| 同上
+|}
+
+许多标准库函数（例如许多算法）期待其实参满足{{named req/core|Swappable}}，这意味着每当标准库进行交换时，都使用等价于 {{c|using std::swap; swap(t, u);}} 的写法。
+
+典型的实现进行二者之一
+@1@ 在外围命名空间中定义非成员 swap，若要求访问非公开数据成员，则它可转发到成员 {{tt|swap}}
+@2@ 于类中定义[[cpp/language/friend|友元函数]]（此方法对于除 ADL 之外的名字查找隐藏了类特有的 {{tt|swap}}）
+
+===注解===
+标准库进行交换时是否实际包含 {{rev inl|until=c++11|{{header|algorithm}}}}{{rev inl|since=c++11|{{header|utility}}}} 是未指明的，因此用户提供的 {{c|swap()}} 不应当期待它已被包含。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct IntVector
+{
+    std::vector&lt;int&gt; v;
+
+    IntVector&amp; operator=(IntVector) = delete; // 不可赋值
+
+    void swap(IntVector&amp; other)
+    {
+        v.swap(other.v);
+    }
+
+    void operator()(auto rem, auto term = " ")
+    {
+        std::cout &lt;&lt; rem &lt;&lt; "{&lt;!----&gt;{";
+        for (int n{}; int e : v)
+            std::cout &lt;&lt; (n++ ? ", " : "") &lt;&lt; e;
+        std::cout &lt;&lt; "}&lt;!----&gt;}" &lt;&lt; term;
+    }
+};
+
+void swap(IntVector&amp; v1, IntVector&amp; v2)
+{
+    v1.swap(v2);
+}
+
+int main()
+{
+    IntVector v1{&lt;!----&gt;{1, 1, 1, 1}&lt;!----&gt;}, v2{&lt;!----&gt;{2222, 2222}&lt;!----&gt;};
+
+    auto prn = [&amp;]{ v1("v1", ", "), v2("v2", ";\n"); };
+
+//  std::swap(v1, v2); // 编译器错误！std::swap 要求可移动赋值 (MoveAssignable)
+    prn();
+    std::iter_swap(&amp;v1, &amp;v2); // OK：标准库调用无限定的 swap()
+    prn();
+    std::ranges::swap(v1, v2); // OK：标准库调用无限定的 swap()
+    prn();
+}
+|output=
+v1{&lt;!----&gt;{1, 1, 1, 1}&lt;!----&gt;}, v2{&lt;!----&gt;{2222, 2222}&lt;!----&gt;};
+v1{&lt;!----&gt;{2222, 2222}&lt;!----&gt;}, v2{&lt;!----&gt;{1, 1, 1, 1}&lt;!----&gt;};
+v1{&lt;!----&gt;{1, 1, 1, 1}&lt;!----&gt;}, v2{&lt;!----&gt;{2222, 2222}&lt;!----&gt;};
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=226&lt;!-- 另见 N1523 --&gt;|std=C++98|before=标准库如何使用 {{tt|swap}} 不明确|after=澄清为使用 {{tt|std::}} 以及 ADL 所找到的 {{tt|swap}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/types/dsc is_swappable}}
+{{dsc inc | cpp/concepts/dsc swappable}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

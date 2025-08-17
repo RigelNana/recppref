@@ -1,0 +1,177 @@
+{{cpp/title|find_end}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt1 find_end( ForwardIt1 first, ForwardIt1 last,
+                     ForwardIt2 s_first, ForwardIt2 s_last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt1 find_end( ExecutionPolicy&amp;&amp; policy,
+                     ForwardIt1 first, ForwardIt1 last,
+                     ForwardIt2 s_first, ForwardIt2 s_last );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2, class BinaryPred &gt;
+ForwardIt1 find_end( ForwardIt1 first, ForwardIt1 last,
+                     ForwardIt2 s_first, ForwardIt2 s_last,
+                     BinaryPred p );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class BinaryPred &gt;
+ForwardIt1 find_end( ExecutionPolicy&amp;&amp; policy,
+                     ForwardIt1 first, ForwardIt1 last,
+                     ForwardIt2 s_first, ForwardIt2 s_last,
+                     BinaryPred p );
+}}
+{{dcl end}}
+
+在范围 {{range|first|last}} 中搜索序列 {{range|s_first|s_last}} 最后一次出现的位置。
+
+@1@ 用 {{c/core|1=operator==}} 比较元素。
+
+@3@ 用给定的二元谓词 {{c|p}} 比较元素。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的}}
+{{par range|s_first|s_last|要搜索的}}
+{{par exec pol}}
+{{par pred2 eq|p|p1=ForwardIt1|p2=ForwardIt2}}
+{{par hreq}}
+{{par req named|ForwardIt1|ForwardIterator}}
+{{par req named|ForwardIt2|ForwardIterator}}
+{{par end}}
+
+===返回值===
+指向范围 {{range|first|last}} 中 {{range|s_first|s_last}} 最后一次出现的起始的迭代器。
+
+如果 {{range|s_first|s_last}} 为空或找不到这种序列，那么就会返回 {{c|last}}。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}，{{mathjax-or|\(\scriptsize S\)|S}} 为 {{c|std::distance(s_first, s_last)}}：
+@1,2@ 最多应用 {{mathjax-or|\(\scriptsize S\cdot(N-S+1)\)|S·(N-S+1)}} 次 {{c/core|1=operator==}} 进行比较。
+@3,4@ 最多应用 {{mathjax-or|\(\scriptsize S\cdot(N-S+1)\)|S·(N-S+1)}} 次谓词 {{c|p}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=find_end (1)|ver1=1|1=
+template&lt;class ForwardIt1, class ForwardIt2&gt;
+constexpr //&lt; C++20 起
+ForwardIt1 find_end(ForwardIt1 first, ForwardIt1 last,
+                    ForwardIt2 s_first, ForwardIt2 s_last)
+{
+    if (s_first == s_last)
+        return last;
+    
+    ForwardIt1 result = last;
+    while (true)
+    {
+        ForwardIt1 new_result = std::search(first, last, s_first, s_last);
+        if (new_result == last)
+            break;
+        else
+        {
+            result = new_result;
+            first = result;
+            ++first;
+        }
+    }
+    return result;
+}
+|title2=find_end (3)|ver2=3|2=
+template&lt;class ForwardIt1, class ForwardIt2, class BinaryPred&gt;
+constexpr //&lt; C++20 起
+ForwardIt1 find_end(ForwardIt1 first, ForwardIt1 last,
+                    ForwardIt2 s_first, ForwardIt2 s_last, BinaryPred p)
+{
+    if (s_first == s_last)
+        return last;
+    
+    ForwardIt1 result = last;
+    while (true)
+    {
+        ForwardIt1 new_result = std::search(first, last, s_first, s_last, p);
+        if (new_result == last)
+            break;
+        else
+        {
+            result = new_result;
+            first = result;
+            ++first;
+        }
+    }
+    return result;
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+
+auto print_result = [](auto result, const auto&amp; v)
+{
+    result == v.end()
+        ? std::cout &lt;&lt; "未找到序列\n"
+        : std::cout &lt;&lt; "最后一次在位置 " &lt;&lt; std::distance(v.begin(), result)
+                    &lt;&lt; " 出现\n";
+};
+
+int main()
+{
+    const auto v = {1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4};
+    
+    for (auto const&amp; x : {std::array{1, 2, 3}, {4, 5, 6}&lt;!----&gt;})
+    {
+        auto iter = std::find_end(v.begin(), v.end(), x.begin(), x.end()); // 重载 (1)
+        print_result(iter, v);
+    }
+    
+    for (auto const&amp; x : {std::array{-1, -2, -3}, {-4, -5, -6}&lt;!----&gt;})
+    {
+        auto iter = std::find_end(v.begin(), v.end(), x.begin(), x.end(), // 重载 (3)
+                                  [](int x, int y)
+                                  {
+                                      return std::abs(x) == std::abs(y);
+                                  });
+        print_result(iter, v);
+    }
+}
+|output=
+最后一次在位置 8 出现
+未找到序列
+最后一次在位置 8 出现
+未找到序列
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=1205|std=C++98|before={{range|s_first|s_last}} 为空时返回值不明确|after=此时会返回 {{c|last}}}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before=“出现序列”的条件不正确|after=已改正}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc search}}
+{{dsc inc|cpp/algorithm/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/dsc find}}
+{{dsc inc|cpp/algorithm/dsc find_first_of}}
+{{dsc inc|cpp/algorithm/dsc search_n}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_end}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

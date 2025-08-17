@@ -1,0 +1,100 @@
+{{cpp/filesystem/path/title|append|operator/{{=}}}}
+{{cpp/filesystem/path/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++17|1=
+path&amp; operator/=( const path&amp; p );
+}}
+{{dcl|num=2|since=c++17|1=
+template&lt; class Source &gt;
+path&amp; operator/=( const Source&amp; source );
+}}
+{{dcl|num=3|since=c++17|1=
+template&lt; class Source &gt;
+path&amp; append( const Source&amp; source );
+}}
+{{dcl|num=4|since=c++17|1=
+template&lt; class InputIt &gt;
+path&amp; append( InputIt first, InputIt last );
+}}
+{{dcl end}}
+
+@1@ 若 {{c|p.is_absolute() {{!!}} (p.has_root_name() &amp;&amp; p.root_name() !{{=}} root_name())}}，则如同用 {{c|operator{{=}}(p)}} 以 {{c|p}} 替换当前路径，并终止。
+@@* 否则，若 {{c|p.has_root_directory()}}，则移除 {{c|*this}} 的通用格式路径名的任何根目录及整个相对路径。 
+@@* 否则，若 {{c|has_filename() {{!!}} (!has_root_directory() &amp;&amp; is_absolute())}}，则附加 {{tt|path::preferred_separator}} 到 {{c|*this}} 的通用格式。
+@@* 用以上之一处理后，附加 {{c|p}} 的原生格式路径名（从其通用格式忽略任何 {{spar|root-name}}）到 {{c|*this}} 的原生格式。
+
+{{source|1=
+// 其中 "//host" 是根名
+path("//host")  / "foo" // 结果是      "//host/foo" （附加分隔符）
+path("//host/") / "foo" // 结果亦为    "//host/foo" （附加，无分隔符）
+
+// POSIX 上，
+path("foo") / ""      // 结果是 "foo/" （附加）
+path("foo") / "/bar"; // 结果是 "/bar" （替换）
+
+// Windows 上，
+path("foo") / "C:/bar";  // 结果是 "C:/bar"    （替换）
+path("foo") / "C:";      // 结果是 "C:"        （替换）
+path("C:") / "";         // 结果是 "C:"        （附加，不带分隔符）
+path("C:foo") / "/bar";  // 生成   "C:/bar"    （移除相对路径后附加）
+path("C:foo") / "C:bar"; // 生成   "C:foo/bar" （附加，忽略 p 的根名）
+}}
+
+@2,3@ 同 {{v|1}}，但接受任何 {{lc|std::basic_string}}，{{lc|std::basic_string_view}}，空终止多字符字符串，或指向空终止多字符序列的输入迭代器。等价于 {{c|1=return operator/=(path(source));}}。
+@4@ 同 {{v|1}}，但接受任何指代多字符字符串的迭代器对。等价于 {{c|1=return operator/=(path(first, last));}}。
+
+{{cpp/filesystem/path/param source constraints|2|3}}
+
+===参数===
+{{par begin}}
+{{par | p | 要添加的路径 }}
+{{par | source | {{lc|std::basic_string}}，{{lc|std::basic_string_view}}，空终止多字节/宽字符串，或指向空终止多字符序列的输入迭代器，它表示路径名（以可移植或原生格式）}}
+{{par | first, last| 一对指定表示路径名的多字符序列的{{named req|InputIterator}}}}
+{{par hreq}}
+{{par req named | InputIt | InputIterator}}
+{{par req | {{tt|InputIt}} 的 value_type 必须是编码字符（{{c|char}}、{{c|wchar_t}}、{{c|char16_t}} 及 {{c|char32_t}}）类型之一。}}
+{{par end}}
+
+===返回值===
+{{c|*this}}
+
+===异常===
+若内存分配失败则可能抛出 {{c|std::bad_alloc}}。
+
+===注解===
+这些函数等效地生成以 {{c|*this}} 为起始目录的环境中，对实参路径 {{tt|p}} 的含义估计。
+
+===示例===
+{{example
+|The output is produced on Windows.
+|code=
+#include &lt;filesystem&gt;
+#include &lt;iostream&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    fs::path p1 = "C:";
+    p1 /= "Users"; // 不插入分隔符
+    std::cout &lt;&lt; "\"C:\" / \"Users\" == " &lt;&lt; p1 &lt;&lt; '\n';
+    p1 /= "batman"; // 插入 fs::path::preferred_separator，在 Windows 上为 '\'
+    std::cout &lt;&lt; "\"C:\" / \"Users\" / \"batman\" == " &lt;&lt; p1 &lt;&lt; '\n';
+}
+|p=true
+|output=
+"C:" / "Users" == "C:Users"
+"C:" / "Users" / "batman" == "C:Users\\batman"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item | wg=lwg | dr=3244 | std=C++17 | before=缺失 {{tt|Source}} 不能为 {{tt|path}} 的制约 | after=已添加 }}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/path/dsc concat}}
+{{dsc inc|cpp/filesystem/path/dsc operator/}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

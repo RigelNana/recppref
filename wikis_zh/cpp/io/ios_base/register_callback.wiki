@@ -1,0 +1,105 @@
+{{cpp/io/ios_base/title|register_callback}}
+{{cpp/io/ios_base/navbar}}
+{{ddcl|
+void register_callback( event_callback function, int index );
+}}
+
+注册将为 {{lc|imbue()}}、{{lc|std::basic_ios::copyfmt()}} 和 {{lc|~ios_base()}} 调用的用户定义函数。每次都调用每个已注册回调：事件类型（{{lc|event}} 类型的值）作为首个实参传递，而且可用于区别调用方。
+
+以注册的逆序调用各回调（换言之，{{tt|register_callback()}} 在回调栈上推入回调对）。若在回调函数内调用 {{tt|register_callback()}} 添加新回调，则只在下次事件发生时调用新回调。
+
+不允许用户定义的回调抛异常。
+
+===参数===
+{{par begin}}
+{{par | function |事件发生时将调用的函数，作为 {{rlp|event_callback}} 类型函数指针提供}}
+{{par | index |将传递给函数的自定义参数}}
+{{par end}}
+
+===返回值===
+（无）
+
+===注解===
+一旦注册，则不能解除已注册回调：它在流对象剩下的生存期中保留为其一部分。若需要更改回调的行为，则可通过 {{lc|iword()}} 或 {{lc|pword()}} 控制。
+
+若多次注册同一函数，则会多次调用它。
+
+与回调一同存储的整数值通常为从 {{lc|xalloc()}} 获得的索引。
+
+===示例===
+{{example
+|演示用 {{tt|register_callback}} 更新本地环境依赖的缓存值，它为自定义的输出运算符所用。
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+
+// 缓存本地环境限定的消息及其散列
+typedef std::pair&lt;std::string, std::size_t&gt; cache_t;
+
+// 从本地环境填充缓存的消息及其散列
+void update_cache(cache_t&amp; cache, std::locale loc)
+{
+    auto&amp; fct = std::use_facet&lt; std::messages&lt;char&gt; &gt;(loc);
+    std::messages_base::catalog cat = fct.open("sed", loc);
+    cache.first = cat &lt; 0 ? "" : fct.get(cat, 0, 0, "内存耗尽");
+    cache.second = std::hash&lt;std::string&gt;()(cache.first);
+}
+
+// 若本地环境更改则更新缓存
+void true_callback(std::ios_base::event evt, std::ios_base&amp; str, int idx)
+{
+    if (evt == std::ios_base::imbue_event) 
+    {
+        cache_t* ptr = static_cast&lt;cache_t*&gt;(str.pword(idx));
+        update_cache(*ptr, str.getloc());
+    }
+}
+
+// 注册 pword() 中的缓存并设置回调
+struct CacheSetup
+{
+    CacheSetup(std::ostream&amp; os, std::ios_base::event_callback f, cache_t* cache)
+    {
+        int index = std::ostream::xalloc();
+        os.pword(index) = cache; // 设置指针指向流中的缓存
+        os.register_callback(f, index); // 存储回调和指针的索引
+        update_cache(*cache, os.getloc()); // 初始化缓存
+    };
+};
+
+// 某定制类
+struct S {};
+// 某定制类的 operator&lt;&lt; 需要对被散列消息的快速访问
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const S&amp;)
+{
+    static cache_t cache;
+    static CacheSetup setup(os, true_callback, &amp;cache);
+    return os &lt;&lt; cache.first &lt;&lt; " : " &lt;&lt; cache.second;
+}
+
+int main()
+{
+    std::locale loc("en_US.utf8");
+    
+    S s;
+    std::cout.imbue(loc);
+    std::cout &lt;&lt; s &lt;&lt; '\n';
+    
+    std::cout.imbue(std::locale(loc, new std::messages_byname&lt;char&gt;("de_DE.utf8")));
+    std::cout &lt;&lt; s &lt;&lt; '\n';
+
+    std::cout.imbue(std::locale(loc, new std::messages_byname&lt;char&gt;("ja_JP.utf8")));
+    std::cout &lt;&lt; s &lt;&lt; '\n';
+
+    std::cout.imbue(std::locale(loc, new std::messages_byname&lt;char&gt;("ru_RU.utf8")));
+    std::cout &lt;&lt; s &lt;&lt; '\n';
+}
+|output=
+Memory exhausted : 2,295,079,096
+Speicher erschöpft : 3,139,423,551
+メモリーが足りません : 3,837,351,114
+Память исчерпана : 3,742,732,851
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

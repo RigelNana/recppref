@@ -1,0 +1,145 @@
+{{cpp/ranges/title|mismatch|mismatch_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr mismatch_result&lt;I1, I2&gt;
+    mismatch( I1 first1, S1 last1, I2 first2, S2 last2,
+              Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;
+             ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;, Pred, Proj1, Proj2&gt;
+constexpr mismatch_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                          ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+    mismatch( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+              Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I1, class I2 &gt;
+using mismatch_result = ranges::in_in_result&lt;I1, I2&gt;;
+}}
+{{dcl end}}
+
+返回来自两个范围的首个不匹配的投影后元素对：一个以 {{range|first1|last1}} 或 {{c|r1}} 定义而另一个以 {{range|first2|last2}} 或 {{c|r2}} 定义。
+
+@1@ 用给定的二元谓词 {{c|p}} 比较元素。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|要比较的|sentinel=yes|range=第一}}
+{{par|r1|第一待比较元素范围}}
+{{par range|first2|last2|要比较的|sentinel=yes|range=第二}}
+{{par|r2|第二待比较元素范围}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj1|应用到第一元素范围的投影}}
+{{par|proj2|应用到第二元素范围的投影}}
+{{par end}}
+
+===返回值===
+拥有指向最先两个不相等元素的迭代器的 {{tt|ranges::mismatch_result}}。
+
+若比较抵达 {{c|last1}} 或 {{c|last2}}，无论何者先发生，都未找到不匹配，则对象保有尾迭代器与来自另一范围的对应迭代器。
+
+===复杂度===
+至多应用 {{c|std::min(last1 - first1, last2 - first2)}} 次谓词与对应的投影。
+
+===可能的实现===
+{{eq fun|1=
+struct mismatch_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr std::mismatch_result&lt;I1, I2&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                   Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        for (; first1 != last1 &amp;&amp; first2 != last2; ++first1, (void)++first2)
+            if (not std::invoke(pred, std::invoke(proj1, *first1),
+                                      std::invoke(proj2, *first2)))
+                break;
+
+        return {first1, first2};
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                                        Pred, Proj1, Proj2&gt;
+    constexpr ranges::mismatch_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                      ranges::borrowed_iterator_t&lt;R2&gt;&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::ref(pred), std::ref(proj1), std::ref(proj2));
+    }
+};
+
+inline constexpr mismatch_fn mismatch;
+}}
+
+===示例===
+{{example
+ | 此程序确定同时在给定字符串的首端与在末端逆序找到的最长子串（可能重叠）
+ | code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+ 
+[[nodiscard]]
+constexpr std::string_view mirror_ends(const std::string_view in)
+{
+    const auto end = std::ranges::mismatch(in, in {{!}} std::views::reverse).in1;
+    return {in.cbegin(), end};
+}
+ 
+int main()
+{
+    std::cout &lt;&lt; mirror_ends("abXYZba") &lt;&lt; '\n'
+              &lt;&lt; mirror_ends("abca") &lt;&lt; '\n'
+              &lt;&lt; mirror_ends("ABBA") &lt;&lt; '\n'
+              &lt;&lt; mirror_ends("level") &lt;&lt; '\n';
+
+    using namespace std::literals::string_view_literals;
+
+    static_assert("123"sv == mirror_ends("123!@#321"));
+    static_assert("radar"sv == mirror_ends("radar"));
+}
+|output=
+ab
+a
+ABBA
+level
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc equal}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc lexicographical_compare}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/dsc mismatch}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

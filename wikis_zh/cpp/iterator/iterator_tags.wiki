@@ -1,0 +1,137 @@
+{{cpp/title|input_iterator_tag|output_iterator_tag|forward_iterator_tag|bidirectional_iterator_tag|random_access_iterator_tag|contiguous_iterator_tag}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl|num=1|
+struct input_iterator_tag {};
+}}
+{{dcl|num=2|
+struct output_iterator_tag {};
+}}
+{{dcl|num=3|
+struct forward_iterator_tag : public input_iterator_tag {};
+}}
+{{dcl|num=4|
+struct bidirectional_iterator_tag : public forward_iterator_tag {};
+}}
+{{dcl|num=5|
+struct random_access_iterator_tag : public bidirectional_iterator_tag {};
+}}
+{{dcl|num=6|since=c++20|
+struct contiguous_iterator_tag : public random_access_iterator_tag {};
+}}
+{{dcl end}}
+
+定义迭代器的分类。每个标签均为空类型。
+
+===迭代器类别===
+对于每个{{named req|Iterator}}类型 {{tt|It}}，{{tt|typedef}} {{c|std::iterator_traits&lt;It&gt;::iterator_category}} 必须定义为这些标签类型之一的别名，以指示 {{tt|It}} 所在的最特定的类别。
+
+# {{tt|input_iterator_tag}} 对应{{named req|InputIterator}}。
+# {{tt|output_iterator_tag}} 对应{{named req|OutputIterator}}。
+# {{tt|forward_iterator_tag}} 对应{{named req|ForwardIterator}}。
+# {{tt|bidirectional_iterator_tag}} 对应{{named req|BidirectionalIterator}}。
+# {{tt|random_access_iterator_tag}} 对应{{named req|RandomAccessIterator}}。
+
+迭代器分类标签携带信息，可以用于根据这一分类所蕴含的特定要求集合选择最高效算法。
+
+{{rrev|since=c++20|
+===迭代器概念===
+对每个 {{lconcept|input_iterator}} 类型 {{tt|It}}，可以声明 {{c|It::iterator_concept}}（若 {{c|std::iterator_traits&lt;It&gt;}} 从主模板生成）或 {{c|std::iterator_traits&lt;It&gt;::iterator_concept}}（若 {{c|std::iterator_traits&lt;It&gt;}} 被特化）为这些标签之一的别名，以指示 {{tt|It}} 有意实现的最强迭代器概念。
+
+# {{tt|input_iterator_tag}} 对应 {{lconcept|input_iterator}}。
+# {{tt|forward_iterator_tag}} 对应 {{lconcept|forward_iterator}}。
+# {{tt|bidirectional_iterator_tag}} 对应 {{lconcept|bidirectional_iterator}}。
+# {{tt|random_access_iterator_tag}} 对应 {{lconcept|random_access_iterator}}。
+# {{tt|contiguous_iterator_tag}} 对应 {{lconcept|contiguous_iterator}}。
+
+若未提供 {{tt|iterator_concept}}，则以 {{tt|iterator_category}} 为后备。若亦未提供 {{tt|iterator_category}}（即 {{tt|It}} 非 {{named req|Iterator}}），且未特化 {{c|std::iterator_traits&lt;It&gt;}}，则假设为 {{tt|random_access_iterator_tag}}。
+
+任何情况下，若不支持要求的操作则不满足各个概念，无关乎标签。
+}}
+
+===注解===
+没有用于{{named req|ContiguousIterator}}的独立标签。即不可能基于其 {{tt|iterator_category}} 分辨{{named req|ContiguousIterator}}。{{rev inl|since=c++20|要定义用于连续迭代器的特化算法，须使用 {{lconcept|contiguous_iterator}} 概念。}}
+
+{{tt|output_iterator_tag}} 和 {{lconcept|output_iterator}} 概念之间没有对应关系。将 {{tt|iterator_concept}} 设为 {{tt|output_iterator_tag}} 只表明该类型并不实现 {{lconcept|input_iterator}}。
+
+===示例===
+{{example
+|如果需要根据迭代器分类标签选择算法，常用做法是使用分发函数（也可以通过 {{lc|std::enable_if}} 实现）。{{rev inl|since=c++20|各迭代器标签类也用于在相应的概念定义中表示要求，它们无法单独基于使用模式予以表达。}}
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;list&gt;
+#include &lt;vector&gt;
+
+// 使用概念（标签检查是概念自身的一部分）
+
+template&lt;std::bidirectional_iterator BDIter&gt;
+void alg(BDIter, BDIter)
+{
+    std::cout &lt;&lt; "1. alg() \t 为双向迭代器调用\n";
+}
+
+template&lt;std::random_access_iterator RAIter&gt;
+void alg(RAIter, RAIter)
+{
+    std::cout &lt;&lt; "2. alg() \t 为随机访问迭代器调用\n";
+}
+
+// 遗留，使用标签派发
+
+
+namespace legacy
+{
+    // 经常把实现细节隐藏于专门的命名空间
+    namespace implementation_details
+    {
+        template&lt;class BDIter&gt;
+        void alg(BDIter, BDIter, std::bidirectional_iterator_tag)
+        {
+            std::cout &lt;&lt; "3. legacy::alg() 为双向迭代器调用\n";
+        }
+
+        template&lt;class RAIter&gt;
+        void alg(RAIter, RAIter, std::random_access_iterator_tag)
+        {
+            std::cout &lt;&lt; "4. legacy::alg() 为随机访问迭代器调用\n";
+        }
+    } // namespace implementation_details
+
+    template&lt;class Iter&gt;
+    void alg(Iter first, Iter last)
+    {
+        implementation_details::alg(first, last,
+            typename std::iterator_traits&lt;Iter&gt;::iterator_category());
+    }
+} // namespace legacy
+
+int main()
+{
+    std::list&lt;int&gt; l;
+    alg(l.begin(), l.end()); // 1.
+    legacy::alg(l.begin(), l.end()); // 3.
+
+    std::vector&lt;int&gt; v;
+    alg(v.begin(), v.end()); // 2.
+    legacy::alg(v.begin(), v.end()); // 4.
+
+//  std::istreambuf_iterator&lt;char&gt; i1(std::cin), i2;
+//  alg(i1, i2);         // 编译错误：没有匹配的函数可以调用
+//  legacy::alg(i1, i2); // 编译错误：没有匹配的函数可以调用
+}
+|output=
+1. alg() 	 为双向迭代器调用
+3. legacy::alg() 为双向迭代器调用
+2. alg() 	 为随机访问迭代器调用
+4. legacy::alg() 为随机访问迭代器调用
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc iterator}}
+{{dsc inc|cpp/iterator/dsc iterator_traits}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

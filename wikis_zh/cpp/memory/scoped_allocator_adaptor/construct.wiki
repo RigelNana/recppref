@@ -1,0 +1,126 @@
+{{cpp/memory/scoped_allocator_adaptor/title|construct}}
+{{cpp/memory/scoped_allocator_adaptor/navbar}}
+{{dcl begin}}
+{{dcl header|scoped_allocator}}
+{{dcl|num=1|
+template&lt; class T, class... Args &gt;
+void construct( T* p, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|until=c++20|
+template&lt; class T1, class T2, class... Args1, class... Args2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, std::piecewise_construct_t,
+                std::tuple&lt;Args1...&gt; x, std::tuple&lt;Args2...&gt; y );
+}}
+{{dcl|num=3|until=c++20|
+template&lt; class T1, class T2 &gt;
+void construct( std::pair&lt;T1, T2&gt;* p );
+}}
+{{dcl|num=4|until=c++20|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, U&amp;&amp; x, V&amp;&amp; y );
+}}
+{{dcl|num=5|until=c++20|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, const std::pair&lt;U, V&gt;&amp; xy );
+}}
+{{dcl|num=6|until=c++20|
+template&lt; class T1, class T2, class U, class V &gt;
+void construct( std::pair&lt;T1, T2&gt;* p, std::pair&lt;U, V&gt;&amp;&amp; xy );
+}}
+{{dcl h|辅助函数模板}}
+{{dcla|num=7|until=c++20|expos=yes|
+template &lt; class T, class... Args &gt;
+std::tuple&lt;/* 见下文 */&gt; /*concat-args*/( std::tuple&lt;Args...&gt;&amp;&amp; tup );
+}}
+{{dcl end}}
+
+在 {{c|p}} 所指向的分配但未初始化的存储中，用外层分配器与提供的构造函数实参构造对象。如果对象具有的类型是自身使用分配器的类型{{rev inl|until=c++20|或 {{tt|std::pair}}}}，那么就会下传内层分配器给构造的对象。
+
+@1@ 以{{ls|cpp/memory/uses_allocator#使用分配器构造}}的方式，用最外层分配器在由 {{c|p}} 指示的未初始化内存位置创建 {{tt|T}} 类型对象。
+{{rev begin}}
+{{rev|until=c++20|
+给定 {{c|std::uses_allocator&lt;T, inner_allocator_type&gt;::value}} 为 {{c|uses_inner}}：
+* 如果 {{c|uses_inner}} 是 {{c|false}} 并且 {{c|std::is_constructible&lt;T, Args...&gt;::value}} 是 {{c|true}}，那么就会调用 {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::forward&lt;Args&gt;(args)...)}}}}。
+* 否则，如果 {{c|uses_inner}} 和 {{c multi|std::is_constructible&lt;T, std::allocator_arg_t,|                      inner_allocator_type&amp;,|                      Args...&gt;::value}} 都是 {{c|true}}，那么就会调用 {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::allocator_arg,}}&lt;br&gt;{{nbspt|20}}{{c/core|inner_allocator(),}}&lt;br&gt;{{nbspt|20}}{{c/core|std::forward&lt;Args&gt;(args)...)}}}}。
+* 否则，如果 {{c|uses_inner}} 和 {{c|std::is_constructible&lt;T, Args..., inner_allocator_type&amp;&gt;::value}} 都是 {{c|true}}，那么就会调用 {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::forward&lt;Args&gt;(args)..., inner_allocator())}}}}。
+* 否则程序非良构。
+
+{{cpp/enable if| {{tt|T}} 不是 {{lc|std::pair}} 的特化}}。
+}}
+{{rev|since=c++20|
+等价于 {{box|
+{{c/core|std::apply}}&lt;br&gt;
+{{c/core|(}}&lt;br&gt;
+{{nbspt|4}}{{c/core|[p, this](auto&amp;&amp;... newargs)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|{}}&lt;br&gt;
+{{nbspt|8}}{{rlpsi|helpers#outermost-construct}}&lt;br&gt;
+{{nbspt|12}}{{c/core|(p, std::forward&lt;decltype(newargs)&gt;(newargs)...);}}&lt;br&gt;
+{{nbspt|4}}{{c/core|},}}&lt;br&gt;
+{{nbspt|4}}{{c/core|std::uses_allocator_construction_args}}&lt;br&gt;
+{{nbspt|8}}{{c/core|(inner_allocator(), std::forward&lt;Args&gt;(args)...)}}&lt;br&gt;
+{{c/core|);}}
+}}。
+}}
+{{rev end}}
+
+@2-6@ 以{{ls|cpp/memory/uses_allocator#使用分配器构造}}的方式，用最外层分配器在由 {{c|p}} 指示的未初始化内存位置创建 {{lc|std::pair}} 特化类型对象。
+
+:@2@ 设 {{c|xprime}} 为 {{box|{{tti|concat-args}}{{sep}}{{c/core|&lt;T1&gt;(std::move(x))}}}}，{{c|yprime}} 为 {{box|{{tti|concat-args}}{{sep}}{{c/core|&lt;T2&gt;(std::move(y))}}}}，调用 {{box|{{rlpsi|helpers#outermost-construct}}{{sep}}{{c/core|(p, std::piecewise_construct, std::move(xprime), std::move(yprime))}}}}。
+
+:@3@ 等价于 {{c|construct(p, std::piecewise_construct, std::tuple&lt;&gt;(), std::tuple&lt;&gt;());}}。
+
+:@4-6@ 等价于 {{c multi|construct(p, std::piecewise_construct,|          std::forward_as_tuple(xarg), std::forward_as_tuple(yarg));}}，其中 {{c|xarg}} 和 {{c|yarg}} 定义如下：
+{|class="wikitable" style="text-align: center;"
+!{{nbsp|2}}重载{{nbsp|2}}
+!{{normal|{{c|xarg}}}}
+!{{normal|{{c|yarg}}}}
+|-
+|{{v|4}}
+|{{c|std::forward&lt;U&gt;(x)}}
+|{{c|std::forward&lt;V&gt;(y)}}
+|-
+|{{v|5}}
+|{{c|xy.first}}
+|{{c|xy.second}}
+|-
+|{{v|6}}
+|{{c|std::forward&lt;U&gt;(xy.first)}}
+|{{c|std::forward&lt;V&gt;(xy.second)}}
+|}
+
+@7@ 合并 {{c|tup}} 中包含的实参与{{ls|cpp/memory/uses_allocator#使用分配器构造}} {{tt|T}} 类型对象所需的额外实参。
+@@ 给定 {{c|std::uses_allocator&lt;T, inner_allocator_type&gt;::value}} 为 {{c|uses_inner}}：
+* 如果 {{c|uses_inner}} 是 {{c|false}} 并且 {{c|std::is_constructible&lt;T, Args...&gt;::value}} 是 {{c|true}}，那么就会返回 {{c|std::tuple&lt;Args&amp;&amp;...&gt;(std::move(tup))}}。
+* 否则，如果 {{c|uses_inner}} 和 {{c multi|std::is_constructible&lt;T, std::allocator_arg_t,|                      inner_allocator_type&amp;,|                      Args...&gt;::value}} 都是 {{c|true}}，那么就会返回 {{c multi|std::tuple_cat(std::tuple&lt;std::allocator_arg_t, inner_allocator_type&amp;&gt;|                   (std::allocator_arg, inner_allocator()),|               std::tuple&lt;Args&amp;&amp;...&gt;(std::move(tup)))}}。
+* 否则，如果 {{c|uses_inner}} 和 {{c|std::is_constructible&lt;T, Args..., inner_allocator_type&amp;&gt;::value}} 都是 {{c|true}}，那么就会返回 {{c multi|std::tuple_cat(std::tuple&lt;Args&amp;&amp;...&gt;(std::move(tup)),|               std::tuple&lt;inner_allocator_type&amp;&gt;(inner_allocator())}}。
+* 否则程序非良构。
+
+===参数===
+{{par begin}}
+{{par|p|指向被分配但未初始化的存储的指针}}
+{{par|args|传递给 {{tt|T}} 的构造函数的各构造函数实参}}
+{{par|x|传递给 {{tt|T1}} 的构造函数的构造函数实参}}
+{{par|y|传递给 {{tt|T2}} 的构造函数的构造函数实参}}
+{{par|xy|两个成员分别为 {{tt|T1}} 与 {{tt|T2}} 构造函数实参的 {{tt|pair}}}}
+{{par|non_pair|转换成 {{tt|pair}} 以进行进一步构造的非 {{tt|pair}} 实参}}
+{{par|tup|要被合并的实参}}
+{{par end}}
+
+===注解===
+此函数由任何具分配器对象，例如 {{lc|std::vector}}，在给予了 {{lc|std::scoped_allocator_adaptor}} 作为所用分配器时（通过 {{lc|std::allocator_traits}}）调用。因为 {{tt|inner_allocator_type}} 自身也是 {{lc|std::scoped_allocator_adaptor}} 的特化，所以此函数也会在具分配器对象通过此函数开始构造其自身成员时得到调用。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2203|std=C++11|before=内层分配器通过值初始化 {{tt|inner_allocator_type}} 对象获取|after=通过调用 {{rlpf|inner_allocator}} 获取}}
+{{dr list item|wg=lwg|dr=2511|paper=P0475R1|std=C++11|before={{tti|concat-args}} 可能会复制 {{lc|std::tuple}} 元素|after=消除所有元素复制操作}}
+{{dr list item|wg=lwg|dr=2586|std=C++11|before=只检查从 {{tt|inner_allocator_type}} 右值进行的构造|after=改为检查从 {{tt|inner_allocator_type}}&lt;br&gt;的非 const 左值进行的构造}}
+{{dr list item|wg=lwg|dr=2975|std=C++11|before=重载 {{v|1}} 没有被约束|after=添加约束以拒绝 {{lc|std::pair}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator_traits/dsc construct}}
+{{dsc inc|cpp/memory/allocator/dsc construct}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

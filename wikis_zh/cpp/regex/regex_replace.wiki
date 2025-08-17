@@ -1,0 +1,149 @@
+{{cpp/title|regex_replace}}
+{{cpp/regex/navbar}}
+{{dcl begin}}
+{{dcl header|regex}}
+{{dcl|num=1|since=c++11|1=
+template&lt; class OutputIt, class BidirIt, class Traits, class CharT,
+          class STraits, class SAlloc &gt;
+OutputIt regex_replace( OutputIt out, BidirIt first, BidirIt last,
+                        const std::basic_regex&lt;CharT, Traits&gt;&amp; re,
+                        const std::basic_string&lt;CharT, STraits, SAlloc&gt;&amp; fmt,
+                        std::regex_constants::match_flag_type flags =
+                            std::regex_constants::match_default );
+}}
+{{dcl|num=2|since=c++11|1=
+template&lt; class OutputIt, class BidirIt, class Traits, class CharT &gt;
+OutputIt regex_replace( OutputIt out, BidirIt first, BidirIt last,
+                        const std::basic_regex&lt;CharT, Traits&gt;&amp; re,
+                        const CharT* fmt,
+                        std::regex_constants::match_flag_type flags =
+                            std::regex_constants::match_default );
+}}
+{{dcl|num=3|since=c++11|1=
+template&lt; class Traits, class CharT,
+          class STraits, class SAlloc, class FTraits, class FAlloc &gt;
+std::basic_string&lt;CharT, STraits, SAlloc&gt;
+    regex_replace( const std::basic_string&lt;CharT, STraits, SAlloc&gt;&amp; str,
+                   const std::basic_regex&lt;CharT, Traits&gt;&amp; re,
+                   const std::basic_string&lt;CharT, FTraits, FAlloc&gt;&amp; fmt,
+                   std::regex_constants::match_flag_type flags =
+                       std::regex_constants::match_default );
+}}
+{{dcl|num=4|since=c++11|1=
+template&lt; class Traits, class CharT, class STraits, class SAlloc &gt;
+std::basic_string&lt;CharT, STraits, SAlloc&gt;
+    regex_replace( const std::basic_string&lt;CharT, STraits, SAlloc&gt;&amp; str,
+                   const std::basic_regex&lt;CharT, Traits&gt;&amp; re,
+                   const CharT* fmt,
+                   std::regex_constants::match_flag_type flags =
+                       std::regex_constants::match_default );
+}}
+{{dcl|num=5|since=c++11|1=
+template&lt; class Traits, class CharT, class STraits, class SAlloc &gt;
+std::basic_string&lt;CharT&gt;
+    regex_replace( const CharT* s, const std::basic_regex&lt;CharT, Traits&gt;&amp; re,
+                   const std::basic_string&lt;CharT, STraits, SAlloc&gt;&amp; fmt,
+                   std::regex_constants::match_flag_type flags =
+                       std::regex_constants::match_default );
+}}
+{{dcl|num=6|since=c++11|1=
+template&lt; class Traits, class CharT &gt;
+std::basic_string&lt;CharT&gt;
+    regex_replace( const CharT* s, const std::basic_regex&lt;CharT, Traits&gt;&amp; re,
+                   const CharT* fmt,
+                   std::regex_constants::match_flag_type flags =
+                       std::regex_constants::match_default );
+}}
+{{dcl end}}
+
+{{tt|regex_replace}} 用正则表达式 {{c|re}} 进行目标字符序列的替换：
+
+@1,2@ 复制范围 {{range|first|last}} 中的字符到 {{c|out}}，以 {{c|fmt}} 所格式化的字符替换任何匹配 {{c|re}} 的序列。等价于：
+{{source|1=
+using iter_type = std::regex_iterator&lt;BidirIt, CharT, Traits&gt;;
+iter_type seq_begin(first, last, re, flags), seq_end;
+
+using result_type = std::match_results&lt;BidirIt&gt;;
+result_type m;
+
+bool need_to_copy = (flags &amp; std::regex_constants::format_no_copy) == 0;
+bool format_all = (flags &amp; std::regex_constants::format_first_only) != 0;
+
+for (iter_type i = seq_begin; i != seq.end(); ++i)
+{
+    m = *i;
+    if (need_to_copy)
+        out = std::copy(m.prefix().first, m.prefix().second, out);
+    if (format_all {{!!}} i == seq_begin)
+        out = /* 替换表达式 */
+}
+
+if (need_to_copy)
+    out = m.ready()
+              ? std::copy(m.suffix().first, m.suffix().second, out)
+              : std::copy(first, last, out);
+
+return out;
+}}
+:@1@ 表达式 {{c|/* 替换表达式 */}} 是 {{c|m.format(out, fmt, flags)}}。
+:@2@ 表达式 {{c|/* 替换表达式 */}} 是 {{c|m.format(out, fmt, fmt + std::char_traits&lt;CharT&gt;::length(fmt), flags)}}。
+
+@3,4@ 等价于 {{c multi|std::basic_string&lt;CharT, STraits, SAlloc&gt; result;|regex_replace(std::back_inserter(result),|              str.begin(), str.end(), re, fmt, flags);|return result;}}。
+
+@5,6@ 等价于 {{c multi|std::basic_string&lt;CharT, STraits, SAlloc&gt; result;|regex_replace(std::back_inserter(result),|              s, s + std::char_traits&lt;CharT&gt;::length(s), re, fmt, flags);|return result;}}。
+
+===参数===
+{{par begin}}
+{{par|first, last|目标字符范围}}
+{{par|str|目标 {{lc|std::basic_string}}}}
+{{par|s|目标 C 风格字符串}}
+{{par|re|正则表达式}}
+{{par|fmt|正则表达式替换格式字符串，确切的语法取决于 {{c|flags}} 的值}}
+{{par|flags|用于确定将如何进行匹配的标志}}
+{{par|out|存储替换结果的输出迭代器}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===异常===
+可能抛出指示[[cpp/regex/error_type|错误条件]]的 {{lc|std::regex_error}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;regex&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::string text = "Quick brown fox";
+    std::regex vowel_re("a{{!}}e{{!}}i{{!}}o{{!}}u");
+    
+    // 写结果到输出迭代器
+    std::regex_replace(std::ostreambuf_iterator&lt;char&gt;(std::cout),
+                       text.begin(), text.end(), vowel_re, "*");
+    
+    // 构造保有结果的字符串
+    std::cout &lt;&lt; '\n' &lt;&lt; std::regex_replace(text, vowel_re, "[$&amp;]") &lt;&lt; '\n';
+}
+|output=
+Q**ck br*wn f*x
+Q[u][i]ck br[o]wn f[o]x
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2213|std=C++11|before=替换操作不会更新 {{c|out}}|after=会更新 {{c|out}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/regex/dsc regex_search}}
+{{dsc inc|cpp/regex/dsc match_flag_type}}
+{{dsc inc|cpp/string/basic_string/dsc replace}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,107 @@
+{{cpp/io/basic_filebuf/title |seekoff}}
+{{cpp/io/basic_filebuf/navbar}}
+{{ddcl |1=
+protected:
+virtual pos_type seekoff( off_type off,
+                          std::ios_base::seekdir dir,
+                          std::ios_base::openmode which = std::ios_base::in {{!}} std::ios_base::out );
+}}
+
+在可能时重寻位文件指针到距文件起始、结尾或当前位置恰好 {{c|off}} 个字符的位置（取决于 {{c|dir}} 的值）。
+
+关联文件未打开（{{c|1=is_open() == false}}）时立即失败。
+
+如果多字节字符编码依赖状态（{{ltt|cpp/locale/codecvt/encoding|codecvt::encoding()}} 返回 {{c|-1}}）或者是变长的（{{tt|codecvt::encoding()}} 返回 {{c|0}}），而偏移 {{c|off}} 非 {{c|0}}，那么立即失败：此函数无法确定对应 {{c|off}} 个字符的字节数。
+
+如果 {{c|dir}} 不是 {{lc|std::basic_ios::cur}} 或偏移 {{c|off}} 非 {{c|0}}，并且此 filebuf 对象上最近做的操作是输出（即放置缓冲区非空，或最近调用的函数是 {{lc|overflow()}}），那么就会调用 {{c|std::codecvt::unshift}} 以确定需要的反迁移序列，并通过调用 {{lc|overflow()}} 将该序列写入文件。
+
+然后转换实参 {{c|dir}} 到 {{c|int}} 类型值 {{c|whence}} 如下：
+
+{{dsc begin}}
+{{dsc hitem |{{c|dir}} 的值|{{c|whence}} 的值}}
+{{dsc|{{c|std::basic_ios::beg}}|{{lc|SEEK_SET}}}}
+{{dsc|{{c|std::basic_ios::end}}|{{lc|SEEK_END}}}}
+{{dsc|{{c|std::basic_ios::cur}}|{{lc|SEEK_CUR}}}}
+{{dsc end}}
+
+然后，如果字符编码是定宽的{{tt|codecvt::encoding()}} 返回某个正值 {{c|width}}），那么如同用 {{c|std::fseek(file, width*off, whence)}} 移动文件指针。
+
+否则，如同用 {{c|std::fseek(file, 0, whence)}} 移动文件指针。
+
+基类函数签名要求的 {{tt|openmode}} 实参通常会被忽略，因为 {{tt|std::basic_filebuf}} 只维护一个文件位置。
+
+===参数===
+{{par begin}}
+{{par|off|要设置位置指示器到的相对位置。}}
+{{par|dir|定义要应用相对偏移到的基位置。它可以是下列常量之一：
+{{cpp/io/ios_base/seekdir consts}}}}
+{{par|which|定义会影响到的输入和/或输出序列。它可以是下列常量之一或它们的组合：
+{{cpp/io/ios_base/openmode streambuf consts}}}}
+{{par end}}
+
+===返回值===
+新构造的 {{c|pos_type}} 类型对象，存储结果文件位置，或在失败时返回 {{c|pos_type(off_type(-1))}}。
+
+===注解===
+{{tt|seekoff()}} 会被 {{c|std::basic_streambuf::pubseekoff}} 调用，它又会被 {{c|std::basic_istream::seekg}}、{{c|std::basic_ostream::seekp}}、{{c|std::basic_istream::tellg}} 和 {{c|std::basic_ostream::tellp}} 调用。
+
+===示例===
+{{example
+|code=
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+
+template&lt;typename CharT&gt;
+int get_encoding(const std::basic_istream&lt;CharT&gt;&amp; stream)
+{
+    using Facet = std::codecvt&lt;CharT, char, std::mbstate_t&gt;;
+    return std::use_facet&lt;Facet&gt;(stream.getloc()).encoding();
+}
+
+int main()
+{
+    // 准备 10 字节文件，保有 4 个 UTF-8 中的字符（"zß水𝄋"）
+    std::ofstream("text.txt") &lt;&lt; "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9d\x84\x8b";
+    
+    // 用非转换编码打开
+    std::ifstream f1("text.txt");
+    std::cout &lt;&lt; "f1 的本地环境的 encoding() 返回 "
+              &lt;&lt; get_encoding(f1) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(3, beg) 返回 "
+              &lt;&lt; f1.rdbuf()-&gt;pubseekoff(3, std::ios_base::beg) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(0, end) 返回 "
+              &lt;&lt; f1.rdbuf()-&gt;pubseekoff(0, std::ios_base::end) &lt;&lt; '\n';
+    
+    // 用 UTF-8 打开
+    std::wifstream f2("text.txt");
+    f2.imbue(std::locale("en_US.UTF-8"));
+    std::cout &lt;&lt; "f2 的本地环境的 encoding() 返回 "
+              &lt;&lt; get_encoding(f2) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(3, beg) 返回 "
+              &lt;&lt; f2.rdbuf()-&gt;pubseekoff(3, std::ios_base::beg) &lt;&lt; '\n'
+              &lt;&lt; "pubseekoff(0, end) 返回 "
+              &lt;&lt; f2.rdbuf()-&gt;pubseekoff(0, std::ios_base::end) &lt;&lt; '\n';
+}
+|output=
+f1 的本地环境的 encoding() 返回 1
+pubseekoff(3, beg) 返回 3
+pubseekoff(0, end) 返回 10
+f2 的本地环境的 encoding() 返回 0
+pubseekoff(3, beg) 返回 -1
+pubseekoff(0, end) 返回 10
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=55|std=C++98|before={{tt|seekoff}} 在失败时返回了未定义的无效流位置|after=失败时返回 {{c|pos_type(off_type(-1))}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc pubseekoff}}
+{{dsc inc|cpp/io/basic_filebuf/dsc seekpos}}
+{{dsc inc|cpp/io/c/dsc fseek}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

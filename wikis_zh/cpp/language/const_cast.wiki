@@ -1,0 +1,138 @@
+{{title|{{tt|const_cast}} 转换}}
+{{cpp/language/expressions/navbar}}
+在有不同 cv 限定的类型间转换。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|const_cast&lt;}} {{spar|目标类型}} {{ttb|&gt;(}} {{spar|表达式}} {{ttb|)}}}}
+{{sdsc end}}
+
+返回类型为{{spar sep|目标类型}}的值。
+
+===解释===
+{{c/core|const_cast}} 只能进行下列转换：
+
+@1@ 对于两个{{rlp|implicit conversion#相似类型|相似}}的对象指针或数据成员指针类型 {{tt|T1}} 和 {{tt|T2}}，如果 {{tt|T1}} 和 {{tt|T2}} 仅在 cv 限定上有不同（正式而言，如果它们最长的{{rlp|implicit conversion#相似类型|限定性分解}}中每对 {{tt|P1_i}} 和 {{tt|P2_i}} 对于所有 {{c|i}} 都相同），那么 {{tt|T1}} 类型的纯右值可以转换到 {{tt|T2}}。
+* 如果{{spar sep|表达式}}是空指针值，那么结果也是空指针值。
+* 如果{{spar sep|表达式}}是空成员指针值，那么结果也是空成员指针值。
+* 如果{{spar sep|表达式}}指向某个对象，那么结果也指向该对象。
+* 如果{{spar sep|表达式}}指向某个对象尾后，那么结果也指向该对象尾后。
+* 如果{{spar sep|表达式}}指向某个数据成员，那么结果也指向同一个数据成员。
+{{rrev|since=c++17|
+即使{{spar sep|表达式}}是纯右值，也不会进行{{rlpsd|implicit conversion#临时量实质化}}。
+}}
+
+@2@ 对于两个对象类型 {{tt|T1}} 和 {{tt|T2}}，如果指向 {{tt|T1}} 的指针可以通过 {{c|const_cast&lt;T2*&gt;}} 显式转换到类型“指向 {{tt|T2}} 的指针”，那么也可以进行以下转换：
+* {{tt|T1}} 类型的左值可以通过 {{c|const_cast&lt;T2&amp;&gt;}} 显式转换成类型 {{tt|T2}} 的左值。
+{{rrev|since=c++11|
+* {{tt|T1}} 类型的泛左值可以通过 {{c|const_cast&lt;T2&amp;&amp;&gt;}} 显式转换成类型 {{tt|T2}} 的亡值。
+* 如果 {{tt|T1}} 是类类型或数组类型，那么 {{tt|T1}} 类型的纯右值可以通过 {{c|const_cast&lt;T2&amp;&amp;&gt;}} 显式转换成类型 {{tt|T2}} 的亡值。
+}}
+{{rev begin}}
+{{rev|until=c++17|
+作为结果的引用会指代原来的对象。
+}}
+{{rev|since=c++17|
+如果{{spar sep|表达式}}是泛左值，那么作为结果的引用会指代原来的对象。否则作为结果的引用会指代{{rlp|implicit conversion#临时量实质化|实质化的临时量}}。
+}}
+{{rev end}}
+
+{{cpp/language/cast return}}
+
+===移除常量性===
+对于两个不同的类型 {{tt|T1}} 和 {{tt|T2}}，如果 {{tt|T2}} 存在一个形式为 “cv2_0 P2_0 cv2_1 P2_1 ... cv2_n−1 P2_n−1 cv2_n U2” 的{{rlp|implicit conversion#相似类型|限定性分解}}，使得 {{tt|T1}} 无法通过{{rlps|implicit conversion#限定性转换}}来转换到 “cv2_0 P1_0 cv2_1 P1_1 ... cv2_n−1 P1_n−1 cv2_n U1”（cv 组分相同，P 组分和 U 组分不同），那么从 {{tt|T1}} 到 {{tt|T2}} 的转换会''移除常量性''。
+
+如果从 {{tt|T1*}} 类型的纯右值到类型 {{tt|T2*}} 的转型会移除常量性，那么从 {{tt|T1}} 类型的表达式到 {{tt|T2}} 的引用类型的转型也会移除常量性。
+
+只有 {{c/core|const_cast}} 能用来移除常量性。
+
+“移除常量性”也意味着“移除易变性”，因为限定性转换同样无法移除易变性。
+
+===注解===
+函数指针和成员函数指针无法用于 {{c/core|const_cast}}。
+
+{{c/core|const_cast}} 使得到非 const 类型的引用或指针能够实际指代 {{rlp|cv|const 对象}}，或到非 volatile 类型的引用或指针能够实际指代 {{rlp|cv|volatile 对象}}。通过非 const 访问路径修改 const 对象和通过非 volatile {{rlps|value category#泛左值}}涉指 volatile 对象是未定义行为。
+
+===关键词===
+{{ltt|cpp/keyword/const_cast}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct type
+{
+    int i;
+    
+    type(): i(3) {}
+    
+    void f(int v) const
+    {
+        // this-&gt;i = v;                 // 编译错误：this 是指向 const 的指针
+        const_cast&lt;type*&gt;(this)-&gt;i = v; // 只要该对象不是 const 就 OK
+    }
+};
+
+int main() 
+{
+    int i = 3;                 // 不声明 i 为 const
+    const int&amp; rci = i; 
+    const_cast&lt;int&amp;&gt;(rci) = 4; // OK：修改 i
+    std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n';
+    
+    type t; // 如果这是 const type t，那么 t.f(4) 会是未定义行为
+    t.f(4);
+    std::cout &lt;&lt; "type::i = " &lt;&lt; t.i &lt;&lt; '\n';
+    
+    const int j = 3; // 声明 j 为 const
+    [[maybe_unused]]
+    int* pj = const_cast&lt;int*&gt;(&amp;j);
+    // *pj = 4;      // 未定义行为
+    
+    [[maybe_unused]]
+    void (type::* pmf)(int) const = &amp;type::f; // 指向成员函数的指针
+    // const_cast&lt;void(type::*)(int)&gt;(pmf);   // 编译错误：const_cast 不能用于成员函数指针
+}
+|output=
+i = 4
+type::i = 4
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1965|std=C++11|before={{c/core|const_cast}} 无法将右值引用绑定到数组右值|after=允许绑定此类引用}}
+{{dr list item|wg=cwg|dr=2879|std=C++17|before=指针纯右值操作数会被实质化|after=它们不会被实质化}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.6.1.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.6.1.10|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=5.2.11|title=Const cast|id=expr.const.cast}}
+{{ref std end}}
+
+===参阅===
+* {{rlpt|static_cast}}
+* {{rlpt|dynamic_cast}}
+* {{rlpt|reinterpret_cast}}
+* {{rlp|explicit cast|显式转换}}
+* {{rlp|implicit conversion|隐式转换}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

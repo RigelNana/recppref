@@ -1,0 +1,111 @@
+{{cpp/ranges/title|generate_random}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|random}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++26|
+template&lt; class R, class G &gt;
+    requires ranges::output_range&lt;R, std::invoke_result_t&lt;G&amp;&gt;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    generate_random( R&amp;&amp; r, G&amp;&amp; g );
+}}
+{{dcl|num=2|since=c++26|
+template&lt; class G, std::output_iterator&lt;std::invoke_result_t&lt;G&amp;&gt;&gt; O,
+          std::sentinel_for&lt;O&gt; S &gt;
+    requires std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt;
+constexpr O
+    generate_random( O first, S last, G&amp;&amp; g );
+}}
+{{dcl|num=3|since=c++26|
+template&lt; class R, class G, class D &gt;
+    requires ranges::output_range&lt;R, std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt; &amp;&amp;
+             std::invocable&lt;D&amp;, G&amp;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt; &amp;&amp;
+             std::is_arithmetic_v&lt;std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    generate_random( R&amp;&amp; r, G&amp;&amp; g, D&amp;&amp; d );
+}}
+{{dcl|num=4|since=c++26|
+template&lt; class G, class D, std::output_iterator&lt;std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt; O,
+          std::sentinel_for&lt;O&gt; S &gt;
+    requires std::invocable&lt;D&amp;, G&amp;&gt; &amp;&amp;
+             std::uniform_random_bit_generator&lt;std::remove_cvref_t&lt;G&gt;&gt; &amp;&amp;
+             std::is_arithmetic_v&lt;std::invoke_result_t&lt;D&amp;, G&amp;&gt;&gt;
+constexpr O
+    generate_random( O first, S last, G&amp;&amp; g, D&amp;&amp; d );
+}}
+{{dcl end}}
+
+尝试用随机数生成器或分布的 {{tt|generate_random}} 成员函数生成随机数，这被期望更为高效。如果没有可用的 {{tt|generate_random}} 成员函数则回落到生成逐个元素。
+
+对 {{v|1}} 或 {{v|3}} 分别令后备操作为调用 {{c|ranges::generate(std::forward&lt;R&gt;(r), std::ref(g))}} 或 {{c|ranges::generate(std::forward&lt;R&gt;(r), [&amp;d, &amp;g] { return std::invoke(d, g); })}}。
+
+@1@ 如果 {{c|g.generate_random(std::forward&lt;R&gt;(r))}} 良构则执行此表达式。
+
+@@ 否则，令 {{c|I}} 为 {{c|std::invoke_result_t&lt;G&amp;&gt;}}。若 {{tt|R}} 实现 {{lconcept|sized_range}}，则通过未指定次数的 {{c|g()}} 或 {{c|g.generate_random(s)}} 调用，对 {{c|r}} 填充 {{c|ranges::size(r)}} 个 {{c|I}} 类型值，如果后者于对值 {{tt|N}} 和 {{c|std::span&lt;I, N&gt;}} 类型的对象 {{c|s}} 良构。
+
+@@ 否则进行后备操作。
+
+@3@ 如果 {{c|d.generate_random(std::forward&lt;R&gt;(r), g)}} 良构则执行此表达式。
+
+@@ 否则，令 {{c|I}} 为 {{c|std::invoke_result_t&lt;D&amp;, G&amp;&gt;}}。若 {{tt|R}} 实现 {{lconcept|sized_range}}，则通过未指定次数的 {{c|std::invoke(d, g)}} 或 {{c|d.generate_random(s, g)}} 调用，对 {{c|r}} 填充 {{c|ranges::size(r)}} 个 {{c|I}} 类型值，如果后者于对值 {{tt|N}} 和 {{c|std::span&lt;I, N&gt;}} 类型的对象 {{c|s}} 良构。
+
+@@ 否则进行后备操作。
+
+@2,4@ 分别等价于 {{v|1,3}}，其中 {{c|r}} 从 {{c|ranges::subrange&lt;O, S&gt;(std::move(first), last)}} 获得。
+
+如果 {{v|1}} 或 {{v|3}} 的效果与对应后备操作的效果不等价，则行为未定义。
+
+{{tt|N}} 能在不同调用有别。实现可以对较短的范围选择较小的值。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要写入随机数的|sentinel=yes}}
+{{par|r|要写入随机数的 {{lconcept|range}}}}
+{{par|g|均匀随机位生成器}}
+{{par|d|随机数分布对象}}
+{{par end}}
+
+===注解===
+在 {{tt|std::ranges::generate_random}} 标准化时，标准库中尚未有提供 {{tt|generate_random}} 成员函数的随机数生成器或分布。
+
+{{tt|std::ranges::generate_random}} 在与包装底层向量化 API 的用户定义随机数生成器一同使用时会更高效。
+
+{{feature test macro|__cpp_lib_ranges_generate_random|std=C++26|value=202403L|{{tt|std::ranges::generate_random}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+
+int main()
+{
+    std::default_random_engine eng;
+    std::default_random_engine::result_type rs[16]{};
+    std::ranges::generate_random(rs, eng);
+    
+    std::cout &lt;&lt; std::left;
+    for (int i{}; auto n : rs)
+        std::cout &lt;&lt; std::setw(11) &lt;&lt; n &lt;&lt; (++i % 4 ? ' ' : '\n');
+}
+|p=true
+|output=
+16807       282475249   1622650073  984943658 
+1144108930  470211272   101027544   1457850878
+1458777923  2007237709  823564440   1115438165
+1784484492  74243042    114807987   1137522503
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/algorithm/ranges/dsc generate}}
+{{dsc inc | cpp/numeric/random/dsc uniform_random_bit_generator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

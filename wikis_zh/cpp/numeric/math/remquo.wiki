@@ -1,0 +1,156 @@
+{{cpp/title|remquo|remquof|remquol}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cmath}}
+{{dcl rev multi|num=1|since1=c++11|dcl1=
+float       remquo ( float x, float y, int* quo );
+double      remquo ( double x, double y, int* quo );
+long double remquo ( long double x, long double y, int* quo );
+|since2=c++23|dcl2=
+constexpr /* floating-point-type */
+            remquo ( /* floating-point-type */ x,
+                     /* floating-point-type */ y, int* quo );
+}}
+{{dcla|anchor=no|num=2|since=c++11|constexpr=c++23|
+float       remquof( float x, float y, int* quo );
+}}
+{{dcla|anchor=no|num=3|since=c++11|constexpr=c++23|
+long double remquol( long double x, long double y, int* quo );
+}}
+{{dcl h|[[#注解|额外重载]]}}
+{{dcl header|cmath}}
+{{dcla|anchor=no|num=A|since=c++11|constexpr=c++23|
+template&lt; class Arithmetic1, class Arithmetic2 &gt;
+/* common-floating-point-type */
+    remquo( Arithmetic1 x, Arithmetic2 y, int* quo );
+}}
+{{dcl end}}
+
+@1-3@ 以与 {{lc|std::remainder()}} 相同的方式计算除法运算 {{c|x / y}} 的浮点数余数。此外还会将 {{c|x / y}} 的至少最低三位及符号存储到 {{c|quo}}，这足以确定结果在周期中的八分位。{{rev inl|since=c++23|标准库提供所有以无 cv 限定的浮点数类型作为实参 {{c|x}} 和 {{c|y}} 的类型的 {{tt|std::remquo}} 重载。}}
+@A@ 为算术类型的所有其他组合提供额外重载。
+
+===参数===
+{{par begin}}
+{{par|x, y|浮点数或整数}}
+{{par|quo|用来存储 {{c|x / y}} 的符号和某些位的指向 {{c/core|int}} 的指针}}
+{{par end}}
+
+===返回值===
+在成功时返回定义于 {{lc|std::remainder}} 的 {{c|x / y}} 的余数，并将 {{c|x / y}} 的符号和至少后三位有效数字存储到 {{c|*quo}}（正式而言，存储的值的符号是 {{c|x / y}} 的符号，而绝对值与 {{c|x / y}} 的整数商的绝对值对于 {{math|modulo 2{{su|p=n}}}} 同余，其中 {{c|n}} 是由实现定义的大于或等于 {{c|3}} 的整数）。
+
+如果 {{c|y}} 为零，那么不指定存储到 {{c|*quo}} 的值。
+
+如果发生定义域错误，那么返回值由实现定义（受支持的平台上是 NaN）。
+
+如果出现下溢导致的值域错误，那么在支持非正规值的情况下返回正确结果。
+
+如果 {{c|y}} 为零，但没有发生定义域错误，那么返回零。
+
+===错误处理===
+报告 {{lc|math_errhandling}} 中指定的错误。
+
+如果 {{c|y}} 为零，那么可能发生定义域错误。
+
+如果实现支持 IEEE 浮点数算术（IEC 60559），那么
+* 当前[[cpp/numeric/fenv/FE_round|舍入模式]]无效。
+* 决不引发 {{lc|FE_INEXACT}}。
+* 如果 {{c|x}} 是 ±∞ 且 {{c|y}} 非 NaN，那么返回 NaN 并引发 {{lc|FE_INVALID}}。
+* 如果 {{c|y}} 是 ±0 且 {{c|x}} 非 NaN，那么返回 NaN 并引发 {{lc|FE_INVALID}}。
+* 如果 {{c|x}} 或 {{c|y}} 是 NaN，那么返回 NaN。
+
+===注解===
+[https://pubs.opengroup.org/onlinepubs/9699919799/functions/remquo.html POSIX 要求]在 {{c|x}} 是无穷大或 {{c|y}} 为零时发生定义域错误。
+
+此函数在实现周期可准确表示为浮点数值的周期函数时有用：对非常大的 {{c|x}} 计算 {{math|sin(πx)}} 时，直接调用 {{lc|std::sin}} 可能导致巨大误差，但如果首先以 {{tt|std::remquo}} 减小函数实参，那么商的低位可用来确定结果在周期中的八分位，同时余数可用来计算拥有高精度的值。
+
+某些平台上硬件支持此运算（例如在 Intel CPU 上，{{tt|FPREM1}} 在完成时于商中准确保留 3 位精度）。
+
+{{cpp/numeric/math/additional overload note|remquo}}
+
+===示例===
+{{example
+|code=
+#include &lt;cfenv&gt;
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+ 
+#ifndef __GNUC__
+#pragma STDC FENV_ACCESS ON
+#endif
+ 
+const double pi = std::acos(-1); // C++20 起也可以使用 std::numbers::pi
+ 
+double cos_pi_x_naive(double x)
+{
+    return std::cos(pi * x);
+}
+
+// 周期是 2，值在 (0,0.5) 和 (1.5,2) 中为正，在 (0.5;1.5) 中为负
+double cos_pi_x_smart(double x)
+{
+    int quadrant;
+    double rem = std::remquo(x, 1, &amp;quadrant);
+    quadrant = static_cast&lt;unsigned&gt;(quadrant) % 2; // 周期是 2
+    return quadrant == 0 ?  std::cos(pi * rem)
+                         :- std::cos(pi * rem);
+}
+
+int main()
+{
+    std::cout &lt;&lt; std::showpos
+              &lt;&lt; "朴素实现：\n"
+              &lt;&lt; "  cos(pi * 0.25) = " &lt;&lt; cos_pi_x_naive(0.25) &lt;&lt; '\n'
+              &lt;&lt; "  cos(pi * 1.25) = " &lt;&lt; cos_pi_x_naive(1.25) &lt;&lt; '\n'
+              &lt;&lt; "  cos(pi * 2.25) = " &lt;&lt; cos_pi_x_naive(2.25) &lt;&lt; '\n'
+              &lt;&lt; "优秀实现：\n"
+              &lt;&lt; "  cos(pi * 0.25) = " &lt;&lt; cos_pi_x_smart(0.25) &lt;&lt; '\n'
+              &lt;&lt; "  cos(pi * 1.25) = " &lt;&lt; cos_pi_x_smart(1.25) &lt;&lt; '\n'
+              &lt;&lt; "  cos(pi * 2.25) = " &lt;&lt; cos_pi_x_smart(2.25) &lt;&lt; '\n'
+              &lt;&lt; "朴素实现：\n"
+              &lt;&lt; "  cos(pi * 1000000000000.25) = "
+              &lt;&lt; cos_pi_x_naive(1000000000000.25) &lt;&lt; '\n'
+              &lt;&lt; "  cos(pi * 1000000000001.25) = "
+              &lt;&lt; cos_pi_x_naive(1000000000001.25) &lt;&lt; '\n'
+              &lt;&lt; "优秀实现：\n"
+              &lt;&lt; "  cos(pi * 1000000000000.25) = "
+              &lt;&lt; cos_pi_x_smart(1000000000000.25) &lt;&lt; '\n'
+              &lt;&lt; "  cos(pi * 1000000000001.25) = "
+              &lt;&lt; cos_pi_x_smart(1000000000001.25) &lt;&lt; '\n';
+    
+    // 错误处理
+    std::feclearexcept(FE_ALL_EXCEPT);
+    
+    int quo;
+    std::cout &lt;&lt; "remquo(+Inf, 1) = " &lt;&lt; std::remquo(INFINITY, 1, &amp;quo) &lt;&lt; '\n';
+    if (fetestexcept(FE_INVALID))
+        std::cout &lt;&lt; "    发生 FE_INVALID\n";
+}
+|p=true
+|output=
+朴素实现：
+  cos(pi * 0.25) = +0.707107
+  cos(pi * 1.25) = -0.707107
+  cos(pi * 2.25) = +0.707107
+优秀实现：
+  cos(pi * 0.25) = +0.707107
+  cos(pi * 1.25) = -0.707107
+  cos(pi * 2.25) = +0.707107
+朴素实现：
+  cos(pi * 1000000000000.25) = +0.707123
+  cos(pi * 1000000000001.25) = -0.707117
+优秀实现：
+  cos(pi * 1000000000000.25) = +0.707107
+  cos(pi * 1000000000001.25) = -0.707107&lt;!-- 注意：这是来自 Linux 上的 Intel C++ 、 sparc 上的 Oracle 和 GNU C++ ，及 power 平台上的 IBM 和 GNU C++ 编译器的准确输出。不要替换成来自 Linux 上 GNU C++ 的不正确输出 --&gt;
+remquo(+Inf, 1) = -nan
+    发生 FE_INVALID
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc div}}
+{{dsc inc|cpp/numeric/math/dsc fmod}}
+{{dsc inc|cpp/numeric/math/dsc remainder}}
+{{dsc see c|c/numeric/math/remquo}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

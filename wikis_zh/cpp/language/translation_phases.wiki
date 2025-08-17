@@ -1,0 +1,323 @@
+{{title|翻译阶段}}
+{{cpp/language/basics/navbar}}
+编译器会处理 C++ 源文件，并产生 C++ 程序。
+
+===翻译===
+C++ 程序文本会保存在被称为''源文件''{{sep}}的单元。
+
+C++ 源文件会通过''翻译''{{sep}}成为''翻译单元''，翻译包含以下步骤：
+# 将每个源文件映射到一个字符序列。
+# 将每个字符序列转换成一个预处理记号序列，以空白分隔。
+# 将每个预处理记号转换成一个记号，以组成记号序列。
+# 将每个记号序列转换成一个翻译单元。
+
+翻译后的各个翻译单元可以组成 C++ 程序。多个翻译单元可以分开翻译，并且可以在后续链接在一起来产生可执行程序。
+
+以上流程可以组织为 9 个[[#翻译阶段|翻译阶段]]。
+
+===预处理记号===
+''预处理记号''{{sep}}是语言在翻译阶段 3 到阶段 6 中的最小词法元素。
+
+预处理记号有以下种类：
+* [[cpp/preprocessor/include|标头名]]（例如 {{c|&lt;iostream&gt;}} 或 {{c|"myfile.h"}}）
+{{rrev|since=c++20|
+* 预处理 {{rlp|modules|{{c/core|import}} 和 {{c/core|module}} 指令}}（即 {{c|import XXX;}} 和 {{c|module XXX;}}）的过程中产生的占位记号
+}}
+* {{rlp|identifiers|标识符}}
+* 预处理数字（见下文）
+* {{rlp|character literal|字符字面量}}{{rev inl|since=c++11|，包括{{rlp|user literal|用户定义}}的字符字面量}}
+* {{rlp|string literal|字符串字面量}}{{rev inl|since=c++11|，包括{{rlp|user literal|用户定义}}的字符串字面量}}
+* 运算符和标点，包括{{rlp|operator alternative|代用记号}}
+* 不属于任何其他类别的单独非空白字符
+: 如果匹配此类别的字符是以下之一，那么程序非良构：
+:* 撇号（{{c|'}}，U+0027）
+:* 引号（{{c|"}}，U+0022）
+:* {{rlp|charset|基本字符集}}以外的字符
+
+====预处理数字====
+预处理数字的预处理记号集合是{{rlp|integer literal|整数字面量}}和{{rlp|floating literal|浮点数字面量}}的记号集合的超集：
+{{sdsc begin}}
+{{sdsc|
+{{ttb|.}}{{mark optional}} {{spar|数位}} {{spar optional|数字后续序列}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|数位}}|数位 0-9 之一}}
+{{par|{{spar|数字后续序列}}|包含{{spar sep|数字后续}}的序列}}
+{{par end}}
+
+每个{{spar sep|数字后续}}都是以下之一：
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|标识后续}}
+}}
+{{sdsc|num=2|
+{{spar|幂字符}} {{spar|符号字符}}
+}}
+{{sdsc|num=3|
+{{ttb|.}}
+}}
+{{sdsc|num=4|notes={{mark since c++14}}|
+{{ttb|’}} {{spar|数位}}
+}}
+{{sdsc|num=5|notes={{mark since c++14}}|
+{{ttb|’}} {{spar|非数位}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|标识后续}}|任意合法{{rlp|identifiers|标识符}}的非首字符}}
+{{par|{{spar|幂字符}}|{{rev inl|since=c++11|{{ttb|P}}、{{ttb|p}}、}}{{ttb|E}} 和 {{ttb|e}} 之一}}
+{{par|{{spar|符号字符}}|{{ttb|+}} 和 {{ttb|-}} 之一}}
+{{par|{{spar|数位}}|数位 0-9 之一}}
+{{par|{{spar|非数位}}|拉丁字母 A/a-Z/z 和下划线之一}}
+{{par end}}
+
+预处理数字没有类型或值；它需要在成功转换到整数/浮点数字面量记号后才会获得这些属性。
+
+====空白====
+''空白''{{sep}}由[[cpp/comment|注释]]、空白字符或两者共同组成。
+
+以下字符是空白字符：
+* 横向制表（U+0009）
+* 换行（U+000A）
+* 纵向制表（U+000B）
+* 换页（U+000C）
+* 空格（U+0020）
+
+空白通常用来分隔预处理记号，但有以下例外情况：
+* 它在标头名、字符字面量和字符串字面量中不是分隔符。
+* 以包含换行符的空白分隔的多个预处理记号不能组成[[cpp/preprocessor|预处理指令]]。
+
+{{source|
+#include "my header"         // OK，使用包含空白的标头名
+
+#include/*hello*/&lt;iostream&gt;  // OK，使用注释作为空白
+
+#include
+&lt;iostream&gt; // 错误：#include 不能跨越多行
+
+"str ing"  // OK，单个预处理记号（字符串字面量）
+' '        // OK，单个预处理记号（字符字面量）
+}}
+
+====最大吞噬====
+如果一个给定字符前的输入已被解析为预处理记号，下一个预处理记号通常会由能构成预处理记号的最长字符序列构成，即使这样处理会导致后续分析失败。这常被称为''最大吞噬''。
+{{source|1=
+int foo = 1;
+int bar = 0xE+foo;   // 错误：非法的预处理数字 0xE+foo
+int baz = 0xE + foo; // OK
+}}
+
+也就是说，最大吞噬规则偏好{{rlps|punctuators#多字符运算符和标点符号}}：
+{{source|1=
+int foo = 1;
+int bar = 2;
+
+int num1 = foo+++++bar; // 错误：被视为 “foo++ ++ +bar”，而不是 “foo++ + ++bar”
+int num2 = -----foo;    // 错误：被视为 “-- -- -foo”，而不是 “- -- --foo”
+}}
+
+最大吞噬规则有以下例外：
+* 只能在以下情况下组成标头名：
+:* 在 [[cpp/preprocessor/include|{{c/core|#include}}]] 指令的 {{c|include}} 预处理记号后
+{{rev begin}}
+{{rev|since=c++17|
+:* 在 {{ltt|cpp/preprocessor/include|__has_include}} 表达式中
+}}
+{{rev|since=c++20|
+:* 在 {{ltt|cpp/language/modules#语法|import}} 指令的 {{c|import}} 预处理记号后
+}}
+{{rev end}}
+{{source|
+std::vector&lt;int&gt; x; // OK，“int” 不是标头名
+}}
+* 如果接下来的三个字符是 {{c|&lt;::}}且后继字符不是 {{c|:}} 或者 {{c|&gt;}}，那么把 {{c|&lt;}} 自身当做预处理记号，而非{{rlp|operator alternative|代用记号}} {{c|&lt;:}} 的首字符。
+{{source|1=
+struct Foo { static const int v = 1; };
+std::vector&lt;::Foo&gt; x;  // OK，不会将 &lt;: 当作 [ 的代用记号
+extern int y&lt;::&gt;;      // OK，同 “extern int y[];”
+int z&lt;:::Foo::value:&gt;; // OK，同 “int z[::Foo::value];”
+}}
+{{rrev|since=c++11|
+* 如果接下来的两个字符是 {{c|&gt;&gt;}}，并且其中一个 {{c|&gt;}} 可以完成{{rlps|templates#模板标识}}，那么该字符会单独视为一个预处理记号，而不是预处理记号 {{c|&gt;&gt;}} 的一部分。
+{{source|
+template&lt;int i&gt; class X { /* ... */ };
+template&lt;class T&gt; class Y { /* ... */ };
+
+Y&lt;X&lt;1&gt;&gt; x3;      // OK，声明 “Y&lt;X&lt;1&gt; &gt;” 类型变量 “x3”
+Y&lt;X&lt;6&gt;&gt;1&gt;&gt; x4;   // 语法错误
+Y&lt;X&lt;(6&gt;&gt;1)&gt;&gt; x5; // OK
+}}
+* 如果以下一个字符开头的字符序列可作为{{rlp|string literal|原始字符串字面量}}的前缀和起始双引号，那么下个预处理记号应当为原始字符串字面量。该字面量由匹配原始字符串模式的最短字符序列组成。
+{{source|1=
+#define R "x"
+const char* s = R"y";         // 非良构的原始字符串字面量，而非 "x" "y"
+const char* s2 = R"(a)" "b)"; // 原始字符串字面量后随普通字符串字面量
+}}
+}}
+
+===记号===
+''记号''{{sep}}是语言在翻译阶段 7 中的最小词法元素。
+
+记号有以下种类：
+* {{rlp|identifiers|标识符}}
+* [[cpp/keyword|关键词]]
+* {{rlps|expressions#字面量}}
+* {{rlp|punctuators|运算符和标点符号}}（除预处理运算符外）
+
+===翻译阶段===
+翻译{{rlp|as if|如同}}以从阶段 1 到阶段 9 的顺序进行。实现的行为如同将这些阶段分开进行，但实践中可以将不同的阶段结合在一起。
+
+{{anchor|阶段 1}}
+====阶段 1：映射源字符====
+{{rev begin}}
+{{rev|until=c++23|
+@1@ 将源文件的各个单独字节（以具体实现所定义的方式）映射为{{rlps|charset#基本源字符集}}的字符。特别是，操作系统相关的行尾指示符均被替换为换行字符。
+
+@2@ {{rev inl|since=c++11|可以接受的源文件字符的集合由实现定义。}}任何无法被映射到{{rlp|charset#基本源字符集|基本源字符集}}中的字符的源文件字符均被替换为它的{{rlp|escape|通用字符名}}（用 {{tt|\u}} 或 {{tt|\U}} 转义），或使用某种（由实现定义的）等效处理的方式。
+
+{{rrev|until=c++17|
+@3@ 将各个{{rlp|operator alternative|三标符序列}}替换为它对应的单字符表示。
+}}
+}}
+{{rev|since=c++23|
+保证至少支持 UTF-8 代码单元的序列的输入文件（UTF-8 文件）。其他支持的输入文件的种类的集合由实现定义。该集合不为空时，决定文件种类的方式通过由实现定义且以与内容无关的方式决定（包括指定输入文件为 UTF-8 文件，只识别字节序标记无法满足该要求）。
+* 如果决定文件是 UTF-8 文件，那么它必须是格式正确的 UTF-8 代码单元序列。解码该文件会得到一个 Unicode 标量值序列，然后通过将每个 Unicode 标量映射到对应的{{rlp|charset#翻译字符集|翻译字符集}}元素来组成翻译字符集元素序列。在结果序列中，输入序列中每对回车（U+000D）后随换行符（U+000A）的字符对，以及每个不后随换行符（U+000A）的回车（U+000D），都会替换成一个换行字符。
+* 对于其他支持的文件格式，将字符（以实现所定义的方式）映射为翻译字符集中的字符的序列。特别是，操作系统相关的行尾指示符均被替换为换行字符。
+}}
+{{rev end}}
+
+{{anchor|阶段 2}}
+====阶段 2：拼接行====
+@1@ {{rev inl|since=c++23|如果第一个翻译字符是字节序标记（U+FEFF），那么将它删除。}}当反斜杠（{{c|\}}）在行尾（其后紧跟{{rev inl|since=c++23|零或多个除换行符外的空白符，再紧跟}}换行符）出现时，删除这些字符并将两个物理源码行组合成一个逻辑源码行。如果因为这个阶段 {{rev inl|since=c++11|在{{rlp|string literal|原始字符串字面量}}以外}} 组成了{{rlp|escape|通用字符名}} ，那么行为未定义。这是单趟操作：如果有一行以两个反斜杠结束且后随一个空行，这三行不会合为一行。
+
+@2@ 如果在此步骤后非空源文件不以换行符结束（此时行尾反斜杠不再是拼接点），那么在最后添加一个换行符。
+
+{{anchor|阶段 3}}
+====阶段 3：词法分析====
+@1@ 将源文件分解为[[#预处理记号|预处理记号]]和空白：
+{{source|
+// 以下 #include 指令可以分解成 5 个预处理记号：
+
+//       标点符号（#、&lt; 和 &gt;）
+//          │
+// ┌────────┼────────┐
+// │        │        │
+   #include &lt;iostream&gt;
+//     │        │
+//     │        └── 标头名（iostream）
+//     │
+//     └─────────── 标识符（include）
+}}
+@@ 如果源文件以不完整的预处理记号或不完整的注释结束，那么程序非良构：
+{{source|
+// 错误：不完整的字面量
+"abc
+}}
+{{source|
+// 错误：不完整的注释
+/* 注释
+}}
+
+{{rrev|since=c++23|
+@@ 在组成预处理记号而吸收字符时（即不组成注释或其他形式的空白），通用字符名会被识别并被{{rlp|charset#翻译字符集|翻译字符集}}中的指定元素替换，除非正在匹配以下内容中的字符序列：
+:* 字符字面量（{{spar|c字符序列}}）
+:* 字符串字面量（{{spar|s字符序列}} 和 {{spar|r字符序列}}），但不包括分隔符({{spar|d字符序列}}）
+:* 标头名（{{spar|h字符序列}} 和 {{spar|q字符序列}}）
+}}
+
+
+{{rrev|since=c++11|
+@2@ 撤回在任何{{rlp|string literal|原始字符串字面量}}的首尾双引号之间在{{rev inl|until=c++23|阶段 1 和}}阶段 2 期间进行的所有变换。
+}}
+
+@3@ 变换空白：
+* 以一个空格字符替换每段注释。
+* 保留换行符。
+* 未指定是否可以将不含换行符的空白缩减成单个空格字符。
+
+{{anchor|阶段 4}}
+====阶段 4：预处理====
+@1@ 执行{{lt|cpp/preprocessor|预处理器}}。
+@2@ {{ltt|cpp/preprocessor/include|#include}} 指令所引入的每个文件都经历阶段 1 到 4 的处理，递归执行。
+@3@ 此阶段结束时，所有预处理指令都应从源（代码）移除。
+
+{{anchor|阶段 5}}
+====阶段 5：确定字符串字面量的公共编码====
+{{rev begin}}
+{{rev|until=c++23|
+@1@ 将{{rlp|character literal|字符字面量}}及{{rlp|string literal|字符串字面量}}中的所有字符从源字符集转换到''执行字符集''（可以是 UTF-8 这样的多字节字符集，只要{{rlp|charset#基本源字符集|基本源字符集}}的 96 个字符都拥有单字节表示即可）。
+@2@ 将字符字面量和非原始字符串字面量中的{{rlp|escape|转义序列}}和通用字符名展开，并转换到''执行字符集''。
+如果某个通用字符名所指定的字符不是执行字符集的成员，那么结果由实现定义，但保证不是空（宽）字符。
+}}
+{{rev|since=c++23|
+对于每个含有多个相邻{{rlp|string literal|字符串字面量}}记号的序列，都会有一个以{{rlp|string literal#拼接|此规则}}指定的共同编码前缀。其中每个字符串字面量记号都会被视为拥有该共同编码前缀。
+（字符转换改为在阶段 3 执行）
+}}
+{{rev end}}
+
+{{anchor|阶段 6}}
+====阶段 6：拼接字符串字面量====
+拼接相邻的{{rlp|string literal|字符串字面量}}。
+
+{{anchor|阶段 7}}
+====阶段 7：编译====
+进行编译：将各个预处理记号转换成记号。将所有记号当作一个翻译单元进行语法和语义分析并进行翻译。
+
+{{anchor|阶段 8}}
+====阶段 8：实例化模板====
+检验每个翻译单元，产生所要求的模板实例化的列表，其中包括{{rlp|class template|显式实例化}}所要求的实例化。定位模板定义，并进行所要求的实例化，以产生''实例化单元''。
+
+{{anchor|阶段 9}}
+====阶段 9：链接====
+将翻译单元、实例化单元和为满足外部引用所需的库组件汇集成一个程序映像，它含有在它的执行环境中执行所需的信息。
+
+===注解===
+源文件、翻译单元和翻译后的翻译单元不需要存储为文件，这些实体也不需要和它们的外部表示一一对应。这些描述仅存在于概念上，不指定任何特定的实现方式。
+
+{{rrev|until=c++23|
+某些实现能以命令行选项控制阶段 5 所进行的转换：gcc 和 clang 用 {{c|-finput-charset}} 指定源字符集的编码，用 {{c|-fexec-charset}} 和 {{c|-fwide-exec-charset}} 指定{{rev inl|since=c++11|无编码前缀的}}字符串和字符字面量中的执行字符集的编码，而 Visual Studio 2015 Update 2 及之后版本分别用 {{c|/source-charset}} 和 {{c|/execution-charset}} 指定源字符集和执行字符集。
+}}
+
+某些编译器不实现实例化单元（又称为[http://docs.oracle.com/cd/E18659_01/html/821-1383/bkagr.html#scrolltoc 模板仓库]或[http://www-01.ibm.com/support/knowledgecenter/SSXVZZ_12.1.0/com.ibm.xlcpp121.linux.doc/compiler_ref/fcat_template.html?lang=en 模板注册表]），而是简单地在阶段 7 编译每个模板实例化，将代码存储在它所显式或隐式要求的对象文件中，然后由链接器在阶段 9 将这些编译后的实例化缩减到一个。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=787|std=C++98|before=非空源文件在阶段 2 结束时如果不以换行符结尾，那么行为未定义|after=此时在结尾添加一个换行符}}
+{{dr list item|wg=cwg|dr=1104|std=C++98|before=代用记号 {{c|&lt;:}} 会导致 {{c|std::vector&lt;::std::string&gt;}}&lt;br&gt;被作为 {{c|std::vector[:std::string&gt;}} 处理|after=添加新的词法分析规则来解决这种问题}}
+{{dr list item|wg=cwg|dr=1775|std=C++11|before=阶段 2 中在原始字符串字面量内组成通用字符名时行为未定义|after=赋予良好定义}}
+{{dr list item|wg=cwg|dr=2747|std=C++98|before=阶段 2 在拼接后还会检查文件尾是否有拼接点，实际不需要该检查|after=移除该检查}}
+{{dr list item|paper=P2621R3|std=C++98|before=不允许通过拼接行或拼接记号来组成通用字符名|after=允许}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=5.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=5.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=5.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=2.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=2.2|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=2.1|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=2.1|title=Phases of translation|id=lex.phases}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/translation phases|翻译阶段|nomono=true}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|pl|ru}}

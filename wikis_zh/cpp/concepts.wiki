@@ -1,0 +1,122 @@
+{{title|概念库 {{mark c++20}}}}
+{{cpp/concepts/navbar}}
+
+概念库提供基础库概念们的定义，它们能用于进行模板实参的编译时校验，以及基于类型属性的函数派发。这些概念在程序中提供等式推理的基础。
+
+标准库中的大多数概念一同加上了语法及语义要求。如果符合标准概念的语法要求，那么称它被''满足''，而如果在满足标准概念的情况下还符合它的语义要求（如果存在），那么称它被''实现''。 
+
+通常，编译器只能检查语法要求。如果程序的合法性或含义取决于模板实参序列是否实现一个概念，而该概念被满足但未被实现，或在使用点语义要求未得到满足，那么程序非良构，不要求诊断。
+
+===相等性保持===
+如果表达式对在给定的输入相等时产生的输出也相等，那么它''保持相等性''，其中
+* 表达式的输入由它的操作数组成，并且
+* 表达式的输出由它的结果和表达式对操作数进行的所有修改（如果存在）组成。
+
+为了方便用词，表达式的“操作数”指代的是包含一个[[cpp/language/expressions#初等表达式|标识表达式]]，或者对 {{ltt|cpp/utility/move|std::move}}、{{lc|std::forward}} 和 {{lc|std::declval}} 的调用的最大子表达式。
+
+每个操作数的 cv 限定与值类别，是通过假设每个模板类型形参代表一个无 cv 限定的完整非数组对象类型确定的。
+
+进一步要求每个要求保持相等性的表达式都''稳定''：这种表达式带相同输入对象的二次求值必须拥有相等的输出，而无任何对这些输入对象的显式中间修改。
+
+除非另外指出，每个用于{{ls|#标准库概念}}中的 [[cpp/language/requires|{{c/core|requires}} 表达式]]中的表达式都要求保持相等性且稳定，而表达式的求值只能修改它的非常操作数。不能修改常操作数。
+
+在标准库中，以下概念可以拥有不保持相等性的 {{c/core|requires}} 表达式：
+* {{lconcept|output_iterator}}
+* {{lconcept|indirectly_writable}}
+* {{lconcept|invocable}}
+* {{lconcept|weakly_incrementable}}
+* {{lconcept|range}}
+
+===隐式的表达式变种===
+使用不修改某 const 左值操作数的表达式的 [[cpp/language/requires|{{c/core|requires}} 表达式]]隐式要求该表达式的额外变种对给定操作数接受非 const 左值或（可以是 const 的）右值，除非该表达式变种以其他语义显式要求。
+
+这些''隐式表达式变种''{{sep}}必须符合与声明的表达式的相同的语义。实现可以以任何程度校验这些变种的语法。
+
+{{source|1=
+template&lt;class T&gt;
+concept C = requires(T a, T b, const T c, const T d)
+{
+    c == d;           // 表达式 #1：不会修改任何操作数
+    a = std::move(b); // 表达式 #2: 会修改所有操作数
+    a = c;            // 表达式 #3: 只会修改左操作数 a
+};
+
+// 表达式 #1 隐式要求满足 c == d 的要求（包括无修改）的额外表达式变种，
+// 如同另外声明了以下表达式：
+
+// ------ const == const ------- ------ const ==  非 const ---
+//                                         c  ==           b;
+//            c == std::move(d);           c  == std::move(b);
+// std::move(c) ==           d;  std::move(c) ==           b;
+// std::move(c) == std::move(d); std::move(c) == std::move(b);
+
+// --- 非 const == const ------- --- 非 const ==  非 const ---
+//           a  ==           d;            a  ==           b;
+//           a  == std::move(d);           a  == std::move(b);
+// std::move(a) ==           d;  std::move(a) ==           b;
+// std::move(a) == std::move(d); std::move(a) == std::move(b);
+
+// 表达式 #3 隐式要求满足 a = c 的要求（包括对第二操作数无修改）的额外表达式变种，
+// 如同另外声明了 a = b（非 const 左值变种）和 a = std::move(c)（const 右值变种）。
+
+// 注意：因为表达式 #2 已经显式要求了非 const 右值变种（a == std::move(b)），
+//      所以表达式 #3 不会再隐式要求该变种。
+
+// 类型 T 满足以上概念 C 显式指定的语法要求，但没有满足额外的隐式要求
+// （即 T 满足但没有实现 C）：因此有要求 C&lt;T&gt; 的程序非良构（不要求诊断）。
+struct T
+{
+    bool operator==(const T&amp;) const { return true; }
+    bool operator==(T&amp;) = delete;
+};
+}}
+
+===标准库概念===
+{{dsc begin}}
+{{dsc namespace|std}}
+{{dsc h2|核心语言概念}}
+{{dsc header|concepts}}
+{{dsc inc|cpp/concepts/dsc same_as}}
+{{dsc inc|cpp/concepts/dsc derived_from}}
+{{dsc inc|cpp/concepts/dsc convertible_to}}
+{{dsc inc|cpp/concepts/dsc common_reference_with}}
+{{dsc inc|cpp/concepts/dsc common_with}}
+{{dsc inc|cpp/concepts/dsc integral}}
+{{dsc inc|cpp/concepts/dsc signed_integral}}
+{{dsc inc|cpp/concepts/dsc unsigned_integral}}
+{{dsc inc|cpp/concepts/dsc floating_point}}
+{{dsc inc|cpp/concepts/dsc assignable_from}}
+{{dsc inc|cpp/concepts/dsc swappable}}
+{{dsc inc|cpp/concepts/dsc destructible}}
+{{dsc inc|cpp/concepts/dsc constructible_from}}
+{{dsc inc|cpp/concepts/dsc default_initializable}}
+{{dsc inc|cpp/concepts/dsc move_constructible}}
+{{dsc inc|cpp/concepts/dsc copy_constructible}}
+{{dsc h2|比较概念}}
+{{dsc header|concepts}}
+{{dsc inc|cpp/concepts/dsc boolean-testable}}
+{{dsc inc|cpp/concepts/dsc equality_comparable}}
+{{dsc inc|cpp/concepts/dsc totally_ordered}}
+{{dsc header|compare}}
+{{dsc inc|cpp/utility/compare/dsc three_way_comparable}}
+{{dsc h2|对象概念}}
+{{dsc header|concepts}}
+{{dsc inc|cpp/concepts/dsc movable}}
+{{dsc inc|cpp/concepts/dsc copyable}}
+{{dsc inc|cpp/concepts/dsc semiregular}}
+{{dsc inc|cpp/concepts/dsc regular}}
+{{dsc h2|可调用概念}}
+{{dsc header|concepts}}
+{{dsc inc|cpp/concepts/dsc invocable}}
+{{dsc inc|cpp/concepts/dsc predicate}}
+{{dsc inc|cpp/concepts/dsc relation}}
+{{dsc inc|cpp/concepts/dsc equivalence_relation}}
+{{dsc inc|cpp/concepts/dsc strict_weak_order}}
+{{dsc end}}
+
+更多概念可在[[cpp/iterator#C++20 迭代器概念|迭代器库]]、[[cpp/iterator#算法概念与工具|算法库]]与[[cpp/ranges#范围概念|范围库]]中找到。
+
+===参阅===
+* [[cpp/named req|具名要求]]
+
+{{langlinks|de|en|es|ja|ru}}

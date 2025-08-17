@@ -1,0 +1,1027 @@
+{{title|函数模板}}
+{{cpp/language/templates/navbar}}
+
+函数模板定义一族函数。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|函数声明}}}}
+{{sdsc|num=2|notes={{mark since c++20}}|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|requires}} {{spar|约束}} {{spar|函数声明}}}}
+{{sdsc|num=3|notes={{mark since c++20}}|{{spar|带占位符函数声明}}}}
+{{sdsc|num=4|notes={{mark until c++11|removed=yes}}|{{ttb|export}} {{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|函数声明}}}}
+{{sdsc end}}
+
+===解释===
+{{par begin}}
+{{par|{{spar|形参列表}}|非空的{{rlp|template parameters|模板形参}}的逗号分隔列表，每项是{{rlp|template parameters#非类型模板形参|非类型形参}}、{{rlp|template parameters#类型模板形参|类型形参}}、{{rlp|template parameters#模板模板形参|模板形参}}或这些的{{rlp|parameter pack|形参包}}之一。{{rev inl|since=c++20|与任何模板一样，形参可以{{rlp|template parameters#受约束的模板形参|受约束}}。}}}}
+{{par|{{spar|函数声明}}|{{rlp|function|函数声明}}。所声明的函数名成为模板名。}}
+{{par|{{spar|约束}}|{{rlp|constraints|约束表达式}}，它限制此函数模板接受的模板形参。}}
+{{par|{{spar|带占位符函数声明}}|{{rlp|function|函数声明}}，其中至少一个形参的类型使用了占位符 {{rlpt|auto}} 或 [[cpp/language/constraints|概念 {{tt|auto}}]]：每个占位符都会对应模板形参列表中的一个虚设形参。（见下文“简写函数模板”）}}
+{{par end}}
+
+{{rrev|until=c++11|
+{{tt|export}} 是一个可选的修饰符，它声明模板''被导出''（用于类模板时，它声明所有成员被导出）。对被导出模板进行实例化的文件不需要包含它的定义：声明就足够了。{{tt|export}} 的实现稀少而且在细节上相互不一致。
+}}
+
+{{rrev|since=c++20|
+===简写函数模板===
+当函数声明或函数模板声明的形参列表中出现占位符类型（{{tt|auto}} 或 [[cpp/language/constraints|概念 {{tt|auto}}]]）时，该声明就声明一个函数模板，并且为每个占位符向模板形参列表追加一个虚设的模板形参：
+{{source|1=
+void f1(auto); // 与 template&lt;class T&gt; void f(T) 相同
+void f2(C1 auto); // 如果 C1 是概念，那么与 template&lt;C1 T&gt; void f2(T) 相同
+void f3(C2 auto...); // 如果 C2 是概念，那么与 template&lt;C2... Ts&gt; void f3(Ts...) 相同
+void f4(const C3 auto*, C4 auto&amp;); // 与 template&lt;C3 T, C4 U&gt; void f4(const T*, U&amp;); 相同
+
+template&lt;class T, C U&gt;
+void g(T x, U y, C auto z); // 与 template&lt;class T, C U, C W&gt; void g(T x, U y, W z); 相同
+}}
+
+简写函数模板可以和所有函数模板一样进行特化。
+{{source|
+template&lt;&gt;
+void f4&lt;int&gt;(const int*, const double&amp;); // f4&lt;int, const double&gt; 的特化
+}}
+
+}}
+
+===函数模板签名===
+每个函数模板均拥有签名。
+
+{{spar|模板头}} 的签名是{{rlp|template parameters|模板形参列表}}排除掉模板形参名与{{rlp|template_parameters#默认模板实参|默认实参}}{{rev inl|since=c++20|，以及 requires 子句（若存在）}}。
+
+函数模板的签名含有名字、形参类型列表、返回类型{{rev inl|since=c++20|、尾随 requires 子句（若存在）}}及 {{spar|模板头}} 的签名。除了下列情况，其签名亦含有外围的命名空间。
+
+如果函数是类成员，则其签名含有将它作为成员的类，而非外围命名空间。其签名亦含有{{rev inl|since=c++20|尾随 requires 子句（若存在）}}{{rev inl|since=c++11|、引用限定符以及}} ''cv'' 限定符（若存在）。
+
+{{rrev|since=c++20|
+若函数模板是拥有涉及外围模板形参的{{rlp|friend|友元}}，则其签名含有外围类而非外围命名空间。
+}}
+
+===函数模板实例化===
+函数模板自身并不是类型或函数。不会从只包含模板定义的源文件生成任何代码。模板只有实例化才会有代码出现：必须确定各模板实参，使得编译器能生成实际的函数（或从类模板生成类）。
+
+====显式实例化====
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{spar|返回类型}} {{spar|名字}} {{ttb|&lt;}}  {{spar|实参列表}} {{ttb|&gt;}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{ttb|;}}}}
+{{sdsc|num=2|{{ttb|template}} {{spar|返回类型}} {{spar|名字}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{ttb|;}}}}
+{{sdsc|num=3|{{ttb|extern}} {{ttb|template}} {{spar|返回类型}} {{spar|名字}} {{ttb|&lt;}} {{spar|实参列表}} {{ttb|&gt;}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{ttb|;}}|notes={{mark since c++11}}}}
+{{sdsc|num=4|{{ttb|extern}} {{ttb|template}} {{spar|返回类型}} {{spar|名字}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{ttb|;}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+@1@ 显式实例化定义（显式指定所有无默认值模板形参时不会{{rlp|template argument deduction|推导模板实参}}）
+@2@ 显式实例化定义，对所有形参进行模板实参推导
+@3@ 显式实例化声明（显式指定所有无默认值模板形参时不会推导模板实参）
+@4@ 显式实例化声明，对所有形参进行模板实参推导
+
+显式实例化定义强制实例化它所指代的函数或成员函数。它可以出现在程序中模板定义后的任何位置，而对于给定的实参列表，它在整个程序中只能出现一次，不要求诊断。
+
+{{rrev|since=c++11|
+显式实例化声明（extern 模板）阻止隐式实例化：本来会导致隐式实例化的代码必须改为使用已在程序的别处所提供的显式实例化。
+}}
+
+在函数模板特化或成员函数模板特化的显式实例化中，尾部的各模板实参在能从函数参数{{rlp|template argument deduction|推导}}时不需要指定：
+{{source|1=
+template&lt;typename T&gt;
+void f(T s)
+{
+    std::cout &lt;&lt; s &lt;&lt; '\n';
+}
+
+template void f&lt;double&gt;(double); // 实例化 f&lt;double&gt;(double)
+template void f&lt;&gt;(char);         // 实例化 f&lt;char&gt;(char)，推导出模板实参
+template void f(int);            // 实例化 f&lt;int&gt;(int)，推导出模板实参
+}}
+
+函数模板或类模板成员函数的显式实例化不能使用 {{tt|inline}} 或 {{tt|constexpr}}。如果显式实例化的声明指名了某个隐式声明的特殊成员函数，那么程序非良构。
+
+{{rlp|constructor|构造函数}}的显式实例化不能使用模板形参列表（语法 {{v|1}}），也始终不需要使用，因为能推导它们（语法 {{v|2}}）。
+
+{{rrev|since=c++20|
+{{rlpsd|destructor#预期的析构函数}}的显式实例化必须指名该类的被选择的析构函数。
+}}
+
+显式实例化声明不会抑制 {{rlp|inline}} 函数，{{rlp|auto}} 声明，引用，以及类模板特化的隐式实例化。（从而当作为显式实例化声明目标的 inline 函数被 ODR 式使用时，它会为内联而隐式实例化，但此翻译单元中不会生成它的非内联副本）
+
+带有{{rlp|default arguments|默认实参}}的函数模板的显式实例化定义不会使用或试图初始化该实参：
+{{source|1=
+char* p = 0;
+
+template&lt;class T&gt;
+T g(T x = &amp;p) { return x; }
+
+template int g&lt;int&gt;(int); // OK，即使 &amp;p 不是 int。
+}}
+
+====隐式实例化====
+当代码在{{rlp|definition#ODR 使用|要求存在函数定义}}的语境中指涉某个函数{{rev inl|since=c++11|，或定义存在与否会影响程序语义}}，而这个特定函数尚未被显式实例化时，发生隐式实例化。如果模板实参列表能从语境{{rlp|template argument deduction|推导}}，那么不必提供它。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+template&lt;typename T&gt;
+void f(T s)
+{
+    std::cout &lt;&lt; s &lt;&lt; '\n';
+}
+
+int main()
+{
+    f&lt;double&gt;(1); // 实例化并调用 f&lt;double&gt;(double)
+    f&lt;&gt;('a');     // 实例化并调用 f&lt;char&gt;(char)
+    f(7);         // 实例化并调用 f&lt;int&gt;(int)
+    void (*pf)(std::string) = f; // 实例化 f&lt;string&gt;(string)
+    pf("∇");                     // 调用 f&lt;string&gt;(string)
+}
+}}
+
+{{rrev|since=c++11|&lt;!-- P0859R0 --&gt;
+如果有表达式需要某函数{{rlp|constant expression#常量求值所需要的函数与变量|进行常量求值}}，那么函数定义存在与否会影响程序语义，即使不要求常量求值表达式，或常量表达式求值不使用该定义。
+
+{{source|code=
+template&lt;typename T&gt;
+constexpr int f() { return T::value; }
+
+template&lt;bool B, typename T&gt;
+void g(decltype(B ? f&lt;T&gt;() : 0));
+template&lt;bool B, typename T&gt;
+void g(...);
+
+template&lt;bool B, typename T&gt;
+void h(decltype(int{B ? f&lt;T&gt;() : 0}));
+template&lt;bool B, typename T&gt;
+void h(...);
+
+void x()
+{
+    g&lt;false, int&gt;(0); // OK：B ? f&lt;T&gt;() : 0 不会潜在常量求值
+    h&lt;false, int&gt;(0); // 错误：即使 B 求值为 false 且
+                      // 从 int 到 int 的列表初始化不可能是窄化仍实例化 f&lt;int&gt;
+}
+}}
+}}
+
+注意：完全省略 {{tt|&lt;&gt;}} 允许{{rlp|overload resolution|重载决议}}同时检验模板与非模板重载。
+
+===模板实参推导===
+实例化一个函数模板需要知道它的所有模板实参，但不需要指定每个模板实参。编译器会尽可能从函数实参推导缺失的模板实参。这会在尝试进行函数调用以及取函数模板的地址时发生。
+
+{{source|1=
+template&lt;typename To, typename From&gt;
+To convert(From f);
+
+void g(double d) 
+{
+    int i = convert&lt;int&gt;(d);    // 调用 convert&lt;int,double&gt;(double)
+    char c = convert&lt;char&gt;(d);  // 调用 convert&lt;char,double&gt;(double)
+    int(*ptr)(float) = convert; // 实例化 convert&lt;int, float&gt;(float)
+}
+}}
+
+模板运算符依赖此机制，因为除了将它重写为函数调用表达式之外，不存在为运算符指定模板实参的语法。
+
+{{source|1=
+#include &lt;iostream&gt;
+
+int main() 
+{
+    std::cout &lt;&lt; "Hello, world" &lt;&lt; std::endl;
+    // operator&lt;&lt; 经由 ADL 查找为 std::operator&lt;&lt;，
+    // 然后推导出 operator&lt;&lt;&lt;char, std::char_traits&lt;char&gt;&gt;
+    // 同时推导 std::endl 为 &amp;std::endl&lt;char, std::char_traits&lt;char&gt;&gt;
+}
+}}
+
+模板实参推导在函数模板的{{rlp|lookup|名字查找}}（可能涉及{{rlp|adl|实参依赖查找}}）之后，{{rlp|overload resolution|重载决议}}之前进行。
+
+细节见{{rlp|template argument deduction|模板实参推导}}。
+
+===显式模板实参===
+函数模板的模板实参可从以下途径获得：
+* 模板实参推导
+* 默认模板实参
+* 显式指定，可以在下列语境中进行：
+:* 在函数调用表达式中
+:* 当取函数地址时
+:* 当初始化到函数的引用时 
+:* 当构成成员函数指针时
+:* 在显式特化中
+:* 在显式实例化中
+:* 在友元声明中
+
+不存在为{{rlp|operators|重载的运算符}}、{{rlp|cast operator|转换函数}}和构造函数显式指定模板实参的方法，因为它们不会通过函数名调用。
+
+所指定的各模板实参必须与各模板形参在种类上相匹配（即类型对类型，非类型对非类型，模板对模板）。实参的数量不能多于形参{{rev inl|since=c++11|（除非形参中有形参包，这种情况下每个非包形参必须对应一个实参）}}。
+
+所指定的非类型实参必须要么与其对应的非类型模板形参的类型相匹配，要么{{rlp|template parameters#模板非类型实参|可以转换到这些类型}}。
+
+不参与模板实参推导的函数实参（例如对应的模板实参已经被显式指定）会参与到它对应的函数形参的类型的隐式转换（如在通常{{rlp|overload resolution|重载决议}}中一样）。
+
+{{rrev|since=c++11|
+当有额外的实参时，模板实参推导可以扩充显式指定的模板形参包：
+{{source|1=
+template&lt;class... Types&gt;
+void f(Types... values);
+
+void g()
+{
+    f&lt;int*, float*&gt;(0, 0, 0); // Types = {int*, float*, int}
+}
+}}
+}}
+
+===模板实参替换===
+当已经指定、推导出或从默认模板实参获得了所有的模板实参之后，函数形参列表中对模板形参的每次使用都会被替换成对应的模板实参。
+
+函数模板在替换失败时（即以推导或提供的模板实参替换模板形参失败）会从{{rlp|overload resolution|重载集}}中移除。这样就有许多方式通过模板元编程来操作重载集：细节见 {{rlp|sfinae|SFINAE}}。
+
+替换之后，所有数组和函数类型的函数形参都被调整为指针，且所有函数形参都会移除顶层 cv 限定（如在常规{{rlp|function#函数声明|函数声明}}中一样）。
+
+移除顶层 cv 限定并不会影响形参在函数内展现的类型：
+{{source|1=
+template&lt;class T&gt;
+void f(T t);
+
+template&lt;class X&gt;
+void g(const X x);
+
+template&lt;class Z&gt;
+void h(Z z, Z* zp);
+
+// 两个不同的函数的类型相同，但 t 在这些函数中有不同的 cv 限定
+f&lt;int&gt;(1);       // 函数类型是 void(int)，t 是 int
+f&lt;const int&gt;(1); // 函数类型是 void(int)，t 是 const int
+
+// 两个不同的函数的类型和 x 相同
+// （指向这两个函数的指针不相等，且函数局部的静态变量可以拥有不同地址）
+g&lt;int&gt;(1);       // 函数类型是 void(int)，x 是 const int
+g&lt;const int&gt;(1); // 函数类型是 void(int)，x 是 const int
+
+// 只移除顶层 cv 限定符：
+h&lt;const int&gt;(1, NULL); // 函数类型是 void(int, const int*) 
+                       // z 是 const int，zp 是 const int* 
+}}
+
+===函数模板重载===
+函数模板与非模板函数可以重载。
+
+非模板函数与具有相同类型的模板特化始终不同。即使具有相同类型，不同函数模板的特化也始终互不相同。两个具有相同返回类型和相同形参列表的函数模板是不同的，而且可以用显式模板实参列表进行区分。
+
+当使用了类型或非类型模板形参的表达式在函数形参列表或返回类型中出现时，该表达式会为了重载而保留为函数模板签名的一部分：
+{{source|1=
+template&lt;int I, int J&gt;
+A&lt;I+J&gt; f(A&lt;I&gt;, A&lt;J&gt;); // 重载 #1
+
+template&lt;int K, int L&gt;
+A&lt;K+L&gt; f(A&lt;K&gt;, A&lt;L&gt;); // 同 #1
+
+template&lt;int I, int J&gt;
+A&lt;I-J&gt; f(A&lt;I&gt;, A&lt;J&gt;); // 重载 #2
+}}
+
+对于两个涉及模板形参的表达式，如果两个包含这些表达式的函数定义根据 {{rlp|definition#单一定义规则（ODR）|单一定义规则}}相同，那么称它们''等价''，就是说，除了模板形参的命名可以不同之外，这两个表达式含有相同的记号序列，其中的各个名字通过名字查找都解析到相同的实体。{{rev inl|since=c++20|两个 {{rlp|lambda|lambda 表达式}}始终不等价。}}
+{{source|1=
+template&lt;int I, int J&gt;
+void f(A&lt;I+J&gt;);  // 模板重载 #1
+
+template&lt;int K, int L&gt;
+void f(A&lt;K+L&gt;);  // 等价于 #1
+}}
+
+在确定两个{{rlp|dependent name|待决表达式}}是否等价时，只考虑其中所涉及的各待决名，而不考虑名字查找的结果。如果相同模板的多个声明在名字查找的结果上有所不同，那么使用它们中的第一个：
+{{source|1=
+template&lt;class T&gt;
+decltype(g(T())) h(); // decltype(g(T())) 是待决类型
+
+int g(int);
+
+template&lt;class T&gt;
+decltype(g(T())) h()
+{                  // h() 的再声明使用较早的查找，
+    return g(T()); // 尽管此处的查找找到了 g(int)
+}
+
+int i = h&lt;int&gt;(); // 模板实参替换失败；g(int) 不在 h() 的首个声明处的作用域中
+}}
+
+当满足下列条件时，认为两个函数模板''等价''：
+* 它们在同一作用域声明
+* 它们具有相同的名字
+* 它们拥有''等价''的模板形参列表，意思是列表长度相同，且每对对应的形参均满足下列条件：
+:* 两个形参的种类相同（都是类型、都是非类型或都是模板），
+{{rrev|since=c++11|
+:* 它们都是形参包或都不是，
+}}
+:* 如果是非类型，那么它们的类型等价，
+:* 如果是模板，那么它们的模板形参等价，
+{{rrev|since=c++20|
+:* 如果有一个声明带概念名，那么另一个也有等价的概念名。
+}}
+* 它们的返回类型和形参列表中所有涉及模板实参的表达式均''等价''
+{{rrev|since=c++20|
+* 模板形参列表之后的 requires 子句（如果存在）中的各个表达式均等价
+* 函数声明符之后的 requires 子句（如果存在）中的各个表达式均等价
+}}
+
+对于两个涉及模板形参的{{rev inl|since=c++20|{{rlp|expressions#潜在求值表达式|潜在求值}}}}表达式，如果它们不''等价''但它们对于任何给定的模板实参集的求值都产生相同的值，那么称它们''功能等价''。
+
+如果两个函数模板本来可以''等价''，但它们的返回类型和形参列表中一或多个涉及模板形参的表达式''功能等价''，那么称它们''功能等价''。
+
+{{rrev|since=c++20|
+另外，如果为两个函数模板指定的约束不同，但它们接受且被相同的模板实参列表的集合所满足，那么它们''功能等价''但不''等价''。
+}}
+
+如果程序含有''功能等价''但不''等价''的函数模板声明，那么程序非良构；不要求诊断。
+{{source|1=
+// 等价
+template&lt;int I&gt;
+void f(A&lt;I&gt;, A&lt;I+10&gt;); // 重载 #1
+template&lt;int I&gt;
+void f(A&lt;I&gt;, A&lt;I+10&gt;); // 重载 #1 的再声明
+
+// 不等价
+template&lt;int I&gt;
+void f(A&lt;I&gt;, A&lt;I+10&gt;); // 重载 #1
+template&lt;int I&gt;
+void f(A&lt;I&gt;, A&lt;I+11&gt;); // 重载 #2
+
+// 功能等价但不等价
+// 程序非良构，不要求诊断
+template&lt;int I&gt;
+void f(A&lt;I&gt;, A&lt;I+10&gt;);      // 重载 #1
+template&lt;int I&gt;
+void f(A&lt;I&gt;, A&lt;I+1+2+3+4&gt;); // 功能等价
+}}
+
+当同一个函数模板特化与多于一个重载的函数模板相匹配时（这通常由{{rlp|template argument deduction|模板实参推导}}所导致），执行''重载函数模板的偏序''处理&lt;!-- 译注：英文版及标准文本中在涉及函数模板处有时将 "partial ordering" 视为动作，这里我们不认为中文的“偏序”是动作。 --&gt;以选择最佳匹配。
+
+具体而言，在以下情形中发生偏序处理：
+@1@ 对函数模板特化的调用的{{rlp|overload resolution|重载决议}}：
+{{source|1=
+template&lt;class X&gt;
+void f(X a);
+template&lt;class X&gt;
+void f(X* a);
+
+int* p;
+f(p);
+}}
+@2@ 取{{rlp|overloaded address|函数模板特化的地址}}时：
+{{source|1=
+template&lt;class X&gt;
+void f(X a);
+template&lt;class X&gt;
+void f(X* a);
+
+void (*p)(int*) = &amp;f;
+}}
+@3@ 选择作为函数模板特化的[[cpp/memory/new/operator delete|布置 {{tt|operator delete}}]] 以匹配布置 {{tt|operator new}} 时：
+{{todo|小示例}}
+@4@ 当{{rlp|friend#模板友元|友元函数声明}}、{{rlpsd|function template#显式实例化}}或{{rlp|template specialization|显式特化}}指代函数模板特化时：
+{{source|1=
+template&lt;class X&gt;
+void f(X a);  // 第一个模板 f
+template&lt;class X&gt;
+void f(X* a); // 第二个模板 f
+template&lt;&gt;
+void f&lt;&gt;(int *a) {} // 显式特化
+
+// 模板实参推导出现两个候选：
+// f&lt;int*&gt;(int*) 与 f&lt;int&gt;(int*)
+// 偏序选择 f&lt;int&gt;(int*)，因为它更特殊
+}}
+
+非正式而言，“A 比 B 更特殊”意味着“A 比 B 接受更少的类型”。
+
+正式而言，为确定任意两个函数模板中哪个更特殊，偏序处理首先对两个模板之一进行以下变换：
+* 对于每个类型、非类型及模板形参，包括形参包，生成一个唯一的虚构类型、值或模板，并将其替换到模板的函数类型中
+* 如果要比较的两个函数模板中只有一个是成员函数，且该函数模板是某个类 {{tt|A}} 的非静态成员，那么向它的形参列表的开头插入一个新的形参。给定 ''cv'' 作为该函数模板的 cv 限定符{{rev inl|since=c++11|和 ''ref'' 作为该函数模板的引用限定符}}，该形参的类型是 ''cv'' {{tt|A&amp;}}{{rev inl|since=c++11|，除非 ''ref'' 是 {{tt|&amp;&amp;}}，或 ''ref'' 不存在且要比较的另一个模板的首个形参的类型是右值引用类型，此时新形参的类型是 ''cv'' {{tt|A&amp;&amp;}}}}。这有助于对运算符的定序，它们是同时作为成员和非成员函数查找的：
+{{source|1=
+struct A {};
+
+template&lt;class T&gt;
+struct B
+{
+    template&lt;class R&gt;
+    int operator*(R&amp;); // #1
+};
+
+template&lt;class T, class R&gt;
+int operator*(T&amp;, R&amp;); // #2
+
+int main()
+{
+    A a;
+    B&lt;A&gt; b;
+    b * a; // 模板实参推导对于 int B&lt;A&gt;::operator*(R&amp;) 给出 R=A 
+           //           对于 int operator*(T&amp;, R&amp;)，T=B&lt;A&gt;，R=A
+    
+    // 为进行偏序处理，将成员 template B&lt;A&gt;::operator*
+    // 变换成 template&lt;class R&gt; int operator*(B&lt;A&gt;&amp;, R&amp;);
+    
+    //     int operator*(   T&amp;, R&amp;)  T=B&lt;A&gt;, R=A
+    // 与  int operator*(B&lt;A&gt;&amp;, R&amp;)  R=A 间的偏序
+    // 选择 int operator*(B&lt;A&gt;&amp;, A&amp;) 为更特殊者
+}
+}}
+
+在按上方描述变换两个模板之一后，以变换后的模板为实参模板，以另一模板的原模板类型为形参模板，执行{{rlp|template argument deduction|模板实参推导}}。然后以第二个模板（进行变换后）为实参，以第一个模板的原始形式为形参重复这一过程。
+
+用于确定顺序的类型取决于语境：
+* 在函数调用的语境中，这些类型是在这个函数调用中具有实参的函数形参的类型（不考虑默认函数实参、形参包和省略号形参——见下文）
+* 在调用用户定义的转换函数的语境中，使用转换函数模板的返回类型
+* 在其他语境中，使用函数模板类型
+
+形参模板中的每个以上列出的类型都会被推导。推导开始前，以下列方式对形参模板的每个形参 {{ttb|P}} 和实参模板的对应实参 {{ttb|A}} 进行调整：
+
+* 如果 {{ttb|P}} 与 {{ttb|A}} 此前都是引用类型，那么确定哪个有更多的 cv 限定（其他所有情况下，就偏序目的而言都忽略 cv 限定）
+* 如果 {{ttb|P}} 是引用类型，那么以它所引用的类型替换它
+* 如果 {{ttb|A}} 是引用类型，那么以它所引用的类型替换它
+* 如果 {{ttb|P}} 有 cv 限定，那么 {{ttb|P}} 被替换为自身的无 cv 限定版本
+* 如果 {{ttb|A}} 有 cv 限定，那么 {{ttb|A}} 被替换为自身的无 cv 限定版本
+
+在这些调整后，遵循{{rlp|template argument deduction#从类型推导|从类型进行模板实参推导规则}}，从 {{ttb|A}} 推导 {{ttb|P}}。
+
+{{rrev|since=c++11|
+如果 {{ttb|P}} 是函数形参包，那么实参模板的每个剩余形参类型的类型 {{ttb|A}} 都与该函数参数包的声明符标识的类型 {{ttb|P}} 进行比较。每次比较都为该函数参数包所展开的模板参数包中的后继位置的进行模板实参的推导。
+
+如果 {{ttb|A}} 从函数参数包变换而来，那么将它与形参模板的每个剩余形参类型进行比较。
+}}
+
+如果变换后的模板 1 的实参 {{ttb|A}} 可以用来推导模板 2 的对应形参 {{ttb|P}}，但反之不可，那么对于从这一对 {{ttb|P/A}} 所推导的类型而言，这个 {{ttb|A}} 比 {{ttb|P}} 更特殊。
+
+如果双向推导均成功，且原 {{ttb|P}} 与 {{ttb|A}} 都是引用类型，那么做附加的测试：
+* 如果 {{ttb|A}} 是左值引用而 {{ttb|P}} 是右值引用，那么认为 {{ttb|A}} 比 {{ttb|P}} 更特殊
+* 如果 {{ttb|A}} 比 {{ttb|P}} 有更多的 cv 限定，那么认为 {{ttb|A}} 比 {{ttb|P}} 更特殊
+
+所有其他情况下，对于这一对 {{ttb|P/A}} 所推导的类型而言，没有模板比另一个更特殊。
+
+在以两个方向考虑每个 {{ttb|P}} 与 {{ttb|A}} 后，如果对于所考虑的每个类型，
+* 模板 1 对所有类型至少与模板 2 一样特殊
+* 模板 1 对某些类型比模板 2 特殊
+* 模板 2 对任何类型都不比模板 1 更特殊，或并非对任何类型都至少一样特殊
+
+那么模板 1 比模板 2 更特殊。如果上述条件在切换模板顺序后为真，那么模板 2 比模板 1 更特殊。否则，没有模板比另一个更特殊。
+
+{{rrev|since=c++11|
+持平的情况下，如果一个函数模板有一个尾部的形参包而另一个没有，那么认为带有被忽略的形参者比有空形参包者更特殊。
+}}
+
+如果在考虑所有的重载模板对之后，有一个无歧义地比所有其他的都更特殊，那么选择这个模板的特化，否则编译失败。
+
+在下列示例中，虚构实参被称为 U1, U2：
+{{source|1=
+template&lt;class T&gt;
+void f(T);        // 模板 #1
+template&lt;class T&gt;
+void f(T*);       // 模板 #2
+template&lt;class T&gt;
+void f(const T*); // 模板 #3
+
+void m()
+{
+    const int* p;
+    f(p); // 重载决议选取：#1：void f(T)  [T = const int *]
+          // 　           #2：void f(T*) [T = const int]
+          // 　           #3：void f(const T *) [T = int]
+    
+    // 偏序处理：
+    
+    // 从变换后的 #2 到 #1：从 void(U1*) 到 void(T) ：P=T  A=U1*：推导成功：T=U1*
+    // 从变换后的 #1 到 #2：从 void(U1)  到 void(T*)：P=T* A=U1 ：推导失败
+    // 对于 T 而言 #2 比 #1 更特殊
+    
+    // 从变换后的 #3 到 #1：从 void(const U1*) 到 void(T)：P=T, A=const U1*：成功
+    // 从变换后的 #1 到 #3：从 void(U1) 到 void(const T*)：P=const T*, A=U1：失败
+    // 对于 T 而言 #3 比 #1 更特殊
+    
+    // 从变换后的 #3 到 #2：从 void(const U1*) 到 void(T*)：P=T* A=const U1*：成功
+    // 从变换后的 #2 到 #3：从 void(U1*) 到 void(const T*)：P=const T* A=U1*：失败
+    // 对于 T 而言 #3 比 #2 更特殊
+    
+    // 结果：选择 #3
+    // 换言之，f(const T*) 比 f(T) 或 f(T*) 更特殊
+}
+}}
+
+{{source|1=
+template&lt;class T&gt;
+void f(T, T*);   // #1
+template&lt;class T&gt;
+void f(T, int*); // #2
+
+void m(int* p)
+{
+    f(0, p); // #1 的推导：void f(T, T*)   [T = int]
+             // #2 的推导：void f(T, int*) [T = int]
+    
+    // 偏序处理：
+    
+    // 从 #2 到 #1：从 void(U1,int*) 到 void(T,T*)：
+    // P1=T    A1=U1  ：T=U1
+    // P2=T*   A2=int*：T=int：失败
+    
+    // 从 #1 到 #2：从 void(U1, U2*) 到 void(T,int*)：
+    // P1=T    A1=U1  ：T=U1
+    // P2=int* A2=U2* ：失败
+    
+    // 对于 T 而言没有更特殊的一方，调用有歧义
+}
+}}
+
+{{source|1=
+template&lt;class T&gt;
+void g(T);  // 模板 #1
+template&lt;class T&gt;
+void g(T&amp;); // 模板 #2
+
+void m()
+{
+    float x;
+    g(x); // 从 #1 推导：void g(T)  [T = float]
+          // 从 #2 推导：void g(T&amp;) [T = float]
+    
+    // 偏序处理：
+    
+    // 从 #2 到 #1：从 void(U1&amp;) 到 void(T)：
+    // P=T          A=U1（调整后）：成功
+    
+    // 从 #1 到 #2：从 void(U1)  到 void(T&amp;)：
+    // P=T（调整后） A=U1         ：成功
+    
+    // 对于 T 而言没有更特殊的一方，调用有歧义
+}
+}}
+
+{{source|1=
+template&lt;class T&gt;
+struct A { A(); };
+
+template&lt;class T&gt;
+void h(const T&amp;); // #1
+template&lt;class T&gt;
+void h(A&lt;T&gt;&amp;);    // #2
+
+void m()
+{
+    A&lt;int&gt; z;
+    h(z);  // 从 #1 推导：void h(const T&amp;) [T = A&lt;int&gt;]
+           // 从 #2 推导：void h(A&lt;T&gt;&amp;)    [T = int]
+    
+    // 偏序处理：
+    
+    // 从 #2 到 #1：从 void(A&lt;U1&gt;&amp;)    到 void(const T&amp;)：
+    // P=T    A=A&lt;U1&gt;   ：成功 T=A&lt;U1&gt;
+    
+    // 从 #1 到 #2：从 void(const U1&amp;) 到 void(A&lt;T&gt;&amp;)：
+    // P=A&lt;T&gt; A=const U1：失败
+    
+    // 对于 T 而言 #2 比 #1 更特殊
+    
+    const A&lt;int&gt; z2;
+    h(z2); // 从 #1 推导：void h(const T&amp;) [T = A&lt;int&gt;]
+           // 从 #2 推导：void h(A&lt;T&gt;&amp;)    [T = int]，但替换失败
+    
+    // 只有一个可选择的重载，不尝试偏序处理，调用 #1
+}
+}}
+
+因为在调用语境中只考虑有明确的调用实参的形参，所以没有明确的调用实参的形参，包括函数形参包、省略号形参及有默认实参的形参均被忽略：
+{{source|1=
+template&lt;class T&gt;
+void f(T);           // #1
+template&lt;class T&gt;
+void f(T*, int = 1); // #2
+
+void m(int* ip)
+{
+    int* ip;
+    f(ip); // 调用 #2（T* 比 T 更特殊）
+}
+}}
+
+{{source|1=
+template&lt;class T&gt;
+void g(T);       // #1
+template&lt;class T&gt;
+void g(T*, ...); // #2
+
+void m(int* ip)
+{
+    g(ip); // 调用 #2（T* 比 T 更特殊）
+}
+}}
+
+{{source|1=
+template&lt;class T, class U&gt;
+struct A {};
+
+template&lt;class T, class U&gt;
+void f(U, A&lt;U, T&gt;* p = 0); // #1
+template&lt;class U&gt;
+void f(U, A&lt;U, U&gt;* p = 0); // #2
+
+void h()
+{
+    f&lt;int&gt;(42, (A&lt;int, int&gt;*)0); // 调用 #2
+    f&lt;int&gt;(42);                  // 错误：有歧义
+}
+}}
+
+{{source|1=
+template&lt;class T&gt;
+void g(T, T = T()); // #1
+template&lt;class T, class... U&gt;
+void g(T, U...);    // #2
+
+void h()
+{
+    g(42); // 错误：有歧义
+}
+}}
+
+{{source|1=
+template&lt;class T, class... U&gt;
+void f(T, U...); // #1
+template&lt;class T&gt;
+void f(T);       // #2
+
+void h(int i)
+{
+    f(&amp;i); // 因为形参包与无形参之间的决胜规则调用 #2
+           // （注意：在 DR692 与 DR1395 之间时有歧义）
+}
+}}
+
+{{source|1=
+template&lt;class T, class... U&gt;
+void g(T*, U...); // #1
+template&lt;class T&gt;
+void g(T);        // #2
+
+void h(int i)
+{
+    g(&amp;i); // OK：调用 #1（T* 比 T 更特殊）
+}
+}}
+
+{{source|1=
+template&lt;class... T&gt;
+int f(T*...);    // #1
+template&lt;class T&gt;
+int f(const T&amp;); // #2
+
+f((int*)0); // OK：选择 #2；非变参模板比变参模板更特殊
+            // （DR1395 之前有歧义，因为两个方向的推导均失败）
+}}
+
+{{source|1=
+template&lt;class... Args&gt;
+void f(Args... args);        // #1
+template&lt;class T1, class... Args&gt;
+void f(T1 a1, Args... args); // #2
+template&lt;class T1, class T2&gt;
+void f(T1 a1, T2 a2);        // #3
+
+f();        // 调用 #1
+f(1, 2, 3); // 调用 #2
+f(1, 2);    // 调用 #3；非变参模板 #3 比变参模板 #1 与 #2 更特殊
+}}
+
+在偏序处理内的模板实参推导期间，如果有实参不在任何被偏序考虑的类型中，那么不要求该实参与模板形参相匹配：
+{{source|1=
+template&lt;class T&gt;
+T f(int); // #1
+template&lt;class T, class U&gt;
+T f(U);   // #2
+
+void g()
+{
+    f&lt;int&gt;(1); // #1 的特化为显式：T f(int) [T = int]
+               // #2 的特化为推导：T f(U)   [T = int, U = int]
+    
+    // 偏序处理（只考虑实参类型）：
+    
+    // 从 #2 到 #1：从 U1(U2)  到 T(int)：失败
+    // 从 #1 到 #2：从 U1(int) 到 T(U)  ：成功：U=int, T 未使用
+    
+    // 调用 #1
+}
+}}
+
+{{rrev|since=c++11|
+对包含模板形参包的函数模板进行的偏序处理，与为这些模板形参包所推导的实参数量无关。
+{{source|1=
+template&lt;class...&gt;
+struct Tuple {};
+
+template&lt;class... Types&gt;
+void g(Tuple&lt;Types...&gt;);      // #1
+template&lt;class T1, class... Types&gt;
+void g(Tuple&lt;T1, Types...&gt;);  // #2
+template&lt;class T1, class... Types&gt;
+void g(Tuple&lt;T1, Types&amp;...&gt;); // #3
+
+g(Tuple&lt;&gt;());            // 调用 #1
+g(Tuple&lt;int, float&gt;());  // 调用 #2
+g(Tuple&lt;int, float&amp;&gt;()); // 调用 #3
+g(Tuple&lt;int&gt;());         // 调用 #3
+}}
+}}
+
+{{todo|14.8.3[temp.over]}}
+为编译对函数模板的调用，编译器必须在非模板重载、模板重载和模板重载的特化间作出决定。
+
+{{source|1=
+template&lt;class T&gt;
+void f(T);      // #1：模板重载
+template&lt;class T&gt;
+void f(T*);     // #2：模板重载
+
+void f(double); // #3：非模板重载
+template&lt;&gt;
+void f(int);    // #4：#1 的特化
+
+f('a');        // 调用 #1
+f(new int(1)); // 调用 #2
+f(1.0);        // 调用 #3
+f(1);          // 调用 #4
+}}
+
+===函数重载 vs 函数特化===
+注意，只有非模板和主模板重载参与重载决议。特化并不是重载，因此不受考虑。只有在重载决议选择最佳匹配的主函数模板后，才检验它的特化以查看最佳匹配者。
+
+{{source|1=
+template&lt;class T&gt;
+void f(T);    // #1：所有类型的重载
+template&lt;&gt;
+void f(int*); // #2：#1 的特化，针对指向 int 的指针
+template&lt;class T&gt;
+void f(T*);   // #3：所有指针类型的重载
+
+f(new int(1)); // 调用 #3，虽然 #1 的特化是完美匹配
+}}
+
+在对翻译单元的头文件进行排序时，记住此规则很重要。有关函数重载与函数特化之间的更多示例在下面展开：
+{{cot|示例}}
+首先考虑一些不使用实参依赖查找的场景。对于这种情况，我们使用调用 {{c|(f)(t)}}。如 {{rlp|adl|ADL}} 中的描述，将函数名包在括号中可抑制实参依赖查找。
+
+* 在 {{c|g()}} 中声明的''引用点''之前的多个 {{c|f()}} 重载。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)  { std::cout &lt;&lt; "#1\n"; } // 在 f() 的引用点前的重载 #1
+template&lt;class T&gt;
+void f(T*) { std::cout &lt;&lt; "#2\n"; } // 在 f() 的引用点前的重载 #2
+
+template&lt;class T&gt;
+void g(T* t)
+{
+    (f)(t); // f() 的引用点
+}
+
+int main()
+{
+    A* p = nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// #1 与 #2 都被添加到候选列表；
+// 选择 #2 因为它是更好的匹配。
+|output=
+#2
+}}
+
+
+* 匹配较好的模板重载在引用点之后声明。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)  { std::cout &lt;&lt; "#1\n"; } // #1
+
+template&lt;class T&gt;
+void g(T* t) 
+{
+    (f)(t); // f() 的引用点
+}
+
+template&lt;class T&gt;
+void f(T*) { std::cout &lt;&lt; "#2\n"; } // #2
+
+int main()
+{
+    A* p = nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// 只有 #1 会添加到到候选列表；#2 在引用点之后定义；
+// 因此，即使它是较佳匹配，重载也不会考虑它。
+|output=
+#1
+}}
+
+
+* 匹配较好的显式模板特化在引用点之后声明。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)    { std::cout &lt;&lt; "#1\n"; } // #1
+
+template&lt;class T&gt;
+void g(T* t) 
+{
+    (f)(t); // f() 的引用点
+}
+template&lt;&gt;
+void f&lt;&gt;(A*) { std::cout &lt;&lt; "#3\n"; } // #3
+
+int main()
+{
+    A* p = nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// 添加 #1 到候选列表；#3 是在引用点后定义的较好匹配。候选列表由最终被选择的 #1 组成。
+// 之后，在引用点后声明的 #1 的显式特化 #3 被选择，因为它是较好的匹配。
+// 此行为由 14.7.3/6 [temp.expl.spec] 掌控且与 ADL 无关。
+|output=
+#3
+}}
+
+
+* 匹配较好的模板重载在引用点之后声明。匹配最佳的显式模板特化在这个较好的匹配重载之后声明。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)    { std::cout &lt;&lt; "#1\n"; } // #1
+
+template&lt;class T&gt;
+void g(T* t) 
+{
+    (f)(t); // f() 的引用点
+}
+template&lt;class T&gt;
+void f(T*)   { std::cout &lt;&lt; "#2\n"; } // #2
+template&lt;&gt;
+void f&lt;&gt;(A*) { std::cout &lt;&lt; "#3\n"; } // #3
+
+int main()
+{
+    A* p= nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// #1 是候选列表的唯一成员且它最终被选择。
+// 之后，跳过显式特化 #3，因为它实际特化了在引用点后声明的 #2。
+|output=
+#1
+}}
+
+
+现在让我们考虑使用实参依赖查找的情况（即我们用更常见的调用格式 {{c|f(t)}}）。
+
+* 匹配较好的模板重载在引用点之后声明。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)  { std::cout &lt;&lt; "#1\n"; } // #1
+
+template&lt;class T&gt;
+void g(T* t) 
+{
+    f(t); // f() 的引用点
+}
+
+template&lt;class T&gt;
+void f(T*) { std::cout &lt;&lt; "#2\n"; } // #2
+
+int main()
+{
+    A* p = nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// #1 被作为常规查找的结果添加到候选列表；
+// #2 在引用点之后定义但经由 ADL 查找添加到候选列表。
+// #2 作为较好的匹配被选择。
+|output=
+#2
+}}
+
+
+* 匹配较好的模板重载在引用点之后声明。匹配最佳的显式模板特化在这个匹配较好的重载之前声明。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)    { std::cout &lt;&lt; "#1\n"; } // #1
+
+template&lt;class T&gt;
+void g(T* t) 
+{
+    f(t); // f() 的引用点
+}
+
+template&lt;&gt;
+void f&lt;&gt;(A*) { std::cout &lt;&lt; "#3\n"; } // #3
+template&lt;class T&gt;
+void f(T*)   { std::cout &lt;&lt; "#2\n"; } // #2
+
+int main()
+{
+    A* p = nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// #1 被作为常规查找的结果添加到候选列表；
+// #2 在引用点之后定义但经由 ADL 查找添加到候选列表。
+// 作为较好的匹配，从各主模板中选择 #2。
+// 因为 #3 在 #2 之前声明，所以它是 #1 的显式特化。
+// 从而最终选择 #2。
+|output=
+#2
+}}
+
+
+* 匹配较好的模板重载在引用点之后声明，匹配最佳的显式模板特化最后声明。
+{{example|code=
+#include &lt;iostream&gt;
+
+struct A {};
+
+template&lt;class T&gt;
+void f(T)    { std::cout &lt;&lt; "#1\n"; } // #1
+
+template&lt;class T&gt;
+void g(T* t) 
+{
+    f(t); // f() 的引用点
+}
+
+template&lt;class T&gt;
+void f(T*)   { std::cout &lt;&lt; "#2\n"; } // #2
+template&lt;&gt;
+void f&lt;&gt;(A*) { std::cout &lt;&lt; "#3\n"; } // #3
+
+int main()
+{
+    A* p = nullptr;
+    g(p); // g() 和 f() 的引用点
+}
+
+// #1 被作为常规查找的结果添加到候选列表；
+// #2 在引用点之后定义但经由 ADL 查找添加到候选列表。
+// 作为较好的匹配，从各主模板中选择 #2。
+// 因为 #3 在 #2 之后声明，所以它是 #2 的显式特化；
+// 从而被选为调用的函数。
+|output=
+#3
+}}
+
+
+当实参是一些 C++ 基础类型时，没有 ADL 关联的命名空间。因此这些场景与上述非 ADL 示例等同。
+{{cob}}
+
+有关重载决议的详细规则，见{{rlp|overload resolution|重载决议}}。
+
+===函数模板特化===
+{{todo|14.8[temp.fct.spec] (note that 14.8.1[temp.arg.explicit] 已在全特化专题：要么让函数特化到这里：缺少部分特化、与函数重载的交互，或仅引用那边}}
+
+===关键词===
+{{ltt|cpp/keyword/template}}{{rev inl|since=c++11|,
+{{ltt|cpp/keyword/extern}}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=214|std=C++98|before=未说明偏序处理的具体步骤|after=添加说明}}
+{{dr list item|wg=cwg|dr=532|std=C++98|before=未说明非静态成员函数模板与非成员函数模板之间的顺序|after=添加说明}}
+{{dr list item|wg=cwg|dr=581|std=C++98|before=允许构造函数模板的显式特化或实例化中的模板形参列表|after=已禁止}}
+{{dr list item|wg=cwg|dr=1321|std=C++98|before=不明确首个声明与重声明中的相同待决名是否等价|after=它们等价并且含义与首个声明中的相同}}
+{{dr list item|wg=cwg|dr=1395|std=C++11|before=从形参包推导 A 时失败，且对于空形参包没有决胜规则|after=允许推导，添加决胜规则}}
+{{dr list item|wg=cwg|dr=1406|std=C++11|before=添加到非静态成员函数模板的新的首形参&lt;br&gt;的类型与该模板的引用限定符无关|after=引用限定符是 {{tt|&amp;&amp;}} 时，&lt;br&gt;该形参具有右值引用类型}}
+{{dr list item|wg=cwg|dr=1446|std=C++11|before=添加到无引用限定符的非静态成员函数模板的新的首形参的类型是&lt;br&gt;左值引用类型，即使该模板与首形参具有右值引用类型的模板进行比较|after=此时该形参具有右值引用类型}}
+{{dr list item|wg=cwg|dr=2373|std=C++98|before=偏序处理中会向静态成员函数模板的形参列表的开头插入新的形参|after=不会插入形参}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|class template|类模板}}
+* {{rlp|function|函数声明}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

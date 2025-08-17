@@ -1,0 +1,104 @@
+{{cpp/atomic/atomic/title|exchange}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|1=
+T exchange( T desired, std::memory_order order =
+                           std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=2|since=c++11|1=
+T exchange( T desired, std::memory_order order =
+                           std::memory_order_seq_cst ) volatile noexcept;
+}}
+{{dcl end}}
+
+以 {{c|desired}} 原子地替换底层值。操作为读-修改-写操作。根据 {{c|order}} 的值影响内存。
+
+{{rrev|since=c++20|
+重载 {{v|2}} 在参与重载决议且 {{c|std::atomic&lt;T&gt;::is_always_lock_free}} 是 {{c|false}} 时被弃用。
+}}
+
+===参数===
+{{par begin}}
+{{par|desired|要赋值的值}}
+{{par|order|强制的内存定序约束}}
+{{par end}}
+
+===返回值===
+原子变量在调用前的值。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;atomic&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    constexpr int thread_count{5};
+    constexpr int sum{5};
+    
+    std::atomic&lt;int&gt; atom{0};
+    std::atomic&lt;int&gt; counter{0};
+    
+    auto increment_to_sum = [&amp;](const int id)
+    {
+        for (int next = 0; next &lt; sum;)
+        {
+            // 每个线程各自写入自身所知的值
+            const int current = atom.exchange(next);
+            counter++;
+            // 同步写入，避免被其他线程中断
+            std::osyncstream(std::cout)
+                &lt;&lt; "线程 #" &lt;&lt; id &lt;&lt; "（id=" &lt;&lt; std::this_thread::get_id()
+                &lt;&lt; "）写入 " &lt;&lt; next &lt;&lt; "，替换旧值 "
+                &lt;&lt; current &lt;&lt; "。\n";
+            next = std::max(current, next) + 1;
+        }
+    };
+    
+    std::vector&lt;std::thread&gt; v;
+    for (std::size_t i = 0; i &lt; thread_count; ++i)
+        v.emplace_back(increment_to_sum, i);
+    
+    for (auto&amp; tr : v)
+        tr.join();
+    
+    std::cout &lt;&lt; thread_count &lt;&lt; " 个线程总共用了 "
+              &lt;&lt; counter &lt;&lt; " 次将 0 增加到 " &lt;&lt; sum &lt;&lt; "。\n";
+}
+|p=true
+|output=
+线程 #1（id=139722332333824）写入 0，替换旧值 0。
+线程 #2（id=139722323941120）写入 0，替换旧值 0。
+线程 #1（id=139722332333824）写入 1，替换旧值 0。
+线程 #1（id=139722332333824）写入 2，替换旧值 1。
+线程 #1（id=139722332333824）写入 3，替换旧值 2。
+线程 #1（id=139722332333824）写入 4，替换旧值 3。
+线程 #0（id=139722340726528）写入 0，替换旧值 0。
+线程 #3（id=139722315548416）写入 0，替换旧值 0。
+线程 #3（id=139722315548416）写入 1，替换旧值 4。
+线程 #0（id=139722340726528）写入 1，替换旧值 1。
+线程 #4（id=139722307155712）写入 0，替换旧值 1。
+线程 #4（id=139722307155712）写入 2，替换旧值 2。
+线程 #4（id=139722307155712）写入 3，替换旧值 2。
+线程 #4（id=139722307155712）写入 4，替换旧值 3。
+线程 #2（id=139722323941120）写入 1，替换旧值 0。
+线程 #0（id=139722340726528）写入 2，替换旧值 1。
+线程 #2（id=139722323941120）写入 2，替换旧值 4。
+线程 #0（id=139722340726528）写入 3，替换旧值 2。
+线程 #0（id=139722340726528）写入 4，替换旧值 3。
+5 个线程总共用了 19 次将 0 增加到 5。
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_exchange}}
+{{dsc inc|cpp/utility/dsc exchange}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

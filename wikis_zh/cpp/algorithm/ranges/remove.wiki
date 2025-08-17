@@ -1,0 +1,246 @@
+{{cpp/ranges/title|remove|remove_if}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=版本_1|since=c++20|until=c++26|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S,
+          class T, class Proj = std::identity &gt;
+requires std::indirect_binary_predicate
+             &lt;ranges::equal_to, std::projected&lt;I, Proj&gt;, const T*&gt;
+constexpr ranges::subrange&lt;I&gt;
+    remove( I first, S last, const T&amp; value, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;I, Proj&gt; &gt;
+requires std::indirect_binary_predicate
+             &lt;ranges::equal_to, std::projected&lt;I, Proj&gt;, const T*&gt;
+constexpr ranges::subrange&lt;I&gt;
+    remove( I first, S last, const T&amp; value, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcl|since=c++20|until=c++26|1=
+template&lt; ranges::forward_range R,
+          class T, class Proj = std::identity &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt; &amp;&amp;
+         std::indirect_binary_predicate
+             &lt;ranges::equal_to,
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;, const T*&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    remove( R&amp;&amp; r, const T&amp; value, Proj proj = {} );
+}}
+{{dcl|since=c++26|1=
+template&lt; ranges::forward_range R,
+          class Proj = std::identity,
+          class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt; &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt; &amp;&amp;
+         std::indirect_binary_predicate
+             &lt;ranges::equal_to,
+              std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;, const T*&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    remove( R&amp;&amp; r, const T&amp; value, Proj proj = {} );
+}}
+{{dcl rev end}}
+{{dcla|num=3|since=c++20|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+constexpr ranges::subrange&lt;I&gt;
+    remove_if( I first, S last, Pred pred, Proj proj = {} );
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; ranges::forward_range R,
+          class Proj = std::identity,
+          std::indirect_unary_predicate
+              &lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    remove_if( R&amp;&amp; r, Pred pred, Proj proj = {} );
+}}
+{{dcl end}}
+
+从范围 {{range|first|last}} 移除所有满足特定判别标准的元素，并返回子范围 {{range|ret|last}}，其中 {{c|ret}} 是范围新末尾的尾后迭代器。
+
+@1@ 移除所有等于 {{c|value}} 的元素，用 {{c|1=std::invoke(proj, *i) == value}} 比较。
+@3@ 移除所有使得 {{c|std::invoke(pred, std::invoke(proj, *i))}} 返回 {{c|true}} 的元素。
+@2,4@ 同 {{v|1,3}}，但以 {{c|r}} 为范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+通过使未被移除的元素出现在范围起始这种方式，迁移（方式为移动赋值）范围中元素，来进行移除。保持剩余元素的相对顺序而容器的''物理''大小保持不变。指向新的''逻辑''结尾与''物理''结尾之间的迭代器仍然可解引用，但元素自身拥有未指定的值（经由{{named req|MoveAssignable}}的后条件）。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要处理的|sentinel=yes}}
+{{par|r|要处理的元素范围}}
+{{par|value|要移除的元素的值}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+{{c|{ret, last} }}，其中 {{range|first|ret}} 是移除后作为结果的子范围，而子范围 {{range|ret|last}} 中的元素在合法但未指定的状态，即 {{range|ret|last}} 就是要擦除的范围。
+
+===复杂度===
+准确应用 {{c|N}} 次对应谓词和任何投影，其中 {{c|1=N = ranges::distance(first, last)}}，及最坏情况下 {{c|N - 1}} 次移动操作。
+
+===注解===
+调用 {{tt|ranges::remove}} 经常跟着调用容器的 {{tt|erase}} 成员函数，它擦除未指定值并减小容器的''物理''大小以匹配其新的''逻辑''大小。这两个调用一并被称为{{enwiki|erase-remove idiom|''擦除-移除''手法}}，它可通过对所有标准''序列''容器[[cpp/container#非成员函数表|重载]]的 {{lc|std::erase}} 自由函数，或对''所有''标准容器[[cpp/container#非成员函数表|重载]]的 {{lc|std::erase_if}} 自由函数达成。
+
+名称类似的容器[[cpp/container#成员函数表|成员函数]] {{l2tt|cpp/container/list/remove}}、{{l2tt|cpp/container/list/remove|remove_if}}、{{l2tt|cpp/container/forward_list/remove}} 及 {{l2tt|cpp/container/forward_list/remove|remove_if}} 擦除被移除的元素。
+
+这些算法通常不能用于如 {{lc|std::set}} 与 {{lc|std::map}} 的关联容器，因为其迭代器类型不解引用为{{named req|MoveAssignable}} 类型（这些容器中的键不可修改）。
+
+因为 {{tt|ranges::remove}} 按引用接收 {{c|value}}，若它是到范围 {{range|first|last}} 中元素的引用则函数可能有非期待的行为。
+
+===可能的实现===
+{{eq impl|title1=remove (1,2)|ver1=1|1=
+struct remove_fn
+{
+    template&lt;std::permutable I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             class T = std::projected_value_t&lt;I, Proj&gt;&gt;
+    requires std::indirect_binary_predicate
+                 &lt;ranges::equal_to, std::projected&lt;I, Proj&gt;, const T*&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, S last, const T&amp; value, Proj proj = {}) const
+    {
+        first = ranges::find(std::move(first), last, value, proj);
+        if (first != last)
+        {
+            for (I i{std::next(first)}; i != last; ++i)
+                if (value != std::invoke(proj, *i))
+                {
+                    *first = ranges::iter_move(i);
+                    ++first;
+                }
+        }
+        return {first, last};
+    }
+    
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             class T = std::projected_value_t&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt; &amp;&amp;
+             std::indirect_binary_predicate
+                 &lt;ranges::equal_to,
+                  std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;, const T*&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, const T&amp; value, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), value, std::move(proj));
+    }
+};
+
+inline constexpr remove_fn remove {};
+|title2=remove_if (3,4)|ver2=3|2=
+struct remove_if_fn
+{
+    template&lt;std::permutable I, std::sentinel_for&lt;I&gt; S, class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, S last, Pred pred, Proj proj = {}) const
+    {
+        first = ranges::find_if(std::move(first), last, pred, proj);
+        if (first != last)
+        {
+            for (I i{std::next(first)}; i != last; ++i)
+                if (!std::invoke(pred, std::invoke(proj, *i)))
+                {
+                    *first = ranges::iter_move(i);
+                    ++first;
+                }
+        }
+        return {first, last};
+    }
+    
+    template&lt;ranges::forward_range R, class Proj = std::identity,
+             std::indirect_unary_predicate
+                 &lt;std::projected&lt;ranges::iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), pred, std::move(proj));
+    }
+};
+
+inline constexpr remove_if_fn remove_if {};
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|1,2}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;cctype&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::string v1{"No - Diagnostic - Required"};
+    std::cout &lt;&lt; std::quoted(v1) &lt;&lt; " (v1, size: " &lt;&lt; v1.size() &lt;&lt; ")\n";
+    const auto ret = std::ranges::remove(v1, ' ');
+    std::cout &lt;&lt; std::quoted(v1) &lt;&lt; " (v1 after `remove`, size: " &lt;&lt; v1.size() &lt;&lt; ")\n";
+    std::cout &lt;&lt; ' ' &lt;&lt; std::string(std::distance(v1.begin(), ret.begin()), '^') &lt;&lt; '\n';
+    v1.erase(ret.begin(), ret.end());
+    std::cout &lt;&lt; std::quoted(v1) &lt;&lt; " (v1 after `erase`, size: " &lt;&lt; v1.size() &lt;&lt; ")\n\n";
+    
+    // 以自定义一元谓词调用 remove_if:
+    auto rm = [](char c) { return !std::isupper(c); };
+    std::string v2{"Substitution Failure Is Not An Error"};
+    std::cout &lt;&lt; std::quoted(v2) &lt;&lt; " (v2, size: " &lt;&lt; v2.size() &lt;&lt; ")\n";
+    const auto [first, last] = std::ranges::remove_if(v2, rm);
+    std::cout &lt;&lt; std::quoted(v2) &lt;&lt; " (v2 after `remove_if`, size: " &lt;&lt; v2.size() &lt;&lt; ")\n";
+    std::cout &lt;&lt; ' ' &lt;&lt; std::string(std::distance(v2.begin(), first), '^') &lt;&lt; '\n';
+    v2.erase(first, last);
+    std::cout &lt;&lt; std::quoted(v2) &lt;&lt; " (v2 after `erase`, size: " &lt;&lt; v2.size() &lt;&lt; ")\n\n";
+    
+    // 创建到 `remove_if` 所修改过的容器的视图:
+    for (std::string s : {"Small Object Optimization", "Non-Type Template Parameter"})
+        std::cout &lt;&lt; std::quoted(s) &lt;&lt; " =&gt; "
+            &lt;&lt; std::string_view{begin(s), std::ranges::remove_if(s, rm).begin()} &lt;&lt; '\n';
+
+    std::vector&lt;std::complex&lt;double&gt;&gt; nums{&lt;!----&gt;{2, 2}, {1, 3}, {4, 8}&lt;!----&gt;};
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto e = std::ranges::remove(nums, {1, 3}); // T 被推导
+    #else
+        auto e = std::ranges::remove(nums, std::complex&lt;double&gt;{1, 3});
+    #endif
+    nums.erase(e.begin(), e.end());
+    assert((nums == std::vector&lt;std::complex&lt;double&gt;&gt;{&lt;!----&gt;{2, 2}, {4, 8}&lt;!----&gt;}));
+}
+|p=true
+|output=
+"No _ Diagnostic _ Required" (v1, size: 26)
+"No_Diagnostic_Requiredired" (v1 after `remove`, size: 26)
+ ^^^^^^^^^^^^^^^^^^^^^^
+"No_Diagnostic_Required" (v1 after `erase`, size: 22)
+
+"Substitution Failure Is Not An Error" (v2, size: 36)
+"SFINAEtution Failure Is Not An Error" (v2 after `remove_if`, size: 36)
+ ^^^^^^
+"SFINAE" (v2 after `erase`, size: 6)
+
+"Small Object Optimization" =&gt; SOO
+"Non-Type Template Parameter" =&gt; NTTP
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique}}
+{{dsc inc|cpp/algorithm/dsc remove}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

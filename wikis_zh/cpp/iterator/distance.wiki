@@ -1,0 +1,136 @@
+{{cpp/title|distance}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl|notes={{mark|constexpr since C++17}}|
+template&lt; class InputIt &gt;
+typename std::iterator_traits&lt;InputIt&gt;::difference_type 
+    distance( InputIt first, InputIt last );
+}}
+{{dcl end}}
+
+返回从 {{c|first}} 到 {{c|last}} 的距离。
+
+如果 {{tt|InputIt}} 不是{{named req|RandomAccessIterator}}，那么在 {{c|last}} 从 {{c|first}} 不[[cpp/iterator#范围|可及]]时行为未定义。
+
+如果 {{tt|InputIt}} 是{{named req|RandomAccessIterator}}，那么在 {{c|first}} 和 {{c|last}} 互不可及时行为未定义。
+
+===参数===
+{{par begin}}
+{{par|first|指向首元素的迭代器}}
+{{par|last|指向范围尾的迭代器}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator|notes=在 {{tt|InputIt}} 额外满足{{named req|RandomAccessIterator}}的要求时操作会更高效。}}
+{{par end}}
+
+===返回值===
+从 {{c|first}} 走到 {{c|last}} 所需的自增数。
+
+{{rrev|since=c++11|
+在使用随机访问迭代器且 {{c|first}} 从 {{c|last}} 可及的情况下值可能为负。
+}}
+
+===复杂度===
+线性。 
+
+然而，如果 {{tt|InputIt}} 额外满足{{named req|RandomAccessIterator}}的要求，那么复杂度是常数。
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_iterator_base_funcs.h#L135 libstdc++] 与 [https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/iterator#L611 libc++] 中的实现。
+
+{{eq impl
+|title1=通过标签派发实现，移除 {{c/core|constexpr}} 后可用于 C++98|1=
+namespace detail
+{
+    template&lt;class It&gt;
+    constexpr // C++17 起要求
+    typename std::iterator_traits&lt;It&gt;::difference_type 
+        do_distance(It first, It last, std::input_iterator_tag)
+    {
+        typename std::iterator_traits&lt;It&gt;::difference_type result = 0;
+        while (first != last)
+        {
+            ++first;
+            ++result;
+        }
+        return result;
+    }
+    
+    template&lt;class It&gt;
+    constexpr // C++17 起要求
+    typename std::iterator_traits&lt;It&gt;::difference_type 
+        do_distance(It first, It last, std::random_access_iterator_tag)
+    {
+        return last - first;
+    }
+} // namespace detail
+
+template&lt;class It&gt;
+constexpr // C++17 起
+typename std::iterator_traits&lt;It&gt;::difference_type 
+    distance(It first, It last)
+{
+    return detail::do_distance(first, last,
+                               typename std::iterator_traits&lt;It&gt;::iterator_category());
+}
+|title2=通过 {{c/core|if constexpr}} 实现，可用于 C++17|2=
+template&lt;class It&gt;
+constexpr typename std::iterator_traits&lt;It&gt;::difference_type
+    distance(It first, It last)
+{
+    using category = typename std::iterator_traits&lt;It&gt;::iterator_category;
+    static_assert(std::is_base_of_v&lt;std::input_iterator_tag, category&gt;);
+
+    if constexpr (std::is_base_of_v&lt;std::random_access_iterator_tag, category&gt;)
+        return last - first;
+    else
+    {
+        typename std::iterator_traits&lt;It&gt;::difference_type result = 0;
+        while (first != last)
+        {
+            ++first;
+            ++result;
+        }
+        return result;
+    }
+}
+}}
+
+===示例===
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main() 
+{
+    std::vector&lt;int&gt; v{3, 1, 4};
+    std::cout &lt;&lt; "distance(first, last) = "
+              &lt;&lt; std::distance(v.begin(), v.end()) &lt;&lt; '\n'
+              &lt;&lt; "distance(last, first) = "
+              &lt;&lt; std::distance(v.end(), v.begin()) &lt;&lt; '\n';
+              // （直到LWG940）行为未定义
+    
+    static constexpr auto il = {3, 1, 4};
+    // C++17 起 `distance` 可以在 constexpr 中使用。
+    static_assert(std::distance(il.begin(), il.end()) == 3);
+    static_assert(std::distance(il.end(), il.begin()) == -3);
+}
+|output=
+distance(first, last) = 3
+distance(last, first) = -3
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=940|std=C++98|before={{c|first}} 从 {{c|last}} 可及的情况下的用词不明确|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc advance}}
+{{dsc inc|cpp/algorithm/dsc count}}
+{{dsc inc|cpp/iterator/ranges/dsc distance}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

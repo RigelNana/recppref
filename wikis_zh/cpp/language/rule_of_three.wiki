@@ -1,0 +1,157 @@
+{{title|三/五/零原则}}
+{{cpp/language/navbar}}
+
+===三原则===
+如果某个类需要用户定义的{{rlp|destructor|析构函数}}、用户定义的{{rlp|copy constructor|复制构造函数}}或用户定义的{{rlp|as operator|复制赋值运算符}}，那么它几乎肯定需要全部三个。
+
+因为 C++ 在各种场合（按值传递/返回、操纵容器等）对用户定义类型的对象进行复制和复制赋值时，如果这些特殊成员函数可以访问，就会调用它们，并且如果它们没有被用户定义，那么它们就会被编译器隐式定义。
+
+如果类[[cpp/language/raii|管理的资源]]的句柄是个非类类型对象（原始指针、POSIX 文件描述符等），其析构函数不执行任何操作，且复制构造函数/赋值运算符进行“浅复制”（复制句柄的值，而不复制底层资源），则不应使用隐式定义的特殊成员函数。
+
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;cstring&gt;
+#include &lt;iostream&gt;
+#include &lt;utility&gt;
+
+class rule_of_three
+{
+    char* cstring; // 以裸指针为动态分配内存的句柄
+
+public:
+    explicit rule_of_three(const char* s = "") : cstring(nullptr)
+    {
+        if (s)
+        {
+            cstring = new char[std::strlen(s) + 1]; // 分配
+            std::strcpy(cstring, s); // 填充
+        }
+    }
+
+    ~rule_of_three() // I. 析构函数
+    {
+        delete[] cstring; // 解分配
+    }
+
+    rule_of_three(const rule_of_three&amp; other) // II. 复制构造函数
+        : rule_of_three(other.cstring) {}
+
+    rule_of_three&amp; operator=(const rule_of_three&amp; other) // III. 复制赋值
+    {
+        // 为简洁采用复制后交换（copy-and-swap）手法实现
+        // 注意这样做妨碍潜在的存储重用
+        rule_of_three temp(other);
+        std::swap(cstring, temp.cstring);
+        return *this;
+    }
+
+    const char* c_str() const // 访问器
+    {
+        return cstring;
+    }
+};
+
+int main()
+{
+    rule_of_three o1{"abc"};
+    std::cout &lt;&lt; o1.c_str() &lt;&lt; ' ';
+    auto o2{o1}; // II. 使用复制构造函数
+    std::cout &lt;&lt; o2.c_str() &lt;&lt; ' ';
+    rule_of_three o3("def");
+    std::cout &lt;&lt; o3.c_str() &lt;&lt; ' ';
+    o3 = o2; // III. 使用赋值赋值
+    std::cout &lt;&lt; o3.c_str() &lt;&lt; '\n';
+}   // I. 此处调用所有析构函数
+|output=
+abc abc def abc
+}}
+
+通过可复制句柄来管理不可复制资源的类，可能必须将它的复制赋值和复制构造函数声明为 {{c/core|private}} 并且不提供它们的定义，或将它们定义为弃置的。这是三原则的另一种应用：只删除其一却任由其他特殊成员被隐式定义很可能会导致错误。
+通过可复制的句柄管理不可复制资源的类可能必须{{rev inl|until=c++11|声明复制赋值和复制构造函数为 {{c|private}} 并不提供它们的定义}}{{rev inl|since=c++11|定义复制赋值和复制构造函数为 {{c|1== delete}}}}。这也是“三原则”的另一种应用：删除其中一个而让另一个隐式定义，通常不正确。
+
+===五原则===
+因为用户定义（包括 {{c|1== default}} 或 {{c|1== delete}}）的析构函数、复制构造函数或复制赋值运算符，会阻止隐式定义{{rlp|move constructor|移动构造函数}}和{{rlp|move assignment|移动赋值运算符}}，所以任何想要移动语义的类必须声明全部五个特殊成员函数：
+
+{{source|1=
+class rule_of_five
+{
+    char* cstring; // 以裸指针为动态分配内存的句柄
+public:
+    explicit rule_of_five(const char* s = "") : cstring(nullptr)
+    {
+        if (s)
+        {
+            cstring = new char[std::strlen(s) + 1]; // 分配
+            std::strcpy(cstring, s); // 填充
+        }
+    }
+
+    ~rule_of_five()
+    {
+        delete[] cstring; // 解分配
+    }
+
+    rule_of_five(const rule_of_five&amp; other) // 复制构造函数
+        : rule_of_five(other.cstring) {}
+
+    rule_of_five(rule_of_five&amp;&amp; other) noexcept // 移动构造函数
+        : cstring(std::exchange(other.cstring, nullptr)) {}
+
+    rule_of_five&amp; operator=(const rule_of_five&amp; other) // 复制赋值
+    {
+        // 为简便而实现为从临时副本移动赋值
+        // 注意这样做妨碍了潜在的存储重用
+        return *this = rule_of_five(other);
+    }
+
+    rule_of_five&amp; operator=(rule_of_five&amp;&amp; other) noexcept // 移动赋值
+    {
+        std::swap(cstring, other.cstring);
+        return *this;
+    }
+
+// 此外，还可以将两个赋值运算符都改为复制后交换（copy-and-swap）实现，
+// 这样做仍会无法在复制赋值中重用存储。
+//  rule_of_five&amp; operator=(rule_of_five other) noexcept
+//  {
+//      std::swap(cstring, other.cstring);
+//      return *this;
+//  }
+};
+}}
+
+与三原则不同的是，不提供移动构造函数和移动赋值运算符通常不是错误，而只是错过了优化机会。
+
+===零原则===
+有自定义析构函数、复制/移动构造函数或复制/移动赋值运算符的类应该专门处理所有权（这遵循[[enwiki:Single responsibility principle|单一责任原则]]）。其他类都不应该拥有自定义的析构函数、复制/移动构造函数或复制/移动赋值运算符&lt;ref&gt;[https://web.archive.org/web/20130211035910/http://flamingdangerzone.com/cxx11/2012/08/15/rule-of-zero.html “零原则”，R. Martinho Fernandes 8/15/2012]&lt;/ref&gt;
+
+这条原则也在 C++ 核心指南（C++ Core Guidelines）中出现—— [https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rc-zero C.20：如果可以避免定义默认操作，就不要定义它们]。
+{{source|1=
+class rule_of_zero
+{
+    std::string cppstring;
+public:
+    rule_of_zero(const std::string&amp; arg) : cppstring(arg) {}
+};
+}}
+
+当有意将某个基类用于多态用途时，可能需要将它的析构函数声明为 {{c/core|public}} 和 {{c/core|virtual}}。由于这会阻止生成隐式移动（并弃用隐式复制），因此必须将各特殊成员函数定义为 {{c|1== default}}&lt;ref&gt;[https://scottmeyers.blogspot.fr/2014/03/a-concern-about-rule-of-zero.html “关于零原则的考虑”，Scott Meyers, 3/13/2014]&lt;/ref&gt;。
+{{source|1=
+class base_of_five_defaults
+{
+public:
+    base_of_five_defaults(const base_of_five_defaults&amp;) = default;
+    base_of_five_defaults(base_of_five_defaults&amp;&amp;) = default;
+    base_of_five_defaults&amp; operator=(const base_of_five_defaults&amp;) = default;
+    base_of_five_defaults&amp; operator=(base_of_five_defaults&amp;&amp;) = default;
+    virtual ~base_of_five_defaults() = default;
+};
+}}
+然而这使得类有可能被切片，这是多态类经常把复制定义 {{c|1== delete}} 的原因（见 C++ 核心指南中的 [https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rc-copy-virtual C.67：多态类应该抑制复制操作]），这带来了下列的五原则的通用说法：
+:[https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#Rc-five C.21：如果你定义或 =delete 任何复制、移动或析构函数，则定义或 =delete 它们全部]
+
+===外部链接===
+&lt;references/&gt;
+
+{{langlinks|en|es|ja|ru}}

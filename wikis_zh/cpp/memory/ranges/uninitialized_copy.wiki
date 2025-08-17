@@ -1,0 +1,157 @@
+{{cpp/ranges/title|uninitialized_copy|uninitialized_copy_result}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|调用签名}}
+{{dcla|num=1|since=c++20|constexpr=c++26|
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S1,
+          no-throw-forward-iterator O, no-throw-sentinel-for&lt;O&gt; S2 &gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;,
+                                     std::iter_reference_t&lt;I&gt;&gt;
+uninitialized_copy_result&lt;I, O&gt;
+    uninitialized_copy( I ifirst, S1 ilast, O ofirst, S2 olast );
+}}
+{{dcla|num=2|since=c++20|constexpr=c++26|
+template&lt; ranges::input_range IR, no-throw-forward-range OR &gt;
+    requires std::constructible_from&lt;ranges::range_value_t&lt;OR&gt;,
+                                     ranges::range_reference_t&lt;IR&gt;&gt;
+uninitialized_copy_result&lt;ranges::borrowed_iterator_t&lt;IR&gt;,
+                          ranges::borrowed_iterator_t&lt;OR&gt;&gt;
+    uninitialized_copy( IR&amp;&amp; in_range, OR&amp;&amp; out_range );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using uninitialized_copy_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+设 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::min(ranges::distance(ifirst, ilast), ranges::distance(ofirst, olast))}}。
+
+@1@ 如同用以下方式将范围 {{range|ifirst|ilast}} 中的 {{mathjax-or|\(\scriptsize N\)|N}} 个元素复制到未初始化内存区域 {{range|ofirst|olast}}。
+{{box|
+{{c/core|1=for (; ifirst != ilast &amp;&amp; ofirst != olast; ++ofirst, (void)++ifirst)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{lti|cpp/memory/voidify}}{{c/core|(*ofirst)) std::remove_reference_t&lt;std::iter_reference_t&lt;O&gt;&gt;(*ifirst);}}&lt;br&gt;
+{{c/core|return {std::move(ifirst), ofirst};}}
+}}
+@@ 如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。
+@@ 如果 {{range|ofirst|olast}} 与 {{range|ifirst|ilast}} 有重叠，那么行为未定义。
+
+@2@ 等价于 {{c multi|return ranges::uninitialized_copy(ranges::begin(in_range), ranges::end(in_range),|                                  ranges::begin(out_range), ranges::end(out_range));}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|ifirst|ilast|要复制的|range=源|sentinel=yes}}
+{{par|in_range|要复制的元素 {{lconcept|range}}}}
+{{par range|ofirst|olast|3=|range=目标|sentinel=yes}}
+{{par|out_range|目标 {{lconcept|range}}}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+{{mathjax-or|\(\scriptsize\mathcal{O}(N)\)|𝓞(N)}}。
+
+===异常===
+构造目标范围中的元素时抛出的任何异常。
+
+===注解===
+如果输出范围的值类型是{{named req|TrivialType}}，那么实现可能提升 {{tt|ranges::uninitialized_copy}} 的效率。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1,2}}}}
+
+===可能的实现===
+{{eq fun|1=
+struct uninitialized_copy_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S1,
+             no-throw-forward-iterator O, no-throw-sentinel-for&lt;O&gt; S2&gt;
+        requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;, std::iter_reference_t&lt;I&gt;&gt;
+    constexpr ranges::uninitialized_copy_result&lt;I, O&gt;
+        operator()(I ifirst, S1 ilast, O ofirst, S2 olast) const
+    {
+        O current{ofirst};
+        try
+        {
+            for (; !(ifirst == ilast or current == olast); ++ifirst, ++current)
+                ranges::construct_at(std::addressof(*current), *ifirst);
+            return {std::move(ifirst), std::move(current)};
+        }
+        catch (...) // 回滚：销毁已构造的元素
+        {
+            for (; ofirst != current; ++ofirst)
+                ranges::destroy_at(std::addressof(*ofirst));
+            throw;
+        }
+    }
+    
+    template&lt;ranges::input_range IR, no-throw-forward-range OR&gt;
+        requires std::constructible_from&lt;ranges::range_value_t&lt;OR&gt;,
+    constexpr ranges::range_reference_t&lt;IR&gt;&gt;
+        ranges::uninitialized_copy_result&lt;ranges::borrowed_iterator_t&lt;IR&gt;,
+                                          ranges::borrowed_iterator_t&lt;OR&gt;&gt;
+    operator()(IR&amp;&amp; in_range, OR&amp;&amp; out_range) const
+    {
+        return (*this)(ranges::begin(in_range), ranges::end(in_range),
+                       ranges::begin(out_range), ranges::end(out_range));
+    }
+};
+
+inline constexpr uninitialized_copy_fn uninitialized_copy{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    const char* v[]{"This", "is", "an", "example"};
+    
+    if (const auto sz{std::size(v)};
+        void* pbuf = std::aligned_alloc(alignof(std::string), sizeof(std::string) * sz))
+    {
+        try
+        {
+            auto first{static_cast&lt;std::string*&gt;(pbuf)};
+            auto last{first + sz};
+            std::ranges::uninitialized_copy(std::begin(v), std::end(v), first, last);
+            
+            std::cout &lt;&lt; "{";
+            for (auto it{first}; it != last; ++it)
+                std::cout &lt;&lt; (it == first ? "" : ", ") &lt;&lt; std::quoted(*it);
+            std::cout &lt;&lt; "};\n";
+
+            std::ranges::destroy(first, last);
+        }
+        catch (...)
+        {
+            std::cout &lt;&lt; "uninitialized_copy 异常\n";
+        }
+        std::free(pbuf);
+    }
+}
+|output=
+{"This", "is", "an", "example"};
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可能会在 {{c/core|const}} 存储中创建对象|after=保持禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_copy_n}}
+{{dsc inc|cpp/memory/dsc uninitialized_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,255 @@
+{{title|派生类}}
+{{cpp/language/classes/navbar}}
+
+任何类类型（无论是以{{spar|类关键词}} {{c/core|class}} 还是 {{c/core|struct}} 声明）均可被声明为''派生于''一个或多个''基类''，各基类也可以派生自其自身的基类，组成继承层级结构。
+
+===语法===
+基类的列表在{{rlp|class|类声明语法}}的{{spar sep|基类子句}}中提供。{{spar sep|基类子句}}由字符 {{ttb|:}} 后随一或多个{{spar sep|基类说明符}}的逗号分隔列表组成。
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar optional|属性}} {{spar|类或计算类型}}}}
+{{sdsc|num=2|1=
+{{spar optional|属性}} {{ttb|virtual}} {{spar|类或计算类型}}}}
+{{sdsc|num=3|1=
+{{spar optional|属性}} {{spar|访问说明符}} {{spar|类或计算类型}}}}
+{{sdsc|num=4|1=
+{{spar optional|属性}} {{ttb|virtual}} {{spar|访问说明符}} {{spar|类或计算类型}}}}
+{{sdsc|num=5|1=
+{{spar optional|属性}} {{spar|访问说明符}} {{ttb|virtual}} {{spar|类或计算类型}}}}
+{{sdsc end}}
+
+@1@ 指定非虚且具有默认成员访问性的继承关系。
+@2@ 指定虚且具有默认成员访问性的继承关系。
+@3@ 指定非虚且具有给定成员访问性的继承关系。
+@4@ 指定虚且具有给定成员访问性的继承关系。
+@5@ 同 4)，{{ttb|virtual}} 和{{spar sep|访问说明符}}可以以任意顺序出现。
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量{{rlp|attributes|属性}}的序列}}
+{{par|{{spar|访问说明符}}|{{c/core|private}}、{{c/core|public}} 或 {{c/core|protected}} 之一}}
+{{par|{{spar|类或计算类型}}|以下之一：
+* {{spar optional|嵌套名说明符}} {{spar|类型名}}
+* {{spar|嵌套名说明符}} {{ttb|template}} {{spar|简单模板标识}}
+{{rrev|since=c++11|
+* {{rlp|decltype|{{spar|decltype说明符}}}}
+}}}}
+{{rrev|since=c++26|
+* {{rlp|pack indexing#包索引说明符|{{spar|包索引说明符}}
+}}}}
+{{par end}}
+
+由于语法限制，{{rlp|elaborated type specifier|详述类型说明符}}不能直接作为{{spar sep|类或计算类型}}出现。
+
+{{rrev|since=c++11|
+{{spar sep|基类子句}}中的{{spar sep|基类说明符}}可以是{{rlp|parameter pack|包展开}}。
+
+{{spar sep|类或计算类型}}不能指代声明为 {{rlpt|final}} 的类或结构体。
+}}
+
+如果省略{{spar|访问说明符}}，那么它对以{{spar|类关键词}} {{c/core|struct}} 声明的类默认为 {{c/core|public}}，对以{{spar|类关键词}} {{c/core|class}} 声明的类为 {{c/core|private}}。
+
+{{source|
+struct Base
+{
+    int a, b, c;
+};
+
+// 每个 Derived 类型对象包含一个 Base 子对象
+struct Derived : Base
+{
+    int b;
+};
+
+// 每个 Derived2 类型对象包含 Derived 与 Base 子对象
+struct Derived2 : Derived
+{
+    int c;
+};
+}}
+
+在{{spar sep|基类子句}}中列出的{{spar sep|类或计算类型}}所指代的类是直接基类。它们的基类是间接基类。同一类不能被多次指定为直接基类，但同一类可以既是直接又是间接基类。
+
+每个直接和间接基类都作为''基类子对象''，以依赖于 ABI 的偏移量存在于派生类的对象表示中。因为{{rlp|ebo|空基类优化}}，空基类通常不会增加派生类对象的大小。基类子对象的构造函数被派生类的构造函数所调用：可以在{{rlp|initializer list|成员初始化器列表}}中向这些构造函数提供实参。
+
+===虚基类===
+对于每个指定为 {{c/core|virtual}} 的不同基类，最终派生对象中仅含有该类型的一个基类子对象，即使该类在继承层级中出现多次也是如此（只要它每次都以 {{c/core|virtual}} 继承）。
+
+{{source|1=
+struct B { int n; };
+class X : public virtual B {};
+class Y : virtual public B {};
+class Z : public B {};
+
+// 每个 AA 类型对象拥有一个 X，一个 Y，一个 Z 和两个 B：
+// 一个是 Z 的基类，另一个由 X 与 Y 所共享
+struct AA : X, Y, Z
+{
+    void f()
+    {
+        X::n = 1; // 修改虚 B 子对象的成员
+        Y::n = 2; // 修改同一虚 B 子对象的成员
+        Z::n = 3; // 修改非虚 B 子对象的成员
+        
+        std::cout &lt;&lt; X::n &lt;&lt; Y::n &lt;&lt; Z::n &lt;&lt; '\n'; // 打印 223
+    }
+};
+}}
+
+继承层级有虚基类的例子之一是标准库的 iostream 的继承层级：{{lc|std::istream}} 与 {{lc|std::ostream}} 使用虚继承从 {{lc|std::basic_ios|std::ios}} 派生。{{lc|std::iostream}} 同时派生于 {{lc|std::istream}} 和 {{lc|std::ostream}}，所以每个 {{lc|std::iostream}} 实例含有一个 {{lc|std::ostream}} 子对象、一个 {{lc|std::istream}} 子对象和只有一个 {{lc|std::basic_ios|std::ios}} 子对象（因此也只有一个 {{lc|std::ios_base}}）。
+
+所有虚基类子对象都在任何非虚基类子对象之前初始化，所以只有最终派生类会在它的{{rlp|initializer list|成员初始化器列表}}中调用虚基类的构造函数：
+
+{{source|1=
+struct B
+{
+    int n;
+    
+    B(int x) : n(x) {}
+};
+
+struct X : virtual B { X() : B(1) {} };
+struct Y : virtual B { Y() : B(2) {} };
+struct AA : X, Y     { AA() : B(3), X(), Y() {} };
+
+// AA 的默认构造函数调用 X 和 Y 的默认构造函数
+// 但这些构造函数不调用 B 的构造函数，因为 B 是虚基类
+AA a; // a.n == 3
+
+// X 的默认构造函数调用 B 的构造函数
+X x; // x.n == 1
+}}
+
+涉及虚继承时，对类成员的无限定名字查找有{{rlp|unqualified lookup#成员函数的定义|特殊规则}}（有时被称为“优先性规则”）。
+
+===公开继承===
+当类使用 {{c/core|public}} {{rlp|access|成员访问说明符}}从基类派生时，基类的所有公开成员可作为派生类的公开成员访问，基类的所有受保护成员可作为派生类的受保护成员访问（基类的私有成员始终不可访问，除非设为友元）。
+
+公开继承塑造了面向对象编程的子类型关系：派生类对象是（IS-A）基类对象。到派生类对象的引用和指针，可被期待到其任何公开基类的引用和指针的代码所用（见 {{enwiki|Liskov substitution principle|LSP}}），或者以 {{enwiki|Design by contract|DbC}} 的说法，派生类应该维护其公开基类的类不变式，不应强化其所{{rlp|virtual|覆盖}}的成员函数的任何前条件，或弱化其任何后条件。
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct MenuOption { std::string title; };
+
+// Menu 是 MenuOption 的 vector：能插入、移除、重排……选项并拥有标题。
+class Menu : public std::vector&lt;MenuOption&gt;
+{
+public:
+    std::string title;
+    
+    void print() const
+    {
+        std::cout &lt;&lt; title &lt;&lt; ":\n";
+        for (std::size_t i = 0, s = size(); i &lt; s; ++i)
+            std::cout &lt;&lt; "  " &lt;&lt; (i + 1) &lt;&lt; ". " &lt;&lt; at(i).title &lt;&lt; '\n';
+    }
+};
+// 注：Menu::title 没有问题因为它的角色与基类独立。
+
+enum class Color { WHITE, RED, BLUE, GREEN };
+
+void apply_terminal_color(Color) { /* 操作系统特定 */ }
+
+// 这不好！
+// ColorMenu 是每个选项都有定制颜色的 Menu。
+class ColorMenu : public Menu
+{
+public:
+    std::vector&lt;Color&gt; colors;
+    
+    void print() const
+    {
+        std::cout &lt;&lt; title &lt;&lt; ":\n";
+        
+        for (std::size_t i = 0, s = size(); i &lt; s; ++i)
+        {
+            std::cout &lt;&lt; "  " &lt;&lt; (i + 1) &lt;&lt; ". ";
+            apply_terminal_color(colors[i]);
+            std::cout &lt;&lt; at(i).title &lt;&lt; '\n';
+            apply_terminal_color(Color::WHITE);
+        }
+    }
+};
+// ColorMenu 需要下列通过公开继承 Menu 无法满足的不变式，例如：
+// - ColorMenu::colors 与 Menu 必须拥有相同数量的元素
+// - 为使得有意义，调用 erase() 也应该从 colors 移除元素以保持选项颜色
+// 基本上每个对 std::vector 的非 const 方法调用都会破坏 ColorMenu 的不变式
+// 并将会需要从用户由正确管理颜色来修复。
+
+int main()
+{
+    ColorMenu color_menu;
+
+    // 这个类的大问题是我们必须保持_Color 与的 Menu 同步。
+    color_menu.push_back(MenuOption{"某些选择"});
+
+    // color_menu.print(); // 错误！print() 中的 colors[i] 在范围外
+
+    color_menu.colors.push_back(Color::RED);
+
+    color_menu.print(); // OK：colors 与 Menu 拥有相同的元素数
+}
+}}
+
+===受保护继承===
+当类使用 {{c/core|protected}} {{rlp|access|成员访问说明符}}从基类派生时，基类的所有公开和受保护成员可作为派生类的受保护成员访问（基类的私有成员始终不可访问，除非设为友元）。
+
+受保护继承可用于“受控制的多态”：在派生类的成员中，以及所有进一步派生的类的成员中，派生类是（IS-A）基类：派生类的引用和指针可用于期望基类的引用和指针的地方。
+
+===私有继承===
+当类使用 {{c/core|private}} {{rlp|access|成员访问说明符}}从基类派生时，基类的所有公开和受保护成员可作为派生类的私有成员访问（基类的私有成员始终不可访问，除非设为友元）。
+
+私有继承常用于基于策略的设计，因为策略常是空基类，而使用基类可以同时启用静多态并活用{{rlp|ebo|空基类优化}}
+
+私有继承也可以用于实现合成关系（基类子对象是派生类对象的实现细节）。除非派生类需要访问基类的受保护成员（包含构造函数），需要覆盖基类的虚成员，需要基类在某个其他基类子对象之前构造或在其之后销毁，需要共享虚基类或需要控制虚基类的构造，否则使用成员方案可以提供更好的封装，而且通常是更受偏好的方式。使用成员来实现合成关系，亦不适用于从{{rlp|parameter pack|参数包}}进行多重继承的情况，或在编译时通过模板元编程确定各基类身份的情况。
+
+与受保护继承相似，私有继承也可以用于受控制的多态：在派生类的成员内（但不在进一步派生的类中），派生类是（IS-A）基类。
+
+{{source|1=
+template&lt;typename Transport&gt;
+class service : private Transport // 从 Transport 策略私有继承
+{
+public:
+    void transmit()
+    {
+        this-&gt;send(...); // 使用 Transport 提供的任何东西进行发送
+    }
+};
+
+// TCP 传输策略
+class tcp
+{
+public:
+    void send(...);
+};
+
+// UDP 传输策略
+class udp
+{
+public:
+    void send(...);
+};
+
+service&lt;tcp&gt; service(host, port); 
+service.transmit(...); // 通过 TCP 发送
+}}
+
+===成员名字查找===
+针对类成员进行的无限定和有限定的名字查找规则，详见于{{rlp|lookup|名字查找}}。
+
+===关键词===
+{{ltt|cpp/keyword/virtual}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1710|std=C++98|before={{spar|类或decltype}} 的语法导致无法从需要用到 {{c/core|template}} 消歧义符的待决类派生|after=允许 {{c/core|template}}}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|virtual|虚函数}}
+* {{rlp|abstract class|抽象类}}
+
+{{langlinks|en|es|ja|ru}}

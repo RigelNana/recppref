@@ -1,0 +1,139 @@
+{{cpp/title|pointer_traits}}
+{{cpp/memory/pointer_traits/navbar}}
+
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|since=c++11|num=1|1=
+template&lt; class Ptr &gt;
+struct pointer_traits;
+}}
+{{dcl|since=c++11|num=2|1=
+template&lt; class T &gt;
+struct pointer_traits&lt;T*&gt;;
+}}
+{{dcl end}}
+
+{{tt|pointer_traits}} 类模板提供访问指针式类型（[[cpp/named req/Allocator#缀饰指针|缀饰指针]]，如 [http://www.boost.org/doc/libs/release/doc/html/interprocess/offset_ptr.html {{tt|boost::interprocess::offset_ptr}}]）的某些属性的标准化方法。标准模板 {{lc|std::allocator_traits}} 依靠 {{tt|pointer_traits}} 确定多种{{named req|Allocator}}所要求的 typedef 的默认行为。
+
+@1@ 非特化 {{tt|pointer_traits}} 条件性地声明下列成员：
+&lt;div class="t-member"&gt;
+令 {{c|/*element-type-of*/&lt;Ptr&gt;}} 为
+* {{c|Ptr::element_type}}，若它存在；
+* 否则若 {{tt|Ptr}} 为类模板特化 {{c|Template&lt;T, Args...&gt;}} 而其中 {{c|Args...}} 为零或更多个类型实参，则为 {{tt|T}}；
+* 否则不定义。
+
+若 {{c|/*element-type-of*/&lt;Ptr&gt;}} 不被定义，则主模板无此页面中所指定的成员。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|pointer}}|{{c|Ptr}}}}
+{{dsc|{{tt|element_type}}|{{c|/*element-type-of*/&lt;Ptr&gt;}}}}
+{{dsc|{{tt|difference_type}}|若存在则为 {{c|Ptr::difference_type}}，否则为 {{lc|std::ptrdiff_t}}}}
+{{dsc end}}
+
+===成员别名模板===
+{{dsc begin}}
+{{dsc hitem|模板|定义}}
+{{dsc|{{c|template &lt;class U&gt; using rebind}}|若存在则为 {{c|Ptr::rebind&lt;U&gt;}}，否则若 {{tt|Ptr}} 是模板特化 {{c|Template&lt;T, Args...&gt;}} 则为 {{c|Template&lt;U, Args...&gt;}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/pointer_traits/dsc pointer_to}}
+{{dsc end}}
+&lt;/div&gt;
+
+@2@ 为指针类型 {{c|T*}} 提供的特化，它声明下列成员：
+&lt;div class="t-member"&gt;
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|pointer}}|{{c|T*}}}}
+{{dsc|{{tt|element_type}}|{{c|T}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc end}}
+
+===成员别名模版===
+{{dsc begin}}
+{{dsc hitem|模板|定义}}
+{{dsc|{{c|template &lt;class U&gt; using rebind}}|{{c|U*}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/pointer_traits/dsc pointer_to}}
+{{dsc end}}
+&lt;/div&gt;
+
+===程序定义特化的可选成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/pointer_traits/dsc to_address}}
+{{dsc end}}
+
+===注解===
+重绑定成员模板别名，使得可以由指向 {{tt|T}} 的类指针类型，获取指向 {{tt|U}} 的相同类指针类型。例如，
+
+{{source|1=
+using another_pointer = std::pointer_traits&lt;std::shared_ptr&lt;int&gt;&gt;::rebind&lt;double&gt;;
+static_assert(std::is_same&lt;another_pointer, std::shared_ptr&lt;double&gt;&gt;::value);
+}}
+
+{{rrev|since=c++20|
+对用户定义指针类型的特化可提供额外的静态成员函数 {{tt|to_address}} 以定制 {{lc|std::to_address}} 的行为。
+}}
+
+{{feature test macro|__cpp_lib_constexpr_memory|std=C++20|value=201811L|{{tt|std::pointer_traits}} 中的 {{c/core|constexpr}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+template&lt;class Ptr&gt;
+struct BlockList
+{
+   // 预定义内存块
+   struct block;
+   
+   // 从指针 Ptr 的种类定义指向内存块的指针
+   // 若 Ptr 是任何 T* 类型，则 block_ptr_t 为 block*
+   // 若 Ptr 是 smart_ptr&lt;T&gt;，则 block_ptr_t 为 smart_ptr&lt;block&gt;
+   using block_ptr_t = typename std::pointer_traits&lt;Ptr&gt;::template rebind&lt;block&gt;;
+            
+   struct block
+   {
+       std::size_t size{};
+       block_ptr_t next_block{};
+   }; 
+   
+   block_ptr_t free_blocks;
+}; 
+
+int main()
+{
+    [[maybe_unused]]
+    BlockList&lt;int*&gt; bl1;
+    // bl1.free_blocks 的类型是 BlockList&lt;int*&gt;::block*
+
+    BlockList&lt;std::shared_ptr&lt;char&gt;&gt; bl2;
+    // bl2.free_blocks 的类型是 std::shared_ptr&lt;BlockList&lt;std::shared_ptr&lt;char&gt;&gt;::block&gt;
+    std::cout &lt;&lt; bl2.free_blocks.use_count() &lt;&lt; '\n';
+}
+|output=
+0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3545|std=C++11|before=主模板在 {{tt|element_type}} 非法时导致硬错误|after=使之为 SFINAE 友好}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator_traits}}
+{{dsc inc|cpp/memory/dsc addressof}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

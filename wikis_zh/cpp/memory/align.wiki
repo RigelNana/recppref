@@ -1,0 +1,107 @@
+{{cpp/title|align}}
+{{cpp/memory/navbar}}
+{{ddcl|since=c++11|header=memory| 
+void* align( std::size_t alignment,
+             std::size_t size,
+             void*&amp; ptr,
+             std::size_t&amp; space );
+}}
+
+给定指针 {{c|ptr}} 指定大小为 {{c|space}} 的缓冲区，返回按指定 {{c|alignment}} 为 {{c|size}} 字节数对齐的指针，并减小 {{c|space}} 实参对齐所用的字节数。返回首个对齐的地址。
+
+仅以给定对齐量对齐入缓冲区的所需字节数合适，函数才会修改指针。若缓冲区太小，则函数不做任何事并返回 {{c|nullptr}}。
+
+若 {{c|alignment}} 不是二的幂，则行为未定义。
+
+===参数===
+{{par begin}}
+{{par|alignment|欲求的对齐量}}
+{{par|size|要被对齐的存储的大小}}
+{{par|ptr|指向至少有 {{tt|space}} 字节的连续存储的指针}}
+{{par|space|要在其中操作的缓冲区的大小}}
+{{par end}}
+
+===返回值===
+{{c|ptr}} 的调整值，或若提供空间太小则为空指针值。
+
+===示例===
+{{example
+|演示使用 {{tt|std::align}} 在内存中放置不同类型的对象。
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;new&gt;
+
+template&lt;std::size_t N&gt;
+struct MyAllocator
+{
+    std::byte data[N];
+    std::size_t sz{N};
+    void* p{data};
+
+    MyAllocator() = default;
+
+    // 注意：仅对隐式生存期类型良定义
+    template&lt;typename T&gt;
+    T* implicit_aligned_alloc(std::size_t a = alignof(T))
+    {
+        if (std::align(a, sizeof(T), p, sz))
+        {
+            T* result = std::launder(reinterpret_cast&lt;T*&gt;(p));
+            p = static_cast&lt;std::byte*&gt;(p) + sizeof(T);
+            sz -= sizeof(T);
+            return result;
+        }
+        return nullptr;
+    }
+};
+
+int main()
+{
+    MyAllocator&lt;64&gt; a;
+    std::cout &lt;&lt; "a.data 分配于 " &lt;&lt; (void*)a.data
+              &lt;&lt; " (" &lt;&lt; sizeof a.data &lt;&lt; " 字节)\n";
+
+    // 分配一个 char
+    if (char* p = a.implicit_aligned_alloc&lt;char&gt;())
+    {
+        *p = 'a';
+        std::cout &lt;&lt; "char 分配于 " &lt;&lt; (void*)p &lt;&lt; '\n';
+    }
+
+    // 分配一个 int
+    if (int* p = a.implicit_aligned_alloc&lt;int&gt;())
+    {
+        *p = 1;
+        std::cout &lt;&lt; "int 分配于 " &lt;&lt; (void*)p &lt;&lt; '\n';
+    }
+
+    // 分配一个 int，对齐于 32 字节边界
+    if (int* p = a.implicit_aligned_alloc&lt;int&gt;(32))
+    {
+        *p = 2;
+        std::cout &lt;&lt; "int 分配于 " &lt;&lt; (void*)p &lt;&lt; " (32 字节对齐)\n";
+    }
+}
+|p = true
+|output=
+a.data 分配于 0x7ffc654e8530 (64 字节)
+char 分配于 0x7ffc654e8530
+int 分配于 0x7ffc654e8534
+int 分配于 0x7ffc654e8540 (32 字节对齐)
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item | wg=lwg|dr=2377|std=C++11|before=要求 {{tt|alignment}} 为基础或受支持的扩展对齐值| after=仅需要为二的幂}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignof}}
+{{dsc inc|cpp/language/dsc alignas}}
+{{dsc inc|cpp/types/dsc aligned_storage}}
+{{dsc inc|cpp/memory/dsc assume_aligned}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

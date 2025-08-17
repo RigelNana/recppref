@@ -1,0 +1,143 @@
+{{cpp/title|exchange}}
+{{cpp/utility/navbar}}
+{{ddcl|header=utility|since=c++14|notes={{mark constexpr since c++20}}&lt;br&gt;{{mark|C++23 起条件性 noexcept}}|1=
+template&lt; class T, class U = T &gt;
+T exchange( T&amp; obj, U&amp;&amp; new_value );
+}}
+
+以 {{c|new_value}} 替换 {{c|obj}} 的值，并返回 {{c|obj}} 的旧值。
+
+===参数===
+{{par begin}}
+{{par|obj|要替换值的对象}}
+{{par|new_value|要赋给 {{c|obj}} 的值}}
+{{par hreq}}
+{{par req named|T|MoveConstructible|notes=而且必须能移动赋值 {{tt|U}} 类型对象给 {{tt|T}} 类型对象}}
+{{par end}}
+
+===返回值===
+{{c|obj}} 的旧值。
+
+===异常===
+{{rrev multi|since2=c++23
+|rev1=（无）
+|rev2=
+{{noexcept|
+    std::is_nothrow_move_constructible_v&lt;T&gt; &amp;&amp;
+    std::is_nothrow_assignable_v&lt;T&amp;, U&gt;
+}}
+}}
+
+===可能的实现===
+{{eq fun|1=
+template&lt;class T, class U = T&gt;
+constexpr // C++20 起
+T exchange(T&amp; obj, U&amp;&amp; new_value)
+    noexcept( // C++23 起
+        std::is_nothrow_move_constructible&lt;T&gt;::value &amp;&amp;
+        std::is_nothrow_assignable&lt;T&amp;, U&gt;::value
+    )
+{
+    T old_value = std::move(obj);
+    obj = std::forward&lt;U&gt;(new_value);
+    return old_value;
+}
+}}
+
+===注解===
+{{tt|std::exchange}} 可以在实现[[cpp/language/move assignment|移动赋值运算符]]和[[cpp/language/move_constructor|移动构造函数]]时使用：
+{{tt|std::exchange}} 可以用于实现{{lt|cpp/language/move constructor|移动构造函数}}，也可在成员不需要[[cpp/language/rule_of_three|特殊清理]]时用于实现[[cpp/language/move assignment|移动赋值运算符]]：
+{{source|1=
+struct S
+{
+    int n;
+
+    S(S&amp;&amp; other) noexcept : n{std::exchange(other.n, 0)} {}
+  
+    S&amp; operator=(S&amp;&amp; other) noexcept
+    {
+        n = std::exchange(other.n, 0); // 移动 n，并于 other.n 留下零
+        // 注意：自我移动赋值时，n 不会改变
+        // 令注意：若 n 是需要特殊清理的不透明资源句柄，则此资源会泄漏
+        return *this;
+    }
+};
+}}
+
+{{feature test macro|__cpp_lib_exchange_function|[[#Top|{{tt|std::exchange}}]]|value=201304L|std=C++14}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+class stream
+{
+public:
+    using flags_type = int;
+
+public:
+    flags_type flags() const { return flags_; }
+
+    /// 以 newf 替换 flags_ 并返回旧值。
+    flags_type flags(flags_type newf) { return std::exchange(flags_, newf); }
+
+private:
+    flags_type flags_ = 0;
+};
+
+void f() { std::cout &lt;&lt; "f()"; }
+
+int main()
+{
+    stream s;
+
+    std::cout &lt;&lt; s.flags() &lt;&lt; '\n';
+    std::cout &lt;&lt; s.flags(12) &lt;&lt; '\n';
+    std::cout &lt;&lt; s.flags() &lt;&lt; "\n\n";
+
+    std::vector&lt;int&gt; v;
+
+   // 因为第二模板形参有默认值，故能以花括号初始化式列表为第二实参。
+   // 下方表达式等价于 std::exchange(v, std::vector&lt;int&gt;{1, 2, 3, 4});
+
+    std::exchange(v, {1, 2, 3, 4});
+
+    std::copy(begin(v), end(v), std::ostream_iterator&lt;int&gt;(std::cout, ", "));
+
+    std::cout &lt;&lt; "\n\n";
+
+    void (*fun)();
+
+   // 模板形参的默认值亦使得能以通常函数为第二实参。
+   // 下方表达式等价于 std::exchange(fun, static_cast&lt;void(*)()&gt;(f))
+    std::exchange(fun, f);
+    fun();
+
+    std::cout &lt;&lt; "\n\n斐波那契数列: ";
+    for (int a{0}, b{1}; a &lt; 100; a = std::exchange(b, a + b))
+        std::cout &lt;&lt; a &lt;&lt; ", ";
+    std::cout &lt;&lt; "...\n";
+}
+|output=
+0
+0
+12
+
+1, 2, 3, 4,
+
+f()
+
+斐波那契数列: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, ...
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc swap}}
+{{dsc inc|cpp/atomic/dsc atomic_exchange}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

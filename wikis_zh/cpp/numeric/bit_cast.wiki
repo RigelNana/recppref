@@ -1,0 +1,134 @@
+{{cpp/title|bit_cast}}
+{{cpp/utility/bit/navbar}}
+{{ddcl|since=c++20|header=bit|
+template&lt; class To, class From &gt;
+constexpr To bit_cast( const From&amp; from ) noexcept;
+}}
+
+通过转译 {{tt|from}} 的对象表示获得 {{tt|To}} 类型的值。返回的 {{tt|To}} 对象[[cpp/language/object#对象表示与值表示|值表示]]中的每位都等于 {{tt|from}} 的[[cpp/language/object#对象表示与值表示|对象表示]]中的对应位。未指定返回的 {{tt|To}} 对象中的填充位的值。
+
+如果没有对应所产生的值表示的 {{tt|To}} 类型值，那么行为未定义。如果有多个这种值，那么未指定产生哪个值。
+
+以下情况下，结果的值表示中的某个位''不确定''：
+* 这个位不对应 {{tt|From}} 的值表示中的位（即它对应填充位），或
+* 这个位{{rev inl|until=c++26|所在的对象}}{{rev inl|since=c++26|的最小外围对象}}不在它的[[cpp/language/lifetime|生存期]]内，或
+* 这个位具有[[cpp/language/default initialization#不确定值和错误值|不确定值]]。
+
+{{rrev|since=c++26|
+结果的值表示中的某个位在它对应的位的最小外围对象具有[[cpp/language/default initialization#不确定值和错误值|错误值]]的情况下''错误''。
+}}
+
+
+{{rev begin}}
+{{rev|until=c++26|
+对于结果的值表示中的每个不确定位，含有该位的最小对象具有不确定值；如果该对象不具有[[cpp/language/default initialization#特殊情况|未初始化友好类型]]，那么行为未定义。
+
+其他情况下结果不含不确定值。
+}}
+{{rev|since=c++26|
+对于结果的值表示中的每个不确定位或错误位 {{c|b}}，给定 {{c|u}} 为包围 {{c|b}} 的最小对象：
+* 如果 {{c|u}} 具有[[cpp/language/default initialization#特殊情况|未初始化友好类型]]，那么 {{c|u}} 在它的值表示中存在不确定位的情况下具有不确定值，否则具有错误值。
+* 否则，如果 {{c|b}} 不确定，那么行为未定义。
+* 否则，行为[[cpp/language/ub|错误]]，并且结果与上述一致。
+
+其他情况下结果不含不确定值或错误值。
+}}
+{{rev end}}
+
+{{cpp/enable if| {{c|1=sizeof(To) == sizeof(From)}} 且 {{tt|To}} 和 {{tt|From}} 两者都是{{named req|TriviallyCopyable}}类型}}。
+
+此函数模板为 {{c/core|constexpr}}，当且仅当 {{tt|To}}、{{tt|From}} 和 {{tt|To}} 及 {{tt|From}} 的所有子对象的类型都：
+* 不是联合体类型；
+* 不是指针类型；
+* 不是成员指针类型；
+* 不是 volatile 限定的类型；且
+* 没有引用类型的非静态数据成员。
+
+===参数===
+{{par begin}}
+{{par|from|返回值的位值源}}
+{{par end}}
+
+===返回值===
+具有如上所述值表示的 {{tt|To}} 类型的对象。
+
+===可能的实现===
+要实现 {{tt|std::bit_cast}}，如果忽略 {{lt|cpp/language/constexpr}}，需要翻译对象表示为另一类型的对象表示时，可以使用 {{lc|std::memcpy}}：
+
+{{source|1=
+template &lt;class To, class From&gt;
+typename std::enable_if_t&lt;
+    sizeof(To) == sizeof(From) &amp;&amp;
+    std::is_trivially_copyable_v&lt;From&gt; &amp;&amp;
+    std::is_trivially_copyable_v&lt;To&gt;,
+    To&gt;
+// constexpr 支持需要编译器魔法
+bit_cast(const From&amp; src) noexcept
+{
+    static_assert(std::is_trivially_constructible_v&lt;To&gt;,
+        "此实现还要求目标类型可平凡默认构造");
+    
+    To dst;
+    std::memcpy(&amp;dst, &amp;src, sizeof(To));
+    return dst;
+}
+}}
+
+而实现 {{lt|cpp/language/constexpr}} 可以尝试使用gcc内建函数：
+{{source|1=
+template &lt;class To, class From&gt;
+typename std::enable_if_t&lt;
+    sizeof(To) == sizeof(From) &amp;&amp;
+    std::is_trivially_copyable_v&lt;From&gt; &amp;&amp;
+    std::is_trivially_copyable_v&lt;To&gt;,
+    To&gt;
+constexpr bit_cast(const From&amp; from) noexcept
+{
+    return __builtin_bit_cast(To, from);
+}
+}}
+
+===注解===
+因为[[cpp/language/reinterpret_cast#类型别名使用|类型别名使用规则]]，大多数情况下不应该用指针或引用类型间的 {{ltt|cpp/language/reinterpret_cast}}（或等价的[[cpp/language/explicit_cast|显式转型]]）转译对象表示。
+
+{{feature test macro|__cpp_lib_bit_cast|std=C++20|value=201806L|[[#Top|{{tt|std::bit_cast}}]]}}
+
+===示例===
+{{example|code=
+#include &lt;bit&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+constexpr double f64v = 19880124.0;
+constexpr auto u64v = std::bit_cast&lt;std::uint64_t&gt;(f64v);
+static_assert(std::bit_cast&lt;double&gt;(u64v) == f64v); // 往返测试
+
+constexpr std::uint64_t u64v2 = 0x3fe9000000000000ull;
+constexpr auto f64v2 = std::bit_cast&lt;double&gt;(u64v2);
+static_assert(std::bit_cast&lt;std::uint64_t&gt;(f64v2) == u64v2); // 往返测试
+
+int main()
+{
+    std::cout
+        &lt;&lt; "std::bit_cast&lt;std::uint64_t&gt;(" &lt;&lt; std::fixed &lt;&lt; f64v &lt;&lt; ") == 0x"
+        &lt;&lt; std::hex &lt;&lt; u64v &lt;&lt; '\n'
+        &lt;&lt; "std::bit_cast&lt;double&gt;(0x" &lt;&lt; std::hex &lt;&lt; u64v2 &lt;&lt; ") == "
+        &lt;&lt; std::fixed &lt;&lt; f64v2 &lt;&lt; '\n';
+}
+|p=true
+|output=
+std::bit_cast&lt;std::uint64_t&gt;(19880124.000000) == 0x4172f58bc0000000
+std::bit_cast&lt;double&gt;(0x3fe9000000000000) == 0.781250
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2482|paper=P1272R4|std=C++20|before=在涉及不确定位时未指定 UB 是否会出现|after=已指定}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc start_lifetime_as}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

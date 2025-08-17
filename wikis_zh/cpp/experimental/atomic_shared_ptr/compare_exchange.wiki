@@ -1,0 +1,73 @@
+{{cpp/experimental/atomic_shared_ptr/title|compare_exchange_strong|compare_exchange_weak}}
+{{cpp/experimental/concurrency/atomic_shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl|num=1|1=
+bool compare_exchange_weak( std::shared_ptr&lt;T&gt;&amp; expected, const std::shared_ptr&lt;T&gt;&amp; desired,
+                            std::memory_order success, std::memory_order failure ) noexcept;
+}}
+{{dcl|num=2|1=
+bool compare_exchange_weak( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt;&amp;&amp; desired,
+                            std::memory_order success, std::memory_order failure ) noexcept;
+}}
+{{dcl|num=3|1=
+bool compare_exchange_weak( std::shared_ptr&lt;T&gt;&amp; expected, const std::shared_ptr&lt;T&gt;&amp; desired,
+                            std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=4|1=
+bool compare_exchange_weak( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt;&amp;&amp; desired,
+                            std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=5|1=
+bool compare_exchange_strong( std::shared_ptr&lt;T&gt;&amp; expected, const std::shared_ptr&lt;T&gt;&amp; desired,
+                              std::memory_order success, std::memory_order failure ) noexcept;
+}}
+{{dcl|num=6|1=
+bool compare_exchange_strong( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt;&amp;&amp; desired,
+                              std::memory_order success, std::memory_order failure ) noexcept;
+}}
+{{dcl|num=7|1=
+bool compare_exchange_strong( std::shared_ptr&lt;T&gt;&amp; expected, const std::shared_ptr&lt;T&gt;&amp; desired,
+                              std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl|num=8|1=
+bool compare_exchange_strong( std::shared_ptr&lt;T&gt;&amp; expected, std::shared_ptr&lt;T&gt;&amp;&amp; desired,
+                              std::memory_order order = std::memory_order_seq_cst ) noexcept;
+}}
+{{dcl end}}
+
+原子地比较 {{c|*this}} 中的底层 {{tt|shared_ptr}} 和 {{c|expected}}，且若二者等价，则以 {{c|desired}} 取代前者（实施读修改写操作）。否则，加载 {{c|*this}} 存储的实际值到 {{c|expected}} 中（实施加载操作）。此替换如同以 {{tt|shared_ptr}} 的复制或移动赋值运算符来进行（选择合适者）。
+
+当且仅当两个 {{tt|shared_ptr}} 存储相同的指针值且共享所有权时，二者等价。
+
+读修改写操作和加载操作的内存模型分别为 {{c|success}} 和 {{c|failure}}。对于重载 {{v|3,4,7,8}}，{{c|order}} 同时用于读修改写和加载操作，但当 {{c|1=order == std::memory_order_acq_rel}} 或 {{c|1=order == std::memory_order_release}} 时，分别在加载操作使用 {{lc|std::memory_order_acquire}} 和 {{lc|std::memory_order_relaxed}}。
+
+弱版本 {{v|1-4}} 可能发生假性失败。
+
+===参数===
+{{par begin}}
+{{par|expected|到预期在原子对象中找到的值的引用}}
+{{par|desired|若符合预期则将在原子对象中存储的值}}
+{{par|success|当比较成功时用于读修改写操作的内存同步定序。允许任何值}}
+{{par|failure|当比较失败时用于加载操作的内存同步定序。不能是 {{lc|std::memory_order_release}} 或 {{lc|std::memory_order_acq_rel}} 且不能指定强于 {{c|success}} 的定序}}
+{{par|order|用于两个操作的内存同步定序}}
+{{par end}}
+
+===返回值===
+若改变了底层原子值则为 {{c|true}}，否则为 {{c|false}}。
+
+===说明===
+{{cpp/experimental/atomic_shared_ptr/atomic remarks}}
+
+若比较交换操作返回 {{c|true}}，则在原子更新步骤后不会访问 {{c|expected}}。若其返回 {{c|false}}，则以所尝试的原子更新中从 {{tt|atomic_shared_ptr}} 中读取的值更新 {{c|expected}}。对应于向 {{c|expected}} 写入的 {{tt|use_count}} 更新是原子操作的一部分，但向 {{c|expected}} 写入自身则不必是原子操作的一部分。
+
+对于重载 {{v|1,3,5,7}}，在原子更新步骤后不会访问 {{c|desired}}。
+
+对于重载 {{v|2,4,6,8}}，仅当比较交换操作返回 {{c|true}} 时才从 {{c|desired}} 移动；此移动在原子更新步骤之后发生。
+
+===注解===
+允许函数的弱形式 {{v|1-4}} 发生假性失败，就是说，即使 {{c|*this}} 和 {{c|expected}} 等价时其表现如同它们不等价。在循环中使用比较交换操作时，弱版本在一些平台上可能产生更好的性能。
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared ptr/dsc atomic}}
+{{dsc end}}

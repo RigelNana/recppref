@@ -1,0 +1,136 @@
+{{title|{{tt|alignas}} 说明符 {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+指定类型或对象的{{rlp|object#对齐|对齐要求}}。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|alignas(}} {{spar|表达式}} {{ttb|)}}}}
+{{sdsc|{{ttb|alignas(}} {{spar|类型标识}} {{ttb|)}}}}
+{{sdsc|{{ttb|alignas(}} {{spar|包名}} {{ttb|...}} {{ttb|)}}}}
+{{sdsc end}}
+
+@1@ {{spar|表达式}} 必须是求值为零或合法的{{rlps|object#对齐}}或扩展对齐的{{rlps|constant expression#整数常量表达式}}。
+@2@ 等价于 {{box|{{c/core|alignas(alignof(}} {{spar tt|类型标识}} {{c/core|))}}}}。
+@3@ 等价于对同一说明应用多个 alignas 说明符，逐个对应于{{rlp|parameter pack|形参包}}的各个成员，形参包可以是类型或非类型形参包。
+
+===解释===
+{{c|alignas}} 说明符可用于：
+* {{rlp|class|类}}的声明或定义；
+* 非位域类数据成员的声明；
+* 变量声明，但它不能应用于下列内容：
+** 函数形参；
+** catch 子句的异常形参。
+
+这种声明所声明的对象或类型的{{rlp|object#对齐|对齐要求}}将等于用于该声明的所有 {{tt|alignas}} 说明符中最严格（最大）的非零{{spar sep|表达式}}，除非这会削弱类型的自然对齐。
+
+如果某个声明上的最严格（最大）{{tt|alignas}} 对齐要求比当它没有任何 {{tt|alignas}} 说明符的情况下本应有的对齐更弱（即弱于其原生对齐，或弱于同一对象或类型的另一声明上的 {{tt|alignas}}），那么程序非良构：
+{{source|
+struct alignas(8) S {};
+struct alignas(1) U { S s; }; // 错误：如果没有 alignas(1) 那么 U 的对齐将会是 8
+}}
+
+无效的非零对齐，例如 {{c|alignas(3)}} 非良构。
+
+同一声明上，比其他 {{c|alignas}} 弱的有效的非零对齐被忽略。
+
+始终忽略 {{c|alignas(0)}}。
+
+===注解===
+按 ISO C11 标准，C 语言有 {{c|_Alignas}} 关键词，并于头文件 {{ltt|c/types|&lt;stdalign.h&gt;}} 中将 {{c|alignas}} 定义为展开成该关键词的预处理器宏。
+
+在 C++ 中这是关键词，且
+{{rev begin}}
+{{rev|until=c++20|
+头文件 {{ltt|cpp/header/cstdalign|&lt;stdalign.h&gt;}} 与 {{header|cstdalign}} 并不定义这个宏。不过它们仍定义宏常量 {{c|__alignas_is_defined}}。
+}}
+{{rev|since=c++20|
+头文件 {{ltt|cpp/header/cstdalign|&lt;stdalign.h&gt;}} 并不定义这个宏。不过它仍定义宏常量 {{c|__alignas_is_defined}}。
+}}
+{{rev end}}
+
+===关键词===
+{{ltt|cpp/keyword/alignas}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+
+// 每个 struct_float 类型对象都将被对齐到 alignof(float) 边界
+// （通常为 4）：
+struct alignas(float) struct_float
+{
+    // 定义在此
+};
+
+// sse_t 类型的每个对象将对齐到 32 字节边界
+struct alignas(32) sse_t
+{
+    float sse_data[4];
+};
+
+int main()
+{
+    struct default_aligned
+    {
+        float data[4];
+    } a, b, c;
+    sse_t x, y, z;
+
+    std::cout
+        &lt;&lt; "alignof(struct_float) = " &lt;&lt; alignof(struct_float) &lt;&lt; '\n'
+        &lt;&lt; "sizeof(sse_t) = " &lt;&lt; sizeof(sse_t) &lt;&lt; '\n'
+        &lt;&lt; "alignof(sse_t) = " &lt;&lt; alignof(sse_t) &lt;&lt; '\n'
+        &lt;&lt; std::hex &lt;&lt; std::showbase
+        &lt;&lt; "&amp;a: " &lt;&lt; &amp;a &lt;&lt; "\n"
+           "&amp;b: " &lt;&lt; &amp;b &lt;&lt; "\n"
+           "&amp;c: " &lt;&lt; &amp;c &lt;&lt; "\n"
+           "&amp;x: " &lt;&lt; &amp;x &lt;&lt; "\n"
+           "&amp;y: " &lt;&lt; &amp;y &lt;&lt; "\n"
+           "&amp;z: " &lt;&lt; &amp;z &lt;&lt; '\n';
+}
+|p=true
+|output=
+alignof(struct_float) = 4
+sizeof(sse_t) = 32
+alignof(sse_t) = 32
+&amp;a: 0x7fffcec89930
+&amp;b: 0x7fffcec89940
+&amp;c: 0x7fffcec89950
+&amp;x: 0x7fffcec89960
+&amp;y: 0x7fffcec89980
+&amp;z: 0x7fffcec899a0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1437|std=C++11|before=alignas 可以在别名声明中使用|after=已禁止}}
+{{dr list item|wg=cwg|dr=2354|std=C++11|before=alignas 可以用于枚举声明|after=已禁止}}
+{{dr list end}}
+
+===References===
+{{ref std c++23}}
+{{ref std|section=9.12.4|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.12.3|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.6.3|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.6.4|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.6.4|title=Carries dependency attribute|id=dcl.attr.depend}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignof}}
+{{dsc inc|cpp/types/dsc alignment_of}}
+{{dsc see c|c/language/_Alignas|_Alignas, alignas}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

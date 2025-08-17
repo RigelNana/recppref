@@ -1,0 +1,390 @@
+{{cpp/title|memory_order}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl rev multi
+|since1=c++11|dcl1=
+enum memory_order
+{
+    memory_order_relaxed,
+    memory_order_consume,
+    memory_order_acquire,
+    memory_order_release,
+    memory_order_acq_rel,
+    memory_order_seq_cst
+};
+|since2=c++20|dcl2=
+enum class memory_order : /* 未指明 */
+{
+    relaxed, consume, acquire, release, acq_rel, seq_cst
+};
+inline constexpr memory_order memory_order_relaxed = memory_order::relaxed;
+inline constexpr memory_order memory_order_consume = memory_order::consume;
+inline constexpr memory_order memory_order_acquire = memory_order::acquire;
+inline constexpr memory_order memory_order_release = memory_order::release;
+inline constexpr memory_order memory_order_acq_rel = memory_order::acq_rel;
+inline constexpr memory_order memory_order_seq_cst = memory_order::seq_cst;
+}}
+{{dcl end}}
+
+{{cpp/atomic/memory-order-intro|cpp}}
+
+===常量===
+{{dsc begin}}
+{{dsc header|atomic}}
+{{dsc hitem|名称|含义}}
+{{cpp/atomic/memory-order-constants|cpp}}
+{{dsc end}}
+
+===正式描述===
+线程间同步和内存定序决定了表达式的''求值'' 和''副作用'' 如何在不同的执行线程间排序。它们用下列术语定义：
+
+====先序于====
+在同一线程中，求值 A 可以''先序于''求值 B，如[[cpp/language/eval order|求值顺序]]中所描述。
+
+{{rrev|until=c++26|
+====携带依赖====
+在同一线程中，若下列任一为真，则''先序于''求值 B 的求值 A 可能也会将依赖带入 B（即 B 依赖于 A）
+@1@A 的值被用作 B 的运算数，'''除了'''
+:@a@B 是对 {{lc|std::kill_dependency}} 的调用。
+:@b@A 是内建 {{c|&amp;&amp;}}、{{c|{{!!}}}}、{{c|?:}} 或 {{c|,}} 运算符的左运算数。
+@2@A 写入标量对象 M，B 从 M 读取。
+@3@A 将依赖携带入另一求值 X，而 X 将依赖携带入 B。
+}}
+
+====修改顺序====
+对一个特定的原子变量的修改，以限定于此原子变量的单独全序进行。
+
+对所有原子操作保证下列四个要求：
+@1@ '''写写连贯'''：若修改某原子对象 M 的求值 A（写操作）''先发生于'' 修改 M 的求值 B，则 A 在 M 的''修改顺序'' 中早于 B 出现。
+@2@ '''读读连贯'''：若某原子对象 M 的值计算 A（读操作）''先发生于'' 对 M 的值计算 B，且 A 的值来自对 M 的写操作 X，则 B 的值要么是 X 所存储的值，要么是在 M 的''修改顺序'' 中后于 X 出现的 M 上的副作用 Y 所存储的值。
+@3@ '''读写连贯'''：若某原子对象 M 的值计算 A（读操作）''先发生于'' M 上的操作 B（写操作），则 A 的值来自 M 的''修改顺序'' 中早于 B 出现的副作用 X （写操作）。
+@4@ '''写读连贯'''：若原子对象 M 上的副作用 X（写操作）''先发生于'' M 的值计算 B（读操作），则求值 B 应从 X 或从 M 的''修改顺序'' 中后随 X 的副作用 Y 取得其值。
+
+====释放序列====
+在原子对象 M 上执行一次''释放操作'' A 之后，M 的修改顺序的最长连续子序列由下列内容组成：
+{{rrev|until=c++20|
+@1@ 由执行 A 的同一线程所执行的写操作。
+}}
+@2@ 任何线程对 M 的原子的读-修改-写操作。
+
+被称为''以 A 为首的释放序列''。
+
+====同步于====
+如果在线程 A 上的一个原子存储是''释放操作''，在线程 B 上的对相同变量的一个原子加载是''获得操作''，且线程 B 上的加载读取由线程 A 上的存储写入的值，则线程 A 上的存储''同步于''线程 B 上的加载。
+
+此外，某些库调用也可能定义为同步于其它线程上的其它库调用。
+
+{{rrev|until=c++26|
+====依赖先序于====
+在线程间，若下列任一为真，则求值 A ''依赖先序于'' 求值 B
+@1@ A 在某原子对象 M 上进行''释放操作''，而不同的线程中，B 在同一原子对象 M 上进行''消费操作''，而 B 读取 A {{rev inl|until=c++20|所引领的释放序列的任何部分}}所写入的值。
+@2@ A 依赖先序于 X 且 X 携带依赖到 B。
+}}
+
+====线程间先发生于====
+在线程间，若下列任一为真，则求值 A ''线程间先发生于'' 求值 B
+@1@ A ''同步于'' B。
+@2@ A ''依赖先序于'' B。
+@3@ A ''同步于'' 某求值 X ，而 X ''先序于'' B。
+@4@ A ''先序于'' 某求值 X ，而 X ''线程间先发生于'' B。
+@5@ A ''线程间先发生于'' 某求值 X ，而 X ''线程间先发生于'' B。
+
+{{rev begin}}
+{{rev|until=c++26|
+====先发生于====
+无关乎线程，若下列任一为真，则求值 A ''先发生于'' 求值 B：
+@1@ A ''先序于'' B。
+@2@ A ''线程间先发生于'' B。
+
+要求实现确保''先发生于'' 关系是非循环的，若有必要则引入额外的同步（若引入消费操作，它才可能为必要，见 [http://www.cl.cam.ac.uk/~pes20/cpp/popl085ap-sewell.pdf Batty 等]）。
+
+若一次求值修改一个内存位置，而其他求值读取或修改同一内存位置，且至少一个求值不是原子操作，则程序的行为未定义（程序有[[cpp/language/multithread|数据竞争]]），除非这两个求值之间存在''先发生于'' 关系。
+
+{{rrev|since=c++20|
+====简单先发生于====
+无关乎线程，若下列之一为真，则求值 A ''简单先发生于'' 求值 B：
+@1@ A ''先序于'' B
+@2@ A ''同步于'' B
+@3@ A ''简单先发生于'' X，而 X ''简单先发生于'' B
+
+注：不计消费操作，则''简单先发生于'' 与''强先发生于'' 关系是相同的。
+}}
+}}
+{{rev|since=c++26|
+====先发生于====
+不管是何线程，若下列之一为真，则求值 A ''先发生于'' 求值 B：
+@1@ A ''先序于'' B
+@2@ A ''同步于'' B
+@3@ A ''先发生于'' X，而 X ''先发生于'' B
+}}
+{{rev end}}
+
+====强先发生于====
+无关乎线程，若下列之一为真，则求值 A ''强先发生于'' 求值 B ：
+{{rrev multi|until1=c++20
+|rev1=
+@1@ A ''先序于'' B
+@2@ A ''同步于'' B
+@3@ A ''强先发生于'' X，而 X ''强先发生于'' B
+|rev2=
+@1@ A ''先序于'' B
+@2@ A ''同步于'' B，且 A 与 B 均为序列一致的原子操作
+@3@ A ''先序于'' X，X ''{{rev inl|until=c++26|简单}}先发生于'' Y，而 Y ''先序于'' B
+@4@ A ''强先发生于'' X，而 X ''强先发生于'' B
+
+注：非正式而言，若 A ''强先发生于'' B，则在所有环境中 A 均显得在 B 之前得到求值。
+{{rrev|until=c++26|
+注：''强先发生于''排除消费操作。
+}}
+}}
+
+====可见副作用====
+若下列皆为真，则标量 M 上的副作用 A（写入）相对于 M 上的值计算（读取）''可见''：
+@1@ A ''先发生于'' B
+@2@ 没有其他对 M 的副作用 X 满足 A ''先发生于'' X 且 X ''先发生于'' B
+
+如果副作用 A 相对于值计算 B 可见，那么按 ''修改顺序'' 排列的 M 的且不 ''先发生于'' B 的最长连续副作用子集，称为''副作用的可见序列''（由 B 确定的 M 值将是这些副作用之一存储的值）。
+
+注意：线程间同步可归结为避免数据竞争（通过建立先发生于关系），及定义在何种条件下哪些副作用成为可见。
+
+====消费操作====
+带 {{tt|memory_order_consume}} 或更强标签的原子加载是消费操作。注意 {{lc|std::atomic_thread_fence}} 会施加比消费操作更强的同步要求。
+
+====获得操作====
+带 {{tt|memory_order_acquire}} 或更强标签的原子加载是获得操作。{{named req|Mutex|互斥}}上的 {{tt|lock()}} 操作亦为获得操作。注意 {{lc|std::atomic_thread_fence}} 会施加比获得操作更强的同步要求。
+
+====释放操作====
+带 {{tt|memory_order_release}} 或更强标签的原子存储是释放操作。{{named req|Mutex|互斥}}上的 {{tt|unlock()}} 操作亦为释放操作。注意 {{lc|std::atomic_thread_fence}} 会施加比释放操作更强的同步要求。
+
+===解释===
+
+====宽松定序====
+{{cpp/atomic/relaxed|cpp}}
+
+{{example
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+std::atomic&lt;int&gt; cnt = {0};
+
+void f()
+{
+    for (int n = 0; n &lt; 1000; ++n)
+        cnt.fetch_add(1, std::memory_order_relaxed);
+}
+
+int main()
+{
+    std::vector&lt;std::thread&gt; v;
+    for (int n = 0; n &lt; 10; ++n)
+        v.emplace_back(f);
+    for (auto&amp; t : v)
+        t.join();
+    std::cout &lt;&lt; "最终计数器值为 " &lt;&lt; cnt &lt;&lt; '\n';
+}
+|output=
+最终计数器值为 10000
+}}
+
+====释放-获取定序====
+{{cpp/atomic/release-acquire|cpp}}
+
+{{example
+|code=
+#include &lt;atomic&gt;
+#include &lt;cassert&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+ 
+std::atomic&lt;std::string*&gt; ptr;
+int data;
+ 
+void producer()
+{
+    std::string* p = new std::string("Hello");
+    data = 42;
+    ptr.store(p, std::memory_order_release);
+}
+ 
+void consumer()
+{
+    std::string* p2;
+    while (!(p2 = ptr.load(std::memory_order_acquire)))
+        ;
+    assert(*p2 == "Hello"); // 绝无问题
+    assert(data == 42); // 绝无问题
+}
+ 
+int main()
+{
+    std::thread t1(producer);
+    std::thread t2(consumer);
+    t1.join(); t2.join();
+}
+|output=
+}}
+
+{{example
+|下例演示三个线程间传递性的释放获得顺序，使用一个释放序列
+|code=
+#include &lt;atomic&gt;
+#include &lt;cassert&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+std::vector&lt;int&gt; data;
+std::atomic&lt;int&gt; flag = {0};
+
+void thread_1()
+{
+    data.push_back(42);
+    flag.store(1, std::memory_order_release);
+}
+
+void thread_2()
+{
+    int expected=1;
+    // memory_order_relaxed 是可以的，因为这是一个 RMW 操作
+    // 而 RMW（以任意定序）跟在释放之后将组成释放序列
+    while (!flag.compare_exchange_strong(expected, 2, std::memory_order_relaxed))
+    {
+        expected = 1;
+    }
+}
+
+void thread_3()
+{
+    while (flag.load(std::memory_order_acquire) &lt; 2)
+        ;
+    // 如果我们从 atomic flag 中读到 2，将看到 vector 中储存 42
+    assert(data.at(0) == 42); //决不出错
+}
+
+int main()
+{
+    std::thread a(thread_1);
+    std::thread b(thread_2);
+    std::thread c(thread_3);
+    a.join(); b.join(); c.join();
+}
+|output=
+}}
+
+====释放-消费定序====
+{{rrev|until=c++26|
+{{cpp/atomic/release-consume|cpp}}
+}}
+{{rev begin}}
+{{rev|since=c++17|until=c++26|
+释放消费定序的规范正在修订中，而且暂时不鼓励使用 {{tt|memory_order_consume}}。
+}}
+{{rev|since=c++26|
+释放消费定序的效果与释放获取定序相同，且已被弃用。
+}}
+{{rev end}}
+
+{{example
+|此示例演示用于指针中介的发布的依赖定序同步：{{tt|int data}} 不由数据依赖关系关联到指向字符串的指针，从而其值在消费者中未定义。
+|code=
+#include &lt;atomic&gt;
+#include &lt;cassert&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::atomic&lt;std::string*&gt; ptr;
+int data;
+
+void producer()
+{
+    std::string* p = new std::string("Hello");
+    data = 42;
+    ptr.store(p, std::memory_order_release);
+}
+
+void consumer()
+{
+    std::string* p2;
+    while (!(p2 = ptr.load(std::memory_order_consume)))
+        ;
+    assert(*p2 == "Hello"); // 绝无出错： *p2 从 ptr 携带依赖
+    assert(data == 42); // 可能也可能不会出错： data 不从 ptr 携带依赖
+}
+
+int main()
+{
+    std::thread t1(producer);
+    std::thread t2(consumer);
+    t1.join(); t2.join();
+}
+|output=
+}}
+
+
+====序列一致定序====
+{{cpp/atomic/sequentially-consistent|cpp}}
+
+{{example
+|此示例演示序列一致定序为必要的场合。任何其他定序都可能触发 assert，因为可能令线程 {{tt|c}} 和 {{tt|d}} 观测到原子对象 {{tt|x}} 和 {{tt|y}} 以相反顺序更改。
+|code=
+#include &lt;atomic&gt;
+#include &lt;cassert&gt;
+#include &lt;thread&gt;
+
+std::atomic&lt;bool&gt; x = {false};
+std::atomic&lt;bool&gt; y = {false};
+std::atomic&lt;int&gt; z = {0};
+
+void write_x()
+{
+    x.store(true, std::memory_order_seq_cst);
+}
+
+void write_y()
+{
+    y.store(true, std::memory_order_seq_cst);
+}
+
+void read_x_then_y()
+{
+    while (!x.load(std::memory_order_seq_cst))
+        ;
+    if (y.load(std::memory_order_seq_cst))
+        ++z;
+}
+
+void read_y_then_x()
+{
+    while (!y.load(std::memory_order_seq_cst))
+        ;
+    if (x.load(std::memory_order_seq_cst))
+        ++z;
+}
+
+int main()
+{
+    std::thread a(write_x);
+    std::thread b(write_y);
+    std::thread c(read_x_then_y);
+    std::thread d(read_y_then_x);
+    a.join(); b.join(); c.join(); d.join();
+    assert(z.load() != 0);  //决不发生
+}
+|output=
+}}
+
+===与 {{co|volatile}} 的关系===
+{{cpp/atomic/atomic-vs-volatile|cpp}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/atomic/memory order|nomono=true}}
+{{dsc end}}
+
+===外部链接===
+{{cpp/atomic/external-links|cpp}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

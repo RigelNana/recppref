@@ -1,0 +1,73 @@
+{{cpp/ranges/title|viewable_range}}
+{{cpp/ranges/navbar}}
+
+{{ddcl|header=ranges|since=c++20|1=
+template&lt; class T &gt;
+concept viewable_range =
+    ranges::range&lt;T&gt; &amp;&amp;
+    ((ranges::view&lt;std::remove_cvref_t&lt;T&gt;&gt; &amp;&amp;
+      std::constructible_from&lt;std::remove_cvref_t&lt;T&gt;, T&gt;) {{!!}}
+     (!ranges::view&lt;std::remove_cvref_t&lt;T&gt;&gt; &amp;&amp;
+      (std::is_lvalue_reference_v&lt;T&gt; {{!!}}
+       (std::movable&lt;std::remove_reference_t&lt;T&gt;&gt; &amp;&amp; !/*is-initializer-list*/&lt;T&gt;))));
+}}
+{{tt|viewable_range}} 概念是 {{lconcept|range}} 的精化，它描述能通过 {{ltt|cpp/ranges/all_view|views::all}} 转换成 {{lconcept|view}} 的范围。
+
+当且仅当 {{c|std::remove_cvref_t&lt;T&gt;}} 为 {{lc|std::initializer_list}} 的特化时，常量 {{c|/*is-initializer-list*/&lt;T&gt;}} 为 {{c|true}}。
+
+===示例===
+{{example
+|code=
+#include &lt;ranges&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct valid_result {};
+struct invalid_result {};
+
+template &lt;typename T&gt;
+concept valid_viewable_range = std::same_as&lt;T, valid_result&gt;;
+
+template &lt;typename T&gt;
+concept invalid_viewable_range = std::same_as&lt;T, invalid_result&gt;;
+
+auto test_viewable_range(std::ranges::viewable_range auto &amp;&amp;) -&gt; valid_result;
+auto test_viewable_range(auto&amp;&amp;) -&gt; invalid_result;
+
+int main()
+{
+    auto il = {1, 2, 3};
+    int arr []{1, 2, 3};
+    std::vector vec{1, 2, 3};
+    std::ranges::ref_view r{arr};
+    std::ranges::owning_view o{std::string("Hello")};
+
+    static_assert(requires {
+        { test_viewable_range(il) } -&gt; valid_viewable_range;
+        { test_viewable_range(std::move(il)) } -&gt; invalid_viewable_range;
+        { test_viewable_range(arr) } -&gt; valid_viewable_range;
+        { test_viewable_range(std::move(arr)) } -&gt; invalid_viewable_range;
+        { test_viewable_range(vec) } -&gt; valid_viewable_range;
+        { test_viewable_range(std::move(vec)) } -&gt; valid_viewable_range;
+        { test_viewable_range(r) } -&gt; valid_viewable_range;
+        { test_viewable_range(std::move(r)) } -&gt; valid_viewable_range;
+        { test_viewable_range(o) } -&gt; invalid_viewable_range;
+        { test_viewable_range(std::move(o)) } -&gt; valid_viewable_range;
+        { test_viewable_range(std::ranges::ref_view(o)) } -&gt; valid_viewable_range;
+    });
+}
+
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3481|std=C++20|before={{tt|viewable_range}} 曾接受仅移动视图的左值|after=拒绝}}
+{{dr list item|paper=P2415R2|std=C++20|before={{tt|viewable_range}} 仅接受作为 {{lconcept|borrowed_range}} 的非 {{lconcept|view}} 右值|after=接受更多类型}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc all_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

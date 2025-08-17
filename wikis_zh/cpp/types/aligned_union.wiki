@@ -1,0 +1,106 @@
+{{cpp/title|aligned_union}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|deprecated=c++23|1=
+template&lt; std::size_t Len, class... Types &gt;
+struct aligned_union;
+}}
+{{dcl end}}
+
+提供嵌套类型 {{tt|type}}，它是[[cpp/named req/TrivialType|平凡的]][[cpp/named req/StandardLayoutType|标准布局类型]]，且其大小和对齐适合用作任何列于 {{tt|Types}} 的类型的一个对象的未初始化存储。存储的大小至少为 {{tt|Len}}。{{lc|std::aligned_union}} 亦确定所有 {{tt|Types}} 中最严格（最大）的对齐要求，使之可用作常量 {{tt|alignment_value}}。
+
+若 {{c|1=sizeof...(Types) == 0}} 或若 {{tt|Types}} 中的任何类型不是完整对象类型，则行为未定义。
+
+是否支持任何[[cpp/language/object#对齐|扩展对齐]]是实现定义的。
+
+{{cpp/types/nospec}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|名称|定义}}
+{{dsc|{{tt|type}}|适用于存储来自 {{tt|Types}} 的任何类型的平凡兼标准布局类型}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|since=c++14|deprecated=c++23|1=
+template&lt; std::size_t Len, class... Types &gt;
+using aligned_union_t = typename aligned_union&lt;Len,Types...&gt;::type;
+}}
+{{dcl end}}
+
+===成员常量===
+{{dsc begin}}
+{{dsc mem sconst|alignment_value|所有 {{tt|Types}} 的最严格对齐|nolink=true}}
+{{dsc end}}
+
+===可能的实现===
+{{eq fun|1=
+#include &lt;algorithm&gt;
+
+template&lt;std::size_t Len, class... Types&gt;
+struct aligned_union
+{
+    static constexpr std::size_t alignment_value = std::max({alignof(Types)...});
+
+    struct type
+    {
+        alignas(alignment_value) char _s[std::max({Len, sizeof(Types)...})];
+    };
+};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    std::cout &lt;&lt; sizeof(std::aligned_union_t&lt;0, char&gt;) &lt;&lt; ' ' // 1
+              &lt;&lt; sizeof(std::aligned_union_t&lt;2, char&gt;) &lt;&lt; ' ' // 2
+              &lt;&lt; sizeof(std::aligned_union_t&lt;2, char[3]&gt;) &lt;&lt; ' ' // 3 (!)
+              &lt;&lt; sizeof(std::aligned_union_t&lt;3, char[4]&gt;) &lt;&lt; ' ' // 4
+              &lt;&lt; sizeof(std::aligned_union_t&lt;1, char, int, double&gt;) &lt;&lt; ' '    // 8
+              &lt;&lt; sizeof(std::aligned_union_t&lt;12, char, int, double&gt;) &lt;&lt; '\n'; // 16 (!)
+
+    using var_t = std::aligned_union&lt;16, int, std::string&gt;;
+
+    std::cout &lt;&lt; "var_t::alignment_value = " &lt;&lt; var_t::alignment_value &lt;&lt; '\n'
+              &lt;&lt; "sizeof(var_t::type) = " &lt;&lt; sizeof(var_t::type) &lt;&lt; '\n';
+
+    var_t::type aligned_storage;
+    int* int_ptr = new(&amp;aligned_storage) int(42); // 原位 new
+    std::cout &lt;&lt; "*int_ptr = " &lt;&lt; *int_ptr &lt;&lt; '\n';
+
+    std::string* string_ptr = new(&amp;aligned_storage) std::string("bar");
+    std::cout &lt;&lt; "*string_ptr = " &lt;&lt; *string_ptr &lt;&lt; '\n';
+    *string_ptr = "baz";
+    std::cout &lt;&lt; "*string_ptr = " &lt;&lt; *string_ptr &lt;&lt; '\n';
+    string_ptr-&gt;~basic_string();
+}
+|p=true &lt;!-- sizeof(std::string) 未指定 --&gt;
+|output=
+1 2 3 4 8 16
+var_t::alignment_value = 8
+sizeof(var_t::type) = 32
+*int_ptr = 42
+*string_ptr = bar
+*string_ptr = baz
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2979|std=C++11|before=不要求完整类型|after=要求完整类型}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc alignment_of}}
+{{dsc inc|cpp/types/dsc aligned_storage}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

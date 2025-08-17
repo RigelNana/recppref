@@ -1,0 +1,141 @@
+{{cpp/title|initializer_list}}
+{{cpp/utility/initializer_list/navbar}}
+{{petty|（勿与[[cpp/language/initializer list|成员初始化器列表]]混淆）}}
+{{ddcl|header=initializer_list|since=c++11|
+template&lt; class T &gt;
+class initializer_list;
+}}
+
+{{tt|std::initializer_list&lt;T&gt;}} 类型的对象是轻量代理对象，提供对 {{c/core|const T}} 类型对象数组的访问（可能分配于只读内存）。
+
+{{tt|std::initializer_list}} 对象在这些时候自动构造：
+* 用[[cpp/language/initialization|花括号包围的初始化器列表]]来[[cpp/language/list initialization|列表初始化]]一个对象，其中对应的构造函数接受一个 {{tt|std::initializer_list}} 形参。
+* 以花括号包围的初始化器列表为[[cpp/language/operator assignment#内建的直接赋值|赋值]]的右操作数，或[[cpp/language/overload_resolution#列表初始化中的隐式转换序列|函数调用实参]]，且对应的赋值运算符/函数接受 {{tt|std::initializer_list}} 形参。
+* 将花括号包围的初始化器列表绑定到 {{ltt|cpp/language/auto}}，包括在[[cpp/language/range-for|范围 for 循环]]中。
+
+{{tt|std::initializer_list}} 可以实现为一对指针或指针和长度。复制一个 {{tt|std::initializer_list}} 不会复制它对应的初始化器列表的[[cpp/language/list initialization#列表初始化 std::initializer_list|基底数组]]。
+
+如果声明了 {{tt|std::initializer_list}} 的显式（全）或部分特化，那么程序非良构。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|名字|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|reference}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|const_reference}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|size_type}}|{{lc|std::size_t}}}}
+{{dsc|{{tt|iterator}}|{{c/core|const T*}}}}
+{{dsc|{{tt|const_iterator}}|{{c/core|const T*}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/initializer_list/dsc constructor}}
+{{dsc h2|容量}}
+{{dsc inc|cpp/utility/initializer_list/dsc size}}
+{{dsc h2|迭代器}}
+{{dsc inc|cpp/utility/initializer_list/dsc begin}}
+{{dsc inc|cpp/utility/initializer_list/dsc end}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/utility/initializer_list/dsc begin2}}
+{{dsc inc|cpp/utility/initializer_list/dsc end2}}
+{{dsc h2|对 {{tt|std::initializer_list}} 重载的自由函数模板}}
+{{dsc inc|cpp/iterator/dsc rbegin}}
+{{dsc inc|cpp/iterator/dsc rend}}
+{{dsc inc|cpp/iterator/dsc empty}}
+{{dsc inc|cpp/iterator/dsc data}}
+{{dsc end}}
+
+===注解===
+{{feature test macro|std=C++11|value=200806L|__cpp_initializer_lists|[[cpp/language/list initialization|列表初始化]]与 {{tt|std::initializer_list}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+template&lt;class T&gt;
+struct S
+{
+    std::vector&lt;T&gt; v;
+    
+    S(std::initializer_list&lt;T&gt; l) : v(l)
+    {
+         std::cout &lt;&lt; "以包含 " &lt;&lt; l.size() &lt;&lt; " 个元素的列表构造\n";
+    }
+    
+    void append(std::initializer_list&lt;T&gt; l)
+    {
+        v.insert(v.end(), l.begin(), l.end());
+    }
+    
+    std::pair&lt;const T*, std::size_t&gt; c_arr() const
+    {
+        return {&amp;v[0], v.size()}; // 在 return 语句中进行复制列表初始化
+                                  // 没有使用 std::initializer_list
+    }
+};
+
+template&lt;typename T&gt;
+void templated_fn(T) {}
+
+int main()
+{
+    S&lt;int&gt; s = {1, 2, 3, 4, 5}; // 复制列表初始化
+    s.append({6, 7, 8});        // 在函数调用中进行列表初始化
+
+    std::cout &lt;&lt; "现在 vector 含有 " &lt;&lt; s.c_arr().second &lt;&lt; " 个 int：\n";
+
+    for (auto n : s.v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "用范围 for 遍历花括号初始化器列表：\n";
+
+    for (int x : {-1, -2, -3}) // 对 auto 的规则使得此范围 for 有效
+        std::cout &lt;&lt; x &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    auto al = {10, 11, 12}; // 对 auto 的特殊规则
+    
+    std::cout &lt;&lt; "绑定到 auto 的列表的 size() = " &lt;&lt; al.size() &lt;&lt; '\n';
+    auto la = al; // 顶层代理对象的浅层副本
+    assert(la.begin() == al.begin()); // 保证为真：后备数组相同
+
+    std::initializer_list&lt;int&gt; il{-3, -2, -1};
+    assert(il.begin()[2] == -1); // 注意替代了缺少的 operator[]
+    il = al; // 浅复制
+    assert(il.begin() == al.begin()); // 保证为真
+
+//  templated_fn({1, 2, 3}); // 编译错误！"{1, 2, 3}" 不是表达式，
+                             // 它没有类型，所以不能推导出 T
+    templated_fn&lt;std::initializer_list&lt;int&gt;&gt;({1, 2, 3}); // OK
+    templated_fn&lt;std::vector&lt;int&gt;&gt;({1, 2, 3});           // 同样 OK
+}
+|output=
+以包含 5 个元素的列表构造
+现在 vector 含有 8 个 int：
+1 2 3 4 5 6 7 8
+用范围 for 遍历花括号初始化器列表：
+-1 -2 -3 
+绑定到 auto 的列表的 size() = 3
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2129|std=C++11|before=可以显式特化或偏特化 {{tt|std::initializer_list}}|after=程序非良构}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc span}}
+{{dsc inc|cpp/string/dsc basic_string_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

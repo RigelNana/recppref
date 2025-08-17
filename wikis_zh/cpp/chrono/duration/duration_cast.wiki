@@ -1,0 +1,100 @@
+{{cpp/chrono/title|duration_cast}}
+{{cpp/chrono/duration/navbar}}
+{{ddcl|since=c++11|header=chrono|
+template&lt; class ToDuration, class Rep, class Period &gt;
+constexpr ToDuration duration_cast( const std::chrono::duration&lt;Rep, Period&gt;&amp; d );
+}}
+
+将 {{lc|std::chrono::duration}} 转换成不同类型 {{tt|ToDuration}} 的时长。
+
+只有 {{tt|ToDuration}} 是 {{lc|std::chrono::duration}} 的特化的情况下，此函数才会参与重载决议。
+
+设
+* {{tt|ToRep}} 为 {{c/core|typename ToDuration::rep}}，
+* {{tt|ToPeriod}} 为 {{c/core|typename ToDuration::period}}，
+* {{tt|CF}} 为 {{c/core|std::ratio_divide&lt;Period, ToPeriod&gt;}}，
+* {{tt|CR}} 为 {{c/core|std::common_type&lt;Rep, ToRep, std::intmax_t&gt;::type}}，
+* {{c|cr_count}} 为 {{c|static_cast&lt;CR&gt;(d.count())}}，
+* {{c|cr_num}} 为 {{c|static_cast&lt;CR&gt;(CF::num)}}，以及
+* {{c|cr_den}} 为 {{c|static_cast&lt;CR&gt;(CF::den)}}，
+那么结果是：
+{|class="wikitable"
+!rowspan=2 colspan=2|
+!colspan=2|{{c|CF::num}}
+|-
+!{{c|1}}
+!非 {{c|1}}
+|-
+!rowspan=2|{{c|CF::den}}
+!{{c|1}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (d.count()))}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (cr_count * cr_num))}}
+|-
+!非 {{c|1}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (cr_count / cr_den))}}
+|{{c multi|ToDuration(static_cast&lt;ToRep&gt;|               (cr_count * cr_num / cr_den))}}
+|}
+
+===参数===
+{{par begin}}
+{{par|d|要转换的时长}}
+{{par end}}
+
+===返回值===
+{{c|d}} 转换成 {{tt|ToDuration}} 类型后的时长。
+
+===注解===
+不使用隐式转换。如果在编译时已知一或多个参数为 {{c|1}}，那么就会尽可能避免乘法和除法。以最宽的可用类型进行计算，并如同只在完成时用 {{ltt|cpp/language/static_cast}} 转换为结果类型。
+
+在源周期能被目标周期精确整除的场合（例如小时到分钟），浮点时长和整数时长间转型能经由 {{rlp|duration|{{tt|std::chrono::duration}} 构造函数}}隐式进行，无需 {{tt|duration_cast}}。
+
+从浮点时长转型到整数时长，在浮点值为 NaN、无穷大或过大而无法以目标的整数类型表示时，[[cpp/language/implicit conversion#浮点整数转换|导致未定义行为]]。否则转型到整数时长将进行截断，同任何 {{c/core|static_cast}} 为整数类型一样。
+
+===示例===
+{{example
+|此示例度量函数的执行时间。
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;ratio&gt;
+#include &lt;thread&gt;
+
+void f()
+{
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
+int main()
+{
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    f();
+    const auto t2 = std::chrono::high_resolution_clock::now();
+    
+    // 浮点时长：不需要 duration_cast
+    const std::chrono::duration&lt;double, std::milli&gt; fp_ms = t2 - t1;
+    
+    // 整数时长：必须 duration_cast
+    const auto int_ms = std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(t2 - t1);
+    
+    // 将整数时长转换为更短可整除的时间单位的整数时长：不需要 duration_cast
+    const std::chrono::duration&lt;long, std::micro&gt; int_usec = int_ms;
+    
+    std::cout &lt;&lt; "f() 用了 " &lt;&lt; fp_ms &lt;&lt; "，或 "
+              &lt;&lt; int_ms &lt;&lt; "（整毫秒），或"
+              &lt;&lt; int_usec &lt;&lt; "（整微秒）\n";
+}
+|p=true
+|output=
+f() 用了 1000.14ms，或 1000ms（整毫秒），或 1000000us（整微秒）
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/chrono/dsc duration}}
+{{dsc inc|cpp/chrono/time_point/dsc time_point_cast}}
+{{dsc inc|cpp/chrono/duration/dsc floor}}
+{{dsc inc|cpp/chrono/duration/dsc ceil}}
+{{dsc inc|cpp/chrono/duration/dsc round}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

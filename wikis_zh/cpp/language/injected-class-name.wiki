@@ -1,0 +1,183 @@
+{{title|注入类名}}
+{{cpp/language/classes/navbar}}
+注入类名是在类的作用域内该类自身的无限定的名字。
+
+{{rlp|class template|类模板}}中，注入类名能用作指代当前模板的模板名，或指代当前实例化的类名。
+
+===解释===
+在{{rlps|scope#类作用域}}中，当前类的类名或当前类模板的模板名会被视为一个公开成员名：这被称为''注入类名''。该名字的声明点紧跟类（模板）定义的开花括号之后。
+
+{{source|1=
+int X;
+
+struct X
+{
+    void f()
+    {
+        X* p;   // OK，X 是注入类名
+        ::X* q; // 错误：名称查找找到变量名，它隐藏结构体名
+    }
+};
+
+template&lt;class T&gt;
+struct Y
+{
+    void g()
+    {
+        Y* p;    // OK，Y 是注入类名
+        Y&lt;T&gt;* q; // OK，Y 是注入类名，但 Y&lt;T&gt; 不是
+    }
+};
+}}
+
+与其他成员类似，注入类名会被继承。在私有或受保护继承的场合，某个间接基类的注入类名在派生类中最后可能会无法访问。
+
+{{source|1=
+struct A {};
+struct B : private A {};
+struct C : public B
+{
+    A* p;   // 错误：无法访问注入类名 A
+    ::A* q; // OK：不使用注入类名
+};
+}}
+
+===在类模板中===
+类模板的注入类名可以被用作模板名或类型名。
+
+下列情况下，注入类名被当做类模板自身的模板名：
+* 它后面跟着 {{ttb|&lt;}} &lt;!-- 有意地区别于标准，见 cwg 1841 --&gt;
+* 它被用作{{rlp|template parameters#模板模板实参|模板模板实参}}
+* 它是某个友元类模板声明的{{rlp|elaborated type specifier|详述类型说明符}}中的最后标识符。
+
+否则，它被当做类型名，并等价于模板名后随环绕于 {{ttb|&lt;&gt;}} 中的该类模板的各个模板形参。
+
+{{source|1=
+template&lt;template&lt;class, class&gt; class&gt;
+struct A;
+
+template&lt;class T1, class T2&gt;
+struct X
+{
+    X&lt;T1, T2&gt;* p;   // OK：X 被当做模板名
+    
+    using a = A&lt;X&gt;; // OK：X 被当做模板名
+    
+    template&lt;class U1, class U2&gt;
+    friend class X; // OK：X 被当做模板名
+    
+    X* q;           // OK：X 被当做类型名，等价于 X&lt;T1, T2&gt;
+};
+}}
+
+在类{{rlp|template specialization|模板特化}}或{{rlp|partial specialization|部分特化}}的作用域内，当将注入类名用作类型名时，它等价于模板名后随环绕于 {{ttb|&lt;&gt;}} 中的该类模板特化或部分特化的各个模板实参。
+
+{{source|1=
+template&lt;&gt;
+struct X&lt;void, void&gt;
+{
+    X* p; // OK：X 被当做类型名，等价于 X&lt;void, void&gt;
+    
+    template&lt;class, class&gt;
+    friend class X; // OK：X 被当做模板名（与在主模板中相同）
+    
+    X&lt;void, void&gt;* q; // OK：X 被当做模板名
+};
+
+template&lt;class T&gt;
+struct X&lt;char, T&gt;
+{
+    X* p, q; // OK：X 被当做类型名，等价于 X&lt;char, T&gt;
+    
+    using r = X&lt;int, int&gt;; // OK：可以用它指名另一特化
+};
+}}
+
+只要在作用域中，类模板或类模板特化的注入类名就能被用作模板名或类型名之一。
+
+{{source|1=
+template&lt;&gt;
+class X&lt;int, char&gt;
+{
+    class B
+    {
+        X a;            // 表示 X&lt;int, char&gt;
+        
+        template&lt;class, class&gt;
+        friend class X; // 表示 ::X
+    };
+};
+
+template&lt;class T&gt;
+struct Base
+{
+    Base* p;
+};
+
+template&lt;class T&gt;
+struct Derived: public Base&lt;T*&gt;
+{
+    typename Derived::Base* p; // Derived::Base 表示 Derived&lt;T&gt;::Base，即 Base&lt;T*&gt;
+};
+
+template&lt;class T, template&lt;class&gt; class U = T::template Base&gt;
+struct Third {};
+
+Third&lt;Derived&lt;int&gt;&gt; t; // OK：默认实参将注入类名用作模板
+}}
+
+找到注入类名的查找在某些情况下会导致歧义（例如当在多于一个基类中找到它时）。如果所有找到的注入类名都指代同一类模板的特化，且该名字被用作模板名，那么注入类名指代类模板自身而非其特化，且没有歧义。
+
+{{source|1=
+template&lt;class T&gt;
+struct Base {};
+
+template&lt;class T&gt;
+struct Derived: Base&lt;int&gt;, Base&lt;char&gt;
+{
+    typename Derived::Base b;         // 错误：歧义
+    typename Derived::Base&lt;double&gt; d; // OK
+};
+}}
+
+===注入类名与构造函数===
+构造函数没有名字，但在构造函数的声明与定义中，外围类的注入类名被认为是构造函数的名称。
+
+在有限定的名字 {{tt|C::D}} 中，如果
+* 名字查找不忽略函数名，且
+* 对 {{tt|D}} 在类 {{tt|C}} 的作用域中的查找找到了注入类名
+
+那么始终认为该限定名指名 {{tt|C}} 的构造函数。这种名字只能用于构造函数的声明中（例如，在友元构造函数声明，构造函数模板特化，构造函数模板实例化，或构造函数定义中）{{rev inl|since=c++11|，或用于继承构造函数}}。
+
+{{source|1=
+struct A
+{
+    A();
+    A(int);
+    
+    template&lt;class T&gt;
+    A(T) {}
+};
+using A_alias = A;
+
+A::A() {}
+A_alias::A(int) {}
+template A::A(double);
+
+struct B : A
+{
+    using A_alias::A;
+};
+
+A::A a;         // 错误：A::A 被认为指名构造函数，而非类型
+struct A::A a2; // OK：与 'A a2;' 相同
+B::A b;         // OK：与 'A b;' 相同
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1004|std=C++98|before=注入类名不能作为模板模板实参|after=允许，此时它指代类模板本身}}
+{{dr list item|wg=cwg|dr=2637|std=C++98|before=整个模板标识都可以是注入类名|after=只有模板名可以}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

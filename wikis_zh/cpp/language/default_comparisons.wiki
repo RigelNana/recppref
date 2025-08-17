@@ -1,0 +1,257 @@
+{{title|默认比较 {{mark since c++20}}}}
+{{cpp/language/expressions/navbar}}
+
+可以通过将比较运算符函数显式预置的方式要求编译器为某个类生成对应的默认比较。
+
+===定义===
+''预置比较运算符函数''{{sep}}是满足以下所有条件的非模板比较运算符函数（即 {{tt|1=&lt;=&gt;}}, {{tt|1===}}, {{tt|1=!=}}, {{tt|&lt;}}, {{tt|&gt;}}, {{tt|1=&lt;=}}, or {{tt|1=&gt;=}}）：
+* 它是某个类 {{tt|C}} 的{{rlp|member functions|非静态成员}}或{{rlp|friend|友元}}。
+* 它是在 {{tt|C}} 中或在 {{tt|C}} 是{{rlp|type#不完整类型|完整类型}}的语境中{{rlp|function#函数定义|定义为预置}}的。
+* 它有两个类型是 {{c/core|const C&amp;}} 的形参或两个类型是 {{tt|C}} 的形参，其中{{rlp|overload resolution#成员函数候选的额外规则|隐式对象形参}}（如果存在）会被视为第一个形参。
+
+这样的比较运算符函数也被称为''关于类 {{tt|C}} 的预置比较运算符函数''。
+
+{{source|1=
+struct X
+{
+    bool operator==(const X&amp;) const = default; // OK
+    bool operator==(const X&amp;) = default;       // 错误：隐式对象形参类型是 X&amp;
+    bool operator==(this X, X) = default;      // OK
+};
+
+struct Y
+{
+    friend bool operator==(Y, Y) = default;        // OK
+    friend bool operator==(Y, const Y&amp;) = default; // 错误：形参类型不同
+};
+
+bool operator==(const Y&amp;, const Y&amp;) = default;     // 错误：不是 Y 的友元
+}}
+
+比较运算符函数的隐式定义中的名字查找和访问检查会在等价于该函数的函数体的语境中进行。在类中出现的将比较运算符函数预置的定义必须是该函数的首个声明。
+
+===默认比较顺序===
+给定类 {{tt|C}}，按以下顺序组成子对象列表：
+* {{tt|C}} 的直接基类子对象，按声明顺序。
+* {{tt|C}} 的非静态{{rlp|data members|数据成员}}，按声明顺序。
+:* 如果有数组类型的成员，那么它们会被展开成它们的元素序列，按下标升序。展开是递归的：类型也是数组的数组元素会被继续展开，直到不存在数组类型的子对象。
+
+对于类型 {{tt|C}} 的任意对象 {{c|x}}，在后续描述中：
+* 设 {{c|n}} 为关于 {{c|x}} 的（扩展后的）子对象列表。
+* 设 {{c|x_i}} 为关于 {{c|x}} 的（扩展后的）子对象列表中的第 {{c|i}} 个子对象，其中 {{c|x_i}} 通过将{{rlp|overload resolution#隐式转换序列的分级|派生类到基类转换}}、{{rlp|operator member access#内建的成员访问运算符|类成员访问表达式}}和{{rlp|operator member access#内建的下标运算符|数组下标表达式}}应用到 {{c|x}} 的序列组成。
+
+{{source|
+struct S {};
+
+struct T : S
+{
+    int arr[2][2];
+} t;
+
+// “t” 的子对象列表按顺序包含以下 5 个子对象
+// (S)t → t[0][0] → t[0][1] → t[1][0] → t[1][1]
+}}
+
+===三路比较===
+关于类类型的 {{c/core|1=operator&lt;=&gt;}} 可以以任意返回类型定义为预置。
+
+====比较类别类型====
+有以下三种比较类别类型：
+* {{ltt std|cpp/utility/compare/strong_ordering}}
+* {{ltt std|cpp/utility/compare/weak_ordering}}
+* {{ltt std|cpp/utility/compare/partial_ordering}}
+
+{| class="wikitable" style="font-size:85%; text-align:center;"
+|-
+! 类型
+! 等价的值
+! {{nbsp}}无法比较的值{{nbsp}}
+|-
+| {{ltt std|cpp/utility/compare/strong_ordering}}
+| {{nbsp}}不可以被区分{{nbsp}}
+| 不允许比较
+|-
+| {{ltt std|cpp/utility/compare/weak_ordering}}
+| 可以被区分
+| 不允许比较
+|-
+| {{nbsp}}{{ltt std|cpp/utility/compare/partial_ordering}}{{nbsp}}
+| 可以被区分
+| 允许比较
+|}
+
+====合成三路比较====
+对于具有相同类型的泛左值 {{c|a}} 与 {{c|b}} 之间的 {{tt|T}} 类型''合成三路比较''{{sep}}定义如下：
+* 如果对 {{c|1=a &lt;=&gt; b}} 的重载决议产生了可用候选，并且可以通过 {{rlpt|static_cast}} 显式转换到 {{tt|T}}，那么合成比较是 {{c|1=static_cast&lt;T&gt;(a &lt;=&gt; b)}}。
+* 否则，如果满足以下任意条件，那么合成比较未定义：
+:* 对 {{c|1=a &lt;=&gt; b}} 的重载决议找到了至少一个可行候选。
+:* {{tt|T}} 不是比较类别类型。
+:* 对 {{c|1=a == b}} 的重载决议没有产生可用候选。
+:* 对 {{c|a &lt; b}} 的重载决议没有产生可用候选。
+* 否则，如果 {{tt|T}} 是 {{ltt std|cpp/utility/compare/strong_ordering}}，那么合成比较是：
+{{source|1=
+a == b ? std::strong_ordering::equal :
+a &lt; b  ? std::strong_ordering::less :
+         std::strong_ordering::greater
+}}
+* 否则，如果 {{tt|T}} 是 {{ltt std|cpp/utility/compare/weak_ordering}}，那么合成比较是：
+{{source|1=
+a == b ? std::weak_ordering::equivalent :
+a &lt; b  ? std::weak_ordering::less :
+         std::weak_ordering::greater
+}}
+* 否则，如果 {{tt|T}} 是 {{ltt std|cpp/utility/compare/partial_ordering}})，那么合成比较是：
+{{source|1=
+a == b ? std::partial_ordering::equivalent :
+a &lt; b  ? std::partial_ordering::less :
+b &lt; a  ? std::partial_ordering::greater : 
+         std::partial_ordering::unordered
+}}
+
+====占位返回类型====
+如果预置的关于类类型 {{tt|C}} 的三路比较运算符函数（{{c/core|1=operator&lt;=&gt;}}）声明的返回类型是 {{c/core|auto}}，那么返回类型会从 {{tt|C}} 类型对象 {{c|x}} 的对应子对象的三路比较的返回类型推导。
+
+对于关于 {{c|x}} 的[[#默认比较顺序|（扩展后的）子对象列表]]中的每个子对象 {{c|x_i}}：
+# 对 {{c|1=x_i &lt;=&gt; x_i}} 进行重载决议，如果重载决议没有产生可用候选，那么预置的 {{c/core|1=operator&lt;=&gt;}} 会被定义为弃置。
+# 以 {{tt|R_i}} 表示 {{c|1=x_i &lt;=&gt; x_i}} 的类型的无 cv 限定版本，如果 {{tt|R_i}} 不是比较类别类型，那么预置的 {{c/core|1=operator&lt;=&gt;}} 会被定义为弃置。
+
+如果预置的 {{c/core|1=operator&lt;=&gt;}} 没有被定义为弃置，那么它的返回类型会被推导为 {{c/core|std::common_comparison_category_t&lt;R_1, R_2, ..., R_n&gt;}}。
+
+====非占位返回类型====
+如果预置的三路比较运算符函数（{{c/core|1=operator&lt;=&gt;}}）声明的返回类型不是 {{c/core|auto}}，那么它就不能包含任何{{rlp|auto|占位类型}}（例如 {{c/core|decltype(auto)}}）。
+
+如果关于 {{c|x}} 的（扩展后的）子对象列表中存在子对象 {{c|x_i}} 使得 {{c|x_i}} 与 {{c|x_i}} 之间的声明返回类型的[[#合成三路比较|合成三路比较]]未定义，那么预置的 {{c/core|1=operator&lt;=&gt;}} 会被定义为弃置。
+
+====比较结果====
+设 {{c|x}} 和 {{c|y}} 为预置的 {{c/core|1=operator&lt;=&gt;}} 的形参，将 {{c|x}} 和 {{c|y}} 的（扩展后的）子对象列表的每个子对象分别记为 {{c|x_i}} 和 {{c|y_i}}。{{c|x}} 与 {{c|y}} 的默认三路比较会通过以 {{c|i}} 的升序依次比较对应的子对象 {{c|x_i}} 与 {{c|y_i}}。
+
+设 {{tt|R}} 为（可能经过推导的）返回类型，{{c|x_i}} 与 {{c|y_i}} 的比较结果是 {{c|x_i}} 与 {{c|y_i}} 之间的 {{tt|R}} 类型的三路比较结果。
+* 在进行 {{c|x}} 与 {{c|y}} 的默认三路比较过程中，如果子对象 {{c|x_i}} 与 {{c|y_i}} 之间的比较产生了结果 {{c|v_i}} 使得将 {{c|1=v_i != 0}} 按语境转换到 {{c/core|bool}} 会产生 {{c|true}}，那么返回值是 {{c|v_i}} 的副本（不会比较其余子对象）。
+* 否则，返回值是 {{c|static_cast&lt;R&gt;(std::strong_ordering::equal)}}。
+
+{{example
+|code=
+#include &lt;compare&gt;
+#include &lt;iostream&gt;
+#include &lt;set&gt;
+
+struct Point
+{
+    int x;
+    int y;
+    auto operator&lt;=&gt;(const Point&amp;) const = default;
+    /* 非比较函数 */
+};
+
+int main()
+{
+    Point pt1{1, 1}, pt2{1, 2};
+    std::set&lt;Point&gt; s; // OK
+    s.insert(pt1);     // OK
+    
+    // 不需要显式定义双路比较运算符函数：
+    // operator== 会隐式声明（见下文）
+    // 而其他运算符的重载决议会选择重写候选
+    std::cout &lt;&lt; std::boolalpha
+        &lt;&lt; (pt1 == pt2) &lt;&lt; ' '  // false
+        &lt;&lt; (pt1 != pt2) &lt;&lt; ' '  // true
+        &lt;&lt; (pt1 &lt;  pt2) &lt;&lt; ' '  // true
+        &lt;&lt; (pt1 &lt;= pt2) &lt;&lt; ' '  // true
+        &lt;&lt; (pt1 &gt;  pt2) &lt;&lt; ' '  // false
+        &lt;&lt; (pt1 &gt;= pt2) &lt;&lt; ' '; // false
+}
+}}
+
+===相等比较===
+====显式声明====
+关于类类型的 {{c/core|1=operator==}} 可以以 {{c/core|bool}} 返回类型定义为预置。
+
+给定类 {{tt|C}} 和 {{tt|C}} 类型的对象 {{c|x}}，如果关于 {{c|x}} 的（扩展后的）子对象列表中存在子对象 {{c|x_i}} 使得对 {{c|1=x_i == x_i}} 的重载决议没有产生可用候选，那么预置的 {{c/core|1=operator==}} 会被定义为弃置。
+
+设 {{c|x}} 和 {{c|y}} 为预置的 {{c/core|1=operator==}} 的形参，将 {{c|x}} 和 {{c|y}} 的（扩展后的）子对象列表的每个子对象分别记为 {{c|x_i}} 和 {{c|y_i}}。{{c|x}} 与 {{c|y}} 的默认相等比较会通过以 {{c|i}} 的升序依次比较对应的子对象 {{c|x_i}} 与 {{c|y_i}}。
+
+{{c|x_i}} 与 {{c|y_i}} 的比较结果是 {{c|1=x_i == y_i}} 的结果。
+* 在进行 {{c|x}} 与 {{c|y}} 的默认相等比较过程中，如果子对象 {{c|x_i}} 与 {{c|y_i}} 之间的比较产生了结果 {{c|v_i}} 使得将 {{c|v_i}} 按语境转换到 {{c/core|bool}} 会产生 {{c|false}}，那么返回值是 {{c|false}}（不会比较其余子对象）。
+* 否则，返回值是 {{c|true}}。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct Point
+{
+    int x;
+    int y;
+    bool operator==(const Point&amp;) const = default;
+    /* 非比较函数 */
+};
+
+int main()
+{
+    Point pt1{3, 5}, pt2{2, 5};
+    std::cout &lt;&lt; std::boolalpha
+        &lt;&lt; (pt1 != pt2) &lt;&lt; '\n'  // true
+        &lt;&lt; (pt1 == pt1) &lt;&lt; '\n'; // true
+    
+    struct [[maybe_unused]] { int x{}, y{}; } p, q;
+    // if (p == q) {} // 错误：operator== 未定义
+}
+}}
+
+====隐式声明====
+如果类 {{tt|C}} 没有显式声明任何名为 {{c/core|1=operator==}} 的成员或友元，那么对于每个定义为预置的 {{c/core|1=operator&lt;=&gt;}} 都会隐式声明一个 {{tt|==}} 运算符。每个隐式声明的 {{c/core|1=operator==}} 都会与对应的预置 {{c/core|1=operator&lt;=&gt;}} 具有相同的访问和{{rlps|function#函数定义}}，并且在相同的{{rlps|scope#类作用域}}中，但有以下不同：
+* {{rlp|declarations#声明符|声明符标识符}}会被替换成 {{c/core|1=operator==}}。
+* 返回类型会被替换成 {{c/core|bool}}。
+
+{{source|1=
+template&lt;typename T&gt;
+struct X
+{
+    friend constexpr std::partial_ordering operator&lt;=&gt;(X, X)
+        requires (sizeof(T) != 1) = default;
+    // 隐式声明：friend constexpr bool operator==(X, X)
+    //              requires (sizeof(T) != 1) = default;
+    
+    [[nodiscard]] virtual std::strong_ordering operator&lt;=&gt;(const X&amp;) const = default;
+    // 隐式声明：[[nodiscard]] virtual bool operator==(const X&amp;) const = default;
+};
+}}
+
+===次级比较===
+关于类类型的次级比较运算符函数（{{tt|1=!=}}、{{tt|&lt;}}、{{tt|&gt;}}、{{tt|1=&lt;=}} 和 {{tt|1=&gt;=}}）可以以 {{c/core|bool}} 返回类型定义为预置。
+
+设 {{tt|@}} 为五个次级比较运算符之一，对于每个形参是 {{c|x}} 和 {{c|y}} 的预置 {{c/core|operator@}} 都会进行最多两次重载决议（预置的 {{c/core|operator@}} 不会被视为候选）以确定它是否会被定义为弃置。
+* 第一次重载决议对 {{c|x @ y}} 进行。如果重载决议没有产生可用候选，或者选择的候选不是{{rlp|overload resolution#调用重载运算符|重写候选}}，那么预置的 {{c/core|operator@}} 会被定义为弃置。这些情况下不会进行第二次重载决议。
+* 第二次重载决议对 {{c|x @ y}} 的重写候选进行。如果重载决议没有产生可用候选，那么预置的 {{c/core|operator@}} 会被定义为弃置。
+
+如果 {{c|x @ y}} 不能隐式转换到 {{c/core|bool}}，那么预置的 {{c/core|operator@}} 会被定义为弃置。
+
+如果预置的 {{c/core|operator@}} 没有被定义为弃置，那么它会产生 {{c|x @ y}}.
+
+{{source|1=
+struct HasNoRelational {};
+
+struct C
+{
+    friend HasNoRelational operator&lt;=&gt;(const C&amp;, const C&amp;);
+    bool operator&lt;(const C&amp;) const = default; // OK，函数被预置
+};
+}}
+
+===关键词===
+{{ltt|cpp/keyword/default}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2539|std=C++20|before=合成三路比较即使在无法进行显式转换时也会选择 {{c/core|static_cast}}|after=此时不会选择 {{c/core|static_cast}}}}
+{{dr list item|wg=cwg|dr=2546|std=C++20|before=对 {{c|x @ y}} 的重载决议选择了不可用的重写候选时 {{c/core|operator@}} 不会被定义为弃置|after=此时会被定义为弃置}}
+{{dr list item|wg=cwg|dr=2547|std=C++20|before=不明确是否可以预置对非类的比较运算符函数|after=不可以预置}}
+{{dr list item|wg=cwg|dr=2568|std=C++20|before=比较运算符函数的隐式定义可能会违反成员访问规则|after=会在等价于它们的函数体&lt;br&gt;的语境中进行访问检查}}
+{{dr list end}}
+
+===参阅===
+* 调用重载运算符中的{{rlp|overload resolution#调用重载运算符|重载决议}}
+* 内建的{{rlp|operator comparison#三路比较|三路比较运算符}}
+* 比较运算符的{{rlp|operators#比较运算符|运算符重载}}
+
+{{langlinks|en|es|ja|ru}}

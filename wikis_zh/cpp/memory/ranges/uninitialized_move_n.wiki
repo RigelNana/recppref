@@ -1,0 +1,138 @@
+{{cpp/ranges/title|uninitialized_move_n|uninitialized_move_n_result}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|调用签名}}
+{{dcla|num=1|since=c++20|constexpr=c++26|
+template&lt; std::input_iterator I,
+          no-throw-forward-iterator O, no-throw-sentinel-for&lt;O&gt; S &gt;
+    requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;,
+                                     std::iter_rvalue_reference_t&lt;I&gt;&gt;
+uninitialized_move_n_result&lt;I, O&gt;
+    uninitialized_move_n( I ifirst, std::iter_difference_t&lt;I&gt; count,
+                          O ofirst, S olast );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class I, class O &gt;
+using uninitialized_move_n_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+设 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|ranges::min(count, ranges::distance(ofirst, olast))}}。
+
+如同用以下方式将始于 {{c|ifirst}} 的范围中的 {{mathjax-or|\(\scriptsize N\)|N}} 个元素复制到未初始化内存区域 {{range|ofirst|olast}}（符合条件时使用移动语义）：
+{{c multi|
+auto ret {{=}} ranges::uninitialized_move(std::counted_iterator(std::move(ifirst), count),|
+                                      std::default_sentinel, ofirst, olast);|
+return {std::move(ret.in).base(), ret.out};
+}}
+
+如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。另外，始于 {{c|ifirst}} 的范围中的已被移动的对象被置于合法但未指定的状态。
+
+如果 {{range|ofirst|olast}} 与 {{counted range|ifirst|count}} 有重叠，那么行为未定义。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|ifirst|要移动的输入范围的起始}}
+{{par range|ofirst|olast|要初始化的|range=输出|sentinel=yes}}
+{{par|n|要移动的元素数}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+与 {{mathjax-or|\(\scriptsize N\)|N}} 成线性。
+
+===异常===
+构造目标范围中的元素时抛出的任何异常。
+
+===注解===
+如果输出范围的值类型是{{named req|TrivialType}}，那么实现可能提升 {{tt|ranges::uninitialized_move_n}} 的效率，例如用 {{lc|ranges::copy_n}}。
+
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1}}}}
+
+===可能的实现===
+{{eq fun|1=
+struct uninitialized_move_n_fn
+{
+    template&lt;std::input_iterator I,
+             no-throw-forward-iterator O, no-throw-sentinel-for&lt;O&gt; S&gt;
+        requires std::constructible_from&lt;std::iter_value_t&lt;O&gt;,
+                                         std::iter_rvalue_reference_t&lt;I&gt;&gt;
+    constexpr ranges::uninitialized_move_n_result&lt;I, O&gt;
+        operator()(I ifirst, std::iter_difference_t&lt;I&gt; count, O ofirst, S olast) const
+    {
+        auto iter = std::counted_iterator(std::move(ifirst), count);
+        auto ret = ranges::uninitialized_move(iter, std::default_sentinel, ofirst, olast);
+        return {std::move(ret.in).base(), ret.out};
+    }
+};
+
+inline constexpr uninitialized_move_n_fn uninitialized_move_n{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+void print(auto rem, auto first, auto last)
+{
+    for (std::cout &lt;&lt; rem; first != last; ++first)
+        std::cout &lt;&lt; std::quoted(*first) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::string in[]{ "No", "Diagnostic", "Required", };
+    print("起初，in：", std::begin(in), std::end(in));
+    
+    if (constexpr auto sz = std::size(in);
+        void* out = std::aligned_alloc(alignof(std::string), sizeof(std::string) * sz))
+    {
+        try
+        {
+            auto first{static_cast&lt;std::string*&gt;(out)};
+            auto last{first + sz};
+            std::ranges::uninitialized_move_n(std::begin(in), sz, first, last);
+            
+            print("移动后，in：", std::begin(in), std::end(in));
+            print("移动后，out：", first, last);
+
+            std::ranges::destroy(first, last);
+        }
+        catch (...)
+        {
+            std::cout &lt;&lt; "异常！\n";
+        }
+        std::free(out);
+    }
+}
+|p=true&lt;!-- 移动结果不确定 --&gt;
+|output=
+起初，in："No" "Diagnostic" "Required"
+移动后，in："" "" ""
+移动后，out："No" "Diagnostic" "Required"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可能在 {{c/core|const}} 存储上创建对象|after=保持禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_move}}
+{{dsc inc|cpp/memory/dsc uninitialized_move_n}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

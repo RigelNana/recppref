@@ -1,0 +1,262 @@
+{{title|{{tt|switch}} 语句}}
+{{cpp/language/statements/navbar}}
+根据条件的值，将控制流转移到若干语句之一。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|属性}} {{ttb|switch}} {{ttb|(}} {{spar optional|初始化语句}} {{spar|条件}} {{ttb|)}} {{spar|语句}} 
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}}}
+{{par|{{spar|初始化语句}}|{{mark since c++17}} 下列之一：
+* {{rlps|statements#表达式语句}}（可以是空语句 {{c|;}}）
+* {{rlps|declarations#简单声明}}，典型情况下是带初始化器的变量声明，但它可以声明任意多个变量{{rev inl|since=c++17|或{{rlp|structured binding|结构化绑定}}}}
+{{rrev|since=c++23|
+* 一条{{rlp|type alias|别名声明}}
+}}
+注意任何{{spar sep|初始化语句}}必须以分号结尾。这就是为什么它常被非正式描述为后随分号的表达式或声明。}}
+{{par|{{spar|条件}}|[[#条件|条件]]}}
+{{par|{{spar|语句}}|任意{{rlp|statements|语句}}（典型情况下是复合语句）}}
+{{par end}}
+
+{{cpp/language/condition|usage=确定控制会继续前往哪个标号}}
+
+====类型====
+{{spar sep|条件}}只能产生以下类型的值：
+* 整数类型
+* 枚举类型
+* 类类型
+
+如果产生的值具有类类型，那么它会按语境转换到整数或枚举类型。
+
+如果（可能经转换的）类型适用{{rlps|implicit conversion#整数提升}}，那么产生的值会转换到提升后的类型。
+
+===标号===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|属性}} {{ttb|case}} {{spar|常量表达式}} {{ttb|:}}
+}}
+{{sdsc|num=2|
+{{spar optional|属性}} {{ttb|default}} {{ttb|:}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}}}
+{{par|{{spar|常量表达式}}|具有 {{c/core|switch}} 条件的调整后类型的{{rlps|constant expression#经转换的常量表达式}}}}
+{{par end}}
+
+{{c/core|case}} 和 {{c/core|default}} 与包围它们的最内层 {{c/core|switch}} 语句关联。
+
+如果满足以下任意条件，那么程序非良构：
+* 一个 {{c/core|switch}} 语句与{{spar sep|常量表达式}}在转换后具有相同值的多个 {{c/core|case}} 标号关联。
+* 一个 {{c/core|switch}} 语句与多个 {{c/core|default}} 标号关联。
+
+===控制流转移===
+当某个 {{c/core|switch}} 语句的条件产生了一个（可能经转换的）值时：
+* 如果该值与某个关联的 {{c/core|case}} 标号常量的值相同，那么控制会传递给该匹配的 {{c/core|case}} 标号标记的语句。
+* 否则，如果存在关联的 {{c/core|default}} 标号，那么控制会传递给该 {{c/core|default}} 标号标记的语句。
+* 否则，不会执行该 {{c/core|switch}} 语句中的{{spar|语句}}。
+
+{{c/core|case}} 和 {{c/core|default}} 标签本身不会影响控制流。需要中途从 {{c/core|switch}} 语句退出的情况下，可以参阅 {{rlp|break|{{c/core|break}} 语句}}。
+
+编译器可能在发生直落（抵达下个 {{c/core|case}} 标号而没有 {{c/core|break}}）时发布警告{{rev inl|since=c++17|，除非属性 {{attr|fallthrough}} 紧接该标号之前出现以指示该直落是有意的}}。
+
+{{source|
+switch (1)
+{
+    case 1:
+        cout &lt;&lt; '1'; // 打印 "1",
+    case 2:
+        cout &lt;&lt; '2'; // 然后打印 "2"
+}
+}}
+{{source|
+switch (1)
+{
+    case 1:
+        cout &lt;&lt; '1'; // 打印 "1"
+        break;       // 然后退出 switch
+    case 2:
+        cout &lt;&lt; '2';
+        break;
+}
+}}
+
+{{rrev|since=c++17|
+{{anchor|带初始化器的 switch 语句}}
+===带初始化器的 {{c/core|switch}} 语句===
+如果使用{{spar|初始化语句}}，那么 {{c/core|switch}} 语句等价于
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{}}&lt;br&gt;
+:{{spar|初始化语句}}&lt;br&gt;
+:{{ttb|switch}} {{ttb|(}} {{spar|条件}} {{ttb|)}} {{spar|语句}}&lt;br&gt;
+{{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+但{{spar sep|初始化语句}}所声明的名字（如果{{spar sep|初始化语句}}是声明）和{{spar sep|条件}}声明的名字（如果{{spar sep|条件}}是声明）处于同一{{rlp|scope|作用域}}中，该作用域也是{{spar sep|语句}}的作用域。
+}}
+
+===注解===
+因为控制转移时{{rlp|goto|不允许进入变量的作用域}}，所以如果在{{spar sep|语句}}中遇到声明语句，那么它的作用域必须被限制在它自身的复合语句之内：
+
+{{source|1=
+switch (1)
+{
+    case 1:
+        int x = 0; // 初始化
+        std::cout &lt;&lt; x &lt;&lt; '\n';
+        break;
+    default:
+        // 编译错误：跳到 default: 会在尚未初始化 'x' 的情况下进入它的作用域
+        std::cout &lt;&lt; "default\n";
+        break;
+}
+}}
+
+{{source|1=
+switch (1)
+{
+    case 1:
+        {
+            int x = 0;
+            std::cout &lt;&lt; x &lt;&lt; '\n';
+            break;
+        } // 'x' 的作用域在此结束
+    default:
+        std::cout &lt;&lt; "default\n"; // 无错误
+        break;
+}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/switch}},
+{{ltt|cpp/keyword/case}},
+{{ltt|cpp/keyword/default}}
+
+===示例===
+{{example
+|下列代码展示 {{c/core|switch}} 语句的几种用法：
+|code=
+#include &lt;iostream&gt;
+
+int main()
+{
+    const int i = 2;
+    switch (i)
+    {
+        case 1:
+            std::cout &lt;&lt; "1";
+        case 2:              // 从这个 case 标号开始执行
+            std::cout &lt;&lt; "2";
+        case 3:
+            std::cout &lt;&lt; "3";
+            [[fallthrough]]; // C++17 属性，用以关闭对直落的警告
+        case 5:
+            std::cout &lt;&lt; "45";
+            break;           // 语句的顺序执行到此终止
+        case 6:
+            std::cout &lt;&lt; "6";
+    }
+    
+    std::cout &lt;&lt; '\n';
+    
+    switch (i)
+    {
+        case 4:
+            std::cout &lt;&lt; "a";
+        default:
+            std::cout &lt;&lt; "d"; // 没有适用的常量表达式，因而执行 default 标号
+    }
+    
+    std::cout &lt;&lt; '\n';
+    
+    switch (i)
+    {
+        case 4:
+            std::cout &lt;&lt; "a"; // 不执行任何语句
+    }
+    
+    // 在 switch 语句中使用枚举时，许多编译器都会在有未处理的枚举项时给出警告
+    enum color { RED, GREEN, BLUE };
+    switch (RED)
+    {
+        case RED:
+            std::cout &lt;&lt; "red\n";
+            break;
+        case GREEN:
+            std::cout &lt;&lt; "green\n";
+            break;
+        case BLUE:
+            std::cout &lt;&lt; "blue\n";
+            break;
+    }
+    
+    // C++17 的初始化语句语法，在没有到整数或枚举类型的隐式转换时会很有用
+    struct Device
+    {
+        enum State { SLEEP, READY, BAD };
+        auto state() const { return m_state; }
+        
+        /* ... */
+        
+    private:
+        State m_state{};
+    };
+    
+    switch (auto dev = Device{}; dev.state())
+    {
+        case Device::SLEEP:
+            /* ... */
+            break;
+        case Device::READY:
+            /* ... */
+            break;
+        case Device::BAD:
+            /* ... */
+            break;
+    }
+    
+    // 不正常的例子
+    
+    // 语句不必是复合语句
+    switch (0)
+        std::cout &lt;&lt; "this does nothing\n";
+    
+    // 标号也不必有复合语句
+    switch (int n = 1)
+        case 0:
+        case 1:
+            std::cout &lt;&lt; n &lt;&lt; '\n';
+}
+|output=
+2345
+d
+red
+1
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1767|std=C++98|before=具有不适用整数提升的类型的{{spar sep|条件}}无法被提升|after=不提升具有这些类型的{{spar|条件}}}}
+{{dr list item|wg=cwg|dr=2629|std=C++98|before={{spar sep|条件}}可以是浮点变量的声明|after=已禁止}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/switch}}
+{{dsc end}}
+
+===外部链接===
+{{elink begin}}
+{{elink|{{enwiki|Duff's device|达夫设备}}}}
+{{elink|{{enwiki|Coroutine#C|C/C++ 可以使用达夫设备实现协程}}}}
+{{elink end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

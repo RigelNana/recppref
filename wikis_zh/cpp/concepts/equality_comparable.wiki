@@ -1,0 +1,119 @@
+{{cpp/title|equality_comparable|equality_comparable_with}}
+{{cpp/concepts/navbar}}
+{{dcl begin}}
+{{dcl header|concepts}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class T &gt;
+concept equality_comparable = __WeaklyEqualityComparableWith&lt;T, T&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T, class U &gt;
+concept equality_comparable_with =
+    std::equality_comparable&lt;T&gt; &amp;&amp;
+    std::equality_comparable&lt;U&gt; &amp;&amp;
+    __ComparisonCommonTypeWith&lt;T, U&gt; &amp;&amp;
+    std::equality_comparable&lt;
+        std::common_reference_t&lt;
+            const std::remove_reference_t&lt;T&gt;&amp;,
+            const std::remove_reference_t&lt;U&gt;&amp;&gt;&gt; &amp;&amp;
+    __WeaklyEqualityComparableWith&lt;T, U&gt;;
+}}
+{{dcl h|辅助概念}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class T, class U &gt;
+concept __WeaklyEqualityComparableWith =
+    requires(const std::remove_reference_t&lt;T&gt;&amp; t,
+             const std::remove_reference_t&lt;U&gt;&amp; u) {
+        { t == u } -&gt; boolean-testable;
+        { t != u } -&gt; boolean-testable;
+        { u == t } -&gt; boolean-testable;
+        { u != t } -&gt; boolean-testable;
+    };
+}}
+{{dcl rev begin|num=4}}
+{{dcl|until=c++23|notes={{mark expos}}|1=
+template&lt; class T, class U &gt;
+concept __ComparisonCommonTypeWith =
+    std::common_reference_with&lt;
+        const std::remove_reference_t&lt;T&gt;&amp;,
+        const std::remove_reference_t&lt;U&gt;&amp;&gt;;
+}}
+{{dcl|since=c++23|notes={{mark expos}}|1=
+template&lt; class T, class U, class C = std::common_reference_t&lt;const T&amp;, const U&amp;&gt; &gt;
+concept _ComparisonCommonTypeWithImpl =
+    std::same_as&lt;std::common_reference_t&lt;const T&amp;, const U&amp;&gt;,
+                 std::common_reference_t&lt;const U&amp;, const T&amp;&gt;&gt; &amp;&amp;
+    requires {
+        requires std::convertible_to&lt;const T&amp;, const C&amp;&gt; {{!!}}
+            std::convertible_to&lt;T, const C&amp;&gt;;
+        requires std::convertible_to&lt;const U&amp;, const C&amp;&gt; {{!!}}
+            std::convertible_to&lt;U, const C&amp;&gt;;
+    };
+template&lt; class T, class U &gt;
+concept __ComparisonCommonTypeWith =
+    _ComparisonCommonTypeWithImpl&lt;std::remove_cvref_t&lt;T&gt;, std::remove_cvref_t&lt;U&gt;&gt;;
+}}
+{{dcl rev end}}
+{{dcl end}}
+ 
+@1@ 概念 {{tt|std::equality_comparable}} 指定比较运算符 {{tt|1===}} 和 {{tt|1=!=}} 在 {{tt|T}} 上反映相等性：{{tt|1===}} 当且仅当操作数相等才生成 {{c|true}}。
+
+@2@ 概念 {{tt|std::equality_comparable_with}} 指定比较运算符 {{tt|1===}} 和 {{tt|1=!=}} 在（可能混合的）{{tt|T}} 和 {{tt|U}} 操作数上生成与相等一致的结果。对混合的操作数比较产生的结果等价于对转换到其公共类型的操作数进行比较。
+
+@3@ 仅用于阐释的概念 {{tt|''__WeaklyEqualityComparableWith''}} 指定 {{tt|T}} 类型的对象和 {{tt|U}} 类型的对象能用 {{tt|1===}} 和 {{tt|1=!=}} 彼此比较相等性（以任一顺序），而比较结果一致。
+
+@4@ 仅用于阐释的概念 {{tt|''__ComparisonCommonTypeWith''}} 指定两个类型共享一个公共类型，且任一类型的 const 左值{{rev inl|since=c++23|或非 const 右值}}均可转换为该公共类型。
+
+===语义要求===
+这些概念仅若其所蕴含的概念均被实现才得到实现。
+
+以下段落中，给定表达式 {{tt|E}} 和类型 {{tt|C}}，定义 {{c|CONVERT_TO&lt;C&gt;(E)}} 为：
+{{rrev multi|rev1=
+* {{c|static_cast&lt;C&gt;(std::as_const(E))}}。
+|since2=c++23|rev2=
+* {{c|static_cast&lt;const C&amp;&gt;(std::as_const(E))}}，若其为有效表达式，
+* 否则为 {{c|static_cast&lt;const C&amp;&gt;(std::move(E))}}。
+}}
+
+@1@ {{c|std::equality_comparable&lt;T&gt;}} 仅若符合下列条件才得到实现。给定 {{tt|T}} 类型对象 {{tt|a}} 和 {{tt|b}}，{{c|1=bool(a == b)}} 当且仅当 {{tt|a}} 和 {{tt|b}} 相等才为 {{c|true}}。这与 {{c|1=a == b}} [[cpp/concepts#相等性保持|保持相等性]]的要求一同蕴含了，{{tt|1===}} 为对称且传递，而且 {{tt|1===}} 进而对所有至少等于一个其他对象的 {{tt|a}} 自反。
+
+@2@ {{c|std::equality_comparable_with&lt;T, U&gt;}} 仅若符合下列条件才得到实现，令
+* {{tt|t}} 和 {{tt|t2}} 分别为指代 {{c|const std::remove_reference_t&lt;T&gt;}} 和 {{c|std::remove_cvref_t&lt;T&gt;}} 类型的不同但相等对象的左值，
+* {{tt|u}} 和 {{tt|u2}} 分别为指代 {{c|const std::remove_reference_t&lt;U&gt;}} 和 {{c|std::remove_cvref_t&lt;U&gt;}} 类型的不同但相等对象的左值，
+* {{tt|C}} 为 {{c|std::common_reference_t&lt;const std::remove_reference_t&lt;T&gt;&amp;, const std::remove_reference_t&lt;U&gt;&amp;&gt;}}，
+则下列表达式为 {{c|true}}：
+* {{c|1=bool(t == u) == bool(CONVERT_TO&lt;C&gt;(t2) == CONVERT_TO&lt;C&gt;(u2))}}。
+
+@3@ {{c|__WeaklyEqualityComparableWith&lt;T, U&gt;}} 仅若符合下列条件才得到实现。给定
+* {{tt|t}}，{{c|const std::remove_reference_t&lt;T&gt;}} 类型的左值，和
+* {{tt|u}}，{{c|const std::remove_reference_t&lt;U&gt;}} 类型的左值，
+下列为真：
+* {{c|1=t == u}}、{{c|1=u == t}}、{{c|1=t != u}}、{{c|1=u != t}} 拥有相同定义域；
+* {{c|1=bool(u == t) == bool(t == u)}}；
+* {{c|1=bool(t != u) == !bool(t == u)}}；且
+* {{c|1=bool(u != t) == bool(t != u)}}。
+
+@4@ {{c|__WeaklyEqualityComparableWith&lt;T, U&gt;}} 仅若符合下列条件才得到实现：
+{{rrev multi|rev1=相应的 {{lconcept|common_reference_with}} 概念已得实现，
+|since2=c++23|rev2=
+令
+* {{tt|C}} 为 {{c|std::common_reference_t&lt;const T&amp;, const U&amp;&gt;}}，
+* {{tt|t1}} 和 {{tt|t2}} 为[[cpp/concepts#相等性保持|保持相等性]]表达式且为 {{c|std::remove_cvref_t&lt;T&gt;}} 类型的左值，
+* {{tt|u1}} 和 {{tt|u2}} 为[[cpp/concepts#相等性保持|保持相等性]]表达式且为 {{c|std::remove_cvref_t&lt;U&gt;}} 类型的左值，
+满足以下各条件：
+* 当且仅当 {{tt|t1}} 等于 {{tt|t2}} 时 {{c|CONVERT_TO&lt;C&gt;(t1)}} 等于 {{c|CONVERT_TO&lt;C&gt;(t2)}}；且
+* 当且仅当 {{tt|u1}} 等于 {{tt|u2}} 时 {{c|CONVERT_TO&lt;C&gt;(u1)}} 等于 {{c|CONVERT_TO&lt;C&gt;(u2)}}。
+}}
+
+{{cpp/concepts/equality preservation}}
+{{cpp/concepts/implicit expression variations}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=18.5.4|title=Concept {{tt|equality_comparable}}|id=concept.equalitycomparable}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=18.5.3|title=Concept {{tt|equality_comparable}}|id=concept.equalitycomparable}}
+{{ref std end}}
+
+{{langlinks|de|en|es|ja|ru}}

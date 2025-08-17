@@ -1,0 +1,122 @@
+{{cpp/title|aligned_storage}}
+{{cpp/meta/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl|since=c++11|deprecated=c++23|1=
+template&lt; std::size_t Len, std::size_t Align = /* 默认对齐 */ &gt;
+struct aligned_storage;
+}}
+{{dcl end}}
+
+提供嵌套类型 ''{{tt|type}}''，它满足{{named req|TrivialType}}和{{named req|StandardLayoutType}}，适于作为大小至多为 {{tt|Len}} 且[[cpp/language/object#对齐|对齐要求]]为 {{tt|Align}} 的因数的任意对象的未初始化存储。
+
+{{tt|Align}} 的默认值是大小至多为 {{tt|Len}} 的任意对象的最强（最大）对齐要求。若不使用默认值，则 {{tt|Align}} 对于某类型 {{tt|T}} 必须为 {{c|alignof(T)}} 的值，否则行为未定义。
+
+若 {{c|1=Len == 0}} 则行为未定义。
+
+是否支持任何[[cpp/language/object#对齐|扩展对齐]]是实现定义的。
+
+{{cpp/types/nospec}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|名称|定义}}
+{{dsc|{{tt|type}}|长度至少为 {{tt|Len}} 并拥有对齐要求 {{tt|Align}} 的平凡兼标准布局类型}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|since=c++14|deprecated=c++23|1=
+template&lt; std::size_t Len, std::size_t Align = /* 默认对齐 */ &gt;
+using aligned_storage_t = typename aligned_storage&lt;Len, Align&gt;::type;
+}}
+{{dcl end}}
+
+===注解===
+{{tt|std::aligned_storage&lt;&gt;::type}} 所定义的类型能用于创建适合保有给定类型对象的未初始化内存块，可选地进行比其自然对齐要求更严格的对齐，例如在缓存或页的边界上。
+
+同任何其他未初始化存储，使用[[cpp/language/new|布置 new]] 创建对象，并以显式的析构函数调用销毁它们。
+
+===可能的实现===
+除了默认实参，{{tt|aligned_storage}} 也能通过 {{tt|alignas}} 表达：
+{{eq fun
+|1=
+template&lt;std::size_t Len, std::size_t Align /* 未实现默认对齐 */&gt;
+struct aligned_storage
+{
+    struct type
+    {
+        alignas(Align) unsigned char data[Len];
+    };
+};
+}}
+
+===示例===
+{{example
+|初步的静态 vector 类，演示在对齐存储中创建、访问及析构对象。
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;new&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+
+template&lt;class T, std::size_t N&gt;
+class static_vector
+{
+    // N 个 T 的正确对齐的未初始化存储
+    std::aligned_storage_t&lt;sizeof(T), alignof(T)&gt; data[N];
+    std::size_t m_size = 0;
+
+public:
+    // 在对齐的存储中创建对象
+    template&lt;typename ...Args&gt; void emplace_back(Args&amp;&amp;... args) 
+    {
+        if( m_size &gt;= N ) // 可能的错误处理
+            throw std::bad_alloc{};
+
+        // 用原位 operator new 在对齐的存储中构造值
+        ::new(&amp;data[m_size]) T(std::forward&lt;Args&gt;(args)...);
+        ++m_size;
+    }
+
+    // 在对齐的存储中访问对象
+    const T&amp; operator[](std::size_t pos) const 
+    {
+        // 注意：在 P0137R1 中的对象模型更改后需要 std::launder
+        return *std::launder(reinterpret_cast&lt;const T*&gt;(&amp;data[pos]));
+    }
+
+    // 从对齐的存储中销毁对象
+    ~static_vector() 
+    {
+        for(std::size_t pos = 0; pos &lt; m_size; ++pos) {
+            // 注意：在 P0137R1 中的对象模型更改后需要 std::launder
+            std::destroy_at(std::launder(reinterpret_cast&lt;T*&gt;(&amp;data[pos])));
+        }
+    }
+};
+
+int main()
+{
+    static_vector&lt;std::string, 10&gt; v1;
+    v1.emplace_back(5, '*');
+    v1.emplace_back(10, '*');
+    std::cout &lt;&lt; v1[0] &lt;&lt; '\n' &lt;&lt; v1[1] &lt;&lt; '\n';
+}
+|output=
+*****
+**********
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc alignas}}
+{{dsc inc|cpp/types/dsc alignment_of}}
+{{dsc inc|cpp/memory/c/dsc aligned_alloc}}
+{{dsc inc|cpp/types/dsc aligned_union}}
+{{dsc inc|cpp/types/dsc max_align_t}}
+{{dsc inc|cpp/utility/dsc launder}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

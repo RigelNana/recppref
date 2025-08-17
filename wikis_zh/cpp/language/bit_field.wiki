@@ -1,0 +1,208 @@
+{{title|位域}}
+{{cpp/language/classes/navbar}}
+声明具有以位计的明确大小的类数据成员。相邻的位域成员可以打包成共享和跨过各个字节。
+
+位域声明是使用下列声明符的{{rlp|data members|类数据成员声明}}：
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar optional|标识符}} {{spar optional|属性}} {{ttb|:}} {{spar|大小}}
+}}
+{{sdsc|num=2|notes={{mark since c++20}}|
+{{spar optional|标识符}} {{spar optional|属性}} {{ttb|:}} {{spar|大小}} {{spar|花括号或等号初始化器}}
+}}
+{{sdsc end}}
+
+位域的''类型''{{sep}}由{{rlp|declarations|声明语法}}的{{spar sep|声明说明符序列}}引入。
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量{{rlp|attributes|属性}}的序列}}
+{{par|{{spar|标识符}}|被声明的位域名。名字是可选的：无名位域引入指定数量的{{rlp|object#对象表示与值表示|填充位}}。}}
+{{par|{{spar|大小}}|值大于或等于零的{{rlp|constant expression#整数常量表达式|整数常量表达式}}。大于零时，这是位域将占有的位数。零值只能用于无名位域并具有[[#大小为零|特殊含义]]。}}
+{{par|{{spar|花括号或等号初始化器}}|此位域所使用的{{rlp|data members#成员初始化|默认成员初始化器}}}}
+{{par end}}
+
+===解释===
+位域的类型只能是整数类型（包括 {{c/core|bool}}）或（可有 cv 限定的）枚举类型，无名位域不能声明为具有有 cv 限定的类型。
+
+位域不能是{{rlp|static|静态数据成员}}。
+
+没有位域{{rlp|value category|纯右值}}：左值到右值转换始终生成位域底层类型的对象。
+
+位域中的位数设置它能保有的值的极限：
+
+{{example|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    // 三位的无符号位域，允许的值有 0...7
+    unsigned int b : 3;
+};
+
+int main()
+{
+    S s = {6};
+    
+    ++s.b; // 在位域中存储值 7
+    std::cout &lt;&lt; s.b &lt;&lt; '\n';
+    
+    ++s.b; // 值 8 不适合此位域
+    std::cout &lt;&lt; s.b &lt;&lt; '\n'; // 正式来说是由实现定义的行为，通常为 0
+}
+|p=true
+|output=
+7
+0
+}}
+
+多个相邻位域通常打包在一起（尽管此行为由实现定义）：
+
+{{example
+|code=
+#include &lt;bit&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+
+struct S
+{
+    // 通常会占用 2 个字节：
+    unsigned char b1 : 3; // 前 3 位（第 1 个字节）为 b1
+    unsigned char    : 2; // 下 2 位（第 1 个字节）被跳过为未使用
+    unsigned char b2 : 6; // 6 位给 b2 - 并不适于第 1 个字节 =&gt; 开始第 2 个
+    unsigned char b3 : 2; // 2 位给 b3 - 接下来（即最后 2）位在第 2 个字节
+};
+ 
+int main()
+{
+    std::cout &lt;&lt; sizeof(S) &lt;&lt; '\n'; // 通常打印 2
+
+    S s;
+    // 设置各域为可区分的值
+    s.b1 = 0b111;
+    s.b2 = 0b101111;
+    s.b3 = 0b11;
+
+    // 显式 S 中各域的布局
+    auto i = std::bit_cast&lt;std::uint16_t&gt;(s);
+    // 通常打印 1110000011110111
+    // 分解为： └┬┘├┘└┬┘└─┬──┘└┤
+    //         b1 u  a   b2  b3
+    // 其中 “u” 标记结构体中未使用的 :2，而 “a” 标记由编译器添加用以字节对齐下一个域的填充位。
+    // 发生字节对齐是因为 b2 的类型被声明为了 unsigned char；
+    // 如果 b2 声明为 uint16_t 则将不会有 “a”，b2 将紧挨 “u”。
+    for (auto b = i; b; b &gt;&gt;= 1) // 按 LSB 先序打印
+        std::cout &lt;&lt; (b &amp; 1);
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+2
+1110000011110111
+}}
+
+{{anchor|大小为零}}
+特殊的零大小无名位域可用于强行打破填充。它指定下个位域在它的分配单元的开始处开始：
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    // 通常会占用 2 个字节：
+    // 3 位：b1 的值
+    // 5 位：不使用
+    // 2 位：b2 的值
+    // 6 位：不使用
+    unsigned char b1 : 3;
+    unsigned char :0; // 开始新字节
+    unsigned char b2 : 2;
+};
+
+int main()
+{
+    std::cout &lt;&lt; sizeof(S) &lt;&lt; '\n'; // 通常打印 2
+                                    // 若没有第 11 行打断填充则通常会打印 1
+}
+|p=true
+|output=
+2
+}}
+
+如果位域所指定的大小大于它的类型的大小，那么值由类型所限制：{{c|std::uint8_t b : 1000;}} 仍只能保存范围 {{closed_range|0|255}} 中的值。额外的位都是{{rlp|object#对象表示与值表示|填充位}}。
+
+因为位域不一定在一个字节的开始处开始，所以不能取位域的地址。指向位域的指针和非 const 引用是不可行的。从位域{{rlp|reference initialization|初始化 const 引用}}时，将创建一个临时量（其类型是位域的类型），并以该位域的值复制初始化，而引用绑定到该临时量。
+{{rrev multi
+|rev1=
+位域没有{{rlp|data members#成员初始化|默认成员初始化器}}：{{c|1=int b : 1 = 0;}} 和 {{c|int b : 1 {0}&lt;!----&gt;}} 非良构。
+|since2=c++20|rev2={{anchor|Cpp20 位域的默认成员初始化器}}
+在位域大小与默认初始化器有歧义的情况下，选择组成合法大小的最长记号序列：
+{{source|1=
+int a;
+const int b = 0;
+
+struct S
+{
+    // 简单情况
+    int x1 : 8 = 42; // OK："= 42" 是花括号或等号初始化器
+    int x2 : 8 {42}; // OK："{42}" 是花括号或等号初始化器
+    
+    // 有歧义
+    int y1 : true ? 8 : a = 42;   // OK：不存在花括号或等号初始化器
+    int y2 : true ? 8 : b = 42;   // 错误：不能赋值给 const int
+    int y3 : (true ? 8 : b) = 42; // OK："= 42" 是花括号或等号初始化器
+    int z : 1 {{!!}} new int{0};      // OK：不存在花括号或等号初始化器
+};
+}}
+}}
+
+===注解===
+位域的下列性质''由实现定义''：
+* 以范围外的值对有符号位域进行赋值或初始化，或对有符号位域进行自增越过其范围，所产生的值。
+* 任何关于类对象中位域的实际分配细节：
+:* 例如，在某些平台上，位域不跨过字节，其他平台上会跨过
+:* 还有，在某些平台上，位域从左到右打包，其他平台上从右到左
+
+在 C 编程语言中，位域的宽度不能超过底层类型的宽度，并且未显式标为 {{c/core|signed}} 或 {{c/core|unsigned}} 的 {{c/core|int}} 位域是有符号还是无符号由实现定义。例如，C 中 {{c|int b:3;}} 可能有值域 {{closed_range|0|7}} 或 {{closed_range|-4|3}}，但在 C++ 中只有后者。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=324|std=C++98|before=未指明对位域的赋值的返回值是否也是位域|after=对可能返回左值的操作符添加位域说明}}
+{{dr list item|wg=cwg|dr=739|std=C++98|before=未显式声明为 {{c/core|signed}} 或 {{c/core|unsigned}} 的位域由实现定义是否有符号|after=与底层类型一致}}
+{{dr list item|wg=cwg|dr=2229|std=C++98|before=无名位域可以声明为具有有 cv 限定的类型|after=已禁止}}
+{{dr list item|wg=cwg|dr=2511|std=C++98|before=位域类型不能有 cv 限定|after=位域的类型可以是有 cv 限定的枚举类型}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=11.4.10|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11.4.9|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=12.2.4|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=9.6|title=Bit-fields|id=class.bit}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc bitset}}
+{{dsc inc|cpp/container/dsc vector_bool}}
+{{dsc|[[cpp/utility/bit|'''位操纵工具''']] {{mark c++20}}|用来访问，操纵以及处理单独位和位序列的工具}}
+{{dsc see c|c/language/bit field|位域|nomono=true}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,391 @@
+{{cpp/ranges/title|{{small|iota_view&lt;W, Bound&gt;::}}''iterator''}}
+{{cpp/ranges/iota_view/navbar}}
+{{dcl begin}}
+{{dcla|num=1|anchor=no|expos=yes|
+struct /*iterator*/;
+}}
+{{dcl h|辅助别名模板}}
+{{dcla|num=2|anchor=iota-diff-t|expos=yes|1=
+template&lt; class I &gt;
+using /*iota-diff-t*/ = /* 见下文 */;
+}}
+{{dcl h|辅助概念}}
+{{dcla|num=3|anchor=decrementable|expos=yes|1=
+template&lt; class I &gt;
+concept /*decrementable*/ =
+    std::incrementable&lt;I&gt; &amp;&amp; requires(I i) {
+        { --i } -&gt; std::same_as&lt;I&amp;&gt;;
+        { i-- } -&gt; std::same_as&lt;I&gt;;
+    };
+}}
+{{dcla|num=4|anchor=advanceable|expos=yes|1=
+template&lt; class I &gt;
+concept /*advanceable*/ =
+    /*decrementable*/&lt;I&gt; &amp;&amp; std::totally_ordered&lt;I&gt; &amp;&amp;
+    requires(I i, const I j, const /*iota-diff-t*/&lt;I&gt; n) {
+        { i += n } -&gt; std::same_as&lt;I&amp;&gt;;
+        { i -= n } -&gt; std::same_as&lt;I&amp;&gt;;
+        I(j + n);
+        I(n + j);
+        I(j - n);
+        { j - j } -&gt; std::convertible_to&lt;/*iota-diff-t*/&lt;I&gt;&gt;;
+    };
+}}
+{{dcl end}}
+
+@1@ {{c/core|ranges::iota_view&lt;W, Bound&gt;::}}{{tti|iterator}} 是 {{c/core|ranges::iota_view&lt;W, Bound&gt;}} 的 {{rlpf|begin}} 和 {{rlpf|end}} 返回的迭代器的类型。
+
+@2@ 计算迭代器类型和[[cpp/iterator/is-integer-like|整数式类型]]的差类型。
+* 如果 {{tt|W}} 不是整数类型，或是整数类型且 {{c|sizeof(std::iter_difference_t&lt;I&gt;)}} 大于 {{c|sizeof(I)}}，那么 {{c/core|/*iota-diff-t*/&lt;I&gt;}} 是 {{c/core|std::iter_difference_t&lt;I&gt;}}。
+* 否则，{{c/core|/*iota-diff-t*/&lt;I&gt;}} 是宽度大于 {{tt|I}} 的有符号整数类型，如果这种类型存在。
+* 否则，{{tt|I}} 是最宽的整数类型之一，而 {{c/core|/*iota-diff-t*/&lt;I&gt;}} 是宽度不小于 {{tt|I}} 的未指明的[[cpp/iterator/is-integer-like|有符号整数式类型]]。此时不指定 {{c/core|/*iota-diff-t*/&lt;I&gt;}} 是否实现 {{lconcept|weakly_incrementable}}。
+
+@3@ 指定类型为 {{lconcept|incrementable}}，而且该类型的前缀与后缀 {{c|operator--}} 均拥有通常含义。
+
+@4@ 指定类型同时为 {{lsi|#decrementable}} 及 {{lconcept|totally_ordered}}，而且该类型与其差类型间的 {{c|1=operator+=}}、{{c|1=operator-=}}、{{c|operator+}} 和 {{c|operator-}} 均拥有通常含义。
+
+{{c/core|/*iterator*/}}
+* 在 {{c|W}} 实现 {{lsi|#advanceable}} 时实现 {{lconcept|random_access_iterator}} {{v|4}}，
+* 在 {{c|W}} 实现 {{lsi|#decrementable}} 时实现 {{lconcept|bidirectional_iterator}} {{v|3}}，
+* 在 {{c|W}} 实现 {{lconcept|incrementable}} 时实现 {{lconcept|forward_iterator}}，
+* 否则实现 {{lconcept|input_iterator}}。
+
+然而，只有在 {{tt|W}} 实现 {{lconcept|incrementable}} 的情况下它才会满足{{named req|InputIterator}}，否则不满足{{named req|InputIterator}}。
+
+===语义要求===
+@3@ 只有在 {{tt|I}} 满足 {{tti|decrementable}} 且所有它蕴含的概念均得到实现，并且给定相等的 {{tt|I}} 类型对象 {{c|a}} 与 {{c|b}}，满足以下条件时，类型 {{tt|I}} 才会实现 {{tti|decrementable}}：
+* 如果 {{c|a}} 与 {{c|b}} 在前缀与后缀 {{c|operator--}} 的定义域内（即它们可自减），那么以下值都是 {{c|true}}：
+** {{c|1=std::addressof(--a) == std::addressof(a)}}
+** {{c|1=bool(a-- == b)}}
+** {{c|1=bool(((void)a--, a) == --b)}}
+** {{c|1=bool(++(--a) == b)}}
+* 如果 {{c|a}} 与 {{c|b}} 在前缀与后缀 {{c|operator++}} 的定义域内（即它们可自增），那么 {{c|1=bool(--(++a) == b)}} 是 {{c|true}}。
+
+@4@ 令 {{tt|D}} 代表 {{c/core|/*iota-diff-t*/&lt;I&gt;}}。类型 {{tt|I}} 只有在 {{tt|I}} 满足 {{lsi|#advanceable}} 且所有其所蕴含的概念均得到实现，并且给定
+* {{tt|I}} 类型对象 {{c|a}} 与 {{c|b}} 及
+* {{tt|D}} 类型值 {{c|n}}，
+使得 {{c|b}} 可在 {{c|n}} 次应用 {{c|++a}} 后从 {{c|a}} 可达，使得下列所有条件都得到满足时才会实现 {{lsi|#advanceable}}：
+* {{c|1=(a += n)}} 等于 {{c|b}}。
+* {{c|1=std::addressof(a += n)}} 等于 {{c|std::addressof(a)}}。
+* {{c|I(a + n)}} 等于 {{c|1=(a += n)}}。
+* 对于两个 {{c|D}} 类型的正值 {{c|x}} 与 {{c|y}}，如果 {{c|I(a + D(x + y))}} 具有良好定义，那么 {{c|I(a + D(x + y))}} 等于 {{c|I(I(a + x) + y)}}。
+* {{c|I(a + D(0))}} 等于 {{c|a}}。
+* 如果 {{c|I(a + D(n - 1))}} 具有良好定义，那么 {{c|I(a + n)}} 等于 {{c|[](I c) { return ++c; }(I(a + D(n - 1)))}}。
+* {{c|1=(b += -n)}} 等于 {{c|a}}。
+* {{c|1=(b -= n)}} 等于 {{c|a}}。
+* {{c|1=std::addressof(b -= n)}} 等于 {{c|std::addressof(b)}}。
+* {{c|I(b - n)}} 等于 {{c|1=(b -= n)}}。
+* {{c|D(b - a)}} 等于 {{c|n}}。
+* {{c|D(a - b)}} 等于 {{c|D(-n)}}。
+* {{c|1=bool(a &lt;= b)}} 是 {{c|true}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|iterator_concept}}|[[cpp/iterator/iterator tags|迭代器标签]]，见下文}}
+{{dsc|{{tt|iterator_category}}{{anchor|iterator_category}}&lt;br&gt;{{small|（仅当 {{tt|W}} 实现 {{lconcept|incrementable}} 且 {{c/core|/*iota-diff-t*/&lt;W&gt;}} 是整数类型时提供）}}|{{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|value_type}}|{{tt|W}}}}
+{{dsc|{{tt|difference_type}}|{{c/core|/*iota-diff-t*/&lt;W&gt;}}}}
+{{dsc end}}
+
+====确定迭代器概念====
+{{tt|iterator_concept}} 定义如下：
+* 如果 {{tt|W}} 实现了 {{lsi|#advanceable}}，那么 {{tt|iterator_concept}} 表示 {{lc|std::random_access_iterator_tag}}。
+* 否则，如果 {{tt|W}} 实现了 {{lsi|#decrementable}}，那么 {{tt|iterator_concept}} 表示 {{lc|std::bidirectional_iterator_tag}}。
+* 否则，如果 {{tt|W}} 实现了 {{lconcept|incrementable}}，那么 {{tt|iterator_concept}} 表示 {{lc|std::forward_iterator_tag}}。
+* 否则 {{tt|iterator_concept}} 表示 {{lc|std::input_iterator_tag}}。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem obj|spec={{tt|W}}|value_|id=value|当前值}}
+{{dsc end}}
+
+===成员函数===
+{{member|{{small|std::ranges::iota_view::''iterator''::}}''iterator''|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+/*iterator*/() requires std::default_initializable&lt;W&gt; = default;
+}}
+{{dcl|num=2|since=c++20|
+constexpr explicit /*iterator*/( W value );
+}}
+{{dcl end}}
+
+@1@ 值初始化 {{lsi|#value_}}。
+
+@2@ 以 {{c|value}} 初始化 {{lsi|#value_}}。
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator*|2=
+{{ddcl|since=c++20|
+constexpr W operator*() const
+    noexcept(std::is_nothrow_copy_constructible_v&lt;W&gt;);
+}}
+
+返回 {{box|{{lsi|#value_}}}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(6, 9).begin()};
+    const int&amp; r = *it; // 绑定到临时量
+    assert(*it == 6 and r == 6);
+    ++it;
+    assert(*it == 7 and r == 6);
+}
+}}
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator++|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+constexpr /*iterator*/&amp; operator++();
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr void operator++(int);
+}}
+{{dcl|num=3|since=c++20|1=
+constexpr /*iterator*/ operator++(int) requires std::incrementable&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ 等价于 {{box|{{c/core|++}}{{lsi|#value_}}{{sep}}{{c/core|; return *this;}}}}。
+
+@2@ 等价于 {{box|{{c/core|++}}{{lsi|#value_}}{{sep}}{{c/core|;}}}}。
+
+@3@ 等价于 {{box|{{c/core|1=auto tmp = *this; ++}}{{lsi|#value_}}{{sep}}{{c/core|; return tmp;}}}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(8).begin()};
+    assert(*it == 8);
+    assert(*++it == 9);
+    assert(*it++ == 9);
+    assert(*it == 10);
+}
+}}
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator--|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+constexpr /*iterator*/&amp; operator--() requires /*decrementable*/&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr /*iterator*/operator--(int) requires /*decrementable*/&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ 等价于 {{box|{{c/core|--}}{{lsi|#value_}}{{sep}}{{c/core|; return *this;}}}}。
+
+@2@ 等价于 {{box|{{c/core|1=auto tmp = *this; --}}{{lsi|#value_}}{{sep}}{{c/core|; return tmp;}}}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(8).begin()};
+    assert(*it == 8);
+    assert(*--it == 7);
+    assert(*it-- == 7);
+    assert(*it == 6);
+}
+}}
+}}
+
+{{member|1={{small|std::ranges::iota_view::''iterator''::}}operator+=|2=
+{{ddcl|since=c++20|1=
+constexpr /*iterator*/&amp; operator+=( difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+
+更新 {{lsi|#value_}} 并返回 {{c|*this}}：
+* 如果 {{tt|W}} 是[[cpp/iterator/is-integer-like|无符号整数式类型]]：
+** 如果 {{c|n}} 非负，那么就会进行 {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=+= static_cast&lt;W&gt;(n)}}}}。
+** 否则会进行 {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=-= static_cast&lt;W&gt;(-n)}}}}。
+* 否则会进行 {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=+= n}}}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(5).begin()};
+    assert(*it == 5);
+    assert(*(it += 3) == 8);
+}
+}}
+}}
+
+{{member|1={{small|std::ranges::iota_view::''iterator''::}}operator-=|2=
+{{ddcl|since=c++20|1=
+constexpr /*iterator*/&amp; operator-=( difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+
+更新 {{lsi|#value_}} 并返回 {{c|*this}}：
+* 如果 {{tt|W}} 是[[cpp/iterator/is-integer-like|无符号整数式类型]]：
+** 如果 {{c|n}} 非负，那么就会进行 {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=-= static_cast&lt;W&gt;(n)}}}}。
+** 否则会进行 {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=+= static_cast&lt;W&gt;(-n)}}}}。
+* 否则会进行 {{box|{{lsi|#value_}}{{nbspt}}{{c/core|1=-= n}}}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(6).begin()};
+    assert(*it == 6);
+    assert(*(it -= -3) == 9);
+}
+}}
+}}
+
+{{member|{{small|std::ranges::iota_view::''iterator''::}}operator[]|2=
+{{ddcl|since=c++20|
+constexpr W operator[]( difference_type n ) const
+    requires /*advanceable*/&lt;W&gt;;
+}}
+
+返回 {{box|{{c/core|W(}}{{lsi|#value_}}{{nbspt}}{{c/core|+ n)}}}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    auto it{std::views::iota(6).begin()};
+    assert(*it == 6);
+    assert(*(it + 3) == 9);
+}
+}}
+}}
+
+===非成员函数===
+{{member|1=operator==, &lt;, &gt;, &lt;=, &gt;=, &lt;=&gt;{{petty|(std::ranges::iota_view::''iterator'')}}|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+friend constexpr bool operator==
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::equality_comparable&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+friend constexpr bool operator&lt;
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=3|since=c++20|
+friend constexpr bool operator&gt;
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=4|since=c++20|1=
+friend constexpr bool operator&lt;=
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=5|since=c++20|1=
+friend constexpr bool operator&gt;=
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt;;
+}}
+{{dcl|num=6|since=c++20|1=
+friend constexpr bool operator&lt;=&gt;
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires std::totally_ordered&lt;W&gt; &amp;&amp; std::three_way_comparable&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ 返回 {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|1=== y.}}{{lsi|#value_}}}}。
+
+@2@ 返回 {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|&lt; y.}}{{lsi|#value_}}}}。
+
+@3@ 返回 {{c|y &lt; x}}。
+
+@4@ 返回 {{c|!(y &lt; x)}}。
+
+@5@ 返回 {{c|!(x &lt; y)}}。
+
+@6@ 返回 {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|1=&lt;=&gt; y.}}{{lsi|#value_}}}}。
+
+{{cpp/note synthesized eq}}
+
+{{cpp/hidden friend|''iterator''|plural=yes}}
+}}
+
+{{member|1=operator+{{petty|(std::ranges::iota_view::''iterator'')}}|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+friend constexpr /*iterator*/ operator+
+    ( /*iterator*/ i, difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+friend constexpr /*iterator*/ operator+
+    ( difference_type n, /*iterator*/ i )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl end}}
+
+等价于 {{c|1=i += n; return i;}}。
+
+{{cpp/hidden friend|''iterator''|plural=yes}}
+}}
+
+{{member|1=operator-{{petty|(std::ranges::iota_view::''iterator'')}}|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+friend constexpr /*iterator*/ operator-
+    ( /*iterator*/ i, difference_type n )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl|num=2|since=c++20|
+friend constexpr difference_type operator-
+    ( const /*iterator*/&amp; x, const /*iterator*/&amp; y )
+    requires /*advanceable*/&lt;W&gt;;
+}}
+{{dcl end}}
+
+@1@ 等价于 {{c|1=i -= n; return i;}}。
+
+@2@ 设 {{tt|D}} 为 {{tt|difference_type}}：
+* 如果 {{tt|W}} 是[[cpp/iterator/is-integer-like|整数式类型]]，那么：
+** 如果 {{tt|W}} 是有符号整数式类型，那么就会返回 {{box|{{c/core|D(D(x.}}{{lsi|#value_}}{{sep}}{{c/core|) - D(y.}}{{lsi|#value_}}{{sep}}{{c/core|))}}}}.。
+** 否则会返回 {{box|{{c/core|y.}}{{lsi|#value_}}{{nbspt}}{{c/core|&gt; x.}}{{lsi|#value_}}{{nbspt}}{{c/core|? D(-D(y.}}{{lsi|#value_}}{{nbspt}}{{c/core|- x.}}{{lsi|#value_}}{{sep}}{{c/core|)) : D(x.}}{{lsi|#value_}}{{nbspt}}{{c/core|- y.}}{{lsi|#value_}}{{sep}}{{c/core|)}}}}。
+* 否则会返回 {{box|{{c/core|x.}}{{lsi|#value_}}{{nbspt}}{{c/core|- y.}}{{lsi|#value_}}}}。
+
+{{cpp/hidden friend|''iterator''|plural=yes}}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2259R1|std=C++20|before=始终定义成员 {{lst|#iterator_category}}|after=只有在 {{tt|W}} 满足 {{lconcept|incrementable}} 时才定义}}
+{{dr list item|wg=lwg|dr=3580|std=C++20|before={{c/core|operator+}} 与 {{c/core|operator-}} 复制迭代器|after=使之移动迭代器}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

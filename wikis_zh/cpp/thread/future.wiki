@@ -1,0 +1,128 @@
+{{cpp/title|future}}
+{{cpp/thread/future/navbar}}
+{{dcl begin}}
+{{dcl header|future}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt; class future;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class T &gt; class future&lt;T&amp;&gt;;
+}}
+{{dcl|num=3|since=c++11|
+template&lt;&gt; class future&lt;void&gt;;
+}}
+{{dcl end}}
+
+类模板 {{tt|std::future}} 提供访问异步操作结果的机制：
+
+* （通过 {{lc|std::async}}、{{lc|std::packaged_task}} 或 {{lc|std::promise}} 创建的）异步操作能提供一个 {{tt|std::future}} 对象给该异步操作的创建者。
+
+* 然后，异步操作的创建者可以使用多个方法查询、等待或从 {{tt|std::future}} 提取值。若异步操作尚未提供值，则这些方法可能阻塞。
+
+* 当异步操作准备好发送结果给创建者时，它可以修改与创建者的 {{tt|std::future}} 相链接的''共享状态''（例如 {{lc|std::promise::set_value}}）。
+
+注意，{{tt|std::future}} 所引用的共享状态不与另一异步返回对象共享（与 {{lc|std::shared_future}} 相反）。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/future/dsc constructor|future}}
+{{dsc inc|cpp/thread/future/dsc destructor}}
+{{dsc inc|cpp/thread/future/dsc operator{{=}}}}
+{{dsc inc|cpp/thread/future/dsc share}}
+
+{{dsc h2|获取结果}}
+{{dsc inc|cpp/thread/future/dsc get|future}}
+
+{{dsc h2|状态}}
+{{dsc inc|cpp/thread/future/dsc valid|future}}
+{{dsc inc|cpp/thread/future/dsc wait|future}}
+{{dsc inc|cpp/thread/future/dsc wait_for|future}}
+{{dsc inc|cpp/thread/future/dsc wait_until|future}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int main()
+{
+    // 来自 packaged_task 的 future
+    std::packaged_task&lt;int()&gt; task([](){ return 7; }); // 包装函数
+    std::future&lt;int&gt; f1 = task.get_future();  // 获取 future
+    std::thread t(std::move(task)); // 在线程上运行
+
+    // 来自 async() 的 future
+    std::future&lt;int&gt; f2 = std::async(std::launch::async, [](){ return 8; });
+
+    // 来自 promise 的 future
+    std::promise&lt;int&gt; p;
+    std::future&lt;int&gt; f3 = p.get_future();
+    std::thread([&amp;p]{ p.set_value_at_thread_exit(9); }).detach();
+
+    std::cout &lt;&lt; "等待..." &lt;&lt; std::flush;
+    f1.wait();
+    f2.wait();
+    f3.wait();
+    std::cout &lt;&lt; "完成!\n结果为: "
+              &lt;&lt; f1.get() &lt;&lt; ' ' &lt;&lt; f2.get() &lt;&lt; ' ' &lt;&lt; f3.get() &lt;&lt; '\n';
+    t.join();
+}
+|output=
+等待...完成!
+结果为: 7 8 9
+}}
+
+====带异常的示例====
+{{example
+|code=
+#include &lt;future&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+
+int main()
+{
+    std::promise&lt;int&gt; p;
+    std::future&lt;int&gt; f = p.get_future();
+
+    std::thread t([&amp;p]
+    {
+        try
+        {
+            // 可能抛出异常的代码
+            throw std::runtime_error("Example");
+        }
+        catch (...)
+        {
+            try
+            {
+                // 存储 promise 中抛出的任何异常
+                p.set_exception(std::current_exception());
+            }
+            catch (...) {} // set_exception() 也可能抛出异常
+        }
+    });
+
+    try
+    {
+        std::cout &lt;&lt; f.get();
+    }
+    catch (const std::exception&amp; e)
+    {
+        std::cout &lt;&lt; "来自线程的异常: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    t.join();
+}
+|output=
+来自线程的异常: Example
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc async}}
+{{dsc inc|cpp/thread/dsc shared_future}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

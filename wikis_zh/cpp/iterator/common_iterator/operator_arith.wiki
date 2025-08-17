@@ -1,0 +1,88 @@
+{{cpp/iterator/common_iterator/title|1=operator++}}
+{{cpp/iterator/common_iterator/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+constexpr common_iterator&amp; operator++();
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr decltype(auto) operator++( int );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|notes={{mark expos}}|1=
+class /*postfix_proxy*/ {
+    std::iter_value_t&lt;I&gt; keep_;
+    constexpr postfix_proxy(std::iter_reference_t&lt;I&gt;&amp;&amp; x)
+        : keep_(std::forward&lt;std::iter_reference_t&lt;I&gt;&gt;(x)) {}
+public:
+    constexpr const std::iter_value_t&lt;I&gt;&amp; operator*() const noexcept {
+        return keep_;
+    }
+};
+}}
+{{dcl end}}
+
+自增底层迭代器。
+
+若底层 {{lc|std::variant}} 成员对象 {{tt|''var''}} 不保有 {{tt|I}} 类型的对象，即 {{c|std::holds_alternative&lt;I&gt;(var)}} 等于 {{c|false}}，则行为未定义。
+
+令 {{tt|it}} 代表 {{tt|''var''}} 所保有的 {{tt|I}} 类型的迭代器，即 {{c|std::get&lt;I&gt;(var)}}。
+
+@1@ 前自增一。等价于 {{c|++it; return *this;}}。
+
+@2@ 后自增一：
+* 若 {{c|I}} 实现 {{lconcept|forward_iterator}}，则等价于 {{c|1=auto tmp = *this; ++*this; return tmp; }}。
+* 若变量定义 {{c|1=auto&amp;&amp; ref = *it++;}} 为良构，或者
+:* {{c|std::indirectly_readable&lt;I&gt;}} 或
+:* {{c|std::constructible_from&lt;std::iter_value_t&lt;I&gt;, std::iter_reference_t&lt;I&gt;&gt;}} 或
+:* {{c|std::move_constructible&lt;std::iter_value_t&lt;I&gt;&gt;}}
+为 {{c|false}}，则等价于 {{c|return it++;}}。
+* 否则等价于 {{c|postfix_proxy p(**this); ++*this; return p; }}，其中 {{tt|''postfix_proxy''}} 为仅用于阐释的辅助类型 {{v|3}}。
+
+===参数===
+（无）
+
+===返回值===
+@1@ {{c|*this}}
+@2@ 如上所述，更改前的 {{c|*this}} 的副本，或后自增底层迭代器的结果，或保有当前元素的值的代理。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;initializer_list&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+
+int main()
+{
+    const auto il = {1, 2, 3, 4, 5, 6};
+
+    using CI = std::common_iterator&lt;
+                   std::counted_iterator&lt;std::initializer_list&lt;int&gt;::iterator&gt;,
+                   std::default_sentinel_t
+                   &gt;;
+
+    CI first{std::counted_iterator{std::begin(il), std::ssize(il) - 2}&lt;!----&gt;};
+
+    for (; first != std::default_sentinel; ++first)
+        std::cout &lt;&lt; *first &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+1 2 3 4
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2259R1|std=C++20|before=后自增在更多场合舍弃其结果|after=用代理类保有结果}}
+{{dr list item|wg=lwg|dr=3546|std=C++20|before=代理对象的初始化有时非良构|after=调整了场合与定义}}
+{{dr list item|wg=lwg|dr=3574|std=C++20|before={{tt|variant}} 为完全 constexpr (P2231R1) 但 {{tt|common_iterator}} 不是|after=亦使之为 constexpr}}
+{{dr list item|wg=lwg|dr=3595|std=C++20|before=代理类型的函数缺少 constexpr 与 noexcept|after=已添加}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/adaptor/dsc operator-|common_iterator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

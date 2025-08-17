@@ -1,0 +1,452 @@
+{{title|模块 {{mark since c++20}}}}
+{{cpp/language/basics/navbar}}
+
+大多数 C++ 项目用到了多个翻译单元，因此它们需要在那些单元间共享{{rlp|declarations|声明}}和{{rlp|definition|定义}}。正是因为这样，使用{{ls|cpp/standard library#标头}}非常重要，例如[[cpp/standard library|标准库]]的声明可以通过[[cpp/standard library#包含标头|包含对应的标头]]提供。
+
+模块是一个用于在翻译单元间分享声明和定义的语言特性。
+它们可以在某些地方替代标头的使用。
+
+模块和{{rlp|namespace|命名空间}}是正交的。
+
+{{source|
+// helloworld.cpp
+export module helloworld; // 模块声明
+
+import &lt;iostream&gt;;        // 导入声明
+
+export void hello()       // 导出声明
+{
+    std::cout &lt;&lt; "Hello world!\n";
+}
+}}
+
+{{source|
+// main.cpp
+import helloworld; // 导入声明
+
+int main()
+{
+    hello();
+}
+}}
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|export}}{{mark optional}} {{ttb|module}} {{spar optional|模块名 模块分区}} {{spar optional|属性}} {{ttb|;}}
+}}
+{{sdsc|num=2|
+{{ttb|export}} {{spar|声明}}
+}}
+{{sdsc|num=3|
+{{ttb|export {}} {{spar optional|声明序列}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=4 |
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|模块名 属性}} {{ttb|;}}
+}}
+{{sdsc|num=5|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|模块分区 属性}} {{ttb|;}}
+}}
+{{sdsc|num=6|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|头名 属性}} {{ttb|;}}
+}}
+{{sdsc|num=7|
+{{ttb|module;}}
+}}
+{{sdsc|num=8|
+{{ttb|module : private;}}
+}}
+{{sdsc end}}
+
+@1@ 模块声明。声明当前翻译单元是一个''模块单元''。
+@2,3@ 导出声明。导出{{spar sep|声明}}或{{spar sep|声明序列}}中所有具有命名空间作用域的声明。
+@4,5,6@ 导入声明。导入一个模块单元，模块分区，或标头单元。
+@7@ 开始一个''全局模块片段''。
+@8@ 开始一个''私有模块片段''。
+
+===模块声明===
+翻译单元可以有一个模块声明，这种情况下它们会被视为''模块单元''。
+''模块声明''{{sep}}在有提供时必须是翻译单元的首个声明（后面提到的''全局模块片段''{{sep}}除外）。每个模块单元都对应一个''模块名''（可以带一个分区），它在模块声明中提供。
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|module}} {{spar optional|模块名 模块分区}} {{spar optional|属性}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+模块名包含由点分隔的一个或多个标识符（例如：{{tt|mymodule}}，{{tt|mymodule.mysubmodule}}，{{tt|mymodule2}}...）。点没有内在含义，不过它们会非正式地用于表示层次结构。
+
+如果模块名或模块分区中的任何标识符被定义为[[cpp/preprocessor/replace|对象式宏]]，那么程序非良构。
+
+一个''具名模块''{{sep}}是一组模块名相同的模块单元。
+
+声明中带有关键词 {{c/core|export}} 的模块单元是''模块接口单元''。其他模块单元被称为''模块实现单元''。
+
+对于每个具名模块，必须有且仅有一个未指定模块分区的模块接口单元。这个模块单元被称为''主模块接口单元''。在导入对应的具名模块时可以使用它导出的内容。
+
+{{source|
+// （每行表示一个单独的翻译单元）
+
+export module A;   // 为具名模块 'A' 声明主模块接口单元
+module A;          // 为具名模块 'A' 声明一个模块实现单元
+module A;          // 为具名模块 'A' 声明另一个模块实现单元
+export module A.B; // 为具名模块 'A.B' 声明主模块接口单元
+module A.B;        // 为具名模块 'A.B' 声明一个模块实现单元
+}}
+
+===导出声明和定义===
+模块接口单元可以导出声明（包括定义），这些内容可以导入到其他翻译单元。为导出一条声明，可以用 {{c/core|export}} 关键词作为前缀，或者处于 {{c/core|export}} 块中。
+ 
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}} {{spar|声明}}
+}}
+{{sdsc|
+{{ttb|export {}} {{spar optional|声明序列}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+{{source|
+export module A; // 为具名模块 'A' 声明主模块接口单元
+
+// hello() 会在所有导入 'A' 的翻译单元中可见
+export char const* hello() { return "hello"; } 
+
+// world() 不可见
+char const* world() { return "world"; }
+
+// one() 和 zero() 均可见
+export
+{
+    int one()  { return 1; }
+    int zero() { return 0; }
+}
+
+// 也可以导出命名空间：hi::english() 和 hi::french() 均可见
+export namespace hi
+{
+    char const* english() { return "Hi!"; }
+    char const* french()  { return "Salut!"; }
+}
+}}
+
+===导入模块和标头===
+可以通过''导入声明''{{sep}}导入模块：
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|模块名 属性}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+在给定具名模块的模块接口单元中导出的所有声明和定义，都会在使用导入声明的翻译单元中可用。
+
+导入的声明在模块接口单元里可以再导出。也就是说，如果模块 {{tt|A}} 导入 {{tt|B}} 后又导出，那么导入 {{tt|A}} 也会使所有从 {{tt|B}} 导出的内容可见。
+
+在模块单元里，所有导入声明（包括带导出的导入）必须集中在模块声明后以及所有其他声明前。
+
+{{source|
+/////// A.cpp （'A' 的主模块接口单元）
+export module A;
+
+export char const* hello() { return "hello"; }
+
+/////// B.cpp （'B' 的主模块接口单元）
+export module B;
+
+export import A;
+
+export char const* world() { return "world"; }
+
+/////// main.cpp （非模块单元）
+#include &lt;iostream&gt;
+import B;
+
+int main()
+{
+    std::cout &lt;&lt; hello() &lt;&lt; ' ' &lt;&lt; world() &lt;&lt; '\n';
+}
+}}
+
+在模块单元里（''全局模块片段''{{sep}}以外）不能使用 {{ltt|cpp/preprocessor/include|#include}}，因为所有被包含的声明和定义都会被当作模块的一部分。可以改为将标头通过''导入声明''{{sep}}作为''标头单元''{{sep}}导入：
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|头名 属性}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+标头单元是从标头合成的一个独立翻译单元。导入一个标头单元会使它所有的声明和定义可访问。预处理宏也会可访问（因为预处理器会识别导入声明）。
+
+然而与 {{c/core|#include}} 相反的是，在导入声明处已经定义的预处理宏不会影响标头的处理。这在某些场合会不方便（某些标头用预处理宏作为配置方式），这种情况下需要使用''全局模块片段''。
+
+{{source|1=
+/////// A.cpp （'A' 的主模块接口单元）
+export module A;
+
+import &lt;iostream&gt;;
+export import &lt;string_view&gt;;
+
+export void print(std::string_view message)
+{
+    std::cout &lt;&lt; message &lt;&lt; std::endl;
+}
+
+/////// main.cpp （非模块单元）
+import A;
+
+int main()
+{
+    std::string_view message = "Hello, world!";
+    print(message);
+}
+}}
+
+===全局模块片段===
+模块单元可以有''全局模块片段''{{sep}}前缀，它可以在无法导入标头时（尤其是在标头用预处理宏进行配置时）包含它们。
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|module;}}
+
+{{spar optional|预处理指令序列}}
+
+{{spar|模块声明}}
+}}
+{{sdsc end}}
+
+如果一个模块单元有一个全局模块片段，那么它的首个声明必须是 {{ttb|module;}}。因此在全局模块片段中只能出现[[cpp/preprocessor#指令|预处理指令]]。然后用一条标准的模块声明标记这个全局模块片段的结束，后面就是模块内容。
+
+{{source|
+/////// A.cpp （'A' 的主模块接口单元）
+module;
+
+// 按照 POSIX 标准，定义 _POSIX_C_SOURCE 会向标准标头中添加函数。
+#define _POSIX_C_SOURCE 200809L
+#include &lt;stdlib.h&gt;
+
+export module A;
+
+import &lt;ctime&gt;;
+
+// 仅用于演示（差的随机源）。应改为使用 C++ &lt;random&gt;。
+export double weak_random()
+{
+    std::timespec ts;
+    std::timespec_get(&amp;ts, TIME_UTC); // 来自 &lt;ctime&gt;
+    
+    // 按照 POSIX 标准从 &lt;stdlib.h&gt; 提供。
+    srand48(ts.tv_nsec);
+    
+    // drand48() 返回 0 与 1 之间的一个随机数
+    return drand48();
+}
+
+/////// main.cpp （非模块单元）
+import &lt;iostream&gt;;
+import A;
+
+int main()
+{
+    std::cout &lt;&lt; "0 与 1 之间的随机值：" &lt;&lt; weak_random() &lt;&lt; '\n';
+}
+}}
+
+===私有模块片段===
+主模块接口单元可以后随一个''私有模块片段''，这样就可以在不会把模块的所有内容暴露给导入方的情况下将模块表示为单个编译单元。
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|module : private;}}
+{{spar optional|声明序列}}
+}}
+{{sdsc end}}
+
+''私有模块片段''{{sep}}会终止模块接口单元中可以影响其他翻译单元的行为的部分。如果模块单元包含了私有模块片段，那么它就是它的模块中唯一的模块单元。
+
+{{source|
+export module foo;
+
+export int f();
+
+module : private; // 终止模块接口单元中可以影响其他翻译单元的行为的部分
+                  // 开始私有模块片段
+
+int f()           // 定义对 foo 的导入方不可及
+{
+    return 42;
+}
+}}
+
+===模块分区===
+一个模块可以有''模块分区单元''。它们是模块声明中包含模块分区的模块单元，模块分区在模块名之后，以一个冒号 {{ttb|:}} 开头。
+
+{{source|
+export module A:B; // 为模块 'A' 分区 ':B' 声明一个模块接口单元。
+}}
+
+一个模块分区表示恰好一个模块单元（两个模块单元不能指定同一个模块分区）。它们只在自己所在的具名模块内部可见（在该具名模块外的翻译单元不能直接导入这些模块分区）。
+
+模块分区只能被相同具名模块的模块单元导入。
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|模块分区 属性}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{source|
+/////// A-B.cpp   
+export module A:B;
+...
+
+/////// A-C.cpp
+module A:C;
+...
+
+/////// A.cpp
+export module A;
+
+import :C;
+export import :B;
+
+...
+}}
+
+模块分区内的所有声明和定义在将它导入的模块单元中均可见，无论它们是否被导出。
+
+模块分区可以是模块接口单元（如果模块声明中有 {{ttb|export}}）。它们必须被主模块接口单元在导入同时导出，并且它们导出的语句在模块被导入时均可见。
+
+{{sdsc begin}}
+{{sdsc|
+{{ttb|export}}{{mark optional}} {{ttb|import}} {{spar optional|模块分区 属性}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{source|
+///////  A.cpp   
+export module A;     // 主模块接口单元
+
+export import :B;    // Hello() 在导入 'A' 时可见
+import :C;           // 现在 WorldImpl() 只对 'A.cpp' 可见
+// export import :C; // 错误：无法导出模块实现单元
+
+// World() 对所有导入 'A' 的翻译单元均可见
+export char const* World()
+{
+    return WorldImpl();
+}
+}}
+
+{{source|
+/////// A-B.cpp 
+export module A:B; // 模块分区接口单元
+
+// Hello() 对所有导入 'A' 的翻译单元均可见
+export char const* Hello() { return "Hello"; }
+}}
+
+{{source|
+/////// A-C.cpp 
+module A:C; // 模块分区实现单元
+
+// WorldImpl() 对 'A' 中所有导入 ':C' 的翻译单元均可见
+char const* WorldImpl() { return "World"; }
+}}
+
+{{source|
+/////// main.cpp 
+import A;
+import &lt;iostream&gt;;
+
+int main()
+{
+    std::cout &lt;&lt; Hello() &lt;&lt; ' ' &lt;&lt; World() &lt;&lt; '\n';
+    // WorldImpl(); // 错误：WorldImpl() 不可见
+}
+}}
+
+===模块所有权===
+通常来说，在模块单元中的模块声明后出现的声明都''附着于''{{sep}}该模块。
+
+如果一个实体的声明附着于一个具名模块，该实体只能在该模块中定义。每个这种实体的所有声明都必须附着于同一模块。
+
+如果一个声明附着于一个具名模块，并且该声明没有被导出，那么声明的名字具有{{rlps|storage duration#模块链接}}。
+
+{{source|1=
+export module lib_A;
+ 
+int f() { return 0; } // f 具有模块链接
+export int x = f();   // x 等于 0
+}}
+
+{{source|1=
+export module lib_B;
+ 
+int f() { return 1; } // OK，lib_A 中的 f 和 lib_B 中的 f 指代不同的实体
+export int y = f(); // y 等于 1
+}}
+
+如果{{rlp|conflicting declarations#相同实体的多次声明|同一实体的两个声明}}附着于不同的模块，那么程序非良构；如果两个声明都无法从对方可及，那么不要求诊断。
+
+{{source|
+/////// decls.h
+int f(); // #1，附着于全局模块
+int g(); // #2，附着于全局模块
+}}
+
+{{source|
+/////// M 的模块接口
+module;
+#include "decls.h"
+export module M;
+export using ::f; // OK，不声明实体，导出 #1
+int g();          // 错误：与 #2 匹配，但附着于 M
+export int h();   // #3
+export int k();   // #4
+}}
+
+{{source|
+/////// 其他翻译单元
+import M;
+static int h();   // 错误：与 #3 匹配
+int k();          // 错误：与 #4 匹配
+}}
+
+以下声明不附着于任何具名模块（因此声明的这些实体可以在模块外定义）：
+
+* 具有外部链接的{{rlp|namespace|命名空间}}定义
+* 在{{rlp|language linkage|语言链接}}说明中的声明
+
+{{source|
+export module lib_A;
+ 
+namespace ns // ns 不附着于 lib_A
+{
+    export extern "C++" int f(); // f 不附着于 lib_A
+           extern "C++" int g(); // g 不附着于 lib_A
+    export              int h(); // h 附着于 lib_A
+}
+// ns::h 必须在 lib_A 中定义，但 ns::f 和 ns::g 可以在其他地方定义
+// （例如在传统源文件中）
+}}
+
+===注解===
+{{ftm begin|comment=yes|std=yes}}
+{{ftm|__cpp_modules|模块 &amp;mdash; 核心语言支持|value=201907L|std=C++20}}
+{{ftm|__cpp_lib_modules|[[cpp/standard library#导入模块|标准库模块]] {{c|std}} 和 {{c|std.compat}}|value=202207L|std=C++23}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/private}},
+{{ltt|cpp/identifier_with_special_meaning/module}},
+{{ltt|cpp/identifier_with_special_meaning/import}}, 
+{{ltt|cpp/keyword/export}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2732|std=C++20|before=不明确可导入标头是否会对导入时的预处理器状态有反应|after=不会有反应}}
+{{dr list item|paper=P3034R1|std=C++20|before=模块名和模块分区中可以包含定义为对象式宏的标识符|after=已禁止}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

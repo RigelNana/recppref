@@ -1,0 +1,299 @@
+{{cpp/title|not_fn}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|functional}}
+{{dcla|num=1|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class F &gt;
+/* 未指定 */ not_fn( F&amp;&amp; f );
+}}
+{{dcla|num=2|since=c++26|
+template&lt; auto ConstFn &gt;
+constexpr /* 未指定 */ not_fn() noexcept;
+}}
+{{dcl end}}
+
+@1@ 创建转发调用包装器，返回其所保有的可调用对象的逻辑非。
+@2@ 创建转发调用包装器，返回静态确定的可调用目标的逻辑非。若 {{tt|ConstFn}} 为空指针或空成员指针则程序非良构。
+
+===参数===
+{{par begin}}
+{{par|f|构造包装器所保有的{{named req|Callable}}对象的来源对象}}
+{{par hreq}}
+{{par req named|{{c/core|std::decay_t&lt;F&gt;}}|MoveConstructible|Callable}}
+{{par req|要求 {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}} 是 {{c|true}}}}
+{{par end}}
+
+===返回值===
+@1@ 未指定类型 {{tt|T}} 的函数对象。它拥有下列成员。
+{{member|{{small|std::not_fn}} ''返回类型''|2=
+====成员对象====
+{{tt|std::not_fn}} 的返回类型保有一个 {{c/core|std::decay_t&lt;F&gt;}} 类型的成员对象。
+
+====构造函数====
+{{dcl begin}}
+{{dcl|num=1|since=c++17|notes={{mark constexpr since c++20}}&lt;br&gt;{{mark expos}}|1=
+explicit T( F&amp;&amp; f );
+}}
+{{dcl|num=2|since=c++17|1=
+T( T&amp;&amp; f ) = default;
+T( const T&amp; f ) = default;
+}}
+{{dcl end}}
+@1@ 构造函数从 {{c|std::forward&lt;F&gt;(f)}} 直接非列表初始化成员对象（类型是 {{c/core|std::decay_t&lt;F&gt;}}）。抛出所选构造函数所抛的任何异常。
+@2@ 因为要求 {{c/core|std::decay_t&lt;F&gt;}} {{named req|MoveConstructible}}，所以返回的调用包装器始终{{named req|MoveConstructible}}，并且在 {{c/core|std::decay_t&lt;F&gt;}} {{named req|CopyConstructible}}时也{{named req|CopyConstructible}}。
+{{rrev multi|rev1=
+显式预置的函数定义使得返回类型不可赋值。
+|since2=c++20|rev2=
+这些构造函数是否显式预置，以及返回类型是否可赋值是未指定的。
+}}
+
+====成员函数 {{c/core|operator()}}====
+{{dcl begin}}
+{{dcl rev multi|num=1|since1=c++17|dcl1=
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) &amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt;&amp;, Args...&gt;&gt;());
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) const&amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt; const&amp;, Args...&gt;&gt;());
+|since2=c++20|dcl2=
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) &amp;
+    noexcept(/* 见下文 */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt;&amp;&gt;(), std::declval&lt;Args&gt;()...));
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) const&amp;
+    noexcept(/* 见下文 */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt; const&amp;&gt;(), std::declval&lt;Args&gt;()...));
+}}
+{{dcl rev multi|num=2|since1=c++17|dcl1=
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) &amp;&amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt;, Args...&gt;&gt;());
+template&lt; class... Args &gt;
+auto operator()( Args&amp;&amp;... args ) const&amp;&amp;
+-&gt; decltype(!std::declval&lt;
+    std::invoke_result_t&lt;std::decay_t&lt;F&gt; const, Args...&gt;&gt;());
+|since2=c++20|dcl2=
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) &amp;&amp;
+    noexcept(/* 见下文 */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt;&gt;(), std::declval&lt;Args&gt;()...));
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) const&amp;&amp;
+    noexcept(/* 见下文 */)
+-&gt; decltype(!std::invoke(
+    std::declval&lt;std::decay_t&lt;F&gt; const&gt;(), std::declval&lt;Args&gt;()...));
+}}
+{{dcl end}}
+
+令 {{c|fd}} 为 {{c/core|std::decay_t&lt;F&gt;}} 类型的成员对象。
+{{rrev multi
+|since1=c++17|rev1=
+@1@ 等价于 {{c|return !std::invoke(fd, std::forward&lt;Args&gt;(args)...);}}
+@2@ 等价于 {{c|return !std::invoke(std::move(fd), std::forward&lt;Args&gt;(args)...);}}
+
+在调用结果时，若向原先选择的 {{c/core|operator()}} 重载的返回类型中的代换失败，则[[cpp/language/sfinae|可能选择另一个重载]]。
+|since2=c++20|rev2=
+@1@ [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|!std::invoke(fd, std::forward&lt;Args&gt;(args)...)}}
+@2@ [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|!std::invoke(std::move(fd), std::forward&lt;Args&gt;(args)...)}}
+
+在调用结果时，若向原先选择的 {{c/core|operator()}} 重载的返回类型中的代换失败，则调用非良构，这亦能为[[cpp/language/sfinae|代换失败]]。
+}}
+}}
+
+@2@ 以下类型的值。
+{{member|{{small|std::not_fn}} ''无状态返回类型''|2=
+返回类型是{{named req|CopyConstructible}}的无状态类。返回类型是否可赋值是未指定的。
+
+====成员函数 {{c/core|operator()}}====
+{{ddcl|since=c++26|
+template&lt; class... Args &gt;
+constexpr auto operator()( Args&amp;&amp;... args ) const
+    noexcept(/* 见下文 */)
+-&gt; decltype(!std::invoke(ConstFn, std::declval&lt;Args&gt;()...));
+}}
+
+[[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|!std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...)}}。
+}}
+
+===异常===
+@1@ 不抛出异常，除非 {{c|fd}} 的构造抛出异常。
+
+===可能的实现===
+{{eq impl
+|title1=(1) not_fn|ver1=1|1=
+namespace detail
+{
+    template&lt;class V, class F, class... Args&gt;
+    constexpr bool negate_invocable_impl = false;
+    template&lt;class F, class... Args&gt;
+    constexpr bool negate_invocable_impl&lt;std::void_t&lt;decltype(
+        !std::invoke(std::declval&lt;F&gt;(), std::declval&lt;Args&gt;()...))&gt;, F, Args...&gt; = true;
+
+    template&lt;class F, class... Args&gt;
+    constexpr bool negate_invocable_v = negate_invocable_impl&lt;void, F, Args...&gt;;
+
+    template&lt;class F&gt;
+    struct not_fn_t
+    {
+        F f;
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;F&amp;, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) &amp;
+            noexcept(noexcept(!std::invoke(f, std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(f, std::forward&lt;Args&gt;(args)...);
+        }
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;const F&amp;, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) const&amp;
+            noexcept(noexcept(!std::invoke(f, std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(f, std::forward&lt;Args&gt;(args)...);
+        }
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;F, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) &amp;&amp;
+            noexcept(noexcept(!std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...);
+        }
+        
+        template&lt;class... Args,
+            std::enable_if_t&lt;negate_invocable_v&lt;const F, Args...&gt;, int&gt; = 0&gt;
+        constexpr decltype(auto) operator()(Args&amp;&amp;... args) const&amp;&amp;
+            noexcept(noexcept(!std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...)))
+        {
+            return !std::invoke(std::move(f), std::forward&lt;Args&gt;(args)...);
+        }
+
+        // C++20 起需要被弃用的重载以阻止不等价但良构的重载得到选择。
+ 
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;F&amp;, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) &amp; = delete;
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;const F&amp;, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) const&amp; = delete;
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;F, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) &amp;&amp; = delete;
+
+        template&lt;class... Args,
+            std::enable_if_t&lt;!negate_invocable_v&lt;const F, Args...&gt;, int&gt; = 0&gt;
+        void operator()(Args&amp;&amp;...) const&amp;&amp; = delete;
+    };
+}
+ 
+template&lt;class F&gt;
+constexpr detail::not_fn_t&lt;std::decay_t&lt;F&gt;&gt; not_fn(F&amp;&amp; f)
+{
+    return {std::forward&lt;F&gt;(f)};
+}
+|title2=(2) not_fn|ver2=2|2=
+namespace detail
+{
+    template&lt;auto ConstFn&gt;
+    struct stateless_not_fn
+    {
+        template&lt;class... Args&gt;
+        constexpr auto operator()(Args&amp;&amp;... args) const
+            noexcept(noexcept(!std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...)))
+            -&gt; decltype(!std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...))
+        {
+            return !std::invoke(ConstFn, std::forward&lt;Args&gt;(args)...);
+        }
+    };
+}
+
+template&lt;auto ConstFn&gt;
+constexpr detail::stateless_not_fn&lt;ConstFn&gt; not_fn() noexcept
+{
+    if constexpr (std::is_pointer_v&lt;decltype(ConstFn)&gt; {{!!}}
+                  std::is_member_pointer_v&lt;decltype(ConstFn)&gt;)
+        static_assert(ConstFn != nullptr);
+
+    return {};
+}
+}}
+
+===注解===
+{{tt|std::not_fn}} 的目的是取代 C++03 时代的取反器 {{lc|std::not1}} 和 {{lc|std::not2}}。
+
+{{ftm begin}}
+{{ftm|__cpp_lib_not_fn|std=C++17|value=201603L|rowspan="2"|{{tt|std::not_fn()}}}}
+{{ftm|-|std=C++26|value=202306L|允许将可调用对象作为非类型模板实参传递给 {{tt|std::not_fn}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+
+bool is_same(int a, int b) noexcept
+{
+    return a == b;
+}
+
+struct S
+{
+    int val;
+    bool is_same(int arg) const noexcept { return val == arg; }
+};
+
+int main()
+{
+    // 用于自由函数：
+    auto is_differ = std::not_fn(is_same);
+    assert(is_differ(8, 8) == false); // 等价于：!is_same(8, 8) == false
+    assert(is_differ(6, 9) == true); // 等价于：!is_same(8, 0) == true
+
+    // 用于成员函数：
+    auto member_differ = std::not_fn(&amp;S::is_same);
+    assert(member_differ(S{3}, 3) == false); // 等价于：S tmp{6}; !tmp.is_same(6) == false
+
+    // 保持 noexcept 说明：
+    static_assert(noexcept(is_differ) == noexcept(is_same));
+    static_assert(noexcept(member_differ) == noexcept(&amp;S::is_same));
+
+    // 用于函数对象：
+    auto same = [](int a, int b) { return a == b; };
+    auto differ = std::not_fn(same);
+    assert(differ(1, 2) == true); // 等价于：!same(1, 2) == true
+    assert(differ(2, 2) == false); // 等价于：!same(2, 2) == false
+
+#if __cpp_lib_not_fn &gt;= 202306L
+    auto is_differ_cpp26 = std::not_fn&lt;is_same&gt;();
+    assert(is_differ_cpp26(8, 8) == false);
+    assert(is_differ_cpp26(6, 9) == true);
+
+    auto member_differ_cpp26 = std::not_fn&lt;&amp;S::is_same&gt;();
+    assert(member_differ_cpp26(S{3}, 3) == false);
+
+    auto differ_cpp26 = std::not_fn&lt;same&gt;();
+    static_assert(differ_cpp26(1, 2) == true);
+    static_assert(differ_cpp26(2, 2) == false);
+#endif
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc not1}}
+{{dsc inc|cpp/utility/functional/dsc not2}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

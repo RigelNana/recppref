@@ -1,0 +1,77 @@
+{{cpp/title|mbrtowc}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cwchar|
+std::size_t mbrtowc( wchar_t* pwc,
+                     const char* s,
+                     std::size_t n,
+                     std::mbstate_t* ps );
+}}
+
+转换窄多字节字符为宽字符。
+
+若 {{c|s}} 不是空指针，则从 {{c|s}} 所指向的字节起，审查多字节字符串的至多 {{c|n}} 个字节，以确定完成下个多字节字符（包含任何迁移序列）的字节数。若该函数确定 {{c|s}} 的下个多字节字符完整且合法，则将它转换为对应的宽字符，并存储之于 {{c|*pwc}}（若 {{c|pwc}} 非空）。
+
+若 {{c|s}} 是空指针，则忽略 {{c|n}} 和 {{c|pwc}} 的值，而调用等价于 {{c|std::mbrtowc(NULL, "", 1, ps)}}。
+
+若产生的宽字符是空字符，则存储于 {{c|*ps}} 的转换状态为初始迁移状态。
+
+===参数===
+{{par begin}}
+{{par|pwc|指向要写入结果宽字符位置的指针}}
+{{par|s|指向用作输入的多字节字符串的指针}}
+{{par|n|{{c|s}} 中能被检验的字节数限制}}
+{{par|ps|指向转译多字节字符串时的转换状态的指针}}
+{{par end}}
+
+===返回值===
+下列首个使用者：
+* 若转换自 {{c|s}} 的字符为空字符，则为 {{c|0}} （若 {{c|pwc}} 非空则存储于 {{tt|*pwc}}）
+* 成功地 {{c|s}} 从转换的多字节字符 {{c|[1...n]}} 的字节数
+* 若接下来的 {{c|n}} 字节组成不完整，但该部分合法的宽字符，则为 {{c|static_cast&lt;std::size_t&gt;(-2)}}。不写入 {{c|*pwc}}。
+* 若出现编码错误则为 {{c|static_cast&lt;std::size_t&gt;(-1)}}。不写入 {{c|*pwc}}，存储值 {{lc|EILSEQ}} 于 {{lc|errno}}，并且置 {{c|*ps}} 的值为未指定。
+
+===示例===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cstring&gt;
+#include &lt;cwchar&gt;
+#include &lt;iostream&gt;
+ 
+void print_mb(const char* ptr)
+{
+    std::mbstate_t state = std::mbstate_t(); // 初始状态
+    const char* end = ptr + std::strlen(ptr);
+    int len;
+    wchar_t wc;
+    while ((len = std::mbrtowc(&amp;wc, ptr, end-ptr, &amp;state)) &gt; 0)
+    {
+        std::wcout &lt;&lt; "后 " &lt;&lt; len &lt;&lt; " 个字节为字符 " &lt;&lt; wc &lt;&lt; '\n';
+        ptr += len;
+    }
+}
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    // UTF-8 窄多字节编码
+    const char* str = u8"z\u00df\u6c34\U0001d10b"; // 或 u8"zß水𝄋"
+                      // 或 "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9d\x84\x8b";
+    print_mb(str);
+}
+|output=
+后 1 个字节为字符 z
+后 2 个字节为字符 ß
+后 3 个字节为字符 水
+后 4 个字节为字符 𝄋
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc mbtowc}}
+{{dsc inc|cpp/string/multibyte/dsc wcrtomb}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in}}
+{{dsc see c|c/string/multibyte/mbrtowc}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,107 @@
+{{cpp/title|tuple_element{{small|&lt;std::tuple&gt;}}}}
+{{cpp/utility/tuple/navbar}}
+{{ddcl|header=tuple|since=c++11|
+template&lt; std::size_t I, class... Types &gt;
+struct tuple_element&lt; I, std::tuple&lt;Types...&gt; &gt;;
+}}
+
+提供对元组元素类型的编译时索引访问。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|type|元组的第 {{tt|I}} 元素的类型，其中 {{tt|I}} 在 {{range|0|sizeof...(Types)}} 中}}
+{{dsc end}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;std::size_t I, class T&gt;
+struct tuple_element;
+
+#ifndef __cpp_pack_indexing
+// 递归情况
+template&lt;std::size_t I, class Head, class... Tail&gt;
+struct tuple_element&lt;I, std::tuple&lt;Head, Tail...&gt;&gt;
+    : std::tuple_element&lt;I - 1, std::tuple&lt;Tail...&gt;&gt;
+{ };
+
+// 基础情况
+template&lt;class Head, class... Tail&gt;
+struct tuple_element&lt;0, std::tuple&lt;Head, Tail...&gt;&gt;
+{
+    using type = Head;
+};
+
+#else
+// C++26 使用包索引的实现
+template&lt;std::size_t I, class... Ts&gt;
+struct tuple_element&lt;I, std::tuple&lt;Ts...&gt;&gt;
+{
+    using type = Ts...[I];
+};
+#endif
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;boost/type_index.hpp&gt;
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;tuple&gt;
+#include &lt;utility&gt;
+
+template&lt;typename TupleLike, std::size_t I = 0&gt;
+void printTypes()
+{
+    if constexpr (I == 0)
+        std::cout &lt;&lt; boost::typeindex::type_id_with_cvr&lt;TupleLike&gt;() &lt;&lt; '\n';
+
+    if constexpr (I &lt; std::tuple_size_v&lt;TupleLike&gt;)
+    {
+        using SelectedType = std::tuple_element_t&lt;I, TupleLike&gt;;
+
+        std::cout &lt;&lt; "  位于索引 " &lt;&lt; I &lt;&lt; " 的类型是: "
+                  &lt;&lt; boost::typeindex::type_id_with_cvr&lt;SelectedType&gt;() &lt;&lt; '\n';
+        printTypes&lt;TupleLike, I + 1&gt;();
+    }
+}
+
+struct MyStruct {};
+
+using MyTuple = std::tuple&lt;int, long&amp;, const char&amp;, bool&amp;&amp;,
+                           std::string, volatile MyStruct&gt;;
+
+using MyPair = std::pair&lt;char, bool&amp;&amp;&gt;;
+
+static_assert(std::is_same_v&lt;std::tuple_element_t&lt;0, MyPair&gt;, char&gt;);
+static_assert(std::is_same_v&lt;std::tuple_element_t&lt;1, MyPair&gt;, bool&amp;&amp;&gt;);
+
+int main()
+{
+    printTypes&lt;MyTuple&gt;();
+    printTypes&lt;MyPair&gt;();
+}
+|p=true
+|output=
+std::tuple&lt;int, long&amp;, char const&amp;, bool&amp;&amp;, std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;, MyStruct volatile&gt;
+  位于索引 0 的类型是: int
+  位于索引 1 的类型是: long&amp;
+  位于索引 2 的类型是: char const&amp;
+  位于索引 3 的类型是: bool&amp;&amp;
+  位于索引 4 的类型是: std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;
+  位于索引 5 的类型是: MyStruct volatile
+std::pair&lt;char, bool&amp;&amp;&gt;
+  位于索引 0 的类型是: char
+  位于索引 1 的类型是: bool&amp;&amp;
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc structured binding}}
+{{dsc inc|cpp/utility/dsc tuple_element}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

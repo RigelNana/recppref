@@ -1,0 +1,182 @@
+{{title|有冲突的声明}}
+{{cpp/language/declarations/navbar}}
+除非另外说明，两个声明不能（重新）引入相同的实体。存在这种声明的程序非良构。
+
+===对应的声明===
+（重新）引入相同的名字，都声明构造函数，或者都声明析构函数的两个声明''互相对应''，除非
+* 其中至少有一个是 {{rlp|using declaration|{{c/core|using}} 声明}}，
+* 其中一个声明了类型（除了 {{rlp|typedef|typedef 名}}）而另一个声明了变量，{{rlps|union#匿名联合体}}以外的非静态数据成员，枚举项，函数，或函数模板，或者
+* 两个声明的都是函数或函数模板，并且两个声明并未声明对应的重载。
+
+====对应的函数重载====
+两个{{rlp|function|函数声明}}声明的函数在满足以下所有条件时声明''对应的重载''：
+* 它们拥有相同的{{rlps|function#形参类型列表}}{{rev inl|since=c++23|，其中忽略{{rlps|member functions#显式对象形参}}的类型}}。
+{{rrev|since=c++20|
+* 它们拥有{{rlp|function template#函数模板重载|等价的}}尾随 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}（如果存在，但不包括{{rlp|friend|友元声明}}）。
+}}
+* 如果它们都是非静态成员函数，那么它们还需要额外满足以下条件之一：
+{{rrev|since=c++23|
+:* 它们中恰有一个是没有引用限定符的{{rlp|member functions|隐式对象成员函数}}，并且它们的对象形参的类型在移除顶层引用后相同。
+}}
+:* 它们的对象形参的类型相同。
+
+====对应的函数模板重载====
+两个{{rlp|function template|函数模板声明}}声明的函数模板在满足以下所有条件时声明''对应的重载''：
+* 它们的模板形参列表的长度相同。
+* 它们的对应模板形参{{rlp|function template#函数模板重载|等价}}。
+* 它们拥有等价的{{rlps|function#形参类型列表}}{{rev inl|since=c++23|，其中忽略{{rlps|member functions#显式对象形参}}的类型}}。
+* 它们的返回类型等价。
+{{rrev|since=c++20|
+* 它们的对应模板形参要么声明都不带{{rlps|constraints#约束}}，要么都声明有等价的约束。
+* 它们拥有等价的尾随 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}（如果存在）。
+}}
+* 如果它们都是非静态成员函数模板，那么它们还需要额外满足以下条件之一：
+{{rrev|since=c++23|
+:* 它们中恰有一个是没有引用限定符的{{rlp|member functions|隐式对象成员函数}}，并且它们的对象形参的类型在移除所有引用后等价。
+}}
+:* 它们的对象形参的类型等价。
+
+{{source|
+struct A
+{
+    friend void c();   // #1
+};
+
+struct B
+{
+    friend void c() {} // 对应并且定义 #1
+};
+
+typedef int Int;
+
+enum E : int { a };
+
+void f(int);   // #2
+void f(Int) {} // 定义 #2
+void f(E) {}   // OK，另一重载
+
+struct X
+{
+    static void f();
+    void f() const;   // 错误：重复声明
+    
+    void g();
+    void g() const;   // OK
+    void g() &amp;;       // 错误：重复声明
+    
+    void h(this X&amp;, int);
+    void h(int) &amp;&amp;;   // OK，另一重载
+    
+    void j(this const X&amp;);
+    void j() const &amp;; // 错误：重复声明
+    
+    void k();
+    void k(this X&amp;);  // 错误：重复声明
+};
+}}
+
+===相同实体的多次声明===
+{{rrev|since=c++26|
+名字是 {{c|_}} 且声明了以下实体之一的声明''与名字无关''：
+* 具有自动{{rlp|storage duration|存储期}}的变量。
+* 未{{rlp|scope|居于}}命名空间作用域的没有{{rlp|storage duration|存储类说明符}}的{{rlp|structured binding|结构化绑定}}。
+* {{rlp|function#后条件断言|结果绑定}}。
+* 由带有初始化器的 {{rlps|lambda#lambda 捕获}}引入的变量。
+* 非静态{{rlp|data members|数据成员}}，但不包括{{rlps|union#匿名联合体}}的成员。
+}}
+
+除非另有说明，两个实体声明在满足以下所有条件的情况下''声明相同的实体''，对于无名类型的声明会考虑它们引入的以链接为目的的 {{rlp|typedef#以链接为目的的 typedef 名|typedef 名}}和{{rlp|enum#以链接为目的的枚举名|枚举名}}（如果存在）：
+* 它们互相对应。
+* 它们的{{rlp|scope|目标作用域}}相同，并且该作用域不是{{rlps|scope#函数形参作用域}}或{{rlpsd|scope#模板形参作用域}}。
+{{rrev|since=c++26|
+* 它们都不与名字无关。
+}}
+* 满足以下条件之一：
+:* 它们在相同的翻译单元中出现。
+{{rrev|since=c++20|
+:* 它们声明的名字都具有{{rlps|storage duration#模块链接}}，并且都{{rlp|modules#模块所有权|附着于相同的模块}}。
+}}
+:* 它们声明的名字都具有{{rlps|storage duration#外部链接}}。
+
+对于声明某个实体或 typedef 名 {{tt|X}} 的声明 {{tt|D}}，如果 {{tt|X}} 的另一个声明从 {{tt|D}} 可及，那么 {{tt|D}} 是 {{tt|X}} 的''重声明''；否则 {{tt|D}} 是 {{tt|X}} 的''首次声明''。
+
+====限制====
+如果实体 {{tt|E}} 的任意两个声明违背了以下对应限制，那么程序非良构：
+* 如果其中一个将 {{tt|E}} 声明为变量，那么另一个必须将 {{tt|E}} 也声明为具有相同类型的变量。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|function|函数}}，那么另一个必须将 {{tt|E}} 也声明为具有相同类型的函数。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|enum|枚举项}}，那么另一个必须将 {{tt|E}} 也声明为枚举项。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|namespace|命名空间}}，那么另一个必须将 {{tt|E}} 也声明为命名空间。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|class|类类型}}，那么另一个必须将 {{tt|E}} 也声明为类类型。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|enum|枚举类型}}，那么另一个必须将 {{tt|E}} 也声明为枚举类型。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|class template|类模板}}，那么另一个必须将 {{tt|E}} 也声明为拥有等价的模板形参列表（见{{rlps|function template#函数模板重载}}）的类模板。
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|function template|函数模板}}，那么另一个必须将 {{tt|E}} 也声明为拥有等价的模板形参列表和类型的函数模板。
+{{rev begin}}
+{{rev|since=c++11|
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|type alias|别名模板}}，那么另一个必须将 {{tt|E}} 也声明为拥有等价的模板形参列表和{{spar sep|类型标识}}的别名模板。
+}}
+{{rev|since=c++14|
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|variable template|变量模板}}（的部分特化），那么另一个必须将 {{tt|E}} 也声明为拥有等价的模板形参列表和类型的变量模板（的部分特化）。
+}}
+{{rev|since=c++20|
+* 如果其中一个将 {{tt|E}} 声明为{{rlp|constraints|概念}}, 那么另一个必须将 {{tt|E}} 也声明为概念。
+}}
+{{rev end}}
+
+类型会在所有（在 {{rlp|typedef}} 进行定义替换的过程中进行的）调整完成后进行比较。对数组对象的声明可以指定因出现或缺失主要数组边界而产生的不同类型。如果两个声明都无法从对方可及，那么不要求诊断。
+
+{{source|
+void g();      // #1
+void g(int);   // OK，与 #1 不是相同的实体（它们不互相对应）
+int g();       // 错误：与 #1 是相同的实体，但类型不同
+
+void h();      // #2
+namespace h {} // 错误：与 #2 是相同的实体，但不是函数
+}}
+
+如果声明了一个具有{{rlps|storage duration#外部链接}}的名字的声明 {{tt|H}} 在另一个翻译单元 {{tt|U}} 中的声明 {{tt|D}} 之前，并且假设 {{tt|H}} 在 {{tt|U}} 中的情况下会与 {{tt|D}} 声明相同的实体，那么程序非良构。
+
+===有潜在冲突的声明===
+如果两个声明互相对应但声明的实体不同，那么它们''有潜在冲突''。
+
+在任何作用域中，如果有名字绑定到了两个有潜在冲突的声明 {{tt|A}} 和 {{tt|B}}{{rev inl|since=c++26|，除非 {{tt|B}} 与名字无关}}，并且 {{tt|A}} 在 {{tt|B}} 之前，那么程序非良构：
+{{source|1=
+void f()
+{
+    int x, y;
+    void x(); // 错误：x 指名不同的实体
+    int y;    // 错误：重定义
+}
+
+enum { f };   // 错误：::f 指名不同的实体
+
+namespace A {}
+namespace B = A;
+namespace B = A; // OK，没有效果
+namespace B = B; // OK，没有效果
+namespace A = B; // OK，没有效果
+namespace B {} // 错误：B 指名不同的实体
+
+void g()
+{
+    int _;
+    _ = 0; // OK
+    int _; // C++26 起 OK，声明与名字无关
+    _ = 0; // 错误：查找集中有两个非函数声明
+}
+
+void h ()
+{
+    int _;        // #1
+    _ ++;         // OK
+    static int _; // 错误：与 #1 冲突，因为静态变量与名字有关
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=279|paper=P1787R6|std=C++98|before=不明确是否可以重声明有以链接为目的的 typedef 名的无名类或枚举|after=可以重声明}}
+{{dr list item|wg=cwg|dr=338|paper=P1787R6|std=C++98|before=不明确是否可以重声明以它的枚举项以链接为目的具有枚举名的无名枚举|after=可以重声明}}
+{{dr list item|wg=cwg|dr=1884|paper=P1787R6|std=C++98|before=对声明了相同实体的多个声明的限制不明确|after=使之明确}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

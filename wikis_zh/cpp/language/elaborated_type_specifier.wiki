@@ -1,0 +1,137 @@
+{{title|详述类型说明符}}
+{{cpp/language/declarations/navbar}}
+
+详述类型说明符可用于指代先前声明的类名（类、结构体或联合体）或先前声明的枚举名，即使该名字被{{rlp|lookup|非类型声明所隐藏}}。它们亦可声明新的类名。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|
+{{spar|类关键词}} {{spar|类名}}
+}}
+{{sdsc|num=2|
+{{ttb|enum}} {{spar|枚举名}}
+}}
+{{sdsc|num=3|
+{{spar|类关键词}} {{spar optional|属性}} {{spar|标识符}} {{ttb|;}}
+}}
+{{sdsc end}}
+{{par begin}}
+{{par|{{spar|类关键词}}|{{lt|cpp/keyword/class}}、{{lt|cpp/keyword/struct}}、{{lt|cpp/keyword/union}} 之一}}
+{{par|{{spar|类名}}|先前已声明的类类型的名字，可选地[[cpp/language/identifiers#有限定的标识符|有限定]]，或为先前未作为类型名声明的标识符}}
+{{par|{{spar|枚举名}}|先前已声明的枚举类型的名字，可选地[[cpp/language/identifiers#有限定的标识符|有限定]]}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}}}
+{{par end}}
+
+@1@ 类类型的详述类型说明符。
+@2@ 枚举类型的详述类型说明符。
+@3@ 单独由详述类型说明符组成的声明，总是在含有该声明的{{rlp|scope|作用域}}中声明一个名为{{spar sep|标识符}}的类类型。
+
+{{rlp|enum|笼统枚举声明}}类似于形式 {{v|3}}，但在笼统枚举声明之后，枚举类型是完整类型。
+
+===解释===
+形式 {{v|3}} 是详述类型说明符的一种特殊情况，通常又称为类的''前置声明（forward declaration）''，有关形式 {{v|3}} 的描述，见{{ls|cpp/language/class#前置声明}}。下列内容仅适用于形式 {{v|1}} 和 {{v|2}}。
+
+详述类型说明符中的{{spar sep|类名}}或{{spar|枚举名}}，可以是简单的标识符或是{{rlp|identifiers#有限定的标识符|限定标识}}。根据其表现形式，采用{{rlp|unqualified lookup|无限定名字查找}}或{{rlp|qualified lookup|有限定名字查找}}来查找这个名字。但在任一情况下，均不考虑非类型名。
+{{source|1=
+class T
+{
+public:
+    class U;
+private:
+    int U;
+};
+
+int main()
+{
+    int T;
+    T t; // 错误：找到局部变量 T
+    class T t; // OK：找到 ::T，忽略局部变量 T
+    T::U* u; // 错误：T::U 的查找找到私有数据成员
+    class T::U* u; // OK：忽略该数据成员
+}
+}}
+
+如果名字查找找不到先声明的类型名，该详述类型说明符是以 {{ttb|class}}、{{ttb|struct}} 或 {{ttb|union}} 引入的（即并非 {{ttb|enum}}），并且{{spar sep|类名}}是无限定的标识符，则该详述类型说明符是该类名的一条类声明，且目标作用域是最近的外层命名空间作用域或块作用域。
+{{source|1=
+template &lt;typename T&gt;
+struct Node
+{
+    struct Node* Next; // OK：对 Node 的查找找到注入的类名
+    struct Data* Data; // OK：于全局作用域声明类型 Data
+                       // 并声明数据成员 Data
+    friend class ::List; // 错误：不能引入有限定名
+    enum Kind* kind; // 错误：不能引入枚举
+};
+
+Data* p; // OK：struct Data 已被声明
+}}
+
+若该名字指代某个 {{rlp|typedef|typedef 名}}、{{rlp|type alias|类型别名}}、{{rlp|template_parameters#类型模板形参|类型模板形参}}或{{rlp|type alias|别名模版特化}}，则程序非良构，否则详述类型说明符以与{{rlp|declarations#说明符|简单类型说明符}}引入其类型名相同的方式将该名字引入到声明中。
+{{source|1=
+template&lt;typename T&gt;
+class Node
+{
+    friend class T; // 错误：类型形参不能出现于详述类型说明符中；
+                    // 注意，类似的声明 `friend T;` 则是 OK 的。
+};
+
+class A {};
+enum b { f, t };
+
+int main()
+{
+    class A a; // OK：等价于 'A a;'
+    enum b flag; // OK：等价于 'b flag;'
+}
+}}
+
+存在于详述类型说明符中的{{spar sep|类关键词}}或关键词 {{ttb|enum}} 必须与详述类型说明符所指代的名称的声明在种类上一致。
+* 关键词 {{ttb|enum}} 必须用于指代一个{{rlp|enum|枚举类型}}（无论有无作用域）
+* {{spar|类关键词}} {{ttb|union}} 必须用于指代一个 {{rlp|union|联合体（union）}}
+* {{spar|类关键词}} {{ttb|class}} 或者 {{ttb|struct}} 必须用于指代一个非联合体类类型（此处关键词 {{ttb|class}} 与 {{ttb|struct}} 可互换）。
+{{source|1=
+enum class E { a, b };
+enum E x = E::a; // OK
+enum class E y = E::b; // 错误：'enum class' 不能引入详述类型说明符
+
+struct A {};
+class A a; // OK
+}}
+
+当用作{{rlp|template_parameters#模板实参|模板实参}}时，{{c|class T}} 是名为 {{tt|T}} 的类型模板形参，而非由详述类型说明符引入其类型 {{tt|T}} 的无名非类型模板形参。{{mark unreviewed dr|CWG|1874}}
+
+===关键词===
+{{ltt|cpp/keyword/class}},
+{{ltt|cpp/keyword/struct}},
+{{ltt|cpp/keyword/union}},
+{{ltt|cpp/keyword/enum}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=6.5.6|title=Elaborated type specifiers|id=basic.lookup.elab}}
+{{ref std|section=9.2.9.4|title=Elaborated type specifiers|id=dcl.type.elab}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=6.5.4|title=Elaborated type specifiers|id=basic.lookup.elab}}
+{{ref std|section=9.2.8.3|title=Elaborated type specifiers|id=dcl.type.elab}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.4.4|title=Elaborated type specifiers|id=basic.lookup.elab}}
+{{ref std|section=10.1.7.3|title=Elaborated type specifiers|id=dcl.type.elab}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.4.4|title=Elaborated type specifiers|id=basic.lookup.elab}}
+{{ref std|section=7.1.6.3|title=Elaborated type specifiers|id=dcl.type.elab}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.4.4|title=Elaborated type specifiers|id=basic.lookup.elab}}
+{{ref std|section=7.1.6.3|title=Elaborated type specifiers|id=dcl.type.elab}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.4.4|title=Elaborated type specifiers|id=basic.lookup.elab}}
+{{ref std|section=7.1.5.3|title=Elaborated type specifiers|id=dcl.type.elab}}
+{{ref std end}}
+
+{{todo|可能要将 9.1[class.name]/2-3 的大部分从 cpp/language/class 抽出}}
+
+{{langlinks|en|es|ja|ru}}

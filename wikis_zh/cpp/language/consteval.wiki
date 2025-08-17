@@ -1,0 +1,95 @@
+{{title|{{tt|consteval}} 说明符 {{mark since c++20}}}}
+{{cpp/language/declarations/navbar}}
+:*{{ttb|consteval}} - 指定函数是''立即函数（immediate function）''，即每次调用该函数必须产生编译时常量。
+
+===解释===
+{{tt|consteval}} 说明符声明函数或函数模板为''立即函数''，即该函数的每次{{rlp|expressions#潜在求值表达式|潜在求值}}的调用都必须（直接或间接）产生编译时{{rlp|constant expression|常量表达式}}。
+
+立即函数是 {{rlp|constexpr#constexpr 函数|constexpr 函数}}，并且在情况符合时必须满足相应要求。与 {{tt|constexpr}} 一样，{{tt|consteval}} 说明符蕴含 {{tt|inline}}。不过，它不可应用于析构函数、分配函数或解分配函数。
+
+指定了 {{tt|consteval}} 的函数或函数模板声明不能同时指定 {{tt|constexpr}}，而且该函数或函数模板的任何重复声明也都必须指定 {{tt|consteval}}。
+
+当最内层的非块作用域不是某个立即函数的{{rlp|scope#函数形参作用域|函数形参作用域}}{{rev inl|since=c++23|或 {{rlp|if#consteval if|consteval if 语句}}的 true 分支}}时，对立即函数的{{rlp|expressions#潜在求值表达式|潜在求值}}的调用必须产生常量表达式；这种调用称为''立即调用（immediate invocation）''。
+
+{{source|1=&lt;!-- 来自 P1073R3 --&gt;
+consteval int sqr(int n)
+{
+    return n*n;
+}
+constexpr int r = sqr(100); // OK
+
+int x = 100;
+int r2 = sqr(x);            // 错误：调用未能产生常量
+
+consteval int sqrsqr(int n)
+{
+    return sqr(sqr(n));     // 在此处不是常量表达式，但是 OK
+}
+
+constexpr int dblsqr(int n)
+{
+    return 2 * sqr(n);      // 错误：外围函数并非 consteval 且 sqr(n) 不是常量
+}
+}}
+
+指代某个立即函数的{{rlp|identifiers#在表达式中|标识表达式}}，仅可出现在立即调用的子表达式内，或某个''立即函数语境''（即前述的语境，在其中对立即函数的调用不需要是常量表达式）内。可以取得立即函数的指针或引用，但它们不可逃出常量表达式求值：
+
+{{source|1=
+consteval int f() { return 42; }
+consteval auto g() { return &amp;f; }
+consteval int h(int (*p)() = g()) { return p(); }
+constexpr int r = h();   // OK
+constexpr auto e = g();  // 非良构：指向立即函数的指针不是常量表达式的容许结果
+}}
+
+===注解===
+{{ftm begin|std=1|core=1}}
+{{ftm|std=C++20|value=201811L|__cpp_consteval|rowspan="2"|立即函数}}
+{{ftm|std=C++23|dr=20|value=202211L|-|使 {{c/core|consteval}} 向上传播}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/consteval}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+
+// 此函数在输入在编译时已知的情况下可以在编译时求值。否则在运行时执行。
+constexpr unsigned factorial(unsigned n)
+{
+    return n &lt; 2 ? 1 : n * factorial(n - 1);
+}
+
+// 我们用 consteval 强制函数在编译时求值。
+consteval unsigned combination(unsigned m, unsigned n)
+{
+    return factorial(n) / factorial(m) / factorial(n - m);
+}
+
+static_assert(factorial(6) == 720);
+static_assert(combination(4, 8) == 70);
+
+int main(int argc, const char*[])
+{
+    constexpr unsigned x{factorial(4)};
+    std::cout &lt;&lt; x &lt;&lt; '\n';
+    
+    [[maybe_unused]]
+    unsigned y = factorial(argc); // OK
+//  unsigned z = combination(argc, 7); // 错误：'argc' 不是常量表达式
+}
+|output=
+24
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc constexpr}}
+{{dsc inc|cpp/language/dsc constinit}}
+{{dsc|{{rlp|constant expression|常量表达式}}|定义可以在编译期求值的{{rlp|expressions|表达式}}}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

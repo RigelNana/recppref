@@ -1,0 +1,116 @@
+{{cpp/ranges/title|for_each_n|for_each_n_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I, class Proj = std::identity,
+          std::indirectly_unary_invocable&lt;std::projected&lt;I, Proj&gt;&gt; Fun &gt;
+constexpr for_each_n_result&lt;I, Fun&gt;
+    for_each_n( I first, std::iter_difference_t&lt;I&gt; n, Fun f, Proj proj = {});
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class I, class F &gt;
+using for_each_n_result = ranges::in_fun_result&lt;I, F&gt;;
+}}
+{{dcl end}}
+
+@1@ 按顺序，对范围 {{range|first|first + n}} 中的每个迭代器进行解引用并以{{c|proj}} 投影的结果，应用给定的函数对象 {{c|f}}。
+
+若迭代器类型可变，则 {{c|f}} 可能通过解引用的迭代器修改范围中的元素。若 {{tt|f}} 返回了结果，则忽略该结果，若 {{tt|n}} 小于零，则行为未定义。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par | first | 代表要应用函数到的范围起始的迭代器}}
+{{par | n | 要应用函数的元素数}}
+{{par | f | 应用到投影后范围 {{range|first|first + n}} 的函数}}
+{{par | proj | 应用到元素的投影}}
+{{par end}}
+
+===返回值===
+对象 {{c|{first + n, std::move(f)} }}，其中 {{c|first + n}} 可能求值为 {{c|std::ranges::next(std::move(first), n) }}，取决于迭代器类别。
+
+===复杂度===
+准确 {{c|n}} 次应用 {{c|f}} 与 {{c|proj}}。
+
+===可能的实现===
+{{source|1=
+struct for_each_n_fn
+{
+    template&lt;std::input_iterator I, class Proj = std::identity,
+             std::indirectly_unary_invocable&lt;std::projected&lt;I, Proj&gt;&gt; Fun&gt;
+    constexpr for_each_n_result&lt;I, Fun&gt;
+        operator()(I first, std::iter_difference_t&lt;I&gt; n, Fun fun, Proj proj = Proj{}) const
+    {
+        for (; n-- &gt; 0; ++first)
+            std::invoke(fun, std::invoke(proj, *first));
+        return {std::move(first), std::move(fun)};
+    }
+};
+
+inline constexpr for_each_n_fn for_each_n {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+struct P
+{
+    int first;
+    char second;
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const P&amp; p)
+    {
+        return os &lt;&lt; '{' &lt;&lt; p.first &lt;&lt; ",'" &lt;&lt; p.second &lt;&lt; "'}";
+    }
+};
+
+auto print = [](std::string_view name, auto const&amp; v)
+{
+    std::cout &lt;&lt; name &lt;&lt; ": ";
+    for (auto n = v.size(); const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; (--n ? ", " : "\n");
+};
+
+int main()
+{
+    std::array a {1, 2, 3, 4, 5};
+    print("a", a);
+    // 对前三个数取相反数：
+    std::ranges::for_each_n(a.begin(), 3, [](auto&amp; n) { n *= -1; });
+    print("a", a);
+
+    std::array s { P{1,'a'}, P{2, 'b'}, P{3, 'c'}, P{4, 'd'} };
+    print("s", s);
+    // 用投影对数据成员 'pair::first' 取相反数：
+    std::ranges::for_each_n(s.begin(), 2, [](auto&amp; x) { x *= -1; }, &amp;P::first);
+    print("s", s);
+    // 用投影大写化数据成员 'pair::second' ：
+    std::ranges::for_each_n(s.begin(), 3, [](auto&amp; c) { c -= 'a'-'A'; }, &amp;P::second);
+    print("s", s);
+}
+| output=
+a: 1, 2, 3, 4, 5
+a: -1, -2, -3, 4, 5
+s: {1,'a'}, {2,'b'}, {3,'c'}, {4,'d'}
+s: {-1,'a'}, {-2,'b'}, {3,'c'}, {4,'d'}
+s: {-1,'A'}, {-2,'B'}, {3,'C'}, {4,'d'}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/language/dsc range-for}}
+{{dsc inc | cpp/algorithm/ranges/dsc for_each}}
+{{dsc inc | cpp/algorithm/dsc for_each_n}}
+{{dsc inc | cpp/algorithm/dsc for_each}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

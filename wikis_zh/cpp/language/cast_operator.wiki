@@ -1,0 +1,162 @@
+{{title|用户定义转换函数}}
+{{cpp/language/expressions/navbar}}
+启用从{{rlp|class|类类型}}到另一类型的{{rlp|implicit conversion|隐式转换}}或{{rlp|explicit cast|显式转换}}。
+
+===语法===
+转换函数的声明与{{rlp|member functions|非静态成员函数}}或成员{{rlp|function template|函数模板}}类似，但没有形参和显式返回类型，并拥有下列形式的名字：
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|operator}} {{spar|转换类型标识}}}}
+{{sdsc|num=2|notes={{mark since c++11}}|{{ttb|explicit}} {{ttb|operator}} {{spar|转换类型标识}}}}
+{{sdsc|num=3|notes={{mark since c++20}}|{{ttb|explicit (}} {{spar|表达式}} {{ttb|)}} {{ttb|operator}} {{spar|转换类型标识}}}}
+{{sdsc end}}
+@1@ 声明用户定义的转换函数，它参与所有{{rlp|implicit conversion|隐式}}和{{rlp|explicit cast|显式}}转换。
+@2@ 声明用户定义的转换函数，它只会参与{{rlp|direct initialization|直接初始化}}和{{rlp|explicit cast|显式转换}}。
+@3@ 声明用户定义的转换函数，它是{{rlp|explicit|有条件显式}}的。
+
+{{spar|转换类型标识}}是一个{{rlp|type#类型的命名|类型标识}}，但它的声明符中不能出现函数与数组运算符 {{ttb|[]}} 或 {{ttb|()}}（因此转换到例如数组的指针的类型就需要使用类型别名、typedef 或标识模板：见下文）。无论是否使用 typedef，{{spar|转换类型标识}}都不能代表数组或函数类型。
+
+尽管用户定义的转换函数的声明中不能出现返回类型，但{{rlp|declarations#说明符|声明的文法}}中的 {{spar|声明说明符序列}} 可以存在并可以包含除了 {{spar|类型说明符}} 或关键词 {{tt|static}} 之外的任何说明符。尤其是，它不仅允许 {{tt|explicit}}，也允许说明符 {{rlpt|inline}}、{{rlpt|virtual}}{{rev inl|since=c++11|、{{rlpt|constexpr}}}}{{rev inl|since=c++20|、{{rlpt|consteval}}}} 和 {{rlpt|friend}}（注意 {{tt|friend}} 要求有限定名：{{tt|friend A::operator B();}}）。
+
+如果在类 X 中声明这种成员函数，那么它会进行从 X 到 {{spar|转换类型标识}} 的转换：
+{{source|1=
+struct X
+{
+    // 隐式转换
+    operator int() const { return 7; }
+    
+    // 显式转换
+    explicit operator int*() const { return nullptr; }
+    
+    // 错误：转换类型标识中不能出现数组运算符
+//  operator int(*)[3]() const { return nullptr; }
+    
+    using arr_t = int[3];
+    operator arr_t*() const { return nullptr; } // 可以通过 typedef 转换
+//  operator arr_t () const; // 错误：任何情况下都不能转换到数组
+};
+
+int main()
+{
+    X x;
+
+    int n = static_cast&lt;int&gt;(x);   // OK：设 n 为 7
+    int m = x;                     // OK：设 m 为 7
+
+    int* p = static_cast&lt;int*&gt;(x); // OK：设 p 为空
+//  int* q = x; // 错误：没有隐式转换
+
+    int (*pa)[3] = x;  // OK
+}
+}}
+
+===解释===
+用户定义的转换函数在{{rlp|implicit conversion|隐式转换}}的第二阶段被调用，第二阶段由“零个或一个{{rlp|converting constructor|转换构造函数}}”或“零个或一个用户定义转换函数”构成。
+
+如果转换函数和转换构造函数都能用于进行某个用户定义转换，那么{{rlp|copy initialization|复制初始化}}和{{rlp|reference initialization|引用初始化}}语境中的{{rlp|overload resolution|重载决议}}会同时考虑转换函数和转换构造函数，但在{{rlp|direct initialization|直接初始化}}语境中只考虑转换构造函数。
+{{source|1=
+struct To
+{
+    To() = default;
+    To(const struct From&amp;) {} // 转换构造函数
+};
+
+struct From
+{
+    operator To() const {return To();} // 转换函数
+};
+
+int main()
+{
+    From f;
+    To t1(f);  // 直接初始化：调用构造函数
+    // 注意：如果转换构造函数不可用，那么就会选择隐式的复制构造函数，并调用转换函数以准备它的实参
+    
+//  To t2 = f; // 复制初始化：有歧义
+    // 注意：如果转换函数来自非 const 类型，例如 From::operator To();，
+    // 那么它在这种情况下会替代构造函数被选中
+    
+    To t3 = static_cast&lt;To&gt;(f); // 直接初始化：调用构造函数
+//  const To&amp; r = f;            // 引用初始化：有歧义
+}
+}}
+
+可以定义转换到（可有 cv 限定的）自身类（或它的引用），转换到它自身类的基类（或它的引用），和转换到类型 {{c|void}} 的转换函数，但它无法作为转换序列的一部分执行，除非在某些情况下通过{{rlp|virtual|虚}}派发来执行：
+{{source|1=
+struct D;
+
+struct B
+{
+    virtual operator D() = 0;
+};
+
+struct D : B
+{
+    operator D() override { return D(); }
+};
+
+int main()
+{
+    D obj;
+    D obj2 = obj; // 不会调用 D::operator D()
+    B&amp; br = obj;
+    D obj3 = br;  // 通过虚派发调用 D::operator D() 
+}
+}}
+
+它也能用成员函数调用语法调用：
+{{source|1=
+struct B {};
+
+struct X : B
+{
+    operator B&amp;() { return *this; };
+};
+
+int main()
+{
+    X x;
+    B&amp; b1 = x;                  // 不会调用 X::operatorB&amp;()
+    B&amp; b2 = static_cast&lt;B&amp;&gt;(x); // 不会调用 X::operatorB&amp;
+    B&amp; b3 = x.operator B&amp;();    // 调用 X::operatorB&amp;
+}
+}}
+
+在显式调用转换函数时，{{spar|转换类型标识}} 是贪心的：它是可以组成 {{spar|转换类型标识}}{{rev inl|since=c++11|（包含可能存在的属性）}}的最长记号序列（包括属性，如果存在）：
+{{source|
+&amp; x.operator int * a; // 错误：解析成 &amp; (x.operator int*) a
+                      //      而不是 &amp; (x.operator int) * a
+ 
+operator int [[noreturn]] (); // 错误：noreturn 属性应用到了类型
+}}
+
+{{rev begin}}
+{{rev|since=c++14|
+{{spar|转换类型标识}} 中可以使用占位符 {{rlp|auto}}，以指定一个{{rlp|function#返回类型推导|推导的返回类型}}：
+{{source|1=
+struct X
+{
+    operator int(); // OK
+    operator auto() -&gt; short; // 错误：尾随返回类型不是此类语法的一部分
+    operator auto() const { return 10; } // OK：推导的返回类型
+    operator decltype(auto)() const { return 10l; } // OK：推导的返回类型
+};
+}} 
+注意：{{rlp|member template#转换函数模板|转换函数模板}}不允许具有推导的返回类型。
+}}
+{{rev end}}
+
+转换函数可以继承而且可以是{{rlp|virtual|虚函数}}，但不能是{{rlp|static|静态函数}}。派生类中的转换函数不会隐藏基类中的转换函数，除非它们转换到同一类型。
+
+转换函数可以是模板成员函数，例如 [[cpp/memory/auto_ptr/operator auto_ptr|std::auto_ptr&lt;T&gt;::operator auto_ptr&lt;Y&gt;]]。它适用的特殊规则参阅{{rlp|member template#转换函数模板|成员模板}}和{{rlp|template argument deduction#转换函数模板|模板实参推导}}。
+
+===关键词===
+{{ltt|cpp/keyword/operator}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=296|std=C++98|before=转换函数可以是静态的|after=不能声明为静态成员函数}}
+{{dr list item|wg=cwg|dr=2016|std=C++98|before=转换函数不能指定返回类型，但返回类型已经在 {{spar|转换类型标识}} 中出现|after=不能在转换函数的声明说明符中指定返回类型}}
+{{dr list item|wg=cwg|dr=2175|std=C++11&lt;!-- C++98 中的先前描述没有问题，因为当时没有属性 --&gt;|before=不明确 {{c|1=operator int [[noreturn]] ();}} 中&lt;br&gt;{{c|[[noreturn]]}} 会被解析成（函数声明符中）&lt;br&gt;{{spar|非指针声明符}} 的一部分还是 {{spar|转换类型标识}} 的一部分|after=解析成 {{spar|转换类型标识}} 的一部分}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

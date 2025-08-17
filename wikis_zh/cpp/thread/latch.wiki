@@ -1,0 +1,101 @@
+{{cpp/title|latch}}
+{{cpp/thread/latch/navbar}}
+{{ddcl|header=latch|since=c++20|
+class latch;
+}}
+
+{{tt|latch}} 类是一种 {{lc|std::ptrdiff_t}} 类型的向下计数器，它能用于同步线程。在创建时初始化计数器的值。线程可能在闩上阻塞直至计数器减少到零。没有可能增加或重置计数器，这使得 {{tt|latch}} 成为一种单次使用的屏障。
+
+同时调用 {{tt|latch}} 的成员函数，除了析构函数，不引入数据竞争。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员名|定义}}
+{{dsc expos mem obj|counter|spec={{lc|std::ptrdiff_t}}|内部计数器}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/latch/dsc constructor}}
+{{dsc inc|cpp/thread/latch/dsc destructor}}
+{{dsc mem fun|nolink=true|operator{{=}}|notes={{cmark deleted}}|{{tt|latch}} 不可赋值}}
+
+{{dsc inc|cpp/thread/latch/dsc count_down}}
+
+{{dsc inc|cpp/thread/latch/dsc try_wait}}
+{{dsc inc|cpp/thread/latch/dsc wait}}
+{{dsc inc|cpp/thread/latch/dsc arrive_and_wait}}
+
+{{dsc h2|常量}}
+{{dsc inc|cpp/thread/latch/dsc max}}
+{{dsc end}}
+
+===注解===
+{{feature test macro|__cpp_lib_latch|std=C++20|value=201907L|std::latch}}
+
+===示例===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;latch&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+struct Job
+{
+    const std::string name;
+    std::string product{"未工作"};
+    std::thread action{};
+};
+
+int main()
+{
+    Job jobs[]{&lt;!----&gt;{"Annika"}, {"Buru"}, {"Chuck"}&lt;!----&gt;};
+
+    std::latch work_done{std::size(jobs)};
+    std::latch start_clean_up{1};
+
+    auto work = [&amp;](Job&amp; my_job)
+    {
+        my_job.product = my_job.name + " 已工作";
+        work_done.count_down();
+        start_clean_up.wait();
+        my_job.product = my_job.name + " 已清理";
+    };
+
+    std::cout &lt;&lt; "工作启动... ";
+    for (auto&amp; job : jobs)
+        job.action = std::thread{work, std::ref(job)};
+
+    work_done.wait();
+    std::cout &lt;&lt; "完成:\n";
+    for (auto const&amp; job : jobs)
+        std::cout &lt;&lt; "  " &lt;&lt; job.product &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "清理工作线程... ";
+    start_clean_up.count_down();
+    for (auto&amp; job : jobs)
+        job.action.join();
+
+    std::cout &lt;&lt; "完成:\n";
+    for (auto const&amp; job : jobs)
+        std::cout &lt;&lt; "  " &lt;&lt; job.product &lt;&lt; '\n';
+}
+|output=
+工作启动... 完成:
+  Annika 已工作
+  Buru 已工作
+  Chuck 已工作
+清理工作线程... 完成:
+  Annika 已清理
+  Buru 已清理
+  Chuck 已清理
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/thread/dsc barrier}}
+{{dsc end}}
+
+{{langlinks|es|en|ru|ja}}

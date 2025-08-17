@@ -1,0 +1,146 @@
+{{title|final 说明符 {{mark since c++11}}}}
+{{cpp/language/classes/navbar}}
+
+指定某个{{rlp|virtual|虚函数}}不能在派生类中被覆盖，或者某个类不能被{{rlp|derived class|派生}}。
+
+===语法===
+当应用到成员函数时，标识符 {{tt|final}} 在类定义中的成员函数声明或成员函数定义的语法中，紧随{{rlp|function|声明符}}之后出现。
+
+当应用到类（包括结构体和联合体）时，标识符 {{tt|final}} 在类定义的开头，紧跟类名之后出现，但不能在类声明中出现。
+
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|声明符}} {{spar optional|虚说明符序列}} {{spar optional|纯说明符}}}}
+{{sdsc|num=2|{{spar|声明符}} {{spar optional|虚说明符序列}} {{spar|函数体}}}}
+{{sdsc|num=3|{{spar|类关键词}} {{spar optional|属性}} {{spar|类头名}} {{spar optional|类虚说明符}} {{spar optional|基类子句}}|notes={{mark until c++26}}}}
+{{sdsc|num=4|{{spar|类关键词}} {{spar optional|属性}} {{spar|类头名}} {{spar optional|类性质说明符序列}} {{spar optional|基类子句}}|notes={{mark since c++26}}}}
+{{sdsc end}}
+@1@ 在成员函数声明中，{{tt|final}} 可以在紧跟声明符之后的{{spar sep|虚说明符序列}}中出现，如果有使用 {{rlp|abstract class|{{spar sep|纯说明符}}}}那么应在它之前。
+@2@ 在类定义内的成员函数定义中，{{tt|final}} 可以在紧跟声明符之后并紧接{{spar sep|函数体}}之前的{{spar sep|虚说明符序列}}中出现。
+@3@ 在类定义中，{{tt|final}} 可以在紧跟类名之后，紧接{{spar|基类子句}}（如果使用它）起头的冒号之前，作为{{spar sep|类虚说明符}}出现。
+@4@ 在类定义中，{{tt|final}} 可以在{{spar sep|类性质说明符序列}}中出现，但若使用则仅允许出现一次。
+
+情况 {{v|1,2}} 中，如果有使用{{spar|虚说明符序列}}，那么它是 {{rlpt|override}}、{{tt|final}}、{{tt|final override}} 或 {{tt|override final}} 之一。情况 {{v|3}} 中，如果有使用{{spar sep|类虚说明符}}则只允许 {{tt|final}}。情况 {{v|4}} 中，如果有使用{{spar|类性质说明符序列}}，则可有任意数量的[[cpp/language/class_property_specifiers|类性质说明符]] {{mark since c++26}}，但每个最多仅可出现一次。
+
+===解释===
+当在虚函数声明或定义中使用时，{{c/core|final}} 说明符确保函数为虚并指定它不能被派生类覆盖，否则程序非良构（生成编译时错误）。
+
+当在类定义中使用时，{{c/core|final}} 指定此类不能在另一类的定义中的{{spar sep|基类说明符列表}}中出现（换言之，不能派生于它），否则程序非良构（生成编译时错误）。{{c/core|final}} 也可以用于{{rlp|union|联合体}}定义，此时它没有效果{{rev inl|since=c++14|（除了 {{lc|std::is_final}} 的输出结果）}}，因为不能从联合体派生。
+
+{{c/core|final}} 是在成员函数声明或类头部中使用时有特殊含义的标识符。其他语境中它并未被保留，而且可用于命名对象或函数。
+
+===注解===
+在由以下记号组成的序列中：
+# {{c/core|class}}，{{c/core|struct}} 和 {{c/core|union}} 之一
+# 可有限定的{{rlp|identifiers|标识符}}
+# {{c/core|final}}
+# {{c|:}} 或 {{c|{}}
+序列中的第三个记号 {{c/core|final}} 只会被视为说明符而不是标识符。
+{{example
+|code=
+struct A;
+struct A final {}; // OK：结构体 A 的定义，而不是变量 final 的值初始化
+ 
+struct X
+{
+    struct C { constexpr operator int() { return 5; } };
+    struct B final : C{}; // OK：嵌套类 B 的定义，而不是位域成员 final 的声明
+};
+
+// 不正常的 final 用法。
+
+struct final final // OK，名为 final 的结构体的定义，不能继承
+{
+};
+
+// struct final final {}; // 错误：struct final 的重复定义，
+                          // *并非* 使用详述类型说明符 `struct final` 跟着一个聚合体初始化
+                          // 的变量 final 的定义
+
+// struct override : final {}; // 错误：不能从 final 基类型派生；
+                               // 给定语境中的 override 是正常的名字
+void foo()
+{
+    [[maybe_unused]]
+    final final; // OK，struct final 类型的名为 final 的变量的声明
+}
+
+struct final final; // OK，struct final 类型的名为 final 的变量的声明
+                    // 使用详述类型说明符
+int main()
+{
+}
+}}
+
+===关键词===
+{{ltt|cpp/identifier_with_special_meaning/final}}
+
+===示例===
+{{example
+|code=
+struct Base
+{
+    virtual void foo();
+};
+
+struct A : Base
+{
+    void foo() final; // Base::foo 被覆盖而 A::foo 是最终覆盖函数
+    void bar() final; // 错误：bar 非虚，因此它不能是 final 的
+};
+
+struct B final : A // struct B 为 final
+{
+    void foo() override; // 错误：foo 不能被覆盖，因为它在 A 中是 final 的
+};
+
+struct C : B {}; // 错误：B 是 final 的
+|p=true
+|output=
+main.cpp:9:10: 错误：'void A::bar()' 标记为 'final'，但不是虚函数
+    9 {{!}}     void bar() final; // 错误：bar 非虚，因此它不能是 final 的
+      {{!}}          ^~~
+main.cpp:14:10: 错误：虚函数 'virtual void B::foo()' 覆盖 final 函数
+   14 {{!}}     void foo() override; // 错误：foo 不能被覆盖，因为它在 A 中是 final 的
+      {{!}}          ^~~
+main.cpp:8:10: 注意：函数 'virtual void A::foo()' 被覆盖
+    8 {{!}}     void foo() final; // Base::foo 被覆盖而 A::foo 是最终覆盖函数
+      {{!}}          ^~~
+main.cpp:17:8: 错误：不能在派生类型 'C' 中派生自 'final' 基类 'B'
+   17 {{!}} struct C : B // 错误：B 是 final 的
+      {{!}}
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=11|title=Classes|id=class}}
+{{ref std|section=11.7.3|title=Virtual functions|id=class.virtual}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11|title=Classes|id=class}}
+{{ref std|section=11.7.2|title=Virtual functions|id=class.virtual}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=12|title=Classes|id=class}}
+{{ref std|section=13.3|title=Virtual functions|id=class.virtual}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=9|title=Classes|id=class}}
+{{ref std|section=10.3|title=Virtual functions|id=class.virtual}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=9|title=Classes|id=class}}
+{{ref std|section=10.3|title=Virtual functions|id=class.virtual}}
+{{ref std end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1318|std=C++11|before=成员说明列表为空且类名后有 {{c/core|final}} 的类定义可能会将 {{c/core|final}} 作为标识符|after=此时 {{c/core|final}} 只能是说明符}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc override}}
+{{dsc inc|cpp/language/dsc class_property_specifiers}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

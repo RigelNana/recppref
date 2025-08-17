@@ -1,0 +1,104 @@
+{{title|operator&lt;&lt;,&gt;&gt;{{small|(std::basic_string)}}}}
+{{cpp/string/basic_string/navbar}}
+{{dcl begin}}
+{{dcl header|string}}
+{{dcl|num=1|
+template&lt; class CharT, class Traits, class Allocator &gt;
+std::basic_ostream&lt;CharT, Traits&gt;&amp; 
+    operator&lt;&lt;( std::basic_ostream&lt;CharT, Traits&gt;&amp; os, 
+                const std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; str );
+}}
+{{dcl|num=2|
+template&lt; class CharT, class Traits, class Allocator &gt;
+std::basic_istream&lt;CharT, Traits&gt;&amp; 
+    operator&gt;&gt;( std::basic_istream&lt;CharT, Traits&gt;&amp; is, 
+                std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; str );
+}}
+{{dcl end}}
+
+@1@ 表现为{{named req|FormattedOutputFunction}}。构造并检查哨兵对象后，[[cpp/named req/FormattedOutputFunction#填充|确定输出格式填充]]。
+&lt;!----&gt;
+然后将结果序列的每个字符（{{c|str}} 的内容加上填充）插入到输出流 {{c|os}}，如同通过调用 {{c|os.rdbuf()-&gt;sputn(seq, n)}}，其中 {{c|n}} 是 {{c|std::max(os.width(), str.size())}}。
+&lt;!----&gt;
+最后，调用 {{c|os.width(0)}} 以取消 {{lc|std::setw}} 的效果，如果存在。
+&lt;!----&gt;
+{{rrev|since=c++17|
+等价于 {{c|return os &lt;&lt; std::basic_string_view&lt;CharT, Traits&gt;(str);}}。
+}}
+
+@2@ 表现为{{named req|FormattedInputFunction}}。构造并检查哨兵对象，这可能会跳过前导空白符，然后首先以 {{c|str.erase()}} 清除 {{c|str}}，再从 {{c|is}} 读取字符并后附它们到 {{c|str}}，如同用 {{c|str.append(1, c)}}，直到满足下列任一条件：
+* 读取了 {{tt|N}} 个字符，其中如果 {{c|is.width() &gt; 0}}，那么 {{tt|N}} 是 {{c|is.width()}}，否则 {{tt|N}} 是 {{c|str.max_size()}}，
+* 流 {{c|is}} 中出现文件尾条件，或者
+* {{c|std::isspace(c, is.getloc())}} 对 {{c|is}} 中的下个字符 {{c|c}} 是 {{c|true}}（空白符留在输入流中）。
+&lt;!----&gt;
+如果没有提取任何字符，那么设置 {{c|is}} 上的 {{lc|std::ios::failbit}}，这可能会抛出 {{lc|std::ios_base::failure}}。
+&lt;!----&gt;
+最后，调用 {{c|is.width(0)}} 以取消 {{lc|std::setw}} 的效果，如果存在。 
+
+===异常===
+@1@ 如果在输出中抛出异常，那么可能会抛出 {{lc|std::ios_base::failure}}。
+
+@2@ 如果没有从 {{c|is}} 中提取任何字符（例如流在文件尾或仅有空白符组成），或在输入中抛出异常，那么可能会抛出 {{lc|std::ios_base::failure}}。
+
+===参数===
+{{par begin}}
+{{par|os|字符输出流}}
+{{par|is|字符输入流}}
+{{par|str|插入或提取的字符串}}
+{{par end}}
+
+===返回值===
+@1@ {{c|os}}
+@2@ {{c|is}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+ 
+int main()
+{
+    std::string greeting = "Hello, whirled!";
+    std::istringstream iss(greeting);
+    
+    std::string hello_comma, whirled, word;
+    
+    iss &gt;&gt; hello_comma;
+    iss &gt;&gt; whirled;
+    
+    std::cout &lt;&lt; greeting &lt;&lt; '\n'
+              &lt;&lt; hello_comma &lt;&lt; '\n' &lt;&lt; whirled &lt;&lt; '\n';
+    
+    // 重置流
+    iss.clear();
+    iss.seekg(0);
+    
+    while (iss &gt;&gt; word)
+        std::cout &lt;&lt; '+' &lt;&lt; word &lt;&lt; '\n';
+}
+|output=
+Hello, whirled!
+Hello,
+whirled!
++Hello,
++whirled!
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=25|std=C++98|before={{c|n}} 是 {{c|os.width()}} 和 {{c|str.size()}} 中较小的一方|after={{c|n}} 是较大的一方}}
+{{dr list item|wg=lwg|dr=90|std=C++98|before={{c|std::isspace(c, getloc())}} 被用来检查&lt;br&gt;空白字符，但 {{ltt|cpp/header/string|&lt;string&gt;}} 中没有声明 {{tt|getloc}}|after=将 {{c|getloc()}}&lt;br&gt;改成 {{c|is.getloc()}}}}
+{{dr list item|wg=lwg|dr=91|std=C++98|before={{tt|operator&gt;&gt;}} 没有表现为&lt;br&gt;{{named req|FormattedInputFunction}}|after=表现为&lt;br&gt;{{named req|FormattedInputFunction}}}}
+{{dr list item|wg=lwg|dr=211|std=C++98|before={{tt|operator&gt;&gt;}} 在没有提取到字符时不会设置 {{tt|failbit}}|after=会设置 {{tt|failbit}}}}
+{{dr list item|wg=lwg|dr=435|std=C++98|before=字符通过 {{c|os.rdbuf()-&gt;sputn(str.data(), n)}}&lt;br&gt;插入，而且 {{lwg|25}} 的解决方案导致&lt;br&gt;{{c|os.width()}} 大于 {{c|str.size()}} 时的行为未定义|after=先确定填充，并改成&lt;br&gt;插入填充后的字符序列}}
+{{dr list item|wg=lwg|dr=586|std=C++98|before={{tt|operator&lt;&lt;}} 没有表现为&lt;br&gt;{{named req|FormattedOutputFunction}}|after=表现为&lt;br&gt;{{named req|FormattedOutputFunction}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/basic_string_view/dsc operator ltlt}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

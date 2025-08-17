@@ -1,0 +1,312 @@
+{{title|显式（全）模板特化}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+允许对给定的模板实参集定制模板代码。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|template &lt;&gt;}} {{spar|声明}}}}
+{{sdsc end}}
+
+以下任何一项均可以完全特化：
+# {{rlp|function template|函数模板}}
+# {{rlp|class template|类模板}}
+# {{rev inl|since=c++14|{{rlp|variable template|变量模板}}}}
+# 类模板的{{rlp|member functions|成员函数}}
+# 类模板的{{rlp|static|静态数据成员}}
+# 类模板的{{rlp|nested types|成员类}}
+# 类模板的成员{{rlp|enum|枚举}}
+# 类或类模板的{{rlp|member template|成员类模板}}
+# 类或类模板的{{rlp|member template#成员函数模板|成员函数模板}}
+# {{rev inl|since=c++14|类或类模板的{{rlp|member template#成员变量模板|成员变量模板}}}}
+
+{{example
+|例如，
+|code=
+#include &lt;type_traits&gt;
+
+template&lt;typename T&gt; // 主模板
+struct is_void : std::false_type {};
+template&lt;&gt;           // 对 T = void 的显式特化
+struct is_void&lt;void&gt; : std::true_type {};
+
+int main()
+{
+    static_assert(is_void&lt;char&gt;::value == false,
+        "对于任何非 void 的类型 T，该类均派生自 false_type");
+    static_assert(is_void&lt;void&gt;::value == true,
+        "但当 T 是 void 时，类派生自 true_type");
+}
+}}
+
+===细节===
+显式特化可以在任何可以定义它的主模板的作用域中声明（可以与定义它的主模板的作用域不同；例如同{{rlp|member template|成员模板}}的类外特化）。显式特化必须在非特化模板声明后出现。
+
+{{source|
+namespace N
+{
+    template&lt;class T&gt; // 主模板
+    class X { /*...*/ };
+    template&lt;&gt;        // 同命名空间中的特化
+    class X&lt;int&gt; { /*...*/ };
+
+    template&lt;class T&gt; // 主模板
+    class Y { /*...*/ };
+    template&lt;&gt;        // 对 double 特化的前置声明
+    class Y&lt;double&gt;;
+}
+
+template&lt;&gt; // OK：相同命名空间中的特化
+class N::Y&lt;double&gt; { /*...*/ };
+}}
+
+特化必须在导致隐式实例化的首次使用之前，在每个发生这种使用的翻译单元中声明：
+
+{{source|
+class String {};
+
+template&lt;class T&gt;
+class Array { /*...*/ };
+
+template&lt;class T&gt; // 主模板
+void sort(Array&lt;T&gt;&amp; v) { /*...*/ }
+
+void f(Array&lt;String&gt;&amp; v)
+{
+    sort(v); // 使用 sort() 的主模板隐式实例化 sort(Array&lt;String&gt;&amp;)
+}
+
+template&lt;&gt; // 错误：sort(Array&lt;String&gt;) 的显式特化在隐式实例化之后出现
+void sort&lt;String&gt;(Array&lt;String&gt;&amp; v);
+}}
+
+只有声明没有定义的模板特化可以像其他{{rlp|type#不完整类型|不完整类型}}一样使用（例如可以使用到它的指针和引用）：
+{{source|
+template&lt;class T&gt; // 主模板
+class X;
+template&lt;&gt;        // 特化（声明，不定义）
+class X&lt;int&gt;;
+
+X&lt;int&gt;* p; // OK：指向不完整类型的指针
+X&lt;int&gt; x;  // 错误：不完整类型的对象
+}}
+
+函数模板{{rev inl|since=c++14|和变量模板}}的显式特化是否为 {{rlpt|inline}}{{rev inl|since=c++11|/{{rlpt|constexpr}}}}{{rev inl|since=c++20|/{{rlpt|constinit}}/{{rlpt|consteval}}}} 只与显式特化自身有关，主模板的声明是否带有对应说明符对它没有影响。{{rev inl|since=c++11|模板声明中出现的{{rlp|attributes|属性}}在它的显式特化中也没有效果：}}
+{{source|
+template&lt;class T&gt;
+void f(T) { /* ... */ }
+template&lt;&gt;
+inline void f&lt;&gt;(int) { /* ... */ } // OK，内联
+ 
+template&lt;class T&gt;
+inline T g(T) { /* ... */ }
+template&lt;&gt;
+int g&lt;&gt;(int) { /* ... */ }         // OK，没有内联
+ 
+template&lt;typename&gt;
+[[noreturn]] void h([[maybe_unused]] int i);
+template&lt;&gt; void h&lt;int&gt;(int i)
+{
+    // [[noreturn]] 没有效果，但是 [[maybe_unused]] 有效果
+}
+}}
+
+===函数模板的显式特化===
+当特化函数模板时，如果{{rlp|template argument deduction|模板实参推导}}能通过函数实参提供，那么就可以忽略它的模板实参：
+{{source|1=
+template&lt;class T&gt;
+class Array { /*...*/ };
+
+template&lt;class T&gt; // 主模板
+void sort(Array&lt;T&gt;&amp; v);
+template&lt;&gt;        // 对 T = int 的特化
+void sort(Array&lt;int&gt;&amp;);
+
+// 不需要写成 template&lt;&gt; void sort&lt;int&gt;(Array&lt;int&gt;&amp;);
+}}
+
+与某个特化带有相同名字和相同形参列表的函数不是特化（见{{rlp|function template|函数模板}}中的模板重载）。
+
+不能在函数模板，成员函数模板，以及隐式实例化类时的类模板的成员函数的显式特化中指定{{rlp|default arguments|默认函数实参}}。
+
+显式特化不能是{{rlp|friend|友元声明}}。
+
+{{todo|重新确认不同C++版本对异常说明的要求}}
+
+===特化的成员===
+在类体外定义显式特化的类模板的成员时，不使用 {{c|template&lt;&gt;}} 语法，除非它是某个被特化为类模板的显式特化的成员类模板的成员，因为在其他情况下语法会要求这种定义以嵌套模板所要求的 {{c|template&lt;形参&gt;}} 开始：
+
+{{source|1=
+template&lt;typename T&gt;
+struct A
+{
+    struct B {};      // 成员类
+    
+    template&lt;class U&gt; // 成员类模板
+    struct C {};
+};
+
+template&lt;&gt; // 特化
+struct A&lt;int&gt;
+{
+    void f(int); // 特化的成员函数
+};
+// template&lt;&gt; 不会用于特化的成员
+void A&lt;int&gt;::f(int) { /* ... */ }
+
+template&lt;&gt; // 成员类的特化
+struct A&lt;char&gt;::B
+{
+    void f();
+};
+// template&lt;&gt; 也不会用于特化的成员类的成员
+void A&lt;char&gt;::B::f() { /* ... */ }
+
+template&lt;&gt; // 成员类模板的特化
+template&lt;class U&gt;
+struct A&lt;char&gt;::C
+{
+    void f();
+};
+
+// template&lt;&gt; 会用于定义被特化为类模板的显式特化的成员类模板的成员
+template&lt;&gt;
+template&lt;class U&gt;
+void A&lt;char&gt;::C&lt;U&gt;::f() { /* ... */ }
+}}
+
+模板的静态数据成员的显式特化在它的声明包含初始化器时是定义；否则它是声明。这些定义必须用花括号进行默认初始化：
+{{source|
+template&lt;&gt;
+X Q&lt;int&gt;::x;   // 静态成员的声明
+template&lt;&gt;
+X Q&lt;int&gt;::x(); // 错误：函数声明
+template&lt;&gt;
+X Q&lt;int&gt;::x{}; // 静态成员的默认初始化定义
+}}
+
+类模板的成员或成员模板可对于类模板的隐式实例化显式特化，即使成员或成员模板定义于类模板定义中。
+
+{{source|1=
+template&lt;typename T&gt;
+struct A
+{
+    void f(T);         // 成员，在主模板中声明
+    
+    void h(T) {}       // 成员，在主模板中定义
+    
+    template&lt;class X1&gt; // 成员模板
+    void g1(T, X1);
+    
+    template&lt;class X2&gt; // 成员模板
+    void g2(T, X2);
+};
+
+// 成员的特化
+template&lt;&gt;
+void A&lt;int&gt;::f(int);
+
+// 成员特化 OK，即使在类中定义
+template&lt;&gt;
+void A&lt;int&gt;::h(int) {}
+
+// 类外成员模板定义
+template&lt;class T&gt;
+template&lt;class X1&gt;
+void A&lt;T&gt;::g1(T, X1) {}
+
+// 成员模板特化
+template&lt;&gt;
+template&lt;class X1&gt;
+void A&lt;int&gt;::g1(int, X1);
+
+// 成员模板特化
+template&lt;&gt;
+template&lt;&gt;
+void A&lt;int&gt;::g2&lt;char&gt;(int, char); // 对于 X2 = char
+
+// 同上，用模板实参推导（X1 = char）
+template&lt;&gt; 
+template&lt;&gt;
+void A&lt;int&gt;::g1(int, char); 
+}}
+
+成员或成员模板可以在多个外围类模板内嵌套。在这种成员的显式特化中，对每个显式特化的外围类模板都有一个 {{c|template&lt;&gt;}}。
+
+{{source|
+template&lt;class T1&gt;
+struct A
+{
+    template&lt;class T2&gt;
+    struct B
+    {
+        template&lt;class T3&gt;
+        void mf();
+    };
+};
+
+template&lt;&gt;
+struct A&lt;int&gt;;
+
+template&lt;&gt;
+template&lt;&gt;
+struct A&lt;char&gt;::B&lt;double&gt;;
+
+template&lt;&gt;
+template&lt;&gt;
+template&lt;&gt;
+void A&lt;char&gt;::B&lt;char&gt;::mf&lt;double&gt;();
+}}
+
+在这种嵌套声明中，某些层次可保留不特化（但如果它的外围类没有被特化，那么就不能在命名空间作用域特化类成员模板）。这种层次的每个声明都需要 {{c|template&lt;实参&gt;}}，因为这种特化自身也是模板：
+{{source|
+template &lt;class T1&gt;
+class A
+{
+    template&lt;class T2&gt;
+    class B
+    {
+        template&lt;class T3&gt; // 成员模板
+        void mf1(T3);
+        
+        void mf2();        // 非模板成员
+    };
+};
+
+// 特化
+template&lt;&gt;        // 对于特化的 A
+template&lt;class X&gt; // 对于未特化的 B
+class A&lt;int&gt;::B
+{
+    template&lt;class T&gt;
+    void mf1(T);
+};
+
+// 特化
+template&lt;&gt;        // 对于特化的 A
+template&lt;&gt;        // 对于特化的 B
+template&lt;class T&gt; // 对于未特化的 mf1
+void A&lt;int&gt;::B&lt;double&gt;::mf1(T t) {}
+
+// 错误：B&lt;double&gt; 被特化而且是成员模板，所以它外围的 A 也必须特化
+template&lt;class Y&gt;
+template&lt;&gt;
+void A&lt;Y&gt;::B&lt;double&gt;::mf2() {}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=531|std=C++98|before=未指明在命名空间作用域定义显式特化的成员的语法|after=补充语法}}
+{{dr list item|wg=cwg|dr=727|std=C++98|before=类作用域不允许有全特化和部分特化|after=允许在任何作用域}}
+{{dr list item|wg=cwg|dr=730|std=C++98|before=不能全特化非模板类的成员模板|after=允许这些全特化}}
+{{dr list item|wg=cwg|dr=2478|std=C++20|before=不明确主模板的 {{c/core|constinit}} 和 {{c/core|consteval}} 是否会带入它的显式特化|after=不会带入}}
+{{dr list item|wg=cwg|dr=2604|std=C++11|before=不明确主模板的属性是否会带入它的显式特化|after=不会带入}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|templates|模板}}
+* {{rlp|class template|类模板}}
+* {{rlp|function template|函数模板}}
+* {{rlp|partial specialization|部分特化}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

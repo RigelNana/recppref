@@ -1,0 +1,166 @@
+{{cpp/language/attributes/title|likely, unlikely||notes={{mark since c++20}}}}
+{{cpp/language/attributes/navbar}}
+
+允许编译器为包含该语句的执行路径，比任何其他不包含该语句的执行路径，更可能或更不可能的情况进行优化。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|{{c/core|[[likely]]}}}}
+}}
+{{sdsc|num=2|1=
+{{ttb|{{c/core|[[unlikely]]}}}}
+}}
+{{sdsc end}}
+
+===解释===
+这些属性可应用于标号或语句（除了声明语句）。它们不可同时应用到同一标号或语句。
+
+@1@ 应用到语句，允许编译器为包含该语句的执行路径，比任何其他不包含该语句的执行路径更可能的情况进行优化。
+
+@2@ 应用到语句，允许编译器为包含该语句的执行路径，比任何其他不包含该语句的执行路径更不可能的情况进行优化。
+
+当且仅当执行路径中含有到某个标号的跳转时，才认为该执行路径包含该标号：
+
+{{source|
+int f(int i)
+{
+    switch (i)
+    {
+        case 1: [[fallthrough]];
+        [[likely]] case 2: return 1;
+    }
+    return 2;
+}
+}}
+
+{{c|1=i == 2}} 被认为比 {{tt|i}} 的任何其他值更可能，但 {{c/core|[[likely]]}} 在 {{c|1=i == 1}} 的情况无效果，尽管它直落到 {{c|case 2:}} 标号。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;cmath&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;random&gt;
+
+namespace with_attributes
+{
+    constexpr double pow(double x, long long n) noexcept
+    {
+        if (n &gt; 0) [[likely]]
+            return x * pow(x, n - 1);
+        else [[unlikely]]
+            return 1;
+    }
+    constexpr long long fact(long long n) noexcept
+    {
+        if (n &gt; 1) [[likely]]
+            return n * fact(n - 1);
+        else [[unlikely]]
+            return 1;
+    }
+    constexpr double cos(double x) noexcept
+    {
+        constexpr long long precision{16LL};
+        double y{};
+        for (auto n{0LL}; n &lt; precision; n += 2LL) [[likely]]
+            y += pow(x, n) / (n &amp; 2LL ? -fact(n) : fact(n));
+        return y;
+    }
+} // namespace with_attributes
+
+namespace no_attributes
+{
+    constexpr double pow(double x, long long n) noexcept
+    {
+        if (n &gt; 0)
+            return x * pow(x, n - 1);
+        else
+            return 1;
+    }
+    constexpr long long fact(long long n) noexcept
+    {
+        if (n &gt; 1)
+            return n * fact(n - 1);
+        else
+            return 1;
+    }
+    constexpr double cos(double x) noexcept
+    {
+        constexpr long long precision{16LL};
+        double y{};
+        for (auto n{0LL}; n &lt; precision; n += 2LL)
+            y += pow(x, n) / (n &amp; 2LL ? -fact(n) : fact(n));
+        return y;
+    }
+} // namespace no_attributes
+
+double gen_random() noexcept
+{
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_real_distribution&lt;double&gt; dis(-1.0, 1.0);
+    return dis(gen);
+}
+
+volatile double sink{}; // 确保有副作用
+
+int main()
+{
+    for (const auto x : {0.125, 0.25, 0.5, 1. / (1 &lt;&lt; 26)})
+        std::cout
+            &lt;&lt; std::setprecision(53)
+            &lt;&lt; "x = " &lt;&lt; x &lt;&lt; '\n'
+            &lt;&lt; std::cos(x) &lt;&lt; '\n'
+            &lt;&lt; with_attributes::cos(x) &lt;&lt; '\n'
+            &lt;&lt; (std::cos(x) == with_attributes::cos(x) ? "equal" : "differ") &lt;&lt; '\n';
+
+    auto benchmark = [](auto fun, auto rem)
+    {
+        const auto start = std::chrono::high_resolution_clock::now();
+        for (auto size{1ULL}; size != 10'000'000ULL; ++size)
+            sink = fun(gen_random());
+        const std::chrono::duration&lt;double&gt; diff =
+            std::chrono::high_resolution_clock::now() - start;
+        std::cout &lt;&lt; "Time: " &lt;&lt; std::fixed &lt;&lt; std::setprecision(6) &lt;&lt; diff.count()
+                  &lt;&lt; " sec " &lt;&lt; rem &lt;&lt; std::endl; &lt;!-- flush is intentional --&gt;
+    };
+
+    benchmark(with_attributes::cos, "(with attributes)");
+    benchmark(no_attributes::cos, "(without attributes)");
+    benchmark([](double t) { return std::cos(t); }, "(std::cos)");
+}
+|p=true
+|output=
+x = 0.125
+0.99219766722932900560039115589461289346218109130859375
+0.99219766722932900560039115589461289346218109130859375
+equal
+x = 0.25
+0.96891242171064473343022882545483298599720001220703125
+0.96891242171064473343022882545483298599720001220703125
+equal
+x = 0.5
+0.8775825618903727587394314468838274478912353515625
+0.8775825618903727587394314468838274478912353515625
+equal
+x = 1.490116119384765625e-08
+0.99999999999999988897769753748434595763683319091796875
+0.99999999999999988897769753748434595763683319091796875
+equal
+Time: 0.579122 sec (with attributes)
+Time: 0.722553 sec (without attributes)
+Time: 0.425963 sec (std::cos)
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.12.7|title=Likelihood attributes|id=dcl.attr.likelihood}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.12.6|title=Likelihood attributes|id=dcl.attr.likelihood}}
+{{ref std end}}
+
+{{langlinks|en|es|ja}}

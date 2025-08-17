@@ -1,0 +1,94 @@
+{{cpp/thread/shared_lock/title|shared_lock}}
+{{cpp/thread/shared_lock/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++14|
+shared_lock() noexcept;
+}}
+{{dcl|num=2|since=c++14|
+shared_lock( shared_lock&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=3|since=c++14|
+explicit shared_lock( mutex_type&amp; m );
+}}
+{{dcl|num=4|since=c++14|
+shared_lock( mutex_type&amp; m, std::defer_lock_t t ) noexcept;
+}}
+{{dcl|num=5|since=c++14|
+shared_lock( mutex_type&amp; m, std::try_to_lock_t t );
+}}
+{{dcl|num=6|since=c++14|
+shared_lock( mutex_type&amp; m, std::adopt_lock_t t );
+}}
+{{dcl|num=7|since=c++14|
+template&lt; class Rep, class Period &gt;
+shared_lock( mutex_type&amp; m, 
+             const std::chrono::duration&lt;Rep,Period&gt;&amp; timeout_duration );
+}}
+{{dcl|num=8|since=c++14|1=
+template&lt; class Clock, class Duration &gt;
+shared_lock( mutex_type&amp; m, 
+             const std::chrono::time_point&lt;Clock,Duration&gt;&amp; timeout_time );
+}}
+{{dcl end}}
+
+构造 {{tt|shared_lock}}，可选地锁定提供的互斥体。
+
+@1@ 构造 {{tt|shared_lock}}，不关联互斥体。
+@2@ 移动构造函数。以 {{c|other}} 的内容初始化 {{tt|shared_lock}}。遗留 {{c|other}} 不关联到互斥体。
+@3-8@ 构造 {{tt|shared_lock}}，以 {{c|m}} 为关联的互斥体。另外：
+:@3@ 通过调用 {{c|m.lock_shared()}}，以共享模式锁定关联的互斥体。
+:@4@ 不锁定关联的互斥体。
+:@5@ 尝试通过调用 {{c|m.try_lock_shared()}}，以共享模式锁定关联的互斥体而不阻塞。
+:@6@ 假定调用方线程已在 {{c|m}} 上持有共享锁（即由 {{tt|lock_shared}}、{{tt|try_lock_shared}}、{{tt|try_lock_shared_for}} 或 {{tt|try_lock_shared_until}} 取得的锁）。若非如此则行为未定义。
+@7@ 尝试通过调用 {{c|m.try_lock_shared_for(timeout_duration)}}，以共享模式锁定关联的互斥体，这会阻塞直到经过指定的 {{c|timeout_duration}} 或者取得锁，两者的先达成者。可能阻塞长于 {{c|timeout_duration}}。若 {{tt|Mutex}} 不符合{{named req|SharedTimedLockable}}要求则行为未定义。
+@8@ 尝试通过调用 {{c|m.try_lock_shared_until(timeout_time)}}，以共享模式锁定关联的互斥体，这会阻塞直到抵达指定的 {{c|timeout_time}} 或者取得锁，两者的先达成者。可能阻塞长于抵达 {{c|timeout_time}}。若 {{tt|Mutex}} 不符合{{named req|SharedTimedLockable}}要求则行为未定义。
+
+===参数===
+{{par begin}}
+{{par|other|以之初始化状态的另一 {{tt|shared_lock}}}}
+{{par|m|与锁关联的互斥体，可选地获得其所有权}}
+{{par|t|用于选择不同锁定策略的标签形参}}
+{{par|timeout_duration|要阻塞的最大时长}}
+{{par|timeout_time|要阻塞到的最大时间点}}
+{{par end}}
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+
+std::shared_timed_mutex m;
+int i = 10;
+
+void read_shared_var(int id)
+{
+    // 两个线程都获得对整数 i 的访问
+    std::shared_lock&lt;std::shared_timed_mutex&gt; slk(m);
+    const int ii = i; // 读取全局 i
+
+     std::osyncstream(std::cout) &lt;&lt; '#' &lt;&lt; id &lt;&lt; " 读取 i 为 " &lt;&lt; ii &lt;&lt; "...\n";
+     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+     std::osyncstream(std::cout) &lt;&lt; '#' &lt;&lt; id &lt;&lt; " 已醒来..." &lt;&lt; std::endl;
+}
+
+int main()
+{
+     std::thread r1{read_shared_var, 1};
+     std::thread r2{read_shared_var, 2};
+
+     r1.join();
+     r2.join();
+}
+|p=true
+|output=
+#2 读取 i 为 10...
+#1 读取 i 为 10...
+#2 已醒来...
+#1 已醒来...
+}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

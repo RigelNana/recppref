@@ -1,0 +1,61 @@
+{{cpp/execution/title|scheduler}}
+{{cpp/execution/navbar}}
+{{dcl begin}}
+{{dcl header|execution}}
+{{dcl|num=1|since=c++26|1=
+template&lt; class Sch &gt;
+concept scheduler =
+    std::derived_from&lt;
+        typename std::remove_cvref_t&lt;Sch&gt;::scheduler_concept,
+        scheduler_t&gt; &amp;&amp;
+    /*queryable*/&lt;Sch&gt; &amp;&amp;
+    requires(Sch&amp;&amp; sch)
+    {
+        { 
+            std::execution::schedule(std::forward&lt;Sch&gt;(sch))
+        } -&gt; std::execution::sender;
+        {
+            auto(
+                std::execution::get_completion_scheduler&lt;
+                    std::execution::set_value_t&gt;(
+                        std::execution::get_env(
+                            std::execution::schedule(
+                                std::forward&lt;Sch&gt;(sch)))))
+        } -&gt; std::same_as&lt;std::remove_cvref_t&lt;Sch&gt;&gt;;
+    } &amp;&amp;
+    std::equality_comparable&lt;std::remove_cvref_t&lt;Sch&gt;&gt; &amp;&amp;
+    std::copy_constructible&lt;std::remove_cvref_t&lt;Sch&gt;&gt;;
+};
+}}
+{{dcl h|辅助标签类型}}
+{{dcl|num=2|since=c++26|1=
+struct scheduler_t {};
+}}
+{{dcl end}}
+
+{{tt|scheduler}} 概念由''调度器''{{sep}}类型实现，它们是执行资源的轻量句柄，比如与 C++ 执行库协作的线程池。
+
+===语义要求===
+给定一个 {{tt|Sch}} 类型的调度器和 {{tt|Env}} 类型的执行环境，并满足 {{c|sender_in&lt;schedule_result_t&lt;Sch&gt;, Env&gt;}}，则 {{c|/*sender-in-of*/&lt;schedule_result_t&lt;Sch&gt;, Env&gt;}} 得以实现。
+
+调度器的复制构造函数、析构函数、相等性比较或者 {{tt|swap}} 成员函数都必须不抛出异常。
+
+所有这些成员函数，以及该调度器类型的 {{tt|schedule}} 函数都必须是线程安全的。
+
+仅当两个调度器表示同一个执行资源时，它们相等。
+
+对于给定调度器 {{tt|sch}}，表达式 {{c|get_completion_scheduler&lt;set_value_t&gt;(get_env(schedule(sch)))}} 与 {{tt|sch}} 比较为相等。
+
+对于给定调度器 {{tt|sch}}，如果表达式 {{c|get_domain(sch)}} 良构，那么表达式 {{c|get_domain(get_env(schedule(sch)))}} 也良构且具有相同类型。
+
+调度器的析构函数，不能阻塞于任何与 {{tt|schedule}} 返回的发送器对象向连接的接收器的完成（底层资源可以提供单独 API 用以等待已提交函数对象的完成）。
+
+===示例===
+{{cpp/execution/hello_world_example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/execution/dsc schedule}}
+{{dsc end}}
+
+{{langlinks|cs|de|en|es|fr|it|ja|ko|pl|pt|ru}}

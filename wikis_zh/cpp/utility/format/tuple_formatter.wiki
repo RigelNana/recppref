@@ -1,0 +1,127 @@
+{{cpp/title|formatter{{small|&lt;''pair-or-tuple''&gt;}}}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|since=c++23|1=
+template&lt; class CharT, std::formattable&lt;CharT&gt;... Ts &gt;
+struct formatter&lt;/*pair-or-tuple*/&lt;Ts...&gt;, CharT&gt;;
+}}
+{{dcl end}}
+
+{{lc|std::formatter}} 针对 {{lc|std::pair}} 和 {{lc|std::tuple}} 的模板特化，允许用户使用[[cpp/utility/format|格式化函数]]将对偶或元组转换为元素汇集的文本表示。
+
+仅用于阐释的名字 {{c/core|/*pair-or-tuple*/}} 代表类模板 {{lc|std::pair}} 或 {{lc|std::tuple}}。
+
+此特化在 {{c|(std::formattable&lt;const Ts, CharT&gt; &amp;&amp; ...)}} 为 {{c|true}} 时满足{{named req|Formatter}}的规定。它始终满足{{named req|BasicFormatter}}的规定。
+
+===格式说明===
+{{spar|元组格式说明}} 的语法是：
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|元组填充与对齐}} {{spar optional|宽度}} {{spar optional|元组类型}}
+}}
+{{sdsc end}}
+
+{{spar|元组填充与对齐}} 与 {{spar|填充与对齐}} 的判读方式相同，但 {{spar|元组填充与对齐}} 中的 {{spar|填充}} 是除 {{ttb|{}}、{{ttb|}&lt;!----&gt;}} 和 {{ttb|:}} 外的任意字符。
+
+{{spar|宽度}} 在{{rlp|spec#宽度与精度|标准格式宽度说明}}中描述。
+
+{{spar|元组类型}} 改变格式化元组的方式，某些选项仅对特定实参类型有效。
+
+可用的元组呈现类型有：
+* {{ttb|m}}：指示开闭括号都应为 {{c|""}} 而分隔符应为 {{c|": "}}。
+
+:* 如果选择 {{ttb|m}} 为 {{spar|元组类型}}，则除非 {{c|1=sizeof...(Ts) == 2}} 为 {{c|true}}，否则程序非良构。
+
+* {{ttb|n}}：指示分隔符和开闭括号都应为 {{c|""}}。
+
+===成员对象===
+{{dsc begin}}
+{{dsc hitem|成员名字|定义}}
+{{dsc expos mem obj|private=yes|underlying_|{{c/core|std::tuple&lt;std::formatter&lt;std::remove_cvref_t&lt;Ts&gt;, CharT&gt;...&gt;}} 类型的底层格式化器元组}}
+{{dsc expos mem obj|private=yes|separator_|表示元组格式化结果的分隔符的字符串（默认为 {{c|", "}}）}}
+{{dsc expos mem obj|private=yes|opening-bracket_|表示元组格式化结果的开括号的字符串（默认为 {{c|"("}}）}}
+{{dsc expos mem obj|private=yes|closing-bracket_|表示元组格式化结果的闭括号的字符串（默认为 {{c|")"}}）}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem fun|set_separator|nolink=true|设置元组格式化结果使用指定的分隔符}}
+{{dsc mem fun|set_brackets|nolink=true|设置元组格式化结果使用指定的开闭括号}}
+{{dsc mem fun|parse|nolink=true|按照 {{spar|范围格式说明}} 的说明解析格式说明符}}
+{{dsc mem fun|format|nolink=true|按照 {{spar|范围格式说明}} 写入范围的格式化输出}}
+{{dsc end}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}set_separator|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_separator( std::basic_string_view&lt;CharT&gt; sep ) noexcept;
+}}
+{{dcl end}}
+
+赋值 {{c|sep}} 为 {{tti|separator_}}。
+}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}set_brackets|2=
+{{dcl begin}}
+{{dcl|1=
+constexpr void set_brackets( std::basic_string_view&lt;CharT&gt; opening,
+                             std::basic_string_view&lt;CharT&gt; closing ) noexcept;
+}}
+{{dcl end}}
+
+分别赋值 {{c|opening}} 和 {{c|closing}} 为 {{tti|opening-bracket_}} 和 {{tti|closing-bracket_}}。
+}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}parse|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; class ParseContext &gt;
+constexpr auto parse( ParseContext&amp; ctx ) -&gt; ParseContext::iterator;
+}}
+{{dcl end}}
+
+按 {{spar|元组格式说明}} 解析各个格式说明符，并将所解析的说明符存储到当前对象中。
+
+如果有 {{spar|元组类型}} 或 {{ttb|n}} 选项，则按需要改动 {{tti|opening-bracket}}、{{tti|closing-bracket}} 和 {{tti|separator}} 的值。
+
+对于 {{box|{{tti|underlying_}}}} 中的每个 {{c|e}}，调用 {{c|e.parse(ctx)}} 以解析一个空 {{spar|格式说明}}，并且若 {{c|e.set_debug_format()}} 是有效表达式，则调用 {{c|e.set_debug_format()}}。
+
+返回 {{spar|元组格式说明}} 的尾后迭代器。
+}}
+
+{{member|1={{small|std::formatter&lt;''pair-or-tuple''&gt;::}}format|2=
+{{dcl begin}}
+{{dcl|1=
+template&lt; class FormatContext &gt;
+FormatContext::iterator
+format( /*maybe-const-pair-or-tuple*/&lt;Ts...&gt;&amp; elems, FormatContext&amp; ctx ) const;
+}}
+{{dcl end}}
+
+{{c/core|/*maybe-const-pair-or-tuple*/}} 代表：
+* {{c/core|const /*pair-or-tuple*/}}，如果 {{c|(std::formattable&lt;const Ts, CharT&gt; &amp;&amp; ...)}} 为 {{c|true}}，
+* 否则为 {{c/core|/*pair-or-tuple*/}}。
+
+根据 {{spar|元组格式说明}} 将以下各项依次写入 {{c|ctx.out()}}：
+* {{box|{{tti|opening-bracket_}}}}，
+* 对于 {{range|0|sizeof...(Ts)}} 中的每个索引 {{c|I}}：
+:* 若 {{c|1=I != 0}}，则为 {{box|{{tti|separator_}}}}，
+:* 通过 {{box|{{c/core|std::get&lt;I&gt;(}}{{tti|underlying_}}{{c/core|)}}}} 写入 {{c|std::get&lt;I&gt;(elems)}} 的结果，以及
+* {{box|{{tti|closing-bracket_}}}}。
+
+返回输出范围的尾后迭代器。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3892|std=c++23|before=嵌套元组的格式化不正确|after=已修正}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc formatter}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

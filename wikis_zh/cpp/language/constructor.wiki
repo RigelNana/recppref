@@ -1,0 +1,283 @@
+{{title|构造函数与成员初始化器列表}}
+{{cpp/language/classes/navbar}}
+
+{{i|构造函数}}是以一种特殊的声明符语法进行声明的非静态{{rlp|member functions|成员函数}}，它们用来初始化该类类型的对象。
+
+{{rev begin}}
+{{rev|since=c++20|
+构造函数不能是{{rlp|coroutines|协程}}。
+}}
+{{rev|since=c++23|
+构造函数不能有{{rlps|member functions#显式对象形参}}。
+}}
+{{rev end}}
+
+===语法===
+构造函数用以下形式的成员{{rlp|function|函数声明符}}声明：
+
+{{sdsc begin}}
+{{sdsc|{{spar|类名}} {{ttb|(}} {{spar optional|形参列表}} {{ttb|)}} {{spar optional|异常说明}} {{spar optional|属性}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类名}}|{{rev inl|since=c++11|可后随{{rlp|attributes|属性}}列表，并}}可以圆括号包围的{{rlp|expressions#初等表达式|标识表达式}}}}
+{{par|{{spar|形参列表}}|{{rlpsd|function#形参列表}}}}
+{{par|{{spar|异常说明}}|{{rrev multi|until1=c++11|until2=c++17|rev1={{rlp|except spec|动态异常说明}}|rev2={{rlp|except spec|动态异常说明}}或 {{rlp|noexcept spec|noexcept 说明}}|rev3={{rlp|noexcept spec|noexcept 说明}}}}}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}列表}}
+{{par end}}
+
+构造函数声明的{{rlp|declarations#说明符|声明说明符}}中只允许说明符 {{rlpt|friend}}、{{rlpt|inline}}{{rev inl|since=c++11|、{{rlpt|constexpr}}}}{{rev inl|since=c++20|、{{rlpt|consteval}}}} 及 {{rlpt|explicit}}（尤其是不允许返回类型）。注意 {{rlp|member functions|cv 及引用限定符}}也不受允许；const 与 volatile 语义对于构造过程中的对象没有效果，它们要到最终派生类的构造函数完成才会生效。
+
+{{spar sep|类名}}的标识表达式必须具有以下形式之一：
+* 在{{rlp|friend|友元声明}}中，标识表达式是一个{{rlp|qualified lookup#类成员|命名了构造函数}}的{{rlps|identifiers#有限定的标识符|}}。
+* 否则，在属于类或类模板的{{rlps|class#成员说明}}的成员声明中：
+:* 对于类，标识表达式是立即外围类的{{rlp|injected-class-name|注入类名}}。
+:* 对于类模板，标识表达式是{{rev inl|until=c++20|命名了立即外围类模板的{{rlps|dependent name#当前实例化}}的类名}}{{rev inl|since=c++20|立即外围类模板的注入类名}}。
+* 否则，标识表达式是一个有限定的标识符，并且它尾部的未限定的标识符是在该标识表达式的{{rlp|lookup|查找}}语境中的注入类名。
+
+===成员初始化器列表===
+任何构造函数的{{rlp|function|函数定义}}的函数体，可以在复合语句的开花括号之前包含''成员初始化器列表''，它的语法是冒号字符 {{ttb|:}} 后随一个或多个{{spar sep|成员初始化器}}的逗号分隔列表，每项均具有以下语法：
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|类或标识符}} {{ttb|(}} {{spar optional|表达式列表}} {{ttb|)}}}}
+{{sdsc|num=2|notes={{mark since c++11}}|{{spar|类或标识符}} {{spar|花括号初始化器列表}}}}
+{{sdsc|num=3|notes={{mark since c++11}}|{{spar|形参包}} {{ttb|...}}}}
+{{sdsc end}}
+
+@1@ 用{{rlp|direct initialization|直接初始化}}，或当{{spar sep|表达式列表}}为空时用{{rlp|value initialization|值初始化}}，初始化{{spar sep|类或标识符}}所指名的基类或成员。
+@2@ 用{{rlp|list initialization|列表初始化}}（列表为空时进行{{rlp|value initialization|值初始化}}，而在初始化聚合体时进行{{rlp|aggregate initialization|聚合初始化}}），初始化{{spar sep|类或标识符}}所指名的基类或成员。
+@3@ 用{{rlp|parameter pack#基类说明符与成员初始化器列表|包展开}}初始化多个基类。
+
+{{par begin}}
+{{par|{{spar|类或标识符}}|任何指名非静态数据成员的标识符，或任何指名该类自身（对于委托构造函数）、直接基类或虚基类的类型名。}}
+{{par|{{spar|表达式列表}}|传递给基类或成员的实参的逗号分隔列表，可以为空}}
+{{par|{{spar|花括号初始化器列表}}|{{rlp|initialization|花括号包围的初始化器列表}}}}
+{{par|{{spar|形参包}}|变参模板{{rlp|parameter pack#基类说明符与成员初始化器列表|形参包}}的名字}}
+{{par end}}
+
+{{example|code=
+struct S
+{
+    int n;
+    
+    S(int);       // 构造函数声明
+    
+    S() : n(7) {} // 构造函数定义：
+                  // ": n(7)" 是初始化器列表
+                  // ": n(7) {}" 是函数体
+};
+
+S::S(int x) : n{x} {} // 构造函数定义：": n{x}" 是初始化器列表
+
+int main()
+{
+    S s;      // 调用 S::S()
+    S s2(10); // 调用 S::S(int)
+}
+}}
+
+===解释===
+构造函数没有名字且无法被直接调用。它们在发生{{rlp|initialization|初始化}}时被调用，且它们按照初始化的规则进行选择。没有 {{c/core|explicit}} 说明符的构造函数是{{rlp|converting constructor|转换构造函数}}。有 {{c/core|constexpr}} 说明符的构造函数会让其类型成为{{rlps|constant expression#字面类型}}。可以不带任何实参调用的构造函数是{{rlp|default constructor|默认构造函数}}。可以接收同类型的另一对象为实参的构造函数是{{rlp|copy constructor|复制构造函数}}和{{rlp|move constructor|移动构造函数}}。
+
+在开始执行组成构造函数体的复合语句之前，所有直接基类、虚基类和非静态数据成员的初始化均已结束。这些对象的非默认初始化只能在成员初始化器列表指定。对于不能默认初始化的基类，和不能以默认初始化{{rev inl|since=c++11|或以其{{rlp|data members#成员初始化|默认成员初始化器}}（如果有）}}初始化的非静态数据成员，例如引用和 const 限定的类型的成员，必须指定成员初始化器。{{rev inl|since=c++11|（注意，类模板实例化的非静态数据成员的默认成员初始化器，当成员类型或初始化器待决时可能是无效的。)}}对没有成员初始化器{{rev inl|since=c++11|或默认成员初始化器}}的{{rlps|union#匿名联合体}}或{{rlp|union#联合体式的类|变体成员}}不进行初始化。
+
+{{spar sep|类或标识符}}指名{{rlp|derived class|虚基类}}的初始化器，在并非所构造对象的最终派生类的类的构造期间被忽略。
+
+在{{spar sep|表达式列表}}或{{spar sep|花括号初始化器列表}}中出现的名字在构造函数的作用域中求值：
+{{source|
+class X
+{
+    int a, b, i, j;
+public:
+    const int&amp; r;
+    X(int i)
+      : r(a) // 初始化 X::r 以指代 X::a
+      , b{i} // 初始化 X::b 为形参 i 的值
+      , i(i) // 初始化 X::i 为形参 i 的值
+      , j(this-&gt;i) // 初始化 X::j 为 X::i 的值
+    {}
+};
+}}
+
+成员初始化器所抛出的异常可以被{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}处理。
+
+{{rrev|since=c++11|
+如果非静态数据成员具有{{rlp|data members#成员初始化|默认成员初始化器}}且也在成员初始化器列表中出现，那么使用该成员初始化器而忽略默认成员初始化器：
+{{source|1=
+struct S
+{
+    int n = 42;   // 默认成员初始化器
+    S() : n(7) {} // 将设置 n 为 7，而非 42
+};
+}}
+}}
+
+引用成员不能绑定到成员初始化器列表中的临时量：
+{{source|
+struct A
+{
+    A() : v(42) {} // 错误
+    const int&amp; v;
+};
+}}
+注：这同样适用于{{rlp|data members#成员初始化|默认成员初始化器}}。
+
+====在构造和析构期间的操作====
+可以为正在构造或析构的对象调用成员函数（包括{{rlp|virtual#在构造和析构期间|虚成员函数}}）。正在构造或析构的对象也可以是 {{rlpt|typeid}} 和 {{rlpt|dynamic_cast}} 的操作数。
+
+然而如果在进行以下求值操作的过程中进行这些操作，那么行为未定义：
+{{rrev|since=c++26|
+* 对构造函数的{{rlps|function#前条件断言}}求值
+* 对{{rlp|destructor|析构函数}}的{{rlps|function#后条件断言}}求值
+}}
+* 在完成所有基类的{{spar sep|成员初始化器}}之前对成员初始化器列表求值
+
+{{rrev|since=c++11|
+====委托构造函数====
+如果类自身的名字在初始化器列表中作为{{spar sep|类或标识符}}出现，那么该列表只能由这一个成员初始化器组成；这种构造函数被称为''委托构造函数''，而构造函数列表的仅有成员所选择的构造函数是''目标构造函数''。
+
+此时首先由重载决议选择目标构造函数并予以执行，然后控制返回到委托构造函数并执行其函数体。
+
+委托构造函数不能递归。
+
+{{source|
+class Foo
+{
+public: 
+    Foo(char x, int y) {}
+    Foo(int y) : Foo('a', y) {} // Foo(int) 委托到 Foo(char, int)
+};
+}}
+
+====继承的构造函数====
+见 {{rlp|using declaration#继承构造函数|{{c/core|using}} 声明}}。
+}}
+
+====初始化顺序====
+列表中的成员初始化器的顺序无关紧要：初始化的实际顺序如下：
+
+@1@ 如果构造函数是最终派生类的，那么按基类声明的深度优先、从左到右的遍历中的出现顺序（从左到右指的是基说明符列表中所呈现的顺序），初始化各个虚基类。
+@2@ 然后，以在此类的基类说明符列表中出现的从左到右顺序，初始化各个直接基类。
+@3@ 然后，以类定义中的声明顺序，初始化各个非静态成员。
+@4@ 最后，执行构造函数体。
+
+（注意：如果初始化的顺序是由不同构造函数中的成员初始化器列表中的出现所控制，那么{{rlp|destructor|析构函数}}就无法确保销毁顺序是构造顺序的逆序了。）
+
+===注解===
+{{feature test macro|value=200604L|std=C++11|__cpp_delegating_constructors|[[#委托构造函数|委托构造函数]]}}
+
+===示例===
+
+{{example
+|code=
+#include &lt;fstream&gt;
+#include &lt;string&gt;
+#include &lt;mutex&gt;
+
+struct Base
+{
+    int n;
+};   
+
+struct Class : public Base
+{
+    unsigned char x;
+    unsigned char y;
+    std::mutex m;
+    std::lock_guard&lt;std::mutex&gt; lg;
+    std::fstream f;
+    std::string s;
+    
+    Class(int x) : Base{123}, // 初始化基类
+        x(x),     // x（成员）以 x（形参）初始化
+        y{0},     // y 初始化为 0
+        f{"test.cc", std::ios::app}, // 在 m 和 lg 初始化之后发生
+        s(__func__), //__func__ 可用，因为初始化器列表是构造函数的一部分
+        lg (m),   // lg 使用已经初始化的 m
+        m{}       // m 在 lg 前初始化，即使它最后出现在此处
+    {}            // 空复合语句
+    
+    Class(double a) : y(a + 1),
+        x(y), // x 将在 y 前初始化，它的值不确定
+        lg(m)
+    {} // 基类初始化器未在列表中出现，它被默认初始化（这与使用 Base() 不同，那是值初始化）
+    
+    Class()
+    try // 函数 try 块在包含初始化器列表的函数体之前开始
+      : Class(0.0) // 委托构造函数
+    {
+        // ...
+    }
+    catch (...)
+    {
+        // 初始化中发生的异常
+    }
+};
+
+int main()
+{
+    Class c;
+    Class c1(1);
+    Class c2(0.1);
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=194|std=C++98|before=构造函数的声明器语法最多只能有一个函数说明符&lt;br&gt;（例如无法声明构造函数为 {{c/core|inline explicit}}）|after=可以有多个函数说明符}}
+{{dr list item|wg=cwg|dr=257|std=C++98|before=未指明抽象类是否需要为它的虚基类提供成员初始化器|after=指明为不需要，并且在执行过程中忽略它们}}
+{{dr list item|wg=cwg|dr=263|std=C++98|before=构造函数的声明符语法导致构造函数不能是友元|after=构造函数可以是友元}}
+{{dr list item|wg=cwg|dr=1345|std=C++98|before=没有默认成员初始化器的匿名联合体成员会被默认初始化|after=不会进行初始化}}
+{{dr list item|wg=cwg|dr=1435|std=C++98|before=构造函数的声明符语法中“类名”的含义不明确|after=改为使用特殊的函数声明符语法}}
+{{dr list item|wg=cwg|dr=1696|std=C++98|before=引用成员可被初始化为（生存期会在构造函数结尾结束的）临时量|after=这种初始化非良构}}
+&lt;!-- CWG 问题 #2237 没有以缺陷报告的方式解决 --&gt;
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=11.4.5|title=Constructors|id=class.ctor}}
+{{ref std|section=11.9.3|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=11.4.4|title=Constructors|id=class.ctor}}
+{{ref std|section=11.10.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=15.1|title=Constructors|id=class.ctor}}
+{{ref std|section=15.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=12.1|title=Constructors|id=class.ctor}}
+{{ref std|section=12.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=12.1|title=Constructors|id=class.ctor}}
+{{ref std|section=12.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=12.1|title=Constructors|id=class.ctor}}
+{{ref std|section=12.6.2|title=Initializing bases and members|id=class.base.init}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+* {{rlp|converting constructor|转换构造函数}}
+* {{rlp|copy assignment|复制赋值}}
+* {{rlp|copy constructor|复制构造函数}}
+* {{rlp|default constructor|默认构造函数}}
+* {{rlp|destructor|析构函数}}
+* {{rlpt|explicit}}
+* {{rlp|initialization|初始化}}
+** {{rlp|aggregate initialization|聚合初始化}}
+** {{rlp|constant initialization|常量初始化}}
+** {{rlp|copy initialization|复制初始化}}
+** {{rlp|default initialization|默认初始化}}
+** {{rlp|direct initialization|直接初始化}}
+** {{rlp|list initialization|列表初始化}}
+** {{rlp|reference initialization|引用初始化}}
+** {{rlp|value initialization|值初始化}}
+** {{rlp|zero initialization|零初始化}}
+* {{rlp|move assignment|移动赋值}}
+* {{rlp|move constructor|移动构造函数}}
+* {{rlpt|new}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

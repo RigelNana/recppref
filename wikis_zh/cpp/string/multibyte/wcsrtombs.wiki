@@ -1,0 +1,69 @@
+{{cpp/title|wcsrtombs}}
+{{cpp/string/multibyte/navbar}}
+{{ddcl|header=cwchar|
+std::size_t wcsrtombs( char* dst,
+                       const wchar_t** src,
+                       std::size_t len,
+                       std::mbstate_t* ps );
+}}
+
+转换来自元素为 {{c|*src}} 所指向的宽字符序列为其窄多字节表示，始于 {{c|*ps}} 所描述的转换状态。若 {{c|dst}} 非空，则存储转换后的字符于 {{c|dst}} 所指向的字符数组的相接元素。不写入多于 {{c|len}} 个字节到目标数组。
+
+如同以调用 {{lc|std::wcrtomb}} 转换每个字符。若遇到下列条件则停止转换：
+* 转换并存储了空字符 {{c|L'\0'}}。此情况下存储的字节是反迁移序列（若需要）后随 {{c|'\0'}}，设置 {{c|*src}} 为空指针并令 {{c|*ps}} 表示初始迁移状态。
+* 找到当前 C 本地环境中不对应合法字符的 {{c|wchar_t}}。设置 {{c|*src}} 指向首个未转换的宽字符。
+* 下个多字节字符将超出 {{c|len}}。设置 {{c|*src}} 指向首个未转换的宽字符。若 {{c|dst}} 为空指针则不检查此条件。
+
+===参数===
+{{par begin}}
+{{par|dst|指向窄字符数组的指针，其中将存储多字节字符}}
+{{par|src|指向指向空终止宽字符串首元素的指针的指针}}
+{{par|len|{{c|dst}} 所指向的数组中可用的字节数}}
+{{par|ps|指向转换状态对象的指针}}
+{{par end}}
+
+===返回值===
+成功时，返回写入首元素为 {{c|dst}} 所指向的字符数组的字节数（包含任何迁移序列，但不包含终止 {{c|'\0'}}）。若 {{c|dst}} 为空指针，则返回本会写入的字节数。
+
+转换错误时（若遇到非法宽字符），返回 {{c|static_cast&lt;std::size_t&gt;(-1)}}，存储 {{lc|EILSEQ}} 于 {{lc|errno}}，并令 {{c|*ps}} 留在未指定状态。
+
+===示例===
+{{example
+|code=
+#include &lt;clocale&gt;
+#include &lt;cwchar&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+void print_wide(const wchar_t* wstr)
+{
+    std::mbstate_t state = std::mbstate_t();
+    std::size_t len = 1 + std::wcsrtombs(nullptr, &amp;wstr, 0, &amp;state);
+    std::vector&lt;char&gt; mbstr(len);
+    std::wcsrtombs(&amp;mbstr[0], &amp;wstr, mbstr.size(), &amp;state);
+    std::cout &lt;&lt; "多字节字符串: " &lt;&lt; &amp;mbstr[0] &lt;&lt; '\n'
+              &lt;&lt; "包括 '\0' 的长度: " &lt;&lt; mbstr.size() &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::setlocale(LC_ALL, "en_US.utf8");
+    // UTF-8 窄多字节编码
+    const wchar_t* wstr = L"z\u00df\u6c34\U0001d10b"; // 或 L"zß水𝄋"
+    print_wide(wstr);
+}
+|output=
+多字节字符串: zß水𝄋
+包括 '\0' 的长度: 11
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/string/multibyte/dsc wcrtomb}}
+{{dsc inc|cpp/string/multibyte/dsc mbsrtowcs}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc see c|c/string/multibyte/wcsrtombs}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,156 @@
+{{title|条件包含}}
+{{cpp/preprocessor/navbar}}
+预处理器支持有条件地编译源文件的某些部分。这一行为由 {{tt|#if}}、{{tt|#else}}、{{tt|#elif}}、{{tt|#ifdef}}、{{tt|#ifndef}}{{rev inl|since=c++23|、{{tt|#elifdef}}、{{tt|#elifndef}}}} 与 {{tt|#endif}} 指令所控制。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|#if}} {{spar|表达式}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#ifdef}} {{spar|标识符}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#ifndef}} {{spar|标识符}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#elif}} {{spar|表达式}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#elifdef}} {{spar|标识符}}|notes={{mark since c++23}}}}
+{{sdsc|{{ttb|#elifndef}} {{spar|标识符}}|notes={{mark since c++23}}}}
+{{sdsc|{{ttb|#else}}|notes=&lt;nowiki/&gt;}}
+{{sdsc|{{ttb|#endif}}|notes=&lt;nowiki/&gt;}}
+{{sdsc end}}
+
+===解释===
+条件预处理块由 {{tt|#if}}、{{tt|#ifdef}} 或 {{tt|#ifndef}} 指令开始，然后可选地包含任意多个 {{tt|#elif}}{{rev inl|since=c++23|、{{tt|#elifdef}} 或 {{tt|#elifndef}}}} 指令，接下来是最多一个可选的 {{tt|#else}} 指令，并以 {{tt|#endif}} 指令结束。嵌套的条件预处理块会被单独处理。
+
+各个 {{tt|#if}}、{{tt|#ifdef}}、{{tt|#ifndef}}、{{tt|#elif}}{{rev inl|since=c++23|、{{tt|#elifdef}}、{{tt|#elifndef}}}} 和 {{tt|#else}} 指令所控制的代码块在第一个不属于内部嵌套的条件预处理块的 {{tt|#elif}}{{rev inl|since=c++23|、{{tt|#elifdef}}、{{tt|#elifndef}}}}、{{tt|#else}} 或 {{tt|#endif}} 指令处结束。
+
+{{tt|#if}}、{{tt|#ifdef}} 和 {{tt|#ifndef}} 指令测试其所指定的条件（见下文），如果条件求值为真，则编译其控制的代码块。此时后续的 {{tt|#else}}{{rev inl|since=c++23|、{{tt|#elifdef}}、{{tt|#elifndef}}}} 和 {{tt|#elif}} 指令将被忽略。否则，如果所指定的条件求值为假，则跳过其所控制的代码块，然后处理后续的 {{tt|#else}}{{rev inl|since=c++23|、{{tt|#elifdef}}、{{tt|#elifndef}}}} 或 {{tt|#elif}} 指令（如果存在）。若后续指令为 {{tt|#else}}，则 {{tt|#else}} 指令所控制的代码块将会无条件地进行编译。否则，{{tt|#elif}}{{rev inl|since=c++23|、{{tt|#elifdef}} 或 {{tt|#elifndef}}}} 指令按照与 {{tt|#if}} 指令相同的方式执行：即测试条件是否满足，并根据其结果决定编译或跳过其所控制的代码块，并在后一种情况下继续处理后续的 {{tt|#elif}}{{rev inl|since=c++23|、{{tt|#elifdef}}、{{tt|#elifndef}}}} 和 {{tt|#else}} 指令。条件预处理块以 {{tt|#endif}} 指令结束。
+
+===条件的求值===
+===={{c/core|#if, #elif}}====
+{{spar sep|表达式}}可以包含形如“{{ttb|defined}} {{spar|标识符}}”或“{{ttb|defined (}}{{spar|标识符}}{{ttb|)}}”的一元运算符。当此{{spar sep|标识符}}已经{{rlp|replace|被定义为宏名}}时结果是 {{c|1}}，否则结果是 {{c|0}}。
+
+{{rrev|since=c++17|
+{{spar sep|表达式}}也可以包含以下表达式：
+* {{rlpt|include|__has_include}} 表达式，检测某个标头或源文件存在。
+{{rev begin}}
+{{rev|since=c++20|
+* {{ltt|cpp/feature_test#属性|__has_cpp_attribute}} 表达式，检测给定属性记号是否受支持和支持的版本。
+}}
+{{rev|since=c++26|
+* {{rlpt|embed|__has_embed}} 表达式，检测是否可以嵌入某个资源。
+}}
+{{rev end}}
+
+以上标识符在这种语境中被当做如同是已定义的宏名。
+}}
+
+在进行所有宏展开和对 {{tt|defined}} 以及上述表达式的求值后，任何非[[cpp/language/bool literal|布尔字面量]]的标识符都被替换成数字 {{c|0}}（这包含词法上为关键字的标识符，但不包括如 {{c|and}} 之类的代用记号）。
+
+然后，表达式被当作{{ls|cpp/language/constant expression#整数常量表达式}}进行求值。
+
+当{{spar sep|表达式}}求值为非零值时，包含其所控制的代码块，否则跳过该代码块。
+
+注：解决 {{cwg|1955}} 前，“{{tt|#if ''cond1''}} ... {{tt|#elif ''cond2''}}”和“{{tt|#if ''cond1''}} ... {{tt|#else}}”后面跟着“{{tt|#if ''cond2''}}”是不同的，因为当 {{tti|cond1}} 为真时第二个 {{tt|#if}} 将被跳过，且 {{tti|cond2}} 并不需要是良构的，而 {{tt|#elif}} 中的 {{tti|cond2}} 则必须是合法的表达式。 CWG 1955 开始，引领跳过的代码块的 {{tt|#elif}} 也被跳过。
+
+====组合指令====
+检查标识符是否{{rlp|replace|被定义为宏名}}。 
+
+“{{tt|#ifdef}} {{spar|标识符}}”与“{{tt|#if defined}} {{spar|标识符}}”实质上等价。
+
+“{{tt|#ifndef}} {{spar|标识符}}”与“{{tt|#if !defined}} {{spar|标识符}}”实质上等价。
+
+{{rrev|since=c++23|
+“{{tt|#elifdef}}&amp;nbsp;{{spar|标识符}}”与“{{tt|#elif defined}}&amp;nbsp;{{spar|标识符}}”实质上等价。
+
+“{{tt|#elifndef}}&amp;nbsp;{{spar|标识符}}”与“{{tt|#elif !defined}}&amp;nbsp;{{spar|标识符}}”实质上等价。
+}}
+
+===注解===
+{{tt|#elifdef}} 与 {{tt|#elifndef}} 指令在 C++23 标准化，不过鼓励实现将它们作为遵从的扩展向后移植到旧语言模式。
+
+===示例===
+{{example|
+|code=
+#define ABCD 2
+#include &lt;iostream&gt;
+
+int main()
+{
+
+#ifdef ABCD
+    std::cout &lt;&lt; "1: yes\n";
+#else
+    std::cout &lt;&lt; "1: no\n";
+#endif
+
+#ifndef ABCD
+    std::cout &lt;&lt; "2: no1\n";
+#elif ABCD == 2
+    std::cout &lt;&lt; "2: yes\n";
+#else
+    std::cout &lt;&lt; "2: no2\n";
+#endif
+
+#if !defined(DCBA) &amp;&amp; (ABCD &lt; 2*4-3)
+    std::cout &lt;&lt; "3: yes\n";
+#endif
+
+
+// 注意若编译器不支持 C++23 的 #elifdef/#elifndef 指令则会选择“不期待”块（见后述）。
+#ifdef CPU
+    std::cout &lt;&lt; "4: no1\n";
+#elifdef GPU
+    std::cout &lt;&lt; "4: no2\n";
+#elifndef RAM
+    std::cout &lt;&lt; "4: yes\n"; // 期待的块
+#else
+    std::cout &lt;&lt; "4: no!\n"; // 由于跳过未知的指令不期待地选择此块
+                             // 并直接从 "#ifdef CPU" “跳”到此 "#else" 块
+#endif
+
+// 为修复此问题，我们可以条件性地仅若支持 C++23 指令 #elifdef/#elifndef
+// 才定义 ELIFDEF_SUPPORTED 宏。
+#if 0
+#elifndef UNDEFINED_MACRO
+#define ELIFDEF_SUPPORTED
+#else
+#endif
+
+#ifdef ELIFDEF_SUPPORTED
+    #ifdef CPU
+        std::cout &lt;&lt; "4: no1\n";
+    #elifdef GPU
+        std::cout &lt;&lt; "4: no2\n";
+    #elifndef RAM
+        std::cout &lt;&lt; "4: yes\n"; // 期待的块
+    #else
+        std::cout &lt;&lt; "4: no3\n";
+    #endif
+#else // 不支持 #elifdef 时使用累赘的旧 “#elif defined”
+    #ifdef CPU
+        std::cout &lt;&lt; "4: no1\n";
+    #elif defined GPU
+        std::cout &lt;&lt; "4: no2\n";
+    #elif !defined RAM
+        std::cout &lt;&lt; "4: yes\n"; // 期待的块
+    #else
+        std::cout &lt;&lt; "4: no3\n";
+    #endif
+#endif
+}
+|p=true
+|output=
+1: yes
+2: yes
+3: yes
+4: no!
+4: yes
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1955 |std=C++14|before=要求失败的 {{c/core|#elif}} 中的表达式合法|after=跳过失败的 {{c/core|#elif}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/preprocessor/conditional|条件包含|nomono=true}}
+{{dsc end}}
+
+{{langlinks|ar|de|en|es|fr|it|ja|pt|ru}}

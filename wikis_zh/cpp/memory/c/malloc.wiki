@@ -1,0 +1,69 @@
+{{cpp/title|malloc}}
+{{cpp/memory/navbar}}
+{{ddcl|header=cstdlib|
+void* malloc( std::size_t size );
+}}
+
+分配 {{c|size}} 字节的未初始化存储。
+
+若分配成功，则返回指向分配的适合对任何标量类型对齐（至少同 {{lc|std::max_align_t}} 一样严格）的内存块（在目标区域中[[cpp/language/object#对象创建|隐式创建]]对象）中，最低（首）字节的指针。
+
+若 {{c|size}} 为零，则行为是实现定义的（可以返回空指针，或某个不可用于访问存储，但必须传递给 {{lc|std::free}} 的非空指针）。
+
+{{cpp/memory/thread_safety_note}}
+
+===参数===
+{{par begin}}
+{{par|size|要分配的字节数}}
+{{par end}}
+
+===返回值===
+成功时，返回指向新分配内存起始的指针。为避免内存泄漏，返回的指针必须用 {{lc|std::free()}} 或 {{lc|std::realloc()}} 解分配。
+
+失败时，返回空指针。
+
+===注解===
+任何情况下，此函数不调用构造函数或初始化内存。没有可以直接使用的保证会调用匹配的解分配函数的智能指针。C++ 中偏好的内存分配方法是用 RAII 就绪的函数 {{lc|std::make_unique}}、{{lc|std::make_shared}}、容器构造函数等，而在低层代码中为 [[cpp/language/new|new 表达式]]。
+
+对于加载大文件，经由如 POSIX 上的 [https://pubs.opengroup.org/onlinepubs/9699919799/functions/mmap.html {{tt|mmap}}] 或 Windows 上的 {{tt|CreateFileMapping}}([https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createfilemappinga {{tt|A}}]/[https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw {{tt|W}}]) 伴随 [https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile {{tt|MapViewOfFile}}] 的操作系统特定函数进行文件映射，比为文件读取分配缓冲区更适合。
+
+===示例===
+{{example
+|code=
+#include &lt;cstdlib&gt; 
+#include &lt;iostream&gt;   
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main() 
+{
+    constexpr std::size_t size = 4;
+    if (auto ptr = reinterpret_cast&lt;std::string*&gt;(std::malloc(size * sizeof(std::string))))
+    {
+        try
+        {
+            for (std::size_t i = 0; i &lt; size; ++i)
+                std::construct_at(ptr + i, 5, 'a' + i);
+            for (std::size_t i = 0; i &lt; size; ++i)
+                std::cout &lt;&lt; "ptr[" &lt;&lt; i &lt;&lt; "] == " &lt;&lt; ptr[i] &lt;&lt; '\n';
+            std::destroy_n(ptr, size);
+        }
+        catch (...) {}
+        std::free(ptr);
+    }
+}
+|output=
+p[0] == aaaaa
+p[1] == bbbbb
+p[2] == ccccc
+p[3] == ddddd
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/new/dsc operator_new}}
+{{dsc inc|cpp/memory/dsc get_temporary_buffer}}
+{{dsc see c|c/memory/malloc}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

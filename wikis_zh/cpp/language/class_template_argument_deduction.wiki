@@ -1,0 +1,597 @@
+{{title|类模板实参推导（CTAD）{{mark since c++17}}}}
+{{cpp/language/declarations/expressions/templates/navbar}}
+
+为了实例化一个{{rlp|class template|类模板}}，需要知晓每个模板实参，但并非每个模板实参都必须指定。在下列语境中，编译器会从初始化式的类型推导缺失的模板实参：
+* 任意指定变量及变量模板的初始化的{{rlp|declarations|声明}}，其声明的类型是类模板（可有 {{rlp|cv|cv 限定}}）：
+{{source|1=
+std::pair p(2, 4.5);     // 推导出 std::pair&lt;int, double&gt; p(2, 4.5);
+std::tuple t(4, 3, 2.5); // 同 auto t = std::make_tuple(4, 3, 2.5);
+std::less l;             // 同 std::less&lt;void&gt; l;
+}}
+* {{rlp|new|new 表达式}}：
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    A(T, T);
+};
+
+auto y = new A{1, 2}; // 分配的类型是 A&lt;int&gt;
+}}
+* {{rlp|explicit cast|函数式转换}}表达式：
+{{source|1=
+auto lck = std::lock_guard(mtx);     // 推导出 std::lock_guard&lt;std::mutex&gt;
+std::copy_n(vi1, 3,
+    std::back_insert_iterator(vi2)); // 推导出 std::back_insert_iterator&lt;T&gt;，
+                                     // 其中 T 是容器 vi2 的类型
+std::for_each(vi.begin(), vi.end(),
+    Foo([&amp;](int i) {...}));          // 推导出 Foo&lt;T&gt;，其中 T 是独有的 lambda 类型
+}}
+{{rrev|since=c++20|1=
+* {{rlpsd|template parameters#非类型模板形参}}的类型：
+{{source|1=
+template&lt;class T&gt;
+struct X
+{
+    constexpr X(T) {}
+};
+
+template&lt;X x&gt;
+struct Y {};
+
+Y&lt;0&gt; y; // OK, Y&lt;X&lt;int&gt;(0)&gt;
+}}
+}}
+
+===类模板的推导===
+{{anchor|自动推导指引}}
+====隐式生成的推导指引====
+在函数式转换或变量声明中，当类型说明符只包含主类模板 {{tt|C}} 的名字（即不带模板实参列表）时，以如下方式组成推导的候选：
+
+* 如果已经定义 {{tt|C}}，那么对所指名的主模板（如果已经定义）中所声明的每个构造函数（或构造函数模板）{{tt|C{{sub|i}}}}，构造一个虚设的满足以下所有条件的函数模板 {{tt|F{{sub|i}}}}：
+:* {{tt|F{{sub|i}}}} 的模板形参是 {{tt|C}} 的各模板形参后随（如果 {{tt|C{{sub|i}}}} 是构造函数模板）{{tt|C{{sub|i}}}} 的各模板形参（也会包含默认模板实参）。
+{{rrev|since=c++20|
+:* {{tt|F{{sub|i}}}} 的{{rlp|constraints|关联约束}}是 {{tt|C}} 的关联约束和 {{tt|C{{sub|i}}}} 的关联约束的合取。
+}}
+:* {{tt|F{{sub|i}}}} 的{{rlps|function#形参列表}}是 {{tt|C{{sub|i}}}} 的形参列表。
+:* {{tt|F{{sub|i}}}} 的返回类型是 {{tt|C}} 后随由 {{tt|&lt;&gt;}} 围绕的类模板的各模板形参。
+
+* 如果 {{tt|C}} 未定义或未声明任何构造函数，那么添加一个导出自假想的构造函数 {{tt|C()}} 的额外的虚设函数模板。
+
+* 在任何情况下，都会添加一个以如上方式导出自假想构造函数 {{tt|C(C)}} 的额外的虚设函数模板，它被称为复制推导候选。
+
+* 对于每个[[#用户定义的推导指引|用户定义的推导指引]] {{tt|G{{sub|i}}}}，构造一个虚设的满足以下所有条件的函数或函数模板 {{tt|F{{sub|i}}}}：
+:* {{tt|F{{sub|i}}}} 的形参列表是 {{tt|G{{sub|i}}}} 的形参列表。
+:* {{tt|F{{sub|i}}}} 的返回类型是 {{tt|G{{sub|i}}}} 的简单模板标识。
+:* 如果 {{tt|G{{sub|i}}}} 有模板形参（语法 {{v|2}}），那么 {{tt|F{{sub|i}}}} 是函数模板，并且它的模板形参列表是 {{tt|G{{sub|i}}}} 的模板形参列表。否则 {{tt|F{{sub|i}}}} 是函数。
+
+{{rrev|since=c++20|1=
+* 另外，如果
+:* {{tt|C}} 有定义，在假设它的任何待决基类都没有虚函数或虚基类时，它满足{{rlp|aggregate initialization|聚合类型}}的要求，
+:* 没有 {{tt|C}} 的用户定义推导指引，且
+:* 该变量由非空的初始化式列表 {{spar|arg1, arg2, ..., argn}} 初始化（可使用{{rlpsd|aggregate initialization#指派初始化式}}），
+: 那么可能会添加一个聚合推导候选。按以下方式从聚合体各元素类型产生聚合推导候选的形参列表：
+:* 设 {{tt|e{{sub|i}}}} 为要从 {{tt|arg{{sub|i}}}} 初始化的（可能递归的）{{rlp|aggregate initialization|聚合体元素}}，其中
+::* 具有以下类型的聚合体元素不考虑{{rlpsd|aggregate initialization#花括号消除}}：
+:::* {{rlp|dependent name#待决类型|待决}}的非数组类型
+:::* 边界{{rlp|dependent name#值待决表达式|值待决}}的数组类型
+:::* 数组元素具有待决类型的数组类型，并且 {{tt|arg{{sub|i}}}} 是{{rlp|string literal|字符串字面量}}{{mark unreviewed dr|cwg|2685}}
+::* 如果 {{tt|C}}（或其中的自身就是聚合体的元素）拥有作为{{rlp|parameter pack|包展开}}的基类：
+:::* 如果该包展开是尾部的聚合体元素，那么认为它匹配初始化式列表的所有剩余元素；
+:::* 否则，认为该包为空。
+:* 如果没有这种 {{tt|e{{sub|i}}}}，那么不添加聚合推导候选。
+:* 否则，按以下方式确定聚合推导候选的形参列表 {{tt|T{{sub|1}}, T{{sub|2}}, ..., T{{sub|n}}}}：
+::* 如果 {{tt|e{{sub|i}}}} 是数组且 {{tt|arg{{sub|i}}}} 是{{spar|花括号初始化式列表}}，那么 {{tt|T{{sub|i}}}} 是到 {{tt|e{{sub|i}}}} 的声明类型的右值引用。
+::* 如果 {{tt|e{{sub|i}}}} 是数组且 {{tt|arg{{sub|i}}}} 是{{rlp|string literal|字符串字面量}}，那么 {{tt|T{{sub|i}}}} 是到具有 const 限定的 {{tt|e{{sub|i}}}} 的声明类型的左值引用。{{mark unreviewed dr|cwg|2681}}
+::* 否则，{{tt|T{{sub|i}}}} 是 {{tt|e{{sub|i}}}} 的声明类型。
+::* 如果有包因为它并非尾部聚合体元素而被跳过，那么在它原本的聚合体元素的位置插入形为 {{tt|P{{sub|i}} ...}} 的形参包。（这通常会导致推导失败。）
+::* 如果包是尾部的聚合体元素，那么将对应它的尾部形参序列替换成形为 {{tt|T{{sub|i}} ...}} 的单个形参。
+: 聚合推导候选是从假想构造函数 {{tt|C(T{{sub|1}}, T{{sub|2}}, ..., T{{sub|n}})}} 按上述方式得到的虚设函数模板。
+
+: 在聚合推导候选的模板实参推导中，只有在尾部的形参包的元素数无法从其他情况下推导时，才会从尾部的函数实参数推导。
+
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    T t;
+    
+    struct
+    {
+        long a, b;
+    } u;
+};
+
+A a{1, 2, 3};
+// 聚合推导候选：
+//   template&lt;class T&gt;
+//   A&lt;T&gt; F(T, long, long);
+
+template&lt;class... Args&gt;
+struct B : std::tuple&lt;Args...&gt;, Args... {};
+
+B b{std::tuple&lt;std::any, std::string&gt;{}, std::any{}&lt;!-- --&gt;};
+// 聚合推导候选：
+//   template&lt;class... Args&gt; 
+//   B&lt;Args...&gt; F(std::tuple&lt;Args...&gt;, Args...);
+
+// 推导出 b 的类型是 B&lt;std::any, std::string&gt;
+}}
+}}
+
+然后，针对某个假想类类型的虚设对象的初始化，进行{{rlp|template argument deduction|模板实参推导}}和{{rlp|overload resolution|重载决议}}，对于组成重载集而言，该类的各构造函数的签名与各个指引（除了返回类型）相匹配，并且由进行类模板实参推导的语境提供它的初始化式。但&lt;!--P0702R1--&gt;如果它的初始化式列表由单个（可有 cv 限定的）{{tt|U}} 类型的表达式组成，其中 {{tt|U}} 是 {{tt|C}} 的特化或派生自 {{tt|C}} 的特化的类，那么跳过{{rlpsd|overload resolution#列表初始化}}的第一阶段（考虑初始化式列表构造函数）。
+
+这些虚设构造函数是该假想类类型的公开成员。如果推导指引从显式的构造函数组成，那么它们也是显式的。如果重载决议失败，那么程序非良构。否则，选中的 {{tt|F}} 的返回类型就成为推导出的类模板特化。
+
+{{source|1=
+template&lt;class T&gt;
+struct UniquePtr
+{
+    UniquePtr(T* t);
+};
+
+UniquePtr dp{new auto(2.0)};
+
+// 一个声明的构造函数：
+// C1：UniquePtr(T*);
+
+// 隐式生成的推导指引集：
+
+// F1：template&lt;class T&gt;
+//     UniquePtr&lt;T&gt; F(T *p);
+
+// F2：template&lt;class T&gt;
+//     UniquePtr&lt;T&gt; F(UniquePtr&lt;T&gt;); // 复制推导候选
+
+// 要初始化的假想类：
+// struct X
+// {
+//     template&lt;class T&gt;
+//     X(T *p);         // 从 F1
+//     
+//     template&lt;class T&gt;
+//     X(UniquePtr&lt;T&gt;); // 从 F2
+// };
+
+// X 对象的以“new double(2.0)”为初始化式的直接初始化
+// 会选择与 T = double 对应的指引 F1 的构造函数
+// 对于 T=double 的 F1，返回类型是 UniquePtr&lt;double&gt;
+
+// 结果：
+// UniquePtr&lt;double&gt; dp{new auto(2.0)}
+}}
+
+或者，对于更加复杂的例子（注意：“S::N”无法编译：作用域解析限定符不是可推导物）：
+{{source|1=
+template&lt;class T&gt;
+struct S
+{
+    template&lt;class U&gt;
+    struct N
+    {
+        N(T);
+        N(T, U);
+        
+        template&lt;class V&gt;
+        N(V, U);
+    };
+};
+ 
+S&lt;int&gt;::N x{2.0, 1};
+
+// 隐式生成的推导指引是（注意已知 T 是 int）
+
+// F1：template&lt;class U&gt;
+//     S&lt;int&gt;::N&lt;U&gt; F(int);
+
+// F2：template&lt;class U&gt;
+//     S&lt;int&gt;::N&lt;U&gt; F(int, U);
+
+// F3：template&lt;class U, class V&gt;
+//     S&lt;int&gt;::N&lt;U&gt; F(V, U);
+
+// F4：template&lt;class U&gt;
+//     S&lt;int&gt;::N&lt;U&gt; F(S&lt;int&gt;::N&lt;U&gt;);（复制推导候选）
+
+// 以“{2.0, 1}”为初始化式的直接列表初始化的重载决议
+// 选择 U=int 与 V=double 的 F3。
+// 返回类型是 S&lt;int&gt;::N&lt;int&gt;
+
+// 结果：
+// S&lt;int&gt;::N&lt;int&gt; x{2.0, 1};
+}}
+
+====用户定义的推导指引====
+用户定义的推导指引的语法是带尾随返回类型的函数声明的语法，但它以类模板名作为函数名：
+{{sdsc begin}}
+{{sdsc|num=1|{{spar optional|explicit说明符}} {{spar|模板名}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{ttb|-&gt;}} {{spar|简单模板标识}} {{spar optional|requires子句}} {{ttb|;}}}}
+{{sdsc|num=2|{{ttb|template &lt;}}{{spar sep|模板形参列表}}{{ttb|&gt;}} {{spar optional|requires子句}}&lt;br&gt;{{spar optional|explicit说明符}} {{spar|模板名}} {{ttb|(}} {{spar|形参列表}} {{ttb|)}} {{ttb|-&gt;}} {{spar|简单模板标识}} {{spar optional|requires子句}} {{ttb|;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|模板形参列表}}|非空的{{rlp|template parameters|模板形参}}的逗号分隔列表}}
+{{par|{{spar|explicit说明符}}|{{rlp|explicit|{{c/core|explicit}} 说明符}}}}
+{{par|{{spar|模板名}}|要推导实参的类模板的名字}}
+{{par|{{spar|形参列表}}|（可以为空的）{{rlps|function#形参列表}}}}
+{{par|{{spar|简单模板标识}}|{{rlp|templates#模板标识|简单模板标识}}}}
+{{par|{{spar|requires子句}}|{{mark since c++20}} {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}}}
+{{par end}}
+
+
+{{rrev|since=c++20|
+用户定义的推导指引中的形参不能具有占位类型：不能使用{{rlpsd|function template#简写函数模板}}形式。
+}}
+
+用户定义的推导指引必须指名一个类模板，且必须在类模板的同一语义作用域（可以是命名空间或外围类）中引入，而且对于成员类模板必须拥有同样的访问，但推导指引不会成为该作用域的成员。
+
+推导指引不是函数且没有函数体。推导指引不会被名字查找所找到，并且除了在推导类模板实参时{{rlp|overload resolution#最佳可行函数|与其他推导指引之间的重载决议}}之外不会参与重载决议。不能在同一翻译单元中为同一类模板再次声明推导指引。
+
+{{source|1=
+// 模板的声明
+template&lt;class T&gt;
+struct container
+{
+    container(T t) {}
+    
+    template&lt;class Iter&gt;
+    container(Iter beg, Iter end);
+};
+
+// 额外的推导指引
+template&lt;class Iter&gt;
+container(Iter b, Iter e) -&gt; container&lt;typename std::iterator_traits&lt;Iter&gt;::value_type&gt;;
+
+// 使用
+container c(7); // OK：用隐式生成的指引推导出 T=int
+std::vector&lt;double&gt; v = {/* ... */};
+auto d = container(v.begin(), v.end()); // OK：推导出 T=double
+container e{5, 6}; // 错误：std::iterator_traits&lt;int&gt;::value_type 不存在
+}}
+
+为重载决议而虚设的构造函数（如上文所述）在对应到从显式构造函数组成的隐式生成的推导指引，或对应到声明为 {{rlpt|explicit}} 的用户定义推导指引时是 explicit 的。像往常一样，在复制初始化语境中忽略这些构造函数：
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    explicit A(const T&amp;, ...) noexcept; // #1
+    A(T&amp;&amp;, ...);                        // #2
+};
+
+int i;
+A a1 = {i, i}; // 错误：不能从 #2 的右值引用推导
+               // 且 #1 是 explicit 的，所以复制初始化中不予考虑。
+A a2{i, i};    // OK，#1 推导出 A&lt;int&gt; 并且初始化
+A a3{0, i};    // OK，#2 推导出 A&lt;int&gt; 并且初始化
+A a4 = {0, i}; // OK，#2 推导出 A&lt;int&gt; 并且初始化
+
+template&lt;class T&gt;
+A(const T&amp;, const T&amp;) -&gt; A&lt;T&amp;&gt;; // #3
+
+template&lt;class T&gt;
+explicit A(T&amp;&amp;, T&amp;&amp;)  -&gt; A&lt;T&gt;;  // #4
+
+A a5 = {0, 1}; // 错误：#3 推导出 A&lt;int&amp;&gt; 且 #1 和 #2 会生成形参相同的构造函数。
+A a6{0, 1};    // OK，#4 推导出 A&lt;int&gt; 并以 #2 初始化
+A a7 = {0, i}; // 错误：#3 推导出 A&lt;int&amp;&gt;
+A a8{0, i};    // 错误：#3 推导出 A&lt;int&amp;&gt;
+
+// 注：请查看 https://github.com/cplusplus/CWG/issues/647，
+// 称示例 a7 与 a8 不正确，可替换为
+//A a7 = {0, i}; // 错误：#2 与 #3 都匹配，重载解析失败
+//A a8{i,i};     // 错误：#3 推导出 A&lt;int&amp;&gt;，#1 和 #2 声明同一个构造函数
+
+}}
+
+在构造函数或构造函数模板的形参列表中使用成员 typedef 或别名模板的行为自身不会使隐式生成的指引的对应形参变为不推导语境。
+
+{{source|1=
+template&lt;class T&gt;
+struct B
+{
+    template&lt;class U&gt;
+    using TA = T;
+    
+    template&lt;class U&gt;
+    B(U, TA&lt;U&gt;); // #1
+};
+
+// 从 #1 产生的隐式推导指引等价于
+//   template&lt;class T, class U&gt;
+//   B(U, T) -&gt; B&lt;T&gt;;
+// 而不是
+//   template&lt;class T, class U&gt;
+//   B(U, typename B&lt;T&gt;::template TA&lt;U&gt;) -&gt; B&lt;T&gt;;
+// 后者无法被推导
+
+B b{(int*)0, (char*)0}; // OK，推导出 B&lt;char*&gt;
+}}
+
+{{rrev|since=c++20|1=
+===别名模版的推导===
+当函数式转换或变量定义用到了以不带实参列表的别名模板 {{tt|A}} 为类型说明符的名字，其中 {{tt|A}} 定义为 {{tt|B&lt;ArgList&gt;}} 的别名，而 {{tt|B}} 的作用域为非依赖且 {{tt|B}} 是类模板或定义相似的别名模板时，推导将以与类模板相同的方式进行，但改为从 {{tt|B}} 的指引生成指引，方式如下：
+
+* 对于 {{tt|B}} 的每个指引 {{tt|f}}，用{{rlp|template argument deduction|模板实参推导}}从 {{tt|B&lt;ArgList&gt;}} 推导 {{tt|f}} 的返回类型的模板实参，但推导即使在有实参没有被推导出的时候也不会失败。如果推导因为其他原因失败，那么以空集作为推导出的模板实参集。{{mark unreviewed dr|cwg|2664}}
+* 替换上述推导结果到 {{tt|f}} 中，如果替换失败，那么就不会生成指引；否则，令 {{tt|g}} 代表替换结果，构成指引 {{tt|f'}}，使得：
+:* {{tt|f'}} 的形参类型和返回类型与 {{tt|g}} 的相同
+:* 如果 {{tt|f}} 是模板，那么 {{tt|f'}} 是模板形参列表包含了以下内容的函数模板；否则（{{tt|f}} 不是模板）{{tt|f'}} 是函数：&lt;!-- 由于英文原文的语法无法用中文表达，所以换了一种表达方式 --&gt;
+::* 在上述推导出现的 {{tt|A}} 的所有模板形参（包含其默认模板实参）
+::* 在前一条找到的默认模板实参（如果存在）中出现的 {{tt|A}} 的所有模板形参（包含其默认模板实参）
+::* 如果再次找到默认模板实参，那么递归地包含在这些默认模板实参中出现的 {{tt|A}} 的所有模板形参（包含其默认模板实参）
+::* 后随 {{tt|f}} 未被推导的模板形参（包含其默认模板实参）
+:* {{tt|f'}} 的关联{{rlp|constraints|约束}}是 {{tt|g}} 的关联约束和当且仅当 {{tt|A}} 的实参可以从结果类型推导这一约束的合取。
+
+{{source|1=
+template&lt;class T&gt;
+class unique_ptr
+{
+    /* ... */
+};
+
+template&lt;class T&gt;
+class unique_ptr&lt;T[]&gt;
+{
+    /* ... */
+};
+
+template&lt;class T&gt;
+unique_ptr(T*) -&gt; unique_ptr&lt;T&gt;;   // #1
+
+template&lt;class T&gt;
+unique_ptr(T*) -&gt; unique_ptr&lt;T[]&gt;; // #2
+
+template&lt;class T&gt;
+concept NonArray = !std::is_array_v&lt;T&gt;;
+
+template&lt;NonArray A&gt;
+using unique_ptr_nonarray = unique_ptr&lt;A&gt;;
+
+template&lt;class A&gt;
+using unique_ptr_array = unique_ptr&lt;A[]&gt;;
+
+// 对 unique_ptr_nonarray 生成的推导指引：
+
+// 从 #1（unique_ptr&lt;T&gt; 从 unique_ptr&lt;A&gt; 的推导产生 T = A）：
+// template&lt;class A&gt;
+//     requires(argument_of_unique_ptr_nonarray_is_deducible_from&lt;unique_ptr&lt;A&gt;&gt;)
+// auto F(A*) -&gt; unique_ptr&lt;A&gt;;
+
+// 从 #2（unique_ptr&lt;T[]&gt; 从 unique_ptr&lt;A&gt; 的推导不产生结果）：&lt;!--GCC（迄 2020-01-18）于此 ICE --&gt;
+// template&lt;class T&gt;
+//     requires(argument_of_unique_ptr_nonarray_is_deducible_from&lt;unique_ptr&lt;T[]&gt;&gt;)
+// auto F(T*) -&gt; unique_ptr&lt;T[]&gt;;
+
+// 其中 argument_of_unique_ptr_nonarray_is_deducible_from 能定义为
+
+// template&lt;class&gt;
+// class AA;
+
+// template&lt;class A&gt;
+// class AA&lt;unique_ptr_nonarray&lt;A&gt;&gt; {};
+
+// template&lt;class T&gt;
+// concept argument_of_unique_ptr_nonarray_is_deducible_from =
+//     requires { sizeof(AA&lt;T&gt;); };
+
+// 对 unique_ptr_array 生成的推导指引：
+
+// 从 #1（unique_ptr&lt;T&gt;从 unique_ptr&lt;A[]&gt; 的推导生成 T = A[]）：
+// template&lt;class A&gt;
+//     requires(argument_of_unique_ptr_array_is_deducible_from&lt;unique_ptr&lt;A[]&gt;&gt;)
+// auto F(A(*)[]) -&gt; unique_ptr&lt;A[]&gt;;
+
+// 从 #2（unique_ptr&lt;T[]&gt; 从 unique_ptr&lt;A[]&gt; 的推导生成 T = A）：
+// template&lt;class A&gt;
+//     requires(argument_of_unique_ptr_array_is_deducible_from&lt;unique_ptr&lt;A[]&gt;&gt;)
+// auto F(A*) -&gt; unique_ptr&lt;A[]&gt;;
+
+// 其中 argument_of_unique_ptr_array_is_deducible_from 能定义为
+
+// template&lt;class&gt;
+// class BB;
+
+// template&lt;class A&gt;
+// class BB&lt;unique_ptr_array&lt;A&gt;&gt; {};
+
+// template&lt;class T&gt;
+// concept argument_of_unique_ptr_array_is_deducible_from =
+//     requires { sizeof(BB&lt;T&gt;); };
+
+// 用法：
+unique_ptr_nonarray p(new int); // 推导出 unique_ptr&lt;int&gt;
+// 从 #1 生成的推导指引返回 unique_ptr&lt;int&gt;
+// 从 #2 生成的推导指引返回 unique_ptr&lt;int[]&gt;，它被忽略，因为
+//   argument_of_unique_ptr_nonarray_is_deducible_from&lt;unique_ptr&lt;int[]&gt;&gt; 得不到满足
+
+unique_ptr_array q(new int[42]); // 推导出 unique_ptr&lt;int[]&gt;
+// 从 #1 生成的推导指引失败（不能从 new int[42] 推导出 A(*)[] 中的 A）
+// 从 #2 生成的推导指引返回 unique_ptr&lt;int[]&gt;
+}}
+}}
+
+===注解===
+只有在不存在模板实参列表时才会进行类模板实参推导。如果指定了模板实参列表，那么就不会发生推导。
+{{source|1=
+std::tuple t1(1, 2, 3);                // OK：推导
+std::tuple&lt;int, int, int&gt; t2(1, 2, 3); // OK：提供了所有实参
+
+std::tuple&lt;&gt; t3(1, 2, 3);    // 错误：tuple&lt;&gt; 中没有匹配的构造函数。不进行推导。
+std::tuple&lt;int&gt; t4(1, 2, 3); // 错误
+}}
+
+{{rrev|until=c++20|1=
+聚合体的类模板实参推导通常需要用户定义的推导指引：
+{{source|1=
+template&lt;class A, class B&gt;
+struct Agg
+{
+    A a;
+    B b;
+};
+// 隐式生成的指引由默认、复制及移动构造函数组成
+
+template&lt;class A, class B&gt;
+Agg(A a, B b) -&gt; Agg&lt;A, B&gt;;
+// ^ 此推导指引在 C++20 中能隐式生成
+
+Agg agg{1, 2.0}; // 从用户定义指引推导出 Agg&lt;int, double&gt;
+
+template&lt;class... T&gt;
+array(T&amp;&amp;... t) -&gt; array&lt;std::common_type_t&lt;T...&gt;, sizeof...(T)&gt;;
+auto a = array{1, 2, 5u}; // 从用户定义指引推导出 array&lt;unsigned, 3&gt;
+}}
+}}
+
+用户定义指引不必是模板：
+{{source|1=
+template&lt;class T&gt;
+struct S
+{
+    S(T);
+};
+S(char const*) -&gt; S&lt;std::string&gt;;
+S s{"hello"}; // 推导出 S&lt;std::string&gt;
+}}
+
+在类模板的作用域中，没有形参列表的模板名是注入类名，并可以用作类型。这种情况下不发生类模板推导，但必须显式提供它的模板形参：
+{{source|
+template&lt;class T&gt;
+struct X
+{
+    X(T) {}
+    
+    template&lt;class Iter&gt;
+    X(Iter b, Iter e) {}
+ 
+    template&lt;class Iter&gt;
+    auto foo(Iter b, Iter e)
+    {
+        return X(b, e); // 不推导：X 是当前的 X&lt;T&gt;
+    }
+ 
+    template&lt;class Iter&gt;
+    auto bar(Iter b, Iter e)
+    {
+        return X&lt;typename Iter::value_type&gt;(b, e); 必须指定所需的模板实参
+    }
+ 
+    auto baz()
+    {
+        return ::X(0); // 不是注入类名；推导为 X&lt;int&gt;
+    }
+};
+}}
+
+在{{rlp|overload resolution#最佳可行函数|重载决议}}中，偏序的优先级高于是否从用户定义推导指引生成函数模板：如果从构造函数生成的函数模板比从用户定义的推导指引生成者更特化，那么会选择从构造函数生成的。因为复制推导候选常常比包装构造函数更特殊，所以此规则表明复制通常优于包装。
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    A(T, int*);     // #1
+    A(A&lt;T&gt;&amp;, int*); // #2
+    
+    enum { value };
+};
+
+template&lt;class T, int N = T::value&gt;
+A(T&amp;&amp;, int*) -&gt; A&lt;T&gt;; // #3
+
+A a{1, 0}; // 使用 #1 推导出 A&lt;int&gt; 并以 #1 初始化
+A b{a, 0}; // 使用 #2（比 #3 更特殊）推导出 A&lt;int&gt; 并以 #2 初始化
+}}
+
+当之前的决胜规则（包括偏序）无法分辨两个候选函数模板时，应用下列规则：
+* 由用户定义指引生成的函数模板比从构造函数或构造函数模板隐式生成的函数模板更受偏好。
+* 复制推导候选比所有其他从构造函数或构造函数模板隐式生成的函数模板更受偏好。
+* 从非模板构造函数隐式生成的函数模板比从构造函数模板隐式生成的函数模板更受偏好。
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    using value_type = T;
+    
+    A(value_type); // #1
+    A(const A&amp;);   // #2
+    A(T, T, int);  // #3
+    
+    template&lt;class U&gt; 
+    A(int, T, U);  // #4
+};                 // #5，复制推导候选 A(A);
+
+A x(1, 2, 3); // 使用 #3，从非模板构造函数生成
+
+template&lt;class T&gt;
+A(T) -&gt; A&lt;T&gt;; // #6，比 #5 更不特殊
+
+A a(42); // 使用 #6 推导出 A&lt;int&gt; 并以 #1 初始化
+A b = a; // 使用 #5 推导出 A&lt;int&gt; 并以 #2 初始化
+
+template&lt;class T&gt;
+A(A&lt;T&gt;) -&gt; A&lt;A&lt;T&gt;&gt;;  // #7，与 #5 一样特殊
+
+A b2 = a; // 使用 #7 推导出 A&lt;A&lt;int&gt;&gt; 并以 #1 初始化
+}}
+
+如果模板形参是类模板形参，那么到该形参的无 cv 限定的右值引用不是{{rlp|template argument deduction|转发引用}}：
+{{source|1=
+template&lt;class T&gt;
+struct A
+{
+    template&lt;class U&gt;
+    A(T&amp;&amp;, U&amp;&amp;, int*); // #1：T&amp;&amp; 不是转发引用
+                       //     U&amp;&amp; 是转发引用
+    
+    A(T&amp;&amp;, int*);      // #2：T&amp;&amp; 不是转发引用
+};
+
+template&lt;class T&gt;
+A(T&amp;&amp;, int*) -&gt; A&lt;T&gt;; // #3：T&amp;&amp; 是转发引用
+
+int i, *ip;
+A a{i, 0, ip};  // 错误，不能从 #1 推导
+A a0{0, 0, ip}; // 使用 #1 推导出 A&lt;int&gt; 并以 #1 初始化
+A a2{i, ip};    // 使用 #3 推导出 A&lt;int&amp;&gt; 并以 #2 初始化
+}}
+
+当从类模板的某个特化类型的单个实参进行的初始化有问题时，通常与默认的包装相比，更偏好复制推导：
+
+{{source|1=
+std::tuple t1{1};  //std::tuple&lt;int&gt;
+std::tuple t2{t1}; //std::tuple&lt;int&gt;，不是 std::tuple&lt;std::tuple&lt;int&gt;&gt;
+
+std::vector v1{1, 2};   // std::vector&lt;int&gt;
+std::vector v2{v1};     // std::vector&lt;int&gt;，不是 std::vector&lt;std::vector&lt;int&gt;&gt;（P0702R1）
+std::vector v3{v1, v2}; // std::vector&lt;std::vector&lt;int&gt;&gt;
+}}
+
+除了复制 VS. 包装的特殊情形外，列表初始化中保持对初始化器列表构造函数的强偏好。
+
+{{source|1=
+std::vector v1{1, 2}; // std::vector&lt;int&gt;
+
+std::vector v2(v1.begin(), v1.end()); // std::vector&lt;int&gt;
+std::vector v3{v1.begin(), v1.end()}; // std::vector&lt;std::vector&lt;int&gt;::iterator&gt;
+}}
+
+在引入类模板实参推导前，避免显式指定实参的常用手段是使用函数模板：
+
+{{source|1=
+std::tuple p1{1, 1.0};             // std::tuple&lt;int, double&gt;，使用推导
+auto p2 = std::make_tuple(1, 1.0); // std::tuple&lt;int, double&gt;，C++17 前
+}}
+{{ftm begin|std=1|comment=1|core=1}}
+{{ftm|std=C++17|value=201703L|__cpp_deduction_guides|类模板的模板实参推导|rowspan="2"}}
+{{ftm|std=C++20|value=201907L|-|聚合体和别名的 CTAD}}
+{{ftm end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2376|std=C++17|before=即使在声明的变量的类型和要推导实参的类模板不同时也会进行类模板实参推导|after=此时不进行类模板实参推导}}
+{{dr list item|wg=cwg|dr=2628|std=C++20|before=隐式推导指引不会传递约束|after=会传递约束}}
+{{dr list item|wg=cwg|dr=2697|std=C++20|before=不明确用户定义的推导指引中是否可以使用简写函数模板形式|after=已禁止}}
+{{dr list item|wg=cwg|dr=2707|std=C++20|before=推导指引不能包含尾随的 {{c/core|requires}} 子句|after=可以包含}}
+{{dr list item|wg=cwg|dr=2714|std=C++17|before=隐式推导指引不会考虑构造函数的默认实参|after=会考虑}}
+{{dr list item|wg=cwg|dr=2913|std=C++20|before={{cwg|2707}} 的解决方案导致推导指引语法与函数声明语法不一致|after=调整语法}}
+{{dr list item|paper=P0702R1|std=C++17|before=初始化器列表构造函数能架空复制推导候选，导致产生包装|after=复制时跳过初始化器列表阶段}}
+{{dr list end}}
+
+{{langlinks|de|en|es|ja|ru}}

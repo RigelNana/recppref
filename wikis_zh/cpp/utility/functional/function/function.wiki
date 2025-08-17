@@ -1,0 +1,163 @@
+{{cpp/utility/functional/function/title|function}}
+{{cpp/utility/functional/function/navbar}}
+
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+function() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+function( std::nullptr_t ) noexcept;
+}}
+{{dcl|num=3|since=c++11|
+function( const function&amp; other );
+}}
+{{dcl rev multi|num=4|since1=c++11|until1=c++20|dcl1=
+function( function&amp;&amp; other );
+|dcl2=
+function( function&amp;&amp; other ) noexcept;
+}}
+{{dcla|num=5|since=c++11|
+template&lt; class F &gt; 
+function( F&amp;&amp; f );
+}}
+{{dcla|num=6|since=c++11|removed=c++17|
+template&lt; class Alloc &gt; 
+function( std::allocator_arg_t, const Alloc&amp; alloc ) noexcept;
+}}
+{{dcl|num=7|since=c++11|removed=c++17|
+template&lt; class Alloc &gt; 
+function( std::allocator_arg_t, const Alloc&amp; alloc, 
+          std::nullptr_t ) noexcept;
+}}
+{{dcl|num=8|since=c++11|removed=c++17|
+template&lt; class Alloc &gt; 
+function( std::allocator_arg_t, const Alloc&amp; alloc, 
+          const function&amp; other );
+}}
+{{dcl|num=9|since=c++11|removed=c++17|
+template&lt; class Alloc &gt; 
+function( std::allocator_arg_t, const Alloc&amp; alloc, 
+          function&amp;&amp; other );
+}}
+{{dcl|num=10|since=c++11|removed=c++17|
+template&lt; class F, class Alloc &gt; 
+function( std::allocator_arg_t, const Alloc&amp; alloc, F f );
+}}
+{{dcl end}}
+
+从各种来源构造 {{tt|std::function}}。
+
+@1,2@ 构造{{rlp|/|空}} {{tt|std::function}}。
+
+@3@ 将 {{c|other}} 的{{rlp|/|目标}}复制到 {{c|*this}} 的目标。
+@@ 如果 {{c|other}} 为空，那么 {{c|*this}} 在构造完成时也为空。
+
+@4@ 将 {{c|other}} 的目标移动到 {{c|*this}} 的目标。
+@@ 如果 {{c|other}} 为空，那么 {{c|*this}} 在构造完成时也为空。
+@@ 构造完成时 {{c|other}} 处于有效但未指定的状态。
+
+@5@ 以 {{c|std::forward&lt;F&gt;(f)}} 初始化目标。目标的类型是 {{c/core|std::decay&lt;F&gt;::type}}。
+@@ 如果 {{c|f}} 是空函数指针、空成员指针或某个 {{tt|std::function}} 特化的空值，那么 {{c|*this}} 在构造完成时为空。
+@@ {{cpp/enable if|满足以下所有条件}}：
+{{rrev|since=c++23|
+* {{c|std::is_same_v&lt;std::remove_cvref_t&lt;F&gt;, std::function&lt;R(Args...)&gt;}} 是 {{c|false}}。
+}}
+* {{c/core|std::decay&lt;F&gt;::type}} 类型的左值对实参类型 {{tt|Args...}} 和返回类型 {{tt|R}} 可调用。
+{{rrev|since=c++23|
+如果 {{c|std::is_copy_constructible_v&lt;std::decay_t&lt;F&gt;&gt;}} 或 {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}} 是 {{c|false}}，那么程序非良构。
+}}
+@@ 如果 {{tt|F}} 不{{named req|CopyConstructible}}，那么行为未定义。
+
+@6-10@ 同 {{v|1-5}}，但将 {{c|alloc}} 用于为 {{tt|std::function}} 会用到的任何内部数据结构分配内存。
+
+当目标是函数指针或 {{lc|std::reference_wrapper}} 时，保证使用小对象优化，即始终直接存储这些目标于 {{lc|std::function}} 对象中，不发生动态内存分配。可以构造其他大对象于动态分配的存储中，并由 {{lc|std::function}} 对象通过指针访问。
+
+===参数===
+{{par begin}}
+{{par|other|用于初始化 {{c|*this}} 的函数对象}}
+{{par|f|用于初始化 {{c|*this}} 的可调用对象}}
+{{par|alloc|用于内部内存分配的{{named req|Allocator}}}}
+{{par hreq}}
+{{par req named|Alloc|Allocator}}
+{{par end}}
+
+===异常===
+@3,8,9@ 如果 {{c|other}} 的目标是函数指针或 {{lc|std::reference_wrapper}}，那么不抛出异常，否则可能抛出 {{lc|std::bad_alloc}} 或用于复制或移动存储的可调用对象的构造函数所抛的任何异常。
+
+{{rrev|until=c++20|
+@4@ 如果 {{c|other}} 的目标是函数指针或 {{lc|std::reference_wrapper}}，那么不抛出异常，否则可能抛出 {{lc|std::bad_alloc}} 或用于复制或移动存储的可调用对象的构造函数所抛的任何异常。
+}}
+@5,10@ 如果 {{c|f}} 是函数指针或 {{lc|std::reference_wrapper}}，那么不抛异常，否则可能抛出 {{lc|std::bad_alloc}} 或存储的可调用对象的复制构造函数所抛的任何异常。
+
+===注解===
+{{tt|std::function}} 的分配器支持说明贫乏，且实现不一致。一些实现完全不提供重载 {{vl|6-10}}，一些提供重载但忽略提供的分配器参数，而一些实现提供重载并将提供的分配器用于构造，但不在重赋值 {{tt|std::function}} 时使用。结果，C++17 中移除了分配器支持。
+
+===示例===
+{{example
+|code=
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;utility&gt;
+
+void print_num(int i) { std::cout &lt;&lt; "print_num(" &lt;&lt; i &lt;&lt; ")\n"; }
+
+int main()
+{
+    std::function&lt;void(int)&gt; func1; // (1) 空构造函数
+    try
+    {
+        func1(333 &lt;&lt; 1);
+    }
+    catch (const std::bad_function_call&amp; ex)
+    {
+        std::cout &lt;&lt; "1) " &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+
+    std::function&lt;void(int)&gt; func2{nullptr}; // (2) 空构造函数
+    try
+    {
+        func1(222 * 3);
+    }
+    catch (const std::bad_function_call&amp; ex)
+    {
+        std::cout &lt;&lt; "2) " &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+
+    func1 = print_num; // 用赋值运算符初始化 func1
+
+    std::function&lt;void(int)&gt; func3{func1}; // (3) 复制构造函数
+    func3(33);
+
+    std::function&lt;void(int)&gt; func4{std::move(func3)}; // (4) 移动构造函数，
+                                                      // func3 处于未指明的状态
+    func4(44);
+
+    std::function&lt;void(int)&gt; func5{print_num}; // (5) 用函数调用构造函数
+    func5(55);
+
+    // (5) 用 lambda 调用构造函数
+    std::function&lt;void(int)&gt; func6([](int i) { std::cout &lt;&lt; "lambda(" &lt;&lt; i &lt;&lt; ")\n"; });
+    func6(66);
+}
+|p=true
+|output=
+1) bad_function_call
+2) bad_function_call
+print_num(33)
+print_num(44)
+print_num(55)
+lambda(66)
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2132|std=C++11|before=重载 {{vl|5,10}} 可能有歧义|after=已约束}}
+{{dr list item|wg=lwg|dr=2774|std=C++11|before=重载 {{vl|5,10}} 会进行一次额外移动|after=已消除}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/move_only_function/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

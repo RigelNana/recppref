@@ -1,0 +1,119 @@
+{{title|主函数}}
+{{cpp/language/basics/navbar}}
+
+程序应当含有一个名字是 {{ttb|main}} 的全局函数，它被指定为程序的启动点。它应当有下列形式之一：
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{c/core|int}}{{ttb| main() {}} {{spar|函数体}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=2|
+{{c/core|int}}{{ttb| main(}}{{c/core|int}} {{spar|argc}}{{ttb|,}} {{c/core|char*}} {{spar|argv}}{{tt|[]}}{{ttb|) {}} {{spar|函数体}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=3|
+{{c/core|int}}{{ttb| main(}}{{c/core|/* 由实现定义 */}}{{ttb|) {}} {{spar|函数体}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc end}}
+
+@1@ 不依赖环境提供的实参运行的 {{tt|main}} 函数。
+
+@2@ 接收环境提供的实参的 {{tt|main}} 函数。
+@@ 名字 {{spar|argc}} 和 {{spar|argv}}，以及形参的类型的表示方式没有限制：{{c/core|int main(int ac, char** av)}} 同样合法。
+
+@3@ 类型由实现定义，并且返回 {{c/core|int}} 的 {{tt|main}} 函数。
+@@ C++ 标准建议由实现定义的 {{tt|main}} 函数将额外（可选）形参放在 {{spar|argv}} 后面。
+
+{{par begin}}
+{{par|{{spar|argc}}|非负数，表示从程序运行的环境传递给程序的实参个数。}}
+{{par|{{spar|argv}}|指针，指向包含 {{c|argc + 1}} 个指针的数组的首元素。数组末元素是空指针，如果它前面有任何元素，那么它们指向[[cpp/string/multibyte|空终止多字节字符串]]，表示从执行环境传递给程序的若干参数。如果 {{c|argv[0]}} 不是空指针，或等价地 {{c|argc &gt; 0}}，那么它指向表示用于调用程序的名称的字符串，或空字符串。}}
+{{par|{{spar|函数体}}|{{tt|main}} 函数的函数体}}
+{{par end}}
+
+===解释===
+在程序启动时，主函数在{{rlp|initialization|初始化}}具有静态{{rlp|storage duration|存储期}}的非局部对象之后被调用。它是程序在[[cpp/freestanding|有宿主]]环境（即有操作系统）中所指定的入口点。[[cpp/freestanding|独立]]程序（启动加载器，操作系统内核，等等）的入口点由实现定义。
+
+双形参形式的 {{tt|main}} 函数的形参允许从执行环境中传递任意的多字节字符串（它们通常被称为''命令行参数''），各个指针 {{closed range|argv[1]|argv[argc - 1]}} 指向对应的每个字符串的第一个字符。指针 {{c|argv[0]}}（如果非空）指向一个空终止多字节字符串的开头字符，该字符串表示用于执行该程序自身的名字（当执行环境不支持时是空字符串 {{c|""}}）。这些字符串是可修改的：比如可以用 {{lc|std::strtok}} 来使用它们，虽然对它们的修改并不会被传回给执行环境。由 {{c|argv}} 所指向的数组的大小至少是 {{c|argc + 1}}，它的最后一个元素 {{c|argv[argc]}} 保证是一个空指针。
+
+{{tt|main}} 函数具有下列特殊属性：
+@1@ {{tt|main}} 函数的函数体不需要包含 {{rlp|return|{{c/core|return}} 语句}}：当控制达到 {{tt|main}} 函数体的末尾而未遇到返回语句时，它的效果是执行 {{c|return 0;}}。
+@2@ 执行返回（或当到达 {{tt|main}} 函数体的末尾时的隐式返回）等价于先正常离开函数（这将销毁具有自动存储期的对象{{rev inl|since=c++26|并对 {{tt|main}} 的{{rlps|function#后条件断言}}求值}}），然后用和 {{rlp|return}} 相同的实参来调用 {{lc|std::exit}}。（{{lc|std::exit}} 随即销毁静态对象并终止程序。）
+
+{{tt|main}} 函数具有几项限制，违背限制会导致程序非良构：
+@1@ 不能在程序的任何地方{{rlp|definition#指名函数|指名}}它
+:@a@ 尤其不能递归调用它
+:@b@ 不能取它的地址
+:@c@ 不能在 {{rlpt|typeid}} 表达式{{rev inl|since=c++11|或 {{rlpt|decltype}} 说明符}}中使用它
+@2@ 不能预定义，不能重载：实际上，名字 {{tt|main}} 在全局命名空间中对函数保留（虽然可以用作类、命名空间、枚举和非全局命名空间中的任何实体的名字，但不能在任何命名空间中将名字是 “main” 的实体声明为具有 C {{rlp|language linkage|语言链接}}）。
+@3@ 不能{{rev inl|since=c++11|定义为被弃置（{{c|1==delete;}}），或}}声明为具有任何语言链接{{rev inl|since=c++11|、{{rlpt|constexpr}}}}{{rev inl|since=c++20|、{{rlpt|consteval}}}}、{{rlpt|inline}} 或 {{rlpt|static}}。
+
+{{rev begin}}
+{{rev|since=c++14|
+@4@ {{tt|main}} 函数的返回类型不能被推导（不允许 {{c/core|auto main() {...}&lt;!----&gt;}}）。
+}}
+{{rev|since=c++20|
+@5@ {{tt|main}} 函数不能是{{rlp|coroutines|协程}}。
+@6@ {{tt|main}} 函数不能附着到任何具名{{rlp|modules|模块}}。
+}}
+{{rev end}}
+
+===注解===
+如果以{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}定义 {{tt|main}} 函数，那么它不会{{rlp|catch|捕获}}（由隐含的 {{lc|std::exit}} 所销毁的）静态对象的析构函数所抛出的异常。
+
+将操作系统命令行上给定的参数转换成由 {{c|argv}} 所指代的多字节字符数组的方式，可能涉及到由实现定义的处理过程：
+* [https://learn.microsoft.com/zh-cn/cpp/cpp/main-function-command-line-args main 函数和命令行参数] MSDN
+* [http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_01 Shell 介绍] POSIX
+
+一种非常常见的由实现定义的 {{tt|main}} 函数的形式中，还有（除 {{c|argc}} 和 {{c|argv}} 之外的）第三个参数，它的类型是 {{c/core|char**}}，指向[https://pubs.opengroup.org/onlinepubs/9699919799/functions/exec.html 指向执行环境变量的指针数组]。
+
+===示例===
+{{example
+|演示如何通知程序：从哪里获得输入，向哪里写入结果。&lt;br&gt;
+一种可能的调用方式：{{c|1=./convert table_in.dat table_out.dat}}
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+int main(int argc, char *argv[])
+{
+    std::cout &lt;&lt; "argc == " &lt;&lt; argc &lt;&lt; '\n';
+    
+    for (int ndx{}; ndx != argc; ++ndx)
+        std::cout &lt;&lt; "argv[" &lt;&lt; ndx &lt;&lt; "] == " &lt;&lt; std::quoted(argv[ndx]) &lt;&lt; '\n';
+    std::cout &lt;&lt; "argv[" &lt;&lt; argc &lt;&lt; "] == "
+              &lt;&lt; static_cast&lt;void*&gt;(argv[argc]) &lt;&lt; '\n';
+    
+    /*...*/
+    
+    return argc == 3 ? EXIT_SUCCESS : EXIT_FAILURE; // 可选返回值
+}
+|p=true
+|output=
+argc == 3
+argv[0] == "./convert"
+argv[1] == "table_in.dat"
+argv[2] == "table_out.dat"
+argv[3] == 0
+}}
+
+===引用===
+{{cot}}
+{{ref std c++23}}
+{{ref std|section=6.9.3.1|title=main function|id=basic.start.main}}
+{{ref std end}}
+{{cob}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1003|std=C++98|before=受支持的 {{tt|main}} 形参名被过度限制|after=支持所有合法的形参名}}
+{{dr list item|wg=cwg|dr=1886|std=C++98|before={{tt|main}} 函数可以声明为具有语言链接|after=已禁止}}
+{{dr list item|wg=cwg|dr=2479|std=C++20|before={{tt|main}} 函数可以声明为 {{c/core|consteval}}|after=已禁止}}
+{{dr list item|wg=cwg|dr=2811|std=C++98|before=在 {{wg21|N3214}} 后 {{tt|main}} 函数是否被使用不清晰|after=认为在指名它时使用它}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/main function|{{tt|main}} 函数|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

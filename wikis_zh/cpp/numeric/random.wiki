@@ -1,0 +1,216 @@
+{{title|伪随机数生成}}
+{{cpp/numeric/random/navbar}}
+
+随机数库提供生成随机和伪随机数的类。这些类包括：
+
+* 均匀随机位生成器，包含随机数引擎，它们是生成均匀分布的整数序列的伪随机数生成器，以及真随机数生成器（如果可用）。
+* 随机数分布（例如{{rl|uniform_int_distribution|均匀}}、{{rl|normal_distribution|正态}}或{{rl|poisson_distribution|泊松分布}}），它们将 URBG 生成器的输出转换为各种统计分布。
+
+均匀随机位生成器和分布被设计为一起使用以生成随机值。所有随机数引擎都可以进行明确播种、序列化和反序列化，以用于可重复的模拟器。
+
+===均匀随机位生成器===
+''均匀随机位生成器''{{sep}}是函数对象，它返回无符号整数值，并使得每个值在可能结果的范围中拥有（理想上）相等的返回概率。
+
+所有均匀随机位生成器都满足{{named req|UniformRandomBitGenerator}}。
+C++20 也定义了 {{lconcept|uniform_random_bit_generator}} 概念。
+
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc inc|cpp/numeric/random/dsc uniform_random_bit_generator}}
+{{dsc end}}
+
+===随机数引擎===
+''随机数引擎''（通常简称为''引擎''）是以种子数据为熵源生成伪随机数的均匀随机位生成器。
+
+在任何给定时间点，{{tt|E}} 类型的引擎 {{c|e}} 都具有对于某个非负整数 {{c|i}} 的状态 {{box|e{{sub|{{tt|i}}}}}}。构造完成时，{{c|e}} 具有初始状态 {{box|e{{sub|{{tt|0}}}}}}，它由引擎参数和初始种子（或种子序列）确定。
+
+任何引擎类型 {{tt|E}} 都有定义以下属性：
+* {{tt|E}} 的状态的''大小''，以 {{tt|E::result_type}} 的大小的倍数表示（即 {{box|{{c/core|(sizeof e}}{{sub|{{tt|i}}}}{{c/core|) / sizeof(E::result_type)}}}}）。
+* ''迁移算法'' {{c|TA}}，它将 {{c|e}} 的状态 {{box|e{{sub|{{tt|i}}}}}} 递进到它的后继状态 {{box|e{{sub|{{tt|i+1}}}}}}（即 {{box|{{c/core|TA(e}}{{sub|{{tt|i}}}}{{c/core|1=) == e}}{{sub|{{tt|i+1}}}}}}）。
+* ''生成算法'' {{c|GA}}，它将 {{c|e}} 的状态映射到一个 {{tt|E::result_type}} 类型的值，结果是一个伪随机数。
+
+通过交替调用 {{c|TA}} 和 {{c|GA}} 就可以生成伪随机数序列。
+
+标准库以类模板的形式提供了三种不同类别的伪随机数生成算法，这使得这些算法可以定制。需要进行各种权衡以确定应该使用哪种引擎：
+* {{rl|linear congruential engine|线性同余引擎}}一般很快，并对状态的存储要求非常小。
+* {{rl|mersenne twister engine|梅森缠绕器引擎}}较慢且拥有较大的状态存储要求，但只要有正确的参数，就会有最长的的不可重复序列，且拥有最可取的谱特性（对于给定的“可取”定义）。
+* {{rl|subtract with carry engine|带进位减法引擎}}在无先进算术指令集的处理器上也可以非常快，但状态存储较为庞大，有时有不太可取的谱特性。
+{{rrev|since=c++26|
+* {{rl|philox engine|Philox 引擎}}是一个{{enwiki|counter-based random number generator|基于计数器的随机数生成器}}。它具有较小的存储以及相当长的周期（不小于 2^130），适用于要求大量并行随机数生成的蒙特卡罗模拟。它可以轻易地向量化和并行化，并且也已经在各个为 GPU 优化的库中实现。
+}}
+
+这些随机数引擎都不是{{enwiki|Cryptographically secure pseudorandom number generator|加密安全}}的。在需要进行安全操作的情况下应该使用加密安全库（例如 [https://www.openssl.org/docs/manmaster/man3/RAND_bytes.html OpenSSL {{tt|RAND_bytes}}]）。
+
+从这些模板实例化的所有类型都满足{{named req|RandomNumberEngine}}。
+
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc inc|cpp/numeric/random/dsc linear_congruential_engine}}
+{{dsc inc|cpp/numeric/random/dsc mersenne_twister_engine}}
+{{dsc inc|cpp/numeric/random/dsc subtract_with_carry_engine}}
+{{dsc inc|cpp/numeric/random/dsc philox_engine}}
+{{dsc end}}
+
+===随机数引擎适配器===
+随机数引擎适配器使用另一随机数引擎作为熵源来生成伪随机数。它们通常用于改换底层引擎的谱特性。
+
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc inc|cpp/numeric/random/dsc discard_block_engine}}
+{{dsc inc|cpp/numeric/random/dsc independent_bits_engine}}
+{{dsc inc|cpp/numeric/random/dsc shuffle_order_engine}}
+{{dsc end}}
+
+===预定义随机数生成器===
+预定义了数个具体的流行算法。
+
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc hitem|类型|定义}}
+{{dsc inc|cpp/numeric/random/dsc minstd_rand0}}
+{{dsc inc|cpp/numeric/random/dsc minstd_rand}}
+{{dsc inc|cpp/numeric/random/dsc mt19937}}
+{{dsc inc|cpp/numeric/random/dsc mt19937_64}}
+{{dsc inc|cpp/numeric/random/dsc ranlux24_base}}
+{{dsc inc|cpp/numeric/random/dsc ranlux48_base}}
+{{dsc inc|cpp/numeric/random/dsc ranlux24}}
+{{dsc inc|cpp/numeric/random/dsc ranlux48}}
+{{dsc inc|cpp/numeric/random/dsc knuth_b}}
+{{dsc inc|cpp/numeric/random/dsc philox4x32}}
+{{dsc inc|cpp/numeric/random/dsc philox4x64}}
+{{dsc|{{tt|default_random_engine}} {{mark c++11}}|由实现定义的{{named req|RandomNumberEngine}}类型}}
+{{dsc end}}
+
+===非确定随机数===
+{{lc|std::random_device}} 是非确定的均匀随机位生成器，尽管当不支持非确定随机数生成时，允许实现用伪随机数引擎实现 {{lc|std::random_device}}。
+
+{{dsc begin}}
+{{dsc inc|cpp/numeric/random/dsc random_device}}
+{{dsc end}}
+
+===随机数分布===
+随机数分布对 URBG 的输出进行后处理，以使得输出结果按照定义的统计概率密度函数分布。
+
+随机数分布满足{{named req|RandomNumberDistribution}}。
+
+{{dsc begin}}
+{{dsc header|random}}
+
+{{dsc h2|均匀分布}}
+{{dsc inc|cpp/numeric/random/dsc uniform_int_distribution}}
+{{dsc inc|cpp/numeric/random/dsc uniform_real_distribution}}
+
+{{dsc h2|伯努利分布}}
+{{dsc inc|cpp/numeric/random/dsc bernoulli_distribution}}
+{{dsc inc|cpp/numeric/random/dsc binomial_distribution}}
+{{dsc inc|cpp/numeric/random/dsc negative_binomial_distribution}}
+{{dsc inc|cpp/numeric/random/dsc geometric_distribution}}
+
+{{dsc h2|泊松分布}}
+{{dsc inc|cpp/numeric/random/dsc poisson_distribution}}
+{{dsc inc|cpp/numeric/random/dsc exponential_distribution}}
+{{dsc inc|cpp/numeric/random/dsc gamma_distribution}}
+{{dsc inc|cpp/numeric/random/dsc weibull_distribution}}
+{{dsc inc|cpp/numeric/random/dsc extreme_value_distribution}}
+
+{{dsc h2|正态分布}}
+{{dsc inc|cpp/numeric/random/dsc normal_distribution}}
+{{dsc inc|cpp/numeric/random/dsc lognormal_distribution}}
+{{dsc inc|cpp/numeric/random/dsc chi_squared_distribution}}
+{{dsc inc|cpp/numeric/random/dsc cauchy_distribution}}
+{{dsc inc|cpp/numeric/random/dsc fisher_f_distribution}}
+{{dsc inc|cpp/numeric/random/dsc student_t_distribution}}
+
+{{dsc h2|采样分布}}
+{{dsc inc|cpp/numeric/random/dsc discrete_distribution}}
+{{dsc inc|cpp/numeric/random/dsc piecewise_constant_distribution}}
+{{dsc inc|cpp/numeric/random/dsc piecewise_linear_distribution}}
+{{dsc end}}
+
+===工具===
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc inc|cpp/numeric/random/dsc generate_canonical}}
+{{dsc inc|cpp/numeric/random/dsc seed_seq}}
+{{dsc end}}
+
+===随机数算法===
+{{dsc begin}}
+{{dsc header|random}}
+{{dsc inc|cpp/algorithm/ranges/dsc generate_random}}
+{{dsc end}}
+
+===C 随机库===
+除了上述的引擎和分布，也可以使用来自 C 随机库的函数和常量，尽管不推荐如此：
+
+{{dsc begin}}
+{{dsc header|cstdlib}}
+{{dsc inc|cpp/numeric/random/dsc rand}}
+{{dsc inc|cpp/numeric/random/dsc srand}}
+{{dsc inc|cpp/numeric/random/dsc RAND_MAX}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cmath&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;random&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    // 以真随机值播种，若可能的话
+    std::random_device r;
+    
+    // 选择 1 与 6 间的随机数
+    std::default_random_engine e1(r());
+    std::uniform_int_distribution&lt;int&gt; uniform_dist(1, 6);
+    int mean = uniform_dist(e1);
+    std::cout &lt;&lt; "随机选择的平均值：" &lt;&lt; mean &lt;&lt; '\n';
+    
+    // 生成围绕平均值的正态分布
+    std::seed_seq seed2{r(), r(), r(), r(), r(), r(), r(), r()}; 
+    std::mt19937 e2(seed2);
+    std::normal_distribution&lt;&gt; normal_dist(mean, 2);
+    
+    std::map&lt;int, int&gt; hist;
+    for (int n = 0; n &lt; 10000; ++n)
+        ++hist[std::round(normal_dist(e2))];
+    
+    std::cout &lt;&lt; "围绕 " &lt;&lt; mean &lt;&lt; " 的正态分布：\n"
+              &lt;&lt; std::fixed &lt;&lt; std::setprecision(1);
+    for (auto [x, y] : hist)
+        std::cout &lt;&lt; std::setw(2) &lt;&lt; x &lt;&lt; ' ' &lt;&lt; std::string(y / 200, '*') &lt;&lt; '\n';
+}
+|p=true
+|output=
+随机选择的平均值：4
+围绕 4 的正态分布：
+-4 
+-3 
+-2 
+-1 
+ 0 *
+ 1 ***
+ 2 ******
+ 3 ********
+ 4 *********
+ 5 ********
+ 6 ******
+ 7 ***
+ 8 *
+ 9 
+10 
+11 
+12 
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/numeric/random|伪随机数生成|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

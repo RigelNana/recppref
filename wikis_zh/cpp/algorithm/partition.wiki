@@ -1,0 +1,151 @@
+{{cpp/title|partition}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt, class UnaryPred &gt;
+ForwardIt partition( ForwardIt first, ForwardIt last, UnaryPred p );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt, class UnaryPred &gt;
+ForwardIt partition( ExecutionPolicy&amp;&amp; policy, 
+                     ForwardIt first, ForwardIt last, UnaryPred p );
+}}
+{{dcl end}}
+
+@1@ 重排序范围 {{range|first|last}} 中的元素，使得谓词 {{c|p}} 对其返回 {{c|true}} 的所有元素位于谓词 {{c|p}} 对其返回 {{c|false}} 的所有元素之前。不保持相对顺序。
+
+@2@ 同 {{v|1}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+如果 {{rev inl|until=c++11|{{c|*first}} 的类型不{{named req|Swappable}}}}{{rev inl|since=c++11|{{tt|ForwardIt}} 不{{named req|ValueSwappable}}}}，那么行为未定义。
+
+===参数===
+{{par begin}}
+{{par range|3=要重排序的}}
+{{par exec pol}}
+{{par pred1|p|如果元素在顺序中应该在其他元素之前| p1=ForwardIt}}
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator|}}
+{{par req named|UnaryPred|Predicate}}
+{{par end}}
+
+===返回值===
+指向第二组元素中首元素的迭代器。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+
+@1@ 应用 {{mathjax-or|\(\scriptsize N\)|N}} 次 {{c|p}}。
+@@ 在 {{tt|ForwardIt}} 满足{{named req|BidirectionalIterator}}的要求时交换最多 {{mathjax-or|\(\scriptsize N/2\)|N/2}} 次，否则交换最多 {{mathjax-or|\(\scriptsize N\)|N}} 次。
+
+@2@ 应用 {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} 次 {{c|p}}。
+@@ 交换 {{mathjax-or|\(\scriptsize O(N \cdot log(N))\)|O(N·log(N))}} 次。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===可能的实现===
+实现重载 {{v|1}} 并保留 C++11 兼容性。
+{{eq fun|1=
+template&lt;class ForwardIt, class UnaryPred&gt;
+ForwardIt partition(ForwardIt first, ForwardIt last, UnaryPred p)
+{
+    first = std::find_if_not(first, last, p);
+    if (first == last)
+        return first;
+    
+    for (auto i = std::next(first); i != last; ++i)
+    {
+        if (p(*i))
+        {
+            std::iter_swap(i, first);
+            ++first;
+        }
+    }
+    
+    return first;
+}
+}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;algorithm&gt;
+#include &lt;forward_list&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+template &lt;class ForwardIt&gt;
+void quicksort(ForwardIt first, ForwardIt last)
+{
+    if (first == last)
+        return;
+    
+    auto pivot = *std::next(first, std::distance(first, last) / 2);
+    auto middle1 = std::partition(first, last, [pivot](const auto&amp; em)
+    {
+        return em &lt; pivot;
+    });
+    auto middle2 = std::partition(middle1, last, [pivot](const auto&amp; em)
+    {
+        return !(pivot &lt; em);
+    });
+    
+    quicksort(first, middle1);
+    quicksort(middle2, last);
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::cout &lt;&lt; "原来的 vector：\n    ";
+    for (int elem : v)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    
+    auto it = std::partition(v.begin(), v.end(), [](int i) {return i % 2 == 0;});
+    
+    std::cout &lt;&lt; "\n划分后的 vector：\n    ";
+    std::copy(std::begin(v), it, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; "* ";
+    std::copy(it, std::end(v), std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    
+    std::forward_list&lt;int&gt; fl = {1, 30, -4, 3, 5, -4, 1, 6, -8, 2, -5, 64, 1, 92};
+    std::cout &lt;&lt; "\n未排序的列表：\n    ";
+    for (int n : fl)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    
+    quicksort(std::begin(fl), std::end(fl));
+    std::cout &lt;&lt; "\n用 quicksort 排序后：\n    ";
+    for (int fi : fl)
+        std::cout &lt;&lt; fi &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+原来的 vector：
+    0 1 2 3 4 5 6 7 8 9 
+划分后的 vector：
+    0 8 2 6 4 * 5 3 7 1 9 
+未排序的列表：
+    1 30 -4 3 5 -4 1 6 -8 2 -5 64 1 92 
+快速排序后：
+    -8 -5 -4 -4 1 1 1 2 3 5 6 30 64 92 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=498|std=C++98|before={{tt|std::partition}} 要求 {{c|first}} 和 {{c|last}} 是&lt;br&gt;{{named req|BidirectionalIterator}}|after=只需要是&lt;br&gt;{{named req|ForwardIterator}}}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before={{tt|std::partition}} 只需要将一个满足 {{c|p}}&lt;br&gt;的元素放在一个不满足 {{c|p}} 的元素之前|after=改正要求}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc is_partitioned}}
+{{dsc inc|cpp/algorithm/dsc stable_partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

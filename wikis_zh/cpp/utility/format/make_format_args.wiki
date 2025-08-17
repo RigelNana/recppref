@@ -1,0 +1,118 @@
+{{cpp/title|make_format_args|make_wformat_args}}
+{{cpp/utility/format/navbar}}
+
+{{dcl begin}}
+{{dcl header|format}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class Context = std::format_context, class... Args &gt;
+/*format-arg-store*/&lt;Context, Args...&gt;
+    make_format_args( Args&amp;... args );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class... Args &gt;
+/*format-arg-store*/&lt;std::wformat_context, Args...&gt;
+    make_wformat_args( Args&amp;... args );
+}}
+{{dcl end}}
+
+返回存储格式化参数的数组，并能隐式转换为 {{lc|std::basic_format_args|std::basic_format_args&lt;Context&gt;}} 的对象。
+
+若对于 {{tt|Args}} 中的任一 {{tt|Ti}}，{{c|typename Context::template formatter_type&lt;std::remove_const_t&lt;Ti&gt;&gt;}} 不符合{{named req|BasicFormatter}}要求，则行为未定义。
+
+若对于 {{tt|Args}} 中的任一 {{tt|Ti}}，{{tt|Ti}} 不满足 {{lti|cpp/utility/format/formattable|__formattable_with}}{{c/core|&lt;Context&gt;}} 则程序非良构。
+
+@2@ 等价于 {{c|return std::make_format_args&lt;std::wformat_context&gt;(args...);}}。
+
+===参数===
+{{par begin}}
+{{par|args...|用作格式化参数的值}}
+{{par end}}
+
+===返回值===
+保有格式化参数的对象。
+
+对于每个 {{tt|T}} 类型的参数 {{tt|t}}，令 {{tt|TD}} 为 {{c|std::remove_const_t&lt;std::remove_reference_t&lt;T&gt;&gt;}}。结果中对应的 {{lc|std::basic_format_arg}} 以如下方式确定：
+* 若 {{tt|TD}} 为 {{c/core|bool}} 或 {{tt|Context::char_type}}，则 {{lc|std::basic_format_arg}} 存储 {{c|t}}；
+* 否则，若 {{tt|TD}} 为 {{c/core|char}} 且 {{tt|Context::char_type}} 为 {{c/core|wchar_t}}，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;wchar_t&gt;(static_cast&lt;unsigned char&gt;(t))}}；
+* 否则，若 {{tt|TD}} 为大小不大于 {{c/core|int}} 的有符号整数类型，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;int&gt;(t)}}；
+* 否则，若 {{tt|TD}} 为大小不大于 {{c/core|unsigned int}} 的无符号整数类型，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;unsigned int&gt;(t)}}；
+* 否则，若 {{tt|TD}} 为大小不大于 {{c/core|long long}} 的有符号整数类型，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;long long&gt;(t)}}；
+* 否则，若 {{tt|TD}} 为大小不大于 {{c/core|unsigned long long}} 的无符号整数类型，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;unsigned long long&gt;(t)}}；
+* 否则，若 {{tt|TD}} 为 {{c/core|float}}、{{c/core|double}} 或 {{c/core|long double}}，则 {{lc|std::basic_format_arg}} 存储 {{c|t}}；
+* 否则，若 {{tt|TD}} 为 {{lc|std::basic_string_view}} 或 {{lc|std::basic_string}} 的特化且 {{tt|TD::char_type}} 为 {{tt|Context::char_type}}，则 {{lc|std::basic_format_arg}} 存储 {{c|std::basic_string_view&lt;Context::char_type&gt;(t.data(), t.size())}}；
+* 否则，若 {{c|std::decay_t&lt;TD&gt;}} 为 {{c|Context::char_type*}} 或 {{c|const Context::char_type*}}，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;const Context::char_type*&gt;(t)}}；
+* 否则，若 {{c|std::is_void_v&lt;std::remove_pointer_t&lt;TD&gt;&gt;}} 为 {{c|true}} 或 {{c|std::is_null_pointer_v&lt;TD&gt;}} 为 {{c|true}}，则 {{lc|std::basic_format_arg}} 存储 {{c|static_cast&lt;const void*&gt;(t)}}；
+* 否则，{{lc|std::basic_format_arg}} 存储指向 {{tt|t}} 并且携带 {{rlpt|basic_format_arg/handle|handle::format()}} 所需的额外数据的 {{c|std::basic_format_arg&lt;Context&gt;::handle}}。
+
+===注解===
+对于用户定义类型，格式化参数拥有引用语义并且不延长其生存期。程序员负责确保该参数存活得比返回值更久。通常结果仅在格式化函数内使用。
+
+{{ftm begin}}
+{{ftm|__cpp_lib_format_uchar|格式化编码单元为无符号整数|std=C++20|dr=yes|value=202311L}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;format&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+void raw_write_to_log(std::string_view users_fmt, std::format_args&amp;&amp; args)
+{
+    static int n{};
+    std::clog &lt;&lt; std::format("{:04} : ", n++) &lt;&lt; std::vformat(users_fmt, args) &lt;&lt; '\n';
+}
+
+template&lt;typename... Args&gt;
+constexpr void log(Args&amp;&amp;... args)
+{
+    // 生成格式化字符串 "{} " ……
+    std::array&lt;char, sizeof...(Args) * 3 + 1&gt; braces{};
+    constexpr const char c[4] = "{} ";
+    for (auto i{0uz}; i != braces.size() - 1; ++i)
+        braces[i] = c[i % 3];
+    braces.back() = '\0';
+
+    raw_write_to_log(std::string_view{braces.data()}, std::make_format_args(args...));
+}
+
+template&lt;typename T&gt;
+const T&amp; unmove(T&amp;&amp; x)
+{
+    return x;
+}
+
+int main()
+{
+    log("Number", "of", "arguments", "is", "arbitrary.");
+    log("Any type that meets the BasicFormatter requirements", "can be printed.");
+    log("For example:", 1, 2.0, '3', "*42*");
+
+    raw_write_to_log("{:02} │ {} │ {} │ {}",
+                     std::make_format_args(unmove(1), unmove(2.0), unmove('3'), "4"));
+}
+|output=
+0000 : Number of arguments is arbitrary.
+0001 : Any type that meets the BasicFormatter requirements can be printed.
+0002 : For example: 1 2.0 3 *42*
+0003 : 01 │ 2.0 │ 3 │ 4
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2418R2|std=C++20|before=既非 const 可用亦非可复制的对象（例如 {{tt|generator}} 式的对象）不可格式化|after=允许格式化这些对象}}
+{{dr list item|paper=P2905R2|std=C++20|before={{tt|make_format_args}} 以转发引用接受右值参数|after=仅接收左值引用}}
+{{dr list item|paper=P2909R4|std=C++20|before={{c/core|char}} 或 {{c/core|wchar_t}} 可能被格式化为范围外的无符号整数值|after=在这种格式化前将编码单元转换为对应的无符号类型}}
+{{dr list item|wg=lwg|dr=3631|std=c++20|before=P2418R2 错误地处理了 cv 限定的参数|after=正确处理}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc basic_format_args}}
+{{dsc inc|cpp/utility/format/dsc vformat}}
+{{dsc inc|cpp/utility/format/dsc vformat_to}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

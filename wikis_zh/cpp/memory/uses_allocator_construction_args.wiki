@@ -1,0 +1,176 @@
+{{cpp/title|uses_allocator_construction_args}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl h|{{tt|T}} 不是 {{lc|std::pair}} 的特化}}
+{{dcl|num=1|since=c++20|
+template&lt; class T, class Alloc, class... Args &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    Args&amp;&amp;... args ) noexcept;
+}}
+{{dcl h|{{tt|T}} 是 {{lc|std::pair}} 的特化}}
+{{dcl|num=2|since=c++20|
+template&lt; class T, class Alloc, class Tuple1, class Tuple2 &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    std::piecewise_construct_t, Tuple1&amp;&amp; x, Tuple2&amp;&amp; y ) noexcept;
+}}
+{{dcl|num=3|since=c++20|
+template&lt; class T, class Alloc &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc ) noexcept;
+}}
+{{dcl|num=4|since=c++20|
+template&lt; class T, class Alloc, class U, class V &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    U&amp;&amp; u, V&amp;&amp; v ) noexcept;
+}}
+{{dcl|num=5|since=c++23|
+template&lt; class T, class Alloc, class U, class V &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    std::pair&lt;U, V&gt;&amp; pr ) noexcept;
+}}
+{{dcl|num=6|since=c++20|
+template&lt; class T, class Alloc, class U, class V &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    const std::pair&lt;U, V&gt;&amp; pr ) noexcept;
+}}
+{{dcl|num=7|since=c++20|
+template&lt; class T, class Alloc, class U, class V &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    std::pair&lt;U, V&gt;&amp;&amp; pr ) noexcept;
+}}
+{{dcl|num=8|since=c++23|
+template&lt; class T, class Alloc, class U, class V &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    const std::pair&lt;U, V&gt;&amp;&amp; pr ) noexcept;
+}}
+{{dcl|num=9|since=c++20|
+template&lt; class T, class Alloc, class NonPair &gt;
+constexpr auto uses_allocator_construction_args( const Alloc&amp; alloc,
+    NonPair&amp;&amp; non_pair ) noexcept;
+}}
+{{dcl end}}
+
+准备好以{{rlp|uses_allocator|使用分配器构造}}的方式创建给定类型 {{tt|T}} 对象所需的实参列表。
+
+@1@ {{cpp/enable if| {{tt|T}} 不是 {{lc|std::pair}} 的特化}}。返回按下列方式确定的 {{lc|std::tuple}}：
+&lt;!----&gt;
+* 若 {{c|std::uses_allocator_v&lt;T, Alloc&gt;}} 为 {{c|false}} 且 {{c|std::is_constructible_v&lt;T, Args...&gt;}} 为 {{c|true}}，则返回 {{c|std::forward_as_tuple(std::forward&lt;Args&gt;(args)...)}}。
+* 否则，若 {{c|std::uses_allocator_v&lt;T, Alloc&gt;}} 为 {{c|true}} 且 {{c|std::is_constructible_v&lt;T, std::allocator_arg_t, const Alloc&amp;, Args...&gt;}} 为 {{c|true}}，则返回&lt;br&gt;{{c multi
+|std::tuple&lt;std::allocator_arg_t, const Alloc&amp;, Args&amp;&amp;...&gt;(std::allocator_arg, alloc,
+|                                                          std::forward&lt;Args&gt;(args)...)}}。
+* 否则，若 {{c|std::uses_allocator_v&lt;T, Alloc&gt;}} 为 {{c|true}} 且 {{c|std::is_constructible_v&lt;T, Args..., const Alloc&amp;&gt;}} 为 {{c|true}}，则返回 {{c|std::forward_as_tuple(std::forward&lt;Args&gt;(args)..., alloc)}}。
+* 否则，程序非良构
+@2@ {{cpp/enable if| {{tt|T}} 是 {{lc|std::pair}} 的特化}}。对作为 {{c|std::pair&lt;T1, T2&gt;}} 的 {{tt|T}} 等价于
+{{source|1=
+return std::make_tuple(std::piecewise_construct,
+    std::apply([&amp;alloc](auto&amp;&amp;... args1)
+        {
+            return std::uses_allocator_construction_args&lt;T1&gt;(alloc,
+                       std::forward&lt;decltype(args1)&gt;(args1)...);
+        }, std::forward&lt;Tuple1&gt;(x)
+    ),
+    std::apply([&amp;alloc](auto&amp;&amp;... args2)
+        {
+            return std::uses_allocator_construction_args&lt;T2&gt;(alloc,
+                       std::forward&lt;decltype(args2)&gt;(args2)...);
+        }, std::forward&lt;Tuple2&gt;(y)
+    )
+);
+}}
+@3@ {{cpp/enable if| {{tt|T}} 是 {{lc|std::pair}} 的特化}}。等价于
+{{source|1=
+return std::uses_allocator_construction_args&lt;T&gt;(alloc,
+    std::piecewise_construct, std::tuple&lt;&gt;{}, std::tuple&lt;&gt;{}
+);
+}}
+@4@ {{cpp/enable if| {{tt|T}} 是 {{lc|std::pair}} 的特化}}。等价于
+{{source|1=
+return std::uses_allocator_construction_args&lt;T&gt;(alloc,
+    std::piecewise_construct,
+    std::forward_as_tuple(std::forward&lt;U&gt;(u)),
+    std::forward_as_tuple(std::forward&lt;V&gt;(v))
+);
+}}
+@5,6@ {{cpp/enable if| {{tt|T}} 是 {{lc|std::pair}} 的特化}}。等价于
+{{source|1=
+return std::uses_allocator_construction_args&lt;T&gt;(alloc,
+    std::piecewise_construct,
+    std::forward_as_tuple(pr.first),
+    std::forward_as_tuple(pr.second)
+);
+}}
+@7,8@ {{cpp/enable if| {{tt|T}} 是 {{lc|std::pair}} 的特化}}。等价于
+{{source|1=
+return std::uses_allocator_construction_args&lt;T&gt;(alloc,
+    std::piecewise_construct,
+    std::forward_as_tuple(std::get&lt;0&gt;(std::move(pr))),
+    std::forward_as_tuple(std::get&lt;1&gt;(std::move(pr)))
+);
+}}
+@9@ {{cpp/enable_if| {{tt|T}} 是 {{lc|std::pair}} 的特化，并且给定仅用于阐释的函数模板
+{{source|template&lt;class A, class B&gt;
+void /*deduce-as-pair*/(const std::pair&lt;A, B&gt;&amp;);
+}}
+，{{c|/*deduce-as-pair*/(non_pair)}} 在当作不求值操作数时非良构}}。&lt;br&gt;&lt;!--
+--&gt;令仅用于阐释的类 {{tt|''pair-constructor''}} 定义为
+{{source|1=
+class /*pair-constructor*/
+{
+    const Alloc&amp; alloc_; // 仅用于阐释
+    NonPair&amp;     u_;     // 仅用于阐释
+
+    constexpr reconstruct(const std::remove_cv&lt;T&gt;&amp; p) const // 仅用于阐释
+    {
+        return std::make_obj_using_allocator&lt;std::remove_cv&lt;T&gt;&gt;(alloc_, p);
+    }
+
+    constexpr reconstruct(std::remove_cv&lt;T&gt;&amp;&amp; p) const // 仅用于阐释
+    {
+        return std::make_obj_using_allocator&lt;std::remove_cv&lt;T&gt;&gt;(alloc_, std::move(p));
+    }
+
+public:
+    constexpr operator std::remove_cv&lt;T&gt;() const
+    {
+        return reconstruct(std::forward&lt;NonPair&gt;(u_));
+    }
+};
+}}
+此重载等价于 {{c|return std::make_tuple(pair_construction);}}，其中 {{tt|pair_construction}} 是 {{tt|''pair-constructor''}} 类型的值，其 {{tt|''alloc_''}} 与 {{tt|''u_''}} 成员分别为 {{tt|alloc}} 与 {{tt|non_pair}}。
+
+===参数===
+{{par begin}}
+{{par|alloc|使用的分配器}}
+{{par|args|传递给 {{tt|T}} 构造函数的实参}}
+{{par|x|传递给 {{tt|T}} 的 {{tt|first}} 数据成员的构造函数的实参的元组}}
+{{par|y|传递给 {{tt|T}} 的 {{tt|second}} 数据成员的构造函数的实参的元组}}
+{{par|u|传递给 {{tt|T}} 的 {{tt|first}} 数据成员的构造函数的单个实参}}
+{{par|v|传递给 {{tt|T}} 的 {{tt|second}} 数据成员的构造函数的单个实参}}
+{{par|pr|对偶，其 {{tt|first}} 数据成员将被传递给 {{tt|T}} 的 {{tt|first}} 数据成员的构造函数，而其 {{tt|second}} 数据成员将被传递给 {{tt|T}} 的 {{tt|second}} 数据成员的构造函数}}
+{{par|non_pair|将被转换成 {{lc|std::pair}} 以供进一步构造的单个实参}}
+{{par end}}
+
+===返回值===
+适合于传递给 {{tt|T}} 构造函数的实参的 {{lc|std::tuple}}。
+
+===注解===
+重载 {{v|2-9}} 提供向 {{lc|std::pair}} 中的分配器传播，它们不支持前导分配器或尾随分配器约定（不同于使用前导分配器约定的 {{lc|std::tuple}} 等）。
+
+在用于使用分配器构造时，{{tt|''pair-constructor''}} 的转换函数首先将提供的实参转换成 {{lc|std::pair}}，然后再以使用分配器构造从该 {{lc|std::pair}} 构造其结果。
+
+===示例===
+{{example}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3525|std=C++20|before=没有重载能处理可转换成 {{tt|pair}} 的非 {{tt|pair}} 类型|after=添加了重构的重载}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc uses_allocator}}
+{{dsc inc|cpp/memory/dsc make_obj_using_allocator}}
+{{dsc inc|cpp/memory/dsc uninitialized_construct_using_allocator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

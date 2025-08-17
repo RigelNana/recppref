@@ -1,0 +1,297 @@
+{{title|引用声明}}
+{{cpp/language/declarations/navbar}}
+
+声明具名变量为引用，即既存对象或函数的别名。
+
+===语法===
+引用变量声明是拥有下列形式的被简单声明的{{rlp|declarations|声明符}}：
+
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|&amp;}} {{spar optional|属性}} {{spar|声明符}}
+}}
+{{sdsc|num=2|notes={{mark since c++11}}|
+{{ttb|&amp;&amp;}} {{spar optional|属性}} {{spar|声明符}}
+}}
+{{sdsc end}}
+
+@1@ '''左值引用声明符'''：声明 {{c|S&amp; D;}} 是将 {{tt|D}} 声明为{{spar|声明说明符序列}} {{tt|S}} 所确定的类型的''左值引用''。
+@2@ '''右值引用声明符'''：声明 {{c|S&amp;&amp; D;}} 是将 {{tt|D}} 声明为{{spar|声明说明符序列}} {{tt|S}} 所确定的类型的''右值引用''。
+
+{{par begin}}
+{{par|{{spar|声明符}}|除引用{{rlp|declarations|声明符}}之外的任何其他声明符（不存在引用的引用）}}
+{{par|{{spar|属性}}|{{mark since c++11}} {{rlp|attributes|属性}}的列表}}
+{{par end}}
+
+引用必须被初始化为指代一个有效的对象或函数：见{{rlp|reference initialization|引用初始化}}。
+
+无法组成“到（可有 cv 限定的）{{c/core|void}} 的引用”类型。
+
+引用类型不能在顶层有 {{rlp|cv|cv 限定}}；声明中没有为此而设的语法，如果在 typedef 名{{rev inl|since=c++11|、{{rlpt|decltype}} 说明符}}或{{rlp|template parameters#类型模板形参|类型模板形参}}上添加了该限定符，它将会被忽略。
+
+引用不是对象；它们不必占用存储，尽管编译器会在需要实现所需语义（例如，引用类型的非静态数据成员通常会增加类的大小，量为存储内存地址所需）的情况下分配存储。
+
+因为引用不是对象，所以不存在引用的数组，不存在指向引用的指针，不存在引用的引用：
+
+{{source|
+int&amp; a[3]; // 错误
+int&amp;* p;   // 错误
+int&amp; &amp;r;   // 错误
+}}
+
+{{rrev|since=c++11|
+===引用折叠===
+通过模板或 typedef 中的类型操作可以构成引用的引用，此时适用''引用折叠''{{sep}}规则：右值引用的右值引用折叠成右值引用，所有其他组合均折叠成左值引用：
+
+{{source|1=
+typedef int&amp;  lref;
+typedef int&amp;&amp; rref;
+int n;
+
+lref&amp;  r1 = n; // r1 的类型是 int&amp;
+lref&amp;&amp; r2 = n; // r2 的类型是 int&amp;
+rref&amp;  r3 = n; // r3 的类型是 int&amp;
+rref&amp;&amp; r4 = 1; // r4 的类型是 int&amp;&amp;
+}}
+（这条规则，和将 {{tt|T&amp;&amp;}} 用于函数模板时的{{rlp|template argument deduction|模板实参推导}}的特殊规则一起，组成了使得 {{lc|std::forward}} 可行的规则。）
+}}
+
+===左值引用===
+左值引用可用于建立既存对象的别名（可拥有不同的 cv 限定）：
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::string s = "Ex";
+    std::string&amp; r1 = s;
+    const std::string&amp; r2 = s;
+
+    r1 += "ample";           // 修改 s
+//  r2 += "!";               // 错误：不能通过到 const 的引用修改
+    std::cout &lt;&lt; r2 &lt;&lt; '\n'; // 打印 s，它现在保有 "Example"
+}
+}}
+
+它们也能用于在函数调用中实现按引用传递语义：
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+void double_string(std::string&amp; s)
+{
+    s += s; // 's' 与 main() 的 'str' 是同一对象
+}
+
+int main()
+{
+    std::string str = "Test";
+    double_string(str);
+    std::cout &lt;&lt; str &lt;&lt; '\n';
+}
+}}
+
+当函数的返回值是左值引用时，函数调用表达式变成{{rlp|value category#左值|左值}}表达式：
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+char&amp; char_number(std::string&amp; s, std::size_t n)
+{
+    return s.at(n); // string::at() 返回 char 的引用
+}
+
+int main()
+{
+    std::string str = "Test";
+    char_number(str, 1) = 'a'; // 函数调用是左值，可被赋值
+    std::cout &lt;&lt; str &lt;&lt; '\n';
+}
+}}
+
+{{rrev|since=c++11|
+===右值引用===
+右值引用可用于为临时对象{{rlp|reference initialization#临时量生存期|延长生存期}}（注意，到 const 的左值引用也能延长临时对象生存期，但这些对象无法被修改）：
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::string s1 = "Test";
+//  std::string&amp;&amp; r1 = s1;           // 错误：不能绑定到左值
+
+    const std::string&amp; r2 = s1 + s1; // OK：到 const 的左值引用延长生存期
+//  r2 += "Test";                    // 错误：不能通过到 const 的引用修改
+
+    std::string&amp;&amp; r3 = s1 + s1;      // OK：右值引用延长生存期
+    r3 += "Test";                    // OK：能通过到非 const 的引用修改
+    std::cout &lt;&lt; r3 &lt;&lt; '\n';
+}
+}}
+
+更重要的是，当函数同时具有右值引用和左值引用的{{rlp|overload resolution|重载}}时，右值引用重载绑定到右值（包含纯右值和亡值），而左值引用重载绑定到左值：
+
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;utility&gt;
+
+void f(int&amp; x)
+{
+    std::cout &lt;&lt; "左值引用重载 f(" &lt;&lt; x &lt;&lt; ")\n";
+}
+
+void f(const int&amp; x)
+{
+    std::cout &lt;&lt; "到 const 的左值引用重载 f(" &lt;&lt; x &lt;&lt; ")\n";
+}
+
+void f(int&amp;&amp; x)
+{
+    std::cout &lt;&lt; "右值引用重载 f(" &lt;&lt; x &lt;&lt; ")\n";
+}
+
+int main()
+{
+    int i = 1;
+    const int ci = 2;
+    
+    f(i);  // 调用 f(int&amp;)
+    f(ci); // 调用 f(const int&amp;)
+    f(3);  // 调用 f(int&amp;&amp;)，如果没有 f(int&amp;&amp;) 重载则会调用 f(const int&amp;)
+    f(std::move(i)); // 调用 f(int&amp;&amp;)
+
+    // 右值引用变量在用于表达式时是左值
+    int&amp;&amp; x = 1;
+    f(x);            // 调用 f(int&amp; x)
+    f(std::move(x)); // 调用 f(int&amp;&amp; x)
+}
+}}
+
+这允许在适当时机自动选择{{rlp|move constructor|移动构造函数}}、{{rlp|move assignment|移动赋值}}运算符和其他具有移动能力的函数（例如 {{lc|std::vector::push_back()}}）。
+
+因为右值引用能绑定到亡值，所以它们能指代非临时对象：
+
+{{source|1=
+int i2 = 42;
+int&amp;&amp; rri = std::move(i2); // 直接绑定到 i2
+}}
+
+这使得作用域中不再需要的对象可以被移动出去：
+
+{{source|1=
+std::vector&lt;int&gt; v{1, 2, 3, 4, 5};
+std::vector&lt;int&gt; v2(std::move(v)); // 绑定右值引用到 v
+assert(v.empty());
+}}
+
+===转发引用===
+转发引用是一种特殊的引用，它保持函数实参的值类别，使得 {{lc|std::forward}} 能用来''转发''实参。转发引用是下列之一：
+@1@ 函数模板的函数形参，其被声明为同一函数模板的{{rlp|template parameters#类型模板形参|类型模板形参}}的无 cv 限定的右值引用：
+
+{{source|1=
+template&lt;class T&gt;
+int f(T&amp;&amp; x)                      // x 是转发引用
+{
+    return g(std::forward&lt;T&gt;(x)); // 从而能被转发
+}
+
+int main()
+{
+    int i;
+    f(i); // 实参是左值，调用 f&lt;int&amp;&gt;(int&amp;)，std::forward&lt;int&amp;&gt;(x) 是左值
+    f(0); // 实参是右值，调用 f&lt;int&gt;(int&amp;&amp;)，std::forward&lt;int&gt;(x) 是右值
+}
+
+template&lt;class T&gt;
+int g(const T&amp;&amp; x); // x 不是转发引用：const T 不是无 cv 限定的
+
+template&lt;class T&gt;
+struct A
+{
+    template&lt;class U&gt;
+    A(T&amp;&amp; x, U&amp;&amp; y, int* p); // x 不是转发引用：T 不是构造函数的类型模板形参
+                             // 但 y 是转发引用
+};
+}}
+
+@2@ {{c|auto&amp;&amp;}}，但当其从花括号包围的初始化器列表推导时{{rev inl|since=c++17|，或在{{rlp|class template argument deduction|类模板实参推导}}过程中表示类模板的模板形参时}}除外：
+
+{{source|1=
+auto&amp;&amp; vec = foo();       // foo() 可以是左值或右值，vec 是转发引用
+auto i = std::begin(vec); // 也可以
+(*i)++;                   // 也可以
+
+g(std::forward&lt;decltype(vec)&gt;(vec)); // 转发，保持值类别
+
+for (auto&amp;&amp; x: f())
+{
+    // x 是转发引用；这是在泛型代码中安全使用范围 for 循环的一般方法
+}
+
+auto&amp;&amp; z = {1, 2, 3}; // *不是*转发引用（针对初始化器列表的特殊情形）
+}}
+
+参阅{{rlp|template argument deduction#从函数调用推导|模板实参推导}}和 {{lc|std::forward}}。
+}}
+
+===悬垂引用===
+尽管引用一旦初始化就始终指代一个有效的对象或函数，但有可能创建一个程序，其中被指代对象的{{rlp|lifetime|生存期}}结束而引用仍保持可访问（''悬垂''）。
+
+给定具有引用类型的表达式 {{c|expr}}，并设 {{c|target}} 为该引用指代的对象或函数：
+* 如果指向 {{c|target}} 的指针在求值 {{c|expr}} 的语境中{{rlp|pointer#无效指针|有效}}，那么结果指代 {{c|target}}。
+* 否则行为未定义。
+
+{{source|1=
+std::string&amp; f()
+{
+    std::string s = "Example";
+    return s; // 退出 s 的作用域：调用其析构函数并解分配其存储
+}
+
+std::string&amp; r = f(); // 悬垂引用
+std::cout &lt;&lt; r;       // 未定义行为：从悬垂引用读取
+std::string s = f();  // 未定义行为：从悬垂引用复制初始化
+}}
+
+注意，右值引用和到 const 的左值引用能延长临时对象的生存期（参阅{{rlp|reference initialization#临时量生存期|引用初始化}}中的规则和例外情况）。
+
+如果被指代对象被销毁（例如通过显式的析构函数调用），但存储尚未被解分配，则到生存期外的对象的引用仍能以有限的方式使用，且当在同一存储中重新创建对象时也可以变为有效（细节见{{rlp|lifetime#在生存期之外进行访问|在生存期之外进行访问}}）。
+
+===类型不可访问的引用===
+在转换后的初始化器是通过不具有{{rlp|reinterpret_cast#类型可访问性|类型可访问性}}的{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}的对象的情况下，试图将引用绑定到该对象会导致未定义行为：
+{{source|1=
+char x alignas(int);
+
+int&amp; ir = *reinterpret_cast&lt;int*&gt;(&amp;x); // 未定义行为：初始化器指代 char 对象
+}}
+
+===调用不兼容的引用===
+在转换后的初始化器是函数{{rev inl|until=c++11|左值}}{{rev inl|since=c++11|泛左值}}，并且该值的类型与函数定义的类型不具有{{rlp|reinterpret_cast#调用兼容性|调用兼容性}}的情况下，试图将引用绑定到该函数会导致未定义行为：
+{{source|1=
+void f(int);
+
+using F = void(float);
+F&amp; ir = *reinterpret_cast&lt;F*&gt;(&amp;f); // 未定义行为：初始化器指代 void(int) 函数
+}}
+
+===注解===
+{{feature test macro|std=C++11|value=200610L|__cpp_rvalue_references|[[#右值引用|右值引用]]}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=453|std=C++98|before=不明确引用不能绑定到哪些对象和函数|after=使之明确}}
+{{dr list item|wg=cwg|dr=1510|std=C++11|before=不能在 {{c/core|decltype}} 的操作数中形成有 cv 限定的引用|after=已允许}}
+{{dr list item|wg=cwg|dr=2550|std=C++98|before=形参的类型可以是“到 {{c/core|void}} 的引用”|after=已禁止}}
+{{dr list item|wg=cwg|dr=2933|std=C++98|before=访问悬垂引用的行为不明确|after=使之明确}}
+{{dr list end}}
+
+===外部链接===
+{{eli|Thomas Becker, 2013 - [http://thbecker.net/articles/rvalue_references/section_01.html C++ Rvalue References Explained]}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

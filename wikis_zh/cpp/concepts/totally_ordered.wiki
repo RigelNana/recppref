@@ -1,0 +1,103 @@
+{{cpp/title|totally_ordered|totally_ordered_with}}
+{{cpp/concepts/navbar}}
+{{dcl begin}}
+{{dcl header|concepts}}
+{{dcl|since=c++20|num=1|1=
+template&lt; class T &gt;
+concept totally_ordered =
+    std::equality_comparable&lt;T&gt; &amp;&amp; __PartiallyOrderedWith&lt;T, T&gt;;
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; class T, class U &gt;
+concept totally_ordered_with =
+    std::totally_ordered&lt;T&gt; &amp;&amp;
+    std::totally_ordered&lt;U&gt; &amp;&amp;
+    std::equality_comparable_with&lt;T, U&gt; &amp;&amp;
+    std::totally_ordered&lt;
+        std::common_reference_t&lt;
+            const std::remove_reference_t&lt;T&gt;&amp;,
+            const std::remove_reference_t&lt;U&gt;&amp;&gt;&gt; &amp;&amp;
+    __PartiallyOrderedWith&lt;T, U&gt;;
+}}
+{{dcl h|辅助概念}}
+{{dcl|notes={{mark expos}}|num=3|1=
+template&lt; class T, class U &gt;
+concept __PartiallyOrderedWith =
+    requires(const std::remove_reference_t&lt;T&gt;&amp; t,
+             const std::remove_reference_t&lt;U&gt;&amp; u) {
+        { t &lt;  u } -&gt; boolean-testable;
+        { t &gt;  u } -&gt; boolean-testable;
+        { t &lt;= u } -&gt; boolean-testable;
+        { t &gt;= u } -&gt; boolean-testable;
+        { u &lt;  t } -&gt; boolean-testable;
+        { u &gt;  t } -&gt; boolean-testable;
+        { u &lt;= t } -&gt; boolean-testable;
+        { u &gt;= t } -&gt; boolean-testable;
+    };
+}}
+{{dcl end}}
+
+@1@ 概念 {{tt|std::totally_ordered}} 指定比较运算符 {{tt|1===,!=,&lt;,&gt;,&lt;=,&gt;=}} 在一个类型上产生的结果与该类型上的{{enwiki|Total order#Strict total order|严格全序}}一致。
+
+@2@ 概念 {{tt|std::totally_ordered_with}} 指定比较运算符 {{tt|1===,!=,&lt;,&gt;,&lt;=,&gt;=}} 在（可能混合的） {{tt|T}} 和 {{tt|U}} 操作数上产生的结果等价于对转换到其公共类型的操作数进行比较的结果。
+
+@3@ 仅用于阐释的概念 {{tti|__PartiallyOrderedWith}} 指定 {{tt|T}} 类型的对象与 {{tt|U}} 类型的对象能（以任何顺序）用 {{tt|&lt;}}、{{tt|&gt;}}、{{tt|1=&lt;=}} 及 {{tt|1=&gt;=}} 在一个偏序中彼此比较，且比较结果一致。
+
+===语义要求===
+这些概念仅若其所蕴含的概念均被实现才得到实现。
+
+@1@ {{c|std::totally_ordered&lt;T&gt;}} 仅若符合下列条件才得到实现。给定 {{c|const std::remove_reference_t&lt;T&gt;}} 类型左值 {{tt|a}}、{{tt|b}} 和 {{tt|c}}：
+* {{c|bool(a &lt; b)}}、{{c|bool(a &gt; b)}} 和 {{c|1=bool(a == b)}} 恰有一者为 {{c|true}}；
+* 若 {{c|bool(a &lt; b)}} 与 {{c|bool(b &lt; c)}} 均为 {{c|true}}，则 {{c|bool(a &lt; c)}} 为 {{c|true}}；
+* {{c|1=bool(a &gt; b) == bool(b &lt; a)}}
+* {{c|1=bool(a &gt;= b) == !bool(a &lt; b)}}
+* {{c|1=bool(a &lt;= b) == !bool(b &lt; a)}}
+
+@2@ {{c|std::totally_ordered_with&lt;T, U&gt;}} 仅若符合下列条件才得到实现。给定
+* {{tt|t}} 和 {{tt|t2}}，分别为指代 {{c|const std::remove_reference_t&lt;T&gt;}} 和 {{c|std::remove_reference_t&lt;T&gt;}} 类型的不同但相等对象的左值，与
+* {{tt|u}} 和 {{tt|u2}}，分别为指代 {{c|const std::remove_reference_t&lt;U&gt;}} 和 {{c|std::remove_reference_t&lt;U&gt;}} 类型的不同但相等对象的左值，
+令 {{tt|C}} 为 {{c|std::common_reference_t&lt;const std::remove_reference_t&lt;T&gt;&amp;, const std::remove_reference_t&lt;U&gt;&amp;&gt;}}，并且给定表达式 {{tt|E}} 和类型 {{tt|C}} 时，令 {{c|CONVERT_TO&lt;C&gt;(E)}} 为：
+{{rrev multi|rev1=
+* {{c|static_cast&lt;C&gt;(std::as_const(E))}}.
+|since2=c++23|rev2=
+* {{c|static_cast&lt;const C&amp;&gt;(std::as_const(E))}} 若其为有效表达式，
+* 否则为 {{c|static_cast&lt;const C&amp;&gt;(std::move(E))}}。
+}}
+以下各项为真：
+* {{c|1=bool(t &lt; u) == bool(CONVERT_TO&lt;C&gt;(t2) &lt; CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(t &gt; u) == bool(CONVERT_TO&lt;C&gt;(t2) &gt; CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(t &lt;= u) == bool(CONVERT_TO&lt;C&gt;(t2) &lt;= CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(t &gt;= u) == bool(CONVERT_TO&lt;C&gt;(t2) &gt;= CONVERT_TO&lt;C&gt;(u2))}}
+* {{c|1=bool(u &lt; t) == bool(CONVERT_TO&lt;C&gt;(u2) &lt; CONVERT_TO&lt;C&gt;(t2))}}
+* {{c|1=bool(u &gt; t) == bool(CONVERT_TO&lt;C&gt;(u2) &gt; CONVERT_TO&lt;C&gt;(t2))}}
+* {{c|1=bool(u &lt;= t) == bool(CONVERT_TO&lt;C&gt;(u2) &lt;= CONVERT_TO&lt;C&gt;(t2))}}
+* {{c|1=bool(u &gt;= t) == bool(CONVERT_TO&lt;C&gt;(u2) &gt;= CONVERT_TO&lt;C&gt;(t2))}}
+
+@3@ {{c|__PartiallyOrderedWith&lt;T, U&gt;}} 仅若符合下列条件才得到实现，给定
+* 任何 {{c|const std::remove_reference_t&lt;T&gt;}} 类型的左值 {{tt|t}}，与
+* 任何 {{c|const std::remove_reference_t&lt;U&gt;}} 类型的左值 {{tt|u}}，
+以下各项为真：
+* {{c|t &lt; u}}、{{c|1=t &lt;= u}}、{{c|t &gt; u}}、{{c|1=t &gt;= u}}、{{c|1=u &lt; t}}、{{c|1=u &lt;= t}}、{{c|u &gt; t}} 及 {{c|1=u &gt;= t}} 拥有相同定义域；
+* {{c|1=bool(t &lt; u) == bool(u &gt; t)}}；
+* {{c|1=bool(u &lt; t) == bool(t &gt; u)}}；
+* {{c|1=bool(t &lt;= u) == bool(u &gt;= t)}}；且
+* {{c|1=bool(u &lt;= t) == bool(t &gt;= u)}}。
+
+{{cpp/concepts/equality preservation}}
+
+{{cpp/concepts/implicit expression variations}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=18.5.5|title=Concept {{tt|totally_ordered}}|id=concept.totallyordered}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=18.5.4|title=Concept {{tt|totally_ordered}}|id=concept.totallyordered}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/compare/dsc three_way_comparable}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

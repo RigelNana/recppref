@@ -1,0 +1,366 @@
+{{title|未定义行为}}
+{{cpp/language/basics/navbar}}
+若违反语言的某些规则，则令整个程序失去意义。
+
+===解释===
+C++ 标准为不被归入下列分类之一的每个程序都精确定义了其{{rlp|as if|可观察行为}}：
+
+* ''非良构'' - 程序拥有语法错误或可诊断的语义错误。
+:* 遵从标准的 C++ 编译器必须为此给出诊断，即使它定义了为这种代码赋予了含义的语言扩展（例如用可变长度数组）也应如此。
+:* 标准文本用 ''shall（应当）''、 ''shall not（不应当）''和 ''ill-formed（非良构）''给出了这些要求。&lt;!-- shall 的违规表示病式还是未定义见 http://stackoverflow.com/questions/25300461 上的讨论 --&gt;
+
+* ''非良构而{{rlp|ndr|不要求诊断}}'' - 程序拥有通常情况下可能无法诊断的语义错误（例如 {{rlp|definition|ODR}} 的违规或者其他只能在链接时检测的错误）。
+:* 执行这种程序的行为未定义。
+
+* ''由实现定义的行为'' - 程序的行为随实现而变动，遵从标准的实现必须为每个这样的行为的效果提供文档。
+:* 例如 {{lc|std::size_t}} 的类型或每个字节的位数，或者 {{lc|std::bad_alloc::what}} 的文本。
+:* 由实现定义的行为的一个子集是''本地环境特定行为''，它取决于实现所提供的[[cpp/locale|本地环境]]。
+
+* ''未指明的行为'' - 程序的行为随实现而变动，且遵从标准的实现不需要为每个行为的效果提供文档。
+:* 例如{{rlp|eval order|求值顺序}}，等同的{{rlp|string literal|字符串字面量}}是否为不同的对象，数组分配的开销，等等。
+:* 每个未指明行为均产生合法结果集合中的一个结果。
+
+{{rrev|since=c++26|
+* ''错误行为'' - 建议实现进行诊断的具有良好定义（但不正确）的行为。
+:* 错误行为一定是由错误的程序代码导致的。
+:* 对常量表达式的求值不会导致错误行为。
+:* 如果执行包含了具有错误行为的操作，那么允许且建议实现发布诊断信息，也允许实现在该操作后的任意时间中止执行。
+:* 在由实现确定的一套对程序行为的假设下，实现也可以在有触发错误行为的可能性的情况下直接发布诊断信息，即使实际上不会触发。
+
+{{cot|错误行为的示例}}
+{{source|1=
+#include &lt;cassert&gt;
+#include &lt;cstring&gt;
+
+void f()
+{   
+    int d1, d2;       // d1, d2 有错误值
+    int e1 = d1;      // 错误行为
+    int e2 = d1;      // 错误行为
+    assert(e1 == e2); // 成立
+    assert(e1 == d1); // 成立，错误行为
+    assert(e2 == d1); // 成立，错误行为
+
+    std::memcpy(&amp;d2, &amp;d1, sizeof(int)); // 没有错误行为，但 d2 有错误值
+
+    assert(e1 == d2); // 成立，错误行为
+    assert(e2 == d2); // 成立，错误行为
+}
+
+unsigned char g(bool b)
+{
+    unsigned char c;     // c 有错误值
+    unsigned char d = c; // 没有错误行为，但 d 有错误值
+    assert(c == d);      // 成立，两次整数提升都具有错误行为
+    int e = d;           // 错误行为
+    return b ? d : 0;    // 当 b 为 true 时具有错误行为
+}
+}}
+{{cob}}
+}}
+
+* ''未定义行为'' - 对程序的行为无任何限制。
+:* 一些未定义行为的例子包括：数据竞争，数组边界外的内存访问，有符号整数溢出，空指针的解引用，在一个表达式中对同一标量对象修改{{rlp|eval order|多于一次}}而彼此间{{rev inl|until=c++11|无序列点}}{{rev inl|since=c++11|无序}}，通过{{rlp|reinterpret_cast#类型别名化|类型错误的指针}}访问对象，等等。
+:* 实现不需要诊断未定义行为（尽管许多简单情形确实会得到诊断），而且所编译的程序不需要做任何有意义的事。
+
+* ''运行时未定义行为'' - 只有在对作为{{rlps|constant expression#核心常量表达式}}的表达式进行求值时不是未定义行为的行为。
+
+===未定义行为与优化===
+由于正确的 C++ 程序不存在未定义的行为，因此在启用优化后编译实际存在未定义行为的程序时，编译器可能会产生意想不到的结果。
+
+例如，
+====有符号溢出====
+{{source|1=
+int foo(int x)
+{
+    return x+1 &gt; x; // 要么为 true，要么因为有符号溢出导致未定义行为
+}
+}}
+可能编译为（[https://godbolt.org/z/re39h7P1K 演示]）
+{{source|
+foo(int):
+        mov     eax, 1
+        ret
+}}
+
+====访问越界====
+{{source|1=
+int table[4] = {};
+bool exists_in_table(int v)
+{
+    // 可能在头 4 次迭代中返回 true，或者因为边界外访问导致未定义行为
+    for (int i = 0; i &lt;= 4; i++)
+        if (table[i] == v)
+            return true;
+    return false;
+}
+}}
+可能编译为（[https://godbolt.org/z/vMbsdo5az 演示]）
+{{source|
+exists_in_table(int):
+        mov     eax, 1
+        ret
+}}
+
+====未初始化的标量====
+{{source|1=
+std::size_t f(int x)
+{
+    std::size_t a;
+    if(x) // x 为零时会有未定义行为
+        a = 42;
+    return a; 
+}
+}}
+可能编译为（[https://godbolt.org/z/1sraffdM8 演示]）
+{{source|
+f(int):
+        mov     eax, 42
+        ret
+}}
+
+{{example
+|以下给出的输出曾在旧版本 gcc 上观察到
+|code=
+#include &lt;cstdio&gt;
+
+int main()
+{
+    bool p; // 未初始化的局部变量
+    if (p)  // UB：访问未初始化的标量
+        std::puts("p is true");
+    if (!p) // UB：访问未初始化的标量
+        std::puts("p is false");
+}
+|p=true
+|output=
+p is true
+p is false
+}}
+
+====非法标量====
+{{source|1=
+int f()
+{
+    bool b = true;
+    unsigned char* p = reinterpret_cast&lt;unsigned char*&gt;(&amp;b);
+    *p = 10;
+    // 从 b 读取现在是 UB
+    return b == 0;
+}
+}}
+可能编译为（[https://godbolt.org/z/4vKxhcea4 演示]）
+{{source|
+f():
+        mov     eax, 11
+        ret
+}}
+
+====空指针解引用====
+以下示例演示读取解引用空指针的结果。
+{{source|1=
+int foo(int* p)
+{
+    int x = *p;
+    if (!p)
+        return x; // 要么如上产生未定义行为，要么不可能采用此分支
+    else
+        return 0;
+}
+
+int bar()
+{
+    int* p = nullptr;
+    return *p; // 无条件 UB
+}
+}}
+可能编译为（[https://godbolt.org/z/edxr5W5T7 演示]）
+{{source|
+foo(int*):
+        xor     eax, eax
+        ret
+bar():
+        ret
+}}
+
+====访问已传递给 {{lc|std::realloc}} 的指针====
+{{example
+|选择 clang 以观察所示输出
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    int* p = (int*)std::malloc(sizeof(int));
+    int* q = (int*)std::realloc(p, sizeof(int));
+    *p = 1; // 未定义行为：访问已传递给 realloc 的指针
+    *q = 2;
+    if (p == q) // 未定义行为：访问已传递给 realloc 的指针
+        std::cout &lt;&lt; *p &lt;&lt; *q &lt;&lt; '\n';
+}
+|p=true
+|output=
+12
+}}
+
+====无副作用的{{rev inl|since=c++26|非平凡}}无限循环====
+{{cpp/language/process guarantee note}}
+{{example|选择 clang 或最新版 gcc 以观察所示输出
+|code=
+#include &lt;iostream&gt;
+
+bool fermat()
+{
+    const int max_value = 1000;
+
+    // 无副作用的非平凡无限循环是未定义行为
+    for (int a = 1, b = 1, c = 1; true; )
+    {
+        if (((a * a * a) == ((b * b * b) + (c * c * c))))
+            return true; // 证伪 :()
+        a++;
+        if (a &gt; max_value)
+        {
+            a = 1;
+            b++;
+        }
+        if (b &gt; max_value)
+        {
+            b = 1;
+            c++;
+        }
+        if (c &gt; max_value)
+            c = 1;
+    }
+
+    return false; // 未能证伪
+}
+
+int main()
+{
+    std::cout &lt;&lt; "费马大定理";
+    fermat()
+        ? std::cout &lt;&lt; "被证伪！\n"
+        : std::cout &lt;&lt; "未被证伪。\n";
+}
+|p=true
+|output=
+费马大定理被证伪！
+}}
+{{rrev|since=c++26|
+平凡的无限循环不是未定义行为。
+}}
+
+===带诊断消息的非良构===
+要注意的是，允许编译器以赋予非良构程序一定含义的方式来扩展语言。这种情况下 C++ 标准所规定的仅是一条诊断消息（编译器警告），除非程序是“非良构但无需诊断的”。
+
+例如，除非通过 {{tt|--pedantic-errors}} 禁用了语言扩展，GCC 都会编译以下示例代码[https://coliru.stacked-crooked.com/a/3cc6bdd9576df9a5 而只给出一条警告]，即使它[https://eel.is/c++draft/dcl.init.list#example-6 在 C++ 标准中]是作为“错误”的示例给出的（另请参见 [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=55783 GCC Bugzilla #55783]）
+
+{{example
+|code=
+#include &lt;iostream&gt;
+
+// 示例代码，请勿使用常量
+double a{1.0};
+
+// C++23 标准, §9.4.5 List-initialization [dcl.init.list], 示例 #6:
+struct S
+{
+    // 无初始化式列表构造函数
+    S(int, double, double); // #1
+    S();                    // #2
+    // ...
+};
+
+S s1 = {1, 2, 3.0}; // OK，调用 #1
+S s2{a, 2, 3}; // 错误：窄化
+S s3{}; // OK，调用 #2
+// — end example]
+
+S::S(int, double, double) {}
+S::S() {}
+
+int main()
+{
+    std::cout &lt;&lt; "已通过所有检查。\n";
+}
+|p=true
+|output=
+main.cpp:17:6: error: type 'double' cannot be narrowed to 'int' in initializer ⮠
+list [-Wc++11-narrowing]
+S s2{a, 2, 3}; // 错误：窄化
+     ^
+main.cpp:17:6: note: insert an explicit cast to silence this issue
+S s2{a, 2, 3}; // 错误：窄化
+     ^
+     static_cast&lt;int&gt;( )
+1 error generated.
+}}
+
+===引用===
+{{cot}}
+{{ref std c++23}}
+{{ref std|section=3.25|title=ill-formed program|id=defns.ill.formed}}
+{{ref std|section=3.26|title=implementation-defined behavior|id=defns.impl.defined}}
+{{ref std|section=3.66|title=unspecified behavior|id=defns.unspecified}}
+{{ref std|section=3.68|title=well-formed program|id=defns.well.formed}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=TBD|title=ill-formed program|id=defns.ill.formed}}
+{{ref std|section=TBD|title=implementation-defined behavior|id=defns.impl.defined}}
+{{ref std|section=TBD|title=unspecified behavior|id=defns.unspecified}}
+{{ref std|section=TBD|title=well-formed program|id=defns.well.formed}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=TBD|title=ill-formed program|id=defns.ill.formed}}
+{{ref std|section=TBD|title=implementation-defined behavior|id=defns.impl.defined}}
+{{ref std|section=TBD|title=unspecified behavior|id=defns.unspecified}}
+{{ref std|section=TBD|title=well-formed program|id=defns.well.formed}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=TBD|title=ill-formed program|id=defns.ill.formed}}
+{{ref std|section=TBD|title=implementation-defined behavior|id=defns.impl.defined}}
+{{ref std|section=TBD|title=unspecified behavior|id=defns.unspecified}}
+{{ref std|section=TBD|title=well-formed program|id=defns.well.formed}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=TBD|title=ill-formed program|id=defns.ill.formed}}
+{{ref std|section=TBD|title=implementation-defined behavior|id=defns.impl.defined}}
+{{ref std|section=TBD|title=unspecified behavior|id=defns.unspecified}}
+{{ref std|section=TBD|title=well-formed program|id=defns.well.formed}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=TBD|title=ill-formed program|id=defns.ill.formed}}
+{{ref std|section=TBD|title=implementation-defined behavior|id=defns.impl.defined}}
+{{ref std|section=TBD|title=unspecified behavior|id=defns.unspecified}}
+{{ref std|section=TBD|title=well-formed program|id=defns.well.formed}}
+{{ref std end}}
+{{cob}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2809R3|std=C++11|before=执行“平凡的”无限循环的行为未定义|after=为“平凡的无限循环”提供合适定义，并使行为具有良好定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/attributes/dsc assume}}
+{{dsc inc|cpp/language/attributes/dsc indeterminate}}
+{{dsc inc|cpp/utility/dsc unreachable}}
+{{dsc see c|c/language/behavior|未定义行为|nomono=true}}
+{{dsc end}}
+
+===外部链接===
+{{elink begin}}
+{{elink|[https://blog.llvm.org/2011/05/what-every-c-programmer-should-know.html The LLVM Project Blog: 每个 C 程序员都应该知道的关于未定义行为的事 #1/3]}}
+{{elink|[https://blog.llvm.org/2011/05/what-every-c-programmer-should-know_14.html The LLVM Project Blog: 每个 C 程序员都应该知道的关于未定义行为的事 #2/3]}}
+{{elink|[https://blog.llvm.org/2011/05/what-every-c-programmer-should-know_21.html The LLVM Project Blog: 每个 C 程序员都应该知道的关于未定义行为的事 #3/3]}}
+{{elink|1=[https://devblogs.microsoft.com/oldnewthing/20140627-00/?p=633 未定义行为能导致时间旅行（在所有事项中，时间旅行可是最惊人的）]}}
+{{elink|[https://www.cs.utah.edu/~regehr/papers/overflow12.pdf 了解 C/C++ 中的整数溢出]}}
+{{elink|[https://lwn.net/Articles/342330/ 空指针的趣事，第一部分]（Linux 2.6.30 中空指针解引用所致的未定义行为所引发的局部滥用）}}
+{{elink|[https://web.archive.org/web/20201108094235/https://kukuruku.co/post/undefined-behavior-and-fermats-last-theorem/ 未定义行为与费马大定理]}}
+{{elink|[https://pvs-studio.com/en/blog/posts/cpp/1129/ C++ 程序员的未定义行为指南]}}
+{{elink end}}
+
+{{langlinks|en|es|ja|ru}}

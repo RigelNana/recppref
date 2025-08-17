@@ -1,0 +1,159 @@
+{{title|复制消除}}
+{{cpp/language/initialization/navbar}}
+当满足特定条件时，可以省略从某个源对象创建具有相同类类型（忽略 cv 限定）的对象的操作，即使选择的构造函数和/或析构函数具有副作用。这种对象创建操作的消除被称为''复制消除''{{sep}}。
+
+===解释===
+在下列情形下允许进行复制消除（可以合并多次消除）：
+* 在返回类型是类类型的函数中 {{rlp|return|{{c/core|return}} 语句}}中，当操作数是（函数形参和{{rlp|catch|处理块}}形参以外的）具有{{rlps|storage duration#自动存储期}}的非 volatile 对象 {{c|obj}} 的名字时，可以省略结果对象的{{rlp|copy initialization|复制初始化}}，改为将 {{c|obj}} 直接构造到函数调用的结果对象中。这种复制消除的变体被称为''具名返回值优化''（NRVO）。
+{{rev begin}}
+{{rev|until=c++17|
+* 当以尚未绑定到引用的临时类对象 {{c|obj}} 复制初始化类对象 {{c|target}} 时，可以省略该复制初始化，改为将 {{c|obj}} 直接构造到 {{c|target}} 中。这种复制消除的变体被称为''无名返回值优化''（URVO）。从 C++17 开始，无名返回值优化是强制要求的，而不再被当做复制消除；见下文。
+}}
+{{rev|since=c++11|
+* 在 {{rlp|throw|{{c/core|throw}} 表达式}}中，当操作数是（函数形参和处理块形参以外的）具有自动存储期的非 volatile 对象 {{c|obj}} 的名字，并且 {{c|obj}} 属于某个不包含最内层外围 {{rlp|try|{{c/core|try}} 块}}（如果存在）的{{rlp|scope|作用域}}时，可以省略异常对象的复制初始化，改为将 {{c|obj}} 直接构造到异常对象中。
+* 在{{rlp|catch|处理块}}中，可以省略处理块实参的复制初始化，改为将处理块形参视为异常对象的别名。只要此类复制消除不会影响程序原本的含义（除了处理块实参的构造函数和析构函数的执行以外）。
+}}
+{{rev|since=c++20|
+* 在{{rlp|coroutines|协程}}中，可以消除协程形参的复制，改为将到该副本的引用全部替换成到对应形参的引用。只要此类复制消除不会影响程序原本的含义（除了处理块实参的构造函数和析构函数的执行以外）。
+}}
+{{rev end}}
+
+进行复制消除时，实现将被省略的初始化操作的源和目标单纯地当做指代同一对象的两种不同方式。
+
+{{rev begin}}
+{{rev|until=c++11|
+该对象会在假如不进行优化时两个对象中后被销毁的对象销毁时销毁。
+}}
+{{rev|since=c++11|
+如果被选择的构造函数的首个形参类型是到该对象的类型的右值引用，该对象会在目标对象本应被销毁时销毁。否则该对象会在假如不进行优化时两个对象中后被销毁的对象销毁时销毁。
+}}
+{{rev end}}
+
+
+{{rrev|since=c++17|
+====纯右值语义（“有保证的复制消除”）====
+从 C++17 起，非必须不会将纯右值实质化，并且它会被直接构造到其最终目标的存储中。这有时候意味着，即便语言的语法看起来进行了复制/移动（例如{{rlp|copy initialization|复制初始化}}），也并不进行复制/移动——这表示该类型完全不需要具有可访问的复制/移动构造函数。其例子包括：
+* 在 {{rlp|return|return 语句}}中，当操作数是一个与函数返回类型相同（忽略 {{rlp|cv|cv 限定}}）的类类型的{{rlp|value category|纯右值}}时：
+{{source|1=
+T f()
+{
+    return U(); // 构造一个 U 类型的临时量，然后从临时量初始化返回的 T
+}
+T g()
+{
+    return T(); // 直接构造返回的 T；没有移动
+}
+}}
+: &lt;!--CWG2426--&gt; 返回类型的析构函数必须在 return 语句位置可访问且未被弃置，即使没有 T 对象要被销毁也是如此。
+* 在对象的初始化中，当初始化器表达式是一个与变量类型相同（忽略 {{rlp|cv|cv 限定}}）的类类型的{{rlp|value category|纯右值}}时：
+{{source|1=
+T x = T(T(f())); // 直接以 f() 的结果初始化 x；没有移动
+}}
+: 只能在已知要初始化的对象不是潜在重叠的子对象时应用此规则：
+{{source|
+struct C { /* ... */ };
+C f();
+
+struct D;
+D g();
+
+struct D : C
+{
+    D() : C(f()) {}    // 初始化基类子对象时无消除
+    D(int) : D(g()) {} // 无消除，因为正在初始化的 D 对象可能是某个其他类的基类子对象
+};
+}}
+
+注意：上述规则指定的不是优化，并且标准并未正式将其描述为“复制消除”（因为并无被消除的东西）。针对{{rlp|value category|纯右值}}和{{rlp|implicit conversion#临时量实质化|临时量}}的 C++17 核心语言规定在本质上不同于之前的 C++ 版本：不再有用于复制/移动的临时量。描述 C++17 机制的另一种方式是“未实质化的值传递”或“延迟临时量实质化”：返回并使用纯右值时不实质化临时量。
+}}
+
+===注解===
+复制消除是允许改变可观察副作用的{{rev inl|until=c++14|唯一得到允许的优化形式}}{{rev inl|since=c++14|两种允许的优化形式之一，另一种是{{rlp|new#分配|分配消除与扩展}}}}。因为一些编译器并不在所有允许的场合中进行复制消除（例如调试模式下），依赖于复制/移动构造函数和析构函数的副作用的程序是不可移植的。
+
+{{rrev|since=c++11|
+在 {{c/core|return}} 语句或 {{c/core|throw}} 表达式中，如果编译器不能进行复制消除，但满足或者（若非源是函数形参）本应满足复制消除的条件，那么{{rev inl|until=c++23|即使源操作数由左值代表，编译器也将尝试使用移动构造函数}}{{rev inl|since=c++23|就会将源操作数当做右值}}；细节见 {{rlp|return#注解|{{c/core|return}} 语句}}。
+
+在{{rlp|constant expression|常量表达式}}和{{rlp|constant initialization|常量初始化}}中，保证进行返回值优化&lt;!-- CWG 2022 --&gt;，但禁止具名返回值优化&lt;!-- CWG 2278 --&gt;：
+{{source|1=
+struct A
+{
+    void* p;
+    constexpr A() : p(this) {}
+    A(const A&amp;); // 禁用可平凡复制性
+};
+
+constexpr A a;  // OK: a.p 指向 a
+
+constexpr A f()
+{
+    A x;
+    return x;
+}
+constexpr A b = f(); // 错误：b.p 会悬垂，并会指向 f 中的 x
+
+constexpr A c = A(); // (C++17 前) error: c.p 将悬垂并指向临时量
+                     // (C++17 起) OK: c.p 指向 c; 不涉及临时量
+}}
+}}
+
+{{feature test macro|std=C++17|value=201606L|__cpp_guaranteed_copy_elision|通过简化的{{rlp|value category|值类别}}提供有保证的复制消除}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+
+struct Noisy
+{
+    Noisy() { std::cout &lt;&lt; "在 " &lt;&lt; this &lt;&lt; " 构造" &lt;&lt; '\n'; }
+    Noisy(const Noisy&amp;) { std::cout &lt;&lt; "复制构造\n"; }
+    Noisy(Noisy&amp;&amp;) { std::cout &lt;&lt; "移动构造\n"; }
+    ~Noisy() { std::cout &lt;&lt; "在 " &lt;&lt; this &lt;&lt; " 析构" &lt;&lt; '\n'; }
+};
+
+Noisy f()
+{
+    Noisy v = Noisy(); // (C++17 前) 从临时量初始化 v 时发生复制消除，可能调用移动构造函数
+                       // (C++17 起) "有保证的复制消除"
+    return v; // 从 v 到结果对象的复制消除，可能调用移动构造函数
+}
+
+void g(Noisy arg)
+{
+    std::cout &lt;&lt; "&amp;arg = " &lt;&lt; &amp;arg &lt;&lt; '\n';
+}
+
+int main()
+{
+    Noisy v = f(); // (C++17 前) 从 f() 的结果初始化 v 时发生复制消除
+                   // (C++17 起) "有保证的复制消除"
+    
+    std::cout &lt;&lt; "&amp;v = " &lt;&lt; &amp;v &lt;&lt; '\n';
+    
+    g(f()); // (C++17 前) 从 f() 的结果初始化实参时发生复制消除
+            // (C++17 起) "有保证的复制消除"
+}
+|p=true
+|output=
+在 0x7fffd635fd4e 构造
+&amp;v = 0x7fffd635fd4e
+在 0x7fffd635fd4f 构造
+&amp;arg = 0x7fffd635fd4f
+在 0x7fffd635fd4f 析构
+在 0x7fffd635fd4e 析构
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1967|std=C++11|before=在通过移动构造函数完成复制消除时依然会考虑被移动的对象的生存期|after=不考虑}}
+{{dr list item|wg=cwg|dr=2426|std=C++17|before=返回纯右值时不要求析构函数|after=潜在调用析构函数}}
+{{dr list item|wg=cwg|dr=2930|std=C++98|before=只有复制（或移动）操作可以被消除，但&lt;br&gt;复制初始化可以选择复制（或移动）构造函数|after=会消除有关的复制初始化&lt;br&gt;造成的所有对象构造}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|copy initialization|复制初始化}}
+* {{rlp|copy constructor|复制构造函数}}
+* {{rlp|move constructor|移动构造函数}}
+
+{{langlinks|de|en|es|fr|it|ja|ko|pt|ru}}

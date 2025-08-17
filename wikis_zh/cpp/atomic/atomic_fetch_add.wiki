@@ -1,0 +1,144 @@
+{{cpp/title|atomic_fetch_add|atomic_fetch_add_explicit}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_add( std::atomic&lt;T&gt;* obj,
+                    typename std::atomic&lt;T&gt;::difference_type arg ) noexcept;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_add( volatile std::atomic&lt;T&gt;* obj,
+                    typename std::atomic&lt;T&gt;::difference_type arg ) noexcept;
+}}
+{{dcl|num=3|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_add_explicit( std::atomic&lt;T&gt;* obj,
+                             typename std::atomic&lt;T&gt;::difference_type arg,
+                             std::memory_order order ) noexcept;
+}}
+{{dcl|num=4|since=c++11|
+template&lt; class T &gt;
+T atomic_fetch_add_explicit( volatile std::atomic&lt;T&gt;* obj,
+                             typename std::atomic&lt;T&gt;::difference_type arg,
+                             std::memory_order order ) noexcept;
+}}
+{{dcl end}}
+
+进行原子加法。原子地将 {{c|arg}} 加到 {{c|obj}} 指向的值，并返回 {{c|obj}} 先前保有的值。如同执行下列内容一般进行运算：
+@1,2@ {{c|obj-&gt;fetch_add(arg)}}
+@3,4@ {{c|obj-&gt;fetch_add(arg, order)}}
+
+如果 {{tt|std::atomic&lt;T&gt;}} 没有 {{tt|fetch_add}} 成员（此成员仅对 {{c/core|bool}} 以外的{{rlp|atomic#对整数类型的特化|整数}}{{rev inl|since=c++20|、{{rlp|atomic#对浮点类型的特化|浮点}}}}和{{rlp|atomic#部分特化|指针}}类型提供），那么程序非良构。
+
+===参数===
+{{par begin}}
+{{par|obj|指向要修改的原子对象的指针}}
+{{par|arg|要加到存储于原子对象的值的值}}
+{{par|order|内存同步定序}}
+{{par end}} 
+
+===返回值===
+{{c|*obj}} 的{{ls|cpp/atomic/memory order#修改顺序}}中，紧接此函数生效之前的值。
+
+===示例===
+{{example
+|单写者/多读者锁能用 {{tt|std::atomic_fetch_add}} 制作。注意此过分简化的实现不是免锁的。
+|code=
+#include &lt;atomic&gt;
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+using namespace std::chrono_literals;
+
+// cnt 的含义：
+//  5：读者和写者在竞争中。无活跃读者或写者。
+//  4...0：有 1...5 个读者活跃。写者被阻塞。
+// -1：写者赢得竞争。读者被阻塞。
+
+const int N = 5; // 允许四个共时读者
+std::atomic&lt;int&gt; cnt(N);
+
+std::vector&lt;int&gt; data;
+
+void reader(int id)
+{
+    for(;;)
+    {
+        // 锁定
+        while (std::atomic_fetch_sub(&amp;cnt, 1) &lt;= 0)
+            std::atomic_fetch_add(&amp;cnt, 1);
+        
+        // 读取
+        if (!data.empty())
+            std::cout &lt;&lt; ("读者 " + std::to_string(id) +
+                          " 看见 " + std::to_string(*data.rbegin()) + '\n');
+        if (data.size() == 25)
+            break;
+        
+        // 解锁
+        std::atomic_fetch_add(&amp;cnt, 1);
+        
+        // 暂停
+        std::this_thread::sleep_for(1ms);
+    }
+}
+
+void writer()
+{
+    for(int n = 0; n &lt; 25; ++n)
+    {
+        // 锁定
+        while (std::atomic_fetch_sub(&amp;cnt, N + 1) != N)
+            std::atomic_fetch_add(&amp;cnt, N + 1);
+        
+        // 写入
+        data.push_back(n);
+        std::cout &lt;&lt; "写者写入 " &lt;&lt; n &lt;&lt; '\n';
+        
+        // 解锁
+        std::atomic_fetch_add(&amp;cnt, N + 1);
+        
+        // 暂停
+        std::this_thread::sleep_for(1ms);
+    }
+}
+ 
+int main()
+{
+    std::vector&lt;std::thread&gt; v;
+    for (int n = 0; n &lt; N; ++n)
+        v.emplace_back(reader, n);
+    v.emplace_back(writer);
+    
+    for (auto&amp; t : v)
+        t.join();
+}
+|output=
+写者写入 0
+读者 2 看见 0
+读者 3 看见 0
+读者 1 看见 0
+&lt;...&gt;
+读者 2 看见 24
+读者 4 看见 24
+读者 1 看见 24
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|std=C++11|paper=P0558R1|before=要求准确类型匹配，因为会从多个参数推导 {{tt|T}}|after=只会从 {{c|obj}} 推导 {{tt|T}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_add}}
+{{dsc inc|cpp/atomic/dsc atomic_fetch_sub}}
+{{dsc see c|c/atomic/atomic_fetch_add|atomic_fetch_add|atomic_fetch_add_explicit}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,143 @@
+{{cpp/ranges/view title|lazy_split}}
+{{cpp/ranges/lazy_split_view/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::input_range V, ranges::forward_range Pattern &gt;
+requires ranges::view&lt;V&gt; &amp;&amp;
+         ranges::view&lt;Pattern&gt; &amp;&amp;
+         std::indirectly_comparable&lt;ranges::iterator_t&lt;V&gt;,
+                                    ranges::iterator_t&lt;Pattern&gt;,
+                                    ranges::equal_to&gt; &amp;&amp;
+         (ranges::forward_range&lt;V&gt; {{!!}} /*tiny-range*/&lt;Pattern&gt;)
+class lazy_split_view
+    : public ranges::view_interface&lt;lazy_split_view&lt;V, Pattern&gt;&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    inline constexpr /* unspecified */ lazy_split = /* unspecified */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R, class Pattern &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto lazy_split( R&amp;&amp; r, Pattern&amp;&amp; pattern );
+}}
+{{dcl|since=c++20|1=
+template&lt; class Pattern &gt;
+constexpr /* range adaptor closure */ lazy_split( Pattern&amp;&amp; pattern );
+}}
+{{dcl h|辅助概念}}
+{{dcl|num=3|notes={{mark expos}}|1=
+template&lt; class R &gt;
+concept /*tiny-range*/ =
+    ranges::sized_range&lt;R&gt; &amp;&amp;
+    requires { /* is-statically-constexpr-sized */&lt;R&gt;; } &amp;&amp;
+    (std::remove_reference_t&lt;R&gt;::size() &lt;= 1);
+}}
+{{dcl end}}
+
+@1@ {{tt|lazy_split_view}} 接收一个 {{lconcept|view}} 与一个分隔符，并按分隔符切割 {{lconcept|view}} 为子范围。
+&lt;!----&gt;
+支持两种主要场景：
+* 视图是 {{lconcept|input_range}}，分隔符为单个元素（包装在 {{rlpt|single_view}} 中）。
+* 视图是 {{lconcept|forward_range}}，分隔符为元素的 {{lconcept|view}}。
+
+@2@ {{named req|RangeAdaptorObject}}。表达式 {{c|views::lazy_split(e, f)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|lazy_split_view(e, f)}}&lt;!-- LWG 3524 --&gt;。
+
+@3@ 在 {{tt|Pattern}} 满足 {{lconcept|sized_range}}，{{c|Pattern::size()}} 是常量表达式且适合作为模板非类型实参，且 {{c|Pattern::size()}} 的值小于或等于 {{tt|1}} 时，仅用于阐释的概念 {{c|/*tiny-range*/&lt;Pattern&gt;}} 得到满足。&lt;!-- 标准使用 `std::remove_reference_t&lt;R&gt;::size()`，但由于 `Pattern` 是 `view`，它不能是引用。--&gt;值得注意的是 {{rlpt|empty_view}} 与 {{rlpt|single_view}} 满足此概念。
+
+当底层 {{lconcept|view}} {{tt|V}} 实现概念 {{lconcept|forward_range}} 和 {{lconcept|input_range}} 时，{{tt|lazy_split_view}} 实现相应概念，并且当 {{tt|V}} 一同实现 {{lconcept|forward_range}} 与 {{lconcept|common_range}} 时，{{tt|lazy_split_view}} 实现 {{lconcept|common_range}}。
+
+当底层 {{lconcept|view}} {{tt|V}} 实现概念 {{lconcept|forward_range}} 和 {{lconcept|input_range}} 时，内层范围（{{c/core|ranges::range_reference_t&lt;lazy_split_view&gt;}}）实现相应的概念。它不实现 {{lconcept|common_range}}，并且不能用于期待 {{lconcept|bidirectional_range}} 或更高要求范围的算法。
+
+与 {{rlpt|split_view}} 不同，{{tt|lazy_split_view}} 并不保持子范围的连续性。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|base_|id=base|private=yes|spec={{tt|V}}|底层 {{lconcept|view}}}}
+{{dsc expos mem obj|pattern_|id=pattern|private=yes
+|spec={{tt|Pattern}}|用作切割底层 {{lconcept|view}} 的分隔符的模式}}
+{{dsc expos mem obj|current_|id=current|private=yes
+|maybe=(仅当 {{tt|V}} 不满足 {{lconcept|forward_range}} 时才存在)
+|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}
+|缓存调用 {{rltf|begin}} 的结果的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|lazy_split_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc base|lazy_split_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|lazy_split_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|lazy_split_view}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|data=invalid|size=invalid|back=invalid|operator[]=invalid}}
+{{dsc end}}
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/lazy_split_view/outer_iterator|迭代器类型}}
+{{dsc expos mem tclass|cpp/ranges/lazy_split_view/inner_iterator|内层范围的迭代器类型}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===注解===
+名字 {{tt|lazy_split_view}} 由 C++20 后的缺陷报告 {{wg21|P2210R2}} 引入。它拥有与改动前的旧 {{tt|split_view}} 相同的惰性机制。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+auto print = [](auto const&amp; view)
+{
+    // `view` 是 std::views::lazy_split_view::__outer_iterator::value_type
+
+    for (std::cout &lt;&lt; "{ "; const auto element : view)
+        std::cout &lt;&lt; element &lt;&lt; ' ';
+    std::cout &lt;&lt; "} ";
+};
+
+int main()
+{
+    constexpr static auto source = {0, 1, 0, 2, 3, 0, 4, 5, 6, 0, 7, 8, 9};
+    constexpr int delimiter{0};
+    constexpr std::ranges::lazy_split_view outer_view{source, delimiter};
+    std::cout &lt;&lt; "切割[" &lt;&lt; std::ranges::distance(outer_view) &lt;&lt; "]:  ";
+    for (auto const&amp; inner_view: outer_view)
+        print(inner_view);
+    
+    constexpr std::string_view hello{"Hello C++ 20 !"};
+    std::cout &lt;&lt; "\n" "子字符串: ";
+    std::ranges::for_each(hello {{!}} std::views::lazy_split(' '), print);
+    
+    constexpr std::string_view text{"Hello-+-C++-+-20-+-!"};
+    constexpr std::string_view delim{"-+-"};
+    std::cout &lt;&lt; "\n" "子字符串: ";
+    std::ranges::for_each(text {{!}} std::views::lazy_split(delim), print);
+}
+|output=
+切割[5]:  { } { 1 } { 2 3 } { 4 5 6 } { 7 8 9 }
+子字符串: { H e l l o } { C + + } { 2 0 } { ! }
+子字符串: { H e l l o } { C + + } { 2 0 } { ! }
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2210R2|std=C++20|before=旧的 {{tt|split_view}} 过于惰性而无法易用|after=将其功能移动到 {{tt|lazy_split_view}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc split_view}}
+{{dsc inc|cpp/ranges/dsc join_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

@@ -1,0 +1,211 @@
+{{cpp/container/map/title|insert}}
+{{cpp/container/map/navbar}}
+{{dcl begin}}
+{{dcl|num=1|
+std::pair&lt;iterator, bool&gt; insert( const value_type&amp; value );
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class P &gt;
+std::pair&lt;iterator, bool&gt; insert( P&amp;&amp; value );
+}}
+{{dcl|num=3|since=c++17|
+std::pair&lt;iterator, bool&gt; insert( value_type&amp;&amp; value );
+}}
+{{dcl rev multi|num=4|until1=c++11|
+|dcl1=
+iterator insert( iterator pos, const value_type&amp; value );
+|dcl2=
+iterator insert( const_iterator pos, const value_type&amp; value );
+}}
+{{dcl|num=5|since=c++11|
+template&lt; class P &gt;
+iterator insert( const_iterator pos, P&amp;&amp; value );
+}}
+{{dcl|num=6|since=c++17|
+iterator insert( const_iterator pos, value_type&amp;&amp; value );
+}}
+{{dcl|num=7|
+template&lt; class InputIt &gt;
+void insert( InputIt first, InputIt last );
+}}
+{{dcl|num=8|since=c++11|
+void insert( std::initializer_list&lt;value_type&gt; ilist );
+}}
+{{dcl|num=9|since=c++17|
+insert_return_type insert( node_type&amp;&amp; nh );
+}}
+{{dcl|num=10|since=c++17|
+iterator insert( const_iterator pos, node_type&amp;&amp; nh );
+}}
+{{dcl end}}
+
+如果容器尚未含有带等价键的元素，那么插入元素到容器中。
+
+@1-3@ 插入 {{c|value}}。
+@@ 重载 {{v|2}} 等价于 {{c|emplace(std::forward&lt;P&gt;(value))}}，且只有在 {{c|1=std::is_constructible&lt;value_type, P&amp;&amp;&gt;::value == true}} 时才会参与重载决议。
+
+@4-6@ 插入 {{c|value}} 到尽可能接近正好在 {{c|pos}} 之前的位置。
+@@ 重载 {{v|5}} 等价于 {{c|emplace_hint(hint, std::forward&lt;P&gt;(value))}}，且只有在 {{c|1=std::is_constructible&lt;value_type, P&amp;&amp;&gt;::value == true}} 时才会参与重载决议。
+
+@7@ 插入来自范围 {{range|first|last}} 的元素。{{cpp/container/lwg2488-note}}
+
+@8@ 插入来自初始化式列表 {{c|ilist}} 的元素。{{cpp/container/lwg2488-note}}
+
+{{cpp/container/node handle insert desc|map|9|10}}
+
+{{cpp/container/note iterator invalidation|map|insert}}
+===参数===
+{{par begin}}
+{{par|pos|指向新元素将被插入位置之前的迭代器}}
+{{par|value|要插入的值}}
+{{par range|3=要插入的}}
+{{par|ilist|插入值来源的初始化器列表}}
+{{par|nh|兼容的[[cpp/container/node_handle|结点句柄]]}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}} 
+
+===返回值===
+@1-3@ {{cpp/container/return iterator pair||pair}}
+
+@4-6@ {{cpp/container/return iterator pair}}
+
+@7,8@ （无）
+
+{{cpp/container/node handle insert return|map|9|10}}
+
+===异常===
+@1-6@ 如果任何操作抛出异常，那么插入无效果（强异常保证）。
+
+@7,8@ 如果任何操作抛出异常，那么程序在合法状态（基础异常保证）。
+
+@9,10@ 如果任何操作抛出异常，那么插入无效果，{{c|nh}} 保持不变（强异常保证）。
+
+===复杂度===
+@1-3@ 与容器大小成对数，{{tt|O(log(size()))}}。
+
+@4-6@ 如果插入恰好发生在正好在 {{c|pos}} {{rev inl|until=c++11|''之后''}}{{rev inl|since=c++11|''之前''}} 的位置，那么是均摊常数，否则与容器大小成对数。
+
+@7,8@ {{tt|O(N&amp;middot;log(size() + N))}}，其中 {{tt|N}} 是要插入的元素数。
+
+@9@ 与容器大小成对数，{{tt|O(log(size()))}}。
+
+@10@ 如果插入恰好发生在正好在 {{c|pos}} ''之前''{{sep}}的位置，那么是均摊常数，否则与容器大小成对数。
+
+===注解===
+{{cpp/container/hinted insert note|4-6}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+#include &lt;string&gt;
+using namespace std::literals;
+
+template&lt;typename It&gt;
+void print_insertion_status(It it, bool success)
+{
+    std::cout &lt;&lt; "插入 " &lt;&lt; it-&gt;first
+              &lt;&lt; (success ? " 成功\n" : " 失败\n");
+}
+
+int main()
+{
+    std::map&lt;std::string, float&gt; heights;
+    
+    // 重载 3：从右值引用插入
+    const auto [it_hinata, success] = heights.insert({"Hinata"s, 162.8});
+    print_insertion_status(it_hinata, success);
+    
+    {
+        // 重载 1：从左值引用插入
+        const auto [it, success2] = heights.insert(*it_hinata);
+        print_insertion_status(it, success2);
+    }
+    {
+        // 重载 2：经由转发到 emplace 插入
+        const auto [it, success] = heights.insert({"Kageyama", 180.6});
+        print_insertion_status(it, success);
+    }
+    {
+        // 重载 6：带位置提示从右值引用插入
+        const std::size_t n = std::size(heights);
+        const auto it = heights.insert(it_hinata, {"Azumane"s, 184.7});
+        print_insertion_status(it, std::size(heights) != n);
+    }
+    {
+        // 重载 4：带位置提示从左值引用插入
+        const std::size_t n = std::size(heights);
+        const auto it = heights.insert(it_hinata, *it_hinata);
+        print_insertion_status(it, std::size(heights) != n);
+    }
+    {
+        // 重载 5：带位置提示经由转发到 emplace 插入
+        const std::size_t n = std::size(heights);
+        const auto it = heights.insert(it_hinata, {"Tsukishima", 188.3});
+        print_insertion_status(it, std::size(heights) != n);
+    }
+    
+    auto node_hinata = heights.extract(it_hinata);
+    std::map&lt;std::string, float&gt; heights2;
+    
+    // 重载 7：从范围插入
+    heights2.insert(std::begin(heights), std::end(heights));
+    
+    // 重载 8：从 initializer_list 插入
+    heights2.insert({{"Kozume"s, 169.2}, {"Kuroo", 187.7}});
+
+    // 重载 9：插入结点
+    const auto status = heights2.insert(std::move(node_hinata));
+    print_insertion_status(status.position, status.inserted);
+    
+    node_hinata = heights2.extract(status.position);
+    {
+        // 重载 10：插入结点带位置提示
+        const std::size_t n = std::size(heights2);
+        const auto it = heights2.insert(std::begin(heights2), std::move(node_hinata));
+        print_insertion_status(it, std::size(heights2) != n);
+    }
+
+    // 打印结果 map
+    std::cout &lt;&lt; std::left &lt;&lt; '\n';
+    for (const auto&amp; [name, height] : heights2)
+        std::cout &lt;&lt; std::setw(10) &lt;&lt; name &lt;&lt; " {{!}} " &lt;&lt; height &lt;&lt; "cm\n";
+}
+|output=
+插入 Hinata 成功
+插入 Hinata 失败
+插入 Kageyama 成功
+插入 Azumane 成功
+插入 Hinata 失败
+插入 Tsukishima 成功
+插入 Hinata 成功
+插入 Hinata 成功
+
+Azumane    {{!}} 184.7cm
+Hinata     {{!}} 162.8cm
+Kageyama   {{!}} 180.6cm
+Kozume     {{!}} 169.2cm
+Kuroo      {{!}} 187.7cm
+Tsukishima {{!}} 188.3cm
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=233|std=C++98|before={{c|pos}} 只是提示，可以完全忽略|after=必须在尽可能接近正好在&lt;br&gt;{{c|pos}} 之前的位置插入}}
+{{dr list item|wg=lwg|dr=264|std=C++98|before=重载 {{v|7}} 的复杂度在范围 {{range|first|last}}&lt;br&gt;已经按 {{tt|Compare}} 排序的情况下要求是线性|after=取消这种情况下的线性复杂度要求}}
+{{dr list item|wg=lwg|dr=316|std=C++98|before=未指定重载 {{v|1}} 返回的哪个 {{c/core|bool}} 值表示插入成功|after=返回 {{c|true}} 表示插入成功}}
+{{dr list item|wg=lwg|dr=2005|std=C++11|before=重载 {{v|2,5}} 的描述质量较差|after=改进描述}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc emplace|map}}
+{{dsc inc|cpp/container/dsc emplace_hint|map}}
+{{dsc inc|cpp/container/dsc insert_or_assign|map}}
+{{dsc inc|cpp/iterator/dsc inserter}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

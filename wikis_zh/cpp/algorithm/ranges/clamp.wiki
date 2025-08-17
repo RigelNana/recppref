@@ -1,0 +1,138 @@
+{{cpp/ranges/title|clamp}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|1=
+template&lt; class T, class Proj = std::identity,
+          std::indirect_strict_weak_order&lt;std::projected&lt;const T*, Proj&gt;&gt; Comp =
+              ranges::less &gt;
+constexpr const T&amp;
+    clamp( const T&amp; v, const T&amp; lo, const T&amp; hi, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+若 {{c|v}} 的值属于 {{closed range|lo|hi}} 则返回 {{c|v}}；否则返回最接近的边界值。
+
+
+若 {{c|lo}} 大于 {{c|hi}} 则行为未定义。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|v|待夹的值}}
+{{par|lo, hi|用以夹 {{c|v}} 的边界}}
+{{par|comp|应用到投影后元素的比较}}
+{{par|proj|应用到 {{c|v}}、{{c|lo}} 及 {{c|hi}} 的投影}}
+{{par end}}
+
+===返回值===
+若 {{c|v}} 的投影值小于 {{c|lo}} 的投影值则为到 {{c|lo}} 的引用，若 {{c|hi}} 的投影值小于 {{c|v}} 的投影值则为到 {{c|hi}} 的引用，否则为到 {{c|v}} 的引用。
+
+===复杂度===
+至多应用二次比较和三次投影。
+
+===可能的实现===
+{{eq fun
+|1=
+struct clamp_fn
+{
+    template&lt;class T, class Proj = std::identity,
+             std::indirect_strict_weak_order&lt;std::projected&lt;const T*, Proj&gt;&gt;
+                 Comp = std::ranges::less&gt;
+    constexpr const T&amp; operator()(const T&amp; v, const T&amp; lo, const T&amp; hi,
+                                  Comp comp = {}, Proj proj = {}) const
+    {
+        auto&amp;&amp; pv = std::invoke(proj, v);
+
+        if (std::invoke(comp, std::forward&lt;decltype(pv)&gt;(pv), std::invoke(proj, lo)))
+            return lo;
+
+        if (std::invoke(comp, std::invoke(proj, hi), std::forward&lt;decltype(pv)&gt;(pv)))
+            return hi;
+
+        return v;
+    }
+};
+
+inline constexpr clamp_fn clamp;
+}}
+
+===注解===
+{{include|cpp/algorithm/minmax_danger_note|ranges::clamp}}
+
+若 {{c|v}} 与任一边界比较等价，则返回到 {{c|v}} 而非到边界的引用。
+
+不应同时将按值返回的投影以及按值接收实参的比较器用于此函数，除非从投影结果类型到比较器形参类型的移动等价于复制。如果经由 {{lc|std::invoke}} 的比较会改变投影结果，则由于（{{lc|std::indirect_strict_weak_order}} 所蕴含的） [[cpp/concepts/invocable|{{tt|std::regular_invocable}} 的语义要求]]行为未定义。
+
+标准要求保持投影结果的值类别，并且只能在 {{c|v}} 上调用 {{c|proj}} 一次，这表示必须缓存纯右值投影结果并对两次比较器的调用各将它移动一次。
+* [https://github.com/gcc-mirror/gcc/blob/f3169941996c76ecbfae9c37709d2b57652be555/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L3196-L3218 libstdc++] 不遵从此要求，其始终将投影结果作为左值传递。
+* [https://github.com/llvm/llvm-project/issues/64717 libc++] 曾经执行两次投影，这已在 Clang 18 中更正。
+* [https://github.com/microsoft/STL/issues/1893 MSVC STL] 曾经执行两次投影，这已在 VS 2022 17.2 中更正。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cstdint&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+
+using namespace std::literals;
+namespace ranges = std::ranges;
+
+int main()
+{
+    std::cout &lt;&lt; "[raw] [" &lt;&lt; INT8_MIN &lt;&lt; ',' &lt;&lt; INT8_MAX &lt;&lt; "] "
+                 "[0" &lt;&lt; ',' &lt;&lt; UINT8_MAX &lt;&lt; "]\n";
+    for (int const v : {-129, -128, -1, 0, 42, 127, 128, 255, 256})
+        std::cout &lt;&lt; std::setw(4) &lt;&lt; v
+                  &lt;&lt; std::setw(11) &lt;&lt; ranges::clamp(v, INT8_MIN, INT8_MAX)
+                  &lt;&lt; std::setw(8) &lt;&lt; ranges::clamp(v, 0, UINT8_MAX) &lt;&lt; '\n';
+    std::cout &lt;&lt; std::string(23, '-') &lt;&lt; '\n';
+
+    // 投影函数
+    const auto stoi = [](std::string s) { return std::stoi(s); };
+
+    // 同上，但用字符串
+    for (std::string const v : {"-129", "-128", "-1", "0", "42",
+                                "127", "128", "255", "256"})
+        std::cout &lt;&lt; std::setw(4) &lt;&lt; v
+                  &lt;&lt; std::setw(11) &lt;&lt; ranges::clamp(v, "-128"s, "127"s, {}, stoi)
+                  &lt;&lt; std::setw(8) &lt;&lt; ranges::clamp(v, "0"s, "255"s, {}, stoi)
+                  &lt;&lt; '\n';
+}
+|output=&lt;nowiki/&gt;
+[raw] [-128,127] [0,255]
+-129       -128       0
+-128       -128       0
+  -1         -1       0
+   0          0       0
+  42         42      42
+ 127        127     127
+ 128        127     128
+ 255        127     255
+ 256        127     255
+-----------------------
+-129       -128       0
+-128       -128       0
+  -1         -1       0
+   0          0       0
+  42         42      42
+ 127        127     127
+ 128        127     128
+ 255        127     255
+ 256        127     255
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/algorithm/ranges/dsc min}}
+{{dsc inc | cpp/algorithm/ranges/dsc max}}
+{{dsc inc | cpp/utility/dsc in_range}}
+{{dsc inc | cpp/algorithm/dsc clamp}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

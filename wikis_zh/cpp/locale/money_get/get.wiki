@@ -1,0 +1,126 @@
+{{cpp/locale/money_get/title|get, do_get}}
+{{cpp/locale/money_get/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type get( iter_type beg, iter_type end, bool intl, std::ios_base&amp; str,
+               std::ios_base::iostate&amp; err, long double&amp; units ) const;}}
+{{dcl|num=2|1=
+iter_type get( iter_type beg, iter_type end, bool intl, std::ios_base&amp; str,
+               std::ios_base::iostate&amp; err, string_type&amp; digits ) const;}}
+{{dcl|num=3|1=
+protected:
+virtual iter_type do_get( iter_type beg, iter_type end, bool intl, std::ios_base&amp; str,
+                          std::ios_base::iostate&amp; err, long double&amp; units ) const;}}
+{{dcl|num=4|1=
+virtual iter_type do_get( iter_type beg, iter_type end, bool intl, std::ios_base&amp; str,
+                          std::ios_base::iostate&amp; err, string_type&amp; digits ) const;
+}}
+{{dcl end}}
+
+剖析来自输入迭代器的货币值，并写结果到 {{tt|long double}} 或字符串。
+
+@1,2@ 公开成员函数，调用最终派生类的成员函数 {{tt|do_get}}。
+
+@3,4@ 从输入迭代器 {{c|beg}} 读取字符，期待找到按照 {{c|str.getloc()}} 中感染的 {{c|std::ctype}} 刻面（下称 {{tt|ct}}）、{{c|str.getloc()}} 中浸染的 {{c|std::moneypunct&lt;CharT, intl&gt;}} 刻面（下称 {{tt|mp}}）及获得自 {{c|str.flags()}} 的流格式化标志所指定的规则格式化的货币值。
+
+若输入迭代器 {{c|beg}} 在分析完成前变得等于 {{c|end}}，则在 {{c|err}} 中一同设置 {{lc|failbit}} 和 {{lc|eofbit}}。若分析因另一原因失败，则在 {{c|err}} 中设置 {{tt|failbit}}。无论如何，都不在错误时修改输出形参（{{tt|units}} 或 {{tt|digits}}）。
+
+若分析成功，则不更改 {{c|err}}，并存储结果于 {{c|units}} 或 {{c|digits}}。
+
+此函数所用的格式化 {{lc|pattern}} 始终为 {{c|mp.neg_format()}}。
+
+若 {{c|mp.grouping()}} 不容许千位分隔符，则将首个遇到的分隔符当做错误，否则将它们当做可选的。
+
+若 {{lc|money_base::space}} 或 {{lc|money_base::none}} 是 {{lc|pattern}} 中的最后元素，则分析器不尝试在分析货币值的其他组分后消耗任何空白符。否则在 {{lc|money_base::space}} 出现处消耗一或多个空白字符。
+
+若 {{c|str.flags()}} 中设置了 {{tt|showbase}} 标志，则要求通货符号或通货字符串，若未设置，则通货符号可选。
+
+若在格式化模式的 {{lc|money_base::sign}} 位置找到 {{c|mp.positive_sign()}} 或 {{c|mp.negative_sign()}} 所返回的字符串的首字符，则消耗之，而在货币值的所有其他组分后期待并消耗剩余字符。若 {{c|mp.positive_sign()}} 与 {{c|mp.negative_sign()}} 均为非空，则要求有符号并匹配这些字符串的首字符之一。若这些字符串之一为空，则符号为可选（而若符号不存在，则结果的符号对应空的字符串的符号）。若两个字符均为空，或拥有相同首字符，则将正号给予结果。若输出实参是个字符串（{{c|digits}}）而结果为负，则存储值 {{c|ct.widen('-')}} 为结果的首字符。
+
+如同按 {{c|digits}} 中出现的顺序释出并放置来自输入的数位，或将它们置于临时缓冲区 {{tt|buf1}} 中（若需要则以 {{c|ct.widen()}} 加宽），再用下方式从该缓冲区构造 {{c|units}} 的值：
+
+{{source|1=static const char src[] = "0123456789-";
+CharT atoms[sizeof(src)];
+ct.widen(src, src + sizeof(src) - 1, atoms);
+for (int i = 0; i &lt; n; ++i)
+buf2[i] = src[find(atoms, atoms+sizeof(src), buf1[i]) - atoms];
+buf2[n] = 0;
+sscanf(buf2, "%Lf", &amp;units);
+}}
+（其中 {{tt|n}} 是从输入提取并存储于 {{tt|buf1}} 的字符数，而 {{tt|buf2}} 是另一充分大的字符缓冲区）。
+
+===返回值===
+指向紧跟辨识为货币字符串输入的合法部分的末字符后一位置的迭代器。
+
+===注解===
+假定通货单位为通货的最小非小数单位：美国中为美分，日本中为日元。从而美国本地环境中的输入序列 {{c|"$1,056.23"}} 会令 {{c|units}} 为数字 {{c|105623.0}} 或令 {{c|digits}} 为字符串 {{c|"105623"}}。
+
+因为若 {{tt|showbase}} 关闭则通货符号为可选，但要求整个多字符 {{tt|negative_sign()}}，故给定格式化模式 {{c|{sign, value, space, symbol} }}、关闭的 {{tt|showbase}} 和 {{c|"-"}} 的 negative_sign，字符串 {{c|"-1.23 €"}} 会分析为 {{c|-123}}，而令 "€" 在输入流上留待未消耗，但若 negative_sign 为 {{c|"()"}}，则完全消耗字符串 {{c|"(1.23 €)"}}。
+
+I/O 操纵符 {{lc|std::get_money}} 提供到此函数的简化接口。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;sstream&gt;
+
+void demo_money_get(std::locale loc, const std::string&amp; input)
+{
+    std::istringstream str(input);
+    str.imbue(loc);
+    long double units;
+
+    // 下列代码能简单地写成 std::get_money(units)
+    std::ios_base::iostate err = std::ios_base::goodbit;
+    std::istreambuf_iterator&lt;char&gt; ret =
+        std::use_facet&lt;std::money_get&lt;char&gt;&gt;(loc).get(
+            std::istreambuf_iterator&lt;char&gt;(str),
+            std::istreambuf_iterator&lt;char&gt;(),
+            false, str, err, units);
+    str.setstate(err);
+    std::istreambuf_iterator&lt;char&gt; last{};
+    if(str)
+    {
+        std::cout &lt;&lt; "成功解析 '" &lt;&lt; str.str() &lt;&lt; "' 为 "
+                  &lt;&lt; units/100 &lt;&lt; " 单位\n";
+        if (ret != last)
+        {
+            std::cout &lt;&lt; "剩余内容: '";
+            std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+            std::cout &lt;&lt; "'\n";
+        }
+        else
+            std::cout &lt;&lt; "输入已完全消耗\n";
+    }
+    else
+    {
+            std::cout &lt;&lt; "解析失败。未解析字符串: '";
+            std::copy(ret, last, std::ostreambuf_iterator&lt;char&gt;(std::cout));
+            std::cout &lt;&lt; "'\n";
+    }
+}
+
+int main()
+{
+    demo_money_get(std::locale("en_US.utf8"), "-$5.12 abc");
+    demo_money_get(std::locale("ms_MY.utf8"), "(RM5.12) def");
+}
+|output=
+成功解析 '-$5.12 abc' 为 -5.12 单位
+剩余内容: ' abc'
+成功解析 '(RM5.12) def' 为 -5.12 单位
+剩余内容: ' def'
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/locale/dsc moneypunct}}
+{{dsc inc|cpp/locale/dsc money_get}}
+{{dsc inc|cpp/io/manip/dsc get_money}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

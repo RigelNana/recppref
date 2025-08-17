@@ -1,0 +1,86 @@
+{{cpp/title|inout_ptr_t}}
+{{cpp/memory/inout_ptr_t/navbar}}
+{{ddcl|header=memory|since=c++23|
+template&lt; class Smart, class Pointer, class... Args &gt;
+class inout_ptr_t;
+}}
+
+{{tt|inout_ptr_t}} 用于对通过 {{tt|Pointer*}}（通常为某对象类型 {{tt|T}} 的 {{tt|T**}}）或 {{c/core|void**}} 参数重设所有权的外来函数，适配智能指针之类的类型。
+
+{{tt|inout_ptr_t}} 在构造时捕获额外的实参，为前述的这种外来函数访问的结果提供存储，释放适配的 {{tt|Smart}} 对象所保有的所有权，而最终在销毁时以该结果和捕获的实参重设适配的 {{tt|Smart}} 对象。
+
+{{tt|inout_ptr_t}} 表现如同它拥有下列非静态数据成员：
+* 一个 {{tt|Smart&amp;}} 引用，在构造时绑定到被适配的对象，
+* 对 {{tt|Args...}} 中的每个 {{tt|T}} 有一个 {{tt|T}} 类型成员，它是在构造时捕获并在析构时用于重设的实参，以及
+* 适合在它之内存储 {{tt|Pointer}} 以及提供 {{c/core|void*}} 对象的成员子对象，其中 {{tt|Pointer}} 或 {{c/core|void*}} 对象通常会暴露给用于重初始化的外来函数。
+
+如果 {{tt|Smart}} 不是指针类型，那么在适配的对象上至多调用一次 {{c|release()}}。实现可以在构造函数内或调用 {{c|release()}}，或在析构函数内 {{tt|Pointer}} 值非空的情况下在重设前调用。
+
+用户能通过在 {{tt|Args...}} 中分别指定对象类型或引用类型，控制每个参数是按复制还是按引用捕获。
+
+===模板形参===
+{{par begin}}
+{{par|Smart|要适配的对象（通常是智能指针）的类型}}
+{{par|Pointer|外来函数写入它的结果所用的对象（通常是裸指针）的类型}}
+{{par|Args...|用于重设适配的对象的捕获实参的类型}}
+{{par hreq}}
+{{par req named|Pointer|NullablePointer}}
+{{par req|如果 {{tt|Smart}} 是 {{lc|std::shared_ptr}} 的特化，那么程序非良构。}}
+{{par end}}
+
+===特化===
+不同于标准库中的大多数类模板，依赖至少一个{{ls|cpp/language/type#由程序定义的类型}}的 {{tt|inout_ptr_t}} 的[[cpp/language/type#由程序定义的类型|由程序定义的特化]]不需要符合对主模板的要求。
+
+此许可允许程序定义特化将存储于非标准智能指针内的裸指针暴露给外来函数。
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|cpp/memory/inout_ptr_t/inout_ptr_t|notes={{mark c++23}}|构造 {{tt|inout_ptr_t}}}}
+{{dsc mem fun|operator{{=}}|nolink=true|notes={{cmark deleted}}{{mark c++23}}|{{tt|inout_ptr_t}} 不可赋值}}
+{{dsc mem dtor|cpp/memory/inout_ptr_t/~inout_ptr_t|notes={{mark c++23}}|重设适配的智能指针}}
+{{dsc mem fun|cpp/memory/inout_ptr_t/operator ptr|title=operator Pointer*&lt;br&gt;operator void**|notes={{mark c++23}}|转换 {{tt|inout_ptr_t}} 为用于输出的存储的地址}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/inout_ptr_t/dsc inout_ptr}}
+{{dsc end}}
+
+===注解===
+{{tt|inout_ptr_t}} 期待外来函数释放被指向的 {{tt|Pointer}} 的值所表示的所有权，然后重初始化它。禁止带 {{lc|std::shared_ptr}} 的用法，因为这种操作要求独占所有权。
+
+{{tt|inout_ptr_t}} 的典型用法是由 {{lc|std::inout_ptr}} 创建它的临时对象，这会立即重设智能指针。例如，给定设置器函数和智能指针，分别以 {{c|int foreign_resetter(T**);}} 与 {{c|std::unique_ptr&lt;T, D&gt; up;}} 声明，
+{{source|1=
+if (int ec = foreign_resetter(std::inout_ptr(up))
+    return ec;
+}}
+粗略地等价于
+{{source|1=
+T *raw_p = up.get();
+up.release();
+int ec = foreign_resetter(&amp;raw_p);
+up.reset(raw_p);
+if (ec != 0)
+    return ec;
+}}
+
+不推荐创建拥有自动存储期以外的[[cpp/language/storage duration|存储期]]的 {{tt|inout_ptr_t}} 对象，因为这种代码较可能产生悬垂引用并在析构时导致未定义行为。
+
+捕获的参数常被打包到 {{c/core|std::tuple&lt;Args...&gt;}} 中。实现可能用不同的机制提供他们需要保有的 {{tt|Pointer}} 或 {{c/core|void*}} 对象。
+
+{{ftm begin|sort=yes}}
+{{ftm|std=C++23|value=202106L|__cpp_lib_out_ptr|rowspan="2"|{{tt|std::out_ptr}}, {{lc|std::inout_ptr}}}}
+{{ftm|std=C++26|value=202311L|-|独立的 {{tt|std::out_ptr}} 和 {{lc|std::inout_ptr}}}}
+{{ftm end}}
+
+===示例===
+{{example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc out_ptr_t}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc inc|cpp/memory/dsc shared_ptr}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

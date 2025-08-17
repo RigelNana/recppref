@@ -1,0 +1,156 @@
+{{title|折叠表达式{{mark since c++17}}}}
+{{cpp/language/templates/navbar}}
+以二元运算符对{{rlp|pack|包}}进行规约（{{enwiki|Fold (higher-order function)|折叠}}）。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|(}} {{spar|形参包 运算符}} {{ttb|... )}}}}
+{{sdsc|num=2|{{ttb|( ...}} {{spar|运算符 形参包}} {{ttb|)}}}}
+{{sdsc|num=3|{{ttb|(}} {{spar|形参包 运算符}} {{ttb|...}} {{spar|运算符 初值}} {{ttb|)}}}}
+{{sdsc|num=4|{{ttb|(}} {{spar|初值 运算符}} {{ttb|...}} {{spar|运算符 形参包}} {{ttb|)}}}}
+{{sdsc end}}
+@1@ 一元右折叠
+@2@ 一元左折叠
+@3@ 二元右折叠
+@4@ 二元左折叠
+
+{{par begin}}
+{{par|{{spar|运算符}}|下列 32 个''二元''运算符之一：{{c|+}} {{c|-}} {{c|*}} {{c|/}} {{c|%}} {{c|^}} {{c|&amp;}} {{c|{{!}}}} {{c|1==}} {{c|&lt;}} {{c|&gt;}} {{c|&lt;&lt;}} {{c|&gt;&gt;}} {{c|1=+=}} {{c|1=-=}} {{c|1=*=}} {{c|1=/=}} {{c|1=%=}} {{c|1=^=}} {{c|1=&amp;=}} {{c|1={{!}}=}} {{c|1=&lt;&lt;=}} {{c|1=&gt;&gt;=}} {{c|1===}} {{c|1=!=}} {{c|1=&lt;=}} {{c|1=&gt;=}} {{c|&amp;&amp;}} {{c|{{!!}}}} {{c|,}} {{c|.*}} {{c|-&gt;*}}。在二元折叠中，两个 {{spar|运算符}} 必须相同。}}
+{{par|{{spar|包}}|含有未展开的{{rlp|pack|包}}且在顶层不含{{rlp|operator precedence|优先级}}低于转换（正式而言，是 {{spar|转换表达式}}）的运算符的表达式}}
+{{par|{{spar|初值}}|不含未展开的{{rlp|pack|包}}且在顶层不含{{rlp|operator precedence|优先级}}低于转换（正式而言，是 {{spar|转换表达式}}）的运算符的表达式}}
+{{par end}}
+
+注意开闭括号也是折叠表达式的一部分。
+
+===解释===
+''折叠表达式''的实例化按以下方式展开成表达式 {{c|e}}：
+&lt;!-- 折叠表达式中的省略号是语法的一部分，所以放在{{tt}}里面；而展开结果中的省略号只是完整表示的简写，所以用普通字体 --&gt;
+@1@ 一元右折叠 &lt;span class="t-c"&gt;{{tt|(E}} {{spar|运算符}} {{tt|...)}}&lt;/span&gt; 成为 &lt;span class="t-c"&gt;{{tt|(E{{sub|1}}}} {{spar|运算符}} {{tt|(}}... {{spar|运算符}} {{tt|(E{{sub|N-1}}}} {{spar|运算符}} {{tt|E{{sub|N}})))}}&lt;/span&gt;
+@2@ 一元左折叠 &lt;span class="t-c"&gt;{{tt|(...}} {{spar|运算符}} {{tt|E)}}&lt;/span&gt; 成为 &lt;span class="t-c"&gt;{{tt|(((E{{sub|1}}}} {{spar|运算符}} {{tt|E{{sub|2}})}} {{spar|运算符}} ...{{tt|)}} {{spar|运算符}} {{tt|E{{sub|N}})}}&lt;/span&gt;
+@3@ 二元右折叠 &lt;span class="t-c"&gt;{{tt|(E}} {{spar|运算符}} {{tt|...}} {{spar|运算符}} {{tt|I)}}&lt;/span&gt; 成为 &lt;span class="t-c"&gt;{{tt|(E{{sub|1}}}} {{spar|运算符}} {{tt|(}}... {{spar|运算符}} {{tt|(E{{sub|N−1}}}} {{spar|运算符}} {{tt|(E{{sub|N}}}} {{spar|运算符}} {{tt|I))))}}&lt;/span&gt;
+@4@ 二元左折叠 &lt;span class="t-c"&gt;{{tt|(I}} {{spar|运算符}} {{tt|...}} {{spar|运算符}} {{tt|E)}}&lt;/span&gt; 成为 &lt;span class="t-c"&gt;{{tt|((((I}} {{spar|运算符}} {{tt|E{{sub|1}})}} {{spar|运算符}} {{tt|E{{sub|2}})}} {{spar|运算符}} ...{{tt|)}} {{spar|运算符}} {{tt|E{{sub|N}})}}&lt;/span&gt;
+
+（其中 {{tt|N}} 是包展开中的元素数量）
+
+例如， 
+{{source|1=
+template&lt;typename... Args&gt;
+bool all(Args... args) { return (... &amp;&amp; args); }
+
+bool b = all(true, true, true, false);
+// 在 all() 中，一元左折叠展开成
+//  return ((true &amp;&amp; true) &amp;&amp; true) &amp;&amp; false;
+// b 是 false
+}}
+
+将一元折叠用于长度为零的包展开时，只能使用下列运算符：
+@1@ 逻辑与（{{c|&amp;&amp;}}）。空包的值是 {{c|true}}
+@2@ 逻辑或（{{c|{{!!}}}}）。空包的值是 {{c|false}}
+@3@ 逗号运算符（{{c|,}}）。空包的值是 {{c|void()}}
+
+===注解===
+如果用作{{spar sep|初值}}或{{spar sep|包}}的表达式在顶层具有优先级低于转换的运算符，那么它可以加括号：
+{{source|1=
+template&lt;typename... Args&gt;
+int sum(Args&amp;&amp;... args)
+{
+//  return (args + ... + 1 * 2);   // 错误：优先级低于转换的运算符
+    return (args + ... + (1 * 2)); // OK
+}
+}}
+
+{{feature test macro|std=C++17|value=201603L|__cpp_fold_expressions|[[#top|折叠表达式]]}}
+
+===示例===
+{{example
+|code=
+#include &lt;climits&gt;
+#include &lt;concepts&gt;
+#include &lt;cstdint&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+// 基本用法，在 operator&lt;&lt; 上折叠可变实参
+template&lt;typename... Args&gt;
+void printer(Args&amp;&amp;... args)
+{
+    (std::cout &lt;&lt; ... &lt;&lt; args) &lt;&lt; '\n';
+}
+
+// 在 operator, 上折叠直接使用包的表达式
+template&lt;typename... Ts&gt;
+void print_limits()
+{
+    ((std::cout &lt;&lt; +std::numeric_limits&lt;Ts&gt;::max() &lt;&lt; ' '), ...) &lt;&lt; '\n';
+}
+
+// 同时使用包在 operator&amp;&amp; 上折叠并使用可变形参在 operator, 上折叠
+template&lt;typename T, typename... Args&gt;
+void push_back_vec(std::vector&lt;T&gt;&amp; v, Args&amp;&amp;... args)
+{
+    static_assert((std::is_constructible_v&lt;T, Args&amp;&amp;&gt; &amp;&amp; ...));
+    (v.push_back(std::forward&lt;Args&gt;(args)), ...);
+}
+
+// 通过在 operator, 上折叠一个 lambda，使用整数序列来 N 次执行某个表达式
+template&lt;class T, std::size_t... dummy_pack&gt;
+constexpr T bswap_impl(T i, std::index_sequence&lt;dummy_pack...&gt;)
+{
+    T low_byte_mask = static_cast&lt;unsigned char&gt;(-1);
+    T ret{};
+    ([&amp;]
+    {
+        (void)dummy_pack;
+        ret &lt;&lt;= CHAR_BIT;
+        ret {{!}}= i &amp; low_byte_mask;
+        i &gt;&gt;= CHAR_BIT;
+    }(), ...);
+    return ret;
+}
+ 
+constexpr auto bswap(std::unsigned_integral auto i)
+{
+    return bswap_impl(i, std::make_index_sequence&lt;sizeof(i)&gt;{});
+}
+
+int main()
+{
+    printer(1, 2, 3, "abc");
+    print_limits&lt;uint8_t, uint16_t, uint32_t&gt;();
+
+    std::vector&lt;int&gt; v;
+    push_back_vec(v, 6, 2, 45, 12);
+    push_back_vec(v, 1, 2, 9);
+    for (int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    static_assert(bswap&lt;std::uint16_t&gt;(0x1234u) == 0x3412u);
+    static_assert(bswap&lt;std::uint64_t&gt;(0x0123456789abcdefull) == 0xefcdab8967452301ULL);
+}
+|output=
+123abc
+255 65535 4294967295 
+6 2 45 12 1 2 9
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.5.6|title=Fold expressions|id=expr.prim.fold}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.5.6|title=Fold expressions|id=expr.prim.fold}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=8.1.6|title=Fold expressions|id=expr.prim.fold}}
+{{ref std end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2611|std=C++17|before=折叠表达式的展开结果没有用圆括号包围|after=用圆括号包围}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

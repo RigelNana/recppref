@@ -1,0 +1,131 @@
+{{cpp/title|uninitialized_value_construct_n}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcla|num=1|since=c++17|constexpr=c++26|
+template&lt; class NoThrowForwardIt, class Size &gt;
+NoThrowForwardIt uninitialized_value_construct_n
+    ( NoThrowForwardIt first, Size count );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class NoThrowForwardIt, class Size &gt;
+NoThrowForwardIt uninitialized_value_construct_n
+    ( ExecutionPolicy&amp;&amp; policy, NoThrowForwardIt first, Size count );
+}}
+{{dcl end}}
+
+@1@ 如同用以下方式在未初始化内存区域 {{counted range|first|count}} 上通过[[cpp/language/value initialization|值初始化]]构造 {{c/core|typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type}} 类型对象：
+{{box|
+{{c/core|1=for (; count &gt; 0; (void)++first, --count)}}&lt;br&gt;
+{{nbspt|4}}{{c/core|::new (}}{{rlpi|voidify}}{{c/core|(*first))}}&lt;br&gt;
+{{nbspt|8}}{{c/core|typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type();}}&lt;br&gt;
+{{c/core|return first;}}
+}}
+@@ 如果初始化中抛出了异常，那么以未指定的顺序销毁已构造的对象。
+
+@2@ 同 {{v|1}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+===参数===
+{{par begin}}
+{{par|first|要初始化的元素范围的起始}}
+{{par|count|要初始化的元素数量}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named|NoThrowForwardIt|ForwardIterator}}
+{{par req|通过 {{tt|NoThrowForwardIt}} 合法实例的自增、复制、比较或间接均不抛出异常。}}
+{{par end}}
+
+===返回值===
+如上所述。
+
+===复杂度===
+与 {{c|count}} 成线性。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===注解===
+{{feature test macro|__cpp_lib_raw_memory_algorithms|std=C++26|value=202411L|{{c/core|constexpr}} 的[[cpp/memory#未初始化内存算法|特化内存算法]], {{vl|1}}}}
+
+===可能的实现===
+{{eq fun|1=
+template&lt;class NoThrowForwardIt, class Size&gt;
+constexpr ForwardIt uninitialized_value_construct_n(NoThrowForwardIt first, Size count)
+{
+    using T = typename std::iterator_traits&lt;NoThrowForwardIt&gt;::value_type;
+    NoThrowForwardIt current = first;
+    
+    try
+    {
+        for (; countn &gt; 0; (void) ++current, --count)
+            ::new (static_cast&lt;void*&gt;(std::addressof(*current))) T();
+        return current;
+    }
+    catch (...)
+    {
+        std::destroy(first, current);
+        throw;
+    }
+}
+}}
+
+===示例===
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    struct S { std::string m{"默认值"}; };
+    
+    constexpr int n{3};
+    alignas(alignof(S)) unsigned char mem[n * sizeof(S)];
+    
+    try
+    {
+        auto first{reinterpret_cast&lt;S*&gt;(mem)};
+        auto last = std::uninitialized_value_construct_n(first, n);
+        
+        for (auto it{first}; it != last; ++it)
+            std::cout &lt;&lt; it-&gt;m &lt;&lt; '\n';
+        
+        std::destroy(first, last);
+    }
+    catch (...)
+    {
+        std::cout &lt;&lt; "异常！\n";
+    }
+
+    // 对于标量类型，uninitialized_value_construct_n 会以零填充给定的未初始化内存区域。
+    int v[]{1, 2, 3, 4};
+    for (const int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+    std::uninitialized_value_construct_n(std::begin(v), std::size(v));
+    for (const int i : v)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+默认值
+默认值
+默认值
+1 2 3 4
+0 0 0 0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3870|std=C++20|before=此算法可以在 {{c/core|const}} 存储上创建对象|after=保持不允许}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc uninitialized_value_construct}}
+{{dsc inc|cpp/memory/dsc uninitialized_default_construct_n}}
+{{dsc inc|cpp/memory/ranges/dsc uninitialized_value_construct_n}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

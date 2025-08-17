@@ -1,0 +1,120 @@
+{{cpp/title|quoted}}
+{{cpp/io/manip/navbar}}
+{{dcl begin}}
+{{dcl header|iomanip}}
+{{dcl item|since=c++14|num=1|1=
+template&lt; class CharT &gt;
+/* 未指明 */ quoted( const CharT* s,
+                    CharT delim = CharT('"'), CharT escape = CharT('\\') );
+}}
+{{dcl item|since=c++14|num=2|1=
+template&lt; class CharT, class Traits, class Allocator &gt;
+/* 未指明 */ quoted( const std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; s,
+                    CharT delim = CharT('"'), CharT escape = CharT('\\') );
+}}
+{{dcl item|since=c++17|num=3|1=
+template&lt; class CharT, class Traits&gt;
+/* 未指明 */ quoted( std::basic_string_view&lt;CharT, Traits&gt; s,
+                    CharT delim = CharT('"'), CharT escape = CharT('\\') );
+}}
+{{dcl item|since=c++14|num=4|1=
+template&lt; class CharT, class Traits, class Allocator &gt;
+/* 未指明 */ quoted( std::basic_string&lt;CharT, Traits, Allocator&gt;&amp; s,
+                    CharT delim=CharT('"'), CharT escape=CharT('\\') );
+}}
+{{dcl end}}
+
+允许插入或提取带引号字符串，例如在 {{enwiki|Comma-separated values|CSV}} 或 {{enwiki|XML}} 中出现的那些。
+
+@1-3@ 用于表达式 {{c|out &lt;&lt; quoted(s, delim, escape)}} 时，其中 {{tt|out}} 为拥有等于 {{tt|CharT}} 的 {{tt|char_type}} 的输出流，且对于重载 (2,3)，其 {{tt|traits_type}} 等于 {{tt|Traits}}，表现为{{named req|FormattedOutputFunction}}，它将以如下方式构造的字符序列 {{tt|seq}} 插入到 {{c|out}}：
+:@a@ 首先，向序列添加字符 {{tt|delim}}。
+:@b@ 然后是 {{c|s}} 中的每个字符，但若下个要输出的字符等于 {{c|delim}} 或等于 {{c|escape}}（以流的 {{c|traits_type::eq}} 确定），则首先后附一个额外的 {{c|escape}} 副本。
+:@c@ 最后，再次向 {{tt|seq}} 后附 {{c|delim}}。
+
+:然后，若 {{c|seq.size() &lt; out.width()}}，则添加 {{c|out.width()-seq.size()}} 个填充字符 {{c|out.fill()}} 副本到序列的末尾（若 {{c|out.flags()}} 中设置了 {{c|ios_base::left}}）或到序列的起始（所有其他情况下）。
+
+:最后，如同以调用 {{c|out.rdbuf()-&gt;sputn(seq, n)}} 输出结果序列的各个字符，其中 {{c|1=n=std::max(out.width(), seq.size())}}，并调用 {{c|out.width(0)}} 取消 {{lc|std::setw}} 的效果，若存在。
+
+@4@ 用于表达式 {{c|in &gt;&gt; quoted(s, delim, escape)}} 中时，其中 {{tt|in}} 是拥有等于 {{tt|CharT}} 的 {{tt|char_type}} 和等于 {{tt|Traits}} 的 {{tt|traits_type}} 的输入流时，用 {{lc|std::basic_istream::operator&gt;&gt;}} 按照下列规则从 {{c|in}} 提取字符：
+:@a@ 若首个提取的字符不等于 {{c|delim}}（以流的 {{tt|traits_type::eq}} 确定），则简单地进行 {{c|in &gt;&gt; s}}。
+:@b@ 否则（若首字符是分隔符）：
+::@1@ 关闭输入流上的 {{lc|skipws}} 标志。
+::@2@ 通过调用 {{c|s.clear()}} 清空目标字符串。
+::@3@ 从 {{tt|in}} 提取连续字符并将它们追加到 {{c|s}}，但每当提取到 {{c|escape}} 字符，就忽略该字符并后附下个字符到 {{c|s}}。{{c|1= !in == true}} 时或找到未转义的 {{c|delim}} 字符时停止提取。
+::@4@ 舍弃最终（未转义）的 {{c|delim}} 字符。
+::@5@ 恢复输入流上的 {{lc|skipws}} 标志为其原值。
+
+===参数===
+{{par begin}}
+{{par|s|要插入或提取的字符串}}
+{{par|delim|用作分隔符的字符，默认为 {{tt|"}}}} 
+{{par|escape|用作转义字符的字符，默认为 {{tt|\}}}} 
+{{par end}}
+
+===返回值===
+返回未指定类型对象，使得上述行为发生。
+
+===异常===
+若 {{c|operator&gt;&gt;}} 或 {{c|operator&lt;&lt;}} 抛出异常则抛出 {{lc|std::ios_base::failure}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+void default_delimiter()
+{
+    const std::string in = "std::quoted() quotes this string and embedded \"quotes\" too";
+    std::stringstream ss;
+    ss &lt;&lt; std::quoted(in);
+    std::string out;
+    ss &gt;&gt; std::quoted(out);
+
+    std::cout &lt;&lt; "默认分隔符的情形:\n"
+                 "读取为 [" &lt;&lt; in &lt;&lt; "]\n"
+                 "存储为 [" &lt;&lt; ss.str() &lt;&lt; "]\n"
+                 "写出为 [" &lt;&lt; out &lt;&lt; "]\n\n";
+}
+
+void custom_delimiter()
+{
+    const char delim{'$'};
+    const char escape{'%'};
+
+    const std::string in = "std::quoted() quotes this string and embedded $quotes$ $too";
+    std::stringstream ss;
+    ss &lt;&lt; std::quoted(in, delim, escape);
+    std::string out;
+    ss &gt;&gt; std::quoted(out, delim, escape);
+
+    std::cout &lt;&lt; "自定义分隔符的情形:\n"
+                 "读取为 [" &lt;&lt; in &lt;&lt; "]\n"
+                 "存储为 [" &lt;&lt; ss.str() &lt;&lt; "]\n"
+                 "写出为 [" &lt;&lt; out &lt;&lt; "]\n\n";
+}
+
+int main()
+{
+    default_delimiter();
+    custom_delimiter();
+}
+|output=
+默认分隔符的情形:
+读取为 [std::quoted() quotes this string and embedded "quotes" too]
+存储为 ["std::quoted() quotes this string and embedded \"quotes\" too"]
+写出为 [std::quoted() quotes this string and embedded "quotes" too]
+
+自定义分隔符的情形:
+读取为 [std::quoted() quotes this string and embedded $quotes$ $too]
+存储为 [$std::quoted() quotes this string and embedded %$quotes%$ %$too$]
+写出为 [std::quoted() quotes this string and embedded $quotes$ $too]
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/format/dsc format}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

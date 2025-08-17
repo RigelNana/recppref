@@ -1,0 +1,255 @@
+{{title|非静态数据成员}}
+{{cpp/language/classes/navbar}}
+非静态数据成员是在类的{{rlp|class|成员说明}}中声明的。
+
+{{source|1=
+class S
+{
+    int n;              // 非静态数据成员
+    int&amp; r;             // 引用类型的非静态数据成员
+    int a[2] = {1, 2};  // 带默认成员初始化器的非静态数据成员（C++11）
+    std::string s, *ps; // 两个非静态数据成员
+    
+    struct NestedS
+    {
+        std::string s;
+    } d5;               // 具有嵌套类型的非静态数据成员
+    
+    char bit : 2;       // 2 位的位域
+};
+}}
+
+允许任意{{rlp|declarations|简单声明}}，但
+* 不允许使用 {{ltt|cpp/keyword/extern}} 和 {{ltt|cpp/keyword/register}} 存储类说明符；
+{{rrev|since=c++11|
+* 不允许使用 {{ltt|cpp/keyword/thread_local}} 存储类说明符（但{{rlp|static|静态}}数据成员可以使用）；
+}}
+* 不允许{{rlp|incomplete type|不完整类型}}、{{rlp|abstract class|抽象类类型}}及其数组：尤其是，类 {{tt|C}} 不能拥有 {{tt|C}} 类型的非静态数据成员，尽管它能拥有 {{tt|C&amp;}}（C 的引用）或 {{tt|C*}}（C 的指针）类型的非静态数据成员；
+* 当存在至少一个用户定义的构造函数时，非静态数据成员不能拥有与类名相同的名字；
+{{rrev|since=c++11|
+* {{rlp|auto|占位符类型说明符}}（即 {{c/core|auto}}{{rev inl|since=c++14|、{{c/core|decltype(auto)}}}}{{rev inl|since=c++17|、待{{rlp|class template argument deduction|推导}}的类模板名}}{{rev inl|since=c++20|、{{rlp|constraints|受约束}}的占位符}}）不能用于非静态数据成员的声明（尽管允许将其用于{{rlp|static#常量静态成员|类定义内初始化}}的静态数据成员）。
+}}
+
+另外，允许{{rlp|bit field|位域声明}}。
+
+===布局===
+当创建某个类 {{tt|C}} 的对象时，每个非引用类型的非静态数据成员都在 {{tt|C}} 的对象表示的某个部分中分配。引用成员是否占据存储是由实现定义的，但它们的{{rlp|storage duration|存储期}}与以它们作为成员的对象相同。
+
+{{rrev multi|rev1=
+对于非{{rlp|union|联合体}}类类型，{{rev inl|since=c++20|{{rlp|object#子对象|非零大小}}的}}{{rev inl|until=c++11|未被{{rlp|access|访问说明符}}分隔}}{{rev inl|since=c++11|拥有相同{{rlp|access|成员访问}}}}的成员，始终按照较后声明的成员在类对象中拥有较高地址的方式分配。{{rev inl|until=c++11|被访问说明符分隔}}{{rev inl|since=c++11|拥有不同访问控制}}的成员以未指明的顺序分配（编译器可以将它们组合在一起）。
+|since2=c++23|rev2=
+对于非{{rlp|union|联合体}}类类型，{{rlp|object#大小|非零大小}}的成员始终按照较后声明的成员在类对象中拥有较高地址的方式分配。注意成员的访问控制仍然影响标准布局属性（见后述）。
+}}
+
+对齐要求可能需要在成员间，或在类的最后成员之后进行填充。
+
+===标准布局===
+{{rrev multi
+|rev1=
+当且仅当类是 {{rlps|classes#POD 类}}时它被当成是''标准布局''{{sep}}的，并拥有下述属性。
+|since2=c++11|rev2=
+所有非静态数据成员均拥有相同访问控制，且满足其他特定条件的类被称作''标准布局类型''（对它规定的列表见{{rlps|classes#标准布局类}}）。
+}}
+
+两个标准布局非联合类类型的''共同起始序列''{{sep}}满足以下所有条件的包含非静态成员和位域的最长实体序列，它以声明顺序从每个类的第一个非静态成员或位域开始：
+{{rrev|since=c++20|
+* 如果 {{c|__has_cpp_attribute(no_unique_address)}} 不是 {{c|0}}，那么每对实体都不声明 {{attr|no_unique_address}} 属性， 
+}}
+* 每对实体的类型都布局兼容，
+* 每对实体都具有相同的{{rlp|object#对齐|对齐要求}}，并且
+* 每对实体要么都不是位域，要么都是宽度相同的位域。
+{{source|1=
+struct A { int a; char b; };
+struct B { const int b1; volatile char b2; }; 
+// A 与 B 的共同起始序列是 A.a, A.b 与 B.b1, B.b2
+
+struct C { int c; unsigned : 0; char b; };
+// A 与 C 的共同起始序列是 A.a 与 C.c
+
+struct D { int d; char b : 4; };
+// A 与 D 的共同起始序列是 A.a 与 D.d
+
+struct E { unsigned int e; char b; };
+// A 与 E 的共同起始序列为空
+}}
+
+如果两个标准布局非联合类类型具有同一类型（如果存在 cv 限定符则忽略），或是布局兼容的{{rlp|enum|枚举}}（即拥有相同底层类型的枚举类型），或它们的''共同起始序列''{{sep}}由它们所有的非静态数据成员和位域组成，那么称它们''布局兼容''（上例中，{{tt|A}} 与 {{tt|B}} 布局兼容）。
+
+如果两个标准布局联合体类型拥有相同数量的非静态数据成员，且（以任何顺序）对应的非静态数据成员拥有布局兼容的类型，那么称它们''布局兼容''。
+
+标准布局类型拥有以下特殊性质：
+:* 在以非联合类类型 {{tt|T1}} 作为活跃成员的标准布局联合体中，容许读取具有非联合类类型 {{tt|T2}} 的另一联合体成员的非静态数据成员 {{tt|m}}，只要 {{tt|m}} 是 {{tt|T1}} 与 {{tt|T2}} 的共同起始序列的一部分（但通过非 volatile 泛左值读取 volatile 成员的行为未定义）。
+:* 指向标准布局类类型的指针可以被 {{rlpt|reinterpret_cast}} 成指向它的首个非静态非位域数据成员的指针（如果它拥有非静态数据成员），或指向它的任何基类子对象的指针（如果有基类），反之亦然。换言之，不允许标准布局类型的首个数据成员前有填充。注意{{rlp|reinterpret_cast#类型别名化|严格别名化}}规则仍然适用于这种转换的结果。
+:* 宏 {{lc|offsetof}} 可以用于确定任何成员距标准布局类起始的偏移量。
+
+===成员初始化===
+非静态数据成员可以用下列两种方式之一初始化：
+@1@ 在构造函数的{{rlp|initializer list|成员初始化器列表}}中。
+{{source|1=
+struct S
+{
+    int n;
+    std::string s;
+    S() : n(7) {} // 直接初始化 n，默认初始化 s
+};
+}}
+
+{{rrev|since=c++11|
+@2@ 通过''默认成员初始化器''，它是成员声明中包含的花括号或等号{{rlp|initialization|初始化器}}，并于构造函数的成员初始化器列表中忽略该成员的情况下得到使用。
+{{source|1=
+struct S
+{
+    int n = 7;
+    std::string s{'a', 'b', 'c'};
+    S() {} // 默认成员初始化器将复制初始化 n，列表初始化 s
+};
+}}
+
+如果成员拥有默认成员初始化器，并且在构造函数的成员初始化器列表中也有出现，那么对该构造函数忽略默认成员初始化器。
+{{example|code=
+#include &lt;iostream&gt;
+
+int x = 0;
+struct S
+{
+    int n = ++x;
+    S() {}                 // 使用默认成员初始化器
+    S(int arg) : n(arg) {} // 使用成员初始化器
+};
+
+int main()
+{
+    std::cout &lt;&lt; x &lt;&lt; '\n'; // 打印 0
+    S s1;                   // 执行默认初始化器
+    std::cout &lt;&lt; x &lt;&lt; '\n'; // 打印 1（运行默认初始化器）
+    S s2(7);                // 未执行默认初始化器
+    std::cout &lt;&lt; x &lt;&lt; '\n'; // 打印 1（未运行默认初始化器）
+}
+}}
+
+{{rrev|until=c++20|
+不能对{{rlp|bit field|位域}}成员使用默认成员初始化器。
+}}
+数组类型的成员不能从成员初始化器推导它的大小：
+{{source|1=
+struct X
+{
+   int a[] = {1, 2, 3};  // 错误
+   int b[3] = {1, 2, 3}; // OK
+};
+}}
+
+默认成员初始化器不允许导致外围类的预置{{rlp|default constructor|默认构造函数}}或该构造函数的异常说明被隐式定义：
+{{source|1=
+struct node
+{
+    node* p = new node; // 错误：使用隐式或预置的 node::node() 
+};
+}}
+
+在默认成员初始化器中，引用成员不能绑定到临时量（注意，{{rlp|constructor#解释|成员初始化器列表}}有同样的规则）：
+{{source|1=
+struct A
+{
+    A() = default;     // OK
+    A(int v) : v(v) {} // OK
+    const int&amp; v = 42; // OK
+};
+
+A a1;    // 错误：临时量到引用的非良构绑定
+A a2(1); // OK（忽略默认成员初始化器，因为 v 在构造函数中出现）
+         // 然而 a2.v 是悬垂引用
+}}
+}}
+
+
+{{rrev|since=c++17|
+如果{{rev inl|until=c++20|有一个引用成员从它的默认成员初始化器初始化}}{{rev inl|since=c++20|有一个成员拥有默认成员初始化器}}并且该初始化器中有一个{{rlp|expressions#潜在求值表达式|潜在求值}}的子表达式是用到了该初始化器本身的{{rlp|aggregate initialization|聚合初始化}}，那么程序非良构：
+{{source|1=
+struct A;
+extern A a;
+
+struct A
+{
+    const A&amp; a1{A{a, a}&lt;!----&gt;}; // OK
+    const A&amp; a2{A{}&lt;!----&gt;};     // 错误
+};
+
+A a{a, a};                // OK
+}}
+}}
+
+===用法===
+非静态数据成员或非静态成员函数的名字只能出现在下列三种情形中：
+@1@ 作为类成员访问表达式的一部分，其中的类要么拥有此成员，要么从拥有此成员的类派生，这包括在任何允许 {{rlpt|this}} 的语境（成员函数体内，成员初始化器列表内，类内默认成员初始化器内）中使用非静态成员的名字时所出现的隐式 {{c|this-&gt;}} 成员访问表达式。
+{{source|1=
+struct S
+{
+    int m;
+    int n;
+    int x = m;            // OK：在默认初始化器中允许隐式的 this-&gt; (C++11)
+    
+    S(int i) : m(i), n(m) // OK：在成员初始化器列表中允许隐式的 this-&gt; 
+    {
+        this-&gt;f();        // 显式的成员访问表达式
+        f();              // 在成员函数体内允许隐式的 this-&gt;
+    }
+    
+    void f();
+};
+}}
+@2@ 构成{{rlp|pointer|指向非静态成员的指针}}。
+{{source|1=
+struct S
+{
+    int m;
+    void f();
+};
+
+int S::*p = &amp;S::m;       // OK：m 用于构成成员指针
+void (S::*fp)() = &amp;S::f; // OK：f 用于构成成员指针
+}}
+
+@3@ （仅对数据成员，而非成员函数）当在{{rlp|expressions#不求值表达式|不求值操作数}}中使用时。
+{{source|1=
+struct S
+{
+    int m;
+    static const std::size_t sz = sizeof m; // OK：不求值操作数中的 m
+};
+
+std::size_t j = sizeof(S::m + 42); // OK：即便没有 m 的 "this" 对象
+}}
+@@ 注：这种用法是经由 {{wg21|N2253}} 中 CWG 问题 613 的解决方案允许的，某些编译器（例如 clang）认为它是 C++11 中的改动。
+
+===注解===
+{{ftm begin|core=1|std=1|comment=1}}
+{{ftm|value=200809L|std=C++11|__cpp_nsdmi|[[#成员初始化|非静态数据成员初始化器]]}}
+{{ftm|value=201304L|std=C++14|__cpp_aggregate_nsdmi|带有[[#成员初始化|默认成员初始化器]]的[[cpp/language/aggregate_initialization|聚合类]]}}
+{{ftm end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=80|std=C++98|before=所有数据成员的名字不能与类名相同（与 C 不兼容）|after=非静态数据成员的名字在没有用户&lt;br&gt;声明的构造函数时可以与类名相同}}
+{{dr list item|wg=cwg|dr=190|std=C++98|before=在决定布局兼容性时会考虑所有成员|after=只考虑非静态数据成员}}
+{{dr list item|wg=cwg|dr=613|std=C++98|before=不允许非静态数据成员的不求值使用|after=允许这种使用}} &lt;!-- gcc 在 C++03 更加支持这种使用，并在报告 65890 辩解这是有意的漏洞 --&gt;
+{{dr list item|wg=cwg|dr=645|std=C++98|before=未指明位域成员是否与非位域成员布局兼容|after=不兼容}}
+{{dr list item|wg=cwg|dr=1397|std=C++11|before=在默认成员初始化器中类被视为完整的|after=默认成员初始化不能触发默认构造函数的定义}}
+{{dr list item|wg=cwg|dr=1425|std=C++98|before=不明确标准布局对象的地址与它的首个&lt;br&gt;非静态数据成员还是它的首个基类子对象一致|after=在非静态数据成员存在时与其一致，&lt;br&gt;否则在基类子对象时与其一致}}
+{{dr list item|wg=cwg|dr=1696|std=C++98|before=引用成员能初始化为临时量（其生存期会在构造函数结束时结束）|after=这种初始化非良构}}
+{{dr list item|wg=cwg|dr=1719|std=C++98|before=cv 限定不同的类型曾经不是布局兼容的|after=忽略 cv 限定，改进规范}}
+{{dr list item|wg=cwg|dr=2254|std=C++11|before=指向无数据成员的标准布局类的指针能 reinterpret_cast 到其首个基类|after=能 reinterpret_cast 到它的任意一个基类}}
+{{dr list item|wg=cwg|dr=2583|std=C++11|before=共同起始序列不考虑对齐要求|after=考虑对齐要求}}
+{{dr list item|wg=cwg|dr=2759|std=C++20|before=共同起始序列可以包括声明有 {{attr|no_unique_address}} 的成员|after=不包括这些成员}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc|{{rlp|classes|类}}}}
+{{dsc|{{rlp|static|静态成员}}}}
+{{dsc|{{rlp|member functions|非静态成员函数}}}}
+{{dsc inc|cpp/types/dsc is_standard_layout}}
+{{dsc inc|cpp/types/dsc offsetof}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

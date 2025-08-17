@@ -1,0 +1,74 @@
+{{cpp/experimental/title|make_array}}
+{{cpp/experimental/lib_extensions_2/navbar}}
+
+{{dcl begin}}
+{{dcl header|experimental/array}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class D = void, class... Types &gt;
+constexpr std::array&lt;VT /* 见下文 */, sizeof...(Types)&gt; make_array( Types&amp;&amp;... t );
+}}
+{{dcl end}}
+
+创建一个 {{lc|std::array}}，其大小等于实参数量，且其各元素从对应实参初始化。返回 {{c|std::array&lt;VT, sizeof...(Types)&gt;{std::forward&lt;Types&gt;(t)...} }}。
+
+若 {{tt|D}} 为 {{c|void}}，则推出的类型 {{tt|VT}} 为 {{c|std::common_type_t&lt;Types...&gt;}}。否则，类型为 {{tt|D}}。
+
+若 {{tt|D}} 为 {{c|void}}，且 {{c|std::decay_t&lt;Types&gt;...}} 中任意一者是 {{lc|std::reference_wrapper}} 的特化，则程序非良构。
+
+=== 注解 ===
+{{tt|make_array}} 在库基础 TS v3 中被移除，因为 {{tt|std::array}} 的[[cpp/container/array/deduction guides|推导指引]]与 {{ltt|cpp/container/array/to_array|std::to_array}} 已在 C++20 中。
+
+=== 可能的实现 ===
+{{eq fun|1=
+namespace details
+{
+    template&lt;class&gt; struct is_ref_wrapper : std::false_type{};
+    template&lt;class T&gt; struct is_ref_wrapper&lt;std::reference_wrapper&lt;T&gt;&gt; : std::true_type{};
+
+    template&lt;class T&gt;
+    using not_ref_wrapper = std::negation&lt;is_ref_wrapper&lt;std::decay_t&lt;T&gt;&gt;&gt;;
+
+    template&lt;class D, class...&gt; struct return_type_helper { using type = D; };
+    template&lt;class... Types&gt;
+    struct return_type_helper&lt;void, Types...&gt; : std::common_type&lt;Types...&gt;
+    {
+        static_assert(std::conjunction_v&lt;not_ref_wrapper&lt;Types&gt;...&gt;,
+                      "Types cannot contain reference_wrappers when D is void");
+    };
+
+    template&lt;class D, class... Types&gt;
+    using return_type = std::array&lt;typename return_type_helper&lt;D, Types...&gt;::type,
+                                   sizeof...(Types)&gt;;
+}
+
+template&lt;class D = void, class... Types&gt;
+constexpr details::return_type&lt;D, Types...&gt; make_array(Types&amp;&amp;... t)
+{
+    return {std::forward&lt;Types&gt;(t)...};
+}
+}}
+
+===示例===
+{{example
+ |code=
+#include &lt;experimental/array&gt;
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    auto arr = std::experimental::make_array(1, 2, 3, 4, 5);
+    bool is_array_of_5_ints = std::is_same&lt;decltype(arr), std::array&lt;int, 5&gt;&gt;::value;
+    std::cout &lt;&lt; "返回五个 ints 的数组？";
+    std::cout &lt;&lt; std::boolalpha &lt;&lt; is_array_of_5_ints &lt;&lt; '\n';
+}
+ |output=
+返回五个 ints 的数组？true
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/experimental/dsc to array}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

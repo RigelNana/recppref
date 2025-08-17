@@ -1,0 +1,207 @@
+{{cpp/ranges/title|rotate}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::permutable I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr ranges::subrange&lt;I&gt;
+    rotate( I first, I middle, S last );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R &gt;
+requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+constexpr ranges::borrowed_subrange_t&lt;R&gt;
+    rotate( R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle );
+}}
+{{dcl end}}
+
+@1@ 在元素范围上进行''左旋''。具体而言，{{tt|ranges::rotate}} 交换范围 {{tt|[first, last)}} 中的各元素，使得元素 {{c|*middle}} 成为新范围的起始，而 {{c|*(middle - 1)}} 成为新的末元素。
+
+@@ 若 {{tt|[first, last)}} 不是合法范围或 {{tt|middle}} 不在 {{tt|[first, last)}} 中则行为未定义。
+
+@2@ 同 {{v|1}}，但以 {{tt|r}} 为范围，如同以 {{c|ranges::begin(r)}} 为 {{tt|first}} 并以 {{c|ranges::end(r)}} 为 {{tt|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要旋转的|sentinel=yes}}
+{{par|r|要旋转的元素范围}}
+{{par|middle|指向要出现在旋转后范围起始的元素的迭代器}}
+{{par end}}
+
+===返回值===
+{{c|{new_first, last} }}，其中 {{tt|''new_first''}} 与 {{c|ranges::next(first, ranges::distance(middle, last))}} 比较相等，并指代 {{tt|first}} 所指向的元素的新位置。
+
+===复杂度===
+最坏为''线性''：{{c|ranges::distance(first, last)}} 次交换。
+
+===注解===
+在常见实现上，若 {{tt|I}} 实现 {{lconcept|bidirectional_iterator}} 或（更好的） {{lconcept|random_access_iterator}} 则 {{tt|ranges::rotate}} 有更高的效率。
+
+{{cpp/algorithm/notes swap vectorization}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/14d8a5ae472ca5743016f37da2dd4770d83dea21/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1361-L1506 libstdc++] 与 [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L4407-L4434 MSVC STL] 中的实现。
+{{eq fun|1=
+struct rotate_fn
+{
+    template&lt;std::permutable I, std::sentinel_for&lt;I&gt; S&gt;
+    constexpr ranges::subrange&lt;I&gt;
+        operator()(I first, I middle, S last) const
+    {
+        if (first == middle)
+        {
+            auto last_it = ranges::next(first, last);
+            return {last_it, last_it};
+        }
+        if (middle == last)
+            return {std::move(first), std::move(middle)};
+
+        if constexpr (std::bidirectional_iterator&lt;I&gt;)
+        {
+            ranges::reverse(first, middle);
+            auto last_it = ranges::next(first, last);
+            ranges::reverse(middle, last_it);
+
+            if constexpr (std::random_access_iterator&lt;I&gt;)
+            {
+                ranges::reverse(first, last_it);
+                return {first + (last_it - middle), std::move(last_it)};
+            }
+            else
+            {
+                auto mid_last = last_it;
+                do
+                {
+                    ranges::iter_swap(first, --mid_last);
+                    ++first;
+                }
+                while (first != middle &amp;&amp; mid_last != middle);
+                ranges::reverse(first, mid_last);
+
+                if (first == middle)
+                    return {std::move(mid_last), std::move(last_it)};
+                else
+                    return {std::move(first), std::move(last_it)};
+            }
+        }
+        else
+        { // I 仅为 forward_iterator
+            auto next_it = middle;
+            do
+            { // rotate 第一循环
+                ranges::iter_swap(first, next_it);
+                ++first;
+                ++next_it;
+                if (first == middle)
+                    middle = next_it;
+            }
+            while (next_it != last);
+
+            auto new_first = first;
+            while (middle != last)
+            { // rotate 后继循环
+                next_it = middle;
+                do
+                {
+                    ranges::iter_swap(first, next_it);
+                    ++first;
+                    ++next_it;
+                    if (first == middle)
+                        middle = next_it;
+                }
+                while (next_it != last);
+            }
+
+            return {std::move(new_first), std::move(middle)};
+        }
+    }
+
+    template&lt;ranges::forward_range R&gt;
+    requires std::permutable&lt;ranges::iterator_t&lt;R&gt;&gt;
+    constexpr ranges::borrowed_subrange_t&lt;R&gt;
+        operator()(R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle) const
+    {
+        return (*this)(ranges::begin(r), std::move(middle), ranges::end(r));
+    }
+};
+
+inline constexpr rotate_fn rotate {};
+}}
+
+===示例===
+{{example
+ | ''{{tt|rotate}}'' 算法能用作许多其他算法的公共构建块，例如''插入排序''：
+ | code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::string s(16, ' ');
+
+    for (int k{}; k != 5; ++k) {
+        std::iota(s.begin(), s.end(), 'A');
+        std::ranges::rotate(s, s.begin() + k);
+        std::cout &lt;&lt; "向左旋转 (" &lt;&lt; k &lt;&lt; "): " &lt;&lt; s &lt;&lt; '\n';
+    }
+
+    std::cout &lt;&lt; '\n';
+
+    for (int k{}; k != 5; ++k) {
+        std::iota(s.begin(), s.end(), 'A');
+        std::ranges::rotate(s, s.end() - k);
+        std::cout &lt;&lt; "向右旋转 (" &lt;&lt; k &lt;&lt; "): " &lt;&lt; s &lt;&lt; '\n';
+    }
+
+    std::cout &lt;&lt; "\n" "用 `rotate` 实现插入排序，逐步运行:\n";
+
+    s = {'2', '4', '2', '0', '5', '9', '7', '3', '7', '1'};
+
+    for (auto i = s.begin(); i != s.end(); ++i) {
+        std::cout &lt;&lt; "i = " &lt;&lt; std::ranges::distance(s.begin(), i) &lt;&lt; ": ";
+        std::ranges::rotate(std::ranges::upper_bound(s.begin(), i, *i), i, i + 1);
+        std::cout &lt;&lt; s &lt;&lt; '\n';
+    }
+    std::cout &lt;&lt; (std::ranges::is_sorted(s) ? "已排序!" : "未排序.") &lt;&lt; '\n';
+}
+ | output=
+向左旋转 (0): ABCDEFGHIJKLMNOP
+向左旋转 (1): BCDEFGHIJKLMNOPA
+向左旋转 (2): CDEFGHIJKLMNOPAB
+向左旋转 (3): DEFGHIJKLMNOPABC
+向左旋转 (4): EFGHIJKLMNOPABCD
+
+向右旋转 (0): ABCDEFGHIJKLMNOP
+向右旋转 (1): PABCDEFGHIJKLMNO
+向右旋转 (2): OPABCDEFGHIJKLMN
+向右旋转 (3): NOPABCDEFGHIJKLM
+向右旋转 (4): MNOPABCDEFGHIJKL
+
+用 `rotate` 实现插入排序，逐步运行:
+i = 0: 2420597371
+i = 1: 2420597371
+i = 2: 2240597371
+i = 3: 0224597371
+i = 4: 0224597371
+i = 5: 0224597371
+i = 6: 0224579371
+i = 7: 0223457971
+i = 8: 0223457791
+i = 9: 0122345779
+已排序!
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse}}
+{{dsc inc|cpp/algorithm/dsc rotate}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

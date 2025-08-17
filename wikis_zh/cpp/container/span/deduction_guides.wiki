@@ -1,0 +1,117 @@
+{{title|{{tt|std::span}} 的推导指引}}
+{{cpp/container/span/navbar}}
+{{dcl begin}}
+{{dcl header|span}}
+{{dcl rev multi|num=1|until1=c++26|since1=c++20
+|dcl1=
+template&lt; class It, class EndOrSize &gt;
+span( It, EndOrSize ) -&gt; span&lt;std::remove_reference_t&lt;std::iter_reference_t&lt;It&gt;&gt;&gt;;
+|dcl2=
+template&lt; class It, class EndOrSize &gt;
+span( It, EndOrSize ) -&gt; span&lt;std::remove_reference_t&lt;std::iter_reference_t&lt;It&gt;&gt;,
+                              /*maybe-static-ext*/&lt;EndOrSize&gt;&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T, std::size_t N &gt;
+span( T (&amp;)[N] ) -&gt; span&lt;T, N&gt;;
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class T, std::size_t N &gt;
+span( std::array&lt;T, N&gt;&amp; ) -&gt; span&lt;T, N&gt;;
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class T, std::size_t N &gt;
+span( const std::array&lt;T, N&gt;&amp; ) -&gt; span&lt;const T, N&gt;;
+}}
+{{dcl|num=5|since=c++20|1=
+template&lt; class R &gt;
+span( R&amp;&amp; ) -&gt; span&lt;std::remove_reference_t&lt;std::ranges::range_reference_t&lt;R&gt;&gt;&gt;;
+}}
+{{dcl end}}
+
+为 {{tt|span}} 提供下列[[cpp/language/class template argument deduction|推导指引]]。
+
+@1@ 允许从迭代器-哨位对推导元素类型。{{rev inl|since=c++26|在 {{tt|EndOrSize}} 满足 {{lti|cpp/header/span#概念 integral-constant-like|integral-constant-like}} 时也允许推导静态尺度。}}{{cpp/enable_if| {{tt|It}} 满足 {{lconcept|contiguous_iterator}} }}。
+
+@2-4@ 允许从内建数组与 {{lc|std::array}} 推导静态长度。
+
+@5@ 允许从范围推导元素类型。{{cpp/enable_if| {{tt|R}} 满足 {{lconcept|contiguous_range}} }}。
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;cstddef&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;span&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+ 
+void print(std::string_view rem = "", std::size_t size_of = 0, std::size_t extent = 0)
+{
+    if (rem.empty())
+    {
+        std::cout &lt;&lt; "name │ sizeof │ extent\n"
+                     "─────┼────────┼────────\n";
+        return;
+    }
+    std::cout &lt;&lt; std::setw(4) &lt;&lt; rem &lt;&lt; " │ " &lt;&lt; std::setw(6) &lt;&lt; size_of &lt;&lt; " │ ";
+    if (extent == std::dynamic_extent)
+        std::cout &lt;&lt; "dynamic";
+    else
+        std::cout &lt;&lt; extent;
+    std::cout &lt;&lt; '\n';
+}
+ 
+int main()
+{
+    int a[]{1, 2, 3, 4, 5};
+ 
+    print();
+    std::span s1{std::begin(a), std::end(a)}; // 指引 (1)
+    print("s1", sizeof s1, s1.extent);
+ 
+    std::span s2{std::begin(a), 3}; // 指引 (1)
+    print("s2", sizeof s2, s2.extent);
+
+#if __cplusplus &gt; 202302L
+    std::span s3{std::begin(a), std::integral_constant&lt;std::size_t, 2&gt;{}&lt;!----&gt;}; // 指引 (1)
+    print("s3", sizeof s3, s3.extent);
+#endif // C++26
+ 
+    std::span s4{a}; // 指引 (2)
+    print("s4", sizeof s4, s4.extent);
+ 
+    std::span&lt;int&gt; s5{a}; // 不使用指引，制作动态 span
+    print("s5", sizeof s5, s5.extent);
+ 
+    std::array arr{6, 7, 8};
+    std::span s6{arr}; // 指引 (3)
+    print("s6", sizeof s6, s6.extent);
+    s5[0] = 42; // OK, element_type 为 'int'
+ 
+    const std::array arr2{9, 10, 11};
+    std::span s7{arr2}; // 指引 (4)
+    print("s7", sizeof s7, s7.extent);
+    // s7[0] = 42; // 错误: element_type 为 'const int'
+ 
+    std::vector v{66, 69, 99};
+    std::span s8{v}; // 指引 (5)
+    print("s8", sizeof s8, s8.extent);
+}
+|p=true
+|output=
+name │ sizeof │ extent
+─────┼────────┼────────
+  s1 │     16 │ dynamic
+  s2 │     16 │ dynamic
+  s3 │      8 │ 2
+  s4 │      8 │ 5
+  s5 │     16 │ dynamic
+  s6 │      8 │ 3
+  s7 │      8 │ 3
+  s8 │     16 │ dynamic
+}}
+
+{{langlinks|en|es|ja|ru}}

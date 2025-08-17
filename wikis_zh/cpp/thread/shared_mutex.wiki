@@ -1,0 +1,129 @@
+{{cpp/title|shared_mutex}}
+{{cpp/thread/shared_mutex/navbar}}
+{{ddcl|header=shared_mutex|since=c++17|1=
+class shared_mutex;
+}}
+
+{{tt|shared_mutex}} 类是一个同步原语，可用于保护共享数据不被多个线程同时访问。与便于独占访问的其他互斥体类型不同，shared_mutex 拥有两个访问级别：
+
+* ''共享'' - 多个线程能共享同一互斥体的所有权。
+
+* ''独占'' - 仅一个线程能占有互斥。
+
+若一个线程已获取''独占''{{sep}}锁（通过 {{lc|lock}}、{{lc|try_lock}}），则无其他线程能获取该锁（包括''共享''的）。
+
+若一个线程已获取''共享''{{sep}}锁（通过 {{lc|lock_shared}}、{{lc|try_lock_shared}}），则无其他线程能获取''独占''{{sep}}锁，但可以获取''共享''{{sep}}锁。
+
+仅当任何线程均未获取''独占''{{sep}}锁时，''共享''{{sep}}锁能被多个线程获取。
+
+在一个线程内，同一时刻只能获取一个锁（''共享''或''独占''）。
+
+共享互斥体在能由任何数量的线程同时读共享数据，但一个线程只能在无其他线程同时读写时写同一数据时特别有用。
+
+{{tt|shared_mutex}} 类满足{{named req|SharedMutex}}和{{named req|StandardLayoutType}}的所有要求。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc inc|cpp/thread/dsc native_handle_type|shared_mutex}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/mutex/dsc constructor|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc destructor|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc operator{{=}}}}
+
+{{dsc h2|排他性锁定}}
+{{dsc inc|cpp/thread/mutex/dsc lock|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock|shared_mutex}}
+
+{{dsc h2|共享锁定}}
+{{dsc inc|cpp/thread/mutex/dsc lock_shared|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc try_lock_shared|shared_mutex}}
+{{dsc inc|cpp/thread/mutex/dsc unlock_shared|shared_mutex}}
+
+{{dsc h2|本机句柄}}
+{{dsc inc|cpp/thread/mutex/dsc native_handle|shared_mutex}}
+{{dsc end}}
+
+===示例===
+{{example
+|以下输出是在单核机器上产生的。当 {{tt|thread1}} 启动时，它首次进入循环并调用 {{tt|increment()}} 随后调用 {{tt|get()}}。但在它能将返回值打印到 {{c/core|std::cout}} 之前，调度器会让 {{tt|thread1}} 睡眠并唤醒 {{tt|thread2}}，后者显然有足够时间一次性运行全部三次循环重复。回到 {{tt|thread1}}，它仍处于首次循环重复中，它最终打印计数器值的本地副本（即 {{c|1}}）到 {{tt|std::cout}}，然后运行剩余的两次循环重复。而在多核机器上，两个线程都不会睡眠，而输出则更可能表现为升序。
+|code=
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;shared_mutex&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+
+class ThreadSafeCounter
+{
+public:
+    ThreadSafeCounter() = default;
+
+    // 多个线程/读者能同时读计数器的值。
+    unsigned int get() const
+    {
+        std::shared_lock lock(mutex_);
+        return value_;
+    }
+
+    // 只有一个线程/写者能增加/写计数器的值。
+    void increment()
+    {
+        std::unique_lock lock(mutex_);
+        ++value_;
+    }
+
+    // 只有一个线程/写者能重置/写计数器的值。
+    void reset()
+    {
+        std::unique_lock lock(mutex_);
+        value_ = 0;
+    }
+
+private:
+    mutable std::shared_mutex mutex_;
+    unsigned int value_{};
+};
+
+int main()
+{
+    ThreadSafeCounter counter;
+
+    auto increment_and_print = [&amp;counter]()
+    {
+        for (int i{}; i != 3; ++i)
+        {
+            counter.increment();
+            std::osyncstream(std::cout)
+                &lt;&lt; std::this_thread::get_id() &lt;&lt; ' ' &lt;&lt; counter.get() &lt;&lt; '\n';
+        }
+    };
+
+    std::thread thread1(increment_and_print);
+    std::thread thread2(increment_and_print);
+
+    thread1.join();
+    thread2.join();
+}
+|p=true
+|output=
+123084176803584 2
+123084176803584 3
+123084176803584 4
+123084185655040 1
+123084185655040 5
+123084185655040 6
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc shared_timed_mutex}}
+{{dsc inc|cpp/thread/dsc shared_lock}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

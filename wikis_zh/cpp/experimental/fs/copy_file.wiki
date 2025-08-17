@@ -1,0 +1,94 @@
+{{cpp/experimental/fs/title|copy_file}}
+{{cpp/experimental/fs/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/filesystem}}
+{{dcl|num=1|since=fs_ts|1=
+bool copy_file( const path&amp; from, const path&amp; to );
+bool copy_file( const path&amp; from, const path&amp; to, error_code&amp; ec );
+}}
+{{dcl|num=2|since=fs_ts|1=
+bool copy_file( const path&amp; from, const path&amp; to, copy_options options );
+bool copy_file( const path&amp; from, const path&amp; to, copy_options options, error_code&amp; ec );
+}}
+{{dcl end}}
+
+@1@ 默认情况，等价于 {{v|2}} 中以 {{tt|copy_options::none}} 用作 {{c|options}}。
+@2@ 从 {{c|from}} 复制单个文件为 {{c|to}}，使用 {{c|options}} 所指定的复制选项。如果 {{c|options}} 中给出的任何 {{rlp|copy_options}} 选项组中有多于一个选项，则其行为未定义（即使与 {{tt|copy_file}} 无关的选项组也是如此）。
+
+* 如果目标文件不存在，
+:* 复制 {{c|from}} 解析到的文件的内容和属性为 {{c|to}} 所解析到的文件（跟随符号链接）。
+* 否则，如果目标文件已经存在：
+:* 如果 {{c|to}} 和 {{c|from}} 按 {{ltt|cpp/experimental/fs/equivalent|equivalent(from, to)}} 确定为相同，则报告错误。
+:* 否则，如果 {{c|options}} 中未设置任何 {{tt|copy_file}} 控制选项，则报告错误。
+:* 否则，如果 {{c|options}} 中设置了 {{tt|copy_options::skip_existing}}，则不做任何事。
+:* 否则，如果 {{c|options}} 中设置了 {{tt|copy_options::overwrite_existing}}，则复制 {{c|from}} 所解析到的文件的内容和属性给 {{c|to}} 所解析到的文件。
+:* 否则，如果 {{c|options}} 中设置了 {{tt|copy_options::update_existing}}，则仅当 {{c|from}} 比 {{c|to}} 更新时才复制文件，如 {{ltt|cpp/experimental/fs/last_write_time|last_write_time()}} 所定义。
+
+当发生错误时，无抛出重载返回 {{c|false}}。
+
+===参数===
+{{par begin}}
+{{par|from|到源文件的路径}}
+{{par|to|到目标文件的路径}}
+{{par|ec|用于无抛出重载中报告错误的输出形参}}
+{{par end}}
+
+===返回值===
+如果复制了文件则为 {{c|true}}，否则为 {{c|false}}。
+
+===异常===
+{{cpp/experimental/fs/error_handling|from|to}}
+
+===注解===
+函数涉及至少一次对 {{ltt|cpp/experimental/fs/status|status(to)}} 的直接或间接调用（既用于确定文件是否存在，也用于 {{tt|copy_options::update_existing}} 选项时获取最后写入时间）。
+
+当用 {{tt|copy_file}} 复制目录时会报错：应当为此使用 {{ltt|cpp/experimental/fs/copy|copy}}。
+
+{{tt|copy_file}} 会跟随符号链接：应当为此使用 {{ltt|cpp/experimental/fs/copy_symlink|copy_symlink}} 或以 {{tt|copy_options::copy_symlinks}} 调用 {{ltt|cpp/experimental/fs/copy|copy}}。
+
+===示例===
+{{example
+|code=
+#include &lt;experimental/filesystem&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+namespace fs = std::experimental::filesystem;
+
+int main()
+{
+    fs::create_directory("sandbox");
+    std::ofstream("sandbox/file1.txt").put('a');
+
+    fs::copy_file("sandbox/file1.txt", "sandbox/file2.txt");
+
+    // 现在 sandbox 中有两个文件：
+    std::cout &lt;&lt; "file1.txt holds : "
+              &lt;&lt; std::ifstream("sandbox/file1.txt").rdbuf() &lt;&lt; '\n';
+    std::cout &lt;&lt; "file2.txt holds : "
+              &lt;&lt; std::ifstream("sandbox/file2.txt").rdbuf() &lt;&lt; '\n';
+
+    // 复制目录失败
+    fs::create_directory("sandbox/abc");
+    try
+    {
+        fs::copy_file("sandbox/abc", "sandbox/def");
+    }
+    catch (fs::filesystem_error&amp; e)
+    {
+        std::cout &lt;&lt; "Could not copy sandbox/abc: " &lt;&lt; e.what() &lt;&lt; '\n';
+    }
+    fs::remove_all("sandbox");
+}
+|p=true
+|output=
+file1.txt holds : a
+file2.txt holds : a
+Could not copy sandbox/abc: copy_file: Is a directory: "sandbox/abc", "sandbox/def"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/fs/dsc copy_options}}
+{{dsc inc|cpp/experimental/fs/dsc copy_symlink}}
+{{dsc inc|cpp/experimental/fs/dsc copy}}
+{{dsc end}}

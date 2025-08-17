@@ -1,0 +1,128 @@
+{{cpp/ranges/view title|zip_transform}}
+{{cpp/ranges/zip_transform_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; std::move_constructible F, ranges::input_range... Views &gt;
+    requires (ranges::view&lt;Views&gt; &amp;&amp; ...) &amp;&amp; (sizeof...(Views) &gt; 0) &amp;&amp;
+              std::is_object_v&lt;F&gt; &amp;&amp; std::regular_invocable&lt;
+                  F&amp;, ranges::range_reference_t&lt;Views&gt;...&gt; &amp;&amp;
+              /*can-reference*/&lt;std::invoke_result_t&lt;
+                  F&amp;, ranges::range_reference_t&lt;Views&gt;...&gt;&gt;
+class zip_transform_view
+     : public ranges::view_interface&lt;zip_transform_view&lt;F, Views...&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    inline constexpr /*unspecified*/ zip_transform = /*unspecified*/;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|1=
+template&lt; class F, ranges::viewable_range... Rs &gt;
+    requires /* 见下文 */
+constexpr auto zip_transform( F&amp;&amp; f, Rs&amp;&amp;... rs );
+}}
+{{dcl end}}
+
+@1@ {{tt|zip_transform_view}} 是范围适配器，接收一个可调用对象和一或多个 {{lconcept|view}}，并产生一个 {{lconcept|view}}，其第 {{tti|i}} 个元素是应用可调用对象到所有视图的第 {{tti|i}} 元素的结果。&lt;br&gt;
+当且仅当 {{c|T&amp;}} 为合法类型时，类型 {{tt|T}} 实现仅用于阐释的概念 {{c|/*can-reference*/}}。
+
+@2@ {{tt|views::zip_transform}} 是定制点对象。
+当以一个实参 {{c|f}} 调用时，令 {{tt|FD}} 为 {{c|std::decay_t&lt;decltype(f)&gt;}}，若
+* {{tt|FD}} 实现 {{lconcept|copy_constructible}}，
+* {{c|FD&amp;}} 实现 {{lconcept|regular_invocable}}，且
+* {{c|std::invoke_result_t&lt;FD&amp;&gt;}} 为对象类型，
+则 {{c|views::zip_transform(f)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|((void)f, auto(views::empty&lt;std::decay_t&lt;std::invoke_result_t&lt;FD&amp;&gt;&gt;&gt;))}}。否则，对 {{tt|views::zip_transform}} 的调用非良构。
+当以多于一个实参 {{c|f}} 与 {{c|rs...}} 调用时，{{c|views::zip_transform(f, rs...)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|ranges::zip_transform_view(f, rs...)}}。
+
+{{tt|zip_transform_view}} 在底层 {{c|ranges::zip_view&lt;Views...&gt;}} 分别实现概念 {{lconcept|random_access_range}}、{{lconcept|bidirectional_range}}、{{lconcept|forward_range}}、{{lconcept|input_range}}、{{lconcept|common_range}} 及 {{lconcept|sized_range}} 时实现对应的概念。
+
+{{cpp/ranges/cpo|views|zip_transform}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|zip_transform_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|zip_transform_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|zip_transform_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|zip_transform_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=yes|data=invalid}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员类型|定义}}
+{{dsc expos mem type|InnerView|private=yes|{{c|ranges::zip_view&lt;Views...&gt;}}。}}
+{{dsc expos mem type|ziperator|private=yes|
+* {{c|ranges::iterator_t&lt;const InnerView&gt;}} 若 {{c|Const}} 为 {{c|true}}，
+* 否则为 {{c|ranges::iterator_t&lt;InnerView&gt;}}。}}
+{{dsc expos mem type|zentinel|private=yes|
+* {{c|ranges::sentinel_t&lt;const InnerView&gt;}} 若 {{c|Const}} 为 {{c|true}}，
+* 否则为 {{c|ranges::sentinel_t&lt;InnerView&gt;}}。}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员对象|定义}}
+{{dsc expos mem obj|zip_|private=yes|{{tti|InnerView}} 类型的底层视图对象}}
+{{dsc expos mem obj|fun_|private=yes|{{box|{{ltt|cpp/ranges/copyable_wrapper|''movable-box''}}{{tt|&lt;F&gt;}}}} 类型的包装的可调用对象}}
+{{dsc end}}
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/zip_transform_view/iterator|迭代器类型}}
+{{dsc expos mem tclass|cpp/ranges/zip_transform_view/sentinel|底层 {{tt|zip_view}} 非 {{lconcept|common_range}} 时使用的哨位类型}}
+{{dsc end}}
+
+===注解===
+{{feature test macro|__cpp_lib_ranges_zip|std=C++23|value=202110L|{{c/core|ranges::zip_view}},&lt;br&gt;{{tt|std::ranges::zip_transform_view}},&lt;br&gt;{{c/core|ranges::adjacent_view}},&lt;br&gt;{{c/core|ranges::adjacent_transform_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+#include &lt;ranges&gt;
+#include &lt;vector&gt;
+
+void print(auto const rem, auto const&amp; r)
+{
+    std::cout &lt;&lt; rem &lt;&lt; '{'; 
+    for (char o[]{0,' ',0}; auto const&amp; e : r)
+        std::cout &lt;&lt; o &lt;&lt; e, *o = ',';
+    std::cout &lt;&lt; "}\n";
+}
+
+int main()
+{
+    auto v1 = std::vector&lt;float&gt;{1, 2, 3};
+    auto v2 = std::list&lt;short&gt;{1, 2, 3, 4};
+    auto v3 = std::to_array({1, 2, 3, 4, 5});
+
+    auto add = [](auto a, auto b, auto c) { return a + b + c; };
+
+    auto sum = std::views::zip_transform(add, v1, v2, v3);
+
+    print("v1:  ", v1);
+    print("v2:  ", v2);
+    print("v3:  ", v3);
+    print("sum: ", sum);
+}
+|output=
+v1:  {1, 2, 3}
+v2:  {1, 2, 3, 4}
+v3:  {1, 2, 3, 4, 5}
+sum: {3, 6, 9}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc zip_view}}
+{{dsc inc|cpp/ranges/dsc transform_view}}
+{{dsc inc|cpp/ranges/dsc elements_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

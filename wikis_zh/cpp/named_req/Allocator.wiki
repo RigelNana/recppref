@@ -1,0 +1,392 @@
+{{cpp/named req/title|Allocator}}
+{{cpp/named req/navbar}}
+
+封装访问/寻址，分配/解分配，以及对象的构造/析构的策略。
+
+可能需要分配或释放内存的每个标准库组件，从 {{tt|std::string}}、{{tt|std::vector}} 和{{rev inl|since=c++11|除 {{tt|std::array}} {{rev inl|since=c++26|与 {{lc|std::inplace_vector}} }}以外的}}所有容器，到 {{tt|std::shared_ptr}}{{rev inl|until=c++17| 和 {{tt|std::function}}}}，都通过{{named req/core|Allocator}}进行这些操作：分配器是满足下列要求的类类型对象。
+
+许多分配器要求的实现是可选的，因为所有{{named req|AllocatorAwareContainer}}都通过 {{tt|std::allocator_traits}} 访问分配器，而 {{lc|std::allocator_traits}} 提供这些要求的默认实现。
+
+===要求===
+给定
+* {{tt|T}}，{{rev inl|until=c++11|无 const 限定的非引用类型}}{{rev inl|since=c++11|无 cv 限定的对象类型}}
+* {{tt|A}}，{{tt|T}} 类型的{{named req/core|Allocator}}类型
+* {{c|a}}，{{tt|A}} 类型的对象
+* {{tt|B}}，某个无 cv 限定的对象类型 {{tt|U}} 的对应{{named req/core|Allocator}}类型（由重绑定 {{tt|A}} 获得）
+* {{c|b}}，{{tt|B}} 类型的对象
+* {{c|p}}，{{c/core|std::allocator_traits&lt;A&gt;::pointer}} 类型的值，由调用 {{c|allocator_traits&lt;A&gt;::allocate()}} 获得
+* {{c|cp}}，{{c/core|std::allocator_traits&lt;A&gt;::const_pointer}} 类型的值，从 {{c|p}} 转换获得
+* {{c|vp}}，{{c/core|std::allocator_traits&lt;A&gt;::void_pointer}} 类型的值，从 {{c|p}} 转换获得
+* {{c|cvp}}，{{c/core|std::allocator_traits&lt;A&gt;::const_void_pointer}} 类型的值，从 {{c|cp}} 或从 {{c|vp}} 转换获得
+* {{c|xp}}，指向某个无 cv 限定类型 {{tt|X}} 的可解引用的指针
+* {{c|r}}，由表达式 {{c|*p}} 获得的 {{tt|T}} 类型的左值
+* {{c|n}}，{{c/core|std::allocator_traits&lt;A&gt;::size_type}} 类型的值
+
+{|table class=wikitable
+|+内部类型
+|-
+!类型标识||别名使用的类型||要求
+|-
+| {{tt|A::pointer}} {{mark optional}}
+| ''（未指定）''&lt;ref&gt;参阅后述[[#缀饰指针|缀饰指针]]。&lt;/ref&gt;
+|
+* 满足{{named req|NullablePointer}}、{{named req|RandomAccessIterator}}及{{named req|ContiguousIterator}}。{{mark unreviewed dr|LWG|2794}}
+|-
+| {{tt|A::const_pointer}} {{mark optional}}
+| ''（未指定）''
+|
+* 满足{{named req|NullablePointer}}、{{named req|RandomAccessIterator}}及{{named req|ContiguousIterator}}。
+* {{tt|A::pointer}} 可以转换到 {{tt|A::const_pointer}}。
+|-
+| {{tt|A::void_pointer}} {{mark optional}}
+| ''（未指定）''
+|
+* 满足{{named req|NullablePointer}}。
+* {{tt|A::pointer}} 可以转换到 {{tt|A::void_pointer}}。
+* {{tt|B::void_pointer}} 与 {{tt|A::void_pointer}} 是同一类型。
+|-
+| {{tt|A::const_void_pointer}} {{mark optional}}
+| ''（未指定）''
+|
+* 满足{{named req|NullablePointer}}。
+* {{tt|A::pointer}}、{{tt|A::const_pointer}} 与 {{tt|A::void_pointer}} 可以转换到 {{tt|A::const_void_pointer}}。
+* {{tt|B::const_void_pointer}} 与 {{tt|A::const_void_pointer}} 是同一类型。
+|-
+| {{tt|A::value_type}}
+| {{tt|T}}
+| 
+|-
+| {{tt|A::size_type}} {{mark optional}}
+| ''（未指定）''
+|
+* 无符号整数类型。
+* 能表示 {{tt|A}} 能分配的最大对象的大小。
+|-
+| {{tt|A::difference_type}} {{mark optional}}
+| ''（未指定）''
+|
+* 有符号整数类型。
+* 能表示任何两个指向 {{tt|A}} 所分配的对象的指针的差
+|-
+| {{c/core|A::template rebind&lt;U&gt;::other}} &lt;br&gt; {{mark optional}}&lt;ref&gt;{{tt|rebind}} 只有在分配器是形式为 {{tt|SomeAllocator&lt;T, Args&gt;}} 的模板（其中 {{tt|Args}} 是零或更多个额外的类型模板形参）时才是可选的（由 {{lc|std::allocator_traits}} 提供）。&lt;/ref&gt;
+| {{tt|B}}
+|
+* 对于任何 {{tt|U}}，{{c/core|B::template rebind&lt;T&gt;::other}} 都是 {{tt|A}}。
+|}
+
+{|table class=wikitable
+|+指针上的操作
+|-
+!表达式||返回类型||要求
+|-
+| {{c|*p}}
+| {{tt|T&amp;}}
+| 
+|-
+| {{c|*cp}}
+| {{c/core|const T&amp;}}
+| {{c|*cp}} 与 {{c|*p}} 标识同一对象。
+|-
+| {{c|p-&gt;m}}
+| &lt;abbr title="T::m 的类型。"&gt;''（原状）''&lt;/abbr&gt;
+| 同 {{c|(*p).m}}，如果 {{c|(*p).m}} 良定义。
+|-
+| {{c|cp-&gt;m}}
+| &lt;abbr title="T::m 的类型。"&gt;''（原状）''&lt;/abbr&gt;
+| 同 {{c|(*cp).m}}，如果 {{c|(*cp).m}} 良定义
+|-
+| {{c|static_cast&lt;A::pointer&gt;(vp)}}
+| &lt;abbr title="A::pointer"&gt;''（原状）''&lt;/abbr&gt;
+| {{c|1=static_cast&lt;A::pointer&gt;(vp) == p}}
+|-
+| {{c|static_cast&lt;A::const_pointer&gt;(cvp)}}
+| &lt;abbr title="A::const_pointer"&gt;''（原状）''&lt;/abbr&gt;
+| {{c|1=static_cast&lt;A::const_pointer&gt;(cvp) == cp}}
+|-
+| {{c|std::pointer_traits&lt;A::pointer&gt;::pointer_to(r)}}{{mark unreviewed dr|LWG|2260}}
+| &lt;abbr title="A::pointer"&gt;''（原状）''&lt;/abbr&gt;
+|
+|}
+
+{|table class=wikitable
+|+存储与生存期操作
+|-
+!表达式||返回类型||要求
+|-
+| {{c|a.allocate(n)}}
+|rowspan=2| {{tt|A::pointer}}
+| 分配适合一个 {{c|T[n]}} 类型数组对象的存储并创建该数组，但不构造数组元素。可以抛出异常。未指定 {{c|1=n == 0}} 的情况下的返回值。
+|-
+| {{c|a.allocate(n, cvp)}} {{mark optional}}
+| 同 {{c|a.allocate(n)}}，但可能以未指定的方式使用 {{c|cvp}}（{{c|nullptr}} 或从 {{c|a.allocate()}} 获得的指针）以辅助局部性。
+|-
+| {{c|a.allocate_at_least(n)}} {{mark optional}} {{mark since c++23}}
+| {{c/core|std::allocation_result
+    &lt;A::pointer&gt;}}
+| 分配适合一个 {{tt|T[cnt]}} 类型数组对象的存储并创建该数组，但不构造数组元素，然后返回 {{c|{p, cnt}&lt;!----&gt;}}，其中 {{c|p}} 指向存储且 {{c|cnt}} 不小于 {{c|n}}。可以抛出异常。
+|-
+| {{c|a.deallocate(p, n)}}
+| ''（不使用）''
+| 解分配 {{c|p}} 指向的存储，该值必须由之前调用 {{tt|allocate}} {{rev inl|since=c++23|或 {{tt|allocate_at_least}}}} 返回且未因介入的对 {{tt|deallocate}} 的调用而失效。{{c|n}} 必须匹配先前传给 {{tt|allocate}} 的值{{rev inl|since=c++23|，或介于经由 {{tt|allocate_at_last}} 所请求和返回的元素数之间（可以等于任一边界）}}。不会抛出异常。
+|-
+| {{c|a.max_size()}} {{mark optional}}
+| {{tt|A::size_type}}
+| 能传递给 {{c|A::allocate()}} 的最大值。
+|-
+| {{c|a.construct(xp, args...)}} {{mark optional}}
+| ''（不使用）''
+| 于 {{c|xp}} 指向的先前分配的存储中构造 {{tt|X}} 类型的对象，以 {{c|args...}} 为构造函数实参。
+|-
+| {{c|a.destroy(xp)}} {{mark optional}}
+| ''（不使用）''
+| 销毁 {{c|xp}} 所指向的 {{tt|X}} 类型的对象，但不会解分配存储。
+|}
+
+{|table class=wikitable
+|+实例间的关系
+|-
+!表达式||返回类型||要求
+|-
+| {{c|1=a1 == a2}}
+|rowspan=2| {{c/core|bool}}
+|
+* 只有在由分配器 {{c|a1}} 分配的存储能通过 {{c|a2}} 解分配时才会返回 {{c|true}}。
+* 建立自反、对称和传递关系。
+* 不会抛出异常。
+|-
+| {{c|1=a1 != a2}}
+|
+* 同 {{c|1=!(a1 == a2)}}。
+|-
+!声明||效果||要求
+|-
+| {{c|A a1(a)}}
+|rowspan=2| 复制构造 {{c|a1}} 使得 {{c|1=a1 == a}}。&lt;br&gt;（注：每个{{named req/core|Allocator}}也满足{{named req|CopyConstructible}}。）
+|rowspan=2|
+* 不会抛出异常。
+|-
+| {{c|1=A a1 = a}}
+|-
+| {{c|A a(b)}}
+| 构造 {{c|a}} 使得 {{c|1=B(a) == b}} 且 {{c|1=A(b) == a}}。&lt;br&gt;（这隐含所有由 {{tt|rebind}} 互相联系的分配器均维护彼此的资源，例如内存池。）
+|
+* 不会抛出异常。
+|-
+| {{c|A a1(std::move(a))}}
+|rowspan=2| 构造 {{c|a1}} 使得它等于先前 {{c|a}} 的值。
+|rowspan=2|
+* 不会抛出异常。
+* 不会更改 {{c|a}} 的值且 {{c|1=a1 == a}}。
+|-
+| {{c|1=A a1 = std::move(a)}}
+|-
+| {{c|A a(std::move(b))}}
+| 构造 {{c|a}} 使得它等于先前 {{c|A(b)}} 的值。
+|
+* 不会抛出异常。
+|-
+!类型标识||别名使用的类型||要求
+|-
+| {{tt|A::is_always_equal}}&lt;br&gt;{{mark optional}}&lt;!-- LWG2108 --&gt;
+| {{lc|std::true_type}} 或 {{lc|std::false_type}} 或从它们派生。
+|
+* 在 {{tt|A}} 类型的任意两个分配器始终比较相等时返回 {{c|true}}。
+* （如果不提供，那么 {{lc|std::allocator_traits}} 默认它是 {{c/core|std::is_empty&lt;A&gt;::type}}。）
+|}
+
+{|table class=wikitable
+|+对容器操作的影响
+|-
+!表达式||返回类型||描述
+|-
+| {{c|a.select_on_container_copy_construction()}}&lt;br&gt;{{mark optional}}
+| {{tt|A}}
+|
+* 提供从当前使用 {{c|a}} 的容器复制构造容器所用的 {{tt|A}} 的实例。
+* （通常返回 {{c|a}} 的副本或默认构造的 {{tt|A}}。）
+|-
+!类型标识||别名使用的类型||描述
+|-
+| {{tt|A::propagate_on_container_copy_assignment}}&lt;br&gt;{{mark optional}}
+|rowspan=3| {{lc|std::true_type}} 或 {{lc|std::false_type}} 或从它们派生。
+|
+* 如果复制赋值使用 {{tt|A}} 类型分配器的容器时需要复制它那么是 {{lc|std::true_type}} 或它的派生类。
+* 如果此成员是 {{lc|std::true_type}} 或从它派生，那么 {{tt|A}} 必须满足{{named req|CopyAssignable}}且复制操作不能抛出异常。
+* 注意如果源与目标容器的分配器不比较相等，那么复制赋值必须用旧分配器解分配目标的内存，然后在复制元素（和分配器）前用新分配器分配内存。
+|-
+| {{tt|A::propagate_on_container_move_assignment}}&lt;br&gt;{{mark optional}}
+|
+* 如果移动赋值使用 {{tt|A}} 类型分配器的容器时需要移动它那么是 {{lc|std::true_type}} 或它的派生类。
+* 如果此成员是 {{lc|std::true_type}} 或从它派生，那么 {{tt|A}} 必须满足{{named req|MoveAssignable}}且移动操作不能抛出异常。
+* 如果不提供此成员或它从 {{lc|std::false_type}} 派生，而源与目标容器的分配器不比较相等，那么移动赋值不能取得源内存的所有权，并且必须单独地复制赋值或复制构造元素，按需重置其自身内存的大小。
+|-
+| {{tt|A::propagate_on_container_swap}}&lt;br&gt;{{mark optional}}
+|
+* 如果交换两个使用 {{tt|A}} 类型分配器的容器时需要移动它们那么是 {{lc|std::true_type}} 或它的派生类。
+* 如果此成员是 {{lc|std::true_type}} 或从它派生，那么 {{tt|A}} 必须满足{{named req|Swappable}}且交换操作不能抛出异常。
+* 如果不提供此成员或它从 {{lc|std::false_type}} 派生，且两个容器的分配器不比较相等，那么容器交换的行为未定义。
+|}
+
+注：
+&lt;references/&gt;
+
+给定
+* {{c|x1}} 与 {{c|x2}}，（可能不同的）类型 {{tt|X::void_pointer}}、{{tt|X::const_void_pointer}}、{{tt|X::pointer}} 或 {{tt|X::const_pointer}} 的对象。
+
+:那么当且仅当 {{c|x1}} 与 {{c|x2}} 能用仅使用这四个类型的一系列 {{c/core|static_cast}} 显式转换成 {{tt|X::const_pointer}} 类型的两个对应的对象 {{c|px1}} 与 {{c|px2}}，且表达式 {{c|1=px1 == px2}} 求值为 {{c|true}} 时，{{c|x1}} 与 {{c|x2}} 是''等价值''的指针值。
+
+给定
+* {{c|w1}} 与 {{c|w2}}，{{tt|X::void_pointer}} 类型的对象
+
+:那么对于表达式 {{c|1=w1 == w2}} 与 {{c|1=w1 != w2}}，可以将一个或两个对象替换成''等价值''的 {{tt|X::const_void_pointer}} 类型的对象而不更改语义。
+
+给定
+* {{c|p1}} 与 {{c|p2}}，{{tt|X::pointer}} 类型的对象
+
+:那么对于表达式 {{c|1=p1 == p2}}、{{c|1=p1 != p2}}、{{c|p1 &lt; p2}}、{{c|1=p1 &lt;= p2}}、{{c|1=p1 &gt;= p2}}、{{c|p1 &gt; p2}}、{{c|p1 - p2}}，可以将一个或两个对象替换成''等价值''的 {{tt|X::const_pointer}} 类型的对象而不更改语义。
+
+以上要求使得能比较{{named req|Container}}的 {{tt|iterator}} 与 {{tt|const_iterator}}。
+
+{{rrev|since=c++17|
+====分配器完整性要求====
+如果无论 {{tt|T}} 是否为完整类型都满足以下所有条件，那么针对类型 {{tt|T}} 的分配器类型 {{tt|X}} 还额外满足''分配器完整性要求''：
+* {{tt|X}} 是完整类型
+* 除 {{tt|value_type}} 之外，{{c/core|std::allocator_traits&lt;X&gt;}} 的所有成员都是完整类型。
+}}
+
+===有状态与无状态分配器===
+每个{{named req/core|Allocator}}类型要么是''有状态''要么是''无状态''的。通常来说，有状态分配器类型可以有不相等的值，它们代表不同的内存资源，而无状态分配器类型代表单一内存资源。
+
+{{rrev multi|until1=c++11|rev1=
+尽管不要求自定义分配器为无状态，但标准库中是否及如何使用分配器是由实现定义的。如果实现不支持使用不相等的分配器值，那么这种使用可能导致实现定义的运行时错误或未定义行为。
+|rev2=
+定制分配器可含有状态。每个容器或其他知分配器对象都存储所提供分配器的一个实例，并通过 {{lc|std::allocator_traits}} 控制分配器的替换。
+}}
+
+无状态分配器类型的实例始终比较相等。无状态分配器类型常实现为空类并适合[[cpp/language/ebo|空基类优化]]。
+
+{{rrev|since=c++11&lt;!-- N4258 &amp; LWG2108 --&gt;|
+{{lc|std::allocator_traits}} 的成员类型 {{tt|is_always_equal}} 有意用于确定分配器类型是否为无状态。
+}}
+
+===缀饰指针===
+当成员类型 {{tt|pointer}} 不是原生指针时，它通常被称为“{{stddoc|P0773R0|缀饰指针（fancy pointer）}}”。这种指针曾为支持分段内存架构而引入，并在当今用于访问在某些不同于原生指针所访问的同质虚拟地址空间的地址空间中所分配的对象。缀饰指针的一个实例是映射的不依赖地址指针 [http://www.boost.org/doc/libs/release/doc/html/interprocess/offset_ptr.html {{tt|boost::interprocess::offset_ptr}}]，它使得在每个进程中映射到不同地址的共享内存和内存映射文件中分配 {{lc|std::set}} 一类的基于结点的数据结构变得可行。{{rev inl|since=c++11|通过类模板 {{lc|std::pointer_traits}}，}}可以独立于提供缀饰指针的分配器而使用它们。{{rev inl|since=c++20|能用函数 {{lc|std::to_address}} 从缀饰指针获得裸指针。}}
+
+{{rrev|until=c++11|
+在标准库中使用缀饰指针和定制的大小/差类型是条件性支持的。实现可以要求成员类型 {{tt|pointer}}、{{tt|const_pointer}}、{{tt|size_type}} 和 {{tt|difference_type}} 分别是 {{tt|value_type*}}、{{c/core|const value_type*}}、{{lc|std::size_t}} 和 {{lc|std::ptrdiff_t}}。
+}}
+
+{{rrev|since=c++26|1=
+===概念===
+为了定义查询对象 {{lc|std::get_allocator}}，定义以下仅用于阐述的概念。
+
+{{dcl begin}}
+{{dcl|1=
+template&lt;class Alloc&gt;
+concept /*simple-allocator*/ = requires(Alloc alloc, std::size_t n)
+{
+    { *alloc.allocate(n) } -&gt; std::same_as&lt;typename Alloc::value_type&amp;&gt;;
+    { alloc.deallocate(alloc.allocate(n), n) };  
+} &amp;&amp; std::copy_constructible&lt;Alloc&gt;
+  &amp;&amp; std::equality_comparable&lt;Alloc&gt;;
+}}
+{{dcl end}}
+
+仅用于阐述的概念 {{c/core|/*simple-allocator*/}} 定义{{named req|Allocator}}要求的最小可用性约束。
+}}
+
+===标准库===
+下列标准库组件满足{{named req/core|Allocator}}要求：
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator}}
+{{dsc inc|cpp/memory/dsc scoped_allocator_adaptor}}
+{{dsc inc|cpp/memory/dsc polymorphic_allocator}}
+{{dsc end}}
+
+===示例===
+{{example|演示一个 C++11 分配器，但添加了 {{attr|nodiscard}} 以符合 C++20 风格。
+|code=
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+#include &lt;limits&gt;
+#include &lt;new&gt;
+#include &lt;vector&gt;
+
+template&lt;class T&gt;
+struct Mallocator
+{
+    typedef T value_type;
+    
+    Mallocator() = default;
+    
+    template&lt;class U&gt;
+    constexpr Mallocator(const Mallocator &lt;U&gt;&amp;) noexcept {}
+    
+    [[nodiscard]] T* allocate(std::size_t n)
+    {
+        if (n &gt; std::numeric_limits&lt;std::size_t&gt;::max() / sizeof(T))
+            throw std::bad_array_new_length();
+        
+        if (auto p = static_cast&lt;T*&gt;(std::malloc(n * sizeof(T))))
+        {
+            report(p, n);
+            return p;
+        }
+        
+        throw std::bad_alloc();
+    }
+    
+    void deallocate(T* p, std::size_t n) noexcept
+    {
+        report(p, n, 0);
+        std::free(p);
+    }
+private:
+    void report(T* p, std::size_t n, bool alloc = true) const
+    {
+        std::cout &lt;&lt; "在 " &lt;&lt; std::hex &lt;&lt; std::showbase
+                  &lt;&lt; reinterpret_cast&lt;void*&gt;(p) &lt;&lt; std::dec
+                  &lt;&lt; (alloc ? " 分配 " : " 解分配 ")
+                  &lt;&lt; sizeof(T) * n &lt;&lt; " 个字节\n";
+    }
+};
+
+template&lt;class T, class U&gt;
+bool operator==(const Mallocator &lt;T&gt;&amp;, const Mallocator &lt;U&gt;&amp;) { return true; }
+
+template&lt;class T, class U&gt;
+bool operator!=(const Mallocator &lt;T&gt;&amp;, const Mallocator &lt;U&gt;&amp;) { return false; }
+
+int main()
+{
+    std::vector&lt;int, Mallocator&lt;int&gt;&gt; v(8);
+    v.push_back(42);
+}
+|p=true
+|output=
+在 0x2020c20 分配 32 个字节
+在 0x2023c60 分配 64 个字节
+在 0x2020c20 解分配 32 个字节
+在 0x2023c60 解分配 64 个字节
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=179|std=C++98|before=未要求 {{tt|pointer}} 与 {{tt|const_pointer}} 可相互比较|after=已要求}}
+{{dr list item|wg=lwg|dr=199|std=C++98|before={{c|a.allocate(0)}} 的返回值不明确|after=此时返回值未指定}}
+{{dr list item|wg=lwg|dr=258|paper=N2436|std=C++98|before=分配器的相等关系不需要是自反、对称或传递的|after=需要是自反、对称和传递的}}
+{{dr list item|wg=lwg|dr=274|std=C++98|before={{tt|T}} 可以是有 const 限定的类型或引用类型，导致 {{lc|std::allocator}} 可能非良构&lt;ref&gt;{{lc|std::allocator}} 的成员类型 {{tt|reference}} 和 {{tt|const_reference}} 分别定义为 {{tt|T&amp;}} 和 {{tt|const T&amp;}}。
+* 如果 {{tt|T}} 是引用类型，那么 {{tt|reference}} 和 {{tt|const_reference}} 会因为无法组成到引用的引用而非良构（[[cpp/language/reference#引用折叠|引用折叠]]在 C++11 中引入）
+* 如果 {{tt|T}} 具有 const 限定，那么 {{tt|reference}} 和 {{tt|const_reference}} 表示相同的类型，导致 {{ltf|cpp/memory/allocator/address}} 的重载集非良构&lt;/ref&gt;|after=禁止这些类型}}
+&lt;!-- LWG 402 中有缺陷的要求在 C++11 中移除 --&gt;
+{{dr list item|wg=lwg|dr=2016|std=C++11|before=分配器的复制、移动与交换操作在使用时可能抛出|after=要求不抛出}}
+{{dr list item|wg=lwg|dr=2081|std=C++98&lt;br&gt;C++11|before=分配器不需要支持复制赋值（C++98）和移动赋值（C++11）|after=需要}}
+{{dr list item|wg=lwg|dr=2108|std=C++11|before=没有方法证明分配器是否有状态|after=提供了 {{tt|is_always_equal}}}}
+{{dr list item|wg=lwg|dr=2263|std=C++11|before={{lwg|179}} 的解决方案在 C++11 中意外丢失&lt;br&gt;且未被推广到 {{tt|void_pointer}} 与 {{tt|const_void_pointer}}|after=恢复并推广}}
+{{dr list item|wg=lwg|dr=2447|std=C++11|before={{tt|T}} 可以是有 volatile 限定的对象类型|after=禁止这些类型}}
+{{dr list item|wg=lwg|dr=2593|std=C++11|before=从分配器移动可能修改它的值|after=禁止修改}}
+{{dr list item|paper=P0593R6|std=C++98|before=未要求 {{tt|allocate}} 在其所分配的存储中创建数组|after=已要求}}
+{{dr list end}}
+&lt;references/&gt;
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

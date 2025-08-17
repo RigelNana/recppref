@@ -1,0 +1,97 @@
+{{cpp/utility/optional/title|transform}}
+{{cpp/utility/optional/navbar}}
+{{dcl begin}}
+{{dcl | num=1 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;;
+}}
+{{dcl | num=2 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;;
+}}
+{{dcl | num=3 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) &amp;&amp;;
+}}
+{{dcl | num=4 | since=c++23 | 1=
+template&lt; class F &gt;
+constexpr auto transform( F&amp;&amp; f ) const&amp;&amp;;
+}}
+{{dcl end}}
+
+若 {{c|*this}} 含值，则以所含值为实参调用 {{tt|f}}，并返回包含该调用结果的 {{lc|std::optional}}。否则返回空 {{lc|std::optional}}。
+
+结果的所含值类型（以下以 {{tt|U}} 代表）必须为非数组对象类型，且必须不是 {{lc|std::in_place_t}} 或 {{lc|std::nullopt_t}}。否则程序非良构。
+
+@1@ 令 {{tt|U}} 为 {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, T&amp;&gt;&gt;}}。若 {{c|*this}} 含值，则返回从 {{c|std::invoke(std::forward&lt;F&gt;(f), **this)}} [[cpp/language/direct_initialization|直接初始化]]所含值的 {{c|std::optional&lt;U&gt;}}（这与 {{rlpt|and_then|and_then()}} 不同，它必须直接返回 {{lc|std::optional}}）。否则返回空的 {{c|std::optional&lt;U&gt;}}。&lt;br&gt;若变量定义 {{c|U x(std::invoke(std::forward&lt;F&gt;(f), **this));}} 非良构则程序非良构。
+
+@2@ 同 {{v|1}}，但 {{tt|U}} 为 {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, const T&amp;&gt;&gt;}}。
+
+@3@ 令 {{tt|U}} 为 {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, T&gt;&gt;}}。若 {{c|*this}} 含值，则返回从 {{c|std::invoke(std::forward&lt;F&gt;(f), std::move(**this))}} 直接初始化所含值的 {{c|std::optional&lt;U&gt;}} 。否则返回空的 {{c|std::optional&lt;U&gt;}}。&lt;br&gt;若变量定义 {{c|U x(std::invoke(std::forward&lt;F&gt;(f), std::move(**this)));}} 非良构则程序非良构。
+
+@4@ 同 {{v|3}}，但 {{tt|U}} 为 {{c|std::remove_cv_t&lt;std::invoke_result_t&lt;F, const T&gt;&gt;}}。
+
+===参数===
+{{par begin}}
+{{par | f | 适合的函数或{{named req|Callable}}对象}}
+{{par end}}
+
+===返回值===
+含有 {{tt|f}} 的结果的 {{lc|std::optional}} 或空 {{lc|std::optional}}，如上所述。
+
+===注解===
+因为 {{tt|transform}} 直接在正确的位置构造 {{tt|U}} 对象，而非将它传递给构造函数，所以 {{c|std::is_move_constructible_v&lt;U&gt;}} 可以为 {{c|false}}。
+
+有些语言称此操作为[[enwiki:Map_(higher-order_function)|''映射（map）'']]。
+
+{{feature test macro|__cpp_lib_optional|std=C++23|value=202110L|{{lc|std::optional}} 中的{{rlp|/#单子式操作|单子式操作}}}}
+
+===示例===
+{{example|code=
+#include &lt;iostream&gt;
+#include &lt;optional&gt;
+
+struct A { /* ... */ };
+struct B { /* ... */ };
+struct C { /* ... */ };
+struct D { /* ... */ };
+
+auto A_to_B(A) -&gt; B { /* ... */ std::cout &lt;&lt; "A =&gt; B \n"; return {}; }
+auto B_to_C(B) -&gt; C { /* ... */ std::cout &lt;&lt; "B =&gt; C \n"; return {}; }
+auto C_to_D(C) -&gt; D { /* ... */ std::cout &lt;&lt; "C =&gt; D \n"; return {}; }
+
+void try_transform_A_to_D(std::optional&lt;A&gt; o_A)
+{
+    std::cout &lt;&lt; (o_A ? "o_A 含值\n" : "o_A 为空\n");
+
+    std::optional&lt;D&gt; o_D = o_A.transform(A_to_B)
+                              .transform(B_to_C)
+                              .transform(C_to_D);
+
+    std::cout &lt;&lt; (o_D ? "o_D 含值\n\n" : "o_D 为空\n\n");
+};
+
+int main()
+{
+    try_transform_A_to_D( A{} );
+    try_transform_A_to_D( {} );
+}
+|output=
+o_A 含值
+A =&gt; B
+B =&gt; C
+C =&gt; D
+o_D 含值
+
+o_A 为空
+o_D 为空
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/utility/optional/dsc value_or}}
+{{dsc inc | cpp/utility/optional/dsc and_then}}
+{{dsc inc | cpp/utility/optional/dsc or_else}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,140 @@
+{{cpp/title|rotate}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt &gt;
+ForwardIt rotate( ForwardIt first, ForwardIt middle, ForwardIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt &gt;
+ForwardIt rotate( ExecutionPolicy&amp;&amp; policy,
+                  ForwardIt first, ForwardIt middle, ForwardIt last );
+}}
+{{dcl end}}
+
+@1@ 进行元素范围上的左旋转。
+@@ 具体而言，{{tt|std::rotate}} 交换范围 {{range|first|last}} 中的元素，将 {{range|first|middle}} 中的元素放在 {{range|middle|last}} 后面并且保留这两个范围中元素的原本顺序。
+
+@2@ 同 {{v|1}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition}}
+
+如果满足以下任意条件，那么行为未定义：
+* {{range|first|middle}} 或 {{range|middle|last}} 不是[[cpp/iterator#范围|合法范围]]。
+{{rev begin}}
+{{rev|until=c++11|
+* {{c|*first}} 的类型不{{named req|Swappable}}。
+}}
+{{rev|since=c++11|
+* {{tt|ForwardIt}} 不{{named req|ValueSwappable}}。
+* {{c|*first}} 的类型不{{named req|MoveConstructible}}。
+* {{c|*first}} 的类型不{{named req|MoveAssignable}}。
+}}
+{{rev end}}
+
+===参数===
+{{par begin}}
+{{par range|3=要旋转的}}
+{{par|middle|应出现在旋转后范围起始的元素}}
+{{par exec pol}}
+{{par hreq}}
+{{par req named |ForwardIt|ForwardIterator}}
+{{par end}}
+
+===返回值===
+到原先由 {{c|*first}} 指代的元素的迭代器，即 {{c|first}} 的下 {{c|std::distance(middle, last)}} 个迭代器。
+
+===复杂度===
+最多 {{c|std::distance(first, last)}} 次交换。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/14d8a5ae472ca5743016f37da2dd4770d83dea21/libstdc%2B%2B-v3/include/bits/stl_algo.h#L1213-L1416 libstdc++]、[https://github.com/llvm/llvm-project/tree/6adbc83ee9e46b476e0f75d5671c3a21f675a936/libcxx/include/__algorithm/rotate.h libc++] 和 [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/xutility#L5392-L5446 MSVC STL] 中的实现。
+{{eq fun|1=
+template&lt;class ForwardIt&gt;
+constexpr // C++20 起
+ForwardIt rotate(ForwardIt first, ForwardIt middle, ForwardIt last)
+{
+    if (first == middle)
+        return last;
+    
+    if (middle == last)
+        return first;
+    
+    ForwardIt write = first;
+    ForwardIt next_read = first; // 当 “read” 碰到 “last” 时的读位置
+    
+    for (ForwardIt read = middle; read != last; ++write, ++read)
+    {
+        if (write == next_read)
+            next_read = read; // 记录 “first” 到过的位置
+        std::iter_swap(write, read);
+    }
+    
+    // 旋转剩余序列到指定位置
+    rotate(write, next_read, last);
+    return write;
+}
+}}
+
+===注解===
+在常见实现上，如果 {{tt|ForwardIt}} 满足{{named req|BidirectionalIterator}}或（更好的）{{named req|RandomAccessIterator}}，那么 {{tt|ranges::rotate}} 会有更高的效率。
+
+{{cpp/algorithm/notes swap vectorization}}
+
+===示例===
+{{example
+|{{tt|std::rotate}} 是许多算法中的公共构建块。此示例演示{{enwiki|insertion sort|插入排序}}。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+auto print = [](const auto remark, const auto&amp; v)
+{
+    std::cout &lt;&lt; remark;
+    for (auto n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+};
+
+int main()
+{
+    std::vector&lt;int&gt; v{2, 4, 2, 0, 5, 10, 7, 3, 7, 1};
+    print("排序前：\t\t", v);
+    
+    // 插入排序
+    for (auto i = v.begin(); i != v.end(); ++i)
+        std::rotate(std::upper_bound(v.begin(), i, *i), i, i + 1);
+    print("排序后：\t\t", v);
+    
+    // 简单向左旋转
+    std::rotate(v.begin(), v.begin() + 1, v.end());
+    print("简单向左旋转：\t", v);
+    
+    // 简单向右旋转
+    std::rotate(v.rbegin(), v.rbegin() + 1, v.rend());
+    print("简单向右旋转：\t", v);
+}
+|std=c++14
+|output=
+排序前：		2 4 2 0 5 10 7 3 7 1 
+排序后：		0 1 2 2 3 4 5 7 7 10 
+简单向左旋转：	1 2 2 3 4 5 7 7 10 0 
+简单向右旋转：	0 1 2 2 3 4 5 7 7 10
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=488|std=C++98|before=没有返回 {{c|first}} 指向的元素的新位置|after=返回该位置}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

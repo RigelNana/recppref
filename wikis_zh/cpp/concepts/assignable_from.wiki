@@ -1,0 +1,83 @@
+{{cpp/title|assignable_from}}
+{{cpp/concepts/navbar}}
+{{ddcl|header=concepts|since=c++20|1=
+template&lt; class LHS, class RHS &gt;
+concept assignable_from =
+    std::is_lvalue_reference_v&lt;LHS&gt; &amp;&amp;
+    std::common_reference_with&lt;
+        const std::remove_reference_t&lt;LHS&gt;&amp;,
+        const std::remove_reference_t&lt;RHS&gt;&amp;&gt; &amp;&amp;
+    requires(LHS lhs, RHS&amp;&amp; rhs) {
+        { lhs = std::forward&lt;RHS&gt;(rhs) } -&gt; std::same_as&lt;LHS&gt;;
+    };
+}}
+概念 {{tt|assignable_from&lt;LHS, RHS&gt;}} 指定能赋值类型和值类别由 {{tt|RHS}} 编码的表达式给类型为 {{tt|LHS}} 所指定的左值表达式。
+
+===语义要求===
+给定
+* {{tt|lhs}}，指代对象 {{tt|lcopy}} 的左值，使得 {{c|decltype((lhs))}} 为 {{tt|LHS}}，
+* {{tt|rhs}}，使得 {{c|decltype((rhs))}} 为 {{tt|RHS}} 的表达式，
+* {{tt|rcopy}}，等于 {{tt|rhs}} 的单独对象，
+{{tt|assignable_from&lt;LHS, RHS&gt;}} 仅当符合下列条件时得到实现
+* {{c|1=std::addressof(lhs = rhs) == std::addressof(lcopy)}}（即赋值表达式生成指代左操作数的左值）；
+* 求值 {{c|1=lhs = rhs}} 后：
+** {{tt|lhs}} 等于 {{tt|rcopy}}，除非 {{tt|rhs}} 是指代 {{tt|lcopy}} 的非 const 亡值（即赋值为自移动赋值），
+** 若 {{tt|rhs}} 是泛左值；
+*** 若它是非 const 亡值，则其所指代的对象在合法但未指定的状态；
+*** 否则，不修改其所指代的对象；
+
+{{cpp/concepts/equality preservation}}
+
+===注解===
+赋值不必为全函数。具体来说，若赋值给某对象 {{tt|x}} 可能导致修改某其他对象 {{tt|y}}，则 {{c|1=x = y}} 可能不在 {{ttb|1==}} 的定义域中。若左操作数直接或间接占有右操作数（例如用指向基于结点的数据结构中的结点的智能指针，或用类似 {{c/core|std::vector&lt;std::any&gt;}} 的构造），则这常发生。
+
+===示例===
+{{example
+|code=
+#include &lt;atomic&gt;
+#include &lt;concepts&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    // 普通的基本用法，检查左值引用赋值
+    static_assert(std::is_assignable_v&lt;int&amp;, int&gt;);
+    static_assert(std::assignable_from&lt;int&amp;, int&gt;);
+
+    static_assert(std::is_assignable_v&lt;std::string&amp;, std::string&gt;);
+    static_assert(std::assignable_from&lt;std::string&amp;, std::string&gt;);
+
+    // 基础类型不支持向右值赋值
+    static_assert(!std::is_assignable_v&lt;int, int&gt;);
+    static_assert(!std::assignable_from&lt;int, int&gt;);
+
+    // std::assignable_from 并不接受全部的有效赋值表达式：
+
+    // 右值引用赋值
+    static_assert(std::is_assignable_v&lt;std::string&amp;&amp;, std::string&gt;);
+    static_assert(!std::assignable_from&lt;std::string&amp;&amp;, std::string&gt;);
+
+    // 右值赋值
+    static_assert(std::is_assignable_v&lt;std::string, std::string&gt;);
+    static_assert(!std::assignable_from&lt;std::string, std::string&gt;);
+
+    // std::atomic::operator= 按值返回
+    static_assert(std::is_assignable_v&lt;std::atomic&lt;int&gt;&amp;, int&gt;);
+    static_assert(!std::assignable_from&lt;std::atomic&lt;int&gt;&amp;, int&gt;);
+}
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=18.4.8|title=Concept {{tt|assignable_from}}|id=concept.assignable}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=18.4.8|title=Concept {{tt|assignable_from}}|id=concept.assignable}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_assignable}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

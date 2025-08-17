@@ -1,0 +1,264 @@
+{{title|移动赋值运算符}}
+{{cpp/language/classes/navbar}}
+
+移动赋值运算符是名字是 {{c/core|1=operator=}} 的非模板{{rlp|member functions|非静态成员函数}}，可以提供一个相同类类型实参调用，并复制该实参的内容，有可能会修改实参。
+
+===语法===
+关于移动赋值运算符的正式语法，可以参考{{rlp|function|函数声明}}。以下列出的语法只是合法移动赋值运算符语法的一部分。
+{{sdsc begin}}
+{{sdsc|num=1|{{spar|返回类型}} {{ttb|1=operator=(}}{{spar sep|形参列表}}{{ttb|);}}}}
+{{sdsc|num=2|{{spar|返回类型}} {{ttb|1=operator=(}}{{spar sep|形参列表}}{{ttb|)}} {{spar|函数体}}}}
+{{sdsc|num=3|{{spar|返回类型}} {{ttb|1=operator=(}}{{spar sep|无默认形参列表}}{{ttb|1=) = default;}}}}
+{{sdsc|num=4|{{spar|返回类型}} {{ttb|1=operator=(}}{{spar sep|形参列表}}{{ttb|1=) = delete;}}}}
+{{sdsc|num=5|{{spar|返回类型}} {{spar sep|类名}}{{ttb|::}}{{ttb|1=operator=(}}{{spar sep|形参列表}}{{ttb|)}} {{spar|函数体}}}}
+{{sdsc|num=6|{{spar|返回类型}} {{spar sep|类名}}{{ttb|::}}{{ttb|1=operator=(}}{{spar sep|无默认形参列表}}{{ttb|1=) = default;}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类名}}|要声明移动赋值运算符的类，它的类型在以下描述中指定为 {{tt|T}}}}
+{{par|{{spar|形参列表}}|只有一个形参的{{rlp|function#形参列表|形参列表}}，该形参的类型是 {{tt|T&amp;&amp;}}，{{c/core|const T&amp;&amp;}}，{{c/core|volatile T&amp;&amp;}} 或 {{c/core|const volatile T&amp;&amp;}}}}
+{{par|{{spar|无默认形参列表}}|只有一个形参的{{rlp|function#形参列表|形参列表}}，该形参的类型是 {{tt|T&amp;&amp;}}，{{c/core|const T&amp;&amp;}}，{{c/core|volatile T&amp;&amp;}} 或 {{c/core|const volatile T&amp;&amp;}}，并且没有默认实参}}
+{{par|{{spar|函数体}}|移动赋值运算符的{{rlp|constructor|函数体}}}}
+{{par|{{spar|返回类型}}|任意类型，但为了和标量类型一致倾向于 {{tt|T&amp;}}}}
+{{par end}}
+
+===解释===
+@1@ 类定义中的移动赋值运算符的声明。
+@2-4@ 类定义中的移动赋值运算符的定义。
+:@3@ 移动赋值运算符会被显式预置。
+:@4@ 移动赋值运算符会被弃置。
+@5,6@ 类定义之外的移动赋值运算符的定义（该类必须包含声明 {{v|1}}）。
+:@6@ 移动赋值运算符会被显式预置。
+
+{{source|1=
+struct X
+{
+    X&amp; operator=(X&amp;&amp; other);    // 移动赋值运算符
+//  X operator=(const X other); // 错误：形参类型不正确
+};
+
+union Y
+{
+    // 移动赋值运算符并不一定要完全遵循上述列出的语法，
+    // 它们只需要在不违反上述限制的情况下遵循通常函数声明的语法
+    auto operator=(Y&amp;&amp; other) -&gt; Y&amp;;       // OK：尾随返回类型
+    Y&amp; operator=(this Y&amp;&amp; self, Y&amp; other); // OK：显式对象形参
+//  Y&amp; operator=(Y&amp;&amp;, int num = 1);        // 错误：有其他非对象形参
+};
+}}
+
+每当{{rlp|overload resolution|重载决议}}选择移动赋值运算符时，它都会被调用，例如当对象出现在赋值表达式左侧，而它的右侧是同类型或可隐式转换的类型的右值时。
+
+典型的移动赋值运算符转移实参曾保有的资源（例如指向动态分配对象的指针，文件描述符，TCP 套接字，线程句柄，等等），而非复制它们，并使得实参处于某个合法但不确定的状态。由于移动赋值并不改变实参的生存期，因此实参通常会在接下来的某一时刻被析构。例如，从 {{lc|std::string}} 或从 {{lc|std::vector}} 移动赋值可能导致实参状态为空。移动赋值与普通赋值相比，它的定义较为宽松而非更严格；在完成时，普通赋值必须留下数据的两份副本，而移动赋值只要求留下一份。
+
+===隐式声明的移动赋值运算符===
+如果没有对类类型提供任何用户定义的移动赋值运算符，且满足下列所有条件：
+* 没有用户声明的{{rlp|copy constructor|复制构造函数}}；
+* 没有用户声明的{{rlp|move constructor|移动构造函数}}；
+* 没有用户声明的{{rlp|copy assignment|复制赋值运算符}}；
+* 没有用户声明的{{rlp|destructor|析构函数}}，
+那么编译器将声明一个，作为类的 {{c/core|inline public}} 成员，并拥有签名 {{c|1=T&amp; T::operator=(T&amp;&amp;)}}。
+
+类可以拥有多个移动赋值运算符，如 {{c|1=T&amp; T::operator=(const T&amp;&amp;)}} 和 {{c|1=T&amp; T::operator=(T&amp;&amp;)}}。当存在用户定义的移动赋值运算符时，用户仍然可以通过关键词 {{tt|default}} 强迫编译器生成隐式声明的移动赋值运算符。
+
+隐式声明的移动赋值运算符具有{{rev inl|until=c++17|{{rlp|except spec|动态异常说明}}}}{{rev inl|since=c++17|{{rlp|noexcept spec|noexcept 说明}}}}中描述的异常说明。
+
+因为每个类总是会声明赋值运算符（移动或复制），所以基类的赋值运算符始终被隐藏。当使用 using 声明从基类带入赋值运算符，且它的实参类型与派生类的隐式赋值运算符的实参类型相同时，该 using 声明也会被隐式声明隐藏。
+
+===隐式定义的移动赋值运算符===
+如果隐式声明的移动赋值运算符既没有被弃置也不平凡，那么当它被 {{rlp|definition#ODR 式使用|ODR 式使用}}{{rev inl|since=c++14|&lt;!-- P0859R0 --&gt;或用于{{rlp|constant expression#常量求值所需要的函数与变量|常量求值}}}}时，它会被编译器定义（即生成并编译函数体）。
+
+对于联合体类型，隐式定义的移动赋值运算符（如用 {{lc|std::memmove}}）复制它的对象表示。
+
+对于非联合体类类型，移动赋值运算符按照声明顺序对对象的各直接基类和直接非静态成员进行完整的逐成员移动赋值，其中对标量用内建运算符，对数组用逐元素移动赋值，而对类类型用移动赋值运算符（非虚调用）。
+
+{{rrev multi|since1=c++14|since2=c++23
+|rev1=如果满足下列所有条件，那么类 {{tt|T}} 的隐式定义的复制赋值运算符是 {{rlpt|constexpr}}：
+* {{tt|T}} 是[[cpp/named req/LiteralType|字面类型]]，且
+* 移动每个直接基类子对象时选中的赋值运算符都是 constexpr 函数，且
+* 移动 {{tt|T}} 的每个类（或它的数组）类型的数据成员时选中的赋值运算符都是 constexpr 函数。
+|rev2=类 {{tt|T}} 的隐式定义的复制赋值运算符是 {{rlpt|constexpr}}。
+}}
+
+与复制赋值一样，隐式定义的移动赋值运算符是否会多次对在继承网格中可通过多于一条路径访问的虚基类子对象赋值是未指明的：
+{{source|1=
+struct V
+{
+    V&amp; operator=(V&amp;&amp; other)
+    {
+        // 这可能会被调用一或两次
+        // 如果调用两次，那么 'other' 是刚被移动的 V 子对象
+        return *this;
+    }
+};
+struct A : virtual V {}; // operator= 调用 V::operator=
+struct B : virtual V {}; // operator= 调用 V::operator=
+struct C : B, A {};      // operator= 调用 B::operator=，然后调用 A::operator=
+                         // 但可能只调用一次 V::operator=
+
+int main()
+{
+    C c1, c2;
+    c2 = std::move(c1);
+}
+}}
+
+===弃置的移动赋值运算符===
+如果满足以下任意条件，那么类 {{tt|T}} 中隐式声明的或显式预置的移动赋值运算符被定义为弃置的：
+* {{tt|T}} 有一个具有 const 限定的非类类型（或它的可以有多维的数组）的非静态数据成员。
+* {{tt|T}} 有一个具有引用类型的非静态数据成员。
+* {{tt|T}} 有一个具有类类型 {{tt|M}}（或它的可以有多维的数组类型）的{{rlp|object#潜在构造的子对象|潜在构造的子对象}}，并且为寻找 {{tt|M}} 的复制赋值运算符而进行的重载决议
+:* 没有产生可用候选，或者
+:* 在该子对象是{{rlp|union#联合体式的类|变体成员}}时，选择了非平凡的函数。
+
+{{rlp|overload resolution|重载决议}}忽略被弃置的隐式声明的移动赋值运算符。
+
+===平凡的移动赋值运算符===
+如果满足下列所有条件，那么类 {{tt|T}} 的移动赋值运算符是平凡的：
+* 它不是用户提供的（即它是隐式定义或预置的）；
+* {{tt|T}} 没有虚成员函数；
+* {{tt|T}} 没有虚基类；
+* 为 {{tt|T}} 的每个直接基类选择的移动赋值运算符都是平凡的；
+* 为 {{tt|T}} 的每个类类型（或类类型的数组）的非静态数据成员选择的移动赋值运算符都是平凡的；
+
+平凡移动赋值运算符实施与平凡复制赋值运算符相同的动作，即如同以 {{lc|std::memmove}} 进行对象表示的复制。所有与 C 语言兼容的数据类型都可以平凡移动。
+
+===合格的移动赋值运算符===
+{{cpp/language/eligible special member function|移动赋值运算符}}
+
+合格移动赋值运算符的平凡性确定该类是否为[[cpp/named req/TriviallyCopyable|可平凡复制类型]]。
+
+===注解===
+如果复制和移动赋值运算符都有提供，那么重载决议会在实参是{{rlp|value category|''右值''}}（例如无名临时量的{{rlp|value category|''纯右值''}} 或 {{lc|std::move}} 的结果的{{rlp|value category|''亡值''}}）时选择移动赋值，而在实参是{{rlp|value category|''左值''}}（具名对象或返回左值引用的函数或运算符）时选择复制赋值。如果只提供了复制赋值，那么重载决议对于所有值类别都会选择它（只要它按值或按到 const 的引用接收它的实参），从而当移动赋值不可用时，复制赋值将会成为它的后备。
+
+隐式定义的移动赋值运算符是否会多次对在继承网格中可通过多于一条路径访问的虚基类子对象赋值是未指明的（同样适用于{{rlp|copy assignment|复制赋值}}）。
+
+有关用户定义的移动赋值运算符应当有哪些行为，见{{rlp|operators#赋值运算符|赋值运算符重载}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+struct A
+{
+    std::string s;
+    
+    A() : s("测试") {}
+    
+    A(const A&amp; o) : s(o.s) { std::cout &lt;&lt; "移动失败！\n"; }
+    
+    A(A&amp;&amp; o) : s(std::move(o.s)) {}
+    
+    A&amp; operator=(const A&amp; other)
+    {
+         s = other.s;
+         std::cout &lt;&lt; "复制赋值\n";
+         return *this;
+    }
+    
+    A&amp; operator=(A&amp;&amp; other)
+    {
+         s = std::move(other.s);
+         std::cout &lt;&lt; "移动赋值\n";
+         return *this;
+    }
+};
+
+A f(A a) { return a; }
+
+struct B : A
+{
+    std::string s2; 
+    int n;
+    // 隐式移动赋值运算符 B&amp; B::operator=(B&amp;&amp;)
+    // 调用 A 的移动赋值运算符
+    // 调用 s2 的移动赋值运算符
+    // 并进行 n 的逐位复制
+};
+
+struct C : B
+{
+    ~C() {} // 析构函数阻止隐式移动赋值
+};
+
+struct D : B
+{
+    D() {}
+    ~D() {} // 析构函数本会阻止隐式移动赋值
+    D&amp; operator=(D&amp;&amp;) = default; // 无论如何都强制移动赋值
+};
+
+int main()
+{
+    A a1, a2;
+    std::cout &lt;&lt; "尝试从右值临时量移动赋值 A\n";
+    a1 = f(A()); // 从右值临时量移动赋值
+    std::cout &lt;&lt; "尝试从亡值移动赋值 A\n";
+    a2 = std::move(a1); // 从亡值移动赋值
+    
+    std::cout &lt;&lt; "\n尝试移动赋值 B\n";
+    B b1, b2;
+    std::cout &lt;&lt; "移动前，b1.s = \"" &lt;&lt; b1.s &lt;&lt; "\"\n";
+    b2 = std::move(b1); // 调用隐式移动赋值
+    std::cout &lt;&lt; "移动后，b1.s = \"" &lt;&lt; b1.s &lt;&lt; "\"\n";
+    
+    std::cout &lt;&lt; "\n尝试移动赋值 C\n";
+    C c1, c2;
+    c2 = std::move(c1); // 调用复制赋值运算符
+    
+    std::cout &lt;&lt; "\n尝试移动赋值 D\n";
+    D d1, d2;
+    d2 = std::move(d1);
+}
+|output=
+尝试从右值临时量移动赋值 A
+移动赋值
+尝试从亡值移动赋值 A
+移动赋值
+
+尝试移动赋值 B
+移动前，b1.s = "测试"
+移动赋值
+移动后，b1.s = "" &lt;!-- 注： gcc 4.7.1 仍打印 "test" ， clang 3.1 正常 --&gt;
+
+尝试移动赋值 C
+复制赋值
+
+尝试移动赋值 D
+移动赋值
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1353|std=C++11|before=弃置隐式声明的移动赋值运算符的条件没有考虑多维数组类型|after=考虑这些类型}}
+{{dr list item|wg=cwg|dr=1402|std=C++11|before=会调用非平凡复制赋值运算符的预置移动赋值运算符被弃置；&lt;br&gt;被弃置的预置移动赋值运算符仍参与重载决议|after=允许调用这种复制赋值运算符；&lt;br&gt;使重载决议将忽略它}}
+{{dr list item|wg=cwg|dr=1806|std=C++11|before=涉及虚基类的预置移动赋值运算符的规定缺失|after=已添加}}
+{{dr list item|wg=cwg|dr=2094|std=C++11|before=volatile 子对象使预置的移动赋值运算符非平凡（{{cwg|496}}）|after=平凡性不受影响}}
+{{dr list item|wg=cwg|dr=2180|std=C++11|before=类 {{tt|T}} 的预置的复制赋值运算符在 {{tt|T}} 是抽象类且拥有&lt;br&gt;无法被复制赋值的直接虚基类时不会被定义为弃置|after=此时会被定义为弃置}}
+{{dr list item|wg=cwg|dr=2595|std=C++20|before=对于一个移动赋值运算符，如果存在其他更受约束但&lt;br&gt;无法满足关联约束的移动赋值运算符，那么它无法合格|after=此时它可以合格}}
+{{dr list item|wg=cwg|dr=2690|std=C++11|before=隐式定义的联合体类型的移动赋值运算符不会复制对象表示|after=会复制对象表示}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|constructor|构造函数}}
+* {{rlp|converting constructor|转换构造函数}}
+* {{rlp|copy assignment|复制赋值}}
+* {{rlp|copy constructor|复制构造函数}}
+* {{rlp|default constructor|默认构造函数}}
+* {{rlp|destructor|析构函数}}
+* {{rlp|initialization|初始化}}
+** {{rlp|aggregate initialization|聚合初始化}}
+** {{rlp|constant initialization|常量初始化}}
+** {{rlp|copy initialization|复制初始化}}
+** {{rlp|default initialization|默认初始化}}
+** {{rlp|direct initialization|直接初始化}}
+** {{rlp|list initialization|列表初始化}}
+** {{rlp|reference initialization|引用初始化}}
+** {{rlp|value initialization|值初始化}}
+** {{rlp|zero initialization|零初始化}}
+* {{rlp|move constructor|移动构造函数}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

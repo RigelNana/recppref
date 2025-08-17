@@ -1,0 +1,277 @@
+{{title|默认实参}}
+{{cpp/language/functions/navbar}}
+
+允许调用函数时不提供一个或多个尾部的实参。
+
+通过使用下列语法来为{{rlp|function|函数声明}}的{{spar sep|形参列表}}中的形参指定默认实参。
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar|声明符}} {{ttb|1==}} {{spar|初始化器}}
+}}
+{{sdsc|num=2|1=
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar optional|抽象声明符}} {{ttb|1==}} {{spar|初始化器}}
+}}
+{{sdsc end}}
+
+默认实参用来取代函数调用中缺失的尾部实参：
+{{source|1=
+void point(int x = 3, int y = 4);
+
+point(1, 2); // 调用 point(1, 2)
+point(1);    // 调用 point(1, 4)
+point();     // 调用 point(3, 4)
+}}
+
+在函数声明中，所有在拥有默认实参的形参之后的形参必须：
+* 拥有在这个或同一作用域中先前的声明中所提供的默认实参：
+{{source|1=
+int x(int = 1, int); // 错误：只有尾随实参能拥有默认值（假设前面没有 “x” 的声明）
+
+void f(int n, int k = 1);
+void f(int n = 0, int k); // OK：同一作用域中之前的声明为 “k” 提供了默认实参
+
+void g(int, int = 7);
+
+void h()
+{
+    void g(int = 1, int); // 错误：不在同一作用域
+}
+}}
+{{rrev|since=c++11|
+:* ...除非该形参是从某个形参包展开得到的：
+{{source|1=
+template&lt;class... T&gt;
+struct C { void f(int n = 0, T...); };
+
+C&lt;int&gt; c; // OK；实例化了声明 void C::f(int n = 0, int)
+}}
+* 或者是函数形参包：
+{{source|1=
+template&lt;class... T&gt;
+void h(int i = 0, T... args); // OK
+}}
+}}
+
+省略号不是形参，所以它可以跟在带有默认实参的形参之后：
+{{source|1=
+int g(int n = 0, ...); // OK
+}}
+
+默认实参只能在{{rlp|function|函数声明}}{{rev inl|since=c++11|和 {{rlp|lambda|lambda 表达式}}}}的形参列表中出现，而不能在函数指针、到函数的引用，或在 {{rlp|typedef}} 声明中出现。模板形参列表为它的{{rlp|template parameters#默认模板实参|默认模板实参}}使用了类似的语法。
+
+对于非模板函数，当在同一作用域中重声明函数时，可以向已声明的函数添加默认实参。在函数调用点，可用的默认实参是由该函数所有可见的声明中所提供的默认实参的并集。重声明不能为已有可见默认值的实参引入默认值（即使值相同）。内层作用域中的重声明不从外层作用域获得默认实参。
+{{source|1=
+void f(int, int);     // #1 
+void f(int, int = 7); // #2 OK：添加默认实参
+
+void h()
+{
+    f(3); // #1 和 #2 在作用域中；进行对 f(3, 7) 的调用
+    void f(int = 1, int); // 错误：内层作用域声明不会从外层作用域获得默认实参
+}
+
+void m()
+{ // 新作用域开始
+    void f(int, int); // 内层作用域声明；无默认实参。
+    f(4); // 错误：调用 f(int, int) 的实参不足
+    void f(int, int = 6); 
+    f(4); // OK：调用 f(4, 6);
+    void f(int, int = 6); // 错误：第二形参已有默认实参（即使值相同）
+}
+
+void f(int = 1, int); // #3 OK，向 #2 添加默认实参
+
+void n()
+{ // 新作用域开始
+    f(); // #1、#2 和 #3 都在作用域中：调用 f(1, 7);
+}
+}}
+
+如果一个{{rlp|inline|内联}}函数在不同的翻译单元中声明，那么默认实参的累积集必须在每个翻译单元的结尾相同。
+
+{{rrev|since=c++20|
+如果一个非内联函数在不同翻译单元的同一命名空间作用域中声明，那么对应的默认实参在存在时必须相同（但某些翻译单元中可以缺少一些默认实参）。
+}}
+
+如果{{rlp|friend|友元}}声明指定了默认实参，那么它必须是友元函数定义，且该翻译单元中不能有此函数的其他声明。
+
+{{rlpsd|namespace#using 声明}}会将已知的默认实参集承接过来，且如果向函数的命名空间中添加更多默认实参，那么这些默认实参在这条 using 声明可见的任何位置均可见：
+{{source|1=
+namespace N
+{
+    void f(int, int = 1);
+}
+
+using N::f;
+
+void g()
+{
+    f(7); // 调用 f(7, 1);
+    f();  // 错误
+}
+
+namespace N
+{
+    void f(int = 2, int);
+}
+
+void h()
+{
+    f();  // 调用 f(2, 1);
+}
+}}
+
+对默认实参中使用的名字进行查找，检查{{rlp|access|可访问性}}，并在声明点绑定，但会在函数调用点才执行：
+{{source|1=
+int a = 1;
+
+int f(int);
+
+int g(int x = f(a)); // f 的查找找到 ::f，a 的查找找到 ::a
+                     // 不使用 ::a 的值，它在这里是 1
+
+void h()
+{
+    a = 2;  // 更改 ::a 的值
+    {
+        int a = 3;
+        g(); // 调用 f(2)，然后以它的结果调用 g()
+    }
+}
+}}
+
+对于非{{rlp|templates#模板化实体|模板化}}类的{{rlp|member functions|成员函数}}，类外的定义中允许出现默认实参，并与类体内的声明所提供的默认实参组合。如果类外的默认实参会使成员函数“转化为”默认构造函数或复制{{rev inl|since=c++11|/移动}}构造函数/赋值运算符（使得调用时存在歧义），那么程序非良构。对于模板化类的成员函数，所有默认实参必须在成员函数的初始声明处提供。
+{{source|1=
+class C
+{
+    void f(int i = 3);
+    void g(int i, int j = 99);
+    C(int arg); // 非默认构造函数
+};
+
+void C::f(int i = 3) {}         // 错误：默认实参已经在类作用域指定
+
+void C::g(int i = 88, int j) {} // OK：此翻译单元中不需要实参就能调用 C::g
+
+C::C(int arg = 1) {}            // 错误：变成了默认构造函数
+}}
+
+{{rlp|virtual|虚}}函数的覆盖函数不会从基类定义获得默认实参，而在进行虚函数调用时，默认实参根据对象的静态类型确定（注意：这可以通过[http://www.gotw.ca/publications/mill18.htm 非虚接口]模式避免）。
+{{source|1=
+struct Base
+{
+    virtual void f(int a = 7);
+};
+
+struct Derived : Base
+{
+    void f(int a) override;
+};
+
+void m()
+{
+    Derived d;
+    Base&amp; b = d;
+    b.f(); // OK：调用 Derived::f(7) 
+    d.f(); // 错误：没有默认实参
+}
+}}
+
+默认实参中不能使用{{rlp|expressions#潜在求表达式|潜在求值}}的局部变量：
+{{source|1=
+void f() 
+{
+    int n = 1;
+    extern void g(int x = n); // 错误：局部变量不能是默认实参
+    extern void h(int x = sizeof n); // CWG 2082 解决后 OK
+}
+}}
+
+默认实参中不能使用 {{rlpt|this}} 指针：
+{{source|1=
+class A
+{
+    void f(A* p = this) {} // 错误：不能使用 this
+};
+}}
+
+默认实参中不能使用非静态的类成员（即使它们不被求值），除非用于构成成员指针或在成员访问表达式中使用：
+{{source|1=
+int b;
+ 
+class X
+{
+    int a;
+    int mem1(int i = a); // 错误：不能使用非静态成员
+    int mem2(int i = b); // OK：查找找到静态成员 X::b
+    int mem3(int X::* i = &amp;X::a); // OK：此时可以使用非静态成员
+    int mem4(int i = x.a); // OK：在成员访问表达式中使用
+ 
+    static X x;
+    static int b;
+};
+}}
+
+默认实参会在每次在未向对应形参提供实参的情况下调用函数时求值。默认实参中不能使用函数形参，除非它们不{{rlp|expressions#潜在求表达式|潜在求值}}。注意，形参列表中较早出现的形参已在{{rlp|scope|作用域}}中：
+{{source|1=
+int a;
+
+int f(int a, int b = a); // 错误：形参用作默认实参
+
+int g(int a, int b = sizeof a); // CWG 2082 解决前错误
+                                // CWG 2082 解决后 OK：可以用于不求值语境
+}}
+
+默认实参不是函数类型的一部分：
+{{source|1=
+int f(int = 0);
+
+void h()
+{
+    int j = f(1);
+    int k = f(); // 调用 f(0);
+}
+
+int (*p1)(int) = &amp;f;
+int (*p2)()    = &amp;f; // 错误：f 的类型是 int(int)
+}}
+
+除了{{rlp|operator other#内建的函数调用运算符|函数调用运算符}}{{rev inl|since=c++23|和{{rlp|operator member access#内建的下标运算符|下标运算符}}}}外，运算符函数不能有默认实参：
+{{source|1=
+class C
+{
+    int operator++(int i = 0); // 非良构
+    int operator[](int j = 0); // C++23 起 OK
+    int operator()(int k = 0); // OK
+};
+}}
+
+{{rrev|since=c++23|
+{{rlps|member functions#显式对象形参}}不能有默认实参：
+{{source|1=
+struct S { void f(this const S&amp; = S{}); }; // 非良构
+}}
+}}
+
+===注解===
+不提供形参名时可能需要插入空格以避免组成复合赋值记号（见{{rlpsd|translation phases#最大吞噬}}）。
+{{source|1=
+void f1(int*=0);         // 错误，会组成 “*=”
+void g1(const int&amp;=0);   // 错误，会组成 “&amp;=”
+void f2(int* = 0);       // OK
+void g2(const int&amp; = 0); // OK
+void h(int&amp;&amp;=0);         // 即使没有空格也 OK，“&amp;&amp;” 是单独的记号
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=217|std=C++98|before=默认实参可以添加到类模板的非模板成员函数中|after=已禁止}}
+{{dr list item|wg=cwg|dr=1344|std=C++98|before=成员函数的类外定义中添加的默认实参可以将它变成特殊成员函数|after=已禁止}}
+{{dr list item|wg=cwg|dr=1716|std=C++98|before=默认实参会在每次调用函数时都会求值，&lt;br&gt;即使调用方已经为对应形参提供了实参|after=只有在没有为对应形参提供&lt;br&gt;实参的情况下才会求值}}
+{{dr list item|wg=cwg|dr=2082|std=C++98|before=默认实参在不求值语境中不能使用局部变量和之前的形参|after=可以在不求值语境中使用}}
+{{dr list item|wg=cwg|dr=2233|std=C++11|before=从形参包展开的形参不能在有默认实参的形参之后出现|after=可以出现}}
+{{dr list item|wg=cwg|dr=2683|std=C++98|before=类模板的嵌套类的成员函数的类外定义可以使用默认实参|after=已禁止}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

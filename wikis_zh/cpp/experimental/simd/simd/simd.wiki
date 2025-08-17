@@ -1,0 +1,86 @@
+{{cpp/experimental/simd/title|simd}}
+{{cpp/experimental/simd/simd/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=parallelism_ts_2|1=
+simd() noexcept = default;
+}}
+{{dcl|num=2|since=parallelism_ts_2|1=
+template&lt; class U &gt;
+simd( U&amp;&amp; value ) noexcept;
+}}
+{{dcl|num=3|since=parallelism_ts_2|1=
+template&lt; class U &gt;
+simd( const simd&lt;U, simd_abi::fixed_size&lt;size()&gt;&gt;&amp; other ) noexcept;
+}}
+{{dcl|num=4|since=parallelism_ts_2|1=
+template&lt; class G &gt;
+explicit simd( G&amp;&amp; generator ) noexcept;
+}}
+{{dcl|num=5|since=parallelism_ts_2|1=
+template&lt; class U, class Flags &gt;
+simd( const U* mem, Flags flags );
+}}
+{{dcl|num=6|since=parallelism_ts_2|notes={{mark implicit}}|1=
+simd( const simd&amp; other ) noexcept = default;
+}}
+{{dcl|num=7|since=parallelism_ts_2|notes={{mark implicit}}|1=
+simd( simd&amp;&amp; other ) noexcept = default;
+}}
+{{dcl end}}
+
+@1@ 以{{lt|cpp/language/default initialization|默认初始化}}（无初始化式）或{{lt|cpp/language/value initialization|值初始化}}（空初始化式）构造一个 {{tt|simd}}。
+@2@ 广播构造函数构造一个 {{tt|simd}}，所有值均以 {{c|value}} 初始化。{{cpp/enable_if|从 {{tt|U}} 向 {{tt|T}} 的转换''保留值''，或者 {{tt|U}} 为 {{c/core|int}} 或当 {{tt|T}} 为无符号整数类型时为  {{c/core|unsigned int}} }}。
+@3@ 构造一个 {{tt|simd}}，使得{{simd_for_all_i}}，第 i 个元素以 {{c|static_cast&lt;T&gt;(other[i])}} 初始化。{{cpp/enable_if|{{tt|Abi}} 为 {{c|simd_abi::fixed_size&lt;size()&gt;}} 且从 {{tt|U}} 向 {{tt|T}} 的转换''保留值''，并且，如果 {{tt|U}} 和 {{tt|T}} 都为整型，则 {{tt|T}} 的整数转换等级大于 {{tt|U}} 的整数转换等级}}。
+@4@ 生成器构造函数构造一个 {{tt|simd}}，其第 i 个元素以 {{c|generator(std::integral_constant&lt;std::size_t, i&gt;())}} 初始化。{{cpp/enable_if|{{simd_for_all_i}}，{{tt|simd(gen(std::integral_constant&lt;std::size_t, i&gt;()))}}}} 均良构。对 {{c|generator}} 的调用之间无顺序。{{c|generator}}不能调用''{{lt|cpp/algorithm/execution_policy_tag_t|向量化不安全}}''的标准库函数。
+@5@ 加载构造函数构造 {{tt|simd}}，使得{{simd_for_all_i}}，其第 i 个元素以 {{co|static_cast&lt;T&gt;(mem[i])}} 初始化。
+@6,7@ 隐式声明的复制和移动构造函数。构造一个 {{tt|simd}}，其各个元素以 {{c|other}} 中的元素初始化。
+
+===参数===
+{{par begin}}
+{{par|value|用于初始化所有 {{tt|simd}} 元素的值}}
+{{par|other|从之复制的另一 {{tt|simd}}}}
+{{par|generator|用于初始化每个 {{tt|simd}} 元素的函数对象}}
+{{par|mem|指向数组的指针，其中 {{range|mem|mem + size()}} 为有效范围}}
+{{par|flags|如果对于类型 {{ltt|cpp/experimental/simd/vector_aligned|vector_aligned_tag}}，则加载构造函数可能假设 {{c|mem}} 指向按 {{ltt|cpp/experimental/simd/memory alignment|memory_alignment_v&lt;simd, U&gt;}} 对齐的存储}}
+{{par hreq}}
+{{par req|从 {{tt|U}} 向 {{tt|T}} 的转换必须''保持值''。广播构造函数 (2) 还允许 {{tt|U}} 为 {{c/core|int}}，或当 {{tt|T}} 为无符号整数类型时为 {{c/core|unsigned int}}。}}
+{{par req|{{tt|is_simd_flag_type_v&lt;Flags&gt;}} 必须为 {{c/core|true}}。}}
+{{par end}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;experimental/simd&gt;
+#include &lt;iostream&gt;
+namespace stdx = std::experimental;
+
+int main()
+{
+    stdx::native_simd&lt;int&gt; a; // 未初始化
+    a = 1; // 将所有元素设为 1
+    stdx::native_simd&lt;int&gt; b([](int i) { return i; }); // {0, 1, 2, 3, ...}
+
+    alignas(stdx::memory_alignment_v&lt;stdx::native_simd&lt;int&gt;&gt;)
+        std::array&lt;int, stdx::native_simd&lt;int&gt;::size() * 2&gt; mem = {};
+    for (std::size_t i = 0; i &lt; mem.size(); ++i)
+        mem[i] = i &amp; 1;
+
+    stdx::native_simd&lt;int&gt; c(&amp;mem[0], stdx::vector_aligned); // {0, 1, 0, 1, ...}
+    stdx::native_simd&lt;int&gt; d(&amp;mem[1], stdx::element_aligned); // {1, 0, 1, 0, ...}
+
+    auto sum = a + b + c + d;
+
+    for (std::size_t i = 0; i &lt; sum.size(); ++i)
+        std::cout &lt;&lt; sum[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|p=true
+|output=
+2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/simd/simd/dsc copy_from}}
+{{dsc end}}

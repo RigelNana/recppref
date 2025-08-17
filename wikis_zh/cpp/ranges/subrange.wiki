@@ -1,0 +1,141 @@
+{{cpp/ranges/title|subrange}}
+{{cpp/ranges/subrange/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt;
+    std::input_or_output_iterator I,
+    std::sentinel_for&lt;I&gt; S = I,
+    ranges::subrange_kind K = std::sized_sentinel_for&lt;S, I&gt; ?
+                                  ranges::subrange_kind::sized :
+                                  ranges::subrange_kind::unsized &gt;
+    requires (K == ranges::subrange_kind::sized {{!!}} !std::sized_sentinel_for&lt;S, I&gt;)
+class subrange
+    : public ranges::view_interface&lt;subrange&lt;I, S, K&gt;&gt;
+}}
+{{dcl h|辅助概念}}
+{{dcla|num=2|expos=yes|1=
+template&lt;class From, class To&gt;
+concept /*uses-nonqualification-pointer-conversion*/ = /* 见描述 */;
+}}
+{{dcla|num=3|expos=yes|1=
+template&lt;class From, class To&gt;
+concept /*convertible-to-non-slicing*/ = /* 见描述 */;
+}}
+{{dcl end}}
+
+@1@ {{tt|subrange}} 类模板组合一个迭代器与一个哨位到单个 {{lconcept|view}} 中。{{tt|subrange}} 只有在最后的模板形参是 {{c|subrange_kind​::​sized}} 时（在 {{c|sized_sentinel_for&lt;S, I&gt;}} 得到满足或者大小作为构造函数实参被显式传递时发生）才会实现 {{lconcept|sized_range}}。
+
+@2@ 确定 {{tt|From}} 是否可以在不进行{{ls|cpp/language/implicit conversion#限定性转换}}的情况下转换到 {{tt|To}}。等价于：
+{{source|1=
+template&lt;class From, class To&gt;
+concept /*uses-nonqualification-pointer-conversion*/ =
+    std::is_pointer_v&lt;From&gt; &amp;&amp; std::is_pointer_v&lt;To&gt; &amp;&amp;
+        !std::convertible_to&lt;std::remove_pointer_t&lt;From&gt;(*)[],
+                             std::remove_pointer_t&lt;To&gt;(*)[]&gt;;
+}}
+
+@3@ 确定 {{tt|From}} 是否可以在不进行派生类到基类转换的情况下转换到 {{tt|To}}。等价于：
+{{source|1=
+template&lt;class From, class To&gt;
+concept /*convertible-to-non-slicing*/ =
+    std::convertible_to&lt;From, To&gt; &amp;&amp;
+        !/*uses-nonqualification-pointer-conversion*/
+            &lt;std::decay_t&lt;From&gt;, std::decay_t&lt;To&gt;&gt;;
+}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem sconst|spec={{c/core|constexpr bool}}﻿|StoreSize﻿|id=StoreSize|{{box|{{c/core|1=K == ranges::subrange_kind::sized &amp;&amp;}}&lt;br&gt;{{nbspt|4}}{{c/core|!std::sized_sentinel_for&lt;S, I&gt;}}}}}}
+{{dsc expos mem obj|spec={{tt|I}}|begin_|id=begin|指向子范围开头的迭代器}}
+{{dsc expos mem obj|spec={{tt|S}}|end_|id=end|表示子范围末尾的哨位}}
+{{dsc expos mem obj|spec={{lsi|cpp/ranges#make-unsigned-like-t}}{{sep}}{{c/core|&lt;std::iter_difference_t&lt;I&gt;&gt;}}|size_|id=size|maybe=（仅当 {{tti|StoreSize}} 是 {{c|true}} 时提供）|子范围的大小}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|cpp/ranges/subrange/subrange|创建新的 {{tt|subrange}}}}
+{{dsc inc|cpp/ranges/subrange/dsc operator PairLike}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/ranges/subrange/dsc begin}}
+{{dsc inc|cpp/ranges/subrange/dsc end}}
+{{dsc inc|cpp/ranges/subrange/dsc empty}}
+{{dsc inc|cpp/ranges/subrange/dsc size}}
+
+{{dsc h2|迭代器操作}}
+{{dsc inc|cpp/ranges/subrange/dsc advance}}
+{{dsc inc|cpp/ranges/subrange/dsc prev}}
+{{dsc inc|cpp/ranges/subrange/dsc next}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|empty=yes|size=yes}}
+{{dsc end}}
+
+==={{rl|deduction guides|推导指引}}===
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/subrange/dsc get}}
+{{dsc end}}
+
+===辅助类型===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc subrange_kind}}
+{{dsc inc|cpp/ranges/subrange/dsc tuple_size}}
+{{dsc inc|cpp/ranges/subrange/dsc tuple_element}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++20|1=
+template&lt; class I, class S, ranges::subrange_kind K &gt;
+constexpr bool ranges::enable_borrowed_range&lt;ranges::subrange&lt;I, S, K&gt;&gt; = true;
+}}
+{{c/core|ranges::enable_borrowed_range}} 的此特化使得 {{tt|subrange}} 满足 {{lconcept|borrowed_range}}。
+
+===示例===
+{{example
+|code=
+#include &lt;map&gt;
+#include &lt;print&gt;
+#include &lt;ranges&gt;
+
+void make_uppercase(char&amp; v)
+{
+    v += 'A' - 'a';
+}
+
+void uppercase_transform(std::multimap&lt;int, char&gt;&amp; m, int k)
+{
+    auto [first, last] = m.equal_range(k);
+    for (auto&amp; [_, v] : std::ranges::subrange(first, last))
+        make_uppercase(v);
+}
+
+int main()
+{
+    std::multimap&lt;int, char&gt; mm{&lt;!----&gt;{4, 'a'}, {3, '-'}, {4, 'b'}, {5, '-'}, {4, 'c'}&lt;!----&gt;};
+    std::println("前: {}", mm);
+    uppercase_transform(mm, 4);
+    std::println("后: {}", mm);
+}
+|output=
+前: {3: '-', 4: 'a', 4: 'b', 4: 'c', 5: '-'}
+后: {3: '-', 4: 'A', 4: 'B', 4: 'C', 5: '-'}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3470|std=C++20|before={{tti|convertible-to-non-slicing}} 可能会拒绝限定性转换|after=始终接受这些转换}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc view_interface}}
+{{dsc end}}
+
+===外部链接===
+{{eli|[https://stackoverflow.com/a/59659686 Read/write all values of a {{tt|std::multimap}} with a given key in C++20] &amp;mdash; SO}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,112 @@
+{{cpp/named req/title|LayoutMapping|notes={{mark since c++23}}}}
+{{cpp/named req/navbar}}
+
+{{named req|LayoutMapping}} 控制 {{c/core|std::mdspan}} 中从多维索引到数据句柄的一维偏移量的映射。
+
+===要求===
+如果类型 {{tt|M}} 实现了 {{lconcept|copyable}} 和 {{lconcept|equality_comparable}}，而且以下各项均为 {{c|true}}，则它满足{{named req/core|LayoutMapping}}：
+* {{c|std::is_nothrow_move_constructible_v&lt;M&gt;}}
+* {{c|std::is_nothrow_move_assignable_v&lt;M&gt;}}
+* {{c|std::is_nothrow_swappable_v&lt;M&gt;}}
+
+并且，给定以下各类型和值，下表所示的表达式均有效并具有所指定的语义：
+
+====凡例====
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|M}}|布局映射类}}
+{{dsc hitem|值|定义}}
+{{dsc|{{c|m}}|（可能 const 限定的）{{tt|M}} 类型的值}}
+{{dsc|{{c|i}}, {{c|j}}|（可能 const 限定的）整数包，为 {{c|m.extents()}} 中的多维索引}}
+{{dsc|{{c|r}}|{{c/core|typename M​::​extents_type}} 的（可能 const 限定的）秩索引}}
+{{dsc|{{c|d_r}}|（可能 const 限定的）整数包，满足 {{c|sizeof...(d_r) {{==}} M​::​extents_type​::​rank()}} 为 {{c|true}}，位于秩索引 {{c|r}} 的元素等于 {{c|1}}，且其他所有元素都等于 {{c|0}}}}
+{{dsc end}}
+
+====成员类型====
+{|class=wikitable
+!名称||类型||要求
+|-
+|{{tt|M::extents_type}}||类模板 {{c/core|std::extents}} 的特化||
+|-
+|{{tt|M::index_type}}||{{c/core|typename M::extents_type::index_type}}||
+|-
+|{{tt|M::rank_type}}||{{c/core|typename M::extents_type::rank_type}}||
+|-
+|{{tt|M::layout_type}}||布局映射策略 {{tt|MP}}，其中 {{c/core|typename MP::template mapping&lt;E&gt;}} 对于尺度类型 {{tt|E}} 为 {{tt|M}}||{{named req|LayoutMappingPolicy}}，满足 {{tt|M}} 是 {{tt|MP}} 的映射类型
+|}
+
+====成员函数与运算符====
+&lt;div style="max-width: 100%; overflow-x: scroll;"&gt;
+{|class=wikitable
+!表达式||返回类型||语义
+|-
+|{{c|m.extents()}}||{{c/core|const typename M​::​extents_type&amp;}}||返回到关联的多维索引空间的常量引用
+|-
+|{{c|m(i...)}}||{{c/core|typename M​::​index_type}}||
+* 返回非负整数 {{c|o}} 使得 {{c|o &lt; std::numeric_limits&lt;typename M​::​index_type&gt;​::​max()}} 和 {{c|o &lt;{{=}} std::numeric_limits&lt;std::size_t&gt;​::​max()}} 均为 {{c|true}}。
+* 此表达式等价于 {{c|m(static_cast&lt;typename M::index_type&gt;(i)...)}}。
+|-
+|{{c|m.required_span_size()}}||{{c/core|typename M​::​index_type}}||
+* 如果多维索引空间 {{c|m.extents()}} 不是 0，则返回 {{c|1}} 加上 {{c|m(i...)}} 对于所有 {{c|i}} 的最大值。
+* 否则，返回 {{c|0}}。
+|-
+|{{c|m.is_unique()}}||{{c/core|bool}}||仅当对于满足 {{c|(i !{{=}} j {{!!}} ...)}} 为 {{c|true}} 的所有 {{c|i}} 和 {{c|j}}，{{c|m(i...) !{{=}} m(j...)}} 都为 {{c|true}} 时，返回 {{c|true}}。&lt;ref group="note"&gt;即便满足条件，映射也可以返回 {{c|false}}。对于某些布局，高效地确定布局是否唯一可能并不可行。&lt;/ref&gt;
+|-
+|{{c|m.is_exhaustive()}}||{{c/core|bool}}||仅当对于范围 {{range|0|m.required_span_size()}} 中的每个 {{c|k}} 都存在一个 {{c|i}} 使得 {{c|m(i...)}} 等于 {{c|k}} 时，返回 {{c|true}}。&lt;ref group="note"&gt;同上，但此为穷尽布局的情形。&lt;/ref&gt;
+|-
+|{{c|m.is_strided()}}||{{c/core|bool}}||仅当对于 {{c|m.extents()}} 的每个秩索引 {{c|r}} 都存在一个整数 {{c|s_r}}，使得对于满足 {{c|(i + d_r)}} 是 {{c|m.extents()}} 中的多维索引的每个 {{c|i}}，{{c|m((i + d_r)...) - m(i...)}} 都等于 {{c|s_r}} 时，返回 {{c|true}}。&lt;ref group="note"&gt;同上，但此为跨步布局的情形。&lt;/ref&gt;
+|-
+|{{c|m.stride(r)}}||{{c/core|typename M​::​index_type}}||
+* 前条件是 {{c|m.is_strided()}} 为 {{c|true}}。
+* 返回如上述 {{c|m.is_strided()}} 中秩索引 {{c|r}} 处的步长 {{c|s_r}}。
+|-
+|{{c|M::is_always_unique()}}||{{c/core|bool}}||
+* 仅当对于 {{tt|M}} 类型的所有可能对象 {{c|m}}，{{c|m.is_unique()}} 都为 {{c|true}} 时，返回 {{c|true}}。&lt;ref group="note"&gt;即便满足条件，映射也可以返回 {{c|false}}。对于某些布局映射，高效地确定每个实例是否唯一可能并不可行。&lt;/ref&gt;
+* 返回值总是常量表达式。
+|-
+|{{c|M::is_always_exhaustive()}}||{{c/core|bool}}||
+* 仅当对于 {{tt|M}} 类型的所有可能对象 {{c|m}}，{{c|m.is_exhaustive()}} 都为 {{c|true}} 时，返回 {{c|true}}。&lt;ref group="note"&gt;同上，但此为穷尽实例的情形。&lt;/ref&gt;
+* 返回值总是常量表达式。
+|-
+|{{c|M::is_always_strided()}}||{{c/core|bool}}||
+* 仅当对于 {{tt|M}} 类型的所有可能对象 {{c|m}}，{{c|m.is_strided()}} 都为 {{c|true}} 时，返回 {{c|true}}。&lt;ref group="note"&gt;同上，但此为跨步实例的情形。&lt;/ref&gt;
+* 返回值总是常量表达式。
+|-
+|}
+&lt;references group="note"/&gt;
+&lt;/div&gt;
+
+===概念===
+定义了如下仅用于阐释的概念，以用于 {{lc|std::layout_stride::mapping}} 中的约束。
+{{ddcla|anchor=layout-mapping-alike|expos=yes|1=
+template&lt; class M &gt;
+concept /*layout-mapping-alike*/ = requires 
+{
+    requires /*is-extents*/&lt;typename M::extents_type&gt;;
+    { M::is_always_strided() }    -&gt; std::same_as&lt;bool&gt;;
+    { M::is_always_exhaustive() } -&gt; std::same_as&lt;bool&gt;;
+    { M::is_always_unique() }     -&gt; std::same_as&lt;bool&gt;;
+    std::bool_constant&lt;M::is_always_strided()&gt;::value;
+    std::bool_constant&lt;M::is_always_exhaustive()&gt;::value;
+    std::bool_constant&lt;M::is_always_unique()&gt;::value;
+};
+}}
+
+定义{{named req/core|LayoutMapping}}的最小可用约束。此概念检查上述的谓词映射特征函数都存在，都是常量表达式，且返回类型都为 {{c/core|bool}}。
+
+当且仅当 {{tt|E}} 是 {{lc|std::extents}} 的特化时，{{c/core|/*is-extents*/&lt;E&gt;}} 为 {{c|true}}。
+
+===标准库===
+序列标准库类型均满足{{named req/core|LayoutMapping}}：
+{{dsc begin}}
+{{dsc inc|cpp/container/mdspan/layout_left/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_right/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_stride/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_left_padded/dsc mapping}}
+{{dsc inc|cpp/container/mdspan/layout_right_padded/dsc mapping}}
+{{dsc end}}
+
+===参阅===
+* {{named req|LayoutMappingPolicy}}
+
+{{langlinks|en|es|ja|ru}}

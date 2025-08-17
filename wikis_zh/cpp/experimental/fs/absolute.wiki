@@ -1,0 +1,61 @@
+{{cpp/experimental/fs/title|absolute|system_complete}}
+{{cpp/experimental/fs/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/filesystem}}
+{{dcl|since=fs_ts|num=1|1=
+path absolute( const path&amp; p, const path&amp; base = current_path() );
+}}
+{{dcl|since=fs_ts|num=2|
+path system_complete( const path&amp; p );
+path system_complete( const path&amp; p, error_code&amp; ec );
+}}
+{{dcl end}}
+
+@1@ 返回根据以下规则 {{c|p}} 相对于 {{c|base}} 的绝对路径：
+:* 若 {{c|p}} 同时具有根名称和根目录（例如 {{c|"C:\users"}}），则返回该路径且无修改。
+:* 若 {{c|p}} 具有根名称，其后未跟着根目录（例如 {{c|"C:text.txt"}}），则将 {{c|base}} 插入 {{c|p}} 的根名称和 {{c|p}} 的其余部分之间。正式而言，返回 {{c|p.root_name() / fs::absolute(base).root_directory() / fs::absolute(base).relative_path() / p.relative_path()}}。
+:* 若 {{c|p}} 没有根名称但有根目录（例如 POSIX 系统上的 {{c|"/var/tmp/file.txt"}} 或 Windows 上的 {{c|"\users\ABC\Document.doc"}}），则将 {{c|base}} 的根名称（若它有）前附于 {{c|p}}（POSIX 系统上不会修改 {{c|p}}，而 Windows 系统上，{{c|"\users\ABC\Document.doc"}} 变为 {{c|"C:\users\ABC\Document.doc"}}。）正式而言，返回 {{c|fs::absolute(base).root_name() / p}}。
+:* 若 {{c|p}} 没有根名称和根目录（例如 {{c|"../file.txt"}}），则将整个 {{c|base}} 前附于 {{c|p}}。正式而言，返回 {{c|absolute(base) / p}}。
+@2@ 对于给定路径名 {{c|p}} 时 OS 文件打开 API 将要访问的文件，获取标定它的绝对路径。POSIX 系统上，这等价于 {{v|1}} 以默认 {{c|base}}（{{tt|fs::current_path()}}）调用。Windows 系统上，每个逻辑驱动器都有其自身的当前工作目录，因而若 {{c|p}} 尚不是绝对路径并具有根名称成分（例如 {{c|"E:filename.txt"}}），则使用该驱动器的当前工作目录，它可能是由早前执行的程序所设置的。
+
+===参数===
+{{par begin}}
+{{par|p|要转换为绝对形式的路径}}
+{{par|base|用作起始位置的路径（不必为绝对路径）}}
+{{par|ec|用于无抛出重载中尽显错误报告的输出参数}}
+{{par end}}
+
+===返回值===
+返回按上文所述组合 {{c|p}} 和 {{c|base}} 所构成的绝对（但不必是规范的）路径。
+
+===异常===
+{{cpp/experimental/fs/error_handling|p|base}}
+
+===注解===
+在支持根名称的系统上（比如 Windows），在有根名称的相对路径（例如 {{c|"D:file.txt"}}）上调用 {{tt|absolute}} 的结果，当 {{c|base}} 的根名称与之不同时通常会得到不存在的路径。
+
+===示例===
+{{example|code=
+#include &lt;filesystem&gt;
+#include &lt;iostream&gt;
+namespace fs = std::experimental::filesystem;
+
+int main()
+{
+    fs::path p = "C:cl.exe";
+    std::cout &lt;&lt; "当前路径为 " &lt;&lt; fs::current_path() &lt;&lt; '\n'
+              &lt;&lt; p &lt;&lt; " 的绝对路径为 " &lt;&lt; fs::absolute(p) &lt;&lt; '\n'
+	      &lt;&lt; p &lt;&lt; " 的系统完整路径为 "
+              &lt;&lt; fs::system_complete(p) &lt;&lt; '\n';
+}
+|p=true
+|output=
+当前路径为 "D:/local/ConsoleApplication1"
+"C:cl.exe" 的绝对路径为 "C:/local/ConsoleApplication1/cl.exe"
+"C:cl.exe" 的系统完整路径为 "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\cl.exe"
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/experimental/fs/dsc canonical}}
+{{dsc end}}

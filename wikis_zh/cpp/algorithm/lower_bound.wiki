@@ -1,0 +1,202 @@
+{{cpp/title|lower_bound}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl rev begin|num=1}}
+{{dcla|anchor=版本_1|constexpr=c++20|until=c++26|
+template&lt; class ForwardIt, class T &gt;
+ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                       const T&amp; value );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ForwardIt, class T = typename std::iterator_traits
+                                         &lt;ForwardIt&gt;::value_type &gt;
+constexpr ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                                 const T&amp; value );
+}}
+{{dcl rev end}}
+{{dcl rev begin|num=2}}
+{{dcla|anchor=版本_2|constexpr=c++20|until=c++26|
+template&lt; class ForwardIt, class T, class Compare &gt;
+ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                       const T&amp; value, Compare comp );
+}}
+{{dcl|since=c++26|1=
+template&lt; class ForwardIt, class T = typename std::iterator_traits
+                                         &lt;ForwardIt&gt;::value_type,
+          class Compare &gt;
+constexpr ForwardIt lower_bound( ForwardIt first, ForwardIt last,
+                                 const T&amp; value, Compare comp );
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+在已划分的范围 {{range|first|last}} 中查找第一个'''不'''先序于 {{c|value}} 的元素。
+
+@1@ 通过 {{c/core|operator&lt;}} 确定顺序：
+{{rev begin}}
+{{rev|until=c++20|
+返回 {{range|first|last}} 中首个使得 {{c|bool(*iter &lt; value)}} 是 {{c|false}} 的迭代器 {{c|iter}}，或者在不存在这种 {{c|iter}} 的情况下返回 {{c|last}}。
+
+如果 {{range|first|last}} 的元素 {{c|elem}} 没有按表达式 {{c|bool(elem &lt; value)}} {{rlp|/#要求|划分}}，那么行为未定义。
+}}
+{{rev|since=c++20|
+等价于 {{c|std::lower_bound(first, last, value, std::less{})}}。
+}}
+{{rev end}}
+
+@2@ 通过 {{c|comp}} 确定顺序：
+@@ 返回 {{range|first|last}} 中首个使得 {{c|bool(comp(*iter, value))}} 是 {{c|false}} 的迭代器 {{c|iter}}，或者在不存在这种 {{c|iter}} 的情况下返回 {{c|last}}。
+@@ 如果 {{range|first|last}} 的元素 {{c|elem}} 没有按表达式 {{c|bool(comp(elem, value))}} {{rlp|/#要求|划分}}，那么行为未定义。
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的|range=已划分}}
+{{par|value|要与元素比较的值}}
+{{par pred2|comp|如果第一个实参先序于第二个|p1=ForwardIt|t2=T}} 
+{{par hreq}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par req named|Compare|BinaryPredicate|notes=不要求满足 {{named req|Compare|}}。}}
+{{par end}}
+
+===返回值===
+返回到范围 {{range|first|last}} 的第一个不先序于 {{c|value}} 的元素的迭代器，或者在找不到这种元素时返回 {{c|last}}。
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}：
+
+@1,2@ 最多应用 {{mathjax-or|\(\scriptsize \log_{2}(N)+O(1)\)|log{{su|b=2}}(N)+O(1)}} 次 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行比较。
+
+@3,4@ 最多应用 {{mathjax-or|\(\scriptsize \log_{2}(N)+O(1)\)|log{{su|b=2}}(N)+O(1)}} 次比较函数 {{c|comp}}。
+
+然而，如果 {{tt|ForwardIt}} 不是{{named req|RandomAccessIterator}}，那么迭代器自增次数与 {{mathjax-or|\(\scriptsize N\)|N}} 成线性。要注意 {{lc|std::map}}、{{lc|std::multimap}}、{{lc|std::set}} 和 {{lc|std::multiset}} 的迭代器不是随机访问的，因此它们的 {{tt|lower_bound}} 成员函数的表现更好。
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algobase.h#L1023 libstdc++] 和 [https://github.com/llvm/llvm-project/blob/8350d9c23d76fb95f42674a1563cbe8c32582dd5/libcxx/include/__algorithm/lower_bound.h#L32 libc++] 中的实现。
+{{eq impl
+|title1=lower_bound (1)|ver1=1|1=
+template&lt;class ForwardIt, class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type&gt;
+ForwardIt lower_bound(ForwardIt first, ForwardIt last, const T&amp; value)
+{
+    return std::lower_bound(first, last, value, std::less{});
+}
+|title2=lower_bound (2)|ver2=2|2=
+template&lt;class ForwardIt, class T = typename std::iterator_traits&lt;ForwardIt&gt;::value_type,
+         class Compare&gt;
+ForwardIt lower_bound(ForwardIt first, ForwardIt last, const T&amp; value, Compare comp)
+{
+    ForwardIt it;
+    typename std::iterator_traits&lt;ForwardIt&gt;::difference_type count, step;
+    count = std::distance(first, last);
+    
+    while (count &gt; 0)
+    {
+        it = first;
+        step = count / 2;
+        std::advance(it, step);
+        
+        if (comp(*it, value))
+        {
+            first = ++it;
+            count -= step + 1;
+        }
+        else
+            count = step;
+    }
+    
+    return first;
+}
+}}
+
+===注解===
+尽管 {{tt|std::lower_bound}} 只要求 {{range|first|last}} 已划分，但是该算法通常会在 {{range|first|last}} 已排序的情况下使用，此时二分查找对于任意 {{c|value}} 都有效。
+
+与 {{lc|std::binary_search}} 不同，{{tt|std::lower_bound}} 不要求 {{c/core|operator&lt;}} 或 {{c|comp}} 不对称（即 {{c|a &lt; b}} 和 {{c|b &lt; a}} 的结果始终不同）。实际上，它甚至不要求 {{c|value &lt; *iter}} 或 {{c|comp(value, *iter)}} 对于 {{range|first|last}} 中的任意迭代器 {{c|iter}} 良构。
+
+{{feature test macro|__cpp_lib_algorithm_default_value_type|value=202403|std=C++26|算法中的[[cpp/language/list initialization|列表初始化]] {{vl|1,2}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;complex&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+struct PriceInfo { double price; };
+
+int main()
+{
+    std::vector&lt;int&gt; data = {1, 2, 4, 5, 5, 6};
+    
+    for (int i = 0; i &lt; 8; ++i)
+    {
+        // 搜索首个使得 i ≤ x 的元素 x
+        auto lower = std::lower_bound(data.begin(), data.end(), i);
+        
+        std::cout &lt;&lt; i &lt;&lt; " ≤ ";
+        lower != data.end()
+            ? std::cout &lt;&lt; *lower &lt;&lt; " 位于索引 " &lt;&lt; std::distance(data.begin(), lower)
+            : std::cout &lt;&lt; "没有找到";
+        std::cout &lt;&lt; '\n';
+    }
+    
+    std::vector&lt;PriceInfo&gt; prices = {{100.0}, {101.5}, {102.5}, {102.5}, {107.3}};
+    
+    for (const double to_find : {102.5, 110.2})
+    {
+        auto prc_info = std::lower_bound(prices.begin(), prices.end(), to_find,
+            [](const PriceInfo&amp; info, double value)
+            {
+                return info.price &lt; value;
+            });
+        
+        prc_info != prices.end()
+            ? std::cout &lt;&lt; prc_info-&gt;price &lt;&lt; " 位于索引 " &lt;&lt; prc_info - prices.begin()
+            : std::cout &lt;&lt; to_find &lt;&lt; " 没有找到";
+        std::cout &lt;&lt; '\n';
+    }
+
+    using CD = std::complex&lt;double&gt;;
+    std::vector&lt;CD&gt; nums{{1, 0}, {2, 2}, {2, 1}, {3, 0}};
+    auto cmpz = [](CD x, CD y) { return x.real() &lt; y.real(); };
+    #ifdef __cpp_lib_algorithm_default_value_type
+        auto it = std::lower_bound(nums.cbegin(), nums.cend(), {2, 0}, cmpz);
+    #else
+        auto it = std::lower_bound(nums.cbegin(), nums.cend(), CD{2, 0}, cmpz);
+    #endif
+    assert((*it == CD{2, 2}));
+}
+|output=
+0 ≤ 1 位于索引 0
+1 ≤ 1 位于索引 0
+2 ≤ 2 位于索引 1
+3 ≤ 4 位于索引 2
+4 ≤ 4 位于索引 2
+5 ≤ 5 位于索引 3
+6 ≤ 6 位于索引 5
+7 ≤ 没有找到
+102.5 位于索引 2
+110.2 没有找到
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=270|std=C++98|before={{tt|Compare}} 需要满足{{named req|Compare}}，并且 {{tt|T}} 需要是&lt;br&gt;{{named req|LessThanComparable}}的（要求严格弱序）|after=只需要划分；&lt;br&gt;容许异相比较}}
+{{dr list item|wg=lwg|dr=384|std=C++98|before=最多允许 {{mathjax-or|\(\scriptsize \log(N)+1\)|log{{su|b=2}}(N)+1}} 次比较|after=改成 {{mathjax-or|\(\scriptsize \log_{2}(N)+O(1)\)|log{{su|b=2}}(N)+O(1)}} 次}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before=如果 {{range|first|last}} 中存在任何迭代器 {{c|iter}} 使得&lt;br&gt;{{c|bool(comp(*iter, value))}} 是 {{c|false}}，那么&lt;br&gt;{{tt|std::lower_bound}} 可以返回 {{range|iter|last}} 中的任意迭代器|after=不能返回 {{c|iter}}&lt;br&gt;后的迭代器}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc equal_range}}
+{{dsc inc|cpp/algorithm/dsc partition}}
+{{dsc inc|cpp/algorithm/dsc partition_point}}
+{{dsc inc|cpp/algorithm/dsc upper_bound}}
+{{dsc inc|cpp/container/dsc lower_bound|set}}
+{{dsc inc|cpp/container/dsc lower_bound|multiset}}
+{{dsc inc|cpp/algorithm/ranges/dsc lower_bound}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|ko|pt|ru}}

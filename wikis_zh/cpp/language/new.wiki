@@ -1,0 +1,288 @@
+{{title|{{tt|new}} 表达式}}
+{{cpp/language/expressions/navbar}}
+
+创建并初始化拥有动态{{rlp|storage duration|存储期}}的对象，这些对象的生存期不受它们创建时所在的作用域限制。
+
+===语法===
+{{sdsc begin}} 
+{{sdsc|num=1|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{ttb|(}}{{spar sep|类型}}{{ttb|)}} {{spar optional|new初始化器}}
+}}
+{{sdsc|num=2|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{spar|类型}} {{spar optional|new初始化器}}
+}}
+{{sdsc|num=3|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{ttb|(}}{{spar sep|布置实参}}{{ttb|)}} {{ttb|(}}{{spar sep|类型}}{{ttb|)}} {{spar optional|new初始化器}}
+}}
+{{sdsc|num=4|1= 
+{{ttb|::}}{{mark optional}} {{ttb|new}} {{ttb|(}}{{spar sep|布置实参}}{{ttb|)}} {{spar|类型}} {{spar optional|new初始化器}}
+}}
+{{sdsc end}}
+
+@1,2@ 尝试创建{{rlp|type#类型的命名|类型标识}}{{spar sep|类型}}指代的类型的一个对象，它可以是数组类型{{rev inl|since=c++11|，可以包含{{rlp|auto|占位符类型说明符}}}}{{rev inl|since=c++17|，或包含将由{{rlp|class template argument deduction|类模板实参推导}}推出的类模板名}}。
+@3,4@ 同 {{v|1,2}}，但会向分配函数提供额外实参，见[[#布置 new|布置 {{c/core|new}}]]。
+
+===解释===
+{{par begin}}
+{{par|{{spar|类型}}|目标类型标识}}
+{{par|{{spar|new初始化器}}|圆括号包围的表达式列表{{rev inl|since=c++11|，或{{rlp|initialization|花括号包围的初始化器列表}}}}}}
+{{par|{{spar|布置实参}}|额外的布置实参}}
+{{par end}}
+
+
+{{c/core|new}} 表达式尝试申请存储空间，并在已申请的存储空间上，尝试构造并初始化一个无名的对象或对象数组。{{c/core|new}} 表达式返回一个指向它构造的对象或者指向数组初始元素的纯右值指针。
+
+在{{spar sep|类型}}包含圆括号的情况下，需要使用语法 {{v|1}} 或 {{v|3}}：
+{{source|1=
+new int(*[10])();    // 错误：会解析成 (new int) (*[10]) ()
+new (int (*[10])()); // OK：分配 10 个函数指针的数组
+}}
+
+另外，{{spar sep|类型}}是贪心的：它会包含所有可以成为声明符一部分的记号：
+
+{{source|1=
+new int + 1; // OK：解析成 (new int) + 1，增加 new int 返回的指针
+new int * 1; // 错误：解析成 (new int*) (1)
+}}
+
+符合下列条件之一时，必须要有 {{spar|new初始化器}}：
+* {{spar sep|类型}}是{{rlps|array#未知边界数组}}&lt;!-- p1009r2 ，作为缺陷报告接受 --&gt;
+{{rev begin}}
+{{rev|since=c++11|
+* {{spar sep|类型}}中使用了{{rlp|auto|占位符}}，即 {{c/core|auto}} {{rev inl|since=c++14|或 {{c/core|decltype(auto)}}}}{{rev inl|since=c++20|，可与{{rlp|constraints#概念|类型约束}}结合使用}}
+}}
+{{rev|since=c++17|
+* {{spar sep|类型}}中使用了类模板，且该模板有实参需要被{{rlp|class template argument deduction|推导}}
+}}
+{{rev end}}
+{{source|1=
+double* p = new double[]{1, 2, 3}; // 创建 double[3] 类型的数组
+auto p = new auto('c');            // 创建单个 char 类型的对象。p 是一个 char*
+
+auto q = new std::integral auto(1);         // OK: q 是一个 int*
+auto q = new std::floating_point auto(true); // 错误：不满足类型约束
+
+auto r = new std::pair(1, true); // OK: r 是一个 std::pair&lt;int, bool&gt;*
+auto r = new std::vector;        // 错误：无法推导元素类型
+}}
+
+===动态数组===
+如果{{spar sep|类型}}是数组类型，那么它第一维之外的所有维都必须指定为正的{{rev inl|until=c++14|{{rlp|constant expression|整数常量表达式}}}}{{rev inl|since=c++14|类型是 {{lc|std::size_t}} 的{{rlp|constant expression|经转换的常量表达式}}}}，但（仅当使用无括号语法 {{v|2}} 时）第一维可以是{{rev inl|until=c++14|整数类型、枚举类型或拥有单个到整数或枚举类型的非 explicit 转换函数的类类型}}{{rev inl|since=c++14|任何能转换成 {{lc|std::size_t}} 的表达式}}。这是唯一直接创建大小在运行时定义的数组的方法，这种数组常被称作''动态数组''：
+
+{{source|1=
+int n = 42;
+double a[n][5]; // 错误
+auto p1 = new double[n][5];   // OK
+auto p2 = new double[5][n];   // 错误：只有第一维可以不是常量
+auto p3 = new (double[n][5]); // 错误：语法 (1) 不能用于动态数组
+}}
+
+{{rrev multi|until1=c++11
+|rev1=
+如果第一维中的值（如果需要则转换到整数或枚举类型）为负，那么行为未定义。
+|rev2=
+下列情况中指定第一维的表达式的值非法：
+* 表达式是非类类型，且它的值在转换到 {{lc|std::size_t}} 前是负的；
+* 表达式拥有类类型，且它的值在用户定义转换函数后，在{{rlp|implicit conversion|第二次标准转换}}前是负的；
+* 表达式的值大于某个实现定义极限；
+* 表达式的值小于花括号包围的初始化器列表中提供的数组元素数量（也包含{{rlp|string literal|字符串字面量}}中的终止 {{c|'\0'}}）。
+
+如果第一维值因以上任何原因非法， 
+* 如果在转换到 {{lc|std::size_t}} 后，第一维是{{rlp|expressions#潜在求值表达式|潜在求值}}的{{rlps|constant expression#核心常量表达式}}，那么程序非良构，
+* 否则，如果要调用的分配函数是不抛出的（包括未声明为 {{lc|noexcept}} 的 {{lc|std::nothrow}} 重载），那么 {{c/core|new}} 表达式返回请求结果类型的空指针，
+* 否则，{{c/core|new}} 表达式不会调用分配函数，而是会抛出类型匹配具有 {{lc|std::bad_array_new_length}} 类型的{{rlp|catch|处理块}}的异常。
+}}
+
+第一维为零是可接受的，分配函数也会被调用。
+
+{{rrev|since=c++11|
+如果 {{spar sep|new初始化器}}是花括号包围的初始化器列表，并且第一维是{{rlp|expressions#潜在求值表达式|潜在求值}}的非{{rlps|constant expression#核心常量表达式}}，那么会检查从空初始化器列表{{rlp|copy initialization|复制初始化}}该数组中的一个虚设元素时需要满足的语义约束。
+}}
+
+===分配===
+{{c/core|new}} 表达式通过调用适当的[[cpp/memory/new/operator new|分配函数]]分配存储。如果{{spar sep|类型}}不是数组类型，那么函数名是 {{c|operator new}}。如果{{spar sep|类型}}是数组类型，那么函数名是 {{c|operator new[]}}。
+
+如[[cpp/memory/new/operator new|分配函数]]中所描述，C++ 程序可提供这些函数的全局和类特有替换函数。如果 {{c/core|new}} 表达式以 {{c|::}} 运算符开始，如 {{c|::new T}} 或 {{c|::new T[n]}}，那么忽略类特有替换函数（在全局{{rlp|scope|作用域}}中{{rlp|lookup|查找}}函数）。否则，如果 {{tt|T}} 是类类型，那么就会从 {{tt|T}} 的类作用域中开始查找。
+
+在调用分配函数时，{{c/core|new}} 表达式将请求的字节数作为 {{lc|std::size_t}} 类型的第一参数传递给它，该参数对于非数组 {{tt|T}} 恰好是 {{c|sizeof(T)}}。
+
+数组的分配中可能带有一个未指明的开销，且每次调用 {{c/core|new}} 的这个开销可能不同，除非选择的分配函数是标准非分配形式。{{c/core|new}} 表达式所返回的指针等于分配函数所返回的指针加上该值。许多实现使用数组开销存储数组中的对象数量，{{rlp|delete|{{c/core|delete[]}}}} 表达式会用它进行正确数量的析构函数调用。另外，如果用 {{c/core|new}} 分配 {{c/core|char}}、{{c/core|unsigned char}} {{rev inl|since=c++17|或 {{ltt std|cpp/types/byte}} }}的数组，那么它可能从分配函数请求额外内存，以此保证所有不大于请求数组大小的类型的对象在放入所分配的数组中时能够正确对齐。
+
+{{rev begin}}
+{{rev|since=c++14|
+允许将各个 {{c/core|new}} 表达式通过可替换分配函数所进行的分配予以省略或合并。在省略的情况下，存储可以由编译器提供，而无需调用分配函数（这也允许优化掉不使用的 {{c/core|new}} 表达式）。在合并的情况下且满足以下所有条件时，{{c/core|new}} 表达式 {{c|E1}} 所做的分配可以被扩展，以提供另一个 {{c/core|new}} 表达式 {{c|E2}} 的额外存储：
+@1@ {{c|E1}} 分配的对象的生存期严格包含 {{c|E2}} 所分配对象的生存期。
+@2@ {{c|E1}} 与 {{c|E2}} 会调用同一可替换全局分配函数。
+@3@ 对于抛出异常的分配函数，{{c|E1}} 与 {{c|E2}} 中的异常会首先被同一处理块捕获。
+
+注意此优化仅在使用 {{c/core|new}} 表达式，而非调用可替换分配函数的任何其他方法时允许：{{c|delete [] new int[10];}} 能被优化掉，但 {{c|operator delete(operator new(10));}} 不能。
+}}
+{{rev|since=c++20|
+在{{rlp|constant expression|常量表达式}}求值期间，始终省略对分配函数的调用。只有在其他情况下调用可替换全局分配函数的 {{c/core|new}} 表达式能在常量表达式中求值。
+}}
+{{rev end}}
+
+{{anchor|布置 new}}
+====布置 {{c/core|new}}====
+如果提供了{{spar|布置实参}}，那么它们会作为额外实参传递给分配函数。这些分配函数被称作“布置 {{c/core|new}}”，这来源于标准分配函数 {{c|void* operator new(std::size_t, void*)}}，它直接返回未更改的第二实参。它被用于在已分配的存储中构造对象：
+
+{{source|1=
+// 在任何块作用域内……
+{
+    // 静态分配拥有自动存储期的存储，对任何对象类型 “T” 足够大。
+    alignas(T) unsigned char buf[sizeof(T)];
+    
+    T* tptr = new(buf) T; // 构造一个 “T” 对象，将它直接置于
+                          // 你预分配的位于内存地址 “buf” 的存储。
+    
+    tptr-&gt;~T();           // 如果程序依赖对象的析构函数的副作用，你必须**手动**调用它。
+}                         // 离开此块作用域自动解分配 “buf”。
+}}
+
+注意：{{named req|Allocator}}类的各成员函数封装了此功能。
+
+{{rrev|since=c++17|
+在分配具有超出 {{ltt|cpp/preprocessor/replace#预定义宏|__STDCPP_DEFAULT_NEW_ALIGNMENT__}} 的对齐要求的对象或这种对象的数组时，{{c/core|new}} 表达式将对齐要求作为第二实参（以 {{lc|std::align_val_t}} 包装）传递给分配函数（对于布置形式，{{spar sep|布置实参}}被放在对齐之后，作为第三、第四个实参等）。如果重载决议失败（当定义了具有不同签名的类特有分配函数时，会发生此种情况，因为它隐藏了全局版本），那么会以实参列表中不带对齐再次尝试进行重载决议。这允许不关心对齐的类特有分配函数优先于全局的关心对齐的分配函数。
+}}
+
+{{source|1=
+new T;      // 调用 operator new(sizeof(T))
+            // (C++17) 或 operator new(sizeof(T), std::align_val_t(alignof(T))))
+new T[5];   // 调用 operator new[](sizeof(T)*5 + overhead)
+            // (C++17) 或 operator new(sizeof(T)*5+overhead, std::align_val_t(alignof(T))))
+new(2,f) T; // 调用 operator new(sizeof(T), 2, f)
+            // (C++17) 或 operator new(sizeof(T), std::align_val_t(alignof(T)), 2, f)
+}}
+
+如果不抛出的分配函数（例如 {{c|new(std::nothrow) T}} 选择的）因为分配失败返回空指针，那么 {{c/core|new}} 表达式会立即返回，而不会试图初始化对象或调用解分配函数。如果将空指针作为实参传给不分配的布置 {{c/core|new}} 表达式，而这会使得被选择的标准不分配布置分配函数返回空指针，那么行为未定义。
+
+===初始化===
+{{c/core|new}} 表达式所创建的对象按照下列规则初始化。
+
+如果{{spar sep|类型}}不是数组类型，那么会在所得内存区域中构造单个对象：
+* 如果没有 {{spar|new初始化器}}，那么对象会被{{rlp|default initialization|默认初始化}}。
+* 如果 {{spar sep|new初始化器}}是圆括号包围的表达式列表，那么对象会被{{rlp|direct initialization|直接初始化}}。
+{{rrev|since=c++11|
+* 如果 {{spar sep|new初始化器}}是花括号包围的初始化器列表，那么对象会被{{rlp|list initialization|列表初始化}}。
+}}
+
+如果{{spar sep|类型}}是数组类型，那么会初始化一个数组的对象：
+* 如果没有 {{spar|new初始化器}}，那么每个元素都会被{{rlp|default initialization|默认初始化}}。
+:* 即使第一维为零，也需要满足默认初始化一个虚设元素时需要满足的语义约束。
+* 如果 {{spar sep|new初始化器}}是一对空括号，那么每个元素都会被{{rlp|value initialization|值初始化}}。
+:* 即使第一维为零，也需要满足值初始化一个虚设元素时需要满足的语义约束。
+{{rev begin}}
+{{rev|since=c++11|
+* 如果 {{spar sep|new初始化器}}是花括号包围的初始化器列表，那么数组会被{{rlp|aggregate initialization|聚合初始化}}。
+}}
+{{rev|since=c++20|
+* 如果 {{spar sep|new初始化器}}是圆括号包围的非空表达式列表，那么数组会被{{rlp|aggregate initialization|聚合初始化}}。
+}}
+{{rev end}}
+
+====初始化失败====
+如果初始化因抛出异常而终止（例如来自构造函数），那么程序会查找匹配的解分配函数，然后：
+* 如果找到了合适的解分配函数，那么就会调用该函数以解分配对象构造处的内存。然后异常会在 {{c/core|new}} 表达式的语境中继续传播。
+* 如果找不到没有歧义的匹配的解分配函数，那么传播异常不会使得对象的内存被释放。这种情况只有在之前调用的分配函数没有分配内存时才合适，否则很有可能会有内存泄漏。
+
+匹配的解分配函数的{{rlp|lookup|查找}}作用域按以下方式确定：
+* 如果 {{c/core|new}} 表达式不以 {{tt|::}} 开始，并且要分配的类型是类类型 {{tt|T}} 或它的数组，那么会在 {{tt|T}} 的类作用域中搜索解分配函数的名字。
+* 否则，或者没有在 {{tt|T}} 的类作用域中找到匹配的解分配函数，那么会在{{rlp|scope|全局作用域}}中搜索解分配函数的名字。
+
+对于非布置分配函数，那么会以通常的解分配函数查找方式查找匹配的解分配函数（见 {{rlp|delete|delete表达式}}）。
+
+对于布置分配函数，匹配的解分配函数必须具有相同数量的形参，（在{{rlp|function#函数类型|形参变换}}后）除首个形参外的每个形参的类型都必须与分配函数的对应形参的类型一致。
+* 如果查找只找到了一个匹配的解分配函数，那么就会调用该函数；后者不会调用任何解分配函数。
+* 如果查找找到了一个非布置解分配函数，并且该函数在被视为布置解分配函数时与分配函数匹配，那么程序非良构。
+
+在任何情况下，匹配的解分配函数（如果存在）{{rev inl|since=c++11|不能被弃置，并且}}必须在 {{c/core|new}} 表达式的出现点可访问。
+{{source|1=
+struct S
+{
+    // 布置分配函数：
+    static void* operator new(std::size_t, std::size_t);
+    
+    // 非布置解分配函数：
+    static void operator delete(void*, std::size_t);
+};
+
+S* p = new (0) S; // 错误：布置分配函数匹配到了非布置解分配函数
+}}
+
+如果 {{c/core|new}} 表达式（因为初始化失败）调用了解分配函数，那么通过以下方式确定传递给该函数的实参：
+* 第一个实参是从分配函数的调用返回的（{{c/core|void*}} 类型的）值。
+* 其他形参（仅限布置解分配函数）是之前传递给布置分配函数的{{spar|布置实参}}。
+
+如果允许实现在调用分配函数的过程中引入临时对象或复制任何实参，那么未指定在调用分配函数和解分配函数时是否会使用相同的对象。
+
+===内存泄漏===
+{{c/core|new}} 表达式所创建的对象（拥有动态存储期的对象）会持续到将 {{c/core|new}} 表达式所返回的指针用于匹配的 {{rlp|delete|delete 表达式}}之时。如果指针的原值丢失，那么对象不可达且无法解分配：发生''内存泄漏''。
+
+对指针赋值时可能发生：
+
+{{source|1=
+int* p = new int(7); // 动态分配的 int 带值 7
+p = nullptr; // 内存泄漏
+}}
+
+或指针离开作用域：
+
+{{source|1=
+void f()
+{
+    int* p = new int(7);
+} // 内存泄漏
+}}
+
+或因为异常：
+
+{{source|1=
+void f()
+{
+    int* p = new int(7);
+    g();      // 可能抛出异常
+    delete p; // 如果没有异常则 ok
+} // 如果 g() 抛出异常则内存泄漏
+}}
+
+为了简化动态分配的对象管理，通常将 {{c/core|new}} 表达式的结果存储到[[cpp/memory#智能指针|智能指针]]中：{{rev inl|until=c++17|{{lc|std::auto_ptr}} }}{{rev inl|since=c++11|{{lc|std::unique_ptr}} 或 {{lc|std::shared_ptr}}}}。这些指针保证在上述情形中执行 {{c/core|delete}} 表达式。
+
+===注解===
+[https://itanium-cxx-abi.github.io/cxx-abi/abi.html#array-cookies Itanium C++ ABI] 要求数组分配开销在创建的数组元素类型为可平凡析构时为零。MSVC 也是这样。
+
+某些实现（如 VS 2019 v16.7 前的 MSVC）在元素类型非可平凡析构的情况下非分配布置数组 {{c/core|new}} 时会有非零的数组分配开销，这从 {{cwg|2382}} 起不再遵从标准。
+
+创建 {{c/core|unsigned char}}{{rev inl|since=c++17| 或 {{ltt|cpp/types/byte|std::byte}}}} 的数组的非分配布置数组 {{c/core|new}} 能用于在给定的存储区域{{rlp|lifetime|隐式创建对象}}：它结束与该数组重叠的对象的生存期，然后在该数组中隐式创建隐式生存期类型的对象。
+
+{{lc|std::vector}} 提供了与一维的动态数组类似的功能。
+
+===关键词===
+{{ltt|cpp/keyword/new}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=74|std=c++98|before=第一维中的值必须拥有整数类型|after=容许枚举类型}}
+{{dr list item|wg=cwg|dr=299|std=c++98|before=第一维中的值必须拥有整数或枚举类型|after=容许有唯一的到整数或枚举&lt;br&gt;类型的转换函数的类类型}}
+{{dr list item|wg=cwg|dr=624|std=C++98|before=未指明要分配的对象的大小超出实现定义的限制时的行为|after=此时不会分配存储，并且会抛出异常}}
+{{dr list item|wg=cwg|dr=1748|std=C++98|before=要求非分配布置 {{c/core|new}} 检查实参是否为空|after=空实参导致未定义行为}}
+{{dr list item|wg=cwg|dr=1992|std=C++11|before={{c|new (std::nothrow) int[N]}} 可能&lt;br&gt;会抛出 {{lc|std::bad_array_new_length}}|after=改为返回空指针}}
+{{dr list item|wg=cwg|dr=2102|std=C++98|before=不明确在初始化空数组时是否需要默认/值初始化良构|after=需要}}
+{{dr list item|wg=cwg|dr=2382|std=C++98|before=非分配布置数组 {{c/core|new}} 能要求分配开销|after=不允许这种分配开销}}
+{{dr list item|wg=cwg|dr=2392|std=C++11|before=即使第一维没有潜在求值，程序也可能会非良构|after=此时良构}}
+{{dr list item|paper=P1009R2|std=C++11|before={{c/core|new}} 表达式中不能推导数组边界|after=可以推导}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|constructor|构造函数}}
+* {{rlp|copy elision|复制消除}}
+* {{rlp|default constructor|默认构造函数}}
+* {{rlpt|delete}}
+* {{rlp|destructor|析构函数}}
+* {{rlp|initialization|初始化}}
+** {{rlp|aggregate initialization|聚合初始化}}
+** {{rlp|default initialization|默认初始化}}
+** {{rlp|direct initialization|直接初始化}}
+** {{rlp|list initialization|列表初始化}}
+** {{rlp|value initialization|值初始化}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

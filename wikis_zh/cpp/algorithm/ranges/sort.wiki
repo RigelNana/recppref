@@ -1,0 +1,188 @@
+{{cpp/ranges/title|sort}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;I, Comp, Proj&gt;
+constexpr I 
+    sort( I first, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::random_access_range R, class Comp = ranges::less,
+          class Proj = std::identity &gt;
+requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    sort( R&amp;&amp; r, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+以非降序排序范围 {{range|first|last}} 中的元素。不保证保持等价元素的顺序。
+
+若对于指向序列的任何迭代器 {{tt|it}} 与使得 {{tt|it + n}} 为指向序列元素的合法迭代器的任何非负整数 {{tt|n}}，{{c|std::invoke(comp, std::invoke(proj, *(it + n)), std::invoke(proj, *it))}} 求值均为 {{c|false}}，则称序列相对于比较器 {{c|comp}} 有序。
+
+@1@ 用给定的二元比较函数 {{c|comp}} 比较元素。
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要排序的|sentinel=yes}}
+{{par|r|要排序的范围}}
+{{par|comp|应用到投影后元素的谓词}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+等于 {{tt|last}} 的迭代器。
+
+===复杂度===
+应用比较与投影 {{mathjax-or|\(\scriptsize \mathcal{O}(N\cdot\log{(N)})\)|𝓞(N&amp;middot;log(N))}} 次，其中 {{c|1=N = ranges::distance(first, last)}}。
+
+===可能的实现===
+注意典型实现使用{{enwiki|Introsort|内省排序}}。参阅 [https://github.com/microsoft/STL/blob/e745bad3b1d05b5b19ec652d68abb37865ffa454/stl/inc/algorithm#L7575-L7641 MSVC STL] 与 [https://github.com/gcc-mirror/gcc/blob/54258e22b0846aaa6bd3265f592feb161eecda75/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1808-L1834 libstdc++] 中的实现。
+{{eq fun|1=
+struct sort_fn
+{
+    template&lt;std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+             class Comp = ranges::less, class Proj = std::identity&gt;
+    requires std::sortable&lt;I, Comp, Proj&gt;
+    constexpr I
+        operator()(I first, S last, Comp comp = {}, Proj proj = {}) const
+    {
+        if (first == last)
+            return first;
+&lt;!--    
+        const auto pivot = *ranges::next(first, ranges::distance(first, last) / 2, last);
+        
+        auto tail1 = ranges::partition(first, last, [&amp;pivot, &amp;comp, &amp;proj](const auto&amp; em) {
+            return std::invoke(comp, std::invoke(proj, em), std::invoke(proj, pivot)); });
+        auto tail2 = ranges::partition(tail1, [&amp;pivot, &amp;comp, &amp;proj](const auto&amp; em) { 
+            return !std::invoke(comp, std::invoke(proj, pivot), std::invoke(proj, em)); });
+        
+        (*this)(first, tail1.begin(), std::ref(comp), std::ref(proj));
+        (*this)(tail2, std::ref(comp), std::ref(proj));
+        
+        return {ranges::next(first, last)};
+--&gt;
+
+        I last_iter = ranges::next(first, last);
+        ranges::make_heap(first, last_iter, std::ref(comp), std::ref(proj));
+        ranges::sort_heap(first, last_iter, std::ref(comp), std::ref(proj));
+        
+        return last_iter;
+    }
+    
+    template&lt;ranges::random_access_range R, class Comp = ranges::less,
+             class Proj = std::identity&gt;
+    requires std::sortable&lt;ranges::iterator_t&lt;R&gt;, Comp, Proj&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R&gt;
+        operator()(R&amp;&amp; r, Comp comp = {}, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(comp), std::move(proj));
+    }
+};
+
+inline constexpr sort_fn sort {};
+}}
+
+===注解===
+{{lc|std::sort}} 使用 {{lc|std::iter_swap}} 来交换元素，而 {{tt|ranges::sort}} 代之以使用 {{lc|ranges::iter_swap}}（它会对 {{tt|iter_swap}} 进行 ADL，这与 {{lc|std::iter_swap}} 不同）
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+
+void print(auto comment, auto const&amp; seq, char term = ' ')
+{
+    for (std::cout &lt;&lt; comment &lt;&lt; '\n'; auto const&amp; elem : seq)
+        std::cout &lt;&lt; elem &lt;&lt; term;
+    std::cout &lt;&lt; '\n';
+}
+
+struct Particle
+{
+    std::string name; double mass; // MeV
+    template&lt;class Os&gt; friend
+    Os&amp; operator&lt;&lt;(Os&amp; os, Particle const&amp; p)
+    {
+        return os &lt;&lt; std::left &lt;&lt; std::setw(8) &lt;&lt; p.name &lt;&lt; " : " &lt;&lt; p.mass &lt;&lt; ' ';
+    }
+};
+
+int main()
+{
+    std::array s {5, 7, 4, 2, 8, 6, 1, 9, 0, 3};
+
+    namespace ranges = std::ranges;
+
+    ranges::sort(s);
+    print("以默认 operator&lt; 排序", s);
+
+    ranges::sort(s, ranges::greater());
+    print("以标准库比较函数对象排序", s);
+
+    struct
+    {
+        bool operator()(int a, int b) const { return a &lt; b; }
+    } customLess;
+    ranges::sort(s.begin(), s.end(), customLess);
+    print("以自定义函数对象排序", s);
+
+    ranges::sort(s, [](int a, int b) { return a &gt; b; });
+    print("以 lambda 表达式排序", s);
+
+    Particle particles[]
+    {
+        {"Electron", 0.511}, {"Muon", 105.66}, {"Tau", 1776.86},
+        {"Positron", 0.511}, {"Proton", 938.27}, {"Neutron", 939.57}
+    };
+    ranges::sort(particles, {}, &amp;Particle::name);
+    print("以投影按名字排序", particles, '\n');
+    ranges::sort(particles, {}, &amp;Particle::mass);
+    print("以投影按质量排序", particles, '\n');
+}
+|output=
+以默认 operator&lt; 排序
+0 1 2 3 4 5 6 7 8 9
+以标准库比较函数对象排序
+9 8 7 6 5 4 3 2 1 0
+以自定义函数对象排序
+0 1 2 3 4 5 6 7 8 9
+以 lambda 表达式排序
+9 8 7 6 5 4 3 2 1 0
+
+以投影按名字排序
+Electron : 0.511
+Muon     : 105.66
+Neutron  : 939.57
+Positron : 0.511
+Proton   : 938.27
+Tau      : 1776.86
+
+以投影按质量排序
+Electron : 0.511
+Positron : 0.511
+Muon     : 105.66
+Proton   : 938.27
+Neutron  : 939.57
+Tau      : 1776.86
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/dsc sort}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

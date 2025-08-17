@@ -1,0 +1,70 @@
+{{cpp/chrono/year_month_day/title|operator sys_days|operator local_days}}
+{{cpp/chrono/year_month_day/navbar}}
+{{dcl begin}}
+{{dcl|since=c++20|num=1|1=
+constexpr operator std::chrono::sys_days() const noexcept;
+}}
+{{dcl|since=c++20|num=2|1=
+constexpr explicit operator std::chrono::local_days() const noexcept;
+}}
+{{dcl end}}
+
+将 {{c|*this}} 转换成与此 {{rlpt|../year_month_day|year_month_day}} 表示同一日期的 {{lc|std::chrono::time_point}}。
+
+@1@ 若 {{lc|ok()}} 为 {{c|true}}，则返回值保有从 {{lc|std::chrono::system_clock}} 纪元 (1970-01-01) 到 {{c|*this}} 的日数总计。若 {{c|*this}} 表示的日期先于纪元，则结果为负。
+
+@@ 否则，若存储的 {{tt|year}} 和 {{tt|month}} 合法（{{c|year().ok() &amp;&amp; month().ok()}} 为 {{c|true}}），则返回值为 {{c|sys_days(year()/month()/1d) + (day() - 1d)}}。
+
+@@ 否则（若 {{c|year().ok() &amp;&amp; month().ok()}} 为 {{c|false}}），返回值未指定。
+
+@@ 范围 {{c|[std::chrono::days{-12687428}, std::chrono::days{11248737}]}} 中的 {{lc|std::chrono::sys_days}}，转换到 {{rlpt|../year_month_day|year_month_day}} 再转换回来后，生成相同值。
+
+@2@ 同 {{v|1}}，但代之以返回 {{lc|std::chrono::local_days|local_days}}。等价于 {{c|return local_days(sys_days(*this).time_since_epoch());}}。
+
+=== 注解 ===
+转换到 {{lc|std::chrono::sys_days}} 再转换回来，能用于正规化含有非法 {{tt|day}} 但有合法 {{tt|year}} 和 {{tt|month}} 的 {{rlpt|../year_month_day|year_month_day}}：
+{{source|1=
+using namespace std::chrono;
+auto ymd = 2017y/January/0;
+ymd = sys_days{ymd};
+// ymd 现在是 2016y/December/31
+}}
+
+能通过加（或减）零个 {{lc|std::chrono::months}} 来正规化年和月：
+{{source|1=
+using namespace std::chrono;
+constexpr year_month_day normalize(year_month_day ymd)
+{
+    ymd += months{0}; // 正规化年和月
+    return sys_days{ymd}; // 正规化日
+}
+static_assert(normalize(2017y/33/59) == 2019y/10/29);
+}}
+
+=== 示例 ===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+
+int main()
+{
+    using namespace std::chrono;
+    const auto today = sys_days{std::chrono::floor&lt;days&gt;(system_clock::now())};
+    for (const year_month_day ymd : {&lt;!----&gt;{November/15/2020}, {November/15/2120}, today})
+    {
+        std::cout &lt;&lt; ymd;
+        const auto delta = (sys_days{ymd} - today).count();
+        (delta &lt; 0) ? std::cout &lt;&lt; " 是 " &lt;&lt; -delta &lt;&lt; " 天前\n" :
+        (delta &gt; 0) ? std::cout &lt;&lt; " 是现在的 " &lt;&lt; delta &lt;&lt; " 天后\n"
+                    : std::cout &lt;&lt; " 是今天!\n";
+    }
+}
+|p=true
+|output=
+2020-11-15 是 1014 天前
+2120-11-15 是现在的 35510 天后
+2023-08-26 是今天!
+}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,91 @@
+{{cpp/utility/functional/function_ref/title|function_ref}}
+{{cpp/utility/functional/function_ref/navbar}}
+
+{{dcl begin}}
+{{dcla|num=1|since=c++26|
+template&lt; class F &gt;
+function_ref( F* f ) noexcept;
+}}
+{{dcla|num=2|since=c++26|
+template&lt; class F &gt;
+function_ref( F&amp;&amp; f ) noexcept;
+}}
+{{dcl|num=3|since=c++26|
+template&lt; auto f &gt;
+function_ref( std::nontype_t&lt;f&gt; ) noexcept;
+}}
+{{dcla|num=4|since=c++26|
+template&lt; auto f, class U &gt;
+function_ref( std::nontype_t&lt;f&gt;, U&amp;&amp; obj ) noexcept;
+}}
+{{dcla|num=5|since=c++26|
+template&lt; auto f, class T &gt;
+function_ref( std::nontype_t&lt;f&gt;, /* cv */ T* obj ) noexcept;
+}}
+{{dcl|num=6|since=c++26|1=
+function_ref( const function_ref&amp; other ) = default;
+}}
+{{dcl end}}
+
+创建新的 {{tt|std::function_ref}}。
+
+@1@ 以 {{c|f}} 初始化 {{rlpsi|/#bound-entity}}，并以某个函数 {{tti|thunk}} 的地址初始化 {{rlpsi|/#thunk-ptr}}。如果 {{c|f}} 是空指针则其行为未定义。
+* {{cpp/enable_if|both {{c|std::is_function_v&lt;F&gt;}} and {{c|/*is-invocable-using*/&lt;F&gt;}} are {{c|true}}}}.
+@2@ 以 {{c|std::addressof(f)}} 初始化 {{tti|bound-entity}}，并以某个函数 {{tti|thunk}} 的地址初始化 {{tti|thunk-ptr}}。
+* 令 {{c|T}} 为 {{c|std::remove_reference_t&lt;F&gt;}}。{{cpp/enable_if|：
+** {{c|std::remove_cvref_t&lt;F&gt;}} 与 {{tt|function_ref}} 不是相同类型，
+** {{c|std::is_member_pointer_v&lt;T&gt;}} 为 {{c|false}}，并且
+** {{c|/*is-invocable-using*/&lt;/*cv*/ T&amp;&gt;}} 为 {{c|true}}
+}}。
+@3@ 以指向某个未指定对象的指针或空指针值初始化 {{tti|bound-entity}}，并以某个函数 {{tti|thunk}} 的地址初始化 {{tti|thunk-ptr}}。
+* 令 {{c|F}} 为 {{c|decltype(f)}}。{{cpp/enable_if| {{c|/*is-invocable-using*/&lt;F&gt;}} 为 {{c|true}} }}。
+* 如果当 {{c|std::is_pointer_v&lt;F&gt; {{!!}} std::is_member_pointer_v&lt;F&gt;}} 为 {{c|true}} 时 {{c|f !{{=}} nullptr}} 为 {{c|false}}，则程序非良构。
+@4@ 以 {{c|std::addressof(obj)}} 初始化 {{tti|bound-entity}}，并以某个函数 {{tti|thunk}} 的地址初始化 {{tti|thunk-ptr}}。
+* 令 {{c|T}} 为 {{c|std::remove_reference_t&lt;U&gt;}} 并令 {{c|F}} 为 {{c|decltype(f)}}。{{cpp/enable_if|：
+** {{c|std::is_rvalue_reference_v&lt;U&amp;&amp;&gt;}} 为 {{c|false}}，并且
+** {{c|/*is-invocable-using*/&lt;F, /*cv*/ T&amp;&gt;}} 为 {{c|true}}
+}}。
+* 如果当 {{c|std::is_pointer_v&lt;F&gt; {{!!}} std::is_member_pointer_v&lt;F&gt;}} 为 {{c|true}} 时 {{c|f !{{=}} nullptr}} 为 {{c|false}}，则程序非良构。
+@5@ 以 {{c|obj}} 初始化 {{tti|bound-entity}}，并以某个函数 {{tti|thunk}} 的地址初始化 {{tti|thunk-ptr}}。如果当 {{c|std::is_member_pointer_v&lt;F&gt;}} 为 {{c|true}} 时 {{c|obj}} 是空指针，则其行为未定义。
+* 令 {{c|F}} 为 {{c|decltype(f)}}。{{cpp/enable_if|{{c|/*is-invocable-using*/&lt;F, /*cv*/ T*&gt;}} 为 {{c|true}}}}。
+* 如果当 {{c|std::is_pointer_v&lt;F&gt; {{!!}} std::is_member_pointer_v&lt;F&gt;}} 为 {{c|true}} 时 {{c|f !{{=}} nullptr}} 为 {{c|false}}，则程序非良构。
+@6@ 预置的复制构造函数复制 {{c|other}} 的 {{tti|bound-entity}} 和 {{tti|thunk-ptr}}。
+
+由某个函数 {{tti|thunk}} 的地址来初始化 {{tti|thunk-ptr}}，使得对 {{box|{{tti|thunk}}{{c/core|(}}{{tti|bound-entity}}{{c/core|,}}{{tti| call-args}}{{c/core|...)}}}} 的调用[[cpp/language/expressions#表达式等价|表达式等价]]于：
+{|class="wikitable"
+!重载
+!表达式等价
+|-
+!{{vl|1,3}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(f,}}{{tti| call-args}}{{c/core|...)}}}}
+|-
+!{{vl|2}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(static_cast&lt;}}{{spar|cv}}{{c/core| T&amp;&gt;(f),}}{{tti| call-args}}{{c/core|...)}}}}
+|-
+!{{vl|4}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(f, static_cast&lt;}}{{spar|cv}}{{c/core| T&amp;&gt;(obj),}}{{tti| call-args}}{{c/core|...)}}}}
+|-
+!{{vl|5}}
+|{{box|{{c/core|std::invoke_r&lt;R&gt;(f, obj,}}{{tti| call-args}}{{c/core|...)}}}}
+|}
+
+当且仅当以下情况下 {{c|/*is-invocable-using*/&lt;T...&gt;}} 为 {{c|true}}：
+* 若 {{spar|noex}} 为 {{c|true}} 则 {{c|std::is_nothrow_invocable_r_v&lt;R, T..., Args...&gt;}} 为 {{c|true}}，或者
+* {{c|std::is_invocable_r_v&lt;R, T..., Args...&gt;}} 为 {{c|true}}
+
+===参数===
+{{par begin}}
+{{par|other|要从之复制的另一 {{tt|function_ref}}}}
+{{par|f|要包装的函数或{{named req|Callable}}对象}}
+{{par|obj|要绑定的对象或指针}}
+{{par end}}
+
+===示例===
+{{example}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/move_only_function/dsc constructor}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

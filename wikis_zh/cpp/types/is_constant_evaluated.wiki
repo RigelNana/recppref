@@ -1,0 +1,108 @@
+{{cpp/title|is_constant_evaluated}}
+{{cpp/utility/navbar}}
+{{ddcl|header=type_traits|since=c++20|
+constexpr bool is_constant_evaluated() noexcept;
+}}
+
+检查函数调用是否出现在常量求值的场合。若对调用的求值出现在[[cpp/language/constant expression#明显常量求值的表达式|明显常量求值]]的表达式或类型转换的求值中，则返回 {{c|true}}，否则返回 {{c|false}}。
+
+为确定下列变量的初始化式是否是明显常量求值，编译期可能首先试探性常量求值：
+* 引用类型或 const 限定的整数或枚举类型的变量
+* 静态及线程局域变量
+
+不建议依赖于这种情况的结果。
+
+{{source|1=
+int y = 0;
+const int a = std::is_constant_evaluated() ? y : 1;
+// 试探性常量求值失败，常量求值被舍弃。
+// 变量 a 动态初始化为 1
+
+const int b = std::is_constant_evaluated() ? 2 : y;
+// 常量求值（std::is_constant_evaluation() == true）成功。
+// 变量 b 静态初始化为 2
+}}
+
+===参数===
+（无）
+
+===返回值===
+若调用的求值出现在明显常量求值的表达式或类型转换的求值中，则返回 {{c|true}}，否则返回 {{c|false}}。
+
+===可能的实现===
+{{eq fun|1=
+// 此实现要求 C++23 if consteval。
+constexpr bool is_constant_evaluated() noexcept
+{
+    if consteval
+    {
+        return true;
+    }
+    else &lt;!--Parentheses are syntactically required--&gt;
+    {
+        return false;
+    }
+}
+}}
+
+===注解===
+{{c|std::is_constant_evaluated()}} 直接用作 {{ltt|cpp/language/static_assert}} 声明和 {{lt|cpp/language/if#constexpr_if|constexpr if 语句}}的条件时，返回值总是 {{c|true}}。
+
+由于 {{ltt|cpp/language/if#consteval if|if consteval}} 不在 C++20 中，{{tt|is_constant_evaluated}} 常由编译器扩展实现。
+
+{{feature test macro|__cpp_lib_is_constant_evaluated|std=C++20|value=201811L|{{tt|std::is_constant_evaluated}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;cmath&gt;
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+constexpr double power(double b, int x)
+{
+    if (std::is_constant_evaluated() &amp;&amp; !(b == 0.0 &amp;&amp; x &lt; 0))
+    {
+        // 常量求值语境：使用 constexpr 友好的算法。
+        if (x == 0)
+            return 1.0;
+        double r {1.0};
+        double p {x &gt; 0 ? b : 1.0 / b};
+        for (auto u = unsigned(x &gt; 0 ? x : -x); u != 0; u /= 2)
+        {
+            if (u &amp; 1)
+                r *= p;
+            p *= p;
+        }
+        return r;
+    }
+    else
+    {
+        // 令代码生成器生成。
+        return std::pow(b, double(x));
+    }
+}
+
+int main()
+{
+    // 常量表达式语境
+    constexpr double kilo = power(10.0, 3);
+    int n = 3;
+    // 非常量表达式，因为 n 不能在常量表达式语境中转换成右值
+    // 等价于 std::pow(10.0, double(n))
+    double mucho = power(10.0, n);
+
+    std::cout &lt;&lt; kilo &lt;&lt; " " &lt;&lt; mucho &lt;&lt; "\n"; // (3)
+}
+|output=
+1000 1000
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc constexpr}}
+{{dsc inc|cpp/language/dsc consteval}}
+{{dsc inc|cpp/language/dsc constinit}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

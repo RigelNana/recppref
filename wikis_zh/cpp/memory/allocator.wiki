@@ -1,0 +1,128 @@
+{{cpp/title|allocator}}
+{{cpp/memory/allocator/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|1=
+template&lt; class T &gt;
+struct allocator;
+}}
+{{dcl|num=2|deprecated=c++17|removed=c++20|1=
+template&lt;&gt;
+struct allocator&lt;void&gt;;
+}}
+{{dcl end}}
+
+如果不提供用户指定的分配器，那么 {{tt|std::allocator}} 类模板是所有标准库容器使用的默认{{named req|Allocator|分配器}}。默认分配器无状态，即给定分配器的任何实例都可交换、比较相等，且能由同一分配器类型的任何其他实例释放分配的内存。
+
+{{rrev|until=c++20|
+对 {{c/core|void}} 的显式特化缺少成员类型定义（typedef）{{tt|reference}}、{{tt|const_reference}}、{{tt|size_type}} 和 {{tt|difference_type}}。此特化不声明成员函数。
+}}
+
+{{rrev|since=c++17|
+默认分配器满足[[cpp/named req/Allocator#分配器完整性要求|分配器完整性要求]]。
+}}
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc|{{tt|pointer}} {{mark life|deprecated=c++17|removed=c++20}}|{{tt|T*}}}}
+{{dsc|{{tt|const_pointer}} {{mark life|deprecated=c++17|removed=c++20}}|{{c/core|const T*}}}}
+{{dsc|{{tt|reference}} {{mark life|deprecated=c++17|removed=c++20}}|{{tt|T&amp;}}}}
+{{dsc|{{tt|const_reference}} {{mark life|deprecated=c++17|removed=c++20}}|{{c/core|const T&amp;}}}}
+{{dsc|{{tt|size_type}}&lt;!-- C++17 中弃用，P0619 解除弃用 --&gt;|{{lc|std::size_t}}}}
+{{dsc|{{tt|difference_type}}&lt;!-- C++17 中弃用，P0619 解除弃用 --&gt;|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|propagate_on_container_move_assignment}} {{mark c++11}}&lt;!-- LWG2103 --&gt;|{{lc|std::true_type}}}}
+{{dsc|{{tt|rebind}} {{mark life|deprecated=c++17|removed=c++20}}|{{c|template&lt; class U &gt;
+struct rebind
+{
+    typedef allocator&lt;U&gt; other;
+};}}}}
+{{dsc|{{tt|is_always_equal}} {{mark life|appear=c++11|deprecated=c++23|removed=c++26}}&lt;!-- LWG2108, LWG3170 --&gt;|{{lc|std::true_type}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc allocator}}
+{{dsc inc|cpp/memory/allocator/dsc ~allocator}}
+{{dsc inc|cpp/memory/allocator/dsc address}}
+{{dsc inc|cpp/memory/allocator/dsc allocate}}
+{{dsc inc|cpp/memory/allocator/dsc allocate_at_least}}
+{{dsc inc|cpp/memory/allocator/dsc deallocate}}
+{{dsc inc|cpp/memory/allocator/dsc max_size}}
+{{dsc inc|cpp/memory/allocator/dsc construct}}
+{{dsc inc|cpp/memory/allocator/dsc destroy}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/allocator/dsc operator_cmp}}
+{{dsc end}}
+
+===注解===
+成员模板 {{tt|rebind}} 提供获得不同类型的分配器的方式。例如，{{c/core|std::list&lt;T, A&gt;}} 在分配某个内部类型 {{tt|Node&lt;T&gt;}} 节点时会使用分配器{{rev inl|until=c++11|{{tt|A::rebind&lt;Node&lt;T&gt;&gt;::other}}}}{{rev inl|since=c++11|{{c/core|std::allocator_traits&lt;A&gt;::rebind_alloc&lt;Node&lt;T&gt;&gt;}}，它在 {{tt|A}} 是 {{tt|std::allocator}} 时以 {{tt|A::rebind&lt;Node&lt;T&gt;&gt;::other}}}} 实现。
+
+成员类型 {{tt|is_always_equal}} 由 {{lwg|3170}} 弃用，因为它使得派生自 {{tt|std::allocator}} 的定制分配器默认被当作始终相等。{{c/core|std::allocator_traits&lt;std::allocator&lt;T&gt;&gt;::is_always_equal}} 未被弃用，而它的成员常量 {{tt|value}} 对任何 {{tt|T}} 均为 {{c|true}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    // int 的默认分配器
+    std::allocator&lt;int&gt; alloc1;
+    
+    // 演示少见的直接使用成员
+    static_assert(std::is_same_v&lt;int, decltype(alloc1)::value_type&gt;);
+    int* p1 = alloc1.allocate(1);  // 一个 int 的空间
+    alloc1.deallocate(p1, 1);      // 而它没了
+    
+    // 这些都可以通过特征使用，所以不需要直接使用
+    using traits_t1 = std::allocator_traits&lt;decltype(alloc1)&gt;; // 匹配的特征
+    p1 = traits_t1::allocate(alloc1, 1);
+    traits_t1::construct(alloc1, p1, 7);  // 构造 int
+    std::cout &lt;&lt; *p1 &lt;&lt; '\n';
+    traits_t1::deallocate(alloc1, p1, 1); // 解分配 int 的空间
+    
+    // string 的默认分配器
+    std::allocator&lt;std::string&gt; alloc2;
+    // 匹配的特征
+    using traits_t2 = std::allocator_traits&lt;decltype(alloc2)&gt;;
+    
+    // 用 string 的特征重绑定产生同一类型
+    traits_t2::rebind_alloc&lt;std::string&gt; alloc_ = alloc2;
+    
+    std::string* p2 = traits_t2::allocate(alloc2, 2); // 2 个 string 的空间
+    
+    traits_t2::construct(alloc2, p2, "foo");
+    traits_t2::construct(alloc2, p2 + 1, "bar");
+    
+    std::cout &lt;&lt; p2[0] &lt;&lt; ' ' &lt;&lt; p2[1] &lt;&lt; '\n';
+    
+    traits_t2::destroy(alloc2, p2 + 1);
+    traits_t2::destroy(alloc2, p2);
+    traits_t2::deallocate(alloc2, p2, 2);
+}
+|output=
+7
+foo bar
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2103|std=C++11|before=可能需要 {{tt|allocator}} 间的冗余比较|after=提供了 {{tt|propagate_on_container_move_assignment}}}}
+{{dr list item|wg=lwg|dr=2108|std=C++11|before=没有方法确认 {{tt|allocator}} 是否有状态|after=提供了 {{tt|is_always_equal}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc allocator_traits}}
+{{dsc inc|cpp/memory/dsc scoped_allocator_adaptor}}
+{{dsc inc|cpp/memory/dsc uses_allocator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,520 @@
+{{title|制约与概念}}
+{{cpp/experimental/navbar}}
+
+{{fmbox | class=noprint | style=font-size: 0.8em | text='''实验性特性''' 此页面上描述的功能是概念技术规范 (Concepts Technical Specification ISO/IEC TS 19217:2015){{mark since concepts_ts}} 的一部分。对于此特性于 C++20 中接纳的版本，见[[cpp/language/constraints|此处]]。}}
+{{small|此页面描述实验性的新语言特性。对于用于标准库规范的具名类型要求，见[[cpp/named req|具名要求]]。}}
+
+[[cpp/language/class template|类模板]]、[[cpp/language/function template|函数模板]]及非模板函数（常为类模板成员）可以与''制约''关联，制约指定模板实参上的要求，这能用于选择最准确的函数重载和模板特化。
+
+制约亦可用于限制变量声明和函数返回类型中的自动类型推导，为只有满足指定要求的类型。
+
+这种要求的具名集合被称为''概念''。每个概念都是谓词，于编译时求值，并成为模板接口的一部分，它在其中用作制约：
+{{example|code=
+#include &lt;string&gt;
+#include &lt;locale&gt;
+using namespace std::literals;
+
+// 概念 "EqualityComparable" 的声明，任何有该类型值 a 和 b ，
+// 而表达式 a==b 可编译而其结果可转换为 bool 的 T 类型满足它
+template&lt;typename T&gt;
+concept bool EqualityComparable = requires(T a, T b) {
+    { a == b } -&gt; bool;
+};
+
+void f(EqualityComparable&amp;&amp;); // 有制约函数模板的声明
+// template&lt;typename T&gt;
+// void f(T&amp;&amp;) requires EqualityComparable&lt;T&gt;; // 相同的长形式
+
+int main() {
+  f("abc"s); // OK：std::string 为 EqualityComparable
+  f(std::use_facet&lt;std::ctype&lt;char&gt;&gt;(std::locale{})); // 错误：非 EqualityComparable &lt;!-- 可能需要没那么玄妙的示例，只要该概念能简单地成一行……可能是 Incrementable ？ --&gt;
+}
+}}
+
+在编译时检测制约违规，早于模板实例化处理，这导致错误信息更易理解。
+{{source|1=
+std::list&lt;int&gt; l = {3,-1,10};
+std::sort(l.begin(), l.end()); 
+//无概念的典型编译器诊断：
+//  invalid operands to binary expression ('std::_List_iterator&lt;int&gt;' and
+//  'std::_List_iterator&lt;int&gt;')
+//                           std::__lg(__last - __first) * 2);
+//                                     &lt;nowiki&gt;~~~~~~ ^ ~~~~~~~&lt;/nowiki&gt;
+// …… 50 行输出……
+//
+//有概念的典型编译器诊断：
+//  error: cannot call std::sort with std::_List_iterator&lt;int&gt;
+//  note:  concept RandomAccessIterator&lt;std::_List_iterator&lt;int&gt;&gt; was not satisfied
+}}
+
+概念的目的是模拟语义类别（Number、Range、RegularFunction）而非语法制约（HasPlus、Array）。按照 [https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#t20-avoid-concepts-without-meaningful-semantics ISO C++ 核心方针 T.20]，“与语法制约相反，指定有意义语义的能力是真概念的定义性特征。”
+
+===占位符===
+无制约占位符 {{c|auto}} 与拥有形式 {{spar|concept-name}} {{ttb|&lt;}} {{spar|template-argument-list}}{{mark|optional}}{{ttb|&gt;}} 的''有制约占位符''，是要被推导的类型的占位符。
+
+占位符可出现于变量声明（该情况下它们从初始化器推导）或于函数返回类型（该情况下它们从 return 语句推导）
+
+{{source|1=
+std::pair&lt;auto, auto&gt; p2 = std::make_pair(0, 'a'); // 第一个 auto 是 int,
+                                                   // 第二个 auto 是 char
+
+Sortable x = f(y); // x 的类型从 f 的返回类型推导，仅若类型满足制约 Sortable 才能编译
+
+auto f(Container) -&gt; Sortable; // 返回类型从 return 语句推导，仅若类型满足 Sortable 才能编译
+}}
+
+占位符亦可出现于形参中，该情况下它们将函数声明转化为模板声明（若占位符有制约，则模板声明有制约）
+{{source|1=
+template&lt;size_t N&gt; concept bool Even = (N%2 == 0);
+void f(std::array&lt;auto, Even&gt;); // 这是有二个形参的模板：
+       // 无制约类型形参和有制约非类型形参
+}}
+
+有制约占位符可用于 {{c|auto}} 能用的任何位置，例如在泛型 lambda 声明中
+{{source|1=
+auto gl = [](Assignable&amp; a, auto* b) { a = *b; };
+}}
+
+如果有制约类型说明符指定了非类型或模板，但被用作有制约占位符，则程序非良构：
+{{source|1=
+template&lt;size_t N&gt; concept bool Even = (N%2 == 0);
+struct S1 { int n; };
+int Even::* p2 = &amp;S1::n; // 错误，非法使用非类型概念
+void f(std::array&lt;auto, Even&gt;); // 错误，非法使用非类型概念
+template&lt;Even N&gt; void f(std::array&lt;auto, N&gt;); // OK
+}}
+
+===缩写的模板===
+若函数参数列表中出现一或多个占位符，则函数声明实际上是函数模板声明，其模板形参列表以出现顺序，为每个单独的占位符包含一个虚设的形参
+
+{{source|1=
+// 短形式
+void g1(const EqualityComparable*, Incrementable&amp;);
+// 长形式：
+// template&lt;EqualityComparable T, Incrementable U&gt; void g1(const T*, U&amp;);
+// 更长形式：
+// template&lt;typename T, typename U&gt;
+// void g1(const T*, U&amp;) requires EqualityComparable&lt;T&gt; &amp;&amp; Incrementable&lt;U&gt;;
+
+void f2(std::vector&lt;auto*&gt;...);
+// 长形式：template&lt;typename... T&gt; void f2(std::vector&lt;T*&gt;...);
+
+void f4(auto (auto::*)(auto));
+// 长形式：template&lt;typename T, typename U, typename V&gt; void f4(T (U::*)(V));
+}}
+
+等价的有制约类型指定符所引入的所有占位符拥有同一虚设模板形参。然而，每个无制约指定符（{{tt|auto}}）始终引入一个相异的模板形参
+{{source|1=
+void f0(Comparable a, Comparable* b);
+// 长形式：template&lt;Comparable T&gt; void f0(T a, T* b);
+
+void f1(auto a, auto* b);
+// 长形式：template&lt;typename T, typename U&gt; f1(T a, U* b);
+}}
+
+函数模板与类模板都能用''模板引入''声明，它有语法 {{spar|concept-name}} {{ttb|{}} {{spar|parameter-list}}{{mark optional}}{{ttb|} }} ，此情况中不需要关键词 {{tt|template}} ：来自模板引入的 {{spar|parameter-list}} 的每个形参都成为模板形参，其种类（类型、非类型、模板）以具名概念中对应形参的种类确定。
+
+除了声明模板，模板引入关联一个''谓词制约''（见后述），它指名（对于变量概念）或调用（对于函数概念）该引入所指名的概念。
+{{source|1=
+EqualityComparable{T} class Foo;
+// 长形式：template&lt;EqualityComparable T&gt; class Foo;
+// 更长形式：template&lt;typename T&gt; requires EqualityComparable&lt;T&gt; class Foo;
+
+template&lt;typename T, int N, typename... Xs&gt; concept bool Example = ...;
+Example{A, B, ...C} struct S1;
+// 长形式：template&lt;class A, int B, class... C&gt; requires Example&lt;A,B,C...&gt; struct S1;
+}}
+
+对于函数模板，模板引入能与占位符组合：
+{{source|1=
+Sortable{T} void f(T, auto);
+// 长形式：template&lt;Sortable T, typename U&gt; void f(T, U);
+// 另一种只用占位符的形式： void f(Sortable, auto);
+}}
+
+{{todo|润色模板声明页面并链接至此}}
+
+===概念===
+概念是具名要求集合。概念的定义出现于命名空间作用域，并拥有[[cpp/language/function template|函数模板]]定义（该情况下称为''函数概念''）或[[cpp/language/variable template|变量模板]]定义（该情况下称为''变量概念''）的形式。仅有的区别是关键词 {{c|concept}} 出现于 {{spar|decl-specifier-seq}} 中：
+{{source|1=
+// 来自标准库（范围 TS）的变量概念
+template &lt;class T, class U&gt;
+concept bool Derived = std::is_base_of&lt;U, T&gt;::value;
+
+// 来自标准库（范围 TS）的函数概念
+template &lt;class T&gt;
+concept bool EqualityComparable() { 
+    return requires(T a, T b) { {a == b} -&gt; Boolean; {a != b} -&gt; Boolean; };
+}
+}}
+
+下列限制应用于函数概念：
+* 不允许 {{tt|inline}} 与 {{tt|constexpr}}，函数自动为 {{tt|inline}} 与 {{tt|constexpr}}
+* 不允许 {{tt|friend}} 与 {{tt|virtual}}
+* 不允许异常规定，函数自动为 {{tt|noexcept(true)}}。
+* 不能声明并延迟定义，不能重声明
+* 返回类型必须是 {{tt|bool}}
+* 不允许返回类型推导
+* 参数列表必须为空
+* 函数体必须仅由一条 {{tt|return}} 语句组成，其参数必须是一条''制约表达式''（谓词制约、其他制约的合取/析取或 requires 表达式，见后述）
+
+下列限制应用于变量概念：
+* 必须有类型 {{tt|bool}}
+* 不能声明为无初始化器
+* 不允许 {{tt|constexpr}}，变量自动为 {{tt|constexpr}}
+* 初始化器必须是制约表达式（谓词制约、其他制约的合取/析取或 requires 表达式，见后述）
+
+概念不能在函数体内或变量初始化器内递归地指涉自身：
+{{source|1=
+template&lt;typename T&gt;
+concept bool F() { return F&lt;typename T::type&gt;(); } // 错误
+template&lt;typename T&gt;
+concept bool V = V&lt;T*&gt;; // 错误
+}}
+
+概念定义不能有关联的制约。
+{{source|1=
+template&lt;class T&gt; concept bool C1 = true;
+template&lt;C1 T&gt;
+concept bool Error1 = true; // 错误：C1 T 声明了一个关联的制约
+template&lt;class T&gt; requires C1&lt;T&gt;
+concept bool Error2 = true; // 错误：requires 子句声明了一个关联的制约
+}}
+
+不允许概念的显式实例化、显式特化或部分特化（不能更改制约的原初定义的意义）。
+
+===制约===
+制约是一系列逻辑运算，它指定模板实参上的要求。它们可出现于 ''requires 表达式''（见后述）中，及直接作为概念的体。
+
+制约有 9 种类型：
+@1@ 合取
+@2@ 析取
+@3@ 谓词制约
+@4@ 表达式制约（仅在 ''requires 表达式''中）
+@5@ 类型制约（仅在 ''requires 表达式''中）
+@6@ 隐式转换制约（仅在 ''requires 表达式''中）
+@7@ 实参推导制约（仅在 ''requires 表达式''中）
+@8@ 异常制约（仅在 ''requires 表达式''中）
+@9@ 参数化制约（仅在 ''requires 表达式''中）
+
+前三个类型的制约可以直接作为概念的体，或作为随即的 requires 子句出现：
+{{source|1=
+template&lt;typename T&gt;
+requires // requires 子句（随即的制约）
+sizeof(T) &gt; 1 &amp;&amp; get_value&lt;T&gt;() // 二个谓词制约的合取
+void f(T);
+}}
+
+附着多个制约到同一声明时，总制约是按下列顺序的合取：''模板引入''所引入的制约、按出现顺序的每个模板形参的制约、模板形参列表后的 ''requires'' 子句、按出现顺序的每个函数参数的制约、尾随的 ''requires'' 子句：
+{{source|1=
+// 声明用制约 Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt; 声明同一有制约函数模板 
+template&lt;Incrementable T&gt;
+void f(T) requires Decrementable&lt;T&gt;;
+template&lt;typename T&gt;
+requires Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt;
+void f(T); // OK
+
+// 下列二个声明拥有不同制约：
+// 第一个声明有 Incrementable&lt;T&gt; &amp;&amp; Decrementable&lt;T&gt;
+// 第二个声明有 Decrementable&lt;T&gt; &amp;&amp; Incrementable&lt;T&gt;
+// 尽管它们逻辑等价。
+// 第二个声明为病式，不要求诊断。
+
+template&lt;Incrementable T&gt; requires Decrementable&lt;T&gt; void g();
+template&lt;Decrementable T&gt; requires Incrementable&lt;T&gt; void g(); // 错误
+}}
+
+====合取====
+以 {{c|P &amp;&amp; Q}} 指定制约 {{tt|P}} 与 {{tt|Q}} 的合取。
+
+{{source|1=
+// 来自标准库（范围 TS）的示例概念
+template &lt;class T&gt;
+concept bool Integral = std::is_integral&lt;T&gt;::value;
+template &lt;class T&gt;
+concept bool SignedIntegral = Integral&lt;T&gt; &amp;&amp; std::is_signed&lt;T&gt;::value;
+template &lt;class T&gt;
+concept bool UnsignedIntegral = Integral&lt;T&gt; &amp;&amp; !SignedIntegral&lt;T&gt;;
+}}
+
+二个制约的合取，仅若二个制约均得到满足才得到满足。合取从左到右且为短路求值（若不满足左侧制约，则不尝试对右侧制约的模板实参替换：这阻止立即语境之外替换导致的失败）。制约合取中不允许用户定义的 {{tt|operator&amp;&amp;}} 重载。
+
+====析取====
+以 {{c|P {{!!}} Q}} 指定制约 {{tt|P}} 与 {{tt|Q}} 的析取。
+
+若任一制约得到满足，则二个制约的析取的到满足。析取从左到右且为短路求值（若满足左侧制约，则不尝试对右侧制约的模板实参替换）。制约析取中不允许用户定义的 {{tt|operator{{!!}}}} 重载。
+
+{{source|1=
+// 来自标准库（范围 TS）的示例制约
+template &lt;class T = void&gt;
+requires EqualityComparable&lt;T&gt;() {{!!}} Same&lt;T, void&gt;
+struct equal_to;
+}}
+
+====谓词制约====
+谓词制约是 {{c|bool}} 类型的常量表达式。它仅若求值为 {{c|true}} 才得到满足。
+{{source|1=
+template&lt;typename T&gt; concept bool Size32 = sizeof(T) == 4;
+}}
+谓词制约能指定非类型模板形参上和模板模板实参上的要求。
+
+谓词制约必须直接求值为 {{c|bool}}，不允许转换：
+{{source|1=
+template&lt;typename T&gt; struct S {
+    constexpr explicit operator bool() const { return true; }
+};
+template&lt;typename T&gt;
+requires S&lt;T&gt;{} // 坏的谓词制约：S&lt;T&gt;{} 不是 bool
+void f(T);
+f(0); // 错误：决不满足制约
+}}
+
+===要求===
+关键词 {{c|requires}} 有二种使用方式：
+@1@ 引入 ''requires 子句''，它指定模板实参或函数声明上的制约。
+{{source|1=
+template&lt;typename T&gt;
+void f(T&amp;&amp;) requires Eq&lt;T&gt;; // 能作为函数声明器的最末元素出现
+
+template&lt;typename T&gt; requires Addable&lt;T&gt; // 或在模板形参列表之右
+T add(T a, T b) { return a + b; }
+}}
+@@此情况下，关键词 ''requires'' 必须为某个常量表达式所后随（故可以写 "requires true;"），但其意图是使用具名概念（如上述示例中）或具名概念的合取/析取或 ''requires 表达式''。
+@2@ 开始 ''requires 表达式''，它是 {{c|bool}} 类型纯右值，描述某些模板实参上的制约。若满足对应概念则这种表达式为 {{tt|true}} ，否则为 false ：
+{{source|1=
+template&lt;typename T&gt;
+concept bool Addable = requires (T x) { x + x; }; // requires 表达式
+
+template&lt;typename T&gt; requires Addable&lt;T&gt; // requires 子句，非 requires 表达式
+T add(T a, T b) { return a + b; }
+
+template&lt;typename T&gt;
+requires requires (T x) { x + x; } // 随即制约，注意使用二次关键字
+T add(T a, T b) { return a + b; }
+}}
+
+''requires 表达式''的语法如下：
+{{sdsc begin}}
+{{sdsc|{{ttb|requires}} {{ttb|(}} {{spar|parameter-list}}{{mark optional}} {{ttb|)}} {{ttb|{ }} {{spar|requirement-seq}} {{ttb|} }} }}
+{{sdsc end}}
+{{par begin}}
+{{par | {{spar|parameter-list}} |逗号分隔列表，如在函数声明中，除了不允许默认参数，且最后的参数不能是省略号。这些参数无存储期、链接或生存期。这些参数在 {{spar|requirement-seq}} 的闭 {{ttb|} }} 前处于作用域中。若不使用参数，则环绕的括号亦可省略}}
+{{par | {{spar|requirement-seq}} |''要求''的空白符分隔序列，描述于下（每个要求以分号结尾）。每个要求添加另一制约到此 requires 表达式所定义的制约''合取''。}}
+{{par end}}
+
+{{spar|requirements-seq}} 中的每个要求是下列之一：
+* 简单要求
+* 类型要求
+* 复合要求
+* 嵌套要求
+
+要求可以提及在作用域中的模板形参，和于 {{spar|parameter-list}} 引入的局部参数。在参数化时，称 requires 表达式引入一个''参数化制约''。
+
+替换模板实参到至 reqiures 表达式可能导致于其要求中形成非法类型或表达式。这些情况下，
+* 若替换失败出现于用于[[cpp/language/templates#模板化实体|模板化实体]]声明之外的 requires 表达式，则程序为病式。
+* 若 requires 表达式用于[[cpp/language/templates#模板化实体|模板化实体]]的声明中，则对应的制约被当做“不满足”而[[cpp/language/sfinae|替换失败不是错误]]，然而
+* 若替换失败会在对每个可能模板实参的 requires 表达式中出现，则程序为病式，不要求诊断：
+{{source|1=
+template&lt;class T&gt; concept bool C = requires {
+    new int[-(int)sizeof(T)]; // 对每个 T 非法：病式，不要求诊断
+};
+}}
+
+====简单要求====
+简单要求是任意表达式语句。要求是表达式合法（是为''表达式制约''）。不同于谓词制约，不发生求值，只检查语言正确性。
+
+{{source|1=
+template&lt;typename T&gt;
+concept bool Addable =
+requires (T a, T b) {
+    a + b; // “表达式 a + b 是可编译的合法表达式”
+};
+
+// 来自标准库（范围 TS ）的示例
+template &lt;class T, class U = T&gt;
+concept bool Swappable = requires(T&amp;&amp; t, U&amp;&amp; u) {
+    swap(std::forward&lt;T&gt;(t), std::forward&lt;U&gt;(u));
+    swap(std::forward&lt;U&gt;(u), std::forward&lt;T&gt;(t));
+};
+}}
+
+====类型要求====
+类型要求是关键词 {{c|typename}} 后随类型名，可选地有限定。要求是该具名类型存在（''类型制约''）：这可用于校验具体的具名嵌套类型是否存在，或类模板特化是否指名一个类型，或别名模板是否指名一个类型。
+{{source|1=
+template&lt;typename T&gt; using Ref = T&amp;;
+template&lt;typename T&gt; concept bool C =
+requires {
+    typename T::inner; // 要求的嵌套成员名
+    typename S&lt;T&gt;;     // 要求的类模板特化
+    typename Ref&lt;T&gt;;   // 要求的别名模版替换
+};
+
+// 来自标准库（范围 TS ）的示例概念
+template &lt;class T, class U&gt; using CommonType = std::common_type_t&lt;T, U&gt;;
+template &lt;class T, class U&gt; concept bool Common =
+requires (T t, U u) {
+    typename CommonType&lt;T, U&gt;; // CommonType&lt;T, U&gt; 合法且指名类型
+    { CommonType&lt;T, U&gt;{std::forward&lt;T&gt;(t)} }; 
+    { CommonType&lt;T, U&gt;{std::forward&lt;U&gt;(u)} }; 
+};
+}}
+
+====复合要求====
+复合要求拥有形式 
+{{sdsc begin}}
+{{sdsc|{{ttb|{}} {{spar|expression}} {{ttb|} }} {{ttb|noexcept}}{{mark optional}} {{spar|trailing-return-type}}{{mark optional}} {{ttb|;}} }}
+{{sdsc end}}
+并指定下列制约的合取：
+@1@ {{spar|expression}} 是合法表达式（''表达式制约''）
+@2@ 若使用 {{tt|noexcept}}，则表达式必须亦为 noexcept （''异常制约''）
+@3@ 若 {{spar|trailing-return-type}} 指名用占位符的类型，则类型必须可从表达式的类型推导（''实参推导制约''）
+@4@ 若 {{spar|trailing-return-type}} 指名不用占位符的类型，则再添加二个制约：
+:@4a@ {{spar|trailing-return-type}} 所指名的类型合法（''类型制约''）
+:@4b@ 表达式结果[[cpp/language/implicit conversion|可隐式转换]]成该类型（''隐式转换制约''）
+
+{{source|1=
+template&lt;typename T&gt; concept bool C2 =
+requires(T x) {
+    {*x} -&gt; typename T::inner; // 表达式 *x 必须合法
+                               // AND 类型 T::inner 必须合法
+                               // AND *x 的结果必须可转换成 T::inner
+};
+
+// 来自标准库（范围 TS ）的示例概念
+template &lt;class T, class U&gt; concept bool Same = std::is_same&lt;T,U&gt;::value;
+template &lt;class B&gt; concept bool Boolean =
+requires(B b1, B b2) {
+    { bool(b1) }; // 直接初始化制约必须使用表达式
+    { !b1 } -&gt; bool; // 复合制约
+    requires Same&lt;decltype(b1 &amp;&amp; b2), bool&gt;; // 嵌套制约，见后述
+    requires Same&lt;decltype(b1 {{!!}} b2), bool&gt;;
+};
+}}
+
+====嵌套要求====
+嵌套要求是另一以分号终止的 ''requires 子句''。它被用于引入''谓词制约''（见前述），该制约以另一应用到局部参数的具名制约表达（在 requires 子句外，谓词制约不能使用参数，而直接放置表达式于 requires 表达式的expression部分会令它成为表达式制约，这表示不求值它）。
+
+{{source|1=
+// 来自范围 TS 的示例制约
+template &lt;class T&gt;
+concept bool Semiregular = DefaultConstructible&lt;T&gt; &amp;&amp;
+    CopyConstructible&lt;T&gt; &amp;&amp; Destructible&lt;T&gt; &amp;&amp; CopyAssignable&lt;T&gt; &amp;&amp;
+requires(T a, size_t n) {  
+    requires Same&lt;T*, decltype(&amp;a)&gt;;  // 嵌套：“Same&lt;...&gt; 求值为 true”
+    { a.~T() } noexcept;  // 复合： "a.~T()" 是不抛出的合法表达式
+    requires Same&lt;T*, decltype(new T)&gt;; // 嵌套：“Same&lt;...&gt; 求值为 true”
+    requires Same&lt;T*, decltype(new T[n])&gt;; // 嵌套
+    { delete new T };  // 复合
+    { delete new T[n] }; // 复合
+};
+}}
+
+===概念决议===
+类似任何其他函数模板，函数概念（但不是变量概念）能重载：可以提供全部使用同一 {{spar|concept-name}} 的多个概念定义。
+
+概念决议在 {{spar|concept-name}} （可以有限定）出现于下列语境时进行
+@1@ 有制约类型指定符 {{c|1=void f(Concept); std::vector&lt;Concept&gt; x = ...;}}
+@2@ 有制约形参 {{c|template&lt;Concept T&gt; void f();}}
+@3@ 模板引入 {{c|Concept{T} struct X;}}
+@4@ ''制约表达式'' {{c|template&lt;typename T&gt; void f() requires Concept&lt;T&gt;;}}
+
+{{source|1=
+template&lt;typename T&gt; concept bool C() { return true; } // #1
+template&lt;typename T, typename U&gt; concept bool C() { return true; } // #2
+void f(C); // C 所指代的制约集包含 #1 和 #2；
+           // 概念决议（见后述）选择 #1。
+}}
+
+为进行概念决议，每个匹配名称（与限定，若存在）的''模板形参''都与模板实参与''通配符''这些''概念实参''的序列配对。通配符可匹配任何种类（类型、非类型、模板）的模板实参。形参集构造方式各异，依赖于语境
+@1@ 对于用作有制约类型指定符或形参一部分的概念名，若概念名以无形参列表使用，则实参列表是单个通配符。
+{{source|1=
+template&lt;typename T&gt; concept bool C1() { return true; } // #1
+template&lt;typename T, typename U&gt; concept bool C1() { return true; } // #2
+void f1(const C1*); // &lt;wildcard&gt; 匹配 &lt;T&gt;，选择 #1
+}}
+@2@ 对于用作有制约类型指定符或形参一部分的概念名，若概念名以模板实参列表使用，则实参列表是一个通配符后随实参列表。
+{{source|1=
+template&lt;typename T&gt; concept bool C1() { return true; } // #1
+template&lt;typename T, typename U&gt; concept bool C1() { return true; } // #2
+void f2(C1&lt;char&gt;); // &lt;wildcard, char&gt; 匹配 &lt;T, U&gt;，选择 #2
+}}
+@3@ 若概念出现于模板引入中，则实参列表是与模板引入中形参列表等长的占位符序列
+{{source|1=
+template&lt;typename... Ts&gt;
+concept bool C3 = true;
+C3{T} void q2();     // OK: &lt;T&gt; 匹配 &lt;...Ts&gt;
+C3{...Ts} void q1(); // OK: &lt;...Ts&gt; 匹配 &lt;...Ts&gt;
+}}
+@4@ 若概念作为模板 id 出现，则概念实参列表准确地是该模板 id 的实参序列
+{{source|1=
+template&lt;typename T&gt; concept bool C() { return true; } // #1
+template&lt;typename T, typename U&gt; concept bool C() { return true; } // #2
+
+template &lt;typename T&gt;
+void f(T) requires C&lt;T&gt;(); // 匹配 #1
+}}
+
+概念决议通过配对每个实参和对应每个可见概念的对应形参进行。默认模板实参（若使用）为每个不对应实参的形参实例化，然后后附到实参列表。模板实参匹配形参，仅若它拥有相同种类（类型、非类型、模板），除非实参是通配符。形参包可匹配零或更多实参，只要所有实参都匹配种类中的模式（除非它们是通配符）。
+
+若任何实参不匹配其对应的形参，或若有多于形参的实参，且最后的形参不是包，则该概念不可达。若有零或多于一个可生成概念，则程序为病式。
+
+{{source|1=
+template&lt;typename T&gt; concept bool C2() { return true; }
+template&lt;int T&gt; concept bool C2() { return true; }
+
+template&lt;C2&lt;0&gt; T&gt; struct S1; // 错误：&lt;wildcard, 0&gt; 不匹配 &lt;typename T&gt; 或 &lt;int T&gt;
+template&lt;C2 T&gt; struct S2; // #1 与 #2 均匹配：错误
+}}
+{{todo|需要一个带有意义概念的示例，而非这些 'return true' 占位符}}
+
+===制约的偏序===
+在任何进一步分析前，通过替换每个具名概念和每个 requires 表达式的体''规范化''制约，直到剩下原子制约上的合取与析取序列。原子制约是谓词制约、表达式制约、隐式转换制约、实参推导制约和异常制约。
+
+若能不因等价性分析类型和表达式就能证明概念 {{tt|P}} [[enwiki:Logical consequence|蕴含]] 概念 {{tt|Q}}，则说 {{tt|P}} ''包含'' {{tt|Q}} （故 {{tt|N &gt;{{=}} 0}} 不包含 {{tt|N &gt; 0}}）
+
+具体而言，转换首个 {{tt|P}} 为析取范式并转换 {{tt|Q}} 为合取范式，再以下列方式比较它们：
+* 每个原子制约 {{tt|A}} 包含等价的原子制约 {{tt|A}}
+* 每个原子制约 {{tt|A}} 包含析取 {{tt|A{{!!}}B}} 而不包含合取 {{tt|A&amp;&amp;B}}
+* 每个合取 {{tt|A&amp;&amp;B}} 包含 {{tt|A}}，但析取 {{tt|A{{!!}}B}} 不包含 {{tt|A}}
+
+包含关系定义制约上的偏序，这被用于确定：
+* [[cpp/language/overload resolution|重载决议]]中非模板函数的最佳可生成候选
+* 重载集中[[cpp/language/overloaded address|非模板函数的地址]]
+* 模板模板实参的最佳匹配
+* 类模板特化的偏序
+* 函数模板的[[cpp/language/function_template#函数模板重载|偏序]]
+
+{{todo|从上述内容添加到此的回链}}
+
+若声明 {{tt|D1}} 与 {{tt|D2}} 有制约且 D1 的规范化制约包含 D2 的规范化制约（或若 D1 有制约而 D2 无制约），则说 D1 与 D2 相比''至少一样有制约''。若 D1 至少与 D2 一样有制约，而 D2 不至少与 D1 一样有制约，则 D1 比 D2 ''更受制约''。
+
+{{source|1=
+template&lt;typename T&gt;
+concept Decrementable = requires(T t) { --t; };
+template&lt;typename T&gt;
+concept RevIterator = Decrementable&lt;T&gt; &amp;&amp; requires(T t) { *t; };
+
+// RevIterator 包含 Decrementable，但非相反
+// RevIterator 比 Decrementable 更受制约
+
+void f(Decrementable); // #1
+void f(RevIterator);   // #2
+
+f(0);       // int 仅满足可自增，选择 #1
+f((int*)0); // int* 满足二个制约，选择 #2，因为更受制约
+
+void g(auto);          // #3（无制约）
+void g(Decrementable); // #4
+
+g(true);  // bool 不满足 Decrementable，选择 #3
+g(0);     // int 满足 Decrementable，选择 #4 因为它更受制约
+}}
+
+===关键词===
+{{ltt|cpp/keyword/concept}},
+{{ltt|cpp/keyword/requires}}
+
+===编译器支持===
+GCC &gt;= 6.1 支持此技术规范（要求选项 {{c|-fconcepts}}）。
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,178 @@
+{{cpp/title|div|ldiv|lldiv|imaxdiv}}
+{{cpp/numeric/math/navbar}}
+{{dcl begin}}
+{{dcl header|cstdlib}}
+{{dcl|num=1|notes={{mark constexpr since c++23}}|
+std::div_t     div( int x, int y );
+}}
+{{dcl|num=2|notes={{mark constexpr since c++23}}|
+std::ldiv_t    div( long x, long y );
+}}
+{{dcla|anchor=no|since=c++11|num=3|constexpr=c++23|
+std::lldiv_t   div( long long x, long long y );
+}}
+{{dcla|anchor=no|num=4|constexpr=c++23|
+std::ldiv_t   ldiv( long x, long y );
+}}
+{{dcla|anchor=no|since=c++11|num=5|constexpr=c++23|
+std::lldiv_t lldiv( long long x, long long y );
+}}
+{{dcl header|cinttypes}}
+{{dcla|anchor=no|since=c++11|num=6|constexpr=c++23|
+std::imaxdiv_t div( std::intmax_t x, std::intmax_t y );
+}}
+{{dcla|anchor=no|since=c++11|num=7|constexpr=c++23|
+std::imaxdiv_t imaxdiv( std::intmax_t x, std::intmax_t y );
+}}
+{{dcl end}}
+
+计算分子 {{c|x}} 除以分母 {{c|y}} 的商和余数。
+
+{{rrev|since=c++11|
+只有在 {{lc|std::intmax_t}} 是[[cpp/language/types#扩展整数类型|扩展整数类型]]时，{{header|cinttypes}} 中才会提供 {{tt|std::div}} 对 {{lc|std::intmax_t}} 的重载。
+}}&lt;br&gt;
+
+{{rrev multi
+|rev1=
+商是舍弃任何小数部分（向零截断）的代数商。余数满足 {{c|1=quot * y + rem == x}}。
+|since2=c++11|rev2=
+商是表达式 {{c|x / y}} 的结果。余数是表达式 {{c|x % y}} 的结果。
+}}
+
+===参数===
+{{par begin}}
+{{par|x, y|整数值}}
+{{par end}}
+
+===返回值===
+如果余数和商都能表示成对应类型（分别是 {{c/core|int}}、{{c/core|long}}、{{c/core|long long}}、{{lc|std::intmax_t}}）的对象，那么返回作为在下方定义的 {{tt|std::div_t}}、{{tt|std::ldiv_t}}、{{tt|std::lldiv_t}}、{{tt|std::imaxdiv_t}} 类型对象的这两个数：
+
+{{member|{{small|std::}}div_t|2=
+{{source|1=
+struct div_t { int quot; int rem; };
+}}
+或
+{{source|1=
+struct div_t { int rem; int quot; };
+}}
+}}
+
+{{member|{{small|std::}}ldiv_t|2=
+{{source|1=
+struct ldiv_t { long quot; long rem; };
+}}
+或
+{{source|1=
+struct ldiv_t { long rem; long quot; };
+}}
+}}
+
+{{member|{{small|std::}}lldiv_t|2=
+{{source|1=
+struct lldiv_t { long long quot; long long rem; };
+}}
+或
+{{source|1=
+struct lldiv_t { long long rem; long long quot; };
+}}
+}}
+
+{{member|{{small|std::}}imaxdiv_t|2=
+{{source|1=
+struct imaxdiv_t { std::intmax_t quot; std::intmax_t rem; };
+}}
+或
+{{source|1=
+struct imaxdiv_t { std::intmax_t rem; std::intmax_t quot; };
+}}
+}}
+
+如果余数或商无法表示，那么行为未定义。
+
+===注解===
+{{cwg|614}} 被解决（{{stddoc|n2757}}）之前，如果运算数之一为负，那么[[cpp/language/operator arithmetic|内建除法与取余运算符]]中商的舍入方向和余数的符号由实现定义，但在 {{tt|std::div}} 中是良定义的。
+
+许多平台上，单条 CPU 指令可一同获得商与余数，而此函数可以活用这点，尽管编译器通常能够在适合处合并邻近的 {{tt|/}} 与 {{tt|%}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cmath&gt;
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+
+std::string division_with_remainder_string(int dividend, int divisor)
+{
+    auto dv = std::div(dividend, divisor);
+    assert(dividend == divisor * dv.quot + dv.rem);
+    assert(dv.quot == dividend / divisor);
+    assert(dv.rem == dividend % divisor);
+    
+    auto sign = [](int n){ return n &gt; 0 ? 1 : n &lt; 0 ? -1 : 0; };
+    assert((dv.rem == 0) or (sign(dv.rem) == sign(dividend)));
+    
+    return (std::ostringstream() &lt;&lt; std::showpos &lt;&lt; dividend &lt;&lt; " = "
+                                 &lt;&lt; divisor &lt;&lt; " * (" &lt;&lt; dv.quot &lt;&lt; ") "
+                                 &lt;&lt; std::showpos &lt;&lt; dv.rem).str();
+}
+
+std::string itoa(int n, int radix /*[2..16]*/)
+{
+    std::string buf;
+    std::div_t dv{}; dv.quot = n;
+ 
+    do
+    {
+        dv = std::div(dv.quot, radix);
+        buf += "0123456789abcdef"[std::abs(dv.rem)]; // 字符串字面量是数组
+    }
+    while (dv.quot);
+    
+    if (n &lt; 0)
+        buf += '-';
+    
+    return {buf.rbegin(), buf.rend()};
+}
+
+int main()
+{
+    std::cout &lt;&lt; division_with_remainder_string(369, 10) &lt;&lt; '\n'
+              &lt;&lt; division_with_remainder_string(369, -10) &lt;&lt; '\n'
+              &lt;&lt; division_with_remainder_string(-369, 10) &lt;&lt; '\n'
+              &lt;&lt; division_with_remainder_string(-369, -10) &lt;&lt; "\n\n";
+    
+    std::cout &lt;&lt; itoa(12345, 10) &lt;&lt; '\n'
+              &lt;&lt; itoa(-12345, 10) &lt;&lt; '\n'
+              &lt;&lt; itoa(42, 2) &lt;&lt; '\n'
+              &lt;&lt; itoa(65535, 16) &lt;&lt; '\n';
+}
+|output=
++369 = +10 * (+36) +9
++369 = -10 * (-36) +9
+-369 = +10 * (-36) -9
+-369 = -10 * (+36) -9
+
+12345
+-12345
+101010
+ffff
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/math/dsc fmod}}
+{{dsc inc|cpp/numeric/math/dsc remainder}}
+{{dsc inc|cpp/numeric/math/dsc remquo}}
+{{dsc see c|c/numeric/math/div}}
+{{dsc end}}
+
+===外部链接===
+{{elink begin}}
+{{elink|{{enwiki|Euclidean division}} — Wikipedia}}
+{{elink|{{enwiki|Modulo|Modulo (and Truncated division)}} — Wikipedia}}
+{{elink end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

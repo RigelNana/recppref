@@ -1,0 +1,154 @@
+{{cpp/ranges/title|set_intersection|set_intersection_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+constexpr set_intersection_result&lt;I1, I2, O&gt;
+    set_intersection( I1 first1, S1 last1, I2 first2, S2 last2,
+                      O result, Comp comp = {},
+                      Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                        O, Comp, Proj1, Proj2&gt;
+constexpr set_intersection_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                  ranges::borrowed_iterator_t&lt;R2&gt;, O&gt;
+    set_intersection( R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                      Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I1, class I2, class O &gt;
+using set_intersection_result = ranges::in_in_out_result&lt;I1, I2, O&gt;;
+}}
+{{dcl end}}
+
+构造一个开始于 {{c|result}} 的有序范围，由同时可以在两个有序范围 {{range|first1|last1}} 和 {{range|first2|last2}} 当中找到的元素组成。如果某个元素可以在 {{range|first1|last1}} 找到 {{tt|m}} 次，在 {{range|first2|last2}} 找到 {{tt|n}} 次，则会从第一个范围中拷贝前 {{c|min(m, n)}} 个元素到 {{tt|result}}。等价元素的先后序列会保持不变。
+
+行为未定义，如果
+* 输入的范围并没有分别相对于 {{c|comp}} 和 {{c|proj1}} 或 {{c|proj2}} 排序，或
+* 生成的范围和任一输入范围重叠。
+
+@1@ 使用二元比较函数 {{c|comp}} 比较元素。
+
+@2@ 如同 {{v|1}}，但以 {{c|r1}} 为第一个范围并以 {{c|r2}} 为第二个范围, 如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，以 {{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|3=|range=第一个输入的有序|sentinel=yes}}
+{{par range|first2|last2|3=|range=第二个输入的有序|sentinel=yes}}
+{{par | r1 | 第一个输入的有序范围}}
+{{par | r2 | 第二个输入的有序范围}}
+{{par | result | 输出范围的起始}}
+{{par | comp | 应用到投影后元素的比较器}}
+{{par | proj1 | 应用到第一个范围元素的投影}}
+{{par | proj2 | 应用到第二个范围元素的投影}}
+{{par end}}
+
+===返回值===
+{{c|{last1, last2, result_last} }}，其中 {{c|result_last}} 是被构造的范围的终点。
+
+===复杂度===
+最多 {{mathjax-or|\(\scriptsize 2\cdot(N_1+N_2)-1\)|2&amp;middot;(N{{su|b=1}}+N{{su|b=2}})-1}} 次比较与对投影的应用，其中 {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} 和{{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} 分别是 {{c|ranges::distance(first1, last1)}} 和 {{c|ranges::distance(first2, last2)}}。
+
+===可能的实现===
+{{eq fun|1=
+struct set_intersection_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_intersection_result&lt;I1, I2, O&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                   O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        while (!(first1 == last1 or first2 == last2))
+        {
+            if (std::invoke(comp, std::invoke(proj1, *first1),
+                                  std::invoke(proj2, *first2)))
+                ++first1;
+            else if (std::invoke(comp, std::invoke(proj2, *first2),
+                                       std::invoke(proj1, *first1)))
+                ++first2;
+            else
+                *result = *first1, ++first1, ++first2, ++result;
+        }
+        return {ranges::next(std::move(first1), std::move(last1)),
+                ranges::next(std::move(first2), std::move(last2)),
+                std::move(result)};
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                            O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_intersection_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;,
+                                              ranges::borrowed_iterator_t&lt;R2&gt;, O&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(result), std::move(comp),
+                       std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr set_intersection_fn set_intersection {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+void print(const auto&amp; v, const auto&amp; rem)
+{
+    std::cout &lt;&lt; "{ ";
+    for (const auto&amp; e : v)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '}' &lt;&lt; rem;
+}
+
+int main()
+{
+    const auto in1 = {1, 2, 2, 3, 4, 5, 6};
+    const auto in2 = {2, 2, 3, 3, 5, 7};
+    std::vector&lt;int&gt; out {};
+
+    std::ranges::set_intersection(in1, in2, std::back_inserter(out));
+
+    print(in1, " ∩ "), print(in2, " = "), print(out, "\n");
+}
+|output=
+{ 1 2 2 3 4 5 6 } ∩ { 2 2 3 3 5 7 } = { 2 2 3 5 }
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_union}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_symmetric_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc set_intersection}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,95 @@
+{{cpp/title|setvbuf}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+int setvbuf( std::FILE* stream, char* buffer, int mode, std::size_t size );
+}}
+
+以 {{c|mode}} 所指示值更改给定文件流 {{c|stream}} 的缓冲模式。另外，
+
+* 若 {{c|buffer}} 为空指针，则重设内部缓冲区大小为 {{c|size}}。
+* 若 {{c|buffer}} 不是空指针，则指示流使用始于 {{c|buffer}} 大小为 {{c|size}} 的用户提供缓冲区。必须在 {{c|buffer}} 所指向的数组的[[cpp/language/lifetime|生存期]]结束前（用 {{lc|fclose}}）关闭流。成功调用 {{lc|std::setvbuf}} 后，数组内容不确定，而任何使用它的尝试是未定义行为。
+
+===参数===
+{{par begin}}
+{{par|stream|要设置缓冲的文件流}}
+{{par|buffer|指向要使用的流缓冲区的指针，或若仅更改大小和模式则为空指针}}
+{{par|mode|2=使用的缓冲模式。它可为下列值之一：
+{{cpp/io/c/buffering modes}}
+}}
+{{par|size|缓冲区的大小}}
+{{par end}}
+
+===返回值===
+成功时为 {{c|0}}，失败时为非零。
+
+===注解===
+此函数仅可在已将 {{c|stream}} 关联到打开的文件后，但要在任何其他操作（除了对 {{lc|std::setbuf}}/{{tt|std::setvbuf}} 的失败调用）前使用。
+
+不是所有 {{c|size}} 字节都需要用于缓冲：实际缓冲区大小通常向下取整到 2 的倍数、页面大小的倍数等。
+
+多数实现上，行缓冲仅对终端输入流可用。
+
+一个常见错误是把 {{tt|stdin}} 或 {{tt|stdout}} 的缓冲区设置为生存期在程序终止前结束的数组：
+{{source|1=
+int main()
+{
+    char buf[BUFSIZ];
+    std::setbuf(stdin, buf);
+} // buf 的生存期结束，未定义行为
+}}
+
+期待默认缓冲区大小 {{lc|BUFSIZ}} 为实现上文件 I/O 的最高效缓冲区大小，但 POSIX [https://pubs.opengroup.org/onlinepubs/9699919799/functions/fstat.html {{tt|fstat}}] 经常提供更好的估计。
+
+===示例===
+{{example
+|更改缓冲区大小的一个使用情况，是在知道更好的缓冲区大小时。
+|code=
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+#include &lt;iostream&gt;
+#include &lt;sys/stat.h&gt;
+
+int main()
+{
+    std::FILE* fp = std::fopen("/tmp/test.txt", "w+");
+    if (!fp)
+    {
+        std::perror("fopen");
+        return EXIT_FAILURE;
+    }
+
+    struct stat stats;
+    if (fstat(fileno(fp), &amp;stats) == -1) // 仅限 POSIX
+    {
+        std::perror("fstat");
+        return EXIT_FAILURE;
+    }
+
+    std::cout &lt;&lt; "BUFSIZ 为 " &lt;&lt; BUFSIZ &lt;&lt; "，但最优块大小为 "
+              &lt;&lt; stats.st_blksize &lt;&lt; '\n';
+    if (std::setvbuf(fp, nullptr, _IOFBF, stats.st_blksize) != 0)
+    {
+        std::perror("setvbuf failed"); // POSIX 版本设置 errno
+        return EXIT_FAILURE;
+    }
+
+    // 读取整个文件：用 truss/strace 观察所用的 read(2) 系统调用
+    for (int ch; (ch = std::fgetc(fp)) != EOF;)
+    {}
+
+    std::fclose(fp);
+    return EXIT_SUCCESS;
+}
+|p=true
+|output=
+BUFSIZ 为 8192，但最优块大小为 65536
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc setbuf}}
+{{dsc inc|cpp/io/basic_filebuf/dsc setbuf}}
+{{dsc see c|c/io/setvbuf}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

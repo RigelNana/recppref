@@ -1,0 +1,138 @@
+{{cpp/title|slice_array}}
+{{cpp/numeric/valarray/slice_array/navbar}}
+{{dcl begin}}
+{{dcl header|valarray}}
+{{dcl|
+template&lt; class T &gt; class slice_array;
+}}
+{{dcl end}}
+
+{{tt|std::slice_array}} 是接受 {{c|std::slice}} 实参的 [[cpp/numeric/valarray/operator_at|{{tt|valarray}} 下标运算符]]所用的辅助模板。它拥有到 {{tt|std::slice}} 对象所指定的数组子集的引用语义。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/valarray/array/dsc constructor|slice_array}}
+{{dsc inc|cpp/numeric/valarray/array/dsc destructor|slice_array}}
+{{dsc inc|cpp/numeric/valarray/array/dsc operator{{=}}|slice_array}}
+{{dsc inc|cpp/numeric/valarray/array/dsc operator_arith|slice_array}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;valarray&gt;
+
+class Matrix
+{
+    int dim;
+    std::valarray&lt;int&gt; data;
+public:
+    explicit Matrix(int dim, int init = 0)
+        : dim{dim}, data(init, dim*dim) {}
+    void clear(int value = 0) { data = value; }
+    void identity() { clear(); diagonal() = 1; }
+    int&amp; operator()(int x, int y) { return data[dim * y + x]; }
+
+    std::slice_array&lt;int&gt; diagonal()
+    {
+        return data[std::slice(0, dim, dim + 1)];
+    }
+    std::slice_array&lt;int&gt; secondary_diagonal()
+    {
+        return data[std::slice(dim - 1, dim, dim - 1)];
+    }
+    std::slice_array&lt;int&gt; row(std::size_t row)
+    {
+        return data[std::slice(dim * row, dim, 1)];
+    }
+    std::slice_array&lt;int&gt; column(std::size_t col)
+    {
+        return data[std::slice(col, dim, dim)];
+    }
+    template&lt;unsigned, unsigned&gt; friend class MatrixStack;
+};
+
+template&lt;unsigned dim = 3, unsigned max = 8&gt; class MatrixStack
+{
+    std::valarray&lt;int&gt; stack;
+    unsigned count = 0;
+public:
+    MatrixStack() : stack(dim * dim * max) {}
+    void print_all() const
+    { 
+        std::valarray&lt;int&gt; row(dim*count);
+        for (unsigned r = 0; r != dim; ++r) // screen row
+        {
+            row = stack[std::gslice(r * dim, {count, dim}, {dim * dim, 1})];
+            for (unsigned i = 0; i != row.size(); ++i)
+                std::cout &lt;&lt; row[i] &lt;&lt; ((i + 1) % dim ? " " : " │ ");
+            std::cout &lt;&lt; '\n';
+        }
+    }
+    void push_back(Matrix const&amp; m)
+    {
+        if (count &lt; max)
+        {
+            stack[std::slice(count * dim * dim, dim * dim, 1)]
+                = m.data[std::slice(0, dim * dim, 1)];
+            ++count;
+        }
+    }
+};
+
+int main()
+{
+    constexpr int dim = 3;
+    Matrix m{dim};
+    MatrixStack&lt;dim,12&gt; stack;
+
+    m.identity();
+    stack.push_back(m);
+
+    m.clear(1);
+    m.secondary_diagonal() = 3;
+    stack.push_back(m);
+
+    for (int i = 0; i != dim; ++i)
+    {
+        m.clear();
+        m.row(i) = i + 1;
+        stack.push_back(m);
+    }
+
+    for (int i = 0; i != dim; ++i)
+    {
+        m.clear();
+        m.column(i) = i + 1;
+        stack.push_back(m);
+    }
+
+    m.clear();
+    m.row(1) = std::valarray&lt;int&gt;{4, 5, 6};
+    stack.push_back(m);
+
+    m.clear();
+    m.column(1) = std::valarray&lt;int&gt;{7, 8, 9};
+    stack.push_back(m);
+
+    stack.print_all();
+}
+|output=
+1 0 0 │ 1 1 3 │ 1 1 1 │ 0 0 0 │ 0 0 0 │ 1 0 0 │ 0 2 0 │ 0 0 3 │ 0 0 0 │ 0 7 0 │
+0 1 0 │ 1 3 1 │ 0 0 0 │ 2 2 2 │ 0 0 0 │ 1 0 0 │ 0 2 0 │ 0 0 3 │ 4 5 6 │ 0 8 0 │
+0 0 1 │ 3 1 1 │ 0 0 0 │ 0 0 0 │ 3 3 3 │ 1 0 0 │ 0 2 0 │ 0 0 3 │ 0 0 0 │ 0 9 0 │
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/numeric/valarray/dsc gslice_array}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

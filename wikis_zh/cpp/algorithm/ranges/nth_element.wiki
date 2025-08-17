@@ -1,0 +1,120 @@
+{{cpp/ranges/title|nth_element}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::random_access_iterator I, std::sentinel_for&lt;I&gt; S,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;I, Comp, Proj&gt;
+constexpr I
+    nth_element( I first, I nth, S last, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::random_access_range R,
+          class Comp = ranges::less, class Proj = std::identity &gt;
+requires std::sortable&lt;iterator_t&lt;R&gt;, Comp, Proj&gt;
+constexpr ranges::borrowed_iterator_t&lt;R&gt;
+    nth_element( R&amp;&amp; r, iterator_t&lt;R&gt; nth, Comp comp = {}, Proj proj = {} );
+}}
+{{dcl end}}
+
+重排 {{range|first|last}} 中的元素使得：
+* {{c|nth}} 所指向的元素被更改为假设 {{range|first|last}} 按照 {{c|comp}} 与 {{c|proj}} 排序则会在该位置出现的元素。
+* 所有在此新的 {{ttb|nth}} 元素前的元素''小于或等于''新的 {{c|nth}} 后的元素。即对于每个分别在范围 {{range|first|nth}} 与 {{range|nth|last}} 中的迭代器 ''i'' 与 ''j''，表达式 {{c|std::invoke(comp, std::invoke(proj, *j), std::invoke(proj, *i))}} 求值为 {{c|false}}。
+* 若 {{c|1=nth == last}} 则此函数无效果。
+
+@1@ 用给定的二元比较函数对象 {{c|comp}} 与投影对象 {{c|proj}} 比较元素。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要重排的|sentinel=yes}}
+{{par | r           | 要重排的元素范围}}
+{{par | nth         | 定义划分点的迭代器}}
+{{par | comp        | 用于比较投影后元素的比较器}}
+{{par | proj        | 应用到元素的投影}}
+{{par end}}
+
+===返回值===
+@1@ 等于 {{c|last}} 的迭代器。
+@2@ 若 {{c|r}} 为左值或拥有 {{lconcept|borrowed_range}} 类型则同 {{v|1}}。否则返回 {{lc|std::ranges::dangling}}。
+
+===复杂度===
+平均与 {{c|ranges::distance(first, last)}} 成线性。
+
+===注解===
+使用的算法常为[[enwiki::Introselect|内省选择]]，尽管允许其他拥有适合的平均情况复杂度的[[enwiki::Selection algorithm|选择算法]]。
+
+===可能的实现===
+参阅 [https://github.com/microsoft/STL/blob/e97bb2b50a12816ce68cc5147b7a3a21fb68bfa3/stl/inc/algorithm#L8896-L8969 msvc stl]，[https://github.com/gcc-mirror/gcc/blob/a87819b8f1b890d36a3f05bd9de80be20e9525dd/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L2016-L2044 libstdc++] 和 libc++: [https://github.com/llvm/llvm-project/blob/ed2d3644abee9535eb07333beb1562a651001281/libcxx/include/__algorithm/ranges_nth_element.h (1)] / [https://github.com/llvm/llvm-project/blob/ed2d364/libcxx/include/__algorithm/nth_element.h (2)] 中的实现。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;array&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+
+void print(std::string_view rem, std::ranges::input_range auto const&amp; a)
+{
+    for (std::cout &lt;&lt; rem; const auto e : a)
+        std::cout &lt;&lt; e &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    std::array v{5, 6, 4, 3, 2, 6, 7, 9, 3};
+    print("Before nth_element: ", v);
+
+    std::ranges::nth_element(v, v.begin() + v.size() / 2);
+    print("After nth_element:  ", v);
+    std::cout &lt;&lt; "The median is: " &lt;&lt; v[v.size() / 2] &lt;&lt; '\n';
+
+    std::ranges::nth_element(v, v.begin() + 1, std::greater&lt;int&gt;());
+    print("After nth_element:  ", v);
+    std::cout &lt;&lt; "The second largest element is: " &lt;&lt; v[1] &lt;&lt; '\n';
+    std::cout &lt;&lt; "The largest element is: " &lt;&lt; v[0] &lt;&lt; "\n\n";
+
+    using namespace std::literals;
+    std::array names
+    {
+        "Diva"sv, "Cornelius"sv, "Munro"sv, "Rhod"sv,
+        "Zorg"sv, "Korben"sv, "Bender"sv, "Leeloo"sv,
+    };
+    print("Before nth_element: ", names);
+    auto fifth_element{std::ranges::next(names.begin(), 4)};
+    std::ranges::nth_element(names, fifth_element);
+    print("After nth_element:  ", names);
+    std::cout &lt;&lt; "The 5th element is: " &lt;&lt; *fifth_element &lt;&lt; '\n';
+}
+|output=
+Before nth_element: 5 6 4 3 2 6 7 9 3 
+After nth_element:  2 3 3 4 5 6 6 7 9 
+The median is: 5
+After nth_element:  9 7 6 6 5 4 3 3 2 
+The second largest element is: 7
+The largest element is: 9
+
+Before nth_element: Diva Cornelius Munro Rhod Zorg Korben Bender Leeloo 
+After nth_element:  Diva Cornelius Bender Korben Leeloo Rhod Munro Zorg 
+The 5th element is: Leeloo
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc max_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc min_element}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc partial_sort}}
+{{dsc inc|cpp/algorithm/dsc nth_element}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

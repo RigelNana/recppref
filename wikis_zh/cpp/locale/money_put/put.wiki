@@ -1,0 +1,99 @@
+{{cpp/locale/money_put/title|put, do_put}}
+{{cpp/locale/money_put/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+iter_type put( iter_type out, bool intl, std::ios_base&amp; f,
+               char_type fill, long double quant ) const;}}
+{{dcl|num=2|1=
+iter_type put( iter_type out, bool intl, std::ios_base&amp; f,
+               char_type fill, const string_type&amp; quant ) const;}}
+{{dcl|num=3|1=
+protected:
+virtual iter_type do_put( iter_type out, bool intl, std::ios_base&amp; str,
+                          char_type fill, long double units ) const;}}
+{{dcl|num=4|1=
+virtual iter_type do_put( iter_type out, bool intl, std::ios_base&amp; str,
+                          char_type fill, const string_type&amp; digits ) const;
+}}
+{{dcl end}}
+
+格式化货币值并写结果到输出流。
+
+@1,2@ 公开成员函数，调用最终派生类的成员函数 {{tt|do_put}}。
+
+@3@ 如同用 {{c|ct.widen(buf1, buf1 + std::sprintf(buf1, "%.0Lf", units), buf2)}} 将数值实参 {{c|units}} 转换成宽字符串，其中 {{c|ct}} 是 {{c|str.getloc()}} 中浸染的 {{lc|std::ctype}} 刻面，而 {{c|buf1}} 和 {{c|buf2}} 是充分大的字符缓冲区。按后述方式处理、格式化结果字符串 {{c|buf2}} 并输出到 {{c|out}}。
+
+@4@ 从字符串实参 {{c|digits}} 采取仅有的可选前导负号（以与 {{c|ct.widen('-')}} 比较确定，其中 {{c|ct}} 是 {{c|str.getloc()}} 中浸染的 {{lc|std::ctype}} 刻面）和紧随其后的数位字符（以 {{c|ct}} 分类）为字符序列，按后述方式处理、格式化，并输出到 {{c|out}}。
+
+给定来自先前步骤的字符序列，如果首字符等于 {{c|ct.widen('-')}}，那么就会调用 {{c|mp.neg_format()}} 获得格式化 {{lc|pattern}}，否则就会调用 {{c|mp.pos_format()}}，其中 {{c|mp}} 是 {{c|str.getloc()}} 中浸染的 {{c|std::moneypunct&lt;CharT, intl&gt;}} 刻面。
+
+依 {{c|mp.grouping()}}、{{c|mp.frac_digits()}}、{{c|mp.decimal_point()}} 和 {{c|mp.thousands_sep()}} 所要求插入千位分隔符和小数点，而将结果字符串置于输出序列中的 {{lc|value}} 在格式化模式中出现的位置。
+
+如果 {{c|str.flags() &amp; str.showbase}} 非零（使用了 {{c|std::showbase}} 操纵符），那么就会通过调用 {{c|mp.curr_symbol()}} 生成通货符号或字符串，并将它置于输出序列中的 {{lc|symbol}} 在格式化模式中出现的位置。
+
+如果 {{c|mp.positive_sign()}}（使用正格式模式的情况下）或 {{c|mp.negative_sign()}}（使用负格式模式的情况下）返回带有多于一个字符的字符串，那么就会将首字符置于输出序列中的 {{lc|sign}} 在格式化模式中出现的位置，而将剩余字符置于所有其他字符之后，例如格式化模式 {{c|{sign, value, space, symbol}&lt;!----&gt;}} 用 {{c|123}} 单位和 {{c|"-"}} 的 negative_sign 会导致 {{c|"-1.23 €"}}，而 {{c|"()"}} 的 negative_sign 会生成 {{c|"(1.23 €)"}}。
+
+如果为指定格式生成的字符数小于 {{c|str.width()}} 的返回值，那么就会以如下方式，插入 {{c|fill}} 的副本以使得输出序列的总长度刚好达到 {{c|str.width()}}：
+* 如果 {{c|str.flags() &amp; str.adjustfield}} 等于 {{c|str.internal}}，那么就会插入填充字符到 {{tt|none}} 或 {{tt|space}} 在格式化模式中出现的位置。
+* 否则，如果 {{c|str.flags() &amp; str.adjustfield}} 等于 {{c|str.left}}，那么就会后附 {{c|fill}} 的副本到所有其他字符后。
+* 否则，将填充字符置于所有其他字符前。
+
+最后，调用 {{c|str.width(0)}} 取消任何 {{lc|std::setw}} 的效果。
+
+===返回值===
+指向紧跟最后产生字符之后的迭代器。
+
+===注解===
+假设通货单位为货币的最小非小数单位：在美国是美分，在日本是日元。
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+
+struct my_punct : std::moneypunct_byname&lt;char, false&gt;
+{
+    my_punct(const char* name) : moneypunct_byname(name) {}
+    string_type do_negative_sign() const { return "()"; }
+};
+
+int main()
+{
+    std::locale loc("ru_RU.utf8");
+    std::cout.imbue(loc);
+    long double units = -123.45;
+    std::cout &lt;&lt; "在俄语本地环境中，" &lt;&lt; units &lt;&lt; " 会输出为 " &lt;&lt; std::showbase;
+    
+    // 注意，以下等价于简单的 std::put_money(units)
+    std::use_facet&lt;std::money_put&lt;char&gt;&gt;(loc).put(
+        {std::cout}, false, std::cout, std::cout.fill(), units);
+    std::cout &lt;&lt; '\n';
+    
+    std::cout.imbue(std::locale(std::cout.getloc(), new my_punct("ru_RU.utf8")));
+    std::cout &lt;&lt; "负号设置为 \"()\" 的情况下会输出 ";
+    std::use_facet&lt;std::money_put&lt;char&gt;&gt;(loc).put(
+        {std::cout}, false, std::cout, std::cout.fill(), units);
+    std::cout &lt;&lt; '\n';
+}
+|output=
+在俄语本地环境中，-123,45 会输出为 -1.23 руб
+负号设置为 "()" 的情况下会输出 (1.23 руб)
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=328|std=C++98|before={{lc|std::sprintf}} 使用的格式字符串是 {{c|"%.01f"}}|after=改成 {{c|"%.0Lf"}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/locale/dsc moneypunct}}
+{{dsc inc|cpp/locale/dsc money_get}}
+{{dsc inc|cpp/io/manip/dsc put_money}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

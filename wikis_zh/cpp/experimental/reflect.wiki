@@ -1,0 +1,382 @@
+{{title | 反射扩展}}
+{{cpp/experimental/reflect/navbar}}
+
+C++ 反射扩展，ISO/IEC TS 23619:2021，指定对核心语言的更改并对 C++ 标准库定义此页面上列出的新组件。
+
+反射 TS 基于 C++20 标准（除了概念的定义以[[cpp/experimental/constraints|概念 TS]] 的风格指定）。
+
+===核心语言更改===
+====reflexpr 说明符====
+{{spar|reflexpr-说明符}} 形式为 {{ttb|reflexpr}} {{ttb|(}} {{spar|reflexpr-操作数}} {{ttb|)}}，并指定一个元对象类型（见后述）。
+
+{{spar|reflexpr-操作数}} 能为下列之一：
+{{sdsc begin}}
+{{sdsc | num=1 | {{ttb|::}} }}
+{{sdsc | num=2 | {{spar|类型标识}} }}
+{{sdsc | num=3 | {{spar|嵌套名说明符}}{{mark optional}} {{spar|命名空间名}} }}
+{{sdsc | num=4 | {{spar|标识表达式}} }}
+{{sdsc | num=5 | {{ttb|(}} {{spar|表达式}} {{ttb|)}} }}
+{{sdsc | num=6 | {{spar|函数调用表达式}} }}
+{{sdsc | num=7 | {{spar|函数式类型转换表达式}} }}
+{{sdsc end}}
+
+其中 {{spar|函数调用表达式}} 为
+{{sdsc begin}}
+{{sdsc |
+{{spar|后缀表达式}} {{ttb|(}} {{spar|表达式列表}}{{mark optional}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+而 {{spar|函数式类型转换表达式}} 为以下种类的进行[[cpp/language/explicit cast|显式转换]]的表达式：
+{{sdsc begin}}
+{{sdsc | num=1 |
+{{spar|简单类型说明符}} {{ttb|(}} {{spar|表达式列表}}{{mark optional}} {{ttb|)}}
+}}
+{{sdsc | num=2 |
+{{spar|typename-说明符}} {{ttb|(}} {{spar|表达式列表}}{{mark optional}} {{ttb|)}}
+}}
+{{sdsc | num=3 |
+{{spar|简单类型说明符}} {{spar|花括号初始化器列表}}
+}}
+{{sdsc | num=4 |
+{{spar|typename-说明符}} {{spar|花括号初始化器列表}}
+}}
+{{sdsc end}}
+
+给 {{spar|reflexpr-说明符}} 的操作数应当是[[cpp/language/type|类型]]、[[cpp/language/namespace|命名空间]]、[[cpp/language/enum|枚举项]]、变量、[[cpp/language/data members|数据成员]]、[[cpp/language/function|函数形参]]、[[cpp/language/lambda|被捕获实体]]、{{spar|函数调用表达式}} 或 {{spar|函数式类型转换表达式}} 及有括号表达式。{{c|reflexpr(::)}} 反射全局命名空间。
+
+对于形式为{{ttb|(}} {{spar|表达式}} {{ttb|)}}的 {{spar|reflexpr-操作数}}，{{spar|表达式}} 应当为（可能有多重括号的）{{spar|函数调用表达式}} 或 {{spar|函数式类型转换表达式}}。
+
+若无括号的操作数能被当作 {{spar|类型标识}} 或 {{spar|函数式类型转换表达式}}，则它被当作 {{spar|类型标识}}。能用括号消歧义函数风格转换与 {{spar|类型标识}}。例如，给定的拥有默认构造函数的类类型 {{tt|X}}，{{c|reflexpr(X())}} 反射函数类型 {{c|X()}}，而 {{c|reflexpr((X()))}} 反射表达式 {{c|X()}}。
+
+若操作数一并指代别名和类名，则 reflexpr 说明符所表示的类型反射别名并满足 {{tt|reflect::Alias}}。
+
+若操作数指代声明被围绕在块作用域内的名字且该具名实体既非捕获亦非函数形参，则程序非良构。
+
+====元对象类型====
+''元对象类型''是无名、不完整的命名空间作用域类类型。一个类型满足概念 {{tt|reflect::Object}} 当且仅当它是元对象类型。元对象类型亦可能满足其他概念，取决于 {{tt|reflexpr}} 的操作数。
+
+重复应用 {{tt|reflexpr}} 到同一操作数是产生同一类型还是不同类型是未指定的。若元对象类型反射不完整类类型，则不能应用某些类型变换。
+
+元对象类型允许通过类型表征或其上的类型变换查询 {{tt|reflexpr}} 的操作数的某些属性。
+
+====重载决议====
+若 {{spar|函数调用表达式}} 的 {{spar|后缀表达式}} 拥有类类型，例如 是 {{spar|函数调用表达式}} {{c|e(args)}} 中的 {{c|e}} 拥有类类型，则 {{spar|后缀表达式}}（{{c|e}}）的类型的[[cpp/language/cast operator|用户定义转换函数]]不应当被使用。
+
+若 {{spar|后缀表达式}} 不拥有类类型，则它应当指名作为重载决议唯一结果的函数。
+
+{{source|1=
+struct Functor {
+    void operator()(int) const;
+
+    using fptr_t = void(*)(std::nullptr_t);
+    operator fptr_t() const;
+};
+
+using Meta0 = reflexpr(Functor{}(0));          // OK
+// using Meta1 = reflexpr(Functor{}(nullptr)); // 错误：使用了转换函数
+}}
+
+====反射相关====
+''别名''是 {{ltt|cpp/language/typedef}} 声明、[[cpp/language/type alias|别名声明]]或 [[cpp/language/using declaration|using 声明]]所引入的名字。
+
+实体或别名 {{tt|B}} ''反射相关''到实体或别名 {{tt|A}}，若
+# {{tt|A}} 与 {{tt|B}} 为同一实体或别名，
+# {{tt|A}} 为变量或枚举项而 {{tt|B}} 为 {{tt|A}} 的类型，
+# {{tt|A}} 为枚举而 {{tt|B}} 为 {{tt|A}} 的底层类型，
+# {{tt|A}} 为类而 {{tt|B}} 为 {{tt|A}} 的成员或基类，
+# {{tt|A}} 为指代实体 {{tt|B}} 的非模板别名，
+# {{tt|A}} 不是全局命名空间而 {{tt|B}} 是 {{tt|A}} 的外围类或外围命名空间，
+# {{tt|A}} 为有括号表达式 ({{tt|B}}) ，
+# {{tt|A}} 为闭包类型 {{tt|B}} 的 lambda 捕获，
+# {{tt|A}} 为 lambda 捕获 {{tt|B}} 的闭包类型，
+# {{tt|B}} 为 {{spar|函数式类型转换表达式}} {{tt|A}} 所指定的类型，
+# {{tt|B}} 为重载决议对 {{spar|函数调用表达式}} {{tt|A}} 所选择的函数，
+# {{tt|B}} 为函数 {{tt|A}} 的返回类型、形参类型或函数类型，或
+# {{tt|B}} 反射相关到实体或别名 {{tt|X}} 而 {{tt|X}} 反射相关到 {{tt|A}} 。
+反射相关关系为自反和传递，但非对称。
+
+不正式而言，{{tt|B}} 反射相关到 {{tt|A}} 的情况表示 {{tt|B}} 参与 {{tt|A}} 的声明或定义。
+
+零或多次相继应用产生元对象类型的类型变换到 {{spar|reflexpr-说明符}} 所代表的类型，使得用户能查阅反射相关到操作数的实体和别名；我们称这种元对象类型反射相应的反射相关的类型或实体。
+
+{{source|1=
+struct X;
+struct B
+{
+    using X = ::X;
+    typedef X Y;
+};
+struct D : B
+{
+    using B::Y;
+};
+// ::X，而非 B::X 或 B::Y 反射相关到 D::Y
+}}
+
+====杂项====
+* 用作 {{spar|reflexpr-操作数}} 的表达式为[[cpp/language/expressions#不求值表达式|不求值表达式]]并被[[cpp/language/constant expression|潜在常量求值]]。
+* 对于确定以捕获默认在 [[cpp/language/lambda#Lambda 捕获|lambda 表达式中捕获]]的变量的目的，不认为 {{tt|reflexpr}} 操作数是不求值操作数。
+* 元对象类型 {{tt|T}} 所反射的函数或拥有静态[[cpp/language/storage duration|存储期]]的变量被 {{c|std::experimental::reflect::get_pointer&lt;T&gt;}} 的特化 [[cpp/language/definition|odr 式使用]]，如同通过取指名该函数或变量的标识表达式的地址。
+* 元对象类型能有多于一个定义，只要此类型上的所有操作都产生相同的常量表达式结果。
+* 一个类型为[[cpp/language/dependent name#待决类型|待决]]，若它为 reflexpr 说明符所指代，且操作数
+** 为[[cpp/language/dependent name#类型待决表达式|类型待决表达式]]或（可能有括号的） {{spar|函数式类型转换表达式}} 且至少拥有一个类型待决的立即子表达式，或
+** 指代待决类型或[[cpp/language/dependent name#未知特化|未知特化]]的成员或[[cpp/language/dependent name#值待决表达式|值待决的常量表达式]]。
+
+====关键词====
+{{ltt|cpp/keyword/reflexpr}}
+
+====预定义功能特性测试宏====
+{{dsc begin}}
+{{dsc macro const | __cpp_reflection | nolink=true | 至少为 {{c|201902}} 的值，指示反射 TS 受到支持}}
+{{dsc end}}
+
+===库支持===
+====概念====
+{{dsc begin}}
+{{dsc header | experimental/reflect}}
+{{dsc namespace | std::experimental::reflect}}
+{{dsc namespace | inline=true | std::experimental::reflect::v1}}
+{{dsc concept | cpp/experimental/reflect/Object | notes={{mark since reflection ts}} | 指定类型为元对象类型}}
+{{dsc concept | cpp/experimental/reflect/ObjectSequence | notes={{mark since reflection ts}} | 指定元对象类型为元对象序列类型}}
+{{dsc concept | cpp/experimental/reflect/TemplateParameterScope | notes={{mark since reflection ts}} | 指定元对象类型反射模板形参作用域}}
+{{dsc concept | cpp/experimental/reflect/Named | notes={{mark since reflection ts}} | 指定元对象类型反射具有关联（可能为空的）名字的实体}}
+{{dsc concept | cpp/experimental/reflect/Alias | notes={{mark since reflection ts}} | 指定元对象类型反射类型别名、命名空间别名或由 using 声明引入的别名}}
+{{dsc concept | cpp/experimental/reflect/RecordMember | notes={{mark since reflection ts}} | 指定元对象类型反射类的 {{spar|成员说明}}}}
+{{dsc concept | cpp/experimental/reflect/Enumerator | notes={{mark since reflection ts}} | 指定元对象类型反射枚举项}}
+{{dsc concept | cpp/experimental/reflect/Variable | notes={{mark since reflection ts}} | 指定元对象类型反射变量或数据成员}}
+{{dsc concept | cpp/experimental/reflect/ScopeMember | notes={{mark since reflection ts}} | 指定元对象类型满足 {{tt|RecordMember}} 、 {{tt|Enumerator}} 或 {{tt|Variable}} ，或反射全局命名空间以外的命名空间}}
+{{dsc concept | cpp/experimental/reflect/Typed | notes={{mark since reflection ts}} | 指定元对象类型反射具有类型的实体}}
+{{dsc concept | cpp/experimental/reflect/Namespace | notes={{mark since reflection ts}} | 指定元对象类型反射命名空间}}
+{{dsc concept | cpp/experimental/reflect/GlobalScope | notes={{mark since reflection ts}} | 指定元对象类型反射全局命名空间}}
+{{dsc concept | cpp/experimental/reflect/Class | notes={{mark since reflection ts}} | 指定元对象类型反射非联合类类型}}
+{{dsc concept | cpp/experimental/reflect/Enum | notes={{mark since reflection ts}} | 指定元对象类型反射枚举类型}}
+{{dsc concept | cpp/experimental/reflect/Record | notes={{mark since reflection ts}} | 指定元对象类型反射类类型}}
+{{dsc concept | cpp/experimental/reflect/Scope | notes={{mark since reflection ts}} | 指定元对象类型反射命名空间、类、枚举、闭包类型、模板实参作用域}}
+{{dsc concept | cpp/experimental/reflect/Type | notes={{mark since reflection ts}} | 指定元对象类型反射一个类型}}
+{{dsc concept | cpp/experimental/reflect/Constant | notes={{mark since reflection ts}} | 指定元对象类型反射枚举项或 constexpr 变量}}
+{{dsc concept | cpp/experimental/reflect/Base | notes={{mark since reflection ts}} | 指定元对象类型反射从 {{tt|get_base_classes}} 获得的直接基类}}
+{{dsc concept | cpp/experimental/reflect/FunctionParameter | notes={{mark since reflection ts}} | 指定元对象类型反射模板形参}}
+{{dsc concept | cpp/experimental/reflect/Callable | notes={{mark since reflection ts}} | 指定元对象类型反射函数（包括构造函数与析构函数）}}
+{{dsc concept | cpp/experimental/reflect/Expression | notes={{mark since reflection ts}} | 指定元对象类型反射表达式}}
+{{dsc concept | cpp/experimental/reflect/ParenthesizedExpression | notes={{mark since reflection ts}} | 指定元对象类型反射有括号表达式}}
+{{dsc concept | cpp/experimental/reflect/FunctionCallExpression | notes={{mark since reflection ts}} | 指定元对象类型反射 {{spar|函数调用表达式}}}}
+{{dsc concept | cpp/experimental/reflect/FunctionalTypeConversion | notes={{mark since reflection ts}} | 指定元对象类型反射 {{spar|函数式类型转换表达式}}}}
+{{dsc concept | cpp/experimental/reflect/Function | notes={{mark since reflection ts}} | 指定元对象类型反射函数（不含构造函数与析构函数）}}
+{{dsc concept | cpp/experimental/reflect/MemberFunction | notes={{mark since reflection ts}} | 指定元对象类型反射成员函数I（不含构造函数与析构函数）}}
+{{dsc concept | cpp/experimental/reflect/SpecialMemberFunction | notes={{mark since reflection ts}} | 指定元对象类型反射特殊成员函数}}
+{{dsc concept | cpp/experimental/reflect/Constructor | notes={{mark since reflection ts}} | 指定元对象类型反射构造函数}}
+{{dsc concept | cpp/experimental/reflect/Destructor | notes={{mark since reflection ts}} | 指定元对象类型反射析构函数}}
+{{dsc concept | cpp/experimental/reflect/Operator | notes={{mark since reflection ts}} | 指定元对象类型反射运算符函数或转换函数}}
+{{dsc concept | cpp/experimental/reflect/ConversionOperator | notes={{mark since reflection ts}} | 指定元对象类型反射转换函数}}
+{{dsc concept | cpp/experimental/reflect/Lambda | notes={{mark since reflection ts}} | 指定元对象类型反射非泛型 lambda 的闭包类型}}
+{{dsc concept | cpp/experimental/reflect/LambdaCapture | notes={{mark since reflection ts}} | 指定元对象类型反射 lambda 捕获}}
+{{dsc end}}
+
+====元对象操作====
+{{dsc begin}}
+{{dsc header | experimental/reflect}}
+{{dsc namespace | std::experimental::reflect}}
+{{dsc namespace | inline=true | std::experimental::reflect::v1}}
+
+{{dsc h2 | {{tt|Object}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/reflects_same | notes={{mark since reflection ts}} | 检查二个元对象类型是否反射同一实体或别名}}
+{{dsc tclass | cpp/experimental/reflect/get_source_line | notes={{mark since reflection ts}} | 获得被反射实体或别名的声明的预设行号}}
+{{dsc tclass | cpp/experimental/reflect/get_source_column | notes={{mark since reflection ts}} |获得被反射实体或别名的声明的实现定义列号}}
+{{dsc tclass | cpp/experimental/reflect/get_source_file_name | notes={{mark since reflection ts}} | 获得被反射实体或别名的声明的预设文件名}}
+
+{{dsc h2 | {{tt|ObjectSequence}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_size | notes={{mark since reflection ts}} | 获得元对象序列的大小}}
+{{dsc tclass | cpp/experimental/reflect/get_element | notes={{mark since reflection ts}} | 获得元对象序列中拥有给定下标的元对象类型}}
+{{dsc tclass | cpp/experimental/reflect/unpack_sequence | notes={{mark since reflection ts}} | 应用模板到元对象序列}}
+
+{{dsc h2 | {{tt|Named}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_unnamed | notes={{mark since reflection ts}} | 检查被反射实体或别名是否具名}}
+{{dsc tclass | cpp/experimental/reflect/get_name | notes={{mark since reflection ts}} | 获得被反射实体或别名的无限定名}}
+{{dsc tclass | cpp/experimental/reflect/get_display_name | notes={{mark since reflection ts}} | 获得被反射实体或别名的实现定义显示名}}
+
+{{dsc h2 | {{tt|Alias}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_alias | notes={{mark since reflection ts}} | 获得反射被反射别名的关联实体的元对象类型}}
+
+{{dsc h2 | {{tt|Type}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_type | notes={{mark since reflection ts}} | 获得反射被反射实体或别名的类型的元对象类型}}
+{{dsc tclass | cpp/experimental/reflect/get_reflected_type | notes={{mark since reflection ts}} | 获得反射被反射实体或别名的类型}}
+{{dsc tclass | cpp/experimental/reflect/is_enum | notes={{mark since reflection ts}} | 检查元对象类型是否反射枚举类型}}
+{{dsc tclass | cpp/experimental/reflect/is_union | notes={{mark since reflection ts}} | 检查元对象类型是否反射联合体类型}}
+{{dsc tclass | cpp/experimental/reflect/uses_key | title=uses_class_key&lt;br&gt;uses_struct_key | notes={{mark since reflection ts}} | 分别检查元对象类型是否反射声明使用 {{c|class}} 或 {{c|struct}} 的非联合类类型}}
+
+{{dsc h2 | {{tt|ScopeMember}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_scope | notes={{mark since reflection ts}} | 获得反射被反射实体或别名的作用域的元对象类型}}
+
+{{dsc h2 | {{tt|Base}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_class | notes={{mark since reflection ts}} | 获得反射给定基类关系中基类的元对象类型}}
+
+{{dsc h2 | {{tt|RecordMember}} 与 {{tt|Base}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_public | notes={{mark since reflection ts}} | 检查被反射的成员或基类是否为公开}}
+{{dsc tclass | cpp/experimental/reflect/is_protected | notes={{mark since reflection ts}} | 检查被反射的成员或基类是否为受保护}}
+{{dsc tclass | cpp/experimental/reflect/is_private | notes={{mark since reflection ts}} | 检查被反射的成员或基类是否为私有}}
+
+{{dsc h2 | {{tt|Record}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_data_members | title=get_public_data_members&lt;br&gt;get_accessible_data_members&lt;br&gt;get_data_members | notes={{mark since reflection ts}} | 获得元素反射被反射类的公开、可访问或全部数据成员的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/get_member_functions | title=get_public_member_functions&lt;br&gt;get_accessible_member_functions&lt;br&gt;get_member_functions | notes={{mark since reflection ts}} | 获得元素反射被反射类的公开、可访问或全部成员函数的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/get_constructors | notes={{mark since reflection ts}} | 获得元素反射被反射类的全部构造函数的的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/get_operators | notes={{mark since reflection ts}} | 获得元素反射声明于被反射类中的所有运算符函数及转换函数的的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/get_destructor | notes={{mark since reflection ts}} | 获得反射被反射类的析构函数的元对象类型}}
+{{dsc tclass | cpp/experimental/reflect/get_member_types | title=get_public_member_types&lt;br&gt;get_accessible_member_types&lt;br&gt;get_member_types | notes={{mark since reflection ts}} | 获得元素反射被反射类的公开、可访问或全部成员类型的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/get_base_classes | title=get_public_base_classes&lt;br&gt;get_accessible_base_classes&lt;br&gt;get_base_classes | notes={{mark since reflection ts}} | 获得元素反射被反射类的公开、可访问或全部基类的元对象序列类型}}
+
+{{dsc h2 | {{tt|Enum}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_scoped_enum | notes={{mark since reflection ts}} | 检查被反射枚举是否有作用域}}
+{{dsc tclass | cpp/experimental/reflect/get_enumerators | notes={{mark since reflection ts}} | 获得元素反射被反射枚举的枚举项的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/get_underlying_type | notes={{mark since reflection ts}} | 获得反射被反射枚举的底层类型的元对象类型}}
+
+{{dsc h2 | {{tt|Variable}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_constant | notes={{mark since reflection ts}} | 获得作为常量表达式的被反射变量的值}}
+{{dsc tclass | cpp/experimental/reflect/is_thread_local | notes={{mark since reflection ts}} | 检查变量是否声明带 {{c|thread_local}} }}
+
+{{dsc h2 | {{tt|FunctionParameter}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/has_default_argument | notes={{mark since reflection ts}} | 检查被反射的形参是否有默认实参}}
+
+{{dsc h2 | {{tt|Callable}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_parameters | notes={{mark since reflection ts}} | 获得元素反射被反射函数的形参的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/is_vararg | notes={{mark since reflection ts}} | 检查被反射函数的形参列表是否含有省略号形参}}
+{{dsc tclass | cpp/experimental/reflect/is_noexcept | notes={{mark since reflection ts}} | 检查被反射函数是否为不抛出}}
+{{dsc tclass | cpp/experimental/reflect/is_deleted | notes={{mark since reflection ts}} | 检查被反射函数是否为被删除}}
+
+{{dsc h2 | {{tt|Variable}} 与 {{tt|Callable}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_constexpr | notes={{mark since reflection ts}} | 检查被反射变量或函数是否为 constexpr}}
+
+{{dsc h2 | {{tt|Namespace}} 与 {{tt|Callable}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_inline | notes={{mark since reflection ts}} | 检查被反射的命名空间或函数是否为 inline}}
+
+{{dsc h2 | {{tt|ParenthesizedExpression}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_subexpression | notes={{mark since reflection ts}} | 获得反射被反射的有括号表达式的无括号表达式的元对象类型}}
+
+{{dsc h2 | {{tt|FunctionCallExpression}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_callable | notes={{mark since reflection ts}} | 获得反射被反射的 {{spar|函数调用表达式}} 中的函数的元对象类型}}
+
+{{dsc h2 | {{tt|FunctionalTypeConversion}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_constructor | notes={{mark since reflection ts}} | 获得反射被反射的 {{spar|函数式类型转换表达式}} 中的构造函数的元对象类型}}
+
+{{dsc h2 | {{tt|Variable}} 与 {{tt|Function}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_pointer | notes={{mark since reflection ts}} | 获得被反射变量或函数的地址，或指向非静态成员的成员指针值}}
+
+{{dsc h2 | {{tt|MemberFunction}} 函数}}
+{{dsc tclass | cpp/experimental/reflect/is_qualified | title=is_const&lt;br&gt;is_volatile&lt;br&gt;has_lvalueref_qualifier&lt;br&gt;has_rvalueref_qualifier | notes={{mark since reflection ts}} | 分别检查被反射成员函数是否声明带 {{c|const}}、 {{c|volatile}}、 {{c|&amp;}} 或 {{c|&amp;&amp;}} 限定符}}
+{{dsc tclass | cpp/experimental/reflect/is_override | notes={{mark since reflection ts}} | 检查被反射的成员函数是否重写基类的成员函数}}
+
+{{dsc h2 | {{tt|Record}} 与 {{tt|MemberFunction}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_final | notes={{mark since reflection ts}} | 检查被反射的类或成员函数是否标记为 {{c|final}} }}
+
+{{dsc h2 | {{tt|Variable}} 与 {{tt|MemberFunction}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_static | notes={{mark since reflection ts}} | 检查被反射的变量是否拥有静态存储期，或被反射的成员函数是否为静态}}
+
+{{dsc h2 | {{tt|SpecialMemberFunction}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_implicitly_declared | notes={{mark since reflection ts}} | 检查被反射的特殊成员函数是否为隐式声明}}
+{{dsc tclass | cpp/experimental/reflect/is_defaulted | notes={{mark since reflection ts}} | 检查被反射的成员函数是否在其首条声明预置}}
+
+{{dsc h2 | {{tt|Constructor}} 与 {{tt|ConversionOperator}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_explicit | notes={{mark since reflection ts}} | 检查被反射的构造函数或转换函数是否声明带 {{c|explicit}} }}
+
+{{dsc h2 | {{tt|MemberFunction}} 与 {{tt|Destructor}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_virtual | notes={{mark since reflection ts}} | 检查被反射的成员函数是否为虚}}
+{{dsc tclass | cpp/experimental/reflect/is_pure_virtual | notes={{mark since reflection ts}} | 检查被反射的成员函数是否为纯虚}}
+
+{{dsc h2 | {{tt|Lambda}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/get_captures | notes={{mark since reflection ts}} | 获得元素反射被反射闭包类型的捕获的元对象序列类型}}
+{{dsc tclass | cpp/experimental/reflect/uses_default_capture | title=uses_default_copy_capture&lt;br&gt;uses_default_reference_capture | notes={{mark since reflection ts}} | 分别检查被反射闭包类型的 lambda 表达式的捕获默认是否为 {{tt|1==}} 或 {{tt|&amp;}} }}
+{{dsc tclass | cpp/experimental/reflect/is_call_operator_const | notes={{mark since reflection ts}} | 检查被反射闭包类型的 {{tt|operator()}} 是否声明带 {{c|const}} }}
+
+{{dsc h2 | {{tt|LambdaCapture}} 操作}}
+{{dsc tclass | cpp/experimental/reflect/is_explictly_captured | notes={{mark since reflection ts}} | 检查被反射的 lambda 捕获是否被显式捕获}}
+{{dsc tclass | cpp/experimental/reflect/is_init_capture | notes={{mark since reflection ts}} | 检查被反射的 lambda 捕获是否为初始化捕获}}
+{{dsc end}}
+
+====库功能特性测试宏====
+{{dsc begin}}
+{{dsc header | experimental/reflect}}
+{{dsc macro const | __cpp_lib_reflection | nolink=true | 至少为 {{c|201902}} 的值，指示反射 TS 的支持库受到支持}}
+{{dsc end}}
+
+====概念的满足====
+下表列出反射一个操作数的类型是否满足一个反射 TS 所引入的概念。
+{| table class="wikitable"
+! 类别
+! {{tt|reflexpr}} 操作数
+! 满足的概念
+|-
+| rowspan="9" | 类型
+| 指代[[cpp/language/union|联合体]]的 {{spar|类名}}
+| {{tt|reflect::Union}}
+|-
+| 指代[[cpp/language/lambda|闭包类型]]的 {{spar|类名}}
+| {{tt|reflect::Lambda}}
+|-
+| 指代非 union 类的 {{spar|类名}}
+| {{tt|reflect::Record}}
+|-
+| [[cpp/language/enum|{{spar|枚举名}}]]
+| {{tt|reflect::Enum}}
+|-
+| [[cpp/language/template parameters#类型模板形参|模板 {{spar|类型形参}}]]
+| {{tt|reflect::Type}}, {{tt|reflect::Alias}}
+|-
+| [[cpp/language/decltype|{{spar|decltype-说明符}}]]
+| {{tt|reflect::Type}}, {{tt|reflect::Alias}}
+|-
+| [[cpp/language/namespace#using 声明|using 声明]]所引入的 {{spar|类型名}}
+| {{tt|reflect::Type}}, {{tt|reflect::Alias}}, {{tt|reflect::ScopedMember}}
+|-
+| 任何其他 {{spar|typedef-名}}
+| {{tt|reflect::Type}}, {{tt|reflect::Alias}}
+|-
+| 任何其他 {{spar|类型标识}}
+| {{tt|reflect::Type}}
+|-
+| rowspan="3" | 命名空间
+| [[cpp/language/namespace alias|{{spar|命名空间别名}}]]
+| {{tt|reflect::Namespace}}, {{tt|reflect::Alias}}
+|-
+| 全局命名空间
+| {{tt|reflect::GlobalScope}}
+|-
+| 任何其他[[cpp/language/namespace|命名空间]]
+| {{tt|reflect::Namespace}}
+|-
+| rowspan="8" | 表达式
+| 数据成员名
+| {{tt|reflect::Variable}}
+|-
+| 变量名
+| {{tt|reflect::Variable}}
+|-
+| 枚举项名
+| {{tt|reflect::Enumerator}}
+|-
+| 函数形参名
+| {{tt|reflect::FunctionParameter}}
+|-
+| [[cpp/language/lambda#Lambda 捕获|被捕获实体]]之名
+| {{tt|reflect::LambdaCapture}}
+|-
+| 带括号表达式
+| {{tt|reflect::ParenthesizedExpression}}
+|-
+| {{spar|函数调用表达式}}
+| {{tt|reflect::FunctionCallExpression}}
+|-
+| {{spar|函数式类型转换表达式}}
+| {{tt|reflect::FunctionalTypeConversion}}
+|}
+
+若形式为标识表达式的操作数为常量表达式，则该 reflexpr 说明符所指定的类型亦满足 {{tt|reflect::Constant}}。
+
+若 reflexpr 操作数指代类成员，则该 reflexpr 说明符所表示的类型亦满足 {{tt|reflect::RecordMember}}。
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc type_info}}
+{{dsc inc|cpp/header/dsc type_traits}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

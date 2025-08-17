@@ -1,0 +1,285 @@
+{{title|访问说明符}}
+{{cpp/language/classes/navbar}}
+在 {{rlp|class|class/struct}} 或 {{rlp|union}} 的 {{spar|成员说明}} 中定义其后继成员的可访问性。
+
+在{{rlp|derived class|派生类}}声明的 {{spar|基类说明符}} 中定义它所继承的基类的成员的可访问性。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|public}}  {{ttb|:}} {{spar|成员声明}}}}
+{{sdsc|num=2|{{ttb|protected}} {{ttb|:}} {{spar|成员声明}}}}
+{{sdsc|num=3|{{ttb|private}} {{ttb|:}} {{spar|成员声明}}}}
+{{sdsc|num=4|{{c|public}} {{spar|基类}}}}
+{{sdsc|num=5|{{c|protected}} {{spar|基类}}}}
+{{sdsc|num=6|{{c|private}} {{spar|基类}}}}
+{{sdsc end}}
+
+@1@ 该访问说明符之后的各个成员具有公开成员访问。
+@2@ 该访问说明符之后的各个成员具有受保护成员访问。
+@3@ 该访问说明符之后的各个成员具有私有成员访问。
+@4@ {{rlp|derived class#公开继承|公开继承}}：该访问说明符之后列出的{{rlp|derived class|基类}}的公开和受保护成员在派生类中保持它的成员访问，而基类的私有成员对派生类不可访问。
+@5@ {{rlp|derived class#受保护继承|受保护继承}}：该访问说明符之后列出的{{rlp|derived class|基类}}的公开和受保护成员在派生类中是受保护成员，而基类的私有成员对派生类不可访问。
+@6@ {{rlp|derived class#私有继承|私有继承}}：该访问说明符之后列出的{{rlp|derived class|基类}}的公开和受保护成员在派生类中是私有成员，而基类的私有成员对派生类不可访问。
+
+无论是公开，受保护还是私有继承，基类的私有成员对派生类总是不可访问的。
+
+===解释===
+每个{{rlp|class|类}}成员（静态、非静态、函数、类型等）的名字都具有与其关联的“成员访问”。在程序的任何位置使用成员的名字时都会检查其访问，而且如果它不满足访问规则，那么程序不能编译：
+
+{{example|code=
+#include &lt;iostream&gt;
+
+class Example
+{
+public:             // 此点后的所有声明都是公开的
+    void add(int x) // 成员 "add" 具有公开访问
+    {
+        n += x;     // OK：从 Example::add 可以访问私有的 Example::n
+    }
+private:            // 此点后的所有声明都是私有的
+    int n = 0;      // 成员 "n" 具有私有访问
+};
+
+int main()
+{
+    Example e;
+    e.add(1); // OK：从 main 可以访问公开的 Example::add
+//  e.n = 7;  // 错误：从 main 不能访问私有的 Example::n
+}
+}}
+访问说明符给予类作者决定哪些类成员能被类的用户所访问（即类的''接口''），而哪些成员用于内部使用（即其''实现''）的能力。
+
+===细节===
+类的所有成员（{{rlp|member functions|成员函数}}体，成员对象的初始化式，以及整个{{rlp|nested types|嵌套类定义}}），都拥有对类所能访问的所有名字的访问权。成员函数内的局部类拥有对成员函数所能访问的所有名字的访问权。
+
+以关键词 {{tt|class}} 定义的类，它的成员和基类默认具有私有访问。以关键词 {{tt|struct}} 定义的类，它的成员和基类默认具有公开访问。{{rlp|union}} 的成员默认具有公开访问。
+
+如果要向其他函数或类授予对受保护或私有成员的访问权，可以使用{{rlp|friend|友元声明}}。
+
+可访问性应用到所有名字，而不考虑它们的来源，因此受检查的是以 {{rlp|typedef}} 或 {{rlp|using declaration|using 声明}}引入的名字，而非它们指涉的名字：
+
+{{source|
+class A : X
+{
+    class B {};   // 在 A 中，B 是私有的
+public:
+    typedef B BB; // 在 A 中，BB 是公开的
+};
+
+void f()
+{
+    A::B y;  // 错误：A::B 是私有的
+    A::BB x; // OK：A::BB 是公开的
+}
+}}
+
+成员访问不影响可见性：私有和私有继承的成员对重载决议可见并会被它考虑，到不可访问基类的隐式转换也仍被考虑，等等。成员访问检查是对任何给定语言构造进行解释之后的最后一步。此规则的目的是使得以 {{tt|public}} 替换任何 {{tt|private}} 时始终不会改变程序的行为。
+
+对于{{rlp|default arguments|默认函数实参}}中以及默认{{rlp|template parameters#默认模板实参|模板形参}}中所使用的名字的访问检查在声明点而不是在使用点进行。
+
+对{{rlp|virtual|虚函数}}的名字的访问规则，在调用点使用（用于代表调用该成员函数的对象的）表达式的类型进行检查。忽略最终覆盖函数的访问：
+
+{{source|1=
+struct B
+{
+    virtual int f(); // 在 B 中，f 是公开的
+};
+
+class D : public B
+{
+private:
+    int f(); // 在 D 中，f 是私有的
+};
+
+void f()
+{
+    D d;
+    B&amp; b = d;
+    
+    b.f(); // OK：B::f 是公开的，调用 D::f，即使它是私有的
+    d.f(); // 错误：D::f 是私有的
+}
+}}
+
+根据无限定{{rlp|lookup|名字查找}}为私有的名字，有可能通过有限定名字查找访问：
+
+{{source|1=
+class A {};
+
+class B : private A {};
+
+class C : public B
+{
+    A* p;   // 错误：无限定名字查找找到作为 B 的私有基类的 A
+    ::A* q; // OK：有限定名字查找找到命名空间层级的声明
+};
+}}
+
+如果一个名字可以通过继承图中多条路径访问，那么它的访问是所有路径中带最大访问的路径的访问：
+
+{{source|1=
+class W
+{
+public:
+    void f();
+};
+
+class A : private virtual W {};
+
+class B : public virtual W {};
+
+class C : public A, public B
+{
+    void f()
+    {
+        W::f(); // OK：C 可以通过 B 访问 W
+    }
+};
+}}
+
+类中可以以任意顺序出现任意数量的访问说明符。
+
+{{rrev|until=c++23|
+成员访问说明符可能影响{{rlp|data members#布局|类的布局}}：非静态数据成员的地址只保证对于{{rev inl|until=c++11|未被访问说明符分隔}}{{rev inl|since=c++11|具有相同访问}}的成员以声明顺序增加。
+}}
+{{rrev|since=c++11|
+对于[[cpp/named req/StandardLayoutType|标准布局类型]]，所有非静态数据成员必须具有相同访问。
+}}
+
+在类中重声明成员时，成员访问必须相同：
+
+{{source|1=
+struct S
+{
+    class A;    // S::A 公开
+private:
+    class A {}; // 错误：不能更改访问
+};
+}}
+
+===公开成员访问===
+公开成员组成类公开接口的一部分（公开接口的其他部分是由 {{rlp|adl|ADL}} 所找到的非成员函数）。
+
+类的公开成员可以在任意位置访问。
+
+{{source|1=
+class S
+{
+public:
+    // n、E、A、B、C、U、f 都是公开成员
+    int n;
+    enum E {A, B, C};
+    struct U {};
+    static void f() {}
+};
+
+int main()
+{
+    S::f();     // S::f 可以在 main 访问
+    
+    S s;
+    s.n = S::B; // S::n 与 S::B 可以在 main 访问
+    
+    S::U x;     // S::U 可以在 main 访问
+}
+}}
+
+===受保护成员访问===
+受保护成员组成所在类针对其派生类的接口（与类的公开接口有别）。
+
+类的受保护成员只能为下列者所访问
+@1@ 该类的成员和友元
+@2@ 派生自该类的任何类的成员和友元，但仅在访问受保护成员所通过的对象的类是该派生类或该派生类的派生类时允许：
+
+{{source|1=
+struct Base
+{
+protected:
+    int i;
+private:
+    void g(Base&amp; b, struct Derived&amp; d);
+};
+
+struct Derived : Base
+{
+    friend void h(Base&amp; b, Derived&amp; d);
+    void f(Base&amp; b, Derived&amp; d) // 派生类的成员函数
+    {
+        ++d.i;                  // OK：d 的类型是 Derived
+        ++i;                    // OK：隐含的 '*this' 的类型是 Derived
+//      ++b.i;                  // 错误：不能通过 Base 访问受保护成员
+                                // （否则可能更改另一派生类，假设为 Derived2 的基实现）
+    }
+};
+ 
+void Base::g(Base&amp; b, Derived&amp; d) // Base 的成员函数
+{
+    ++i;                          // OK
+    ++b.i;                        // OK
+    ++d.i;                        // OK
+}
+
+void h(Base&amp; b, Derived&amp; d) // Derived 的友元
+{
+    ++d.i;                  // OK: 派生类的友元可以通过派生类的对象访问受保护成员
+//  ++b.i;                  // 错误: 派生类的友元并非基类的友元
+}
+
+void x(Base&amp; b, Derived&amp; d) // 非成员非友元
+{
+//    ++b.i;                // 错误：非成员不能访问
+//    ++d.i;                // 错误：非成员不能访问
+}
+}}
+
+组成指向受保护成员的指针时，必须在它的声明中使用派生类：
+
+{{source|1=
+struct Base
+{
+protected:
+    int i;
+};
+
+struct Derived : Base
+{
+    void f()
+    {
+//      int Base::* ptr = &amp;Base::i;    // 错误：必须使用 Derived 来指名
+        int Base::* ptr = &amp;Derived::i; // OK
+    }
+};
+}}
+
+===私有成员访问===
+私有成员组成类的实现，以及针对类的其他成员的私有接口。
+
+类的私有成员仅对类的成员和友元可访问，无关乎成员在相同还是不同实例：
+
+{{source|1=
+class S
+{
+private:
+    int n; // S::n 私有
+public:
+    S() : n(10) {}                    // this-&gt;n 可以在 S::S 访问
+    S(const S&amp; other) : n(other.n) {} // other.n 可以在 S::S 访问
+};
+}}
+
+{{rlp|explicit cast|显式转换}}（C 风格与函数风格）允许从派生类左值转型到它的私有基类的引用，或从指向派生类的指针转型到指向它的私有基类的指针。
+
+===继承===
+公开、受保护和私有继承的含义，见{{rlp|derived class|派生类}}。
+
+===关键词===
+{{ltt|cpp/keyword/public}},
+{{ltt|cpp/keyword/protected}},
+{{ltt|cpp/keyword/private}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1873|std=C++98|before=受保护成员对派生类的友元可访问|after=不可访问}}
+{{dr list end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

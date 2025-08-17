@@ -1,0 +1,145 @@
+{{cpp/title|nth_element}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|constexpr=c++20|
+template&lt; class RandomIt &gt;
+void nth_element( RandomIt first, RandomIt nth, RandomIt last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt &gt;
+void nth_element( ExecutionPolicy&amp;&amp; policy,
+                  RandomIt first, RandomIt nth, RandomIt last );}}
+{{dcla|num=3|constexpr=c++20|
+template&lt; class RandomIt, class Compare &gt;
+void nth_element( RandomIt first, RandomIt nth, RandomIt last,
+                  Compare comp );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy, class RandomIt, class Compare &gt;
+void nth_element( ExecutionPolicy&amp;&amp; policy,
+                  RandomIt first, RandomIt nth, RandomIt last,
+                  Compare comp );
+}}
+{{dcl end}}
+
+{{tt|nth_element}} 会重排 {{range|first|last}} 中的元素，使得在重排后：
+* {{c|nth}} 指向的元素被更改为假如 {{range|first|last}} 已排序则该位置会出现的元素。
+* {{range|first|nth}} 中的每个迭代器 {{c|i}} 和 {{range|nth|last}} 中的每个迭代器 {{c|j}} 满足以下条件：
+:@1,2@ {{rev inl|until=c++20|{{c|bool(*j &lt; *i)}}}}{{rev inl|since=c++20|{{c|std::less{}(*j, *i)}}}} 是 {{c|false}}。
+:@3,4@ {{c|bool(comp(*j, *i))}} 是 {{c|false}}。
+
+
+@1@ 假设按 {{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行{{rlp|/#要求|排序}}。
+
+@3@ 假设按 {{c|comp}} 进行排序。
+
+@2,4@ 同 {{v|1,3}}，但按照 {{c|policy}} 执行。
+@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+如果满足以下任意条件，那么行为未定义：
+* {{range|first|nth}} 或 {{range|nth|last}} 不是[[cpp/iterator#范围|有效范围]]。
+{{rev begin}}
+{{rev|until=c++11|
+* {{c|*first}} 的类型不{{named req|Swappable}}。
+}}
+{{rev|since=c++11|
+* {{tt|RandomIt}} 不{{named req|ValueSwappable}}。
+* {{c|*first}} 的类型不{{named req|MoveConstructible}}。
+* {{c|*first}} 的类型不{{named req|MoveAssignable}}。
+}}
+{{rev end}}
+
+===参数===
+{{par begin}}
+{{par range|3=要部分排序的}}
+{{par|nth|定义排序划分点的随机访问迭代器}}
+{{par exec pol}}
+{{par cmp ord|comp|p1=RandomIt}}
+{{par hreq}}
+{{par req named|RandomIt|RandomAccessIterator}}
+{{par req named|Compare|Compare}}
+{{par end}}
+
+===复杂度===
+给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|last - first}}：
+@1@ 平均应用 {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} 次{{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行比较
+@2@ 应用 {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} 次{{rev inl|until=c++20|{{c/core|operator&lt;}}}}{{rev inl|since=c++20|{{c|std::less{}&lt;!----&gt;}}}} 进行比较，并且交换 {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N·log(N))}} 次。
+@3@ 平均应用 {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} 次比较函数 {{c|comp}}。
+@4@ 应用 {{mathjax-or|\(\scriptsize O(N)\)|O(N)}} 次比较函数 {{c|comp}}，并且交换 {{mathjax-or|\(\scriptsize O(N \cdot \log(N))\)|O(N·log(N))}} 次。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L4718 libstdc++]、[https://github.com/llvm/llvm-project/blob/ed2d364/libcxx/include/__algorithm/nth_element.h libc++] 与 [https://github.com/microsoft/STL/blob/e97bb2b50a12816ce68cc5147b7a3a21fb68bfa3/stl/inc/algorithm#L8849-L8894 MSVC STL] 中的实现。
+
+===注解===
+典型地使用{{enwiki|Introselect|内省选择}}算法，但也允许其他拥有适合平均情况复杂度的{{enwiki|Selection algorithm|选择算法}}。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+void printVec(const std::vector&lt;int&gt;&amp; vec)
+{
+    std::cout &lt;&lt; "v = {";
+    for (char sep[]{0, ' ', 0}; const int i : vec)
+        std::cout &lt;&lt; sep &lt;&lt; i, sep[0] = ',';
+    std::cout &lt;&lt; "};\n";
+}
+
+int main()
+{
+    std::vector&lt;int&gt; v{5, 10, 6, 4, 3, 2, 6, 7, 9, 3};
+    printVec(v);
+    
+    auto m = v.begin() + v.size() / 2;
+    std::nth_element(v.begin(), m, v.end());
+    std::cout &lt;&lt; "\n中值为 " &lt;&lt; v[v.size() / 2] &lt;&lt; '\n';
+    // 之后导致第 N 个前后的元素互不相等
+    assert(std::accumulate(v.begin(), m, 0) &lt; std::accumulate(m, v.end(), 0));
+    printVec(v);
+    
+    // 注意：改变了比较函数
+    std::nth_element(v.begin(), v.begin() + 1, v.end(), std::greater{});
+    std::cout &lt;&lt; "\n第二大的元素是 " &lt;&lt; v[1] &lt;&lt; '\n';
+    std::cout &lt;&lt; "最大的元素是 " &lt;&lt; v[0] &lt;&lt; '\n';
+    printVec(v);
+}
+|p=true
+|output=
+v = {5, 10, 6, 4, 3, 2, 6, 7, 9, 3};
+
+中值为 6
+v = {3, 2, 3, 4, 5, 6, 10, 7, 9, 6};
+
+第二大的元素是 9
+最大的元素是 10
+v = {10, 9, 6, 7, 6, 3, 5, 4, 3, 2};
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before=重排后 {{c|nth}} 前只需要有一个元素不大于 {{c|nth}} 后的一个元素|after=改正要求}}
+{{dr list item|wg=lwg|dr=2163|std=C++98|before=重载 {{vl|1}} 使用 {{c/core|operator&gt;}} 比较元素|after=改成 {{c/core|operator&lt;}}}}
+{{dr list item|paper=P0896R4|std=C++98|before={{range|first|nth}} 和 {{range|nth|last}} 不需要有效|after=其中之一无效时行为未定义}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc max_element}}
+{{dsc inc|cpp/algorithm/dsc min_element}}
+{{dsc inc|cpp/algorithm/dsc partial_sort_copy}}
+{{dsc inc|cpp/algorithm/dsc stable_sort}}
+{{dsc inc|cpp/algorithm/dsc sort}}
+{{dsc inc|cpp/algorithm/ranges/dsc nth_element}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,80 @@
+{{cpp/title|fseek}}
+{{cpp/io/c/navbar}}
+{{ddcl|header=cstdio|
+int fseek( std::FILE* stream, long offset, int origin );
+}}
+
+设置文件流 {{c|stream}} 的文件位置指示器。
+
+若 {{c|stream}} 以二进制模式打开，则新位置是文件起始（若 {{c|origin}} 为 {{lc|SEEK_SET}}）或当前文件位置（若 {{c|origin}} 为 {{lc|SEEK_CUR}}），或文件结尾（若 {{c|origin}} 为 {{lc|SEEK_END}}）算起的恰好 {{c|offset}} 个字节。不要求二进制流支持 {{lc|SEEK_END}}，尤其是输出过空字节时。
+
+若 {{c|stream}} 以文本模式打开，则仅有的受支持 {{c|offset}} 值为零（可用于任何 {{c|origin}}）和先前在关联到同一个文件的流上对 {{lc|std::ftell}} 的调用的返回值（仅可用于 {{lc|SEEK_SET}} 的 {{c|origin}}）。
+
+若 {{c|stream}} 为宽取向，则一同应用对文本和二进制流的限制（允许 {{lc|std::ftell}} 的结果与 {{lc|SEEK_SET}} 一同使用，并允许零偏移量以 {{lc|SEEK_SET}} 和 {{lc|SEEK_CUR}} 但非 {{lc|SEEK_END}} 为基准）。
+
+除了更改文件位置指示器，{{tt|fseek}} 还撤销 {{lc|std::ungetc}} 的效果并清除文件尾状态，若适用。
+
+若发生读或写错误，则设置流的错误指示器（{{lc|std::ferror}}）而不影响文件位置。
+
+===参数===
+{{par begin}}
+{{par|stream|要修改的文件流}}
+{{par|offset|相对 origin 迁移的字符数}} 
+{{par|origin|{{c|offset}} 所加上的位置。可具有下列值之一：{{lc|SEEK_SET}}、{{lc|SEEK_CUR}}、{{lc|SEEK_END}}}} 
+{{par end}}
+
+===返回值===
+成功时为 {{c|0}}，否则为非零。
+
+===注解===
+在巡位到宽流的非结尾位置后，下个对任意输出函数的调用可能令剩下的文件内容未定义，例如通过输出一个长度不同的多字节序列。
+
+POSIX 允许巡位越过现有的文件尾。若在此巡位后进行输出，则从间隙进行的任何读取将返回零字节。如果文件系统支持，这会创建一个''稀疏文件''。
+
+POSIX 亦要求当有任何未写入数据时 {{tt|fseek}} 先进行 {{lc|std::fflush|fflush}}，但是否恢复迁移状态是实现定义的。标准 C++ 文件流保证进行冲洗和反迁移：{{lc|std::basic_filebuf::seekoff}}。
+
+POSIX 规定，[https://pubs.opengroup.org/onlinepubs/9699919799/functions/fseek.html {{tt|fseek}}] 错误时应返回 {{c|-1}}，并设置 {{lc|errno}} 以标明该错误。
+
+{{windows IO-extensions note}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;cstdio&gt;
+#include &lt;cstdint&gt;
+#include &lt;fstream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::ofstream("dummy.nfo") &lt;&lt; "8 bytes\n"; // 创建文件
+
+    std::FILE* fp = std::fopen("dummy.nfo", "rb");
+    assert(fp);
+
+    std::fseek(fp, 0, SEEK_END); // 寻位到结尾
+    std::size_t filesize = std::ftell(fp);
+    std::vector&lt;std::uint8_t&gt; buffer(filesize);
+
+    std::fseek(fp, 0, SEEK_SET); // 寻位到起始
+    std::fread(buffer.data(), sizeof(std::uint8_t), buffer.size(), fp);
+
+    std::fclose(fp);
+    std::printf("I've read %zi bytes\n", filesize);
+}
+|p=true
+|output=
+I've read 8 bytes
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/c/dsc fsetpos}}
+{{dsc inc|cpp/io/c/dsc fgetpos}}
+{{dsc inc|cpp/io/c/dsc ftell}}
+{{dsc inc|cpp/io/c/dsc rewind}}
+{{dsc see c|c/io/fseek}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

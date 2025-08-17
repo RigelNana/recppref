@@ -1,0 +1,66 @@
+{{cpp/types/traits/is|1=is_aggregate
+|std=c++17
+|description=如果 {{tt|T}} 是[[cpp/language/aggregate initialization|聚合类型]]，那么提供的成员常量 {{tt|value}} 等于 {{c|true}}。对于其它任何类型，{{tt|value}} 等于 {{c|false}}。
+
+如果 {{tt|TT}} 是除数组类型或（可以有 cv 限定的）{{c/core|void}} 之外的不完整类型，那么行为未定义。
+|inherit_desc={{tt|T}} 是聚合类型
+}}
+
+===注解===
+{{feature test macro|__cpp_lib_is_aggregate|value=201703L|std=C++17|{{tt|std::is_agregate}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;new&gt;
+#include &lt;string_view&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+// 于 p 所指向的未初始化内存构造 T
+// 对于聚合体使用列表初始化，否则使用非列表初始化
+template&lt;class T, class... Args&gt;
+T* construct(T* p, Args&amp;&amp;... args)
+{
+    if constexpr (std::is_aggregate_v&lt;T&gt;)
+        return ::new (static_cast&lt;void*&gt;(p)) T{std::forward&lt;Args&gt;(args)...};
+    else
+        return ::new (static_cast&lt;void*&gt;(p)) T(std::forward&lt;Args&gt;(args)...);
+}
+
+struct A { int x, y; };
+static_assert(std::is_aggregate_v&lt;A&gt;);
+
+struct B
+{
+    int i;
+    std::string_view str;
+
+    B(int i, std::string_view str) : i(i), str(str) {}
+};
+static_assert(not std::is_aggregate_v&lt;B&gt;);
+
+template &lt;typename... Ts&gt;
+using aligned_storage_t = alignas(Ts...) std::byte[std::max({sizeof(Ts)...})];
+
+int main()
+{
+    aligned_storage_t&lt;A, B&gt; storage;
+
+    A&amp; a = *construct(reinterpret_cast&lt;A*&gt;(&amp;storage), 1, 2);
+    assert(a.x == 1 and a.y == 2);
+
+    B&amp; b = *construct(reinterpret_cast&lt;B*&gt;(&amp;storage), 3, "4");
+    assert(b.i == 3 and b.str == "4");
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3823|std=C++17|before=如果 {{tt|T}} 是数组类型，但&lt;br&gt;{{tt|std::remove_all_extents_t&lt;T&gt;}} 是不完整类型，则行为未定义。|after=只要 {{tt|T}} 是数组类型，无论 {{tt|std::remove_all_extents_t&lt;T&gt;}}&lt;br&gt; 是否完整，都会定义该行为。}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

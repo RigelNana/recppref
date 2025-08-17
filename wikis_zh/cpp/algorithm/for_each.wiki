@@ -1,0 +1,125 @@
+{{cpp/title|for_each}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class InputIt, class UnaryFunc &gt;
+UnaryFunc for_each( InputIt first, InputIt last, UnaryFunc f );
+}}
+{{dcla|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt, class UnaryFunc &gt;
+void for_each( ExecutionPolicy&amp;&amp; policy,
+               ForwardIt first, ForwardIt last, UnaryFunc f );
+}}
+{{dcl end}}
+
+对[[cpp/iterator#范围|范围]] {{range|first|last}} 中每个{{lt|cpp/iterator|迭代器}}的解引用结果应用给定的一元{{named req|FunctionObject|函数对象}} {{c|f}}。忽略 {{c|f}} 返回的结果。
+
+@1@ 从 {{c|first}} 开始按顺序应用 {{c|f}}。
+{{rrev|since=c++11|
+如果 {{tt|UnaryFunc}} 不{{named req|MoveConstructible}}，那么[[cpp/language/ub|行为未定义]]。
+}}
+
+@2@ 不一定按顺序应用 {{c|f}}。按照 {{c|policy}} 执行算法。
+@@ {{cpp/algorithm/parallel overload precondition}}
+@@ 如果 {{tt|UnaryFunc}} 不{{named req|CopyConstructible}}，那么[[cpp/language/ub|行为未定义]]。
+
+如果迭代器类型（{{tt|InputIt}}/{{tt|ForwardIt}}）是可变的，那么 {{c|f}} 可以通过解引用后的迭代器修改[[cpp/iterator#范围|范围]]的元素。
+
+与其他并行算法不同，不允许 {{tt|for_each}} 复制序列中的元素，即使它们{{named req|TriviallyCopyable}}。
+
+===参数===
+{{par begin}}
+{{par range|3=要对之应用{{named req|FunctionObject|函数对象}}的}}
+{{par exec pol}}
+{{par opf|f|要应用到[[cpp/iterator#范围|范围]] {{range|first|last}} 中每个迭代器的解引用结果的函数|p1=InputIt}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par req named|ForwardIt|ForwardIterator}}
+{{par end}}
+
+===返回值===
+@1@ {{c|f}}
+@2@（无）
+
+===复杂度===
+应用 {{c|std::distance(first, last)}} 次 {{c|f}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=yes}}
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/d9375e490072d1aae73a93949aa158fcd2a27018/libstdc%2B%2B-v3/include/bits/stl_algo.h#L3858 libstdc++]、[https://github.com/llvm-mirror/libcxx/blob/a12cb9d211019d99b5875b6d8034617cbc24c2cc/include/algorithm#L880 libc++] 和 [https://github.com/microsoft/STL/blob/ff83542af4b683fb2f2dea1423fd6c50fe3e13b0/stl/inc/algorithm#L229 MSVC stdlib] 中的实现。
+{{eq fun|1=
+template&lt;class InputIt, class UnaryFunc&gt;
+constexpr UnaryFunc for_each(InputIt first, InputIt last, UnaryFunc f)
+{
+    for (; first != last; ++first)
+        f(*first);
+    
+    return f; // C++11 起隐式移动
+}
+}}
+
+===注解===
+对于重载 {{vl|1}}，{{c|f}} 可以是带状态的函数对象。返回值可以视为批量操作的最终状态。
+
+对于重载 {{vl|2}}，可能会由于需要进行并行调用而创建 {{c|f}} 的多个副本。因为并行操作会阻碍高效的状态累积，所以不会返回任何值。
+
+===示例===
+{{example
+|下列示例代码用 [[cpp/language/lambda|lambda 表达式]]自增 vector 的所有元素，然后用函数对象中重载的 {{tt|operator()}} 计算它们的和。注意推荐用更适合的算法 {{lc|std::accumulate}} 计算和。
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+ 
+int main()
+{
+    std::vector&lt;int&gt; v{3, -4, 2, -8, 15, 267};
+    
+    auto print = [](const int&amp; n) { std::cout &lt;&lt; n &lt;&lt; ' '; };
+    
+    std::cout &lt;&lt; "之前：";
+    std::for_each(v.cbegin(), v.cend(), print);
+    std::cout &lt;&lt; '\n';
+    
+    // 就地自增每个元素
+    std::for_each(v.begin(), v.end(), [](int &amp;n){ n++; });
+    
+    std::cout &lt;&lt; "之后：";
+    std::for_each(v.cbegin(), v.cend(), print);
+    std::cout &lt;&lt; '\n';
+    
+    struct Sum
+    {
+        void operator()(int n) { sum += n; }
+        int sum {0};
+    };
+    
+    // 对每个元素调用 Sum::operator()
+    Sum s = std::for_each(v.begin(), v.end(), Sum());
+    std::cout &lt;&lt; "总和：" &lt;&lt; s.sum &lt;&lt; '\n';
+}
+|output=
+之前：3 -4 2 -8 15 267 
+之后：4 -3 3 -7 16 268 
+总和：281
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=475|std=C++98|before=不明确 {{c|f}} 是否可以修改遍历中的序列的元素&lt;br&gt;（{{tt|for_each}} 被归类为“不修改序列的操作”）|after=使之明确（迭代器&lt;br&gt;类型可变时允许）}}
+{{dr list item|wg=lwg|dr=2747|std=C++11|before=重载 {{vl|1}} 返回 {{c|std::move(f)}}|after=返回 {{c|f}}（它会隐式移动）}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/algorithm/dsc for_each_n}}
+{{dsc inc|cpp/algorithm/ranges/dsc for_each}}
+{{dsc inc|cpp/algorithm/ranges/dsc for_each_n}}
+{{dsc inc|cpp/language/dsc range-for}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

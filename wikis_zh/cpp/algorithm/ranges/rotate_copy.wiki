@@ -1,0 +1,114 @@
+{{cpp/ranges/title|rotate_copy|rotate_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::forward_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;I, O&gt;
+constexpr rotate_copy_result&lt;I, O&gt;
+    rotate_copy( I first, I middle, S last, O result );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::forward_range R, std::weakly_incrementable O &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+constexpr rotate_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+    rotate_copy( R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle, O result );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using rotate_copy_result = in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+复制{{i|左旋转}} {{range|first|last}} 的结果到 {{c|result}}。
+@1@ 从源范围 {{range|first|last}} 复制元素到始于 {{c|result}} 的目标范围，使得目标范围中，{{range|first|middle}} 中的元素在 {{range|middle|last}} 后面并且保留这两个范围中元素的原本顺序。
+@@ 若 {{range|first|middle}} 或 {{range|middle|last}} 不是合法范围，或若源与目标范围重叠，则行为未定义。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的|range=源|sentinel=yes}}
+{{par|r|要复制的源元素范围}}
+{{par|middle|指向应该出现在目标范围起始的元素的迭代器}}
+{{par|result|目标范围的起始}}
+{{par end}}
+
+===返回值===
+{{c|{last, result + N} }}，其中 {{c|1=N = ranges::distance(first, last)}}。
+
+===复杂度===
+''线性''：准确赋值 {{c|N}} 次。
+
+===注解===
+若值类型为{{named req|TriviallyCopyable}}且迭代器类型满足 {{lconcept|contiguous_iterator}}，则 {{tt|ranges::rotate_copy}} 的实现通常通过使用如 {{lc|std::memmove}} 的“大块复制”函数避免多次赋值。
+
+===可能的实现===
+参阅 [https://github.com/gcc-mirror/gcc/blob/14d8a5ae472ca5743016f37da2dd4770d83dea21/libstdc%2B%2B-v3/include/bits/ranges_algo.h#L1511-L1539 libstdc++] 与 [https://github.com/microsoft/STL/blob/472161105d596192194d4715ccad307c6c163b4a/stl/inc/algorithm#L4466-L4514 MSVC STL] 中的实现。
+{{eq fun|1=
+struct rotate_copy_fn
+{
+    template&lt;std::forward_iterator I, std::sentinel_for&lt;I&gt; S, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;I, O&gt;
+    constexpr ranges::rotate_copy_result&lt;I, O&gt;
+        operator()(I first, I middle, S last, O result) const
+    {
+        auto c1 {ranges::copy(middle, std::move(last), std::move(result))};
+        auto c2 {ranges::copy(std::move(first), std::move(middle), std::move(c1.out))};
+        return {std::move(c1.in), std::move(c2.out)};
+    }
+
+    template&lt;ranges::forward_range R, std::weakly_incrementable O&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O&gt;
+    constexpr ranges::rotate_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O&gt;
+        operator()(R&amp;&amp; r, ranges::iterator_t&lt;R&gt; middle, O result) const
+    {
+        return (*this)(ranges::begin(r), std::move(middle),
+                       ranges::end(r), std::move(result));
+    }
+};
+
+inline constexpr rotate_copy_fn rotate_copy {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; src {1, 2, 3, 4, 5};
+    std::vector&lt;int&gt; dest(src.size());
+    auto pivot = std::ranges::find(src, 3);
+
+    std::ranges::rotate_copy(src, pivot, dest.begin());
+    for (int i : dest)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    // copy the rotation result directly to the std::cout
+    pivot = std::ranges::find(dest, 1);
+    std::ranges::rotate_copy(dest, pivot, std::ostream_iterator&lt;int&gt;(std::cout, " "));
+    std::cout &lt;&lt; '\n';
+}
+|output=
+3 4 5 1 2
+1 2 3 4 5
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/dsc rotate_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

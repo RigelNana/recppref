@@ -1,0 +1,132 @@
+{{cpp/ranges/view title|adjacent|{{small|views::}}pairwise}}
+{{cpp/ranges/adjacent_view/navbar}}
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++23|1=
+template&lt; ranges::forward_range V, std::size_t N &gt;
+    requires ranges::view&lt;V&gt; &amp;&amp; (N &gt; 0)
+class adjacent_view
+    : public ranges::view_interface&lt;adjacent_view&lt;V, N&gt;&gt;
+}}
+{{dcl|num=2|since=c++23|1=
+namespace views {
+    template&lt; std::size_t N &gt;
+    constexpr /* 未指明 */ adjacent = /* 未指明 */ ;
+}
+}}
+{{dcl|num=3|since=c++23|1=
+namespace views {
+    inline constexpr auto pairwise = adjacent&lt;2&gt;;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++23|1=
+template&lt; ranges::viewable_range R &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto adjacent&lt;N&gt;( R&amp;&amp; r );
+}}
+{{dcl end}}
+
+@1@ {{tt|adjacent_view}} 是接受一个 {{lconcept|view}} 的范围适配器。其产生的 {{lconcept|view}} 的第 {{tti|i}} 个元素（“窗口”）为一个 {{lc|std::tuple}}，它保有原视图 {{closed_range/core|{{tti|i}}|{{tti|i + N - 1}}}} 的 {{tti|N}} 个元素的引用。
+
+@@ 设 {{tti|S}} 为原视图的大小，那么生成的视图大小：
+* 如果 {{tt|1=S &gt;= N}}，则为 {{c|S - N + 1}}。
+* 否则为 {{c|0}}，且结果视图为空。
+
+@2@ 名字 {{c|views::adjacent&lt;N&gt;}} 代表一个{{named req|RangeAdaptorObject}}。给定子表达式 {{c|e}} 与常量表达式 {{c|N}}， 
+* 如果 {{c|N}} 等于 {{c|0}} 且 {{c|decltype((e))}} 实现 {{lconcept|forward_range}}，则表达式 {{c|views::adjacent&lt;N&gt;(e)}} [[cpp/language/expressions#表达式等价|表达式等价]]于 {{c|((void)e, auto(views::empty&lt;tuple&lt;&gt;&gt;))}}，
+* 否则 {{c|views::adjacent&lt;N&gt;(e)}} 表达式等价于 {{c|adjacent_view&lt;views::all_t&lt;decltype((e))&gt;, N&gt;(e)}}。
+
+@3@ 名字 {{c|views::pairwise}} 代表一个{{named req|RangeAdaptorObject}}，其行为如同 {{c|views::adjacent&lt;2&gt;}}。
+
+{{tt|adjacent_view}} 始终实现 {{lconcept|forward_range}}，并且如果被适配的 {{lconcept|view}} 实现 {{lconcept|bidirectional_range}}，{{lconcept|random_access_range}} 或 {{lconcept|sized_range}} 则它也实现对应的概念。
+&lt;!-- {{tt|adjacent_view}} 实现 {{lconcept|common_range}}，若 --&gt;
+&lt;!-- {{cpp/ranges/cpo|views|adjacent}} --&gt;
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|base_|id=base|spec={{tt|V}}|底层 {{lconcept|view}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/adaptor/dsc constructor|adjacent_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc begin|adjacent_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc end|adjacent_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc size|adjacent_view}}
+{{dsc inc|cpp/ranges/adaptor/dsc reserve_hint|adjacent_view}}
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=invalid|data=invalid}}
+{{dsc end}}
+
+===推导指引===
+（无）
+
+===嵌套类===
+{{dsc begin}}
+{{dsc expos mem tclass|cpp/ranges/adjacent_view/iterator|迭代器类型}}
+{{dsc expos mem tclass|cpp/ranges/adjacent_view/sentinel|当 {{tt|adjacent_view}} 非 {{lconcept|common_range}} 时使用的哨位类型}}
+{{dsc end}}
+
+===辅助模板===
+{{ddcl|since=c++23|1=
+template&lt; class V, size_t N &gt;
+constexpr bool ranges::enable_borrowed_range&lt;adjacent_view&lt;V, N&gt;&gt; =
+    ranges::enable_borrowed_range&lt;V&gt;;
+}}
+{{lc|ranges::enable_borrowed_range}} 的特化使得底层视图满足 {{lconcept|borrowed_range}} 时，{{tt|adjacent_view}} 同样满足。
+
+===注解===
+{{c|views::adjacent}} 仅接受向前范围，即使当 {{tt|N}} 为 {{tt|0}}。
+
+{{cpp/ranges/adjacent vs slide}}
+
+{{feature test macro|__cpp_lib_ranges_zip|std=C++23|value=202110L|{{c/core|ranges::zip_view}},&lt;br&gt;{{c/core|ranges::zip_transform_view}},&lt;br&gt;{{tt|ranges::adjacent_view}},&lt;br&gt;{{c/core|ranges::adjacent_transform_view}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;array&gt;
+#include &lt;format&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;tuple&gt;
+
+int main()
+{
+    constexpr std::array v{1, 2, 3, 4, 5, 6};
+    std::cout &lt;&lt; "v = [1 2 3 4 5 6]\n";
+
+    for (int i{}; std::tuple t : v {{!}} std::views::adjacent&lt;3&gt;)
+    {
+        auto [t0, t1, t2] = t;
+        std::cout &lt;&lt; std::format("e = {:&lt;{}&lt;!----&gt;}[{} {} {}]\n", "", 2 * i++, t0, t1, t2);
+    }
+}
+|output=
+v = [1 2 3 4 5 6]
+e = [1 2 3]
+e =   [2 3 4]
+e =     [3 4 5]
+e =       [4 5 6]
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=4098|std=C++23|before={{c|views::adjacent&lt;0&gt;}} 曾接受仅输入的范围|after=使之拒绝}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Adjacent view|id=range.adjacent|section=26.7.25}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/ranges/dsc adjacent_transform_view}}
+{{dsc inc|cpp/ranges/dsc slide_view}}
+{{dsc inc|cpp/ranges/dsc chunk_view}}
+{{dsc inc|cpp/ranges/dsc stride_view}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

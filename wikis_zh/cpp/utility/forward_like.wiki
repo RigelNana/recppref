@@ -1,0 +1,183 @@
+{{cpp/title|forward_like}}
+{{cpp/utility/navbar}}
+{{ddcl|header=utility|since=c++23|
+template&lt; class T, class U &gt;
+constexpr auto&amp;&amp; forward_like( U&amp;&amp; x ) noexcept;
+}}
+
+返回拥有与 {{tt|T&amp;&amp;}} 相似属性的到 {{c|x}} 的引用。
+
+返回类型确定如下：
+# 如果 {{c/core|std::remove_reference_t&lt;T&gt;}} 是 const 限定类型，那么返回类型的被引用类型是 {{c/core|const std::remove_reference_t&lt;U&gt;}}。否则被引用类型是 {{c/core|std::remove_reference_t&lt;U&gt;}}。
+# 如果 {{tt|T&amp;&amp;}} 是左值引用类型，那么返回类型也是左值引用类型。否则返回类型是右值引用类型。
+
+如果 {{tt|T}} 不是[[cpp/meta#定义|可引用类型]]，那么程序非良构。
+
+===参数===
+{{par begin}}
+{{par|x|需要像类型 {{tt|T}} 一样转发的值}}
+{{par end}}
+
+===返回值===
+到 {{c|x}} 的引用，类型确定如上。
+
+===注解===
+类似 {{lc|std::forward}}、{{ltt|cpp/utility/move|std::move}} 与 {{lc|std::as_const}}，{{tt|std::forward_like}} 是类型转换，它只影响表达式的[[cpp/language/value category|值类别]]或潜在地添加 const 限定。
+
+当 {{tt|m}} 是实际成员从而 {{c|o.m}} 是合法表达式时，这通常在 C++20 代码中写作 {{c|std::forward&lt;decltype(o)&gt;(o).m}}。
+
+这导致三种可能的模式，称为''合并''、''元组''{{sep}}和''语言''。
+* ''合并''：合并 {{c/core|const}} 限定符，并采纳 {{tt|Owner}} 的值类别。
+* ''元组''：{{c|std::get&lt;0&gt;(Owner)}} 之所为，假定 {{tt|Owner}} 是 {{c/core|std::tuple&lt;Member&gt;}}。
+* ''语言''：{{c|std::forward&lt;decltype(Owner)&gt;(o).m}} 之所为。
+
+{{tt|std::forward_like}} 的主要应用场景是接纳“远”对象。''元组''{{sep}}或''语言''{{sep}}模型均不能在主要使用情况中正确工作，因此 {{tt|std::forward_like}} 使用''合并''{{sep}}模型。
+
+{{feature test macro|__cpp_lib_forward_like|[[#Top|{{tt|std::forward_like}}]]|value=202207L|std=C++23}}
+
+===可能的实现===
+{{eq fun|1=
+template&lt;class T, class U&gt;
+constexpr auto&amp;&amp; forward_like(U&amp;&amp; x) noexcept
+{
+    constexpr bool is_adding_const = std::is_const_v&lt;std::remove_reference_t&lt;T&gt;&gt;;
+    if constexpr (std::is_lvalue_reference_v&lt;T&amp;&amp;&gt;)
+    {
+        if constexpr (is_adding_const)
+            return std::as_const(x);
+        else
+            return static_cast&lt;U&amp;&gt;(x);
+    }
+    else
+    {
+        if constexpr (is_adding_const)
+            return std::move(std::as_const(x));
+        else
+            return std::move(x);
+    }
+}
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;optional&gt;
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+struct TypeTeller
+{
+    void operator()(this auto&amp;&amp; self)
+    {
+        using SelfType = decltype(self);
+        using UnrefSelfType = std::remove_reference_t&lt;SelfType&gt;;
+        if constexpr (std::is_lvalue_reference_v&lt;SelfType&gt;)
+        {
+            if constexpr (std::is_const_v&lt;UnrefSelfType&gt;)
+                std::cout &lt;&lt; "常量左值\n";
+            else
+                std::cout &lt;&lt; "可变左值\n";
+        }
+        else
+        {
+            if constexpr (std::is_const_v&lt;UnrefSelfType&gt;)
+                std::cout &lt;&lt; "常量右值\n";
+            else
+                std::cout &lt;&lt; "可变右值\n";
+        }
+    }
+};
+
+struct FarStates
+{
+    std::unique_ptr&lt;TypeTeller&gt; ptr;
+    std::optional&lt;TypeTeller&gt; opt;
+    std::vector&lt;TypeTeller&gt; container;
+    
+    auto&amp;&amp; from_opt(this auto&amp;&amp; self)
+    {
+        return std::forward_like&lt;decltype(self)&gt;(self.opt.value());
+        // 可以使用 std::forward&lt;decltype(self)&gt;(self).opt.value()，
+        // 因为 std::optional 提供了适合的访问器。
+    }
+    
+    auto&amp;&amp; operator[](this auto&amp;&amp; self, std::size_t i)
+    {
+        return std::forward_like&lt;decltype(self)&gt;(self.container.at(i));
+        // 使用 std::forward&lt;decltype(self)&gt;(self)[i] 不太好，
+        // 因为容器不提供右值下标访问，虽然它们能。
+    }
+    
+    auto&amp;&amp; from_ptr(this auto&amp;&amp; self)
+    {
+        if (!self.ptr)
+            throw std::bad_optional_access{};
+        return std::forward_like&lt;decltype(self)&gt;(*self.ptr);
+        // 使用 *std::forward&lt;decltype(self)&gt;(self).ptr 不好，
+        // 因为 std::unique_ptr&lt;TypeTeller&gt; 始终解引用到非 const 左值。
+    }
+};
+
+int main()
+{
+    FarStates my_state
+    {
+        .ptr{std::make_unique&lt;TypeTeller&gt;()},
+        .opt{std::in_place, TypeTeller{}&lt;!----&gt;},
+        .container{std::vector&lt;TypeTeller&gt;(1)},
+    };
+    
+    my_state.from_ptr()();
+    my_state.from_opt()();
+    my_state[0]();
+    
+    std::cout &lt;&lt; '\n';
+    
+    std::as_const(my_state).from_ptr()();
+    std::as_const(my_state).from_opt()();
+    std::as_const(my_state)[0]();
+    
+    std::cout &lt;&lt; '\n';
+    
+    std::move(my_state).from_ptr()();
+    std::move(my_state).from_opt()();
+    std::move(my_state)[0]();
+    
+    std::cout &lt;&lt; '\n';
+    
+    std::move(std::as_const(my_state)).from_ptr()();
+    std::move(std::as_const(my_state)).from_opt()();
+    std::move(std::as_const(my_state))[0]();
+    
+    std::cout &lt;&lt; '\n';
+}
+|output=
+可变左值
+可变左值
+可变左值
+
+常量左值
+常量左值
+常量左值
+
+可变右值
+可变右值
+可变右值
+
+常量右值
+常量右值
+常量右值
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/dsc move}}
+{{dsc inc|cpp/utility/dsc forward}}
+{{dsc inc|cpp/utility/dsc as_const}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

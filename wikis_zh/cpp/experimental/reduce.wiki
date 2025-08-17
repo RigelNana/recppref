@@ -1,0 +1,122 @@
+{{cpp/experimental/parallel/title|reduce}}
+{{cpp/experimental/parallelism/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/numeric}}
+{{dcl|num=1|since=parallelism|
+template&lt; class InputIt &gt;
+typename std::iterator_traits&lt;InputIt&gt;::value_type reduce(
+    InputIt first, InputIt last );
+}}
+{{dcl|num=2|since=parallelism|
+template&lt; class ExecutionPolicy, class InputIterator &gt;
+typename std::iterator_traits&lt;InputIt&gt;::value_type reduce(
+    ExecutionPolicy&amp;&amp; policy, InputIt first, InputIt last );
+}}
+{{dcl|num=3|since=parallelism|
+template&lt; class InputIt, class T &gt;
+T reduce( InputIt first, InputIt last, T init );
+}}
+{{dcl|num=4|since=parallelism|
+template&lt; class ExecutionPolicy, class InputIt, class T &gt;
+T reduce( ExecutionPolicy&amp;&amp; policy, InputIt first, InputIt last, T init );
+}}
+{{dcl|num=5|since=parallelism|
+template&lt; class InputIt, class T, class BinaryOp &gt;
+T reduce( InputIt first, InputIt last, T init, BinaryOp binary_op );
+}}
+{{dcl|num=6|since=parallelism|
+template&lt; class ExecutionPolicy, class InputIt, class T, class BinaryOp &gt;
+T reduce( ExecutionPolicy&amp;&amp; policy,
+          InputIt first, InputIt last, T init, BinaryOp binary_op );
+}}
+{{dcl end}}
+
+@1@ 与 {{c|reduce(first, last, typename std::iterator_traits&lt;InputIt&gt;::value_type{})}} 相同。
+@3@ 与 {{c|reduce(first, last, init, std::plus&lt;&gt;())}} 相同。
+@5@ 归约范围 {{range|first|last}}，可能以未指明的方式，在 {{c|binary_op}} 上同初值 {{c|init}} 一起进行排列和聚合。
+@2,4,6@ 与 {{v|1,3,5}} 相同，但根据 {{c|policy}} 执行。
+
+如果 {{c|binary_op}} 不可结合或不可传递，则其行为不确定。
+
+如果 {{c|binary_op}} 修改了任何元素或使 {{range|first|last}} 中的任何迭代器失效，则其行为未定义。
+
+===参数===
+{{par begin}}
+{{par|first, last|要应用算法的元素范围}}
+{{par|init|广义和的初值}}
+{{par|policy|[[cpp/experimental/parallelism#执行策略|执行策略]]}}
+{{par|binary_op|二元{{named req|FunctionObject|函数对象}}，将以未指定顺序应用于输入迭代器的解引用结果，其他 {{c|binary_op}} 的结果和 {{c|init}}}}
+{{par hreq}}
+{{par req named|InputIt|InputIterator}}
+{{par end}}
+
+===返回值===
+{{c|init}} 和 {{c|*first}}, {{c|*(first + 1)}}, ... {{c|*(last - 1)}} 在 {{c|binary_op}} 上的广义和。
+
+其中广义和 {{math|GSUM(op, a{{su|b=1}}, ..., a{{su|b=N}})}} 定义如下：
+* 如果 {{math|N{{=}}1}}，则 {{math|a{{su|b=1}}}}
+* 如果 {{math|N &gt; 1}}，则 {{math|op(GSUM(op, b{{su|b=1}}, ..., b{{su|b=K}}), GSUM(op, b{{su|b=M}}, ..., b{{su|b=N}}))}} 其中
+:* {{math|b{{su|b=1}}, ..., b{{su|b=N}}}} 可能是 {{math|a1, ..., aN}} 的任意排列，且
+:* {{math|1 &lt; K+1 {{=}} M ≤ N}}
+
+换言之，范围中的各元素可以任意顺序分组和重排。
+
+===复杂度===
+{{math|O(last - first)}} 次运用 {{c|binary_op}}。
+
+===异常===
+{{cpp/experimental/exceptions_reporting_behavior}}
+
+===注解===
+如果范围为空，则返回未修改的 {{c|init}}。
+
+{{cpp/experimental/execution_policy_note}}
+
+===示例===
+{{example|reduce 是 {{lc|std::accumulate}} 的无顺序版本：
+|code=
+#include &lt;chrono&gt;
+#include &lt;experimental/execution_policy&gt;
+#include &lt;experimental/numeric&gt;
+#include &lt;iostream&gt;
+#include &lt;numeric&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;double&gt; v(10'000'007, 0.5);
+
+    {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double result = std::accumulate(v.begin(), v.end(), 0.0);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double, std::milli&gt; ms = t2 - t1;
+        std::cout &lt;&lt; std::fixed &lt;&lt; "std::accumulate result " &lt;&lt; result
+                  &lt;&lt; " took " &lt;&lt; ms.count() &lt;&lt; " ms\n";
+    }
+
+    {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double result = std::experimental::parallel::reduce(
+                            std::experimental::parallel::par,
+                            v.begin(), v.end());
+        auto t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double, std::milli&gt; ms = t2 - t1;
+        std::cout &lt;&lt; "parallel::reduce result "
+                  &lt;&lt; result &lt;&lt; " took " &lt;&lt; ms.count() &lt;&lt; " ms\n";
+    }
+}
+|p=true
+|output=
+std::accumulate result 5000003.50000 took 12.7365 ms
+parallel::reduce result 5000003.50000 took 5.06423 ms
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc accumulate}}
+{{dsc inc|cpp/algorithm/dsc transform}}
+{{dsc inc|cpp/experimental/parallelism/dsc transform_reduce}}
+{{dsc end}}
+
+{{langlinks|de|es|fr|it|ja|pt|ru|zh}}

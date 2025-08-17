@@ -1,0 +1,578 @@
+{{title|有改动的 ECMAScript 正则表达式文法}}
+{{cpp/regex/navbar}}
+此页面描述以设置为 {{tt|ECMAScript}}（默认值）的 {{rlpt|syntax_option_type}} 构造 {{lc|std::basic_regex}} 时使用的正则表达式文法。其他受支持的正则表达式文法见 {{rlpt|syntax_option_type}}。
+
+C++ 中的 {{tt|ECMAScript}} 3 正则表达式文法是 [http://ecma-international.org/ecma-262/5.1/#sec-15.10 ECMA-262 语法]，并带有一些修改，下文将之标记为 {{mark|仅 C++}}。
+
+===总览===
+[https://eel.is/c++draft/re.grammar 有改动的正则表达式文法]几乎是 ECMAScript RegExp 文法，并带有''类原子''{{sep}}下进行本地环境上的 POSIX 类型展开。我们作出了相等检查与数量分析上的一些澄清。对于这里的多数示例，你可以在你的浏览器控制台中尝试等价的版本：
+
+{{source|1=function match(s, re) { return s.match(new RegExp(re)); }|lang=JavaScript}}
+
+标准中的“正式参考”指定 ECMAScript 3。我们这里链接到 ECMAScript 5.1 规范，因为它的正则表达式语法相比 ECMAScript 3 仅有微小改动，而且它有一个 HTML 版本。方言特性的概览见 [https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions MDN Guide on JavaScript RegExp]。
+
+===可选项===
+正则表达式模式是一或多个以析取运算符 {{ttb|{{!}}}} 分隔的''可选项''{{sep}}的序列（换言之，析取运算符拥有最低优先级）
+
+''模式'' ::
+:''析取''
+
+''析取'' ::
+:''可选项''
+:''可选项'' {{ttb|{{!}}}} ''析取''
+
+模式首先尝试跳过''析取''{{sep}}并匹配（析取后的）后随剩余正则表达式的左侧''可选项''。
+
+如果它失败，那么尝试跳过左侧''可选项''{{sep}}并匹配右侧''析取''（后随剩余正则表达式）。
+
+如果左侧''可选项''、右侧''析取''{{sep}}和剩余正则表达式都拥有选择点，那么在尝试移动到左侧''可选项''{{sep}}中的下个选择前，尝试剩余表达式值中的所有选择。如果穷尽了左侧''可选项''{{sep}}中的所有选择，那么取代左侧''可选项''{{sep}}尝试右侧''析取''。
+
+跳过的''可选项''{{sep}}内的任何捕获括号产生空子匹配。
+
+{{example
+|code=
+{{cpp/regex/example common}}
+
+int main()
+{
+    show_matches("abcdef", "abc{{!}}def");
+    show_matches("abc", "ab{{!}}abc"); // 首先匹配左侧可选项
+
+    // 针对后随剩余正则表达式 (c{{!}}bc) 左侧可选项 (a) 的匹配成功
+    // 它生成 m[1]="a" 及 m[4]="bc"。
+    // 跳过的可选项 (ab) 和 (c) 将其子匹配 m[3] 和 m[5] 置为空。
+    show_matches("abc", "((a){{!}}(ab))((c){{!}}(bc))");
+}
+|output=
+input=[abcdef], regex=[abc{{!}}def]
+  prefix=[]
+  smatch: m[0]=[abc]
+  suffix=[def]
+input=[abc], regex=[ab{{!}}abc]
+  prefix=[]
+  smatch: m[0]=[ab]
+  suffix=[c]
+input=[abc], regex=[((a){{!}}(ab))((c){{!}}(bc))]
+  prefix=[]
+  smatch: m[0]=[abc] m[1]=[a] m[2]=[a] m[3]=[] m[4]=[bc] m[5]=[] m[6]=[bc]
+  suffix=[]
+}}
+
+===项===
+每个''可选项''{{sep}}要么为空，要么是''项''{{sep}}的序列（''项''{{sep}}间无分隔符）
+
+''可选项'' ::
+: ''[空]''
+: ''可选项'' ''项''
+
+空的''可选项''{{sep}}始终匹配并且不消耗任何输入。
+
+相继的''项''{{sep}}尝试同时匹配输入的连续部分。
+
+如果左侧''可选项''{{sep}}、右侧''项''{{sep}}和剩余正则表达式都拥有选择点，那么在移动到右侧''项''{{sep}}中的下个选择前，尝试剩余正则表达式中的所有选择，并在移动到左侧''可选项''{{sep}}中的下个选择前，尝试右侧''项''{{sep}}中的所有选择。
+
+{{example
+|code=
+{{cpp/regex/example common}}
+
+int main()
+{
+    show_matches("abcdef", ""); // 空正则表达式是单个空可选项
+    show_matches("abc", "abc{{!}}"); // 左可选项首先匹配
+    show_matches("abc", "{{!}}abc"); // 左可选项首先匹配，留待 abc 未匹配
+}
+|output=
+input=[abcdef], regex=[]
+  prefix=[]
+  smatch: m[0]=[]
+  suffix=[abcdef]
+input=[abc], regex=[abc{{!}}]
+  prefix=[]
+  smatch: m[0]=[abc]
+  suffix=[]
+input=[abc], regex=[{{!}}abc]
+  prefix=[]
+  smatch: m[0]=[]
+  suffix=[abc]
+}}
+
+===数量词===
+* 每个''项''{{sep}}是''断言''（见下文）、''原子''（见下文），和''原子''{{sep}}立即后随''数量词''{{sep}}之一
+
+''项'' ::
+: ''断言''
+: ''原子''
+: ''原子'' ''数量词''
+
+每个''数量词''{{sep}}要么是''贪心''{{sep}}数量词（仅由一个''数量词前缀''{{sep}}组成），要么是''非贪心''{{sep}}数量词（由一个''数量词前缀''{{sep}}后随问号 {{ttb|?}} 组成）。
+
+''数量词'' ::
+: ''数量词前缀''
+: ''数量词前缀'' {{ttb|?}}
+
+每个''数量词前缀''{{sep}}确定两个数：最小重复数和最大重复数，如下：
+{|table class=wikitable
+|-
+!数量词前缀||最小||最大
+|-
+| {{ttb|*}}
+| 零
+| 无穷大
+|-
+| {{ttb|+}}
+| 一
+| 无穷大
+|-
+| {{ttb|?}}
+| 零
+| 一
+|-
+| {{ttb|{ }} ''十进制数'' {{ttb|} }}
+| 十进制数的值
+| 十进制数的值
+|-
+| {{ttb|{}} ''十进制数'' {{ttb|,}} {{ttb|} }}
+| 十进制数的值
+| 无穷大
+|-
+| {{ttb|{}} ''十进制数'' {{ttb|,}} ''十进制数'' {{ttb|} }}
+| 逗号前的十进制数的值
+| 逗号后的十进制数的值
+|}
+
+通过在每个数位上调用 {{lc|std::regex_traits::value}}{{mark|仅 C++}}获得单独的''十进制数''{{sep}}的值。
+
+''原子''{{sep}}后随''数量词''{{sep}}重复''数量词''{{sep}}所指定的次数。''数量词''{{sep}}可以是''非贪心''{{sep}}的，此时''原子''{{sep}}模式重复在仍然匹配剩余正则表达式的同时尽可能少的次数；也可以是''贪心''{{sep}}的，此时''原子''{{sep}}模式重复在仍然匹配剩余正则表达式的同时尽可能多的次数。
+
+重复的是''原子''{{sep}}模式，而非它匹配的输入，因此''原子''{{sep}}的不同重复能匹配不同的输入子串。
+
+如果''原子''{{sep}}和剩余正则表达式都有选择点，那么首先将''原子''{{sep}}匹配尽可能多（或少，如果是''非贪心''{{sep}}的）次。，移动到''原子''{{sep}}的最后一次重复中的下个选择前，尝试剩余正则表达式中的所有选择。移动到''原子''{{sep}}的倒数第二（第 n-1）次重复中的下个选择前，尝试''原子''{{sep}}的最后一（第 n）次重复中的所有选择；在明确现在可能有''原子''{{sep}}的更多或更少重复时；在移动到''原子''{{sep}}的第 n-1 次重复中的下个选择前，将这些穷尽（再次以尽可能少或多开始），以此类推。
+
+每次重复''原子''{{sep}}时，清除它的捕获（见下文 {{c|"(z)((a+)?(b+)?(c))*"}} 的示例）
+
+{{example|code=
+{{cpp/regex/example common}}
+
+int main()
+{
+    // 贪心匹配，重复 [a-z] 4 次
+    show_matches("abcdefghi", "a[a-z]{2,4}");
+    // 非贪心匹配，重复 [a-z] 2 次
+    show_matches("abcdefghi", "a[a-z]{2,4}?");
+
+    // 数量词的选择点顺序，生成带二个重复的匹配，
+    // 第一个匹配子串 "aa"，第二个匹配子串 "ba"，保留 "ac" 匹配
+    // （"ba" 出现于 m[1] 的捕获子句中）
+    show_matches("aabaac", "(aa{{!}}aabaac{{!}}ba{{!}}b{{!}}c)*");
+
+    // 数量词的选择点顺序令此 regex 计算 10 与 15 间的最大公约数
+    // （答案是 5，并以 "aaaaa" 填充 m[1]）
+    show_matches("aaaaaaaaaa,aaaaaaaaaaaaaaa", "^(a+)\\1*,\\1+$");
+
+    // 子串 "bbb" 不出现于捕获子句 m[4] 中
+    // 因为它在原子 (a+)?(b+)?(c) 的第二次重复匹配子串 "ac" 时被声明
+    // 注：gcc 理解有误——它没有正确地按 ECMA-262 21.2.2.5.1 清除
+    // matches[4] 捕获组，从而错误地对于该组捕获 "bbb"。
+    show_matches("zaacbbbcac", "(z)((a+)?(b+)?(c))*");
+}
+|output=
+input=[abcdefghi], regex=[a[a-z]{2,4}]
+  prefix=[]
+  smatch: m[0]=[abcde]
+  suffix=[fghi]
+input=[abcdefghi], regex=[a[a-z]{2,4}?]
+  prefix=[]
+  smatch: m[0]=[abc]
+  suffix=[defghi]
+input=[aabaac], regex=[(aa{{!}}aabaac{{!}}ba{{!}}b{{!}}c)*]
+  prefix=[]
+  smatch: m[0]=[aaba] m[1]=[ba]
+  suffix=[ac]
+input=[aaaaaaaaaa,aaaaaaaaaaaaaaa], regex=[^(a+)\1*,\1+$]
+  prefix=[]
+  smatch: m[0]=[aaaaaaaaaa,aaaaaaaaaaaaaaa] m[1]=[aaaaa]
+  suffix=[]
+input=[zaacbbbcac], regex=[(z)((a+)?(b+)?(c))*]
+  prefix=[]
+  smatch: m[0]=[zaacbbbcac] m[1]=[z] m[2]=[ac] m[3]=[a] m[4]=[] m[5]=[c] 
+  suffix=[]
+}}
+
+===断言===
+''断言'' 匹配条件，而非输入字符串的子串。它们不会消耗任何来自输入的字符。每个''断言''{{sep}}是下列之一
+
+''断言'' ::
+: {{ttb|^}}
+: {{ttb|$}}
+: {{ttb|\}} {{ttb|b}}
+: {{ttb|\}} {{ttb|B}}
+: {{ttb|(}} {{ttb|?}} {{ttb|{{=}}}} ''析取'' {{ttb|)}}
+: {{ttb|(}} {{ttb|?}} {{ttb|!}} ''析取'' {{ttb|)}}
+
+断言 {{ttb|^}}（行起始）匹配
+@1@ 立即后随''行终止符''{{sep}}字符的位置{{rev inl|until=c++17|（这可能不受支持）}}{{rev inl|since=c++17|（这只有在启用 {{ltt|cpp/regex/syntax_option_type|std::regex_constants::multiline}}{{mark|仅 C++}} 时才会得到保证）}}
+@2@ 输入的起始（除非启用 {{lc|std::regex_constants::match_not_bol}}{{mark|仅 C++}} ）
+
+断言 {{ttb|$}}（行结尾）匹配
+@1@ ''行终止符''{{sep}}字符的位置{{rev inl|until=c++17|（这可能不受支持）}}{{rev inl|since=c++17|（这只有在启用 {{ltt|cpp/regex/syntax_option_type|std::regex_constants::multiline}}{{mark|仅 C++}} 时才会得到保证）}}
+@2@ 输入的结尾（除非启用 {{lc|std::regex_constants::match_not_bol}}{{mark|仅 C++}}）
+
+在上面两个断言和下面的原子 {{ttb|.}} 中，''行终止符''{{sep}}是下列四个字符之一： {{tt|U+000A}} （{{tt|\n}} 或换行）、{{tt|U+000D}}（{{tt|\r}} 或回车）、{{tt|U+2028}}（行分隔符）或 {{tt|U+2029}}（段分隔符）
+
+断言 {{ttb|\b}}（词边界）匹配
+@1@ 词的起始（当前字符为字母、数字或下划线，而前一字符不是）
+@2@ 词的结尾（当前字符不是字母、数字或下划线，而前一字符是这些之一）
+@3@ 输入的起始，若首字符为字母、数字或下划线（除非启用 {{lc|std::regex_constants::match_not_bow}}{{mark|仅 C++}} ）
+@4@ 输入的结尾，若末字符为字母、数字或下划线（除非启用 {{lc|std::regex_constants::match_not_eow}}{{mark|仅 C++}} ）
+
+断言 {{ttb|\B}} （反词边界）匹配所有字符，'''除了'''下列内容
+@1@ 词的起始（当前字符是字母、数字或下划线，而前一字符不是这些之一或不存在）
+@2@ 词的结尾（当前字符不是字母、数字或下划线（或匹配者在输入结尾），前一字符是这些之一）
+
+如果''析取''{{sep}}会匹配在当前位置的输入，那么断言 {{ttb|(}} {{ttb|?}} {{ttb|{{=}}}} ''析取'' {{ttb|)}}（零宽正前瞻）匹配。
+
+如果''析取''{{sep}}'''不'''会匹配在当前位置的的输入，那么断言 {{ttb|(}} {{ttb|?}} {{ttb|!}} ''析取'' {{ttb|)}}（零宽负前瞻）匹配。
+
+对于两个前瞻断言，在匹配''析取''{{sep}}时，不在匹配剩余正则表达式之前令位置前进。另外，如果''析取''{{sep}}能以多种方式在当前位置匹配，那么只尝试第一个。
+
+ECMAScript 禁止回撤到前瞻析取中，这影响到来自剩余正则表达式的正前瞻中的回溯引用（见下方示例）。到来自剩余正则表达式的负前瞻中的回溯引用始终没有定义（因为前瞻断言必定无法继续）。
+
+注意：前瞻断言可用于创建多个正则表达式间的逻辑与（见下方示例）。
+
+{{example
+|code=
+{{cpp/regex/example common}}
+
+int main()
+{
+    // 在输入结尾匹配 a
+    show_matches("aaa", "a$");
+
+    // 在第一个词结尾匹配 o
+    show_matches("moo goo gai pan", "o\\b");
+
+    // 前瞻匹配立即在第一个 b 之后的空字符串
+    // 这以 "aaa" 填充 m[1]，尽管 m[0] 为空
+    show_matches("baaabac", "(?=(a+))");
+
+    // 因为禁止回溯引用回撤到前瞻中，
+    // 这匹配 aba 而非 aaaba
+    show_matches("baaabac", "(?=(a+))a*b\\1");
+
+    // 经由前瞻的逻辑与：此密码匹配，若它含有
+    // 至少一个小写字母
+    // 与 至少一个大写字母
+    // 与 至少一个标点字符
+    // 与 至少有 6 个字符长
+    show_matches("abcdef", "(?=.*[[:lower:]])(?=.*[[:upper:]])(?=.*[[:punct:]]).{6,}");
+    show_matches("aB,def", "(?=.*[[:lower:]])(?=.*[[:upper:]])(?=.*[[:punct:]]).{6,}");
+}
+|output=
+input=[aaa], regex=[a$]
+  prefix=[aa]
+  smatch: m[0]=[a] 
+  suffix=[]
+input=[moo goo gai pan], regex=[o\b]
+  prefix=[mo]
+  smatch: m[0]=[o] 
+  suffix=[ goo gai pan]
+input=[baaabac], regex=[(?=(a+))]
+  prefix=[b]
+  smatch: m[0]=[] m[1]=[aaa] 
+  suffix=[aaabac]
+input=[baaabac], regex=[(?=(a+))a*b\1]
+  prefix=[baa]
+  smatch: m[0]=[aba] m[1]=[a] 
+  suffix=[c]
+input=[abcdef], regex=[(?=.*[[:lower:]])(?=.*[[:upper:]])(?=.*[[:punct:]]).{6,}]: NO MATCH
+input=[aB,def], regex=[(?=.*[[:lower:]])(?=.*[[:upper:]])(?=.*[[:punct:]]).{6,}]
+  prefix=[]
+  smatch: m[0]=[aB,def] 
+  suffix=[]
+}}
+
+===原子===
+''原子''{{sep}}可以是下列之一：
+
+''原子'' ::
+: ''模式字符''
+: {{ttb|.}}
+: {{ttb|\}} ''原子转义''
+: ''字符类''
+: {{ttb|(}} ''析取'' {{ttb|)}}
+: {{ttb|(}} {{ttb|?}} {{ttb|:}} ''析取'' {{ttb|)}}
+
+其中
+''原子转义'' ::
+: ''数字转义''
+: ''字符转义''
+: ''字符类转义''
+
+不同种类的原子求值方式不同。
+
+===子表达式===
+''原子'' {{ttb|(}} ''析取'' {{ttb|)}} 是有标记表达式：它执行''析取''{{sep}}并存储''析取''{{sep}}所消耗的输入子串于子匹配数组，下标对应在此点已遇到的整个正则表达式中，有标记子表达式的左开括号 {{ttb|(}} 次数。
+
+除了在 {{lc|std::match_results}} 中返回外，捕获的子匹配还可作为回溯引用（{{tt|\1}}、{{tt|\2}} ……）访问，并在正则表达式中引用它们。注意 {{lc|std::regex_replace}} 以同 String.prototype.replace (ECMA-262, part 15.5.4.11) 的方式，对于回溯引用以 {{tt|$}} 代替 {{tt|\}}（{{tt|$1}}、{{tt|$2}} ……）。
+
+''原子'' {{ttb|(}} {{ttb|?}} {{ttb|:}} ''析取'' {{ttb|)}} （非标记子表达式）简单地求值''析取''{{sep}}并不存储其结果于子匹配。这单纯是词法分组。
+
+{{example}}
+
+===回溯引用===
+''数字转义'' ::
+: ''十进制整数字面量'' [''前瞻'' ∉ ''十进制位'']
+
+如果 {{ttb|\}} 后随首位非 {{tt|0}} 的十进制数 {{tt|N}}，那么认为该转义序列为''回溯引用''。通过在每个数位上调用 {{lc|std::regex_traits::value}}{{mark|仅 C++}} 并用底 10 算术组合及其结果获得 {{tt|N}}。如果 {{tt|N}} 大于整个正则表达式中捕获括号的总数，那么就是错误。
+
+回溯引用 {{tt|\N}} 作为原子出现时，它匹配当前存储于子匹配数组中第 N 个元素的子串。
+
+十进制转义 {{tt|\0}} '''不'''是回溯引用：它是表示空字符的字符转义。它不能为十进制数所后随。
+
+如上，注意 {{lc|std::regex_replace}} 对于回溯引用以 {{tt|$}} 代替 {{tt|\}}（{{tt|$1}}、{{tt|$2}} ……）。
+
+{{example}}
+
+===单字符匹配===
+''原子'' {{ttb|.}} 匹配并消耗来自输入序列的任一字符，除了''行终止符''（{{tt|U+000A}}、{{tt|U+000D}}、{{tt|U+2028}} 或 {{tt|U+2029}}）
+
+''原子'' ''模式字符'' ，其中''模式字符''{{sep}}是任意''源字符'' ，'''除了'''字符 {{ttb|^ $ \ . * + ? ( ) [ ] { } {{!}}}}，匹配并消耗一个来自输入的字符，如果它等于此''模式字符''。
+
+这个及所有其他单字符匹配定义如下：
+@1@ 如果设置了 {{lc|std::regex_constants::icase}}，那么在 {{lc|std::regex_traits::translate_nocase}} 的返回值相等时字符相等。{{mark|仅 C++}}
+@2@ 否则，如果设置了 {{lc|std::regex_constants::collate}}，那么在 {{lc|std::regex_traits::translate}} 的返回值相等时字符相等。{{mark|仅 C++}}
+@3 @否则，如果 operator== 返回 true，那么字符相等。
+
+每个由转义字符 {{ttb|\}} 后随''字符转义''{{sep}}的''原子''，还有特殊十进制转义 {{ttb|\0}}，匹配消耗一个来自输入的字符，如果它等于''字符转义''{{sep}}所表示的字符。辨识下列字符转义序列：
+
+''字符转义'' ::
+: ''控制转义''
+: {{ttb|c}} ''控制字母''
+: ''十六进制转义序列''
+: ''Unicode 转义序列''
+: ''恒等转义''
+
+此处''控制转义''{{sep}}是下列五个字符之一：{{ttb|f n r t v}}
+
+{|table class=wikitable
+|-
+!控制转义||编码单元||名称
+|-
+| {{ttb|f}}
+| U+000C
+| 换页
+|-
+| {{ttb|n}}
+| U+000A
+| 换行
+|-
+| {{ttb|r}}
+| U+000D
+| 回车
+|-
+| {{ttb|t}}
+| U+0009
+| 水平制表
+|-
+| {{ttb|v}}
+| U+000B
+| 垂直制表
+|}
+
+''控制字母''{{sep}}是任何小写或大写 ASCII 字符，而此字符转义所匹配字符的编码单元等于''控制字母''的编码单元的值除以 {{c|32}} '''的余数'''，例如 {{ttb|\cD}} 和 {{ttb|\cd}} 都匹配编码单元 {{tt|U+0004}} (EOT)，因为 'D' 是 {{tt|U+0044}} 而 {{tt|0x44 % 32 {{==}} 4}} 并且 'd' 是 {{tt|U+0064}} 而 {{tt|0x64 % 32 {{==}} 4}}。
+
+''十六进制转义序列''{{sep}}是字母 {{ttb|x}} 后随准确二个''十六进制位''（其中''十六进制位''{{sep}}是 {{ttb|0 1 2 3 4 5 6 7 8 9 a b c d e f A B C D E F}} 之一）。此字符转义所匹配字符的编码单元等于二位十六进制数的数值。
+
+''Unicode 转义序列''{{sep}}是字母 {{ttb|u}} 后随准确四个''十六进制位''。此字符转义所匹配字符的编码单元等于此四位十六进制数的数值。如果该值不适于此 {{lc|std::basic_regex}} 的 CharT，那么就会抛出 {{lc|std::regex_error}} {{mark|仅 C++}}。
+
+''恒等转义'' 能为任何非字母数字的字符：例如另一反斜杠。它照原样匹配字符。
+
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;regex&gt;
+#include &lt;string&gt;
+
+void show_matches(const std::wstring&amp; in, const std::wstring&amp; re)
+{
+    std::wsmatch m;
+    std::regex_search(in, m, std::wregex(re));
+    if (!m.empty())
+    {
+        std::wcout &lt;&lt; L"input=[" &lt;&lt; in &lt;&lt; L"], regex=[" &lt;&lt; re &lt;&lt; L"]\n  "
+                      L"prefix=[" &lt;&lt; m.prefix() &lt;&lt; L"]\n  wsmatch: ";
+        for (std::size_t n = 0; n &lt; m.size(); ++n)
+            std::wcout &lt;&lt; L"m[" &lt;&lt; n &lt;&lt; L"]=[" &lt;&lt; m[n] &lt;&lt; L"] ";
+        std::wcout &lt;&lt; L"\n  suffix=[" &lt;&lt; m.suffix() &lt;&lt; L"]\n";
+    }
+    else
+        std::wcout &lt;&lt; L"input=[" &lt;&lt; in &lt;&lt; "], regex=[" &lt;&lt; re &lt;&lt; L"]: NO MATCH\n";
+}
+
+int main()
+{
+    // 大多数转义类似 C++ ，为元字符保存。你将需要在斜杠情形使用双重转义或未处理字符串。
+    show_matches("C++\\", R"(C\+\+\\)");
+
+    // 转义序列与 NUL 。
+    std::string s("ab\xff\0cd", 5);
+    show_matches(s, "(\\0{{!}}\\u00ff)");
+
+    // 没有定义非 BMP Unicode 的匹配，因为 ECMAScript 使用 UTF-16 原子。
+    // 此 emoji 香蕉是否匹配能为平台依赖：
+    // XXX ：这些需要为宽字符串！
+    // show_matches(L"\U0001f34c", L"[\\u0000-\\ufffe]+");
+}
+|p=true
+|output=&lt;nowiki&gt;
+input=[C++\], regex=[C\+\+\\]
+  prefix=[]
+  wsmatch: m[0]=[C++\]
+  suffix=[]
+input=[ab?c], regex=[(\0{{!}}\u00ff)]
+  prefix=[ab]
+  wsmatch: m[0]=[?] m[1]=[?]
+  suffix=[c]
+input=[?], regex=[[\u0000-\ufffe]+]: NO MATCH
+&lt;/nowiki&gt;
+}}
+
+===字符类===
+原子能表示字符类，即它会匹配并消耗一个字符，若该字符属于预定义的字符组之一。
+
+字符类能通过字符类转义引入：
+
+''原子'' ::
+: {{ttb|\}} ''字符类转义''
+
+或直接为
+
+''原子'' ::
+: ''字符类''
+
+字符类转义是一些常用字符类的简洁写法，如下：
+
+{|table class=wikitable
+|-
+!字符类转义||类名表达式{{mark|仅 C++}}||含义
+|-
+| {{ttb|d}}
+| {{ttb|&lt;nowiki&gt;[[&lt;/nowiki&gt;:digit:]]}}
+| 数字
+|-
+| {{ttb|D}}
+| {{ttb|[^[:digit:]]}}
+| 非数字
+|-
+| {{ttb|s}}
+| {{ttb|&lt;nowiki&gt;[[&lt;/nowiki&gt;:space:]]}}
+| 空白字符
+|-
+| {{ttb|S}}
+| {{ttb|[^[:space:]]}}
+| 非空白字符
+|-
+| {{ttb|w}}
+| {{ttb|[_[:alnum:]]}}
+| 字母数字字符及字符 {{ttb|_}}
+|-
+| {{ttb|W}}
+| {{ttb|[^_[:alnum:]]}}
+| 异于字母数字或 {{ttb|_}} 的字符
+|}{{small|C++ 中这些字符类转义的准确含义以依赖本地环境的具名字符类定义，而非通过显式列举同 ECMAScript 中的可接受字符。}}
+
+''字符类''{{sep}}是方括号环绕的''类范围''{{sep}}序列，可选地以取反运算符 {{ttb|^}} 开始。如果它始于 {{ttb|^}} ，那么此''原子''{{sep}}匹配任何'''不在'''所有''类范围''{{sep}}的并所表示的字符集合中的字符。否则，此''原子''{{sep}}匹配任何'''在'''所有''类范围''{{sep}}的并所表示的字符集合中的字符。
+
+''字符类'' ::
+: {{ttb|[}} {{ttb|[}} ''前瞻 ∉ {''{{ttb|^}}''}]'' ''类范围'' {{ttb|]}}
+: {{ttb|[}} {{ttb|^}} ''类范围'' {{ttb|]}}
+
+''类范围'' ::
+: [空]
+: ''非空类范围''
+
+''非空类范围'' ::
+: ''类原子''
+: ''类原子'' ''非空无连字符类范围''
+: ''类原子'' - ''类原子'' ''类范围''
+
+如果非空类范围拥有形式 {{ttb|''ClassAtom'' - ''ClassAtom''}}，那么它匹配来自定义如下的范围的任何字符：{{mark|仅 C++}}
+
+首个''类原子''{{sep}}必须匹配单个校排元素 {{tt|c1}}，而第二个''类原子''{{sep}}必须匹配单个校排元素 {{tt|c2}}。采用下列步骤，测试此范围是否匹配输入字符 {{tt|c}}：
+@1@ 如果 {{lc|std::regex_constants::collate}} 不打开，那么通过直接比较编码点匹配字符：{{tt|c1 &lt;{{=}} c &amp;&amp; c &lt;{{=}} c2}} 时匹配 {{tt|c}}
+@2@ 否则（如果启用 {{lc|std::regex_constants::collate}}）：
+:@1@ 如果启用 {{lc|std::regex_constants::icase}}，那么传递所有三个字符（{{tt|c}}、{{tt|c1}} 及 {{tt|c2}}）给 {{lc|std::regex_traits::translate_nocase}}
+:@2@ 否则（如果未设置 {{lc|std::regex_constants::icase}}），那么传递所有三个字符（{{tt|c}}、{{tt|c1}} 及 {{tt|c2}}）给 {{lc|std::regex_traits::translate}}
+@3@ 用 {{lc|std::regex_traits::transform}} 比较结果字符串，而在 {{tt|transformed c1 &lt;{{=}} transformed c &amp;&amp; transformed c &lt;{{=}} transformed c2}} 时匹配 {{tt|c}}
+
+按字面对待字符 {{ttb|-}}，如果它是下列之一
+* ''类范围''{{sep}}的首或末字符
+* 杠分隔范围规定的开始或结尾类原子
+* 立即在杠分隔范围规定之后。
+* 以反斜杠转义为''字符转义''
+
+''非空无连字符类范围'' ::
+: ''类原子''
+: ''无连字符类原子'' ''非空无连字符类范围''
+: ''无连字符类原子'' - ''类原子'' ''类范围''
+
+''类原子'' ::
+: {{ttb|-}}
+: ''无连字符类原子''
+: ''扩展类类原子'' {{mark|仅 C++}}
+: ''校排元素类原子'' {{mark|仅 C++}}
+: ''等价类原子''{{mark|仅 C++}}
+
+''无连字符类原子'' ::
+: ''源字符''（{{ttb|\ ] -}} 除外）
+: {{ttb|\}} ''类转义''
+
+每个''无连字符类原子''{{sep}}表示单个字符——原状的''源字符''{{sep}}或转义如下的字符：
+
+''类转义'' ::
+: ''数字转义''
+: {{ttb|b}}
+: ''字符转义''
+: ''字符类转义''
+
+特殊的''类转义'' {{ttb|\b}} 产生匹配编码单元 U+0008（退格）的字符集。在''字符类''{{sep}}外，它是词边界''断言''。
+
+''字符类''{{sep}}内，{{ttb|\B}} 的使用和任何回溯引用（异于零的''十进制转义''）都是错误。
+
+为将字符 {{ttb|-}} 和 {{ttb|]}} 当做原子，一些情形中需要转义它们。其他拥有在''字符类''{{sep}}外的特殊含义的字符，例如 {{ttb|*}} 或 {{ttb|?}}，不需要转义。
+
+{{example}}
+
+===基于 POSIX 的字符类===
+这些字符类是对 ECMAScript 语法的扩展，并等价于 POSIX 正则表达式中找到的字符类。
+
+''扩展类类原子'' {{mark|仅 C++}} ::
+: {{ttb|[:}} ''类名'' {{ttb|:]}}
+
+表示所有具名字符类''类名''{{sep}}中的成员。仅若 {{lc|std::regex_traits::lookup_classname}} 对此名称返回非零字符串，名称才合法。如 {{lc|std::regex_traits::lookup_classname}} 中描述，保证辨识下列名称：{{ttb|alnum, alpha, blank, cntrl, digit, graph, lower, print, punct, space, upper, xdigit, d, s, w}}。额外的名称（如日文中的 {{ttb|jdigit}} 或 {{ttb|jkanji}} ）可为系统提供的本地环境提供，或实现为用户定义的扩展：
+
+''校排元素类原子'' {{mark|仅 C++}} ::
+: {{ttb|[.}} ''类名'' {{ttb|.]}}
+
+表示具名校排元素，它可表示单个字符，或在浸染的本地环境下作为单个单位校排的字符序列，例如 {{tt|[.tilde.]}} 或捷克文中的 {{tt|[.ch.]}}。只有在 {{lc|std::regex_traits::lookup_collatename}} 不是空字符串名称时才合法。
+
+使用 {{lc|std::regex_constants::collate}} 时，始终能以对照元素为范围的端点（例如匈牙利文中的 {{tt|&lt;nowiki&gt;[[&lt;/nowiki&gt;.dz.]-g]}}）。
+
+''等价类原子'' {{mark|仅 C++}} ::
+: {{ttb|1=[=}} ''类名'' {{ttb|1==]}}
+
+表示与具名校排元素相同的等价类的所有成员字符，即它的主校排键与校排元素''类名''{{sep}}所拥有者相同的字符。只有在 {{lc|std::regex_traits::lookup_collatename}} 对该名称返回非空字符串，且 {{lc|std::regex_traits::transform_primary}} 对调用 {{lc|std::regex_traits::lookup_collatename}} 的结果的返回值不是空字符串时名称才合法。
+
+主排序键是忽略大小写、标音符或本地环境限定裁剪的键；因此例如 {{tt|&lt;nowiki&gt;[[&lt;/nowiki&gt;=a=]]}} 匹配任何这些字符之一：{{tt|a, À, Á, Â, Ã, Ä, Å, A, à, á, â, ã, ä}} 和 {{tt|å}}。
+
+''类名'' {{mark|仅 C++}} ::
+: 类名字符
+: 类名字符 类名
+
+''类名字符'' {{mark|仅 C++}} ::
+: ''源字符'' （{{ttb|1=. = :}} 除外）
+
+{{example}}
+
+{{langlinks|en|es|ja}}

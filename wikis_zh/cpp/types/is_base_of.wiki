@@ -1,0 +1,91 @@
+{{cpp/title|is_base_of}}
+{{cpp/meta/navbar}}
+{{ddcl|header=type_traits|since=c++11|1=
+template&lt; class Base, class Derived &gt;
+struct is_base_of;
+}}
+
+{{tt|std::is_base_of}} 是一个{{named req|BinaryTypeTrait}}。
+
+如果 {{tt|Derived}} [[cpp/language/derived class|派生于]] {{tt|Base}}，或者它们都是同一非联合类（均忽略 cv 限定），那么提供的成员常量 {{c|value}} 等于 {{c|true}}。否则，{{c|value}} 等于 {{c|false}}。
+
+如果 {{tt|Base}} 和 {{tt|Derived}} 都是非联合类类型，且它们不是同一类型（忽略 cv 限定），那么 {{tt|Derived}} 应是[[cpp/language/incomplete type|完整类型]]；否则行为未定义。
+
+{{cpp/types/nospec|v}}
+
+=== 辅助变量模板 ===
+{{ddcl|since=c++17|1=
+template&lt; class Base, class Derived &gt;
+constexpr bool is_base_of_v = is_base_of&lt;Base, Derived&gt;::value;
+}}
+{{cpp/types/integral_constant/inherit| {{nbsp}}{{tt|Derived}} 从 {{tt|Base}} 派生，或者都是同一非联合类（均忽略 cv 限定）}}
+
+===注解===
+即使 {{tt|A}} 是 {{tt|B}} 的私有、受保护或有歧义基类，{{c|std::is_base_of&lt;A, B&gt;::value}} 依然是 {{c|true}}。许多情况下，{{c|std::is_convertible&lt;B*, A*&gt;}} 是更适合的测试方法。
+
+虽然类都不是自身的基类，但 {{c|std::is_base_of&lt;T, T&gt;::value}} 依然是 {{c|true}}，因为此特征的目的是模拟“是（is-a）”关系，而 {{tt|T}} 自然是 {{tt|T}}。尽管如此，{{c|std::is_base_of&lt;int, int&gt;::value}} 仍是 {{c|false}}，因为只有类才会参与此特征模拟的关系。
+
+===可能的实现===
+{{eq fun|1=
+namespace details
+{
+    template&lt;typename B&gt;
+    std::true_type test_ptr_conv(const volatile B*);
+    template&lt;typename&gt;
+    std::false_type test_ptr_conv(const volatile void*);
+
+    template&lt;typename B, typename D&gt;
+    auto test_is_base_of(int) -&gt; decltype(test_ptr_conv&lt;B&gt;(static_cast&lt;D*&gt;(nullptr)));
+    template&lt;typename, typename&gt;
+    auto test_is_base_of(...) -&gt; std::true_type; // 私有或有歧义的基
+}
+
+template&lt;typename Base, typename Derived&gt;
+struct is_base_of :
+    std::integral_constant&lt;
+        bool,
+        std::is_class&lt;Base&gt;::value &amp;&amp;
+        std::is_class&lt;Derived&gt;::value &amp;&amp;
+        decltype(details::test_is_base_of&lt;Base, Derived&gt;(0))::value
+    &gt; {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;type_traits&gt;
+
+class A {};
+class B : A {};
+class C : B {};
+class D {};
+union E {};
+using I = int;
+
+static_assert
+(
+    std::is_base_of_v&lt;A, A&gt; == true &amp;&amp;
+    std::is_base_of_v&lt;A, B&gt; == true &amp;&amp;
+    std::is_base_of_v&lt;A, C&gt; == true &amp;&amp;
+    std::is_base_of_v&lt;A, D&gt; != true &amp;&amp;
+    std::is_base_of_v&lt;B, A&gt; != true &amp;&amp;
+    std::is_base_of_v&lt;E, E&gt; != true &amp;&amp;
+    std::is_base_of_v&lt;I, I&gt; != true
+);
+ 
+int main() {}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2015|std=C++11|before=在 {{tt|Derived}} 是不完整的联合体类型时行为可能未定义|after=此时基特征是 {{lc|std::false_type}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/types/dsc is_virtual_base_of}}
+{{dsc inc|cpp/types/dsc is_convertible}}
+{{dsc inc|cpp/concepts/dsc derived_from}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

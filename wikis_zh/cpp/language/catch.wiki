@@ -1,0 +1,253 @@
+{{title|处理异常}}
+{{cpp/language/expressions/exceptions/navbar}}
+{{rlp|exceptions|异常}}可以由处理块进行处理。
+
+===处理块===
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|catch}} {{ttb|(}} {{spar optional|属性}} {{spar|类型说明符序列}} {{spar|声明符}} {{ttb|)}} {{spar|复合语句}}
+}}
+{{sdsc|num=2|1=
+{{ttb|catch}} {{ttb|(}} {{spar optional|属性}} {{spar|类型说明符序列}} {{spar optional|抽象声明符}} {{ttb|)}} {{spar|复合语句}}
+}}
+{{sdsc|num=3|1=
+{{ttb|catch}} {{ttb|(}} {{ttb|...}} {{ttb|)}} {{spar|复合语句}}
+}}
+{{sdsc end}}
+
+@1@ 带有一个具名形参的处理块。
+
+@2@ 带有一个无名形参的处理块。
+
+@3@ 可以匹配所有异常的处理块。
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}，应用到形参}}
+{{par|{{spar|类型说明符序列}}|形参声明的一部分，与在函数{{rlps|function#形参列表}}中相同}}
+{{par|{{spar|声明符}}|形参声明的一部分，与在函数{{rlps|function#形参列表}}中相同}}
+{{par|{{spar|抽象声明符}}|无名形参声明的一部分，与在函数{{rlps|function#形参列表}}中相同}}
+{{par|{{spar|复合语句}}|{{rlps|statements#复合语句}}}}
+{{par end}}
+
+
+处理块中的形参声明描述了可以导致进入该处理块的异常类型。
+
+如果形参声明为具有以下类型之一，那么程序非良构：
+* {{rlps|type#不完整类型}}
+* {{rlp|abstract class|抽象类类型}}
+{{rrev|since=c++11|
+* {{rlps|reference#右值引用}}类型
+}}
+* 指向（可有 cv 限定的）{{c/core|void}} 以外的不完整类型的指针
+* 到不完整类型的左值引用
+
+如果形参声明为具有函数类型 {{tt|T}} 或类型“{{tt|T}} 的数组”，那么该类型会被调整到“指向 {{tt|T}} 的指针”。
+
+具有形参类型 {{tt|T}} 的处理块可以简称为“{{tt|T}} 类型处理块”。
+
+===匹配异常===
+每个 {{rlp|try|{{c/core|try}} 块}}都与若干处理块关联，这些处理块组成了一个处理块序列。当 {{c/core|try}} 块中有异常抛出时，会按出现顺序对序列中的每个处理块匹配异常。
+
+满足以下任意条件的处理块会匹配 {{tt|E}} 类型的{{rlps|throw#异常对象}}：
+* 处理块具有类型“可有 cv 限定的 {{tt|T}}” 或“到可有 cv 限定的 {{tt|T}} 的左值引用”，并且满足以下任意条件：
+:* {{tt|E}} 和 {{tt|T}}（在忽略顶层 cv 限定的情况下）是相同的类型。
+:* {{tt|T}} 是 {{tt|E}} 的无歧义公开基类。
+* 处理块具有类型“可有 cv 限定的 {{tt|T}}” 或 {{c/core|const T&amp;}}，其中 {{tt|T}} 是指针或成员指针类型，并且满足以下任意条件：
+:* {{tt|E}} 是可以通过以下至少一种转换转换到 {{tt|T}} 的指针或成员指针类型：
+::* 不涉及到指向有歧义类的成员或类的私有或受保护成员的指针的转换的{{rlp|implicit conversion#指针转换|标准指针转换}}。
+{{rrev|since=c++17|
+::* {{rlps|implicit conversion#函数指针转换}}。
+}}
+::* {{rlps|implicit conversion#限定性转换}}。
+{{rrev|since=c++11|
+:* {{tt|E}} 是 {{lc|std::nullptr_t}}。
+}}
+
+{{c|catch (...)}} 处理块会匹配所有类型的异常。如果有出现，那么它只能是处理块序列中的最后一个处理块。此处理块可以用来保证不会有未捕获的异常从提供了{{rlp|exceptions|不抛出异常保证}}的函数中逃逸。
+
+{{source|
+try
+{
+    f();
+}
+catch (const std::overflow_error&amp; e)
+{} // 如果 f() 抛出 std::overflow_error 就会执行它（“相同类型”规则）
+catch (const std::runtime_error&amp; e)
+{} // 如果 f() 抛出 std::underflow_error 就会执行它（“基类”规则）
+catch (const std::exception&amp; e)
+{} // 如果 f() 抛出 std::logic_error 就会执行它（“基类”规则）
+catch (...)
+{} // 如果 f() 抛出 std::string 或 int 或任何其他无关类型就会执行它
+}}
+
+如果某个 {{c/core|try}} 块的所有处理块中没有匹配的处理块，那么会对{{rev inl|since=c++11|相同线程}}的动态外围 {{c/core|try}} 块继续查找匹配的处理块。
+
+如果没有找到匹配的处理块，那么就会调用 {{lc|std::terminate}}；由实现定义是否会在该 {{lc|std::terminate}} 调用前进行{{rlps|throw#栈回溯|}}。
+
+===处理异常===
+在抛出异常时，控制会转移到具有匹配类型的最近处理块；这里“最近”表示控制线程最近进入且尚未退出的 {{c/core|try}} 关键词之后的符合语句或成员初始化器列表（如果存在）对应的最近处理块。
+
+====初始化处理块形参====
+形参列表中声明的具有类型“可有 cv 限定的 {{tt|T}}”或“到可有 cv 限定的 {{tt|T}} 的左值引用”的形参（如果存在）会按以下方式从 {{tt|E}} 类型的{{rlps|throw#异常对象}}初始化：
+* 如果 {{tt|T}} 是 {{tt|E}} 的基类，那么形参会从指定了异常对象的对应基类子对象的 {{tt|T}} 类型左值{{rlp|copy initialization|复制初始化}}。
+* 否则形参会从指定了异常对象的 {{tt|E}} 类型左值复制初始化。
+
+形参的生存期会在处理块退出时，并在处理块中初始化的所有具有自动{{rlp|storage duration|存储期}}的对象析构后结束。
+
+当声明形参为对象时，修改该对象不会影响异常对象。
+
+当声明形参为到对象的引用时，修改被引用对象就是修改异常对象，并且在重新抛出该对象时也会生效。
+
+====激活处理块====
+在处理块的形参（如果存在）的初始化完成时，该处理块进入''活跃''{{sep}}状态。
+
+另外，因抛出异常而进入 {{lc|std::terminate}} 时会将一个隐式的处理块进入活跃状态。
+
+处理块在退出时不再视为处于活跃状态。
+
+最近激活且处于活跃状态中的处理块匹配的异常被称为''当前正在处理的异常''。这种异常可以{{rlp|throw#throw expressions|重新抛出}}。
+
+===控制流===
+处理块的{{spar sep|复合语句}}是{{rlps|statements#有控制流限制的语句}}：
+{{source|
+void f()
+{
+    goto label;     // 错误
+    try
+    {
+        goto label; // 错误
+    }
+    catch (...)
+    {
+        goto label: // OK
+        label: ;
+    }
+}
+}}
+
+===注解===
+{{rlps|throw#栈回溯}}会在转移控制到处理块的过程中发生。当处理块进入活跃状态时，栈回溯已经完成。
+
+{{c/core|throw}} 表达式 {{c|throw 0}} 抛出的异常不会匹配指针或成员指针类型的处理块。
+{{rrev|since=c++11|
+* 需要匹配此类处理块时可以改用 {{c|throw nullptr}} 抛出空指针。
+}}
+
+因为{{rlps|throw#异常对象}}无法具有数组或函数类型，所以到数组或函数的引用类型的处理块不会匹配任何异常对象。
+
+有可能会写出永远无法执行的处理块，比如将最终派生类型的处理块放在对应的无歧义公开基类的处理块后面：
+{{source|
+try
+{
+    f();
+}
+catch (const std::exception&amp; e)
+{} // 在 f() 抛出 std::runtime_error 时执行
+catch (const std::runtime_error&amp; e)
+{} // 死代码！
+}}
+
+许多实现将 {{cwg|388}} 的解决方案过度扩展到具有到非 const 指针类型的引用的处理块：
+{{source|1=
+int i;
+try
+{
+    try
+    {
+        throw static_cast&lt;float*&gt;(nullptr);
+    }
+    catch (void*&amp; pv)
+    {
+        pv = &amp;i;
+        throw;
+    }
+}
+catch (const float* pf)
+{
+    assert(pf == nullptr); // 应该通过，但在 MSVC 与 Clang 上失败
+}
+}}
+
+===关键词===
+{{ltt|cpp/keyword/catch}}
+
+===示例===
+{{example
+|以下代码演示处理块的几种用法：
+|code=
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    try
+    {
+        std::cout &lt;&lt; "抛出整数异常...\n";
+        throw 42;
+    }
+    catch (int i)
+    {
+        std::cout &lt;&lt; "  整数异常已捕获，它的值是：" &lt;&lt; i &lt;&lt; '\n';
+    }
+    
+    try
+    {
+        std::cout &lt;&lt; "创建一个大小为 5 的 vector...\n";
+        std::vector&lt;int&gt; v(5);
+        std::cout &lt;&lt; "访问 vector 的第 11 个元素...\n";
+        std::cout &lt;&lt; v.at(10); // vector::at() 会抛出 std::out_of_range
+    }
+    catch (const std::exception&amp; e) // 按基类的引用捕获
+    {
+        std::cout &lt;&lt; "  标准异常已捕获，它的信息是：'" &lt;&lt; e.what() &lt;&lt; "'\n";
+    }
+
+}
+|p=true
+|output=
+抛出整数异常...
+  整数异常已捕获，它的值是：42
+创建一个大小为 5 的 vector...
+访问 vector 的第 11 个元素...
+  标准异常已捕获，它的信息是：'out_of_range'
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=98|std=C++98|before={{c/core|switch}} 语句可以转移控制进入处理块|after=已禁止}}
+{{dr list item|wg=cwg|dr=210|std=C++98|before=会以 {{c/core|throw}} 表达式来匹配处理块|after=会以异常对象来匹配处理块}}
+{{dr list item|wg=cwg|dr=388|std=C++98|before=指针或成员指针类型的异常不能为到不同类型的 const 引用匹配|after=使之在可转换时可匹配}}
+{{dr list item|wg=cwg|dr=1166|std=C++98|before=未指明匹配到异常类型是到抽象类的引用类型的处理块时的行为|after=catch 子句不能对应抽象类类型}}
+{{dr list item|wg=cwg|dr=1769|std=C++98|before=当 catch 子句声明的异常类型是异常对象的基类时，&lt;br&gt;该 处理块的形参的初始化可能会用到转换构造函数|after=此时该形参会从异常对象的&lt;br&gt;对应基类子对象复制初始化}}
+{{dr list item|wg=cwg|dr=2093|std=C++98|before=具有成员指针类型的异常对象无法通过限定性转换匹配具有成员指针类型的处理块|after=可以匹配}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=14.4|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=14.4|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=18.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=15.3|title=Handling an exception|id=except.handle}}
+{{ref std end}}
+
+===参阅===
+* {{rlp|try|{{c/core|try}} 块}}
+* {{rlp|throw|抛出异常}}
+* {{ls|cpp/error#异常处理}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

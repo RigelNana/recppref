@@ -1,0 +1,192 @@
+{{title|{{tt|return}} 语句}}
+{{cpp/language/statements/navbar}}
+终止当前函数并返回指定值（如果存在）给调用者。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar optional|属性}} {{ttb|return}} {{spar optional|表达式}} {{ttb|;}}
+}}
+{{sdsc|num=2|notes={{mark since c++11}}|1=
+{{spar optional|属性}} {{ttb|return}} {{spar|花括号初始化列表}} {{ttb|;}}
+}}
+{{sdsc|num=3|notes={{mark since c++20}}|1=
+{{spar optional|属性}} {{ttb|co_return}} {{spar optional|表达式}} {{ttb|;}}
+}}
+{{sdsc|num=4|notes={{mark since c++20}}|1=
+{{spar optional|属性}} {{ttb|co_return}} {{spar|花括号初始化列表}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意个{{rlp|attributes|属性}}组成的序列}}
+{{par|{{spar|表达式}}|可以转换到函数返回类型的{{rlp|expressions|表达式}}}}
+{{par|{{spar|花括号初始化列表}}|{{rlp|initialization|花括号包围的初始化器列表}}}}
+{{par end}}
+
+===解释===
+@1@ 对{{spar sep|表达式}}求值，终止当前函数，并将{{spar sep|表达式}}{{rlp|implicit conversion|隐式转换}}到函数返回类型后的结果返回给调用方。{{spar sep|表达式}}在返回类型是（可有 cv 限定的）{{c/core|void}} 的函数中可以不出现，在构造函数中和析构函数中不能出现。
+
+@2@ 使用{{rlp|list initialization|复制列表初始化}}对函数的返回值进行构造。
+
+@3,4@ 在协程中，对于最终暂停点，必须用关键字 {{lc|co_return}} 取代 {{lc|return}}（细节见{{rlp|coroutines|协程}}）。
+
+{{rev begin}}
+{{rev|until=c++11|
+在对函数调用结果的复制初始化和{{spar sep|表达式}}结尾处对所有临时量的销毁之间有一个{{rlp|eval order#序列点规则 (C++11 前)|序列点}}。
+}}
+{{rev|since=c++11|
+对函数调用结果的复制初始化{{rlp|eval order|按顺序早于}}在{{spar sep|表达式}}结尾处对所有临时量的销毁，后者''按顺序早于''该 {{c/core|return}} 的外围块的局部变量的销毁。
+}}
+{{rev|since=c++26|
+如果函数的返回类型是引用类型，且 {{c/core|return}} 语句 {{v|1,2}} 将返回的引用绑定到{{rlp|reference initialization#临时量的生存期|临时表达式}}的结果，那么程序非良构。
+}}
+{{rev end}}
+
+如果控制流抵达
+* 返回类型为（可有 cv 限定的）{{c/core|void}} 的函数结尾，
+* 构造函数结尾，
+* 析构函数结尾，或
+* 返回类型为（可有 cv 限定的）{{c/core|void}} 的函数的{{rlp|try#函数 try 块|函数 {{c/core|try}} 块}}结尾，
+且没有遇到返回语句，那么就会执行 {{c|return;}}。
+
+如果控制流抵达 {{rlp|main function|{{tt|main}} 函数}}的结尾，那么就会执行 {{c|return 0;}}。
+
+如果控制流抵达 {{tt|main}} 函数{{rev inl|since=c++20|和特定{{rlp|coroutines|协程}}}}以外的有返回值的函数的结尾却没有 {{c/core|return}} 语句，那么行为未定义。
+
+在返回（可有 cv 限定的）{{c/core|void}} 的函数中，当表达式类型是（可有 cv 限定的）{{c/core|void}} 时，可以使用带{{spar sep|表达式}}的 {{c/core|return}} 语句。
+
+{{rrev|since=c++14|
+如果函数返回类型被指定为{{rlp|auto|占位类型}}，那么会根据返回值自动{{rlp|function#返回类型推导|推导}}它的具体类型。
+}}
+
+===注解===
+按值返回可能会涉及临时对象的构造和复制/移动，除非使用{{rlp|copy elision|复制消除}}。具体而言，复制/移动的条件如下：
+
+{{rev begin}}
+{{rev|since=c++11|
+====自动从局部变量和形参移动====
+如果{{spar sep|表达式}}是（可以有括号的）{{rlp|identifiers|标识表达式}}并且指名类型如下的自动存储期变量，那么它是“{{rlp|value category#有移动资格的表达式|有移动资格的}}”
+* 非 volatile 对象类型
+}}
+{{rev|since=c++20|
+* 或到对象类型的非 volatile 右值引用}}
+}}
+{{rev|since=c++11|
+而该变量声明于最内层外围函数或 lambda 表达式
+* 的体内，或
+* 为其形参。
+}}
+{{rev|since=c++11|until=c++23|
+如果{{spar sep|表达式}}有移动资格，那么进行''两次''{{sep}}{{rlp|overload resolution|重载决议}}，以选择用于初始化返回值的构造函数{{rev inl|since=c++20|，或对于 {{c/core|co_return}} 为选择 {{c|promise.return_value()}} 的重载}}：
+* 第一次，如同{{spar sep|表达式}}是右值表达式（从而可以选择{{rlp|move constructor|移动构造函数}}），然后
+:* 如果第一次重载决议失败
+}}
+{{rev|since=c++11|until=c++20|
+:* 或如果成功，但未选择{{rlp|move constructor|移动构造函数}}（正式而言，选择的构造函数的首参数不是到{{spar sep|表达式}}类型的（可有 cv 限定）的右值引用）
+}}
+{{rev|since=c++11|until=c++23|
+* 然后，照常进行重载决议，把{{spar sep|表达式}}当做左值（从而可以选择{{rlp|copy constructor|复制构造函数}}）。
+}}
+{{rev|since=c++23|
+如果{{spar sep|表达式}}有移动资格，把它视为亡值（从而可以选择{{rlp|move constructor|移动构造函数}}）。
+}}
+{{rev|since=c++17|
+====受保证的复制消除====
+如果{{spar sep|表达式}}是纯右值，那么直接以该表达式初始化结果对象。其中在类型相匹配时并不涉及复制或移动构造函数（见{{rlp|copy elision|复制消除}}）。
+}}
+{{rev end}}
+
+{{feature test macro|std=C++23|value=202207L|__cpp_implicit_move|简化的[[#自动从局部变量和形参移动|隐式移动]]}}
+
+===关键词===
+{{ltt|cpp/keyword/return}},
+{{ltt|cpp/keyword/co_return}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;utility&gt;
+
+void fa(int i)
+{
+    if (i == 2)
+         return;
+    std::cout &lt;&lt; i &lt;&lt; '\n';
+} // 隐含的 return;
+
+int fb(int i)
+{
+    if (i &gt; 4)
+        return 4;
+    std::cout &lt;&lt; "fb(" &lt;&lt; i &lt;&lt; ")\n";
+    return 2;
+}
+
+std::pair&lt;std::string, int&gt; fc(const char* p, int x)
+{
+    return {p, x};
+}
+
+void fd()
+{
+    return fa(10); // fa(10) 是 void 表达式
+}
+
+int main()
+{
+    fa(2); // 返回，当 i==2 时无动作
+    fa(1); // 打印其实参，然后返回
+    
+    int i = fb(5); // 返回 4
+    i = fb(i);     // 打印其实参，返回 2
+    std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n'
+              &lt;&lt; "fc(~).second = " &lt;&lt; fc("Hello", 7).second &lt;&lt; '\n';
+    
+    fd();
+}
+
+struct MoveOnly
+{
+    MoveOnly() = default;
+    MoveOnly(MoveOnly&amp;&amp;) = default;
+};
+
+MoveOnly move_11(MoveOnly arg)
+{
+    return arg; // OK，隐式移动
+}
+
+MoveOnly move_11(MoveOnly&amp;&amp; arg)
+{
+    return arg; // C++20 起 OK。隐式移动
+}
+
+MoveOnly&amp;&amp; move_23(MoveOnly&amp;&amp; arg)
+{
+    return arg; // C++23 起 OK。隐式移动
+}
+|output=
+fa(1)
+fb(4)
+i = 2
+fc(~).second = 7
+fa(10)
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1541|std=C++98|before=返回类型是有 cv 限定的 {{c/core|void}} 时不能省略{{spar|表达式}}|after=可以省略}}
+{{dr list item|wg=cwg|dr=1579|std=C++11|before=不允许经由转换移动构造函数返回|after=启用对转换移动构造函数的查找}}
+{{dr list item|wg=cwg|dr=1885|std=C++98|before=自动变量的销毁顺序不明确|after=添加了定序规则}}
+{{dr list end}}
+
+===参阅===
+* {{rlp|copy elision|复制消除}}
+{{dsc begin}}
+{{dsc see c|c/language/return|{{tt|return}} 语句|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,93 @@
+{{cpp/title|projected}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl rev multi|num=1
+|since1=c++20|dcl1=
+template&lt; std::indirectly_readable I,
+          std::indirectly_regular_unary_invocable&lt;I&gt; Proj &gt;
+struct projected
+{
+    using value_type = std::remove_cvref_t&lt;std::indirect_result_t&lt;Proj&amp;, I&gt;&gt;;
+    std::indirect_result_t&lt;Proj&amp;, I&gt; operator*() const; // 不定义
+};
+|since2=c++26|dcl2=
+template&lt; std::indirectly_readable I,
+          std::indirectly_regular_unary_invocable&lt;I&gt; Proj &gt;
+using projected = /*projected-impl*/&lt;I, Proj&gt;::/*__type*/; // 见 (3)
+}}
+{{dcl|num=2|since=c++20|until=c++26|1=
+template&lt; std::weakly_incrementable I, class Proj &gt;
+struct incrementable_traits&lt;std::projected&lt;I, Proj&gt;&gt;
+{
+    using difference_type = std::iter_difference_t&lt;I&gt;;
+};
+}}
+{{dcl|num=3|since=c++26|notes={{mark expos}}|1=
+template&lt; class I, class Proj &gt;
+struct /*projected-impl*/
+{
+    struct /*__type*/
+    {
+        using value_type = std::remove_cvref_t&lt;std::indirect_result_t&lt;Proj&amp;, I&gt;&gt;;
+        using difference_type = std::iter_difference_t&lt;I&gt;; // 条件性存在
+
+        std::indirect_result_t&lt;Proj&amp;, I&gt; operator*() const; // 不定义
+    };
+};
+}}
+{{dcl end}}
+
+@1@ {{rev inl|until=c++26|类}}{{rev inl|since=c++26|别名}}模板 {{tt|projected}} 将 {{lconcept|indirectly_readable}} 类型 {{tt|I}} 与可调用对象类型 {{tt|Proj}} 组合到新的 {{tt|indirectly_readable}} 类型中，其引用类型是应用 {{tt|Proj}} 到 {{c|std::iter_reference_t&lt;I&gt;}} 的结果。
+
+@2@ {{lc|std::incrementable_traits}} 的此特化使 {{c|std::projected&lt;I, Proj&gt;}} 在 {{tt|I}} 为 {{lconcept|weakly_incrementable}} 类型时亦为 {{tt|weakly_incrementable}} 类型。
+
+@3@ 用于避免不期待的[[cpp/language/adl|实参依赖查找]]的间接层。成员类型 {{tt|difference_type}} 仅若 {{tt|I}} 实现 {{lconcept|weakly_incrementable}} 才存在。
+
+{{tt|projected}} 仅用于约束接受可调用对象与投影的算法，因而其 {{tt|operator*()}} 没有定义。
+
+===模板形参===
+{{par begin}}
+{{par|I|间接可读类型}}
+{{par|Proj|应用到解引用的 {{tt|I}} 上的投影}}
+{{par end}}
+
+===注解===
+间接层使得 {{tt|I}} 与 {{tt|Proj}} 不会成为 {{tt|projected}} 的关联类。当一个 {{tt|I}} 或 {{tt|Proj}} 的关联类为不完整类类型时，间接层避免检查该类型的定义的尝试，而尝试会导致硬错误。
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iterator&gt;
+
+template&lt;class T&gt;
+struct Holder
+{
+    T t;
+};
+
+struct Incomplete;
+
+using P = Holder&lt;Incomplete&gt;*;
+
+static_assert(std::equality_comparable&lt;P&gt;); // OK
+static_assert(std::indirectly_comparable&lt;P*, P*, std::equal_to&lt;&gt;&gt;); // C++26 前是错误
+static_assert(std::sortable&lt;P*&gt;); // C++26 前是错误
+
+int main()
+{
+    P a[10] = {}; // 十个空指针
+    assert(std::count(a, a + 10, nullptr) == 10); // OK
+    assert(std::ranges::count(a, a + 10, nullptr) == 10); // C++26 前是错误
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc projected_value_t}}
+{{dsc end}}
+
+{{langlinks|en|es|ja}}

@@ -1,0 +1,109 @@
+{{cpp/locale/ctype/title|narrow, do_narrow}}
+{{cpp/locale/ctype/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+char narrow( CharT c, char dflt ) const;
+}}
+{{dcl|num=2|1=
+public:
+const CharT* narrow( const CharT* beg, const CharT* end, 
+                     char dflt, char* dst ) const;
+}}
+{{dcl|num=3|1=
+protected:
+virtual char do_narrow( CharT c, char dflt ) const;
+}}
+{{dcl|num=4|1=
+protected:
+virtual const CharT* do_narrow( const CharT* beg, const CharT* end, 
+                                char dflt, char* dst ) const;
+}}
+{{dcl end}}
+
+@1,2@ 公开成员函数，调用最终派生类的受保护虚成员函数 {{c|do_narrow}} 的对应重载。重载 (1) 会调用 {{c|do_narrow(c, dflt)}}，重载 (2) 会调用 {{c|do_narrow(beg, end, dflt, dst)}}。
+
+@3@ 如果（可能为宽）的字符 {{c|c}} 能以单字节表示（例如 UTF-8 编码中的 ASCII 字符是单字节），那么转换它为多字节表示。如果这种转换不存在则返回 {{c|dflt}}。
+
+@4@ 对于字符数组 {{range|beg|end}} 中的每个字符，写入窄化字符（或在窄化失败时写入 {{c|dflt}}）到 {{c|dst}} 所指向的字符数组中的相继位置。
+
+对于来自{{rev inl|until=c++23|[[cpp/language/charset#基本源字符集|基本源字符集]]}}{{rev inl|until=c++23|[[cpp/language/charset#基本字符集|基本字符集]]}}的字符，窄化始终成功且始终可逆（通过调用 {{lc|widen()}}）。
+* 即 {{c|1=do_widen(do_narrow(c, 0)) == c}} 对于{{rev inl|until=c++23|[[cpp/language/charset#基本源字符集|基本源字符集]]}}{{rev inl|until=c++23|[[cpp/language/charset#基本字符集|基本字符集]]}}中的任何字符 {{c|c}} 都正确。
+
+如果窄化成功，那么它保持所有 {{lc|is()}} 所知的字符分类类别。
+* 即 {{c|is(m, c) {{!!}} !ctc.is(m, do_narrow(c, dflt))}} 对于任何具有 {{tt|ctype&lt;char&gt;}} 刻面 {{c|ctc}} 和 {{tt|ctype_base::mask}} 值 {{c|m}} 的具名 {{tt|ctype}} 类别都会是 {{c|true}}（除非 {{tt|do_narrow}} 返回 {{c|dflt}}）。
+
+窄化任何数字字符保证从结果减去字符字面量 {{c|'0'}} 的差等于原字符的数位值。
+* 即对于任何数字字符 {{c|c}}，表达式 {{c|(do_narrow(c, dflt) - '0')}} 始终求值为该字符的数字值。
+
+===参数===
+{{par begin}}
+{{par|c|要转换的字符}}
+{{par|dflt|转换失败时产生的默认值}}
+{{par|beg|指向要转换的字符数组中首字符的指针}}
+{{par|end|指向要转换的字符数组的尾后一位置的指针}}
+{{par|dst|指向要填充的字符数组首元素的指针}}
+{{par end}}
+
+===返回值===
+@1,3@ 窄化的字符，或窄化失败时返回 {{c|dflt}}
+@2,4@ {{c|end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+
+void try_narrow(const std::ctype&lt;wchar_t&gt;&amp; f, wchar_t c)
+{
+    char n = f.narrow(c, 0);
+    if (n)
+        std::wcout &lt;&lt; '\'' &lt;&lt; c &lt;&lt; "' 窄化为 " &lt;&lt; +(unsigned char)n &lt;&lt; '\n';
+    else
+        std::wcout &lt;&lt; '\'' &lt;&lt; c &lt;&lt; "' 无法被窄化\n";
+}
+ 
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    std::wcout.imbue(std::locale());
+    std::wcout &lt;&lt; std::hex &lt;&lt; std::showbase &lt;&lt; "在英语（美国）UTF-8 本地环境下：\n";
+    auto&amp; f = std::use_facet&lt;std::ctype&lt;wchar_t&gt;&gt;(std::locale());
+    try_narrow(f, L'A');
+    try_narrow(f, L'Ａ');
+    try_narrow(f, L'ě');
+ 
+    std::locale::global(std::locale("cs_CZ.iso88592"));
+    auto&amp; f2 = std::use_facet&lt;std::ctype&lt;wchar_t&gt;&gt;(std::locale());
+    std::wcout &lt;&lt; "在捷克语 ISO-8859-2 本地环境下：\n";
+    try_narrow(f2, L'A');
+    try_narrow(f2, L'Ａ');
+    try_narrow(f2, L'ě');
+}
+|output=
+在英语（美国）UTF-8 本地环境下：
+'A' 窄化为 0x41
+'Ａ' 无法被窄化
+'ě' 无法被窄化
+在捷克语 ISO-8859-2 本地环境下：
+'A' 窄化为 0x41
+'Ａ' 无法被窄化
+'ě' 窄化为 0xec
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=126|std=C++98|before=1. 表示可逆性的代码是 {{c|1=do_widen(do_narrow(c), 0) == c}}&lt;br&gt;2. 表示保持类别的代码是 {{c|is(m, c) {{!!}} !ctc.is(m, do_narrow(c), dflt)}}|after=两者均已修正}}
+{{dr list item|wg=lwg|dr=153|std=C++98|before={{tt|narrow}} 只会调用重载 (4)|after=会调用对应重载}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/locale/ctype/dsc widen}}
+{{dsc inc|cpp/io/basic_ios/dsc narrow}}
+{{dsc inc|cpp/string/multibyte/dsc wctob}}
+{{dsc end}}
+
+{{langlinks|en|ja}}

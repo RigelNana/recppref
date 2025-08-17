@@ -1,0 +1,202 @@
+{{cpp/title|search}}
+{{cpp/algorithm/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcla|num=1|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt1 search( ForwardIt1 first, ForwardIt1 last,
+                   ForwardIt2 s_first, ForwardIt2 s_last );
+}}
+{{dcl|num=2|since=c++17|
+template&lt; class ExecutionPolicy, class ForwardIt1, class ForwardIt2 &gt;
+ForwardIt1 search( ExecutionPolicy&amp;&amp; policy,
+                   ForwardIt1 first, ForwardIt1 last,
+                   ForwardIt2 s_first, ForwardIt2 s_last );
+}}
+{{dcla|num=3|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt1, class ForwardIt2, class BinaryPred &gt;
+ForwardIt1 search( ForwardIt1 first, ForwardIt1 last,
+                   ForwardIt2 s_first, ForwardIt2 s_last,
+                   BinaryPred p );
+}}
+{{dcl|num=4|since=c++17|
+template&lt; class ExecutionPolicy,
+          class ForwardIt1, class ForwardIt2, class BinaryPred &gt;
+ForwardIt1 search( ExecutionPolicy&amp;&amp; policy,
+                   ForwardIt1 first, ForwardIt1 last,
+                   ForwardIt2 s_first, ForwardIt2 s_last,
+                   BinaryPred p );
+}}
+{{dcl|num=5|since=c++17|notes={{mark constexpr since c++20}}|
+template&lt; class ForwardIt, class Searcher &gt;
+ForwardIt search( ForwardIt first, ForwardIt last,
+                  const Searcher&amp; searcher );
+}}
+{{dcl end}}
+
+@1-4@ 搜索范围 {{range|first|last}} 中首次出现元素序列 {{range|s_first|s_last}} 的位置。
+:@1@ 元素用 {{c/core|operator{{==}}}} 比较。
+:@3@ 元素用给定的二元谓词 {{c|p}} 比较。
+:@2,4@ 同 {{v|1,3}}，但按 {{c|policy}} 执行。
+:@@ {{cpp/algorithm/parallel overload precondition|plural=yes}}
+
+@5@ 在范围 {{range|first|last}} 中以 {{c|searcher}} 构造函数中指定的模式进行搜索。
+
+{{rrev|since=c++17|
+标准库提供下列搜索器：
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc default_searcher}}
+{{dsc inc|cpp/utility/functional/dsc boyer_moore_searcher}}
+{{dsc inc|cpp/utility/functional/dsc boyer_moore_horspool_searcher}}
+{{dsc end}}
+}}
+
+===参数===
+{{par begin}}
+{{par range|3=要检验的}}
+{{par range|s_first|s_last|要搜索的}}
+{{par exec pol}}
+{{par|searcher|封装搜索算法和搜索模式的搜索器}}
+{{par pred2 eq|p|p1=ForwardIt1|p2=ForwardIt2}}
+{{par hreq}}
+{{par req named|ForwardIt1, ForwardIt2|ForwardIterator}}
+{{par req named|BinaryPred|BinaryPredicate}}
+{{par end}}
+
+===返回值===
+@1-4@ 指向范围 {{range|first|last}} 中首次出现 {{range|s_first|s_last}} 的起始位置的迭代器。没有出现时返回 {{c|last}}。
+@@ {{range|s_first|s_last}} 为空时返回 {{c|first}}。
+
+@5@ {{c|searcher(first, last).first}}。
+
+===复杂度===
+@1-4@ 给定 {{mathjax-or|\(\scriptsize N\)|N}} 为 {{c|std::distance(first, last)}}，{{mathjax-or|\(\scriptsize S\)|S}} 为 {{c|std::distance(s_first, s_last)}}：
+:@1,2@ 应用最多 {{mathjax-or|\(\scriptsize N\cdot S\)|N·S}} 次 {{c/core|1=operator==}} 进行比较。
+:@3,4@ 应用最多 {{mathjax-or|\(\scriptsize N\cdot S\)|N·S}} 次谓词 {{c|p}}。
+@5@ 依赖于 {{c|searcher}}。
+
+===异常===
+{{cpp/algorithm/parallel exceptions reporting behavior|singular=no}}
+
+===可能的实现===
+{{eq impl
+|title1=search (1)|ver1=1|1=
+template&lt;class ForwardIt1, class ForwardIt2&gt;
+constexpr //&lt; C++20 起
+ForwardIt1 search(ForwardIt1 first, ForwardIt1 last,
+                  ForwardIt2 s_first, ForwardIt2 s_last)
+{
+    while (true)
+    {
+        ForwardIt1 it = first;
+        for (ForwardIt2 s_it = s_first; ; ++it, ++s_it)
+        {
+            if (s_it == s_last)
+                return first;
+            if (it == last)
+                return last;
+            if (!(*it == *s_it))
+                break;
+        }
+        ++first;
+    }
+}
+|title2=search (3)|ver2=3|2=
+template&lt;class ForwardIt1, class ForwardIt2, class BinaryPred&gt;
+constexpr //&lt; C++20 起
+ForwardIt1 search(ForwardIt1 first, ForwardIt1 last,
+                  ForwardIt2 s_first, ForwardIt2 s_last, BinaryPred p)
+{
+    while (true)
+    {
+        ForwardIt1 it = first;
+        for (ForwardIt2 s_it = s_first; ; ++it, ++s_it)
+        {
+            if (s_it == s_last)
+                return first;
+            if (it == last)
+                return last;
+            if (!p(*it, *s_it))
+                break;
+        }
+        ++first;
+    }
+}
+}}
+
+===示例===
+{{example|
+|code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+using namespace std::literals;
+
+bool contains(const auto&amp; cont, std::string_view s)
+{
+    // 也能使用 str.find()（或从 C++23 起使用 str.contains()）
+    return std::search(cont.begin(), cont.end(), s.begin(), s.end()) != cont.end();
+}
+
+int main()
+{
+    const auto str{"why waste time learning, when ignorance is instantaneous?"sv};
+    assert(contains(str, "learning"));
+    assert(not contains(str, "lemming"));
+    
+    const std::vector vec(str.begin(), str.end());
+    assert(contains(vec, "learning"));
+    assert(not contains(vec, "leaning"));
+    
+    // 演示 C++17 使用搜索器的重载：
+    constexpr auto quote
+    {
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed "
+        "do eiusmod tempor incididunt ut labore et dolore magna aliqua"sv
+    };
+    
+    for (const auto word : {"pisci"sv, "Pisci"sv})
+    {
+        std::cout &lt;&lt; "字符串 " &lt;&lt; std::quoted(word) &lt;&lt; ' ';
+        const std::boyer_moore_searcher searcher(word.begin(), word.end());
+        const auto it = std::search(quote.begin(), quote.end(), searcher);
+        if (it == quote.end())
+            std::cout &lt;&lt; "未找到\n";
+        else
+            std::cout &lt;&lt; "在偏移 " &lt;&lt; it - quote.begin() &lt;&lt; " 处找到\n";
+    }
+}
+|output=
+字符串 "pisci" 在偏移 43 处找到
+字符串 "Pisci" 未找到
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=1205|std=C++98|before={{range|s_first|s_last}} 为空时返回值不明确|after=此时会返回 {{c|first}}}}
+{{dr list item|wg=lwg|dr=1338|std=C++98|before={{lwg|1205}} 的解决方案没有正确应用，导致在没有出现子序列时会返回 {{c|first}}|after=此时会返回 {{c|last}}}}
+{{dr list item|wg=lwg|dr=2150|std=C++98|before=“出现序列”的条件不正确|after=已改正}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc find_end}}
+{{dsc inc|cpp/algorithm/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc equal}}
+{{dsc inc|cpp/algorithm/dsc find}}
+{{dsc inc|cpp/algorithm/dsc lexicographical_compare}}
+{{dsc inc|cpp/algorithm/dsc mismatch}}
+{{dsc inc|cpp/algorithm/dsc search_n}}
+{{dsc inc|cpp/utility/functional/dsc default_searcher}}
+{{dsc inc|cpp/utility/functional/dsc boyer_moore_searcher}}
+{{dsc inc|cpp/utility/functional/dsc boyer_moore_horspool_searcher}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

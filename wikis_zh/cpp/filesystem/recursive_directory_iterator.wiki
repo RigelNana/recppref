@@ -1,0 +1,140 @@
+{{cpp/filesystem/title|recursive_directory_iterator}}
+{{cpp/filesystem/recursive_directory_iterator/navbar}}
+{{dcl begin}}
+{{dcl header|filesystem}}
+{{dcl|since=c++17|1=
+class recursive_directory_iterator;
+}}
+{{dcl end}}
+
+{{tt|recursive_directory_iterator}} 是在目录的 {{ltt|cpp/filesystem/directory_entry|directory_entry}} 元素上，及递归地在所有子目录的目录条目上迭代的{{named req|InputIterator}}。迭代顺序是未指定的，但每个目录条目只造访一次。
+
+默认不跟随符号链接，但这可以通过在构造时指定目录选项 {{ltt|cpp/filesystem/directory_options|follow_directory_symlink}} 启用。
+
+跳过特殊路径名 {{spar|点}} 和 {{spar|点点}}。
+
+若 {{tt|recursive_directory_iterator}} 被前移越过了顶层目录的最终目录迭代器，则它变得等于默认构造的迭代器，亦称作尾迭代器。两个尾迭代器始终相等，解引用或自增尾迭代器是未定义行为。
+
+若在递归目录迭代器创建后，文件或目录被删除或添加到目录树，则更改是否会通过迭代器观察到是未指定的。
+
+若目录结构含有环，则可能无法抵达尾迭代器。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem | 成员类型 | 定义}}
+{{dsc|{{tt|value_type}}|{{lc|std::filesystem::directory_entry}}}}
+{{dsc|{{tt|difference_type}}|{{lc|std::ptrdiff_t}}}}
+{{dsc|{{tt|pointer}}|{{c/core|const std::filesystem::directory_entry*}}}}
+{{dsc|{{tt|reference}}|{{c/core|const std::filesystem::directory_entry&amp;}}}}
+{{dsc|{{tt|iterator_category}}|{{lc|std::input_iterator_tag}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc constructor}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc destructor}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc operator*}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc options}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc depth}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc recursion_pending}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc operator{{=}}}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc increment}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc pop}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc disable_recursion_pending}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/recursive_directory_iterator/dsc begin}}
+{{dsc end}}
+
+另外按{{named req|InputIterator}}所要求提供 {{rev inl|until=c++20|{{tt|1=operator==}} 和 {{tt|1=operator!=}}}}{{rev inl|since=c++20|{{tt|1=operator==}}}}。
+
+{{rev inl|since=c++20|是否提供 {{tt|1=operator!=}}（因为它能从 {{tt|1=operator==}} 合成），以及}}相等运算符是成员还是非成员是未指定的。
+
+===辅助特化===
+{{dcl begin}}
+{{dcl|since=c++20|1=
+template&lt;&gt;
+constexpr bool
+    ranges::enable_borrowed_range&lt;std::filesystem::recursive_directory_iterator&gt; = true;
+}}
+{{dcl|since=c++20|1=
+template&lt;&gt;
+constexpr bool
+    ranges::enable_view&lt;std::filesystem::recursive_directory_iterator&gt; = true;
+}}
+{{dcl end}}
+
+这些对 {{tt|recursive_directory_iterator}} 的特化使之为 {{lconcept|borrowed_range}} 及 {{lconcept|view}}。
+
+===注解===
+{{tt|recursive_directory_iterator}} 通常保有指向实现对象的引用计数''指针''（以满足{{named req|InputIterator}}的浅复制语义），该对象保有：
+* 组成递归栈的非递归 {{ltt|cpp/filesystem/directory_iterator}} 的容器（例如 {{lc|std::vector}}），
+* 递归深度计数器（能以 {{ltf|cpp/filesystem/recursive_directory_iterator/depth}} 访问），
+* 构造时所用的目录选项（能以 {{ltf|cpp/filesystem/recursive_directory_iterator/options}} 访问），
+* 递归挂起标志（可用 {{ltf|cpp/filesystem/recursive_directory_iterator/recursion_pending}} 访问，可以与目录选项结合以节省空间）。
+
+===示例===
+{{example
+|code=
+#include &lt;filesystem&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+namespace fs = std::filesystem;
+
+int main()
+{
+    std::filesystem::current_path(std::filesystem::temp_directory_path());
+    std::filesystem::create_directories("sandbox/a/b");
+    std::ofstream("sandbox/file1.txt");
+    std::filesystem::create_symlink("a", "sandbox/syma");
+
+    // 显式迭代 std::filesystem::directory_entry 元素
+    auto entry_length{3UZ};
+    for (const fs::directory_entry&amp; dir_entry :
+            fs::recursive_directory_iterator("sandbox"))
+    {
+        std::cout &lt;&lt; dir_entry &lt;&lt; '\n';
+        if (auto l{dir_entry.path().string().length()}; entry_length &lt; l)
+            entry_length = l;
+    }
+    std::cout &lt;&lt; std::string(entry_length + 2, '-') &lt;&lt; '\n';
+
+    // 使用 `auto` 迭代 std::filesystem::directory_entry 元素
+    for (auto const&amp; dir_entry : fs::recursive_directory_iterator("sandbox"))
+        std::cout &lt;&lt; dir_entry &lt;&lt; '\n';
+
+    std::filesystem::remove_all("sandbox");
+}
+|p=true
+|output=
+"sandbox/syma"
+"sandbox/file1.txt"
+"sandbox/a"
+"sandbox/a/b"
+-------------------
+"sandbox/syma"
+"sandbox/file1.txt"
+"sandbox/a"
+"sandbox/a/b"
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3480|std=C++20|before={{tt|recursive_directory_iterator}} 既非 {{lconcept|borrowed_range}} 亦非 {{lconcept|view}}|after=它都是}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/filesystem/dsc directory_iterator}}
+{{dsc inc|cpp/filesystem/dsc directory_entry}}
+{{dsc inc|cpp/filesystem/dsc directory_options}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

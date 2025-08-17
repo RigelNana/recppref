@@ -1,0 +1,222 @@
+{{cpp/title|atomic}}
+{{cpp/atomic/atomic/navbar}}
+{{dcl begin}}
+{{dcl header|atomic}}
+{{dcl|num=1|since=c++11|
+template&lt; class T &gt;
+struct atomic;
+}}
+{{dcl|num=2|since=c++11|
+template&lt; class U &gt;
+struct atomic&lt;U*&gt;;
+}}
+{{dcl sep}}
+{{dcl header|memory}}
+{{dcl|num=3|since=c++20|
+template&lt;class U&gt;
+struct atomic&lt;std::shared_ptr&lt;U&gt;&gt;;
+}}
+{{dcl|num=4|since=c++20|
+template&lt;class U&gt;
+struct atomic&lt;std::weak_ptr&lt;U&gt;&gt;;
+}}
+{{dcl sep}}
+{{dcl header|stdatomic.h}}
+{{dcl|num=5|since=c++23|
+#define _Atomic(T) /* 见下文 */
+}}
+{{dcl end}}
+
+每个 {{tt|std::atomic}} 模板的实例化和全特化均定义一个原子类型。如果一个线程写入原子对象，同时另一线程从它读取，那么行为有良好定义（数据竞争的细节见{{lt|cpp/language/memory model|内存模型}}）。
+
+另外，对原子对象的访问可以建立线程间同步，并按 {{lc|std::memory_order}} 对非原子内存访问定序。
+
+{{tt|std::atomic}} 既不可复制也不可移动。
+
+{{rrev|since=c++23|
+在 {{header|stdatomic.h}} 中提供了兼容性宏 {{tt|_Atomic}}，使得两者均良构时 {{tt|_Atomic(T)}} 等同于 {{tt|std::atomic&lt;T&gt;}}。
+
+包含 {{header|stdatomic.h}} 时未指定命名空间 {{tt|std}} 中的任何声明是否可用。
+}}
+
+===特化===
+====主模板====
+主 {{tt|std::atomic}} 模板可用任何满足{{named req|CopyConstructible}}及{{named req|CopyAssignable}}的{{named req|TriviallyCopyable}} 类型 {{tt|T}} 实例化。如果下列任何值是 {{c|false}}，那么程序非良构：
+* {{c|std::is_trivially_copyable&lt;T&gt;::value}}
+* {{c|std::is_copy_constructible&lt;T&gt;::value}}
+* {{c|std::is_move_constructible&lt;T&gt;::value}}
+* {{c|std::is_copy_assignable&lt;T&gt;::value}}
+* {{c|std::is_move_assignable&lt;T&gt;::value}}
+* {{c|std::is_same&lt;T, typename std::remove_cv&lt;T&gt;::type&gt;::value}}
+{{source|1=
+struct Counters { int a; int b; }; // 用户定义的可平凡复制类型
+std::atomic&lt;Counters&gt; cnt;         // 为用户定义的类型而特化
+}}
+
+{{c/core|std::atomic&lt;bool&gt;}} 使用的是主模板。它保证是[[cpp/language/classes#标准布局类|标准布局结构体]]，并且具有{{ls|cpp/language/destructor#平凡析构函数}}。
+
+====部分特化====
+标准库为下列类型提供 {{tt|std::atomic}} 模板的特化，它们拥有主模板所不拥有的额外属性：
+
+@2@ 针对所有指针类型的部分特化 {{tt|std::atomic&amp;lt;U*&gt;}}。这些特化拥有标准布局{{rev inl|until=c++20|、平凡默认构造函数}}和平凡析构函数。除了为所有原子类型提供的操作外，这些特化额外支持适合指针类型的原子算术运算，例如 {{rlt|fetch_add}}、{{rlt|fetch_sub}}。
+
+{{rrev|since=c++20|
+@3,4@ 针对 {{lc|std::shared_ptr}} 和 {{lc|std::weak_ptr}} 提供的部分特化 {{c/core|std::atomic&lt;std::shared_ptr&lt;U&gt;&gt;}} 和 {{c/core|std::atomic&lt;std::weak_ptr&lt;U&gt;&gt;}}。
+
+细节见 {{ltt|cpp/memory/shared_ptr/atomic2|std::atomic{{dsc small|&lt;std::shared_ptr&gt;}}}} 和 {{ltt|cpp/memory/weak_ptr/atomic2|std::atomic{{dsc small|&lt;std::weak_ptr&gt;}}}}。
+}}
+
+====对整数类型的特化====
+以下列整数类型之一实例化时，{{tt|std::atomic}} 提供适合于整数类型的额外原子操作，例如 {{rlt|fetch_add}}、{{rlt|fetch_sub}}、{{rlt|fetch_and}}、{{rlt|fetch_or}}、{{rlt|fetch_xor}}：
+:* 字符类型 {{c/core|char}}{{rev inl|since=c++20|、{{c/core|char8_t}}}}、{{c/core|char16_t}}、{{c/core|char32_t}} 和 {{c/core|wchar_t}}；
+:* 标准有符号整数类型：{{c/core|signed char}}、{{c/core|short}}、{{c/core|int}}、{{c/core|long}} 和 {{c/core|long long}}；
+:* 标准无符号整数类型：{{c/core|unsigned char}}、{{c/core|unsigned short}}、{{c/core|unsigned int}}、{{c/core|unsigned long}} 和 {{c/core|unsigned long long}}；
+:* 标头 {{header|cstdint}} 中的各 typedef 所需的任何额外整数类型。
+
+另外，结果的 {{tt|std::atomic&lt;''整数''&gt;}} 特化拥有标准布局{{rev inl|until=c++20|、平凡默认构造函数}}和平凡析构函数。定义有符号整数算术为使用补码；无未定义的结果。
+
+{{rrev|since=c++20|
+====对浮点数类型的特化====
+以无 cv 限定的浮点数类型（{{c/core|float}}、{{c/core|double}}、{{c/core|long double}}{{rev inl|since=c++23| 和无 cv 限定的[[cpp/language/types#扩展浮点数类型|扩展浮点数类型]]}}）之一实例化时，{{tt|std::atomic}} 提供适合于浮点数类型的额外原子操作，例如 {{rlt|fetch_add}} 和 {{rlt|fetch_sub}}。
+
+另外，结果的 {{tt|std::atomic&lt;''浮点数''&gt;}} 特化拥有标准布局和平凡析构函数。
+
+无操作导致未定义行为，即使结果不能以浮点数类型表示。有效的[[cpp/numeric/fenv|浮点数环境]]可能与调用方线程的浮点数环境不同。
+}}
+
+===成员类型===
+{{dsc begin}}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|value_type}}|{{tt|T}} {{mark|无论是否特化}}}}
+{{dsc|{{tt|difference_type}}&lt;ref&gt;{{tt|std::atomic}} 主模板中，或对 {{lc|std::shared_ptr}} 和 {{lc|std::weak_ptr}} 的部分特化中，未定义 {{tt|difference_type}}。&lt;/ref&gt;|
+{{rrev multi
+|rev1=
+{{tt|value_type}} {{mark|仅对 {{tt|atomic&lt;''整数''&gt;}} {{rev inl|since=c++20|和 {{tt|atomic&lt;''浮点数''&gt;}}}} 特化}}&lt;br&gt;
+|rev2=
+{{lc|std::ptrdiff_t}} {{mark|仅对 {{tt|std::atomic&amp;lt;U*&gt;}} 特化}}
+}}
+}}
+{{dsc end}}
+&lt;references/&gt;
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/atomic/dsc constructor}}
+{{dsc inc|cpp/atomic/atomic/dsc operator{{=}}}}
+{{dsc inc|cpp/atomic/atomic/dsc is_lock_free}}
+{{dsc inc|cpp/atomic/atomic/dsc store}}
+{{dsc inc|cpp/atomic/atomic/dsc load}}
+{{dsc inc|cpp/atomic/atomic/dsc operator_T}}
+{{dsc inc|cpp/atomic/atomic/dsc exchange}}
+{{dsc inc|cpp/atomic/atomic/dsc compare_exchange}}
+{{dsc inc|cpp/atomic/atomic/dsc wait|atomic}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_one|atomic}}
+{{dsc inc|cpp/atomic/atomic/dsc notify_all|atomic}}
+{{dsc h1|常量}}
+{{dsc inc|cpp/atomic/atomic/dsc is_always_lock_free}}
+{{dsc end}}
+
+===特化成员函数===
+{{anchor|为整数、浮点数和指针类型特化}}
+{{dsc begin}}
+{{dsc h2|为整数{{rev inl|since=c++20|、浮点数}}和指针类型特化}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_add}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_sub}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith2}}
+{{dsc h2|仅为整数和指针类型特化}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_max}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_min}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith}}
+{{dsc h2|仅为整数类型特化}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_and}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_or}}
+{{dsc inc|cpp/atomic/atomic/dsc fetch_xor}}
+{{dsc inc|cpp/atomic/atomic/dsc operator arith3}}
+{{dsc end}}
+
+===类型别名===
+为 {{c/core|bool}} 和所有上面列出的整数类型提供如下类型别名：
+
+{{dsc begin}}
+{{dsc h2|所有 {{tt|std::atomic&lt;整数&gt;}} 的别名}}
+{{dsc inc|cpp/atomic/atomic/dsc atomic integral types}}
+{{dsc h2|特殊用途类型的别名}}
+{{dsc inc|cpp/atomic/atomic/dsc atomic lock free aliases}}
+{{dsc end}}
+
+注意：{{tt|std::atomic_int''N''_t}}、{{tt|std::atomic_uint''N''_t}}、{{tt|std::atomic_intptr_t}} 和 {{tt|atomic_uintptr_t}} 分别在当且仅当定义了 {{tt|std::int''N''_t}}、{{tt|std::uint''N''_t}}、{{lc|std::intptr_t}} 和 {{lc|std::uintptr_t}} 时才会有定义。
+{{rrev|since=c++20|
+{{tt|std::atomic_signed_lock_free}} 与 {{tt|std::atomic_unsigned_lock_free}} 在独立实现中可选。
+}}
+
+===注解===
+存在等价于 {{tt|std::atomic}} 所有成员函数的非成员函数模板。这些非成员函数可以额外对非 {{tt|std::atomic}} 特化的类型重载，但不能保证原子性。标准库中仅有的这种类型是 {{c/core|std::shared_ptr&lt;U&gt;}}。
+
+C 中 {{tt|_Atomic}} 是[[c/keyword/_Atomic|关键词]]并用于提供[[c/language/atomic|原子类型]]。
+
+推荐实现确保对于每个可能的类型 {{tt|T}}，C 中 {{tt|_Atomic(T)}} 的表示与 C++ 中 {{tt|std::atomic&lt;T&gt;}} 的相同。用于确保原子性与内存定序的机制应该兼容。
+
+GCC 和 Clang 上，此处描述的某些功能要求通过 {{tt|-latomic}} 链接。
+
+{{ftm begin|sort=1}}
+{{ftm|__cpp_lib_atomic_ref|{{tt|std::atomic_ref}}|value=201806L|std=C++20}}
+{{ftm|__cpp_lib_constexpr_atomic|{{c/core|constexpr}} 的 {{tt|std::atomic}} 与 {{lc|std::atomic_ref}}|value=202411L|std=C++26}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;atomic&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+std::atomic_int acnt;
+int cnt;
+
+void f()
+{
+    for (auto n{10000}; n; --n)
+    {
+        ++acnt;
+        ++cnt;
+        // 注意: 对于此示例，宽松内存定序已经足够，
+        // 例如 acnt.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+int main()
+{
+    {
+        std::vector&lt;std::jthread&gt; pool;
+        for (int n = 0; n &lt; 10; ++n)
+            pool.emplace_back(f);
+    }
+    
+    std::cout &lt;&lt; "原子计数器为 " &lt;&lt; acnt &lt;&lt; '\n'
+              &lt;&lt; "非原子计数器为 " &lt;&lt; cnt &lt;&lt; '\n';
+}
+|p=true
+|output=
+原子计数器为 100000
+非原子计数器为 69696
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2441|std=c++11|before=可选的[[cpp/types/integer|定宽整数类型]]的原子版本的 typedef 缺失|after=已添加}}
+{{dr list item|wg=lwg|dr=3012|std=c++11|before={{tt|std::atomic&lt;T&gt;}} 对任何可平凡复制但非可复制的 {{tt|T}} 容许|after=禁止这种特化}}
+{{dr list item|wg=lwg|dr=3949|std=C++17|before=C++17 意外地丢失了要求 {{c/core|std::atomic&lt;bool&gt;}} 具有平凡析构函数的说明|after=已补回}}
+{{dr list item|wg=lwg|dr=4069|paper=P3323R1|std=C++11|before=对 cv 限定的 {{tt|T}} 的支持可疑|after=不允许 {{tt|T}} 为 cv 限定}}
+{{dr list item|paper=P0558R1|std=c++11|before=某些原子类型函数的模板实参推导可能意外失败；&lt;br&gt;提供了非法指针操作|after=实质上重写了规范：提供成员 typedef&lt;br&gt;{{tt|value_type}} 和 {{tt|difference_type}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/atomic/dsc atomic_flag}}
+{{dsc inc|cpp/memory/shared_ptr/dsc atomic2}}
+{{dsc inc|cpp/memory/weak_ptr/dsc atomic2}}
+{{dsc see c|c/language/atomic|原子类型|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,195 @@
+{{cpp/ranges/title|{{petty|lazy_split_view&lt;V, Pattern&gt;::}}''outer_iterator''}}
+{{cpp/ranges/lazy_split_view/navbar}}
+{{dcla|anchor=no|since=c++20|expos=yes|
+template&lt; bool Const &gt;
+struct /*outer_iterator*/;
+}}
+
+{{rlpt|begin|lazy_split_view::begin}} 的返回类型，并且为当底层视图是 {{lconcept|common_range}} 和 {{lconcept|forward_range}} 时，为 {{rlpt|end|lazy_split_view::end}} 的返回类型。
+
+如果 {{tt|V}} 或 {{tt|Pattern}} 不是[[cpp/ranges#辅助概念|简单视图]]（如当 {{c/core|ranges::iterator_t&lt;const V&gt;}} 无效或者与 {{c/core|ranges::iterator_t&lt;V&gt;}} 不同时），{{tt|Const}} 对于 const 重载返回的迭代器为 {{c|true}}，否则为 {{c|false}}。如果 {{tt|V}} 是简单视图，则当且仅当 {{tt|V}} 是 {{lconcept|forward_range}} 时 {{tt|Const}} 为 {{c|true}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem type|Parent|{{cpp/ranges/maybe-const|ranges::lazy_split_view}}}}
+{{dsc expos mem type|Base|{{cpp/ranges/maybe-const|V}}}}
+{{dsc|{{tt|iterator_concept}}|
+* 若 {{tti|Base}} 实现 {{lconcept|forward_range}} 则为 {{lc|std::forward_iterator_tag}}，
+* 否则为 {{lc|std::input_iterator_tag}}}}
+{{dsc|{{tt|iterator_category}}&lt;br&gt;{{small|(仅当 {{tti|Base}} 实现 {{lconcept|forward_range}} 时提供)}}|{{lc|std::input_iterator_tag}}}}
+{{dsc mem class|cpp/ranges/lazy_split_view/value_type|{{tti|outer_iterator}} 的值类型}}
+{{dsc|{{tt|difference_type}}|{{c/core|ranges::range_difference_t&lt;Base&gt;}}}}
+{{dsc end}}
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|描述}}
+{{dsc expos mem obj|parent_|id=parent|private=yes|spec={{c/core|Parent*}}|指向父对象 {{rlpt|/|lazy_split_view}} 的指针}}
+{{dsc expos mem obj|current_|id=current|private=yes|spec={{c/core|ranges::iterator_t&lt;Base&gt;}}|maybe=（仅当 {{tt|V}} 实现 {{lconcept|forward_range}} 时提供）|指向底层 {{lconcept|view}} 的迭代器}}
+{{dsc expos mem obj|trailing_empty_|id=trailing_empty|private=yes|spec=bool|指示是否抵达空尾部子范围（如果有）的标志}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|nolink=true|构造迭代器}}
+{{dsc mem fun|nolink=true|operator*|返回当前子范围}}
+{{dsc mem fun|nolink=true|operator++&lt;br&gt;operator++{{dsc small|(int)}}|推进迭代器}}
+{{dsc expos mem fun|nolink=true|cur|按条件地返回到 {{box|{{lsi|#current_}}}}（若存在）或到 {{box|{{c/core|*}}{{lsi|#parent_}}{{c/core|-&gt;}}{{rlpsi|/#current_}}}} 的引用}}
+{{dsc end}}
+
+===成员函数===
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}''outer_iterator''|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+/*outer_iterator*/() = default;
+}}
+{{dcl|num=2|since=c++20|
+constexpr explicit /*outer_iterator*/( Parent&amp; parent )
+    requires (!ranges::forward_range&lt;Base&gt;);
+}}
+{{dcl|num=3|since=c++20|
+constexpr /*outer_iterator*/( Parent&amp; parent,
+                              ranges::iterator_t&lt;Base&gt; current )
+    requires ranges::forward_range&lt;Base&gt;;
+}}
+{{dcla|num=4|anchor=ctor4|since=c++20|
+constexpr /*outer_iterator*/( /*outer_iterator*/&lt;!Const&gt; i )
+    requires Const &amp;&amp; std::convertible_to&lt;ranges::iterator_t&lt;V&gt;,
+                                          ranges::iterator_t&lt;Base&gt;&gt;;
+}}
+{{dcl end}}
+
+@1@ 各非静态数据成员以它们的默认成员初始化式进行值初始化，即：
+* {{c|1=parent_ = nullptr;}}，
+* {{c|1=current_ = iterator_t&lt;Base&gt;();}}（仅当 {{tt|V}} 实现 {{lconcept|forward_range}} 时出现）。
+@2@ 以 {{c|std::addressof(parent)}} 初始化 {{tti|parent_}}。
+@3@ 以 {{c|std::addressof(parent)}} 初始化 {{tti|parent_}}，并以 {{c|std::move(current)}} 初始化 {{tti|current_}}。
+@4@ 以 {{c|i.parent_}} 初始化 {{tti|parent_}}，以 {{c|std::move(i.current_)}} 初始化 {{tti|current_}}，并以 {{c|t.trailing_empty_}} 初始化 {{tti|trailing_empty_}}。
+
+{{tti|trailing_empty_}} 以其默认成员初始化式初始化为 {{c/core|false}}。
+}}
+
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}operator*|2=
+{{ddcl|since=c++20|
+constexpr value_type operator*() const;
+}}
+等价于 {{c|return value_type{*this};}}。
+}}
+
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}operator++|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+constexpr /*outer_iterator*/&amp; operator++();
+}}
+{{dcl|num=2|since=c++20|1=
+constexpr decltype(auto) operator++(int);
+}}
+{{dcl end}}
+
+@1@ 函数体等价于
+{{source|1=
+const auto end = ranges::end(parent_-&gt;base_);
+if (/*cur*/() == end)
+{
+    trailing_empty_ = false;
+    return *this;
+}
+const auto [pbegin, pend] = ranges::subrange{parent_-&gt;pattern_};
+if (pbegin == pend)
+    ++/*cur*/();
+else if constexpr (/*tiny_range*/&lt;Pattern&gt;)
+{
+    /*cur*/() = ranges::find(std::move(/*cur*/()), end, *pbegin);
+    if (/*cur*/() != end)
+    {
+        ++/*cur*/();
+        if (/*cur*/() == end)
+            trailing_empty_ = true;
+    }
+}
+else
+{
+    do
+    {
+        auto [b, p] = ranges::mismatch(/*cur*/(), end, pbegin, pend);
+        if (p == pend)
+        {
+            /*cur*/() = b;
+            if (/*cur*/() == end)
+                trailing_empty_ = true;
+            break; // 已匹配模式；跳过它
+        }
+    } while (++/*cur*/() != end);
+}
+return *this;
+}}
+
+@2@ 等价于
+{{source|1=
+if constexpr (ranges::forward_range&lt;Base&gt;)
+{
+    auto tmp = *this;
+    ++*this;
+    return tmp;
+}
+else
+{
+    ++*this; // 没有返回语句
+}
+}}
+}}
+
+{{member|{{small|std::ranges::lazy_split_view::''outer_iterator''{{sep}}::}}''cur''{{sep}}()|2=
+{{dcl begin}}
+{{dcla|anchor=no|num=1|since=c++20|expos=yes|
+constexpr auto&amp; /*cur*/() noexcept;
+}}
+{{dcla|anchor=no|num=2|since=c++20|expos=yes|
+constexpr auto&amp; /*cur*/() const noexcept;
+}}
+{{dcl end}}
+
+这个便利成员函数由 {{c|/*outer_iterator*/::operator++()}}，非成员 {{c|1=operator==(const /*outer_iterator*/&amp;, std::default_sentinel_t)}}，和 {{rlpi|inner_iterator}} 的可能实现的某些成员函数使用。
+
+@1,2@ 等价于
+{{source|1=
+if constexpr (ranges::forward_range&lt;V&gt;)
+    return current_;
+else
+    return *parent-&gt;current_;
+}}
+}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc fun|nolink=true|operator{{==}}|比较底层迭代器或者底层迭代器和 {{lc|std::default_sentinel}}|notes={{mark c++20}}}}
+{{dsc end}}
+
+{{member|1= operator==&lt;small&gt;(std::ranges::split_view::''outer_iterator'')&lt;/small&gt;|2=
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+friend constexpr bool operator==( const /*outer_iterator*/&amp; x,
+                                  const /*outer_iterator*/&amp; y )
+      requires forward_range&lt;Base&gt;;
+}}
+{{dcl|num=2|since=c++20|1=
+friend constexpr bool operator==( const /*outer_iterator*/&amp; x,
+                                  std::default_sentinel_t );
+}}
+{{dcl end}}
+
+@1@ 等价于 {{c|1=return x.current_ == y.current_ and x.trailing_empty_ == y.trailing_empty_;}}。
+@2@ 等价于 {{c|1=return x./*cur*/() == ranges::end(x.parent_-&gt;base_) and !x.trailing_empty_;}}。
+
+{{cpp/note synthesized eq}}
+
+{{cpp/hidden friend|plural=yes|{{tt|std::ranges::split_view::''outer_iterator''}}}}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3904|std=C++20|before=[[#数据成员|{{tti|trailing_empty_}}]] 在构造函数从中（[[#ctor4|4]]）中未初始化|after=初始化}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

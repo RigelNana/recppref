@@ -1,0 +1,127 @@
+{{cpp/title|condition_variable}}
+{{cpp/thread/condition_variable/navbar}}
+{{ddcl|header=condition_variable|since=c++11|
+class condition_variable;
+}}
+
+{{tt|std::condition_variable}} 是与 {{lc|std::mutex}} 一起使用的同步原语，它能用于阻塞一个线程，或同时阻塞多个线程，直至另一线程修改共享变量（''条件''）并通知 {{tt|std::condition_variable}}。
+
+有意修改共享变量的线程必须
+# 获得 {{lc|std::mutex}}（常通过 {{lc|std::lock_guard}}）
+# 在保有锁时进行修改
+# 在 {{tt|std::condition_variable}} 上执行 {{lc|notify_one}} 或 {{lc|notify_all}}（可以释放锁后再通知）
+即使共享变量是原子的，也必须在拥有互斥体时修改它，以[https://stackoverflow.com/questions/38147825/正确地]把修改发布到等待的线程。
+
+任何有意在 {{tt|std::condition_variable}} 上等待的线程必须：
+# 在用于保护共享变量的互斥体上获得 {{c/core|std::unique_lock&lt;std::mutex&gt;}}。
+# 执行下列之一：
+:# 检查条件，是否为已更新且已提醒的情况。
+:# 调用 {{tt|std::condition_variable}} 的 {{lc|wait}}、{{lc|wait_for}} 或 {{lc|wait_until}}（原子地释放互斥体并暂停线程的执行，直到条件变量被通知，时限过期，或发生{{enwiki|Spurious_wakeup|虚假唤醒}}，然后在返回前自动获得互斥体）。
+:# 检查条件，并在未满足的情况下继续等待。
+:: 或者
+:# 使用 {{lc|wait}}、{{lc|wait_for}} 和 {{lc|wait_until}} 的有谓词重载，它们包揽以上三个步骤。
+
+{{tt|std::condition_variable}} 只可与 {{c/core|std::unique_lock&lt;std::mutex&gt;}} 一同使用；此限制在一些平台上允许最大效率。{{lc|std::condition_variable_any}} 提供可与任何{{named req|BasicLockable}}对象（例如 {{lc|std::shared_lock}}）一同使用的条件变量。
+
+条件变量允许并行调用成员函数 {{lc|wait}}、{{lc|wait_for}}、{{lc|wait_until}}、{{lc|notify_one}} 和 {{lc|notify_all}}。
+
+类 {{tt|std::condition_variable}} 是{{named req|StandardLayoutType}}。它不{{named req|CopyConstructible}}、{{named req|MoveConstructible}}、{{named req|CopyAssignable}}或{{named req|MoveAssignable}}。
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|名字|定义}}
+{{dsc|{{tt|native_handle_type}}|由实现定义}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/condition_variable/dsc constructor|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc destructor|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc operator{{=}}|condition_variable}}
+
+{{dsc h2|通知}}
+{{dsc inc|cpp/thread/condition_variable/dsc notify_one|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc notify_all|condition_variable}}
+
+{{dsc h2|等待}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_for|condition_variable}}
+{{dsc inc|cpp/thread/condition_variable/dsc wait_until|condition_variable}}
+
+{{dsc h2|原生句柄}}
+{{dsc inc|cpp/thread/condition_variable/dsc native handle|condition_variable}}
+{{dsc end}}
+
+===示例===
+{{example
+|与 {{lc|std::mutex}} 组合使用 {{tt|std::condition_variable}}，以促进线程间通信。
+|code=
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+
+std::mutex m;
+std::condition_variable cv;
+std::string data;
+bool ready = false;
+bool processed = false;
+
+void worker_thread()
+{
+    // 等待直至 main() 发送数据
+    std::unique_lock lk(m);
+    cv.wait(lk, []{ return ready; });
+    
+    // 等待后，我们占有锁
+    std::cout &lt;&lt; "工作线程正在处理数据\n";
+    data += "（处理后）";
+    
+    // 发送数据回 main()
+    processed = true;
+    std::cout &lt;&lt; "工作线程指示数据已经处理完成\n";
+    
+    // 通知前完成手动解锁，以避免等待线程才被唤醒就阻塞（细节见 notify_one）
+    lk.unlock();
+    cv.notify_one();
+}
+
+int main()
+{
+    std::thread worker(worker_thread);
+
+    data = "数据样例";
+    // 发送数据到 worker 线程
+    {
+        std::lock_guard lk(m);
+        ready = true;
+        std::cout &lt;&lt; "main() 指示数据已准备好进行处理\n";
+    }
+    cv.notify_one();
+
+    // 等候 worker
+    {
+        std::unique_lock lk(m);
+        cv.wait(lk, []{ return processed; });
+    }
+    std::cout &lt;&lt; "返回 main()，data = " &lt;&lt; data &lt;&lt; '\n';
+
+    worker.join();
+}
+|output=
+main() 指示数据已准备好进行处理
+工作线程正在处理数据
+工作线程指示数据已经处理完成
+返回 main()，data = 数据样例（处理后）
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc condition_variable_any}}
+{{dsc inc|cpp/thread/dsc mutex}}
+{{dsc inc|cpp/thread/dsc lock_guard}}
+{{dsc inc|cpp/thread/dsc unique_lock}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

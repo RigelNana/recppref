@@ -1,0 +1,138 @@
+{{cpp/ranges/title|partition_copy|partition_copy_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+          std::weakly_incrementable O1, std::weakly_incrementable O2,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;I, Proj&gt;&gt; Pred &gt;
+requires std::indirectly_copyable&lt;I, O1&gt; &amp;&amp;
+         std::indirectly_copyable&lt;I, O2&gt;
+constexpr partition_copy_result&lt;I, O1, O2&gt;
+    partition_copy( I first, S last, O1 out_true, O2 out_false,
+                    Pred pred, Proj proj = {} );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::input_range R,
+          std::weakly_incrementable O1, std::weakly_incrementable O2,
+          class Proj = std::identity,
+          std::indirect_unary_predicate&lt;std::projected&lt;iterator_t&lt;R&gt;, Proj&gt;&gt; Pred &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O1&gt; &amp;&amp;
+         std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O2&gt;
+constexpr partition_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O1, O2&gt;
+    partition_copy( R&amp;&amp; r, O1 out_true, O2 out_false,
+                    Pred pred, Proj proj = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O1, class O2 &gt;
+using partition_copy_result = ranges::in_out_out_result&lt;I, O1, O2&gt;;
+}}
+{{dcl end}}
+
+@1@ 从输入范围 {{range|first|last}} 复制元素到两个不同的输出范围，取决于谓词 {{c|pred}} 所返回的值。由 {{c|proj}} 投影后满足 {{c|pred}} 的元素被复制到始于 {{c|out_true}} 的范围。剩余元素被复制到始于 {{c|out_false}} 的范围。若输入范围与任一输出范围重叠，则行为未定义。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的|range=源|sentinel=yes}}
+{{par|r|要复制的输入元素源范围}}
+{{par|out_true|满足 {{c|pred}} 的元素所输出范围的起始}}
+{{par|out_false|不满足 {{c|pred}} 的元素所输出范围的起始}}
+{{par|pred|应用到投影后元素的谓词}}
+{{par|proj|应用到元素的投影}}
+{{par end}}
+
+===返回值===
+{{c|{last, o1, o2} }}，其中 {{tt|o1}} 与 {{tt|o2}} 分别为复制完成后两个输出范围的末尾。
+
+===复杂度===
+准确应用 {{c|ranges::distance(first, last)}} 次对应的谓词 {{c|comp}} 和任何投影 {{c|proj}}。
+
+&lt;!-- ===异常=== --&gt;
+===可能的实现===
+{{eq fun|1=
+struct partition_copy_fn
+{
+    template&lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S,
+             std::weakly_incrementable O1, std::weakly_incrementable O2,
+             class Proj = std::identity, std::indirect_unary_predicate&lt;
+             std::projected&lt;I, Proj&gt;&gt; Pred&gt;
+    requires std::indirectly_copyable&lt;I, O1&gt; &amp;&amp; std::indirectly_copyable&lt;I, O2&gt;
+    constexpr ranges::partition_copy_result&lt;I, O1, O2&gt;
+        operator()(I first, S last, O1 out_true, O2 out_false,
+                   Pred pred, Proj proj = {}) const
+    {
+        for (; first != last; ++first)
+            if (!!std::invoke(pred, std::invoke(proj, *first)))
+                *out_true = *first, ++out_true;
+            else
+                *out_false = *first, ++out_false;
+        return {std::move(first), std::move(out_true), std::move(out_false)};
+    }
+
+    template&lt;ranges::input_range R,
+             std::weakly_incrementable O1, std::weakly_incrementable O2,
+             class Proj = std::identity,
+             std::indirect_unary_predicate&lt;std::projected&lt;iterator_t&lt;R&gt;, Proj&gt;&gt; Pred&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O1&gt; &amp;&amp;
+             std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, O2&gt;
+    constexpr ranges::partition_copy_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, O1, O2&gt;
+        operator()(R&amp;&amp; r, O1 out_true, O2 out_false, Pred pred, Proj proj = {}) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(out_true),
+                       std::move(out_false), std::move(pred), std::move(proj));
+    }
+};
+
+inline constexpr partition_copy_fn partition_copy {};
+}}
+
+===示例===
+{{example|code=
+#include &lt;algorithm&gt;
+#include &lt;cctype&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    const auto in = {'N', '3', 'U', 'M', '1', 'B', '4', 'E', '1', '5', 'R', '9'};
+
+    std::vector&lt;int&gt; o1(size(in)), o2(size(in));
+
+    auto pred = [](char c) { return std::isalpha(c); };
+
+    auto ret = std::ranges::partition_copy(in, o1.begin(), o2.begin(), pred);
+
+    std::ostream_iterator&lt;char&gt; cout {std::cout, " "};
+    std::cout &lt;&lt; "in = ";
+    std::ranges::copy(in, cout);
+    std::cout &lt;&lt; "\no1 = ";
+    std::copy(o1.begin(), ret.out1, cout);
+    std::cout &lt;&lt; "\no2 = ";
+    std::copy(o2.begin(), ret.out2, cout);
+    std::cout &lt;&lt; '\n';
+}
+|output=
+in = N 3 U M 1 B 4 E 1 5 R 9
+o1 = N U M B E R
+o2 = 3 1 4 1 5 9
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc stable_partition}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/dsc partition_copy}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

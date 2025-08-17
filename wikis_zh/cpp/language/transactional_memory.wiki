@@ -1,0 +1,231 @@
+{{title|事务性内存 {{mark since tm_ts}}}}
+{{cpp/language/statements/navbar}}
+
+{{fmbox | class=noprint | style=font-size: 0.8em | text='''工作中''' 此页面正在构建 }}
+
+{{fmbox | class=noprint | style=font-size: 0.8em | text='''实验性特性''' 此页面上描述的功能是事务性内存技术规范（ Transactional Memory Technical Specification ）， ISO/IEC TS 19841:2015 的一部分 {{mark since tm_ts}} }}
+
+事务性内存（transactional memory）是在事务中结合语句组的并发同步机制，事务具有
+* 原子性（atomic）（要么语句全部发生，要么全部不发生）
+* 隔离性（isolated）（事务中的语句不会观察到另一事务写入一半，即使它们并行执行）
+
+典型实现在受支持的平台上将硬件事务性内存使用到极致（例如，直至变更集饱和），再退回到软件事务性内存，后者常以乐观并发（optimistic concurrency）来实现：如果另一事务更新了事务所用的某些变量，那么该事务会安静地重试。由于这个原因，可重试事务（“原子块”）只能调用事务安全的函数。
+
+注意，在没有其他的外部同步的情况下在事务内和事务外访问变量是数据竞争。
+
+如果支持功能特性测试，那么本页所描述的功能特性由具有大于或等于 {{c|201505}} 的值的宏常量 {{c|__cpp_transactional_memory}} 标明。
+
+===同步块===
+{{ttb|synchronized}} {{spar|复合语句}}
+
+如同在一个全局锁下执行{{rlp|statements#复合语句|复合语句}}：程序中的所有最外层同步块都以一个单独的全序执行。在该顺序中，每个同步块的结尾同步于（synchronize with）下个同步块的开始。内嵌于其他同步块的同步块没有特殊语义。
+
+同步块不是事务（不同于后面的原子块），并可以调用事务不安全的函数。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+int f()
+{
+    static int i = 0;
+    synchronized { // 开始同步块
+        std::cout &lt;&lt; i &lt;&lt; " -&gt; ";
+        ++i;       // 每次调用 f() 都获得唯一的 i 值
+        std::cout &lt;&lt; i &lt;&lt; '\n';
+        return i;  // 结束同步块
+    }
+}
+
+int main()
+{
+    std::vector&lt;std::thread&gt; v(10);
+    for (auto&amp; t : v)
+        t = std::thread([] { for (int n = 0; n &lt; 10; ++n) f(); });
+    for (auto&amp; t : v)
+        t.join();
+}|output=
+0 -&gt; 1
+1 -&gt; 2
+2 -&gt; 3
+...
+99 -&gt; 100
+}}
+
+以任何方式（抵达结尾，执行 goto、break、continue 或 return，或抛出异常）离开同步块都会退出该块，而如果退出的块是外层块，那么这在单一全序中同步于下个同步块。如果使用 {{lc|std::longjmp}} 退出同步块则行为未定义。
+
+不允许用 goto 或 switch 进入同步块。
+
+尽管同步块如同在一个全局锁下执行，我们仍然期待各实现检验每个块内的代码，并为事务安全代码使用乐观并发（在可用时以硬件事务性内存为后盾），为非事务安全代码使用最小锁定。当同步块调用非内联函数时，除非该函数声明为 {{tt|transaction_safe}}（见下文）或使用 {{attr/core|optimize_for_synchronized}} 属性（见下文），否则编译器可能必须放弃推测执行（spculative execution），并在整个调用周围持有一个锁。
+
+===原子块===
+{{todo}}
+
+{{ttb|atomic_noexcept}} {{spar|复合语句}}
+
+{{ttb|atomic_cancel}} {{spar|复合语句}}
+
+{{ttb|atomic_commit}} {{spar|复合语句}}
+
+@1@ 如果抛出异常，那么调用 {{c|std::abort}}
+@2@ 如果抛出异常，那么调用 {{c|std::abort}}，除非该异常是用于事务取消的异常之一（见后述），这种情况下事务被''取消（cancel）''：程序中所有由该原子块的各操作的副作用所修改的内存位置的值，被还原到该原子块的执行开始时它们曾拥有的值，而异常照常持续栈回溯。
+@3@ 如果抛出异常，那么正常提交事务。
+
+用于 {{tt|atomic_cancel}} 块中的事务取消的异常有 {{lc|std::bad_alloc}}、&lt;!-- {{lc|std::bad_array_length}}、--&gt;{{lc|std::bad_array_new_length}}、{{lc|std::bad_cast}}、{{lc|std::bad_typeid}}、{{lc|std::bad_exception}}、{{lc|std::exception}} 和所有从它派生的标准库异常，以及特殊异常类型 {{ltt|cpp/error/tx_exception|std::tx_exception&lt;T&gt;}}。
+
+不允许原子块中的 {{spar|复合语句}} 执行任何非 {{tt|transaction_safe}} 的表达式或语句，或调用非 {{tt|transaction_safe}} 的函数（这是编译时错误）。
+
+{{source|1=
+// 每次调用 f() 都取得唯一的 i 值，即使以并行进行
+int f()
+{
+    static int i = 0;
+    atomic_noexcept { // 开始事务
+//  printf("before %d\n", i); // 错误：不能调用非事务安全的函数
+        ++i;
+        return i; // 提交事务
+    }
+}
+}}
+
+以除异常之外的任何方式（抵达结尾、goto、break、continue、return）离开原子块时，将提交事务。如果用 {{lc|std::longjmp}} 退出原子块则行为未定义。
+
+===事务安全的函数===
+{{todo}}
+可在函数声明中用关键词 {{c|transaction_safe}} 将其显式声明为事务安全。
+
+{{todo}}
+{{rlp|lambda|Lambda 表达式}}声明中，它可以紧跟俘获列表之后，或紧跟关键词 {{tt|mutable}} 之后（如果使用它）出现。
+{{todo}}
+
+{{source|1=
+extern volatile int * p = 0;
+struct S
+{
+    virtual ~S();
+};
+int f() transaction_safe
+{
+    int x = 0;  // OK：非 volatile
+    p = &amp;x;     // OK：指针非 volatile
+    int i = *p; // 错误：通过 volatile 泛左值读取
+    S s;        // 错误：调用不安全的析构函数
+}
+}}
+
+{{source|1=
+int f(int x) { // 隐式事务安全
+    if (x &lt;= 0)
+        return 0;
+    return x + f(x - 1);
+}
+}}
+
+如果通过指向事务安全函数的引用或指针调用非事务安全的函数，那么行为未定义。
+
+&lt;!-- 从 lambda 到指针的转换是事务安全的 --&gt;
+
+指向事务安全函数的指针和指向事务安全成员函数的指针分别可隐式转换为函数指针和成员函数指针。结果指针和原指针是否比较相等是未指明的。
+
+====事务安全的虚函数====
+{{todo}}
+
+如果 {{tt|transaction_safe_dynamic}} 函数的最终覆盖函数未被声明为 {{tt|transaction_safe}}，那么在原子块中调用它是未定义行为。
+
+===标准库===
+除了引入新的异常模板 {{ltt|cpp/error/tx_exception|std::tx_exception}} 之外，事务性内存技术规范还对标准库做出下列更改：
+
+* 令下列函数为显式 {{tt|transaction_safe}}：
+:* {{lc|std::forward}}、{{lc|std::move}}、{{lc|std::move_if_noexcept}}、{{lc|std::align}}、{{lc|std::abort}}、全局默认 {{lc|operator new}}、全局默认 {{lc|operator delete}}、{{lc|std::allocator::construct}}（如果调用的构造函数是事务安全的）、{{lc|std::allocator::destroy}}（如果调用的析构函数是事务安全的）、{{lc|std::get_temporary_buffer}}、{{lc|std::return_temporary_buffer}}、{{lc|std::addressof}}、{{lc|std::pointer_traits::pointer_to}}、所有支持事务取消的异常类型（见上文的 {{tt|atomic_cancel}}）的每个非虚成员函数{{todo|还有更多}}
+* 令下列函数为显式 {{tt|transaction_safe_dynamic}}：
+:* 所有支持事务取消的异常类型（见上文的 {{tt|atomic_cancel}}）的每个虚函数
+* 要求{{named req|Allocator|分配器}} X 上所有事务安全的操作在 {{tt|X::rebind&lt;&gt;::other}} 上也是事务安全的
+
+===属性===
+{{attr|optimize_for_synchronized}} 属性可以应用到函数声明中的声明符中，而且必须在函数的首个声明上出现。
+
+如果某函数在一个翻译单元中被声明为 {{attr/core|optimize_for_synchronized}}，而同一个函数在另一翻译单元中的声明不带 {{attr/core|optimize_for_synchronized}}，那么程序非良构；不要求诊断。
+
+它指示函数定义应该针对从 {{c|synchronized}} 语句中调用而优化。具体而言，如果函数对大多数的调用但非全部调用为事务安全（例如可能必须重算散列的哈希表插入、可能必须请求新内存块的分配器、可能罕有记录日志的简单函数），那么该属性避免对调用该函数的同步块进行串行化。
+
+{{source|1=
+std::atomic&lt;bool&gt; rehash{false};
+
+// 维护线程运行此循环
+void maintenance_thread(void*)
+{
+    while (!shutdown)
+    {
+        synchronized
+        {
+            if (rehash)
+            {
+                hash.rehash();
+                rehash = false;
+            }
+        }
+    }
+}
+
+// 工作线程每秒执行数十万次对此函数的调用。
+// 从另一翻译单元中的同步块调用 insert_key() 将导致这些块被串行化，
+// 除非标记 insert_key() 为 [[optimize_for_synchronized]]
+[[optimize_for_synchronized]] void insert_key(char* key, char* value)
+{
+    bool concern = hash.insert(key, value);
+    if (concern)
+        rehash = true;
+}
+}}
+无该属性的 GCC 汇编：串行化整个函数
+&lt;pre&gt;insert_key(char*, char*):
+	subq	$8, %rsp
+	movq	%rsi, %rdx
+	movq	%rdi, %rsi
+	movl	$hash, %edi
+	call	Hash::insert(char*, char*)
+	testb	%al, %al
+	je	.L20
+	movb	$1, rehash(%rip)
+	mfence
+.L20:
+	addq	$8, %rsp
+	ret
+&lt;/pre&gt;
+有该属性的 GCC 汇编：
+&lt;pre&gt;transaction clone for insert_key(char*, char*):
+	subq	$8, %rsp
+	movq	%rsi, %rdx
+	movq	%rdi, %rsi
+	movl	$hash, %edi
+	call	transaction clone for Hash::insert(char*, char*)
+	testb	%al, %al
+	je	.L27
+	xorl	%edi, %edi
+	call	_ITM_changeTransactionMode # 注意：这是串行化点
+	movb	$1, rehash(%rip)
+	mfence
+.L27:
+	addq	$8, %rsp
+	ret
+&lt;/pre&gt;
+
+{{todo|检查带主干的汇编，也显示调用方的更改}}
+
+===注解===
+{{todo|来自 Wyatt 提案/讨论的体验笔记}}
+
+===关键词===
+{{ltt|cpp/keyword/atomic_cancel}},
+{{ltt|cpp/keyword/atomic_commit}},
+{{ltt|cpp/keyword/atomic_noexcept}},
+{{ltt|cpp/keyword/synchronized}},
+{{ltt|cpp/keyword/transaction_safe}},
+{{ltt|cpp/keyword/transaction_safe_dynamic}}
+
+===编译器支持===
+GCC 从版本 6.1 起支持此技术规范（要求启用 {{c|-fgnu-tm}}）。GCC 4.7 时曾[http://www-users.cs.umn.edu/~boutcher/stm/ 支持]此规范的一个旧版变体。
+
+{{langlinks|en|ja|ru}}

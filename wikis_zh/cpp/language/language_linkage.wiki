@@ -1,0 +1,234 @@
+{{title|语言链接}}
+{{cpp/language/declarations/navbar}}
+提供以不同程序语言编写的程序单元间的链接。
+
+{{rrev|since=c++20|
+此语法也可用于使一条声明与它的模块脱离。参见{{rlps|modules#模块所有权}}。
+}}
+
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{ttb|extern}} {{spar|字符串字面量}} {{ttb|{}} {{spar optional|声明序列}} {{ttb|}&lt;!----&gt;}}
+}}
+{{sdsc|num=2|1=
+{{ttb|extern}} {{spar|字符串字面量}} {{spar|声明}}
+}}
+{{sdsc end}}
+@1@ 将语言说明{{spar sep|字符串字面量}}应用到在{{spar sep|声明序列}}中声明的所有函数类型，具有外部链接的函数名，和具有外部链接的变量。
+@2@ 将语言说明{{spar sep|字符串字面量}}应用到单一声明或定义。
+
+{{par begin}}
+{{par|{{spar|字符串字面量}}|指名所要求的语言链接的{{rlp|string literal#不求值字符串|不求值字符串字面量}}}}
+{{par|{{spar|声明序列}}|声明的序列，可以包含嵌套的链接说明}}
+{{par|{{spar|声明}}|应用到的声明}}
+{{par end}}
+
+===解释===
+所有函数类型，所有拥有{{rlp|storage duration|外部链接}}的函数名，以及所有拥有{{rlp|storage duration|外部链接}}的变量名，拥有一种称作''语言链接''{{sep}}的性质。语言链接封装与以另一程序语言编写的模块进行链接的要求的集合：{{enwiki|Calling convention|调用约定}}、{{enwiki|Name mangling|名字重整}}的算法，等等。
+
+只有以下两种语言链接保证受支持：
+# {{c/core|"C++"}}，默认的语言链接。
+# {{c/core|"C"}}，可以与使用 C 语言编写的函数进行链接，使得在 C++ 中定义能从 C 单元调用的函数成为可能。
+
+{{source|1=
+extern "C"
+{
+    int open(const char *path_name, int flags); // C 函数声明
+}
+
+int main()
+{
+    int fd = open("test.txt", 0); // 从 C++ 程序调用 C 函数
+}
+
+// 此 C++ 函数能从 C 代码调用
+extern "C" void handler(int)
+{
+    std::cout &lt;&lt; "调用回调\n"; // 它能使用 C++
+} 
+}}
+
+因为语言链接是每个函数类型的一部分，所以函数指针也要维持语言链接。函数类型的语言链接（表示调用约定）和函数名的语言链接（表示名字重整）是彼此独立的：
+
+{{source|1=
+extern "C" void f1(void(*pf)()); // 声明具有 C 链接的函数 f1
+                             // 它返回 void 并接受一个指向返回 void 且不接受形参的 C 函数的指针
+
+extern "C" typedef void FUNC(); // 声明 FUNC 为返回 void 且不接受形参的 C 函数类型
+
+FUNC f2;            // 名字 f2 拥有 C++ 链接，但它的类型是 C 函数
+extern "C" FUNC f3; // 名字 f3 拥有 C 链接且它的类型是 C 函数 void()
+void (*pf2)(FUNC*); // 名字 pf2 拥有 C++ 链接，且它的类型是“指向返回 void 并接受
+                    // 一个‘指向返回 void 且不接受形参的 C 函数的指针’的 C++ 函数的指针
+
+extern "C"
+{
+    static void f4(); // 函数 f4 的名字拥有内部链接（无语言）
+                      // 但函数的类型拥有 C 语言链接
+}
+}}
+
+如果{{rlp|conflicting declarations#相同实体的多次声明|同一实体的两个声明}}给予了它不同的语言链接，那么程序非良构；如果两个声明都无法从对方可及，那么不要求诊断。不带语言链接说明的重声明会继承声明的实体和它的类型（如果存在）的语言链接。
+
+{{source|
+extern "C" int f();
+extern "C++" int f(); // 错误：语言链接不同
+
+extern "C" int g();
+int g(); // OK，具有 C 语言链接
+
+int h(); // 默认具有 C++ 语言链接
+extern "C" int h(); // 错误：语言链接不同
+}}
+
+===={{c/core|"C"}} 链接的特殊规则====
+当类成员{{rev inl|since=c++20|，尾部带有 {{rlp|constraints#requires 子句|{{c/core|requires}} 子句}}的友元函数}}或非静态成员函数在 {{c/core|"C"}} 语言块中出现时，它的链接仍然是 {{c/core|"C++"}}（但形参的类型在存在时仍然是 {{c/core|"C"}}）：
+{{source|
+extern "C"
+{
+    class X
+    {
+        void mf();           // 函数 mf 和它的类型都具有 C++ 语言链接
+        void mf2(void(*)()); // 函数 mf2 具有 C++ 语言链接；
+                             // 它的形参的类型是“指向 C 函数的指针”
+    };
+}
+
+template&lt;typename T&gt;
+struct A { struct B; };
+
+extern "C"
+{
+    template&lt;typename T&gt;
+    struct A&lt;T&gt;::B
+    {
+        friend void f(B*) requires true {} // 忽略 C 语言链接
+    };
+}
+
+namespace Q
+{
+    extern "C" void f(); // 良构
+}
+}}
+
+设 {{tt|C}} 为声明了一个具有 {{c/core|"C"}} 语言链接的函数或变量的声明。如果另一声明 {{tt|D}} 声明了具有相同名字的实体，并且满足以下任意条件，那么 {{tt|C}} 和 {{tt|D}} 声明的是相同的实体：
+* {{tt|D}} 声明了一个属于全局作用域的变量。
+* 如果 {{tt|C}} 声明的是变量，那么 {{tt|D}} 声明的也是变量。
+* 如果 {{tt|C}} 声明的是函数，那么 {{tt|D}} 声明的也是函数。
+
+与{{rlp|conflicting declarations#相同实体的多次声明|常规的重声明}}不同，{{tt|C}} 和 {{tt|D}} 的{{rlp|scope|目标作用域}}可以不一致：
+{{source|
+extern "C"
+{
+    int x;
+    int f();
+    int g() { return 1; }
+}
+
+namespace A
+{
+    int x;                // 错误：重定义 “x”
+    int f();              // OK，重声明 “f”
+    int g() { return 1; } // 错误：重定义 “g”
+}
+}}
+
+然而，这些定义的{{rlps|conflicting declarations#限制}}依然适用，也就是说它们要么都声明函数要么都声明变量，而且声明的实体的类型必须相同：
+{{source|
+namespace A
+{
+    extern "C" int x();
+    extern "C" int y();
+}
+
+int x; // 错误：“x” 被重声明为另一种实体
+
+namespace B
+{
+    void y(); // 错误：以另一类型重声明 “y”
+}
+}}
+
+===注解===
+语言链接只能在{{rlps|scope#命名空间作用域}}出现。
+
+语言说明的花括号不建立作用域。
+
+当语言说明发生嵌套时，只有最内层的说明生效。
+
+直接包含在语言链接说明之中的声明，被处理为如同它含有 {{rlp|storage duration|{{c/core|extern}} 说明符}}，用以确定所声明的名字的{{rlps|storage duration#链接}}以及它是否为{{rlp|definition|定义}}。
+{{source|1=
+extern "C" int x; // 声明且非定义
+// 上一行与 extern "C" { extern int x; } 等价
+
+extern "C" { int x; } // 声明及定义
+
+extern "C" double f();
+static double f(); // 错误：链接冲突
+ 
+extern "C" static void g(); // 错误：链接冲突
+}}
+
+{{c/core|extern "C"}} 允许 C++ 程序中包含含有 C 库函数的声明的头文件，但如果与 C 程序共用相同的头文件，就必须以适当的 {{ltt|cpp/preprocessor/conditional|#ifdef}} 隐藏 {{c/core|extern "C"}}（C 中不允许使用），通常会用 {{ltt|cpp/preprocessor/replace#预定义宏|__cplusplus}}：
+{{source|1=
+#ifdef __cplusplus
+extern "C" int foo(int, int); // C++ 编译器看到的
+#else
+int foo(int, int);            // C 编译器看到的
+#endif
+}}
+
+在现代编译器中，只有 Oracle Studio 区分带 {{c/core|"C"}} 与 {{c/core|"C++"}} 语言链接的函数类型，其他编译器不允许只在语言链接有区别的重载，包括 C++ 标准要求的重载集（{{lc|std::qsort}}、{{lc|std::bsearch}}、{{lc|std::signal}}、{{lc|std::atexit}} 及 {{lc|std::at_quick_exit}}）：[https://gcc.gnu.org/bugzilla/show_bug.cgi?id=2316 GCC bug 2316]、[https://bugs.llvm.org/show_bug.cgi?id=6277 Clang bug 6277]、{{cwg|1555}}。
+
+{{source|1=
+extern "C"   using c_predfun   = int(const void*, const void*);
+extern "C++" using cpp_predfun = int(const void*, const void*);
+
+// 非良构，但大多数编译器都会接受
+static_assert(std::is_same&lt;c_predfun, cpp_predfun&gt;::value,
+              "C 和 C++ 语言链接不应区分函数类型。");
+
+// 多数编译器中下列声明不声明重载
+// 因为 c_predfun 与 cpp_predfun 被认为是同一类型
+void qsort(void* base, std::size_t nmemb, std::size_t size, c_predfun*   compar);
+void qsort(void* base, std::size_t nmemb, std::size_t size, cpp_predfun* compar);
+}}
+
+===关键词===
+{{ltt|cpp/keyword/extern}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=4|std=C++98|before=具有内部链接的名字可以有语言链接|after=只有具有外部链接的名字才可以}}
+&lt;!-- CWG 195 只是以“条件性支持”规范化了标准文档内的说明，没有改变本身的含义。 --&gt;
+{{dr list item|wg=cwg|dr=341|std=C++98|before=有 "C" 语言链接的函数可以与某个全局变量的名字相同|after=此时程序非良构（在不同&lt;br&gt;翻译单元出现时不要求诊断）}}
+{{dr list item|wg=cwg|dr=564|std=C++98|before=如果两条声明只有语言链接说明不同（即 extern&lt;br&gt;后面的字符串字面量不同），那么程序非良构|after=改为比较这些声明实际提供的语言链接}}
+{{dr list item|wg=cwg|dr=2460|std=C++20|before=尾部带有 {{c/core|requires}} 子句且具有 "C" 语言链接的友元函数的行为有冲突|after=此时忽略 "C" 语言链接}}
+{{dr list item|wg=cwg|dr=2483|std=C++98|before=在 "C" 语言块中出现的静态成员函数的类型具有 "C++" 语言链接|after=具有 "C" 语言链接}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.11|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.11|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=10.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++03}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=7.5|title=Linkage specifications|id=dcl.link}}
+{{ref std end}}
+
+{{langlinks|de|en|es|ja|ru}}

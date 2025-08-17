@@ -1,0 +1,353 @@
+{{title|对象}}
+{{cpp/language/basics/navbar}}
+
+C++ 程序可以创建、销毁、引用、访问并操作''对象''。
+
+在 C++ 中，一个对象拥有这些性质：
+* 大小（可以使用 {{rlpt|sizeof}} 获取）；
+* 对齐要求（可以使用 {{rlpt|alignof}} 获取）；
+* {{rlp|storage duration|存储期}}（自动、静态、动态、线程局部）；
+* {{rlp|lifetime|生存期}}（与存储期绑定或者为临时）
+* {{rlp|type|类型}}；
+* 值（可能是不确定的，例如{{rlp|default initialization|默认初始化}}的非类类型）；
+* 一个可选的{{rlp|name|名字}}。
+
+以下实体都不是对象：值，引用，函数，枚举项，类型，类的非静态成员，模板，类或函数模板的特化，命名空间，形参包，和 {{c|this}}。
+
+''变量''{{sep}}由{{rlp|declarations|声明}}引入，是对象或者是并非非静态数据成员的引用。
+
+===对象创建===
+对象可以使用{{rlp|definition|定义}}、{{rlp|new|{{c/core|new}} 表达式}}、{{rlp|throw|{{c/core|throw}} 表达式}}、更改{{rlp|union|联合体}}的活跃成员和求值要求{{rlp|lifetime#临时对象生存期|临时对象}}的表达式显式创建。显式对象创建完全定义了所创建的对象。
+
+{{rlps|type#隐式生存期类型}}的对象也可以由下列操作隐式创建：
+* 在常量求值以外的场合,开始类型 {{c/core|unsigned char}}{{rev inl|since=c++17| 或 {{ltt std|cpp/types/byte}}}} 的数组生存期的操作，此时在该数组中创建这种对象，
+* 调用下列分配函数，此时在分配的存储中创建这种对象：
+:* {{lc|operator new}} （在常量求值以外的场合）
+:* {{lc|operator new[]}} （在常量求值以外的场合）
+:* {{lc|std::calloc}}
+:* {{lc|std::malloc}}
+:* {{lc|std::realloc}}
+{{rrev|since=c++17|
+:* {{lc|std::aligned_alloc}}
+}}
+* 调用下列[[#对象表示与值表示|对象表示]]复制函数，此时在目标存储区域或结果中创建这种对象：
+:* {{lc|std::memcpy}}
+:* {{lc|std::memmove}}
+{{rrev|since=c++20|
+:* {{ltt|cpp/numeric/bit_cast|std::bit_cast}}
+}}
+{{rrev|since=c++23|
+* 调用下列特定的函数，此时在指定的存储区域中创建对象：
+:* {{lc|std::start_lifetime_as}}
+:* {{lc|std::start_lifetime_as_array}}
+}}
+
+同一存储区域中可以创建零或多个对象，只要能给予程序有定义的行为即可。如果无法这样创建，例如操作冲突，那么程序行为未定义。如果多个这种隐式创建的对象的集合会给予程序有定义行为，那么不指定这些集合中的哪一个被创建。换言之，不要求隐式创建的对象是唯一定义的。
+
+在指定的存储区域内隐式创建对象后，一些操作会生成指向''已适当创建的对象''{{sep}}的指针。已适当创建的对象与存储区域拥有相同地址。类似地，当且仅当不存在能给予程序有定义行为的指针值时，行为才未定义；而如果有多个给予程序有定义行为的值，那么不指定产生哪个值。
+
+{{source|1=
+#include &lt;cstdlib&gt;
+
+struct X { int a, b; };
+
+X* MakeX()
+{
+    // 可能的有定义行为之一：
+    // 调用 std::malloc 隐式创建一个 X 类型对象和它的子对象 a 与 b，并返回指向该 X 对象的指针
+    X* p = static_cast&lt;X*&gt;(std::malloc(sizeof(X)));
+    p-&gt;a = 1;
+    p-&gt;b = 2;
+    return p;
+}
+}}
+
+调用 {{lc|std::allocator::allocate}}，或者{{rlp|union|联合体}}类型的隐式定义的复制/移动特殊成员函数，也能创建对象。
+
+===对象表示与值表示===
+某些类型和对象具有''对象表示''{{sep}}和''值表示''，它们在下表中定义：
+{|class="wikitable" style="text-align: center;"
+!实体
+!对象表示
+!值表示
+|-
+|完整对象类型 {{tt|T}}
+|一个 {{tt|T}} 类型的非{{rlp|bit field|位域}}完整对象占据的 {{c|N}} 个 {{c/core|unsigned char}} 对象，其中 {{c|N}} 是 {{c|sizeof(T)}}
+|{{tt|T}} 的对象表示中有参与表示 {{tt|T}} 的值的所有位的集合
+|-
+|{{tt|T}} 类型的非位域完整对象 {{c|obj}}
+|{{c|obj}} 中对应 {{tt|T}} 的对象表示的字节
+|{{c|obj}} 中对应 {{tt|T}} 的值表示的位
+|-
+|位域对象 {{c|bf}}
+|{{c|bf}} 占据的 {{c|N}} 个位的序列，其中 {{c|N}} 是该位域的宽度
+|{{c|bf}} 的对象表示中有参与表示 {{c|bf}} 的值的所有位的集合
+|}
+
+类型或对象的对象表示中不属于值表示的位是''填充位''。
+
+对于{{named req|TriviallyCopyable|可平凡复制类型}}，它的值表示是对象表示的一部分，这意味着复制该对象在存储中所占据的字节就足以产生另一个具有相同值的对象（除非这个值是该类型的一个“陷阱表示”，将它读取到 CPU 中会产生一个硬件异常，就像浮点数的 SNaN（“Signaling NaN 发信非数”）或整数的 NaT（“Not a Thing 非事物”）。
+
+尽管大多数实现都不允许整数的陷阱表示、填充位或多重表示，也还存在例外；例如 Itanium 上的整数类型值[https://web.archive.org/web/20170830125905/https://blogs.msdn.microsoft.com/oldnewthing/20040119-00/?p=41003 就可以是陷阱表示]。
+
+反过来不一定是对的：{{named req|TriviallyCopyable|可平凡复制类型}}的两个具有不同对象表示的对象可能表现出相同的值。例如，浮点数有多种位模式都表示相同的特殊值 [[cpp/numeric/math/NAN|NaN]]。更常见的是，会为了满足{{rlp|object#对齐|对齐要求}}和{{rlp|bit field|位域}}的大小等目的而引入填充位。
+
+{{source|1=
+#include &lt;cassert&gt;
+
+struct S
+{
+    char c;  // 1 字节值
+             // 3 字节填充位（假设 alignof(float) == 4）
+    float f; // 4 字节值    （假设 sizeof(float) == 4）
+    
+    bool operator==(const S&amp; arg) const // 基于值的相等性
+    {
+        return c == arg.c &amp;&amp; f == arg.f;
+    }
+};
+ 
+void f()
+{
+    static_assert(sizeof(S) == 8);
+    S s1 = {'a', 3.14};
+    S s2 = s1;
+    reinterpret_cast&lt;unsigned char*&gt;(&amp;s1)[2] = 'b'; // 修改部分填充位
+    assert(s1 == s2); // 值并未更改
+}
+}}
+
+对于 {{c/core|char}}，{{c/core|signed char}}，和 {{c/core|unsigned char}} 类型的对象，除非它们是大小过大的{{rlp|bit field|位域}}，否则它的对象表示的每个位都参与它的值表示，而且每一种位模式都表示一个独立的值（没有填充位或陷阱位，不允许值的多种表示）。
+
+===子对象===
+一个对象可以拥有''子对象''。子对象包括：
+* 成员对象
+* 基类子对象
+* 数组元素
+不是其他任何对象的子对象的对象称为''完整对象''。
+
+如果某个完整对象，成员对象或数组元素具有{{rlp|classes|类类型}}，那么它的类型被视为''最终派生类''，以便和任何基类子对象的类类型区分开。最终派生类类型对象和非类类型对象被称为''最终派生对象''。
+
+{{anchor|潜在构造的子对象}}
+对于某个类，
+* 它的非静态{{rlp|data members|数据成员}}，
+* 它的非虚直接{{rlp|derived class|基类}}，以及
+* 它不是{{rlp|abstract class|抽象类}}时，它的{{rlps|derived class#虚基类}}
+被统称为该类的''潜在构造的子对象''。
+
+===大小===
+如果一个子对象是基类子对象{{rev inl|since=c++20|或声明有 {{attr|no_unique_address}} 属性的非静态数据成员}}，那么它是''潜在重叠的子对象''。
+
+只有在满足以下所有条件时，对象 {{c|obj}} 的大小才有可能为零：
+* {{c|obj}} 是潜在重叠的子对象。
+* {{c|obj}} 的类型是没有虚成员函数和虚基类的类类型。
+* {{c|obj}} 没有非零大小的子对象，也没有非零长度的无名{{rlp|bit field|位域}}。
+
+对于满足以上所有条件的对象 {{c|obj}}：
+* 如果 {{c|obj}} 是没有非静态数据成员的{{rev inl|since=c++11|{{rlps|data members#标准布局}}}}类类型的基类子对象，那么它的大小为零。
+* 否则，由实现定义在哪些情况下 {{c|obj}} 的大小为零。
+
+详情见{{rlp|ebo|空基类优化}}。
+
+任何非零大小的非位域对象都必须占据一个或更多字节的存储，其中包括它的子对象（全部或部分）占据的所有字节。如果对象具有可平凡复制{{rev inl|since=c++11|或标准布局}}类型，那么占据的存储必须连续。
+
+===地址===
+一个对象的''地址''{{sep}}是该对象占据的第一个{{rlps|memory model#字节}}的地址，除非该对象是位域或大小为零的子对象。
+
+一个对象能含有其他对象，该情况下被含有的对象''内嵌于''{{sep}}前述对象。如果满足以下任意条件，那么对象 {{c|a}} 内嵌于另一对象 {{c|b}}：
+* {{c|a}} 是 {{c|b}} 的子对象。
+* &lt;!-- P0137R1 --&gt;{{c|b}} 为 {{c|a}} {{rlp|lifetime#提供存储|提供存储}}。
+* 存在对象 {{c|c}}，其中 {{c|a}} 内嵌于 {{c|c}} 而 {{c|c}} 内嵌于 {{c|b}}。
+
+以下对象是''潜在非独立对象''：
+* {{rlp|string literal|字符串字面量}}对象。
+{{rrev|since=c++11|
+* 初始化器列表的{{rlp|list initialization#列表初始化 std::initializer_list|基底数组}}。
+}}
+* 潜在非独立对象的子对象。
+
+对于任何两个具有交叠的{{rlp|lifetime|生存期}}的对象：
+* 如果满足以下任意条件，那么它们的地址可能相同：
+:* 其中一个对象内嵌于另一个对象。
+:* 其中一个是大小为零的子对象，并且两个对象的类型不{{rlp|implicit conversion#相似类型|相似}}。
+:* 两个对象都是潜在非独立对象。
+* 否则，它们的地址必然不同，并且占据的存储也不会共用字节。
+
+{{source|1=
+// 字符字面量都是独立的
+static const char test1 = 'x';
+static const char test2 = 'x';
+const bool b = &amp;test1 != &amp;test2;      // 始终是 true
+
+// 从 “r”, “s” and “il” 访问得到的字符 'x' 的地址可能相同
+// （也就是说这些对象可能会共用存储）
+static const char (&amp;r) [] = "x";
+static const char *s = "x";
+static std::initializer_list&lt;char&gt; il = {'x'};
+const bool b2 = r != il.begin();      // 结果未指定
+const bool b3 = r != s;               // 结果未指定
+const bool b4 = il.begin() != &amp;test1; // 始终是 true
+const bool b5 = r != &amp;test1;          // 始终是 true
+}}
+
+===多态对象===
+声明或继承了至少一个虚函数的类类型的对象是多态对象。每个多态对象中，实现都会储存额外的信息（在所有现存的实现中，如果没被编译器优化掉的话，这就是一个指针），它被用于进行{{rlp|virtual|虚函数}}的调用，RTTI 功能特性（{{rlpt|dynamic_cast}} 和 {{rlpt|typeid}}）也用它在运行时确定对象创建时所用的类型，而不管使用它的表达式是什么类型。
+
+对于非多态对象，值的解释方式由使用对象的表达式所确定，这在编译期就已经决定了。
+
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;typeinfo&gt;
+
+struct Base1
+{
+    // 多态类型：声明了虚成员
+    virtual ~Base1() {}
+};
+struct Derived1 : Base1
+{
+    // 多态类型：继承了虚成员
+};
+
+struct Base2
+{
+    // 非多态类型
+};
+
+struct Derived2 : Base2
+{
+    // 非多态类型
+};
+
+int main()
+{
+    Derived1 obj1; // object1 创建为类型 Derived1
+    Derived2 obj2; // object2 创建为类型 Derived2
+    
+    Base1&amp; b1 = obj1; // b1 指代对象 obj1
+    Base2&amp; b2 = obj2; // b2 指代对象 obj2
+    
+    std::cout &lt;&lt; "b1 的表达式类型：" &lt;&lt; typeid(decltype(b1)).name() &lt;&lt; '\n'
+              &lt;&lt; "b2 的表达式类型：" &lt;&lt; typeid(decltype(b2)).name() &lt;&lt; '\n'
+              &lt;&lt; "b1 的对象类型：" &lt;&lt; typeid(b1).name() &lt;&lt; '\n'
+              &lt;&lt; "b2 的对象类型：" &lt;&lt; typeid(b2).name() &lt;&lt; '\n'
+              &lt;&lt; "b1 的大小：" &lt;&lt; sizeof b1 &lt;&lt; '\n'
+              &lt;&lt; "b2 的大小：" &lt;&lt; sizeof b2 &lt;&lt; '\n';
+}
+|p=true
+|output=
+b1 的表达式类型：Base1
+b2 的表达式类型：Base2
+b1 的对象类型：Derived1
+b2 的对象类型：Base2
+b1 的大小：8
+b2 的大小：1
+}}
+
+===严格的别名使用===
+在很多情况下，通过类型与对象的创建类型不同的表达式来访问对象都是未定义行为，它的例子和例外请参考 {{rlp|reinterpret_cast#类型别名使用|reinterpret_cast}}。
+
+===对齐===
+每个{{rlp|type|对象类型}}都具有被称为''对齐要求''{{sep}}的性质，它是一个非负整数（类型是 {{lc|std::size_t}}，总是 2 的幂），表示这个类型的不同对象所能分配放置的连续相邻地址之间的字节数。
+
+{{rrev|since=c++11|
+可以用 {{rlpt|alignof}} 或 {{lc|std::alignment_of}} 来查询类型的对齐要求。可以使用指针对齐函数 {{lc|std::align}} 来获取某个缓冲区中经过适当对齐的指针。{{rev inl|until=c++23|，还可以使用 {{lc|std::aligned_storage}} 来获取经过适当对齐的存储区。}}
+}}
+
+每个对象类型在该类型的所有对象上强制该类型的对齐要求{{rev inl|since=c++11|；可以使用 {{rlpt|alignas}} 来要求更严格的对齐（更大的对齐要求）}}。尝试在没有满足某个对象类型的对齐要求的存储中创建该类型的对象是未定义行为。
+
+为了使{{rlp|class|类}}中的所有非静态成员都符合对齐要求，会在一些成员后面插入一些[[#对象表示与值表示|填充位]]。
+
+{{example|code=
+#include &lt;iostream&gt;
+
+// S 类型的对象可以在任何地址上分配
+// 因为 S.a 和 S.b 都可以在任何地址上分配
+struct S
+{
+    char a; // 大小：1，对齐：1
+    char b; // 大小：1，对齐：1
+}; // 大小：2，对齐：1
+
+// X 类型的对象只能在 4 字节边界上分配
+// 因为 X.n 必须在 4 字节边界上分配
+// 因为 int 的对齐要求（通常）就是 4
+struct X
+{
+    int n;  // 大小：4，对齐：4
+    char c; // 大小：1，对齐：1
+    // 三个字节的填充位
+}; // 大小：8，对齐：4
+
+int main()
+{
+    std::cout &lt;&lt; "alignof(S) = " &lt;&lt; alignof(S) &lt;&lt; '\n'
+              &lt;&lt; "sizeof(S)  = " &lt;&lt; sizeof(S) &lt;&lt; '\n'
+              &lt;&lt; "alignof(X) = " &lt;&lt; alignof(X) &lt;&lt; '\n'
+              &lt;&lt; "sizeof(X)  = " &lt;&lt; sizeof(X) &lt;&lt; '\n';
+}
+|p=true
+|output=
+alignof(S) = 1
+sizeof(S)  = 2
+alignof(X) = 4
+sizeof(X)  = 8
+}}
+
+最弱的对齐（最小的对齐要求）是 {{c/core|char}}、{{c/core|signed char}} 和 {{c/core|unsigned char}} 的对齐，等于 {{c|1}}&lt;!-- 因为 char 数组中无填充位 --&gt;；所有类型中最大的''基础对齐''{{sep}}由实现定义{{rev inl|since=c++11|，并等于 {{lc|std::max_align_t}} 的对齐}}。
+
+基础对齐对于所有类型的存储期的对象都得到支持。
+
+{{rrev|since=c++11|
+当使用 {{rlpt|alignas}} 使某个类型的对齐比 {{lc|std::max_align_t}} 的更严格（更大）时，将该类型称为具有''扩展对齐''{{sep}}要求的类型。具有扩展对齐的类型或包含具有扩展对齐的非静态成员的类类型称为''过对齐类型''。
+
+规定{{named req|Allocator}}类型应能正确处理过对齐类型。&lt;!-- P0593R6 --&gt;
+}}
+
+
+{{rrev|since=c++11|until=c++20|
+{{rev inl|until=c++17|{{rlp|new|{{c/core|new}} 表达式}}和 }}{{lc|std::get_temporary_buffer}} 是否支持过对齐类型由实现定义。
+}}
+
+===注解===
+C++ 中的对象和{{enwiki|Object-oriented programming|面向对象编程（OOP）}}中的对象的含义有所不同：
+{|class="wikitable" style="text-align: center;"
+!C++ 中的对象
+!OOP 中的对象
+|-
+|可以具有任何对象类型&lt;br&gt;（见 {{lc|std::is_object}}）
+|必须具有类类型
+|-
+|没有“实例”的概念
+|{{nbsp}}有“实例”的概念（并且有类似 {{tt|instanceof}} 这样可以检测“是...的实例”关系的机制）{{nbsp}}
+|-
+|没有“接口”的概念
+|有“接口”的概念（并且有类似 {{tt|instanceof}} 这样可以检测是否有实现接口的机制）
+|-
+|{{nbsp}}需要通过虚成员显式启用多态{{nbsp}}
+|始终具有多态
+|}
+
+缺陷报告 {{wg21|P0593R6}} 中，隐式对象创建被认为在常量求值期间创建字节数组或调用[[cpp/memory/new/operator new|分配函数]]（可能为用户定义并为 {{rlpt|constexpr}}）时发生。然而这种允许导致了常量求值中的不确定性，这是不受期望的，且在一些方面无法实现。作为结果，{{wg21|P2747R2}} 不允许常量求值中的这种隐式对象创建。我们有意将该更改当作缺陷报告，尽管完整的提案不是。
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=633|std=C++98|before=变量只能是对象|after=也可以是引用}}
+{{dr list item|wg=cwg|dr=734|std=C++98|before=未指明在同一作用域内定义的多个变量&lt;br&gt;在保证值相同时是否可以具有相同的地址|after=在它们的生存期交叠时地址&lt;br&gt;保证不同，与值是否相同无关}}
+{{dr list item|wg=cwg|dr=1189|std=C++98|before=两个类型相同的基类子对象可以有相同的地址|after=它们的地址不会相同}}
+{{dr list item|wg=cwg|dr=1861|std=C++98|before=大小过大的窄字符类型的位域的对象表示的每个位依然都参与它的值表示|after=允许存在填充位}}
+{{dr list item|wg=cwg|dr=2489|std=C++98|before={{c/core|char[]}} 不能提供存储，但是可以在它的存储中隐式创建对象|after=不能在 {{c/core|char[]}} 的存储中隐式创建对象}}
+{{dr list item|wg=cwg|dr=2519|std=C++98|before=对象表示的定义没有考虑位域|after=考虑位域}}
+{{dr list item|wg=cwg|dr=2719|std=C++98|before=在没有正确对齐的存储中创建对象的行为不明确|after=此时行为未定义}}
+{{dr list item|wg=cwg|dr=2753|std=C++11|before=不明确初始化器列表的基底数组是否可以与字符串字面量共享存储|after=它们可以共享存储}}
+{{dr list item|wg=cwg|dr=2795|std=C++98|before=当确定生存期交叠的两个对象地址是否可以相同时，如果它们&lt;br&gt;之一是大小为零的子对象，那么它们可以具有相似的不同类型|after=只允许不相似类型}}
+{{dr list item|paper=P0593R6|std=C++98|before=先前的对象模型不支持标准库所要求的许多&lt;br&gt;有用的手法，并且与 C 中的有效类型不兼容|after=添加了隐式对象创建}}
+{{dr list end}}
+
+===参考===
+{{dsc begin}}
+{{dsc see c|c/language/object|对象|nomono=true}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

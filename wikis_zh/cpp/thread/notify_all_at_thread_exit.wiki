@@ -1,0 +1,97 @@
+{{cpp/title|notify_all_at_thread_exit}}
+{{cpp/thread/navbar}}
+{{ddcl|header=condition_variable|since=c++11|
+void notify_all_at_thread_exit( std::condition_variable&amp; cond,
+                                std::unique_lock&lt;std::mutex&gt; lk );
+}}
+
+{{tt|notify_all_at_thread_exit}} 提供一种机制，通知其他线程给定的线程已完全完成，包括销毁所有 {{ltt|cpp/keyword/thread_local}} 对象。它操作如下：
+
+* 将先前获得的锁 {{c|lk}} 的所有权转移到内部存储。
+
+* 修改执行环境，以令当前线程退出时，如同以 {{c multi|lk.unlock();|cond.notify_all();}} 通知条件变量 {{c|cond}}。
+
+隐含的 {{c|lk.unlock}} [[cpp/atomic/memory_order|按顺序晚于]]与当前线程关联的所有拥有[[cpp/keyword/thread_local|线程局域存储期]]的对象析构。
+
+如果满足以下任意条件，那么行为未定义：
+* 调用线程没有锁定 {{c|lk}}。
+* 在有其他线程也在 {{c|cond}} 上等待的情况下，那些线程在 {{c|cond}} 上调用的等待函数（{{tt|wait}}、{{lc|wait_for}} 以及 {{lc|wait_until}}）解锁的互斥与 {{c|lk.mutex()}} 不同。
+
+===注解===
+等价的效果可以用 {{lc|std::promise}} 或 {{lc|std::packaged_task}} 所提供的设施达成。
+
+保有提供的锁 {{c|lk}} 直至线程退出。一旦调用此函数，则不会再有线程可获得相同的锁以在 {{c|cond}} 上等待。若某些线程正在此条件变量上等待，则应确保所等待的条件是在持有 {{c|lk}} 的锁时满足的，并且在调用 {{tt|notify_all_at_thread_exit}} 之前不应释放和重获得锁，以避免其他线程中发生虚假唤醒的混乱。
+
+典型使用情况中，此函数是被脱附线程所做的最后行动。
+
+===参数===
+{{par begin}}
+{{par|cond|在线程退出时通知的条件变量}}
+{{par|lk|与条件变量 {{c|cond}} 关联的锁}}
+{{par end}}
+
+===返回值===
+（无）
+
+===示例===
+{{example
+|此部分代码零碎地描绘 {{tt|notify_all_at_thread_exit}} 能如何用于避免在线程局域对象处于被析构过程时，访问依赖于它们的数据：
+|code=
+#include &lt;cassert&gt;
+#include &lt;condition_variable&gt;
+#include &lt;mutex&gt;
+#include &lt;string&gt;
+#include &lt;thread&gt;
+ 
+std::mutex m;
+std::condition_variable cv;
+
+bool ready = false;
+ComplexType result; // 某种任意类型
+
+void thread_func()
+{
+    thread_local std::string thread_local_data = "42";
+    
+    std::unique_lock&lt;std::mutex&gt; lk(m);
+    
+    // 用 thread_local 数据赋值给 result
+    result = thread_local_data;
+    ready = true;
+    
+    std::notify_all_at_thread_exit(cv, std::move(lk));
+    
+}   // 1. 销毁 thread_local 对象；
+    // 2. 解锁互斥体；
+    // 3. 通知 cv。
+
+int main()
+{
+    std::thread t(thread_func);
+    t.detach();
+    
+    // 做其他工作
+    // .…
+    
+    // 等待脱附的线程
+    std::unique_lock&lt;std::mutex&gt; lk(m);
+    cv.wait(lk, []{ return ready; });
+    
+    // result 已就绪且 thread_local 析构函数已完成，无 UB
+    assert(result == "42");
+}
+|output=
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2140|std=C++11|before={{tt|notify_all_at_thread_exit}} 的调用同步于在 {{c|cond}} 上等待的函数的调用|after=更新同步要求}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/promise/dsc set_value_at_thread_exit}}
+{{dsc inc|cpp/thread/packaged_task/dsc make_ready_at_thread_exit}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

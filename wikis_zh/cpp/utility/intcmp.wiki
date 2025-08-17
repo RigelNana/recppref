@@ -1,0 +1,161 @@
+{{cpp/title|cmp_equal, cmp_not_equal, cmp_less, cmp_greater, cmp_less_equal, cmp_greater_equal}}
+{{cpp/utility/navbar}}
+
+{{dcl begin}}
+{{dcl header|utility}}
+{{dcl|num=1|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_equal( T t, U u ) noexcept;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_not_equal( T t, U u ) noexcept;
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_less( T t, U u ) noexcept;
+}}
+{{dcl|num=4|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_greater( T t, U u ) noexcept;
+}}
+{{dcl|num=5|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_less_equal( T t, U u ) noexcept;
+}}
+{{dcl|num=6|since=c++20|1=
+template&lt; class T, class U &gt;
+constexpr bool cmp_greater_equal( T t, U u ) noexcept;
+}}
+{{dcl end}}
+
+比较两个整数 {{c|t}} 与 {{c|u}} 的值。不同于内建比较运算符，负的有符号整数始终比较''小于''（且''不等于''）无符号整数：该比较相对于不保持值的整数转换而言是安全的。
+
+{{source|1=
+-1 &gt; 0u; // true
+std::cmp_greater(-1, 0u); // false
+}}
+ 
+若 {{tt|T}} 或 {{tt|U}} 不是[[cpp/language/types#整数类型|整数]]类型，或者是字符类型或 {{c/core|bool}}，则为编译时错误。
+
+===参数===
+{{par begin}}
+{{par|t|左侧实参}}
+{{par|u|右侧实参}}
+{{par end}}
+
+===返回值===
+@1@ 若 {{c|t}} 等于 {{c|u}} 则为 {{c|true}}。
+@2@ 若 {{c|t}} 不等于 {{c|u}} 则为 {{c|true}}。
+@3@ 若 {{c|t}} 小于 {{c|u}} 则为 {{c|true}}。
+@4@ 若 {{c|t}} 大于 {{c|u}} 则为 {{c|true}}。
+@5@ 若 {{c|t}} 小于或等于 {{c|u}} 则为 {{c|true}}。
+@6@ 若 {{c|t}} 大于或等于 {{c|u}} 则为 {{c|true}}。
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;class T, class U&gt;
+constexpr bool cmp_equal(T t, U u) noexcept
+{
+    if constexpr (std::is_signed_v&lt;T&gt; == std::is_signed_v&lt;U&gt;)
+        return t == u;
+    else if constexpr (std::is_signed_v&lt;T&gt;)
+        return t &gt;= 0 &amp;&amp; std::make_unsigned_t&lt;T&gt;(t) == u;
+    else
+        return u &gt;= 0 &amp;&amp; std::make_unsigned_t&lt;U&gt;(u) == t;
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_not_equal(T t, U u) noexcept
+{
+    return !cmp_equal(t, u);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_less(T t, U u) noexcept
+{
+    if constexpr (std::is_signed_v&lt;T&gt; == std::is_signed_v&lt;U&gt;)
+        return t &lt; u;
+    else if constexpr (std::is_signed_v&lt;T&gt;)
+        return t &lt; 0 {{!!}} std::make_unsigned_t&lt;T&gt;(t) &lt; u;
+    else
+        return u &gt;= 0 &amp;&amp; t &lt; std::make_unsigned_t&lt;U&gt;(u);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_greater(T t, U u) noexcept
+{
+    return cmp_less(u, t);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_less_equal(T t, U u) noexcept
+{
+    return !cmp_less(u, t);
+}
+
+template&lt;class T, class U&gt;
+constexpr bool cmp_greater_equal(T t, U u) noexcept
+{
+    return !cmp_less(t, u);
+}
+}}
+
+===注解===
+这些函数不能用于比较[[cpp/language/enum|枚举]]（包括 {{ltt std|cpp/types/byte}}）、{{c/core|char}}、{{c/core|char8_t}}、{{c/core|char16_t}}、{{c/core|char32_t}}、{{c/core|wchar_t}} 及 {{c/core|bool}}。
+
+{{feature test macro|__cpp_lib_integer_comparison_functions|value=202002L|std=C++20|{{ls|cpp/utility#整数比较函数}}}}
+
+===示例===
+{{example
+|如果编译时没有添加适当的警告抑制参数，例如 {{tt|-Wno-sign-compare}} (gcc/clang 使用 {{tt|-Wall -Wextra}}，下面的例子可能会产生''不同符号性比较''警告，另外参见 [https://stackoverflow.com/questions/3378560 SO: disabling a specific warning])。
+|code=
+#include &lt;utility&gt;
+
+// 取消下一行的注释将禁用 "有符号/无符号比较 "的警告：
+// #pragma GCC diagnostic ignored "-Wsign-compare"
+
+int main()
+{
+    static_assert(sizeof(int) == 4); // 先决条件
+
+    // 意外
+    static_assert(-1 &gt; 1U); //&lt; 警告：无符号-有符号比较
+    // 因为在经过隐式转换后，-1 的类型会变成右操作数的类型 (`unsigned int`)
+    // 这个表达式等价于:
+    static_assert(0xFFFFFFFFU &gt; 1U);
+    static_assert(0xFFFFFFFFU == static_cast&lt;unsigned&gt;(-1));
+
+    // 相比之下，cmp_* 系列比较整数的结果是最符合期望的 -
+    // 负的有符号整数总是小于无符号整数：
+    static_assert(std::cmp_less(-1, 1U));
+    static_assert(std::cmp_less_equal(-1, 1U));
+    static_assert(!std::cmp_greater(-1, 1U));
+    static_assert(!std::cmp_greater_equal(-1, 1U));
+
+    static_assert(-1 == 0xFFFFFFFFU); //&lt; 警告：无符号-有符号比较
+    static_assert(std::cmp_not_equal(-1, 0xFFFFFFFFU));
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc equal_to}}
+{{dsc inc|cpp/utility/functional/dsc not_equal_to}}
+{{dsc inc|cpp/utility/functional/dsc less}}
+{{dsc inc|cpp/utility/functional/dsc greater}}
+{{dsc inc|cpp/utility/functional/dsc less_equal}}
+{{dsc inc|cpp/utility/functional/dsc greater_equal}}
+{{dsc inc|cpp/utility/functional/ranges/dsc equal_to}}
+{{dsc inc|cpp/utility/functional/ranges/dsc not_equal_to}}
+{{dsc inc|cpp/utility/functional/ranges/dsc less}}
+{{dsc inc|cpp/utility/functional/ranges/dsc greater}}
+{{dsc inc|cpp/utility/functional/ranges/dsc less_equal}}
+{{dsc inc|cpp/utility/functional/ranges/dsc greater_equal}}
+{{dsc inc|cpp/utility/compare/dsc compare_three_way}}
+{{dsc inc|cpp/utility/dsc in_range}}
+{{dsc inc|cpp/types/dsc numeric_limits}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|fr|it|pt|ru}}

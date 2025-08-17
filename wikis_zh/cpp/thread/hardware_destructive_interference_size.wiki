@@ -1,0 +1,144 @@
+{{cpp/title|hardware_destructive_interference_size|hardware_constructive_interference_size}}
+{{cpp/thread/navbar}}
+{{dcl begin}}
+{{dcl header|new}}
+{{dcl|since=c++17|num=1|1=
+inline constexpr std::size_t
+    hardware_destructive_interference_size = /* 由实现定义 */;
+}}
+{{dcl|since=c++17|num=2|1=
+inline constexpr std::size_t
+    hardware_constructive_interference_size = /* 由实现定义 */;
+}}
+{{dcl end}}
+
+@1@ 两个对象间避免假数据共享的最小偏移。保证至少为 {{c|alignof(std::max_align_t)}}
+{{source|1=
+struct keep_apart
+{
+    alignas(std::hardware_destructive_interference_size) std::atomic&lt;int&gt; cat;
+    alignas(std::hardware_destructive_interference_size) std::atomic&lt;int&gt; dog;
+};
+}}
+
+@2@ 鼓励真共享的最大连续内存大小。保证至少为 {{c|alignof(std::max_align_t)}}
+{{source|1=
+struct together
+{
+    std::atomic&lt;int&gt; dog;
+    int puppy;
+};
+
+struct kennel
+{
+    // 其他数据成员……
+
+    alignas(sizeof(together)) together pack;
+
+    // 其他数据成员……
+};
+
+static_assert(sizeof(together) &lt;= std::hardware_constructive_interference_size);
+}}
+
+===注解===
+这些常量提供一种可移植的访问 L1 数据缓存行大小的方式。
+{{feature test macro|__cpp_lib_hardware_interference_size|std=C++17|value=201703L|
+{{c/core|constexpr std::hardware_constructive_interference_size}} 和&lt;br&gt;
+{{c/core|constexpr std::hardware_destructive_interference_size}}}}
+
+===示例===
+{{example
+|程序使用两个线程（原子地）写入给定全局对象的数据成员。第一个对象适合于存入一条缓存行内，这导致“硬件干涉”。第二个对象保持其数据成员在分离的缓存行上，故避免了线程写入后可能的“缓存同步”。
+|code=
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;chrono&gt;
+
+#ifdef __cpp_lib_hardware_interference_size
+using std::hardware_constructive_interference_size;
+using std::hardware_destructive_interference_size;
+#else
+// 在 x86-64 │ L1_CACHE_BYTES │ L1_CACHE_SHIFT │ __cacheline_aligned │ ... 上为 64 字节
+constexpr std::size_t hardware_constructive_interference_size = 64;
+constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif
+
+struct one_cache_liner
+{
+	::std::atomic_uint64_t x{};
+	::std::atomic_uint64_t y{};
+};
+
+struct two_cache_liner
+{
+	alignas(hardware_destructive_interference_size)::std::atomic_uint64_t x{};
+	alignas(hardware_destructive_interference_size)::std::atomic_uint64_t y{};
+};
+
+inline auto increment_thread(::std::atomic_uint64_t &amp;u)
+{
+	return [&amp;] {
+		constexpr int max_write_iterations{10'000'000};
+		for (::std::size_t i{}; i &lt; max_write_iterations; ++i)
+		{
+			u.fetch_add(1, ::std::memory_order_relaxed);
+		};
+	};
+}
+
+template &lt;typename T&gt;
+auto parallel_increment(T &amp;&amp;t)
+{
+	::std::jthread th1{increment_thread(t.x)};
+	::std::jthread th2{increment_thread(t.y)};
+}
+
+struct timer
+{
+	timer()
+		: beg(::std::chrono::high_resolution_clock::now())
+	{}
+	~timer()
+	{
+		::std::cout &lt;&lt; ::std::chrono::high_resolution_clock::now() - beg &lt;&lt; '\n';
+	}
+	::std::chrono::high_resolution_clock::time_point beg;
+};
+
+int main()
+{
+	::std::cout	&lt;&lt; "hardware_constructive_interference_size = " 
+			&lt;&lt; hardware_constructive_interference_size &lt;&lt; '\n';
+	::std::cout	&lt;&lt; "hardware_destructive_interference_size = "
+			&lt;&lt; hardware_destructive_interference_size &lt;&lt; '\n';
+
+	::std::chrono::high_resolution_clock::now();
+	{
+		::std::cout &lt;&lt; "sizeof(one_cache_liner) = " &lt;&lt; sizeof(one_cache_liner) &lt;&lt; '\n';
+		timer t;
+		parallel_increment(one_cache_liner{});
+	}
+	{
+		::std::cout &lt;&lt; "sizeof(two_cache_liner) = " &lt;&lt; sizeof(two_cache_liner) &lt;&lt; '\n';
+		timer t;
+		parallel_increment(two_cache_liner{});
+	}
+}
+|p=true
+|output=
+hardware_constructive_interference_size = 64
+hardware_destructive_interference_size = 64
+sizeof(one_cache_liner) = 16
+182019200ns
+sizeof(two_cache_liner) = 128
+35766400ns
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/thread/dsc hardware_concurrency|thread}}
+{{dsc inc|cpp/thread/thread/dsc hardware_concurrency|jthread}}
+{{dsc end}}
+
+{{langlinks|ar|de|en|es|fr|it|ja|ko|pt|ru}}

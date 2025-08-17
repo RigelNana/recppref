@@ -1,0 +1,216 @@
+{{cpp/ranges/view title|reverse}}
+{{cpp/ranges/navbar}}
+
+{{dcl begin}}
+{{dcl header|ranges}}
+{{dcl|num=1|since=c++20|1=
+template&lt; ranges::view V &gt;
+    requires ranges::bidirectional_range&lt;V&gt;
+class reverse_view
+    : public ranges::view_interface&lt;reverse_view&lt;V&gt;&gt;
+}}
+{{dcl|num=2|since=c++20|1=
+namespace views {
+    inline constexpr /* 未指明 */ reverse = /* 未指明 */;
+}
+}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|1=
+template&lt; ranges::viewable_range R &gt;
+    requires /* 见下文 */
+constexpr ranges::view auto reverse( R&amp;&amp; r );
+}}
+{{dcl end}}
+
+@1@ 代表有逆序的底层 {{lconcept|view}} 的视图的范围适配器。
+@2@ {{named req|RangeAdaptorObject}}。表达式 {{c|views::reverse(e)}} [[cpp/language/expressions#表达式等价|表达式等价]]于下列表达式之一，但 {{c|e}} 仅求值一次：
+* {{c|e.base()}}，若 {{tt|e}} 的类型是（可有 cv 限定的）{{tt|reverse_view}} 的特化；
+* 否则，若 {{c|e}} 的类型是（可有 cv 限定的）某迭代器类型 {{tt|I}} 和 {{tt|ranges::subrange_kind}} 类型的值 {{tt|K}} 的 {{c|ranges::subrange&lt;std::reverse_iterator&lt;I&gt;, std::reverse_iterator&lt;I&gt;, K&gt;}}：
+:* {{c|ranges::subrange&lt;I, I, K&gt;(e.end().base(), e.begin().base(), e.size())}}，若 {{tt|K}} 为 {{tt|ranges::subrange_kind::sized}}；
+:* 否则为 {{c|ranges::subrange&lt;I, I, K&gt;(e.end().base(), e.begin().base())}}；
+* 否则为 {{c|ranges::reverse_view{e}&lt;!----&gt;}}。
+换言之，{{tt|views::reverse}} 尽可能解包逆转的视图。
+
+{{tt|reverse_view}} 始终实现 {{lconcept|bidirectional_range}} 与 {{lconcept|common_range}}，而若底层视图类型 {{tt|V}} 实现 {{lconcept|borrowed_range}}、{{lconcept|sized_range}} 或 {{lconcept|random_access_range}} 则它也实现对应的概念。
+
+===数据成员===
+{{dsc begin}}
+{{dsc hitem|成员|说明}}
+{{dsc expos mem obj|base_|id=base|private=yes|spec={{tt|V}}|底层视图}}
+{{dsc expos mem obj|cached_end_|id=cached_end|private=yes
+|maybe=(仅当 {{tt|V}} 不满足 {{lconcept|common_range}} 时提供)
+|spec={{lti|cpp/ranges/non-propagating-cache}}{{c/core|&lt;ranges::iterator_t&lt;V&gt;&gt;}}
+|缓存调用 {{rlpf|/#begin|begin}} 的结果的对象}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|{{PAGENAME}}#constructor|构造 {{tt|reverse_view}}}}
+{{dsc mem fun|{{PAGENAME}}#base|title=base|返回底层视图 {{tt|V}}}}
+{{dsc mem fun|{{PAGENAME}}#begin|title=begin|返回 {{tt|reverse_view}} 的起始迭代器}}
+{{dsc mem fun|{{PAGENAME}}#end|title=end|返回 {{tt|reverse_view}} 的尾迭代器}}
+{{dsc mem fun|{{PAGENAME}}#size|title=size|若底层视图有界则返回其大小}}
+{{dsc mem fun|{{PAGENAME}}#reserve_hint|title=reserve_hint|返回底层 {{rlpt|approximately_sized_range}} 的估计大小|notes={{mark c++26}}}}
+
+{{cpp/ranges/view_interface/inherit|embedded=yes|size=yes|data=invalid}}
+{{dsc end}}
+
+{{anchor|constructor}}
+{{member|{{small|std::ranges::reverse_view::}}reverse_view|
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+reverse_view() requires std::default_initializable&lt;V&gt; = default;&lt;!--P2325R3--&gt;
+}}
+{{dcl|num=2|since=c++20|
+constexpr reverse_view( V r );
+}}
+{{dcl end}}
+
+@1@ 经由其默认成员初始化式（{{c|1== V()}}）值初始化 {{lsi|#base_}}。
+@2@ 以 {{c|std::move(r)}} 初始化 {{lsi|#base_}}。
+
+===参数===
+{{par begin}}
+{{par|r|要逆转的范围}}
+{{par end}}
+}}
+
+{{anchor|base}}
+{{member|{{small|std::ranges::reverse_view::}}base|
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr V base() const&amp; requires std::copy_constructible&lt;V&gt;;
+}}
+{{dcl|num=2|since=c++20|
+constexpr V base() &amp;&amp;;
+}}
+{{dcl end}}
+
+返回底层视图。
+@1@ 从底层视图复制构造结果。等价于 {{box|{{c/core|return}}{{nbspt}}{{lsi|#base_}}{{sep}}{{c/core|;}}}}。
+@2@ 从底层视图移动构造结果。等价于 {{box|{{c/core|return std::move(}}{{lsi|#base_}}{{sep}}{{c/core|);}}}}。
+}}
+
+{{anchor|begin}}
+{{member|{{small|std::ranges::reverse_view::}}begin|
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr std::reverse_iterator&lt;ranges::iterator_t&lt;V&gt;&gt; begin();
+}}
+{{dcl|num=2|since=c++20|
+constexpr std::reverse_iterator&lt;ranges::iterator_t&lt;V&gt;&gt; begin()
+    requires ranges::common_range&lt;V&gt;;
+}}
+{{dcl|num=3|since=c++20|
+constexpr auto begin() const requires ranges::common_range&lt;const V&gt;;
+}}
+{{dcl end}}
+
+@1@ 返回 {{box|{{c/core|std::make_reverse_iterator(ranges::next(ranges::begin(}}{{lsi|#base_}}{{sep}}{{c/core|),}}&lt;br&gt;{{nbspt|27}}{{c/core|ranges::end(}}{{lsi|#base_}}{{sep}}{{c/core|)))}}}}。
+@@ 为提供 {{lconcept|range}} 概念所要求的的均摊常数时间复杂度，此函数在缓存对象内缓存结果，以供后继调用使用。
+@2,3@ 等价于 {{box|{{c/core|return std::make_reverse_iterator(ranges::end(}}{{lsi|#base_}}{{sep}}{{c/core|));}}}}。
+}}
+
+{{anchor|end}}
+{{member|{{small|std::ranges::reverse_view::}}end|
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr std::reverse_iterator&lt;ranges::iterator_t&lt;V&gt;&gt; end();
+}}
+{{dcl|num=2|since=c++20|
+constexpr auto end() const requires ranges::common_range&lt;const V&gt;;
+}}
+{{dcl end}}
+等价于 {{box|{{c/core|return std::make_reverse_iterator(ranges::begin(}}{{lsi|#base_}}{{sep}}{{c/core|));}}}}。
+}}
+
+{{anchor|size}}
+{{member|{{small|std::ranges::reverse_view::}}size|
+{{dcl begin}}
+{{dcl|num=1|since=c++20|
+constexpr auto size() requires ranges::sized_range&lt;V&gt;;
+}}
+{{dcl|num=2|since=c++20|
+constexpr auto size() const requires ranges::sized_range&lt;const V&gt;;
+}}
+{{dcl end}}
+
+若视图有界则返回其大小。等价于 {{box|{{c/core|return ranges::size(}}{{lsi|#base_}}{{sep}}{{c/core|);}}}}。
+}}
+
+{{anchor|reserve_hint}}
+{{member|{{small|std::ranges::as_rvalue_view::}}reserve_hint|
+{{dcl begin}}
+{{dcl|num=1|since=c++26|
+constexpr auto reserve_hint()
+    requires ranges::approximately_sized_range&lt;V&gt;;
+}}
+{{dcl|num=2|since=c++26|
+constexpr auto reserve_hint() const
+    requires ranges::approximately_sized_range&lt;const V&gt;;
+}}
+{{dcl end}}
+
+返回 {{box|{{c/core|ranges::reserve_hint(}}{{lsi|#base_}}{{sep}}{{c/core|)}}}}。
+}}
+
+===推导指引===
+{{ddcl|since=c++20|
+template&lt; class R &gt;
+reverse_view( R&amp;&amp; ) -&gt; reverse_view&lt;views::all_t&lt;R&gt;&gt;;
+}}
+
+===辅助模板===
+{{ddcl|since=c++20|1=
+template&lt; class T &gt;
+constexpr bool enable_borrowed_range&lt;std::ranges::reverse_view&lt;T&gt;&gt; =
+    ranges::enable_borrowed_range&lt;T&gt;;
+}}
+{{ltt|cpp/ranges/borrowed_range|std::ranges::enable_borrowed_range}} 的此特化使得 {{tt|reverse_view}} 在底层视图满足 {{lconcept|borrowed_range}} 时满足它。
+
+===注解===
+{{feature test macro|__cpp_lib_ranges_reserve_hint|std=C++26|value=202502L|{{lc|ranges::approximately_sized_range}} 与 {{lst|#reserve_hint}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+
+int main()
+{
+    static constexpr auto il = {3, 1, 4, 1, 5, 9};
+
+    std::ranges::reverse_view rv{il};
+    for (int i : rv)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    for (int i : il {{!}} std::views::reverse)
+        std::cout &lt;&lt; i &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+
+    // operator[] 继承自 std::view_interface
+    for (auto i{0U}; i != rv.size(); ++i)
+        std::cout &lt;&lt; rv[i] &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+9 5 1 4 1 3
+9 5 1 4 1 3
+9 5 1 4 1 3
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3494|std=c++20|before={{tt|reverse_view}} 始终不是 {{tt|borrowed_range}}|after=若底层视图为 {{tt|borrowed_range}} 则它也是}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc reverse_iterator}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse_copy}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,102 @@
+{{cpp/io/basic_stringbuf/title|seekoff}}
+{{cpp/io/basic_stringbuf/navbar}}
+{{ddcl|1=
+protected:
+virtual pos_type seekoff( off_type off,
+                          std::ios_base::seekdir dir,
+                          std::ios_base::openmode which = std::ios_base::in {{!}} std::ios_base::out );
+}}
+
+在可能时重寻位 {{lc|std::basic_streambuf::gptr}} 和/或 {{lc|std::basic_streambuf::pptr}} 到对应距流的获取和/或放置区起始、结尾或当前位置 {{c|off}} 个字符的位置。
+
+* 如果 {{c|which}} 包含 {{lc|std::ios_base::in}} 并且此缓冲为读取打开（即 {{c|1=(which &amp; std::ios_base::in) == std::ios_base::in}}），那么通过在下文中描述的方式重寻位获取区内的读指针 {{lc|std::basic_streambuf::gptr}}。
+* 如果 {{c|which}} 包含 {{lc|std::ios_base::out}} 并且此缓冲为写入打开（即 {{c|1=(which &amp; std::ios_base::out) == std::ios_base::out}}），那么通过在下文中描述的方式重寻位放置区内的写指针 {{lc|std::basic_streambuf::pptr}}。
+* 如果 {{c|which}} 包含 {{lc|std::ios_base::in}} 和 {{lc|std::ios_base::out}} 两者并且此缓冲同时为读和写打开（即 {{c|1=(which &amp; (std::ios_base::in {{!}} std::ios_base::out)) ==(std::ios_base::in {{!}} std::ios_base::out)}}），而且 {{c|dir}} 是 {{lc|std::ios_base::beg}} 或 {{lc|std::ios_base::end}} 之一，那么通过在下文中描述的方式一起重寻位读和写指针。
+* 否则，此函数失败。
+
+如果重寻位了指针（{{ltt|cpp/io/basic_streambuf|gptr}} 和/或 {{ltt|cpp/io/basic_streambuf|pptr}}），那么它会按下列方式进行：
+@1@ 确定 {{tt|off_type}} 类型的新指针偏移 {{c|newoff}}：
+:@a@ 如果 {{c|1=dir == std::ios_base::beg}}，那么 {{c|newoff}} 为零
+:@b@ 如果 {{c|1=dir == std::ios_base::cur}}，那么 {{c|newoff}} 是指针的当前位置（{{c|gptr() - eback()}} 或 {{c|pptr() - pbase()}}）
+:@c@ 如果 {{c|1=dir == std::ios_base::end}}，那么 {{c|newoff}} 是缓冲区的整个已初始化部分的长度（使用{{rlp|str|过分配}}时就是高水位指针减起始指针）
+@2@ 如果要重寻位的指针是空指针且新偏移 {{c|newoff}} 非零，那么函数失败。
+@3@ 如果 {{c|newoff + off &lt; 0}}（重寻位会移动指针到缓冲区的起始指针之前）或 {{c|newoff + off}} 会指向缓冲区结尾后（或在使用{{rlp|str|过分配}}时指向缓冲区中最后的未初始化字符后），那么函数失败。
+@4@ 否则，如同以 {{c|1=gptr() = eback() + newoff + off}} 或 {{c|1=pptr() = pbase() + newoff + off}} 赋值指针。
+
+===参数===
+{{par begin}}
+{{par|off|要设置下一位置指针到的相对位置}}
+{{par|dir|定义应用偏移到的基位置。它可以是下列常量之一：
+{{cpp/io/ios_base/seekdir consts}}}}
+{{par|which|定义会影响到的输入和/或输出序列。它可以是下列常量之一或它们的组合：
+{{cpp/io/ios_base/openmode streambuf consts}}}}
+{{par end}}
+
+===返回值===
+成功时返回 {{c|pos_type(newoff)}}，失败时或 {{tt|pos_type}} 不能表示结果流位置时返回 {{c|pos_type(off_type(-1))}}。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+int main()
+{
+    std::stringstream ss("123"); // 入/出
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // 两个指针绝对寻位
+    ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::beg); // 都前移 1
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // 试图从当前位置前移两个指针 1
+    if (-1 == ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::cur))
+        std::cout &lt;&lt; "从当前位置前移两个指针失败\n";
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // 前移写指针 1 ，但不前移读指针
+    // 也可以调用 ss.seekp(1, std::ios_base::cur);
+    ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::cur, std::ios_base::out);
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    ss &lt;&lt; 'a'; // 在写入位置写入
+    std::cout &lt;&lt; "在写入位置写入 'a'，现在缓冲区是 " &lt;&lt; ss.str() &lt;&lt; '\n';
+    
+    char ch;
+    ss &gt;&gt; ch;
+    std::cout &lt;&lt; "在读取位置读取到了 '" &lt;&lt; ch &lt;&lt; "'\n";
+}
+|output=
+写入位置 = 0 读取位置 = 0
+写入位置 = 1 读取位置 = 1
+从当前位置前移两个指针失败
+写入位置 = 1 读取位置 = 1
+写入位置 = 2 读取位置 = 1
+在写入位置写入 'a'，现在缓冲区是 12a
+在读取位置读取到了 '2'
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=55|std=C++98|before={{tt|seekoff}} 在失败时返回了未定义的无效流位置|after=失败时返回 {{c|pos_type(off_type(-1))}}}}
+{{dr list item|wg=lwg|dr=375|std=C++98|before={{lc|std::ios_base}} 的静态常量成员被误指定为 {{lc|std::basic_ios}} 的成员|after=已修正}}
+{{dr list item|wg=lwg|dr=432|std=C++98|before={{tt|seekoff}} 在 {{c|newoff + off}} 会指向缓冲区中&lt;br&gt;最后的未初始化字符后的情况下也可能会成功|after=此时 {{tt|seekoff}} 会失败}}
+{{dr list item|wg=lwg|dr=453|std=C++98|before=在新指针偏移为零的情况下重寻位空的 {{c|gptr()}} 或 {{c|pptr()}} 始终会失败|after=此时重寻位可以成功}}
+{{dr list item|wg=lwg|dr=563|std=C++98|before=在解决 {{lwg|432}} 后程序无法精确控制&lt;br&gt;结束指针，因此它不能再用于计算 {{c|newoff}}|after=改用高水位指针}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_streambuf/dsc pubseekoff}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc seekpos}}
+{{dsc inc|cpp/io/basic_filebuf/dsc seekoff}}
+{{dsc inc|cpp/io/strstreambuf/dsc seekoff}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

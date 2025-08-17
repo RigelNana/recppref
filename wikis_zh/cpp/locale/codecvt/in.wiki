@@ -1,0 +1,97 @@
+{{cpp/locale/codecvt/title|in|do_in}}
+{{cpp/locale/codecvt/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+result in( StateT&amp; state,
+           const ExternT* from,
+           const ExternT* from_end,
+           const ExternT*&amp; from_next,
+           InternT* to,
+           InternT* to_end,
+           InternT*&amp; to_next ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual result do_in( StateT&amp; state,
+                      const ExternT* from,
+                      const ExternT* from_end,
+                      const ExternT*&amp; from_next,
+                      InternT* to,
+                      InternT* to_end,
+                      InternT*&amp; to_next ) const;
+}}
+{{dcl end}}
+
+@1@ 公开成员函数，调用最终派生类的成员函数 {{tt|do_in}}。
+
+@2@ 如果此 {{tt|codecvt}} 刻面定义一种转换，那么将来自源范围 {{range|from|from_end}} 的外部字符翻译到内部字符，将结果置于从 {{c|to}} 开始的后继位置。最多转换 {{c|from_end - from}} 个外部字符，最多写入 {{c|to_end - to}} 个内部字符。令 {{c|from_next}} 和 {{c|to_next}} 指向最后成功转换元素的后一位置。
+
+如果此 {{tt|codecvt}} 刻面不定义转换，那么不会转换字符。设置 {{c|to_next}} 等于 {{c|to}}，不更改 {{c|state}}，并返回 {{lc|std::codecvt_base::noconv}}。
+
+如果满足以下条件，{{c|do_in(state, from, from_end, from_next, to, to + 1, to_next)}} 必须返回 {{tt|ok}}：
+* 此 {{tt|codecvt}} 刻面用于 {{ltt|cpp/io/basic_filebuf}}，并且
+* {{c|do_in(state, from, from_end, from_next, to, to_end, to_next)}} 在 {{c|1=from != from_end}} 时会返回 {{tt|ok}}。
+
+===返回值===
+{{lc|std::codecvt_base::result}} 类型的值，按以下方式指示成功状况：
+{{dsc begin}}
+{{dsc|{{tt|ok}}|转换完成}}
+{{dsc|{{tt|partial}}|输出缓冲区的中空间不足，或源缓冲的未期待结尾}}
+{{dsc|{{tt|error}}|遇到无法转换的字符}}
+{{dsc|{{tt|noconv}}|此刻面无转换，不写入输出}}
+{{dsc end}}
+
+无转换特化 {{c|std::codecvt&lt;char, char, std::mbstate_t&gt;}} 始终返回 {{lc|std::codecvt_base::noconv}}。
+
+===注解===
+要求 {{c|1=from &lt;= from_end &amp;&amp; to &lt;= to_end}} 且 {{c|state}} 要么表示初始迁移状态，要么以转换序列中前趋的字符获得。
+
+{{c|state}} 上的效果是有意未指定的。标准刻面中，它用于维护诸如调用 {{lc|std::mbsrtowcs}} 时的状态，从而被更新为反映最后被处理外部字符后的转换状态，但是用户定义刻面可以自由地用它维护任何其他状态，例如计量遇到的特殊字符数。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    auto const&amp; f = std::use_facet&lt;std::codecvt&lt;wchar_t, char, std::mbstate_t&gt;&gt;
+        (std::locale());
+    std::string external = u8"z\u00df\u6c34\U0001d10b"; // 或 u8"zß水𝄋"
+                          // 或 "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9d\x84\x8b";
+    
+    // 注意 wstring_convert 能进行下列内容
+    std::mbstate_t mb = std::mbstate_t(); // 初始迁移状态
+    std::wstring internal(external.size(), '\0'); 
+    const char* from_next;
+    wchar_t* to_next;
+    f.in(mb, &amp;external[0], &amp;external[external.size()], from_next,
+             &amp;internal[0], &amp;internal[internal.size()], to_next);
+    // 为简略跳过错误检查
+    internal.resize(to_next - &amp;internal[0]);
+    
+    std::wcout &lt;&lt; L"在宽编码下的字符串：" &lt;&lt; internal &lt;&lt; '\n';
+}
+|output=
+在宽编码下的字符串：zß水𝄋
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=76|std=C++98|before=不明确转换是否需要支持每次转换单个内部字符|after=只有用于 {{ltt|cpp/io/basic_filebuf}} 时才需要}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_filebuf/dsc underflow}}
+{{dsc inc|cpp/locale/wstring_convert/dsc from_bytes}}
+{{dsc inc|cpp/string/multibyte/dsc mbsrtowcs}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

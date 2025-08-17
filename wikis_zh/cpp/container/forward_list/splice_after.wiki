@@ -1,0 +1,126 @@
+{{cpp/container/forward_list/title|splice_after}}
+{{cpp/container/forward_list/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+void splice_after( const_iterator pos, forward_list&amp; other );
+}}
+{{dcl|num=2|since=c++11|
+void splice_after( const_iterator pos, forward_list&amp;&amp; other );
+}}
+{{dcl|num=3|since=c++11|
+void splice_after( const_iterator pos, forward_list&amp; other,
+                   const_iterator it );
+}}
+{{dcl|num=4|since=c++11|
+void splice_after( const_iterator pos, forward_list&amp;&amp; other,
+                   const_iterator it );
+}}
+{{dcl|num=5|since=c++11|
+void splice_after( const_iterator pos, forward_list&amp; other,
+                   const_iterator first, const_iterator last );
+}}
+{{dcl|num=6|since=c++11|
+void splice_after( const_iterator pos, forward_list&amp;&amp; other,
+                   const_iterator first, const_iterator last );
+}}
+{{dcl end}}
+
+从另一 {{tt|forward_list}} 移动元素到 {{c|*this}}。元素会被插入到 {{c|pos}} 指向的元素后。
+
+不复制元素。没有迭代器或引用会失效。指向被移动的元素的迭代器现在指代到 {{c|*this}} 中，而不是到 {{c|other}} 中。
+
+@1,2@ 从 {{c|other}} 移动所有元素到 {{c|*this}}。操作后 {{c|other}} 变为空。
+
+@3,4@ 从 {{c|other}} 移动后随 {{c|it}} 的迭代器所指向的元素到 {{c|*this}}。元素被插入到 {{c|pos}} 指向的元素后，在 {{c|1=pos == it}} 或 {{c|1=pos == ++it}} 时没有效果。
+
+@5,6@ 从 {{c|other}} 移动范围 {{open range|first|last}} 中的元素到 {{c|*this}}。不会移动 {{c|first}} 指向的元素。
+
+在以下情况下行为未定义：
+* {{c|1=get_allocator() != other.get_allocator()}}。
+* {{c|pos}} 既不是 {{c|before_begin()}} 也不是 {{range|begin()|end()}} 中的[[cpp/iterator#可解引用性和有效性|可解引用迭代器]]。
+* 对于重载 {{v|1,2}}，{{c|*this}} 和 {{c|other}} 指代同一对象。
+* 对于重载 {{v|3,4}}，后随 {{c|it}} 的迭代器不是到 {{c|other}} 中的[[cpp/iterator#可解引用性与有效性|可解引用迭代器]]。
+* 对于重载 {{v|5,6}}：
+:* {{open range|first|last}} 不是 {{c|other}} 中的[[cpp/iterator#范围|有效范围]]。
+:* {{open range|first|last}} 中有不[[cpp/iterator#可解引用性与有效性|可解引用]]的迭代器。
+:* {{c|pos}} 在 {{open range|first|last}} 中。
+
+===参数===
+{{par begin}}
+{{par|pos|指向将插入内容到其后的元素的迭代器}}
+{{par|other|移动内容来源的另一容器}}
+{{par|it|指向从 {{c|other}} 移动到 {{c|*this}} 的元素的迭代器的前趋迭代器}}
+{{par range|3=要从 {{c|other}} 移动到 {{c|*this}} 的}}
+{{par end}} 
+
+===返回值===
+（无）
+
+===异常===
+不抛出。
+
+===复杂度===
+@1,2@ 与 {{c|other}} 的大小成线性。
+
+@3,4@ 常数。
+
+@5,6@ 与 {{c|std::distance(first, last)}} 成线性。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;forward_list&gt;
+
+int main()
+{
+    using F = std::forward_list&lt;int&gt;;
+    
+    // 演示重载 (5) 中开区间 (first, last) 的意义：不会移动 l1 的首个元素。
+    F l1 = {1, 2, 3, 4, 5};
+    F l2 = {10, 11, 12};
+    
+    l2.splice_after(l2.cbegin(), l1, l1.cbegin(), l1.cend());
+    // 不与 l2.splice_after(l2.cbegin(), l1); 等价，后者与以下语句等价：
+    // l2.splice_after(l2.cbegin(), l1, l1.cbefore_begin(), l1.end());
+    
+    assert((l1 == F{1}));
+    assert((l2 == F{10, 2, 3, 4, 5, 11, 12}));
+    
+    // 重载 (1)
+    F x = {1, 2, 3, 4, 5};
+    F y = {10, 11, 12};
+    x.splice_after(x.cbegin(), y);
+    assert((x == F{1, 10, 11, 12, 2, 3, 4, 5}));
+    assert((y == F{}));
+    
+    // 重载 (3)
+    x = {1, 2, 3, 4, 5};
+    y = {10, 11, 12};
+    x.splice_after(x.cbegin(), y, y.cbegin());
+    assert((x == F{1, 11, 2, 3, 4, 5}));
+    assert((y == F{10, 12}));
+    
+    // 重载 (5)
+    x = {1, 2, 3, 4, 5};
+    y = {10, 11, 12};
+    x.splice_after(x.cbegin(), y, y.cbegin(), y.cend());
+    assert((x == F{1, 11, 12, 2, 3, 4, 5}));
+    assert((y == F{10}));
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2045|std=C++11|before=在 {{c|1=get_allocator() != other.get_allocator()}}&lt;br&gt;的情况下无法保证在 O(1) 时间内完成拼接|after=此时行为未定义}}
+{{dr list item|wg=lwg|dr=2222|std=C++11|before={{c|it}} 指向的元素不会被移动，但先前指代它的指针、&lt;br&gt;引用和迭代器在拼接后会指代 {{c|*this}} 中的某个元素|after=始终指代 {{c|other}} 中的元素}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/container/dsc merge|forward_list}}
+{{dsc inc|cpp/container/dsc remove|forward_list}}
+{{dsc inc|cpp/container/dsc before_begin|forward_list}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

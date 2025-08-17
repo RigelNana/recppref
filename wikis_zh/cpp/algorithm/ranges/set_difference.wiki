@@ -1,0 +1,196 @@
+{{cpp/ranges/title|set_difference|set_difference_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+constexpr set_difference_result&lt;I1, O&gt;
+    set_difference( I1 first1, S1 last1, I2 first2, S2 last2,
+                    O result, Comp comp = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::input_range R2,
+          std::weakly_incrementable O, class Comp = ranges::less,
+          class Proj1 = std::identity, class Proj2 = std::identity &gt;
+requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                        O, Comp, Proj1, Proj2&gt;
+constexpr set_difference_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;, O&gt;
+    set_difference( R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                    Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl h|辅助类型}}
+{{dcl|num=3|since=c++20|1=
+template&lt; class I, class O &gt;
+using set_difference_result = ranges::in_out_result&lt;I, O&gt;;
+}}
+{{dcl end}}
+
+从有序输入范围 {{range|first1|last1}} 将在有序输入范围 {{range|first2|last2}} 中找不到的元素赋值到始于 {{c|result}} 的输出范围。
+
+若
+* 输入范围未分别相对于 {{c|comp}} 与 {{c|proj1}} 或 {{c|proj2}} 排序，或
+* 结果范围与任一输入范围重叠，
+则行为未定义。
+
+@1@ 用给定的二元比较函数 {{c|comp}} 比较元素。
+
+@2@ 同 {{v|1}}，但以 {{c|r1}} 为第一范围，并以 {{c|r2}} 为第二范围，如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，以 {{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|3=|range=第一个输入的有序|sentinel=yes}}
+{{par range|first2|last2|3=|range=第二个输入的有序|sentinel=yes}}
+{{par | r1 | 第一个输入的有序范围}}
+{{par | r2 | 第二个输入的有序范围}}
+{{par | result | 输出范围的起始}}
+{{par | comp | 应用到投影后元素的比较器}}
+{{par | proj1 | 应用到第一个范围元素的投影}}
+{{par | proj2 | 应用到第二个范围元素的投影}}
+{{par end}}
+
+===返回值===
+{{c|{last1, result_last} }}，其中 {{c|result_last}} 为被构造范围末尾。
+
+===复杂度===
+至多比较和应用每个投影 {{mathjax-or|\(\scriptsize 2\cdot(N_1+N_2)-1\)|2&amp;middot;(N{{su|b=1}}+N{{su|b=2}})-1}} 次，其中 {{mathjax-or|\(\scriptsize N_1\)|N{{su|b=1}}}} 与 {{mathjax-or|\(\scriptsize N_2\)|N{{su|b=2}}}} 分别为 {{c|ranges::distance(first1, last1)}} 与 {{c|ranges::distance(first2, last2)}}。
+
+===可能的实现===
+{{eq fun|1=
+struct set_difference_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::input_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;I1, I2, O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_difference_result&lt;I1, O&gt;
+        operator()(I1 first1, S1 last1, I2 first2, S2 last2,
+                   O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        while (!(first1 == last1 or first2 == last2))
+        {
+            if (std::invoke(comp, std::invoke(proj1, *first1), std::invoke(proj2, *first2)))
+            {
+                *result = *first1;
+                ++first1;
+                ++result;
+            }
+            else if (std::invoke(comp, std::invoke(proj2, *first2),
+                                 std::invoke(proj1, *first1)))
+                ++first2;
+            else
+            {
+                ++first1;
+                ++first2;
+            }
+        }
+        return ranges::copy(std::move(first1), std::move(last1), std::move(result));
+    }
+
+    template&lt;ranges::input_range R1, ranges::input_range R2,
+             std::weakly_incrementable O, class Comp = ranges::less,
+             class Proj1 = std::identity, class Proj2 = std::identity&gt;
+    requires std::mergeable&lt;ranges::iterator_t&lt;R1&gt;, ranges::iterator_t&lt;R2&gt;,
+                            O, Comp, Proj1, Proj2&gt;
+    constexpr ranges::set_difference_result&lt;ranges::borrowed_iterator_t&lt;R1&gt;, O&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, O result, Comp comp = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(result), std::move(comp),
+                       std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr set_difference_fn set_difference {};
+}}
+
+===示例===
+{{example
+ | code=
+#include &lt;algorithm&gt;
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+auto print = [](const auto&amp; v, std::string_view end = "")
+{
+    std::cout &lt;&lt; "{ ";
+    for (auto n{v.size()}; auto i : v)
+        std::cout &lt;&lt; i &lt;&lt; (--n ? ", " : " ");
+    std::cout &lt;&lt; "} " &lt;&lt; end;
+};
+
+struct Order // 拥有非常有趣的数据的类
+{
+    int order_id{};
+
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const Order&amp; ord)
+    {
+        return os &lt;&lt; '{' &lt;&lt; ord.order_id &lt;&lt; '}';
+    }
+};
+
+int main()
+{
+    const auto v1 = {1, 2, 5, 5, 5, 9};
+    const auto v2 = {2, 5, 7};
+    std::vector&lt;int&gt; diff;
+
+    std::ranges::set_difference(v1, v2, std::back_inserter(diff));
+    print(v1, "∖ ");
+    print(v2, "= ");
+    print(diff, "\n");
+
+    // 我们想知道哪些顺序在旧和新状态之间“改变了”：
+    const std::vector&lt;Order&gt; old_orders{&lt;!----&gt;{1}, {2}, {5}, {9}&lt;!----&gt;};
+    const std::vector&lt;Order&gt; new_orders{&lt;!----&gt;{2}, {5}, {7}&lt;!----&gt;};
+    std::vector&lt;Order&gt; cut_orders(old_orders.size() + new_orders.size());
+
+    auto [old_orders_end, cut_orders_last] =
+        std::ranges::set_difference(old_orders, new_orders,
+                                    cut_orders.begin(), {},
+                                    &amp;Order::order_id, &amp;Order::order_id);
+    assert(old_orders_end == old_orders.end());
+
+    std::cout &lt;&lt; "old orders = ";
+    print(old_orders, "\n");
+    std::cout &lt;&lt; "new orders = ";
+    print(new_orders, "\n");
+    std::cout &lt;&lt; "cut orders = ";
+    print(cut_orders, "\n");
+    cut_orders.erase(cut_orders_last, end(cut_orders));
+    std::cout &lt;&lt; "cut orders = ";
+    print(cut_orders, "\n");
+}
+|output=
+{ 1, 2, 5, 5, 5, 9 } ∖ { 2, 5, 7 } = { 1, 5, 5, 9 } 
+
+old orders = { {1}, {2}, {5}, {9} } 
+new orders = { {2}, {5}, {7} } 
+cut orders = { {1}, {9}, {0}, {0}, {0}, {0}, {0} } 
+cut orders = { {1}, {9} }
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_union}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_intersection}}
+{{dsc inc|cpp/algorithm/ranges/dsc set_symmetric_difference}}
+{{dsc inc|cpp/algorithm/ranges/dsc includes}}
+{{dsc inc|cpp/algorithm/dsc set_difference}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

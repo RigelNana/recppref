@@ -1,0 +1,58 @@
+{{title|RAII}}
+{{cpp/language/navbar}}
+
+''资源获取即初始化''（''Resource Acquisition Is Initialization''），或称 RAII，是一种 C++ 编程技术&lt;ref&gt;[https://www.stroustrup.com/bs_faq2.html#finally Stroustrup's C++ FAQ 中的 RAII]&lt;/ref&gt;&lt;ref&gt;[https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#e6-use-raii-to-prevent-leaks C++ 核心方针 E.6 “用 RAII 避免泄露”]&lt;/ref&gt;，它将必须在使用前请求的资源（分配的堆内存、执行线程、打开的套接字、打开的文件、锁定的互斥体、磁盘空间、数据库连接等——任何存在于受限供给的事物）的生命周期与一个对象的{{rlp|lifetime|生存期}}相绑定。
+
+RAII 保证资源能够用于任何会访问该对象的函数（资源可用性是一种[[enwiki:Class_invariant|类不变式]]，这会消除冗余的运行时测试）。它也保证对象在自己生存期结束时会以获取顺序的逆序释放它控制的所有资源。类似地，如果资源获取失败（构造函数以异常退出），那么已经构造完成的对象和基类子对象所获取的所有资源就会以初始化顺序的逆序释放。这有效地利用了语言特性（{{rlp|lifetime|对象生存期}}、{{rlp|statements|退出作用域}}、{{rlp|initializer_list#初始化顺序|初始化顺序}}以及{{rlp|throw#栈回溯|栈回溯}}）以消除内存泄漏并保证异常安全。根据 RAII 对象的生存期在退出作用域时结束这一基本状况，此技术也被称为''作用域界定的资源管理''（''Scope-Bound Resource Management''，SBRM）。
+
+RAII 可以总结如下:
+* 将每个资源封装入一个类，其中：
+:* 构造函数请求资源，并建立所有类不变式，或在它无法完成时抛出异常，
+:* 析构函数释放资源并且决不会抛出异常；
+* 在使用资源时始终通过 RAII 类的满足以下要求的实例：
+:* 自身拥有自动存储期或临时生存期，或
+:* 具有与自动或临时对象的生存期绑定的生存期
+
+{{rrev|since=c++11|
+移动语义使得在对象间，容器内外以及在线程内外转移资源和所有权，同时维护资源安全成为可能。
+}}
+
+拥有 {{tt|open()}}/{{tt|close()}}、{{tt|lock()}}/{{tt|unlock()}}，或 {{tt|init()}}/{{tt|copyFrom()}}/{{tt|destroy()}} 成员函数的类是典型的非 RAII 类的例子：
+
+{{source|1=
+std::mutex m;
+
+void bad() 
+{
+    m.lock();             // 获取互斥体
+    f();                  // 如果 f() 抛出异常，那么互斥体永远不会被释放
+    if (!everything_ok())
+       return;            // 提早返回，互斥体永远不会被释放
+    m.unlock();           // 只有 bad() 抵达此语句，互斥体才会被释放
+}
+
+void good()
+{
+    std::lock_guard&lt;std::mutex&gt; lk(m); // RAII类：互斥体的获取即是初始化
+    f();                               // 如果 f() 抛出异常，那么就会释放互斥体
+    if (!everything_ok())
+        return;                        // 提早返回也会释放互斥体
+}                                      // 如果 good() 正常返回，那么就会释放互斥体
+}}
+
+===标准库===
+C++ 标准库遵循 RAII 管理其自身的资源：{{lc|std::string}}、{{lc|std::vector}}{{rev inl|since=c++20|、{{ltt|cpp/thread/jthread|std::jthread}}}}，以及很多其他在构造函数中获取资源（错误时抛出异常），并在析构函数中将其释放（决不抛出）而不要求显式清理的类。
+
+{{rrev|since=c++11|
+另外，标准库提供几种 RAII 包装器以管理用户提供的资源：
+* 通过 {{lc|std::make_unique}} 以及 {{lc|std::make_shared}} 构造的 {{lc|std::unique_ptr}} 及 {{lc|std::shared_ptr}} 用于管理动态分配的内存；
+* {{lc|std::lock_guard}}、{{lc|std::unique_lock}}、{{lc|std::shared_lock}} 用于管理互斥体。
+}}
+
+===注解===
+RAII 不适用于管理那些不是在使用前获取的资源：CPU 时间、核心可用性、缓存容量、熵池容量、网络带宽、电力消耗、栈内存。对于这些资源，C++ 类的构造函数无法保证在对象生命周期内资源的可用性，因此需要使用其他资源管理方法。
+
+==外部链接==
+&lt;references/&gt;
+
+{{langlinks|en|es|ja|ru}}

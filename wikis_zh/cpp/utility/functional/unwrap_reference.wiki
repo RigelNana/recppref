@@ -1,0 +1,130 @@
+{{cpp/title|unwrap_reference|unwrap_ref_decay}}
+{{cpp/utility/functional/navbar}}
+{{dcl begin}}
+{{dcl header|type_traits}}
+{{dcl header|functional}}
+{{dcl|num=1|since=c++20|
+template&lt; class T &gt;
+struct unwrap_reference;
+}}
+{{dcl|num=2|since=c++20|
+template&lt; class T &gt;
+struct unwrap_ref_decay;
+}}
+{{dcl end}}
+
+解包任意 {{lc|std::reference_wrapper}}：将 {{c/core|std::reference_wrapper&lt;U&gt;}} 变为 {{tt|U&amp;}}。
+
+@1@ 如果 {{tt|T}} 是 {{lc|std::reference_wrapper}} 的特化，那么将其解包；否则 {{tt|T}} 保持不变。
+
+@2@ 如果退化后的 {{tt|T}} 是 {{lc|std::reference_wrapper}} 的特化，那么将其解包；否则 {{tt|T}} 会被退化。
+
+{{cpp/types/nospec|any}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|type}}|
+{{v|1}} {{tt|T}} 是 {{c/core|std::reference_wrapper&lt;U&gt;}} 时是 {{tt|U&amp;}}；否则是 {{tt|T}}&lt;br&gt;
+{{v|2}} {{c/core|std::decay_t&lt;T&gt;}} 是 {{c/core|std::reference_wrapper&lt;U&gt;}} 时是 {{tt|U&amp;}}；否则是 {{c/core|std::decay_t&lt;T&gt;}}}}
+{{dsc end}}
+
+===辅助类型===
+{{dcl begin}}
+{{dcl|num=1|since=c++20|1=
+template&lt;class T&gt;
+using unwrap_reference_t = unwrap_reference&lt;T&gt;::type;
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt;class T&gt;
+using unwrap_ref_decay_t = unwrap_ref_decay&lt;T&gt;::type;
+}}
+{{dcl end}}
+
+===可能的实现===
+{{eq fun
+|1=
+template&lt;class T&gt;
+struct unwrap_reference { using type = T; };
+template&lt;class U&gt;
+struct unwrap_reference&lt;std::reference_wrapper&lt;U&gt;&gt; { using type = U&amp;; };
+
+template&lt;class T&gt;
+struct unwrap_ref_decay : std::unwrap_reference&lt;std::decay_t&lt;T&gt;&gt; {};
+}}
+
+===注解===
+{{tt|std::unwrap_ref_decay}} 进行与 {{lc|std::make_pair}} 及 {{lc|std::make_tuple}} 所用者相同的变换。
+
+{{feature test macro|__cpp_lib_unwrap_ref|{{tt|std::unwrap_ref_decay}} 与 {{tt|std::unwrap_reference}}|std=C++20|value=201811L}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int&gt;, int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;const int&gt;, const int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int&amp;&gt;, int&amp;&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int&amp;&amp;&gt;, int&amp;&amp;&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_reference_t&lt;int*&gt;, int*&gt;);
+    
+    {
+        using T = std::reference_wrapper&lt;int&gt;;
+        using X = std::unwrap_reference_t&lt;T&gt;;
+        static_assert(std::is_same_v&lt;X, int&amp;&gt;);
+    }
+    {
+        using T = std::reference_wrapper&lt;int&amp;&gt;;
+        using X = std::unwrap_reference_t&lt;T&gt;;
+        static_assert(std::is_same_v&lt;X, int&amp;&gt;);
+    }
+    
+    static_assert(std::is_same_v&lt;std::unwrap_ref_decay_t&lt;int&gt;, int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_ref_decay_t&lt;const int&gt;, int&gt;);
+    static_assert(std::is_same_v&lt;std::unwrap_ref_decay_t&lt;const int&amp;&gt;, int&gt;);
+    
+    {
+        using T = std::reference_wrapper&lt;int&amp;&amp;&gt;;
+        using X = std::unwrap_ref_decay_t&lt;T&gt;;
+        static_assert(std::is_same_v&lt;X, int&amp;&gt;);
+    }
+    
+    {
+        auto reset = []&lt;typename T&gt;(T&amp;&amp; z)
+        {
+        //  x = 0; // 错误：如果 T 为 reference_wrapper&lt;&gt; 则无法工作
+            // 对于普通类型将 T&amp;&amp; 转换为 T&amp;
+            // 对于 reference_wrapper&lt;U&gt; 将 T&amp;&amp; 转换为 U&amp;
+            decltype(auto) r = std::unwrap_reference_t&lt;T&gt;(z);
+            std::cout &lt;&lt; "r：" &lt;&lt; r &lt;&lt; '\n';
+            r = 0; // OK，r 具有引用类型
+        };
+        
+        int x = 1;
+        reset(x);
+        assert(x == 0);
+        
+        int y = 2;
+        reset(std::ref(y));
+        assert(y == 0);
+    }
+}
+|output=
+r：1
+r：2
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/functional/dsc reference_wrapper}}
+{{dsc inc|cpp/utility/pair/dsc make_pair}}
+{{dsc inc|cpp/utility/tuple/dsc make_tuple}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

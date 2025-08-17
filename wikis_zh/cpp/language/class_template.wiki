@@ -1,0 +1,119 @@
+{{title|类模板}}
+{{cpp/language/templates/navbar}}
+
+类模板定义一族类。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|类声明}} }}
+{{sdsc|num=2|notes={{mark since c++20}}|{{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{ttb|requires}} {{spar|约束}} {{spar|类声明}}}}
+{{sdsc|num=3|{{ttb|export}} {{ttb|template}} {{ttb|&lt;}} {{spar|形参列表}} {{ttb|&gt;}} {{spar|类声明}}|notes={{mark until c++11|removed=yes}}}}
+{{sdsc end}}
+
+===解释===
+{{par begin}}
+{{par|{{spar|类声明}}|{{rlp|class|类声明}}。所声明的类名成为模板名。}}
+{{par|{{spar|形参列表}}|非空的{{rlp|template parameters|模板形参}}的逗号分隔列表，其每一项是{{rlp|template parameters#非类型模板形参|非类型形参}}、{{rlp|template parameters#类型模板形参|类型形参}}、{{rlp|template parameters#模板模板形参|模板形参}}或任何这些形参的{{rlp|parameter pack|形参包}}之一。}}
+{{par|{{spar|约束}}|{{rlp|constraints|约束表达式}}，限制这个类模板所能接受的模板形参}}
+{{par end}}
+
+{{rev begin}}
+{{rev|until=c++11|{{tt|export}} 是一个可选的修饰符，它用来表示模板''被导出''（用于声明类模板时，它也声明其所有成员被导出）。对被导出模板进行实例化的文件不需要包含其定义：有声明即已充分。{{tt|export}} 的实现稀少，且在细节上相互不一致。
+}}
+{{rev end}}
+
+===类模板实例化===
+类模板自身并不是类型、对象或任何其他实体。不会从只包含模板定义的源文件生成任何代码。模板只有实例化才会有代码出现：必须提供模板实参，使得编译器可以生成实际的类（或从函数模板生成函数）。
+====显式实例化====
+{{sdsc begin}}
+{{sdsc|num=1|{{ttb|template}} {{spar|类关键词}} {{spar|模板名}} {{ttb|&lt;}} {{spar|实参列表}} {{ttb|&gt;}} {{ttb|;}} }}
+{{sdsc|num=2|{{ttb|extern}} {{ttb|template}} {{spar|类关键词}} {{spar|模板名}} {{ttb|&lt;}} {{spar|实参列表}} {{ttb|&gt;}} {{ttb|;}}|notes={{mark since c++11}}}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|类关键词}}|{{ttb|class}}，{{ttb|struct}} 或 {{ttb|union}}}}
+{{par end}}
+
+@1@ 显式实例化定义
+@2@ 显式实例化声明
+
+显式实例化定义强制实例化其所指代的类、结构体或联合体。它可以出现在程序中模板定义后的任何位置。而对于给定的实参列表，它在整个程序中只能出现一次，不要求诊断。
+
+{{rrev|since=c++11|
+显式实例化声明（extern 模板）跳过隐式的实例化步骤：本来会导致隐式实例化的代码会以别处提供的显式实例化定义（如果这种实例化不存在，则导致连接错误）取代。这个机制可被用于减少编译时间：通过在除了一个文件以外的所有源文件中明确声明模板实例化，而在剩下的那个文件中明确定义它。
+}}
+
+类、函数{{rev inl|since=c++14|、变量}}和成员模板的特化可以从其模板显式实例化。成员函数、成员类和类模板的静态数据成员可以从其成员定义显式实例化。
+
+显式实例化只能在该模板的外围命名空间出现，除非使用有限定标识：
+{{source|1=
+namespace N
+{
+    template&lt;class T&gt;
+    class Y // 模板定义
+    {
+        void mf() {}
+    };
+}
+
+// template class Y&lt;int&gt;; // 错误：类模板 Y 在全局命名空间不可见
+using N::Y;
+// template class Y&lt;int&gt;; // 错误：在模板的命名空间外进行显式实例化
+template class N::Y&lt;char*&gt;;       // OK：显式实例化
+template void N::Y&lt;double&gt;::mf(); // OK：显式实例化
+}}
+
+如果同一组模板实参的{{rlp|template specialization|显式特化}}在显式实例化之前出现，那么显式实例化没有效果。
+
+当显式实例化函数模板{{rev inl|since=c++14|、变量模板}}、类模板的成员函数或静态数据成员，或成员函数模板时，只需要它的声明可见。类模板、类模板的成员类或成员类模板在显式实例化之前必须出现完整定义，除非之前已经出现了拥有相同模板实参的显式特化。
+
+如果以显式实例化定义来对函数模板{{rev inl|since=c++14|、变量模板}}、成员函数模板或类模板的成员函数或静态数据成员进行显式实例化，那么同一翻译单元中必须存在它的模板定义。
+
+当显式实例化指名某个类模板特化时，对于它的每个在当前翻译单元中尚未显式特化的非继承且非模板成员，它同时作为其同种显式实例化（声明或定义）。如果此显式实例化是定义，那么仅对于在此点已被定义的成员，它也是显式实例化定义。
+
+显式实例化定义忽略成员访问说明符：形参类型和返回类型可以是私有的。
+
+====隐式实例化====
+当代码在要求完整定义的类型的语境中涉指某个模板时，或当类型的完整性对代码有影响，而这个特定类型尚未被显式实例化时，发生隐式实例化。例如当构造此类型的对象之时，但不包括构造指向此类型的指针之时。
+
+这也适用于类模板的成员：除非成员在程序中被使用，否则并不会实例化它，并且不要求其有定义。
+
+{{source|1=
+template&lt;class T&gt;
+struct Z // 模板定义
+{
+    void f() {}
+    void g(); // 永远不会定义
+};
+
+template struct Z&lt;double&gt;; // 显式实例化 Z&lt;double&gt;
+Z&lt;int&gt; a;                  // 隐式实例化 Z&lt;int&gt;
+Z&lt;char&gt;* p;                // 此处不实例化任何内容
+
+p-&gt;f(); // 隐式实例化 Z&lt;char&gt; 且 Z&lt;char&gt;::f() 在此出现。
+        // 始终不需要且不实例化 Z&lt;char&gt;::g()：不必对其进行定义
+}}
+
+如果类模板已经声明但尚未定义，那么它的实例化会在实例化点产生不完整的类类型：
+{{source|1=
+template&lt;class T&gt;
+class X;    // 声明，非定义
+
+X&lt;char&gt; ch; // 错误：不完整类型 X&lt;char&gt;
+}}
+
+{{rev begin}}
+{{rev|since=c++17|
+{{rlp|class#局部类|局部类}}和它的成员中所使用的任何模板都会作为该局部类或枚举所处于的实体的实例化的一部分进行实例化。}}
+{{rev end}}
+
+===关键词===
+{{rev inl|until=c++11|{{ltt|cpp/keyword/export}}}}{{rev inl|since=c++11|{{ltt|cpp/keyword/extern}}}}
+
+===参阅===
+* {{rlp|template parameters|模板形参与实参}}允许模板被参数化
+* {{rlp|function template|函数模板声明}}声明函数模板
+* {{rlp|template specialization|模板特化}}针对特定的类型定义既存的模板
+* {{rlp|parameter pack|形参包}}允许在模板中使用类型的列表 {{mark since c++11}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

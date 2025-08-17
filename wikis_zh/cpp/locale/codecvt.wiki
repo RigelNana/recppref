@@ -1,0 +1,133 @@
+{{cpp/title|codecvt}}
+{{cpp/locale/codecvt/navbar}}
+{{ddcl|header=locale|
+template&lt; 
+    class InternT, 
+    class ExternT, 
+    class StateT
+&gt; class codecvt;
+}}
+
+类模板 {{tt|std::codecvt}} 封装字符串的转换，包括宽和多字节，从一种编码到另一种。通过 {{c/core|std::basic_fstream&lt;CharT&gt;}} 进行的所有输入/输出操作都使用流中浸染的 {{c/core|std::codecvt&lt;CharT, char, std::mbstate_t&gt;}} 本地环境刻面。
+
+{{inheritance diagram/std-codecvt}}
+
+===特化===
+标准库保证提供以下特化（{{rlp|locale|所有本地环境对象都需要实现}}这些特化）：
+{{dsc begin}}
+{{dsc header|locale}}
+{{dsc|{{c/core|std::codecvt&lt;char, char, std::mbstate_t&gt;}}|恒等转换}}
+{{dsc|{{c/core|std::codecvt&lt;char16_t, char, std::mbstate_t&gt;}}&lt;br&gt;{{mark life|since=c++11|deprecated=c++20}}|在 UTF-16 和 UTF-8 间转换}}
+{{dsc|{{c/core|std::codecvt&lt;char16_t, char8_t, std::mbstate_t&gt;}}&lt;br&gt;{{mark since c++20}}|在 UTF-16 和 UTF-8 间转换}}
+{{dsc|{{c/core|std::codecvt&lt;char32_t, char, std::mbstate_t&gt;}}&lt;br&gt;{{mark life|since=c++11|deprecated=c++20}}|在 UTF-32 和 UTF-8 间转换}}
+{{dsc|{{c/core|std::codecvt&lt;char32_t, char8_t, std::mbstate_t&gt;}}&lt;br&gt;{{mark since c++20}}|在 UTF-32 和 UTF-8 间转换}}
+{{dsc|{{c/core|std::codecvt&lt;wchar_t, char, std::mbstate_t&gt;}}|在系统原生宽和单字节窄字符集间转换}}
+{{dsc end}}
+
+===嵌套类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|intern_type}}|{{tt|InternT}}}}
+{{dsc|{{tt|extern_type}}|{{tt|ExternT}}}}
+{{dsc|{{tt|state_type}}|{{tt|StateT}}}}
+{{dsc end}}
+
+{{cpp/locale/facet data members}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc mem ctor|cpp/locale/codecvt/codecvt|构造新的 {{tt|codecvt}} 刻面}}
+{{dsc inc|cpp/locale/codecvt/dsc out}}
+{{dsc inc|cpp/locale/codecvt/dsc in}}
+{{dsc inc|cpp/locale/codecvt/dsc unshift}}
+{{dsc inc|cpp/locale/codecvt/dsc encoding}}
+{{dsc inc|cpp/locale/codecvt/dsc always_noconv}}
+{{dsc inc|cpp/locale/codecvt/dsc length}}
+{{dsc inc|cpp/locale/codecvt/dsc max_length}}
+{{dsc end}}
+
+===受保护成员函数===
+{{dsc begin}}
+{{dsc prot mem dtor|cpp/locale/codecvt/~codecvt|销毁 {{tt|codecvt}} 刻面}}
+{{dsc inc|cpp/locale/codecvt/dsc do_out}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in}}
+{{dsc inc|cpp/locale/codecvt/dsc do_unshift}}
+{{dsc inc|cpp/locale/codecvt/dsc do_encoding}}
+{{dsc inc|cpp/locale/codecvt/dsc do_always_noconv}}
+{{dsc inc|cpp/locale/codecvt/dsc do_length}}
+{{dsc inc|cpp/locale/codecvt/dsc do_max_length}}
+{{dsc end}}
+
+{{cpp/locale/codecvt_base/inherit}}
+
+===示例===
+{{example
+|下例示例用在 {{c/core|codecvt&lt;wchar_t, char, std::mbstate_t&gt;}} 实现 UTF-8 转换的本地环境读取 UTF-8 环境，并用 {{tt|std::codecvt}} 的标准特化转换 UTF-8 字符串到 UTF-16。
+|code=
+#include &lt;codecvt&gt;
+#include &lt;cstdint&gt;
+#include &lt;fstream&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;string&gt;
+
+// 工具包装器，用于为 wstring/wbuffer 适配绑定到本地环境的刻面
+template&lt;class Facet&gt;
+struct deletable_facet : Facet
+{
+    template&lt;class... Args&gt;
+    deletable_facet(Args&amp;&amp;... args) : Facet(std::forward&lt;Args&gt;(args)...) {}
+    ~deletable_facet() {}
+};
+
+int main()
+{
+    // UTF-8 窄多字节编码
+    std::string data = reinterpret_cast&lt;const char*&gt;(+u8"z\u00df\u6c34\U0001f34c");
+                       // 或 reinterpret_cast&lt;const char*&gt;(+u8"zß水🍌")
+                       // 或 "\x7a\xc3\x9f\xe6\xb0\xb4\xf0\x9f\x8d\x8c"
+    
+    std::ofstream("text.txt") &lt;&lt; data;
+    
+    // 使用系统提供的本地环境的 codecvt 刻面
+    std::wifstream fin("text.txt");
+    // 从 wifstream 的读取将使用 codecvt&lt;wchar_t, char, std::mbstate_t&gt;
+    // 此本地环境的 codecvt 从 UTF-8 转换到 UCS4（在如 Linux 的系统上）
+    fin.imbue(std::locale("en_US.UTF-8"));
+    std::cout &lt;&lt; "此 UTF-8 文件包含以下 UCS4 编码单元：\n" &lt;&lt; std::hex;
+    for (wchar_t c; fin &gt;&gt; c;)
+        std::cout &lt;&lt; "U+" &lt;&lt; std::setw(4) &lt;&lt; std::setfill('0')
+                  &lt;&lt; static_cast&lt;uint32_t&gt;(c) &lt;&lt; ' ';
+    
+    // 使用标准（本地环境无关）codecvt 刻面
+    std::wstring_convert&lt;
+        deletable_facet&lt;std::codecvt&lt;char16_t, char, std::mbstate_t&gt;&gt;, char16_t&gt; conv16;
+    std::u16string str16 = conv16.from_bytes(data);
+    
+    std::cout &lt;&lt; "\n\n此 UTF-8 文件包含以下 UTF-16 编码单元：\n"
+              &lt;&lt; std::hex;
+    for (char16_t c : str16)
+        std::cout &lt;&lt; "U+" &lt;&lt; std::setw(4) &lt;&lt; std::setfill('0')
+                  &lt;&lt; static_cast&lt;uint16_t&gt;(c) &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=
+此 UTF-8 文件包含以下 UCS4 编码单元：
+U+007a U+00df U+6c34 U+1f34c
+
+此 UTF-8 文件包含以下 UTF-16 编码单元：
+U+007a U+00df U+6c34 U+d83c U+df4c
+}}
+
+===参阅===
+{{cpp/locale/unicode string conversions}}
+{{dsc begin}}
+{{dsc inc|cpp/locale/dsc codecvt_base}}
+{{dsc inc|cpp/locale/dsc codecvt_byname}}
+{{dsc inc|cpp/locale/dsc codecvt_utf8}}
+{{dsc inc|cpp/locale/dsc codecvt_utf16}}
+{{dsc inc|cpp/locale/dsc codecvt_utf8_utf16}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

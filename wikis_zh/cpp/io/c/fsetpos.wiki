@@ -1,0 +1,87 @@
+{{cpp/title | fsetpos}}
+{{cpp/io/c/navbar}}
+{{ddcl | header=cstdio |
+int fsetpos( std::FILE* stream, const std::fpos_t* pos );
+}}
+
+按照 {{tt|pos}} 所指向的值，设置 C 文件流 {{tt|stream}} 的文件位置指示器和多字节分析状态（若存在）。
+
+除了建立新的分析状态和位置外，调用此函数还会撤销 {{lc|std::ungetc}} 的效果，并若设置了文件尾状态则清除之。
+
+若读或写失败，则设置流的错误指示器（{{lc|std::ferror}}）。
+
+===参数===
+{{par begin}}
+{{par | stream |要修改的文件流}}
+{{par | pos |指向 {{c|fpos_t}} 对象的指针，该对象获得自对与同一文件关联的流上的 {{lc|std::fgetpos}} 调用}}
+{{par end}}
+
+===返回值===
+成功时为 {{c|0}}，否则为非零值。失败时还设置 {{lc|errno}}。
+
+===注解===
+在寻位到宽流的非结尾位置后，下个对任何输出函数的调用可能使剩下的文件内容未定义，例如通过输出不同长度的多字节序列。
+
+===示例===
+{{example
+| code=
+#include &lt;cstdio&gt;
+#include &lt;cstdlib&gt;
+ 
+int main()
+{
+    // 准备一个浮点值的数组。
+    const int SIZE = 5;
+    double A[SIZE] = {1., 2., 3., 4., 5.};
+    // 将数组写入文件。
+    std::FILE * fp = std::fopen("test.bin", "wb");
+    std::fwrite(A, sizeof(double), SIZE, fp);
+    std::fclose(fp);
+ 
+    // 将这些值读取到数组 B。
+    double B[SIZE];
+    fp = std::fopen("test.bin", "rb");
+    std::fpos_t pos;
+    if (std::fgetpos(fp, &amp;pos) != 0)      // 当前位置：文件起始
+    {
+       std::perror("fgetpos()");
+       std::fprintf(stderr, "fgetpos() failed in file %s at line # %d\n",
+                    __FILE__, __LINE__-3);
+       std::exit(EXIT_FAILURE);
+    }
+
+    int ret_code = std::fread(B, sizeof(double), 1, fp);      // 读取一个值
+    // 当前位置：读取一个值后
+    std::printf("%.1f; read count = %d\n", B[0], ret_code);   // 打印一个值和 ret_code
+    
+    if (std::fsetpos(fp, &amp;pos) != 0)   // 重置当前位置为文件起始
+    {
+       if (std::ferror(fp))
+       {
+          std::perror("fsetpos()");
+          std::fprintf(stderr, "fsetpos() failed in file %s at line # %d\n",
+                       __FILE__, __LINE__-5);
+          std::exit(EXIT_FAILURE);
+       }
+    }
+
+    ret_code = std::fread(B, sizeof(double), 1, fp);         // 重新读取第一个值
+    std::printf("%.1f; read count = %d\n", B[0], ret_code);  // 打印一个值和 ret_code
+    std::fclose(fp);
+ 
+    return EXIT_SUCCESS; 
+}
+| output=
+1.0; read count = 1
+1.0; read count = 1
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc | cpp/io/c/dsc fgetpos}}
+{{dsc inc | cpp/io/c/dsc ftell}}
+{{dsc inc | cpp/io/c/dsc fseek}}
+{{dsc see c | c/io/fsetpos}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

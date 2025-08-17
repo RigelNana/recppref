@@ -1,0 +1,128 @@
+{{cpp/title|barrier}}
+{{cpp/thread/barrier/navbar}}
+{{ddcl|header=barrier|since=c++20|1=
+template&lt; class CompletionFunction = /* 见下文 */ &gt;
+class barrier;
+}}
+
+类模板 {{tt|std::barrier}} 提供一种线程协调机制，阻塞已知大小的线程组直至该组中的所有线程到达该屏障。不同于 {{lc|std::latch}}，屏障是可重用的：一旦到达的线程组被解除阻塞，即可重用同一屏障。与 {{lc|std::latch}} 不同，会在线程解除阻塞前执行一个可能为空的可调用对象。
+
+屏障对象的生存期由一个或多个屏障阶段组成。每个阶段定义一个阻塞线程的''阶段同步点''。线程可以抵达屏障，但通过调用 {{rlt|arrive}} 来推迟它在''阶段同步点''上的等待。这样的线程可以随后再通过调用 {{rlt|wait}} 在''阶段同步点''上阻塞。
+
+屏障 ''阶段'' 由以下步骤组成：
+# 每次调用 {{rlt|arrive}} 或 {{rlt|arrive_and_drop}} 减少''期待计数''。
+# 期待计数抵达零时，运行''阶段完成步骤''，即调用 [[#数据成员|{{tti|completion}}]]，并解除所有在阶段同步点上阻塞的线程。完成步骤的结束{{ls|cpp/atomic/memory_order#强先发生于}}所有从完成步骤所除阻的调用的返回。&lt;br&gt;&lt;!--
+--&gt;在期待计数抵达零后，一个线程会在其调用 {{rlt|arrive}}、{{rlt|arrive_and_drop}} 或 {{rlt|wait}} 的过程中执行完成步骤恰好一次，但如果没有线程调用 {{rlt|wait}} 则是否执行完成步骤为实现定义。
+# 完成步骤结束时，重置期待计数为构造中指定的值，它可能为 {{tt|arrive_and_drop}} 调用所调整，自此开始下一阶段。
+
+并发调用{{tt|barrier}} 除了析构函数外的成员函数不会引起数据竞争。
+
+===模板形参===
+{{par begin}}
+{{par|CompletionFunction|函数对象类型}}
+{{par req named|CompletionFunction|Destructible|MoveConstructible|notes={{c|std::is_nothrow_invocable_v&lt;CompletionFunction&amp;&gt;}} 必须为 {{c|true}}。}}
+{{par end}}
+
+{{tt|CompletionFunction}} 的默认模板实参是未指定的函数对象类型，它还满足{{named req|DefaultConstructible}}。以无实参调用其左值无效果。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|名称|定义}}
+{{dsc|{{tt|arrival_token}}|未指定的对象类型，满足{{named req|MoveConstructible}}、{{named req|MoveAssignable}}及{{named req|Destructible}}}}
+{{dsc end}}
+
+===成员对象===
+{{dsc begin}}
+{{dsc hitem|成员|定义}}
+{{dsc expos mem obj|completion|spec={{tt|CompletionFunction}}|完成函数对象，在每个阶段完成步骤调用}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/barrier/dsc constructor}}
+{{dsc inc|cpp/thread/barrier/dsc destructor}}
+{{dsc mem fun|nolink=true|operator{{=}}|notes={{cmark deleted}}|{{tt|barrier}} 不可赋值}}
+
+{{dsc inc|cpp/thread/barrier/dsc arrive}}
+{{dsc inc|cpp/thread/barrier/dsc wait}}
+{{dsc inc|cpp/thread/barrier/dsc arrive_and_wait}}
+{{dsc inc|cpp/thread/barrier/dsc arrive_and_drop}}
+
+{{dsc h2|常量}}
+{{dsc inc|cpp/thread/barrier/dsc max}}
+{{dsc end}}
+
+===注解===
+{{ftm begin|std=1|sort=1|comment=1}}
+{{ftm|__cpp_lib_barrier|rowspan="2"|{{tt|std::barrier}}|std=C++20|value=201907L}}
+{{ftm|-|放松的阶段完成保证|std=C++20|dr=yes|value=202302L}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;barrier&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;syncstream&gt;
+#include &lt;thread&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    const auto workers = {"Anil", "Busara", "Carl"};
+
+    auto on_completion = []() noexcept
+    {
+        // 此处无需锁定
+        static auto phase =
+            "... 完成\n"
+            "清理...\n";
+        std::cout &lt;&lt; phase;
+        phase = "... 完成\n";
+    };
+
+    std::barrier sync_point(std::ssize(workers), on_completion);
+
+    auto work = [&amp;](std::string name)
+    {
+        std::string product = "  " + name + " 已工作\n";
+        std::osyncstream(std::cout) &lt;&lt; product;  // OK, op&lt;&lt; 的调用是原子的
+        sync_point.arrive_and_wait();
+
+        product = "  " + name + " 已清理\n";
+        std::osyncstream(std::cout) &lt;&lt; product;
+        sync_point.arrive_and_wait();
+    };
+
+    std::cout &lt;&lt; "启动...\n";
+    std::vector&lt;std::jthread&gt; threads;
+    threads.reserve(std::size(workers));
+    for (auto const&amp; worker : workers)
+        threads.emplace_back(work, worker);
+}
+|p=true
+|output=
+启动...
+  Anil 已工作
+  Carl 已工作
+  Busara 已工作
+... 完成
+清理...
+  Busara 已清理
+  Carl 已清理
+  Anil 已清理
+... 完成
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|paper=P2588R3|std=C++20|before=旧的阶段完成保证可能阻碍硬件加速|after=已放松}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/dsc latch}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,188 @@
+{{cpp/header/experimental/title|experimental/simd}}
+{{cpp/header/experimental/navbar}}
+
+此头文件为数据并行对象上的逐元素操作定义了一组类模板、标签类和函数模板。
+
+===概要===
+{{source|1=
+namespace std::experimental {
+inline namespace parallelism_v2 {
+namespace simd_abi {
+using scalar = /* 见下文 */;
+template &lt;int N&gt; using fixed_size = /* 见下文 */;
+template &lt;class T&gt;
+constexpr int max_fixed_size = /* 由实现定义 */;
+template &lt;class T&gt; using compatible = /* 由实现定义 */;
+template &lt;class T&gt; using native = /* 由实现定义 */;
+template &lt;class T, size_t N, class... Abis&gt; struct deduce {
+  using type = /* 见下文 */;
+};
+template &lt;class T, size_t N, class... Abis&gt;
+using deduce_t = typename deduce&lt;T, N, Abis...&gt;::type;
+} // namespace simd_abi
+struct element_aligned_tag {};
+struct vector_aligned_tag {};
+template &lt;size_t&gt; struct overaligned_tag {};
+inline constexpr element_aligned_tag element_aligned{};
+inline constexpr vector_aligned_tag vector_aligned{};
+template &lt;size_t N&gt; constexpr overaligned_tag&lt;N&gt; overaligned{};
+// 9.4, simd 类型特征
+template &lt;class T&gt; struct is_abi_tag;
+template &lt;class T&gt; constexpr bool is_abi_tag_v = is_abi_tag&lt;T&gt;::value;
+template &lt;class T&gt; struct is_simd;
+template &lt;class T&gt; constexpr bool is_simd_v = is_simd&lt;T&gt;::value;
+template &lt;class T&gt; struct is_simd_mask;
+template &lt;class T&gt;
+constexpr bool is_simd_mask_v = is_simd_mask&lt;T&gt;::value;
+template &lt;class T&gt; struct is_simd_flag_type;
+template &lt;class T&gt;
+constexpr bool is_simd_flag_type_v = is_simd_flag_type&lt;T&gt;::value;
+template &lt;class T, class Abi = simd_abi::compatible&lt;T&gt;&gt; struct simd_size;
+template &lt;class T, class Abi = simd_abi::compatible&lt;T&gt;&gt;
+constexpr size_t simd_size_v = simd_size&lt;T, Abi&gt;::value;
+template &lt;class T, class U = typename T::value_type&gt; struct memory_alignment;
+template &lt;class T, class U = typename T::value_type&gt;
+constexpr size_t memory_alignment_v = memory_alignment&lt;T, U&gt;::value;
+template &lt;class T, class V&gt; struct rebind_simd { using type = /* 见下文 */; };
+template &lt;class T, class V&gt;
+using rebind_simd_t = typename rebind_simd&lt;T, V&gt;::type;
+template &lt;int N, class V&gt; struct resize_simd { using type = /* 见下文 */; };
+template &lt;int N, class V&gt;
+using resize_simd_t = typename resize_simd&lt;N, V&gt;::type;
+// 9.6, 类模板 simd
+template &lt;class T, class Abi = simd_abi::compatible&lt;T&gt;&gt; class simd;
+template &lt;class T&gt; using native_simd = simd&lt;T, simd_abi::native&lt;T&gt;&gt;;
+template &lt;class T, int N&gt;
+using fixed_size_simd = simd&lt;T, simd_abi::fixed_size&lt;N&gt;&gt;;
+// 9.8, 类模板 simd_mask
+template &lt;class T, class Abi = simd_abi::compatible&lt;T&gt;&gt; class simd_mask;
+template &lt;class T&gt; using native_simd_mask = simd_mask&lt;T, simd_abi::native&lt;T&gt;&gt;;
+template &lt;class T, int N&gt;
+using fixed_size_simd_mask = simd_mask&lt;T, simd_abi::fixed_size&lt;N&gt;&gt;;
+// 9.7.5, 转型
+template &lt;class T, class U, class Abi&gt;
+/* 见下文 */ simd_cast(const simd&lt;U, Abi&gt; &amp;) noexcept;
+template &lt;class T, class U, class Abi&gt;
+/* 见下文 */ static_simd_cast(const simd&lt;U, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt;
+fixed_size_simd&lt;T, simd_size_v&lt;T, Abi&gt;&gt;
+to_fixed_size(const simd&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt;
+fixed_size_simd_mask&lt;T, simd_size_v&lt;T, Abi&gt;&gt;
+to_fixed_size(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, int N&gt;
+native_simd&lt;T&gt; to_native(const fixed_size_simd&lt;T, N&gt; &amp;) noexcept;
+template &lt;class T, int N&gt;
+native_simd_mask&lt;T&gt; to_native(const fixed_size_simd_mask&lt;T, N&gt; &amp;) noexcept;
+template &lt;class T, int N&gt;
+simd&lt;T&gt; to_compatible(const fixed_size_simd&lt;T, N&gt; &amp;) noexcept;
+template &lt;class T, int N&gt;
+simd_mask&lt;T&gt; to_compatible(const fixed_size_simd_mask&lt;T, N&gt; &amp;) noexcept;
+template &lt;size_t... Sizes, class T, class Abi&gt;
+tuple&lt;simd&lt;T, simd_abi::deduce_t&lt;T, Sizes&gt;&gt;...&gt;
+split(const simd&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;size_t... Sizes, class T, class Abi&gt;
+tuple&lt;simd_mask&lt;T, simd_mask_abi::deduce_t&lt;T, Sizes&gt;&gt;...&gt;
+split(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class V, class Abi&gt;
+array&lt;V, simd_size_v&lt;typename V::value_type, Abi&gt; / V::size()&gt;
+split(const simd&lt;typename V::value_type, Abi&gt; &amp;) noexcept;
+template &lt;class V, class Abi&gt;
+array&lt;V, simd_size_v&lt;typename V::simd_type::value_type, Abi&gt; / V::size()&gt;
+split(const simd_mask&lt;typename V::simd_type::value_type, Abi&gt; &amp;) noexcept;
+template &lt;size_t N, class T, class A&gt;
+array&lt;resize_simd&lt;simd_size_v&lt;T, A&gt; / N, simd&lt;T, A&gt;&gt;, N&gt;
+split_by(const simd&lt;T, A&gt; &amp;x) noexcept;
+template &lt;size_t N, class T, class A&gt;
+array&lt;resize_simd&lt;simd_size_v&lt;T, A&gt; / N, simd_mask&lt;T, A&gt;&gt;, N&gt;
+split_by(const simd_mask&lt;T, A&gt; &amp;x) noexcept;
+template &lt;class T, class... Abis&gt;
+simd&lt;T, simd_abi::deduce_t&lt;T, (simd_size_v&lt;T, Abis&gt; + ...)&gt;&gt;
+concat(const simd&lt;T, Abis&gt; &amp;...) noexcept;
+template &lt;class T, class... Abis&gt;
+simd_mask&lt;T, simd_abi::deduce_t&lt;T, (simd_size_v&lt;T, Abis&gt; + ...)&gt;&gt;
+concat(const simd_mask&lt;T, Abis&gt; &amp;...) noexcept;
+template &lt;class T, class Abi, size_t N&gt;
+resize_simd&lt;simd_size_v&lt;T, Abi&gt; * N, simd&lt;T, Abi&gt;&gt;
+concat(const array&lt;simd&lt;T, Abi&gt;, N&gt; &amp;arr) noexcept;
+template &lt;class T, class Abi, size_t N&gt;
+resize_simd&lt;simd_size_v&lt;T, Abi&gt; * N, simd_mask&lt;T, Abi&gt;&gt;
+concat(const array&lt;simd_mask&lt;T, Abi&gt;, N&gt; &amp;arr) noexcept;
+// 9.9.4, 归约
+template &lt;class T, class Abi&gt; bool all_of(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt; bool any_of(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt; bool none_of(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt; bool some_of(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt; int popcount(const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt; int find_first_set(const simd_mask&lt;T, Abi&gt; &amp;);
+template &lt;class T, class Abi&gt; int find_last_set(const simd_mask&lt;T, Abi&gt; &amp;);
+bool all_of(T) noexcept;
+bool any_of(T) noexcept;
+bool none_of(T) noexcept;
+bool some_of(T) noexcept;
+int popcount(T) noexcept;
+int find_first_set(T);
+int find_last_set(T);
+// 9.5, where 表达式类模板
+template &lt;class M, class T&gt; class const_where_expression;
+template &lt;class M, class T&gt; class where_expression;
+// 9.9.5, where 函数
+template &lt;class T, class Abi&gt;
+where_expression&lt;simd_mask&lt;T, Abi&gt;, simd&lt;T, Abi&gt;&gt;
+where(const typename simd&lt;T, Abi&gt;::mask_type &amp;, simd&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt;
+const_where_expression&lt;simd_mask&lt;T, Abi&gt;, simd&lt;T, Abi&gt;&gt;
+where(const typename simd&lt;T, Abi&gt;::mask_type &amp;, const simd&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt;
+where_expression&lt;simd_mask&lt;T, Abi&gt;, simd_mask&lt;T, Abi&gt;&gt;
+where(const type_identity_t&lt;simd_mask&lt;T, Abit&gt;&gt; &amp;,
+      simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt;
+const_where_expression&lt;simd_mask&lt;T, Abi&gt;, simd_mask&lt;T, Abi&gt;&gt;
+where(const type_identity_t&lt;simd_mask&lt;T, Abit&gt;&gt; &amp;,
+      const simd_mask&lt;T, Abi&gt; &amp;) noexcept;
+template &lt;class T&gt; where_expression&lt;bool, T&gt; where(/* 见下文 */ k, T &amp;d) noexcept;
+template &lt;class T&gt;
+const_where_expression&lt;bool, T&gt; where(/* 见下文 */ k, const T &amp;d) noexcept;
+// 9.7.4, 归约
+template &lt;class T, class Abi, class BinaryOperation = plus&lt;&gt;&gt;
+T reduce(const simd&lt;T, Abi&gt; &amp;, BinaryOperation = {});
+template &lt;class M, class V, class BinaryOperation&gt;
+typename V::value_type reduce(const const_where_expression&lt;M, V&gt; &amp;x,
+                              typename V::value_type identity_element,
+                              BinaryOperation binary_op);
+template &lt;class M, class V&gt;
+typename V::value_type reduce(const const_where_expression&lt;M, V&gt; &amp;x,
+                              plus&lt;&gt; binary_op = {}) noexcept;
+template &lt;class M, class V&gt;
+typename V::value_type reduce(const const_where_expression&lt;M, V&gt; &amp;x,
+                              multiplies&lt;&gt; binary_op) noexcept;
+template &lt;class M, class V&gt;
+typename V::value_type reduce(const const_where_expression&lt;M, V&gt; &amp;x,
+                              bit_and&lt;&gt; binary_op) noexcept;
+template &lt;class M, class V&gt;
+typename V::value_type reduce(const const_where_expression&lt;M, V&gt; &amp;x,
+                              bit_or&lt;&gt; binary_op) noexcept;
+template &lt;class M, class V&gt;
+typename V::value_type reduce(const const_where_expression&lt;M, V&gt; &amp;x,
+                              bit_xor&lt;&gt; binary_op) noexcept;
+template &lt;class T, class Abi&gt; T hmin(const simd&lt;T, abi&gt; &amp;) noexcept;
+template &lt;class M, class V&gt;
+typename V::value_type hmin(const const_where_expression&lt;M, V&gt; &amp;) noexcept;
+template &lt;class T, class Abi&gt; T hmax(const simd&lt;T, abi&gt; &amp;) noexcept;
+template &lt;class M, class V&gt;
+typename V::value_type hmax(const const_where_expression&lt;M, V&gt; &amp;) noexcept;
+// 9.7.6, 算法
+template &lt;class T, class Abi&gt;
+simd&lt;T, Abi&gt; min(const simd&lt;T, Abi&gt; &amp;a, const simd&lt;T, Abi&gt; &amp;b) noexcept;
+template &lt;class T, class Abi&gt;
+simd&lt;T, Abi&gt; max(const simd&lt;T, Abi&gt; &amp;a, const simd&lt;T, Abi&gt; &amp;b) noexcept;
+template &lt;class T, class Abi&gt;
+pair&lt;simd&lt;T, Abi&gt;, simd&lt;T, Abi&gt;&gt; minmax(const simd&lt;T, Abi&gt; &amp;a,
+                                        const simd&lt;T, Abi&gt; &amp;b) noexcept;
+template &lt;class T, class Abi&gt;
+simd&lt;T, Abi&gt; clamp(const simd&lt;T, Abi&gt; &amp;v, const simd&lt;T, Abi&gt; &amp;lo,
+                   const simd&lt;T, Abi&gt; &amp;hi);
+} // namespace parallelism_v2
+} // namespace std::experimental
+}}

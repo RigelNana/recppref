@@ -1,0 +1,95 @@
+{{cpp/title|realloc}}
+{{cpp/memory/navbar}}
+{{ddcl|header=cstdlib|
+void* realloc( void* ptr, std::size_t new_size );
+}}
+
+重分配给定的内存区域（在目标区域中[[cpp/language/object#对象创建|隐式创建]]对象）。它必须是 {{lc|std::malloc}}、{{lc|std::calloc}} 或 {{tt|std::realloc}} 先前分配的，且仍未被 {{lc|std::free}} 释放，否则行为未定义。
+
+重分配按以下之一进行：
+@a@ 若可能则扩张或收缩 {{c|ptr}} 所指向的既存内存区域。区域的内容直到新旧大小的较小者都保留未更改。若区域扩张，则数组新部分的内容是未定义的。 
+@b@ 分配大小为 {{c|new_size}} 字节的新内存块，复制大小等于新旧大小较小者的内存区域，并释放旧块。
+
+若无足够内存，则不释放旧块并返回空指针。
+
+若 {{c|ptr}} 是空指针，则行为同调用 {{c|std::malloc(new_size)}}。
+
+若 {{c|new_size}} 为零，则行为是实现定义的：可以返回空指针（该情况下可能或可能不释放旧内存块），或可能返回某个不可用于访问存储的非空指针。{{rev inl|since=c++20|这种用法被弃用（经由 {{stddoc|n2396.htm#dr_400|C DR 400|lang=c}}）。}}
+
+{{cpp/memory/thread_safety_note}}
+
+===参数===
+{{par begin}}
+{{par|ptr|指向要被重分配的内存区域的指针}}
+{{par|new_size|数组的新大小}}
+{{par end}}
+
+===返回值===
+成功时，返回指向新分配内存起始的指针。为避免内存泄漏，返回的必须以 {{lc|std::free}} 或 {{tt|std::realloc}} 解分配指针。原指针 {{c|ptr}} 失效，且任何对它的访问是[[cpp/language/ub|未定义行为]]（即使重分配是原位的）。
+
+失败时，返回空指针。原指针 {{c|ptr}} 保持合法且可能需要以 {{lc|std::free}} 解分配。
+
+===注解===
+因为重分配可能涉及逐字节复制（无论是扩展还是压缩），这些对象必须（但并不充分）具有{{named req|TriviallyCopyable}}类型。
+
+一些非标准库定义类型特征“可逐位移动 (BitwiseMovable)”或“可重定位 (Relocatable)”，这描述不拥有下列性质的类型：
+* 外部引用（例如链表或树的保有另一元素引用的结点），和
+* 内部引用（例如，可能保有另一成员地址的成员指针）。
+
+重分配其存储后，能访问这种类型的对象，即使其复制构造函数非平凡。
+
+===示例===
+{{example
+|code= 
+#include &lt;cassert&gt;
+#include &lt;cstdlib&gt;
+#include &lt;new&gt;
+
+class MallocDynamicBuffer
+{
+    char* p;
+public:
+    explicit MallocDynamicBuffer(std::size_t initial = 0) : p(nullptr)
+    {
+        resize(initial);
+    }
+    
+    ~MallocDynamicBuffer() { std::free(p); }
+    
+    void resize(std::size_t newSize)
+    {
+        if (newSize == 0) // 此检查并非严格需要
+        {
+            std::free(p); // 但零大小 realloc 于 C 中弃用
+            p = nullptr;
+        }
+        else
+        {
+            if (void* mem = std::realloc(p, newSize))
+                p = static_cast&lt;char*&gt;(mem);
+            else
+                throw std::bad_alloc();
+        }
+    }
+
+    char&amp; operator[](size_t n) { return p[n]; }
+    char operator[](size_t n) const { return p[n]; }
+};
+
+int main()
+{
+    MallocDynamicBuffer buf1(1024);
+    buf1[5] = 'f';
+    buf1.resize(10); // 收缩
+    assert(buf1[5] == 'f');
+    buf1.resize(1024); // 增长
+    assert(buf1[5] == 'f');
+}
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/memory/realloc}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

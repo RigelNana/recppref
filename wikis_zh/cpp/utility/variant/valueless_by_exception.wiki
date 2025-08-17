@@ -1,0 +1,96 @@
+{{cpp/utility/variant/title|valueless_by_exception}}
+{{cpp/utility/variant/navbar}}
+{{ddcl|since=c++17|
+constexpr bool valueless_by_exception() const noexcept;
+}}
+
+当且仅当变体保有值时返回 {{c|false}}。
+
+===注解===
+变体可能在下列情形中初始化所含值而变得无值：
+* （保证）在{{rlp|operator{{=}}|移动赋值}}中抛出异常
+* （可选）在{{rlp|operator{{=}}|复制赋值}}中抛出异常
+* （可选）在类型更改{{rlp|operator{{=}}|赋值}}期间抛出异常
+* （可选）在类型更改 {{rlpt|emplace}} 期间抛出异常 
+
+因为变体决不容许分配动态内存，故在这些情况下不可能保留并因此无法恢复先前的值。标为“可选”的情形，如果类型提供了不抛出移动，并且实现首先在栈上构造新值然后再把它移动到变体中，就可以避免抛出异常。
+
+这也适用于非类类型的变体：
+{{source|1=
+struct S
+{
+    operator int() { throw 42; }
+};
+std::variant&lt;float, int&gt; v{12.f}; // OK
+v.emplace&lt;1&gt;(S()); // v 可能为无值
+}}
+
+''因异常无值''{{sep}}的变体——即，由于之前有异常在以上列表中的情况之一中抛出而无值——被当做处于非法状态：
+* {{rlpt|index}} 返回 {{rlpt|variant_npos}}
+* {{rlpt|get}} 抛出 {{rlpt|bad_variant_access}}
+* {{rlpt|visit2|visit}} {{rev inl|与成员 {{rlpt|visit}}|since=c++26}} 抛出 {{rlpt|bad_variant_access}}。
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;string&gt;
+#include &lt;variant&gt;
+
+struct Demo
+{
+    Demo(int) {}
+    Demo(const Demo&amp;) { throw std::domain_error("复制构造函数"); }
+    Demo&amp; operator= (const Demo&amp;) = default;
+};
+
+int main()
+{
+    std::variant&lt;std::string, Demo&gt; var{"str"};
+    assert(var.index() == 0);
+    assert(std::get&lt;0&gt;(var) == "str");
+    assert(var.valueless_by_exception() == false);
+
+    try
+    {
+        var = Demo{666};
+    }
+    catch (const std::domain_error&amp; ex)
+    {
+        std::cout &lt;&lt; "1) 异常: " &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+    assert(var.index() == std::variant_npos);
+    assert(var.valueless_by_exception() == true);
+
+    // 现在 var “无值”，此为 var 的初始化过程中引发的异常导致的非法状态。
+
+    try
+    {
+        std::get&lt;1&gt;(var);
+    }
+    catch (const std::bad_variant_access&amp; ex)
+    {
+        std::cout &lt;&lt; "2) 异常: " &lt;&lt; ex.what() &lt;&lt; '\n';
+    }
+
+    var = "str2";
+    assert(var.index() == 0);
+    assert(std::get&lt;0&gt;(var) == "str2");
+    assert(var.valueless_by_exception() == false);
+}
+|p=true
+|output=
+1) 异常: 复制构造函数
+2) 异常: std::get: variant is valueless
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc get}}
+{{dsc inc|cpp/utility/variant/dsc index}}
+{{dsc inc|cpp/utility/variant/dsc bad_variant_access}}
+{{dsc end}}
+
+{{langlinks|en|es|ja|ru}}

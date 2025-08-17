@@ -1,0 +1,180 @@
+{{cpp/title|allocate_shared|allocate_shared_for_overwrite}}
+{{cpp/memory/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++11|
+template&lt; class T, class Alloc, class... Args &gt;
+shared_ptr&lt;T&gt; allocate_shared( const Alloc&amp; alloc, Args&amp;&amp;... args );
+}}
+{{dcl|num=2|since=c++20|
+template&lt; class T, class Alloc &gt;
+shared_ptr&lt;T&gt; allocate_shared( const Alloc&amp; alloc, std::size_t N );
+}}
+{{dcl|num=3|since=c++20|
+template&lt; class T, class Alloc &gt;
+shared_ptr&lt;T&gt; allocate_shared( const Alloc&amp; alloc );
+}}
+{{dcl|num=4|since=c++20|
+template&lt; class T, class Alloc &gt;
+shared_ptr&lt;T&gt; allocate_shared( const Alloc&amp; alloc, std::size_t N,
+                               const std::remove_extent_t&lt;T&gt;&amp; u );
+}}
+{{dcl|num=5|since=c++20|
+template&lt; class T, class Alloc &gt;
+shared_ptr&lt;T&gt; allocate_shared( const Alloc&amp; alloc,
+                               const std::remove_extent_t&lt;T&gt;&amp; u );
+}}
+{{dcl|num=6|since=c++20|
+template&lt; class T, class Alloc &gt;
+shared_ptr&lt;T&gt; allocate_shared_for_overwrite( const Alloc&amp; alloc );
+}}
+{{dcl|num=7|since=c++20|
+template&lt; class T, class Alloc &gt;
+shared_ptr&lt;T&gt; allocate_shared_for_overwrite( const Alloc&amp; alloc,
+                                             std::size_t N );
+}}
+{{dcl end}}
+
+使用 {{c|alloc}} 的（重绑到某个未指定的 {{tt|value_type}} 的）副本为某个对象分配内存并以提供的实参初始化该对象。返回管理新创建的对象的 {{lc|std::shared_ptr}} 对象。
+
+@1@ 该对象具有 {{tt|T}} 类型，并如同以 {{c multi|std::allocator_traits&lt;Alloc&gt;::construct|    (a, pt, (std::forward&lt;Args&gt;(args)...)}} 构造，其中 {{c|pt}} 是指向适合持有 {{c/core|std::remove_cv_t&lt;T&gt;}} 类型对象的存储的 {{c/core|std::remove_cv_t&lt;T&gt;*}} 指针。如果该对象要被销毁，那么它会如同以 {{c|std::allocator_traits&lt;Alloc&gt;::destroy(a, pt)}} 被销毁，其中 {{c|pt}} 是指向该 {{c/core|std::remove_cv_t&lt;T&gt;}} 类型对象的指针。
+@@ 在以上描述中，{{c|a}} 具有 {{tt|Alloc}} 类型，并且它是 {{c|alloc}} 的潜在重绑副本。
+{{rrev|since=c++20|
+{{cpp/enable if| {{tt|T}} 不是数组类型}}。
+}}
+
+@2@ 该对象具有 {{c/core|std::remove_extent_t&lt;T&gt;[N]}} 类型。每个元素都具有默认的初始值。
+@@ {{cpp/enable if| {{tt|T}} 是无边界的数组类型}}。
+
+@3@ 该对象具有 {{tt|T}} 类型。每个元素都具有默认的初始值。
+@@ {{cpp/enable if| {{tt|T}} 是有边界的数组类型}}。
+
+@4@ 该对象具有 {{c/core|std::remove_extent_t&lt;T&gt;[N]}} 类型。每个元素都具有初始值 {{c|u}}。
+@@ {{cpp/enable if| {{tt|T}} 是无边界的数组类型}}。
+
+@5@ 该对象具有 {{tt|T}} 类型。每个元素都具有初始值 {{c|u}}。
+@@ {{cpp/enable if| {{tt|T}} 是有边界的数组类型}}。
+
+@6@ 该对象具有 {{tt|T}} 类型。
+* 如果 {{tt|T}} 不是数组类型，那么如同以 {{c|::new (pv) T}} 构造该对象，其中 {{c|pv}} 是指向适合持有 {{tt|T}} 类型对象的存储的 {{c/core|void*}} 指针。如果该对象要被销毁，那么它会如同以 {{c|pt-&gt;~T()}} 被销毁，其中 {{c|pt}} 是指向该 {{tt|T}} 类型对象的指针。
+* 如果 {{tt|T}} 是有边界的数组类型，那么不指定每个元素的初始值。
+@@ {{cpp/enable if| {{tt|T}} 不是数组类型，或者是有边界的数组类型}}。
+
+@7@ 该对象具有 {{c/core|std::remove_extent_t&lt;T&gt;[N]}} 类型。不指定每个元素的初始值。
+@@ {{cpp/enable if| {{tt|T}} 是无边界的数组类型}}。
+
+{{rrev|since=c++20|
+====初始化和销毁数组元素====
+在以下描述中，{{c|a}} 具有 {{tt|Alloc}} 类型，并且它是 {{c|alloc}} 的潜在重绑副本。
+
+{{tt|U}} 类型的数组元素会以它们地址的升序进行初始化。
+
+* 如果 {{tt|U}} 不是数组类型，那么每个元素如同以以下表达式构造，其中 {{c|pu}} 是指向适合持有 {{c/core|std::remove_cv_t&lt;U&gt;}} 类型对象的存储的 {{c/core|std::remove_cv_t&lt;U&gt;*}} 指针，且 {{c|pv}} 是指向适合持有 {{tt|U}} 类型对象的存储的 {{c/core|void*}} 指针：
+@2,3@ {{c|std::allocator_traits&lt;Alloc&gt;::construct(a, pu)}}
+@4,5@ {{c|std::allocator_traits&lt;Alloc&gt;::construct(a, pu, u)}}
+@6,7@ {{c|::new (pv) U}}
+
+* 否则递归地初始化每个元素各自的元素。对于数组的下一维度：
+:* {{tt|U}} 变成 {{c/core|std::remove_extent_t&lt;U&gt;}}。
+:* 对于重载 {{v|4,5}}，{{c|u}} 变成它的对应元素。
+
+当返回的 {{lc|std::shared_ptr}} 管理的对象的生存期结束，或初始化数组元素时抛出异常，那么已初始化的元素会按构造时的逆序销毁。
+
+对于每一个要被销毁的数组元素，它如同以以下表达式被销毁：
+@2-5@ {{c|std::allocator_traits&lt;Alloc&gt;::destroy(a, pu)}}，其中 {{c|pu}} 是指向该 {{tt|U}} 类型数组元素的 {{c/core|U*}} 指针
+@6,7@ {{c|pu-&gt;~U()}}，其中 {{c|pu}} 是指向该 {{tt|U}} 类型数组元素的指针
+}}
+
+===参数===
+{{par begin}}
+{{par|alloc|使用的{{named req|Allocator|分配器}}}}
+{{par|args...|构造 {{tt|T}} 实例将要用到的实参列表}}
+{{par|N|所用的数组大小}}
+{{par|u|用以初始化数组每个元素的初值}}
+{{par end}}
+
+===返回值===
+指向具有 {{tt|T}} 类型{{rev inl|since=c++20|或在 {{tt|T}} 是无边界的数组类型时具有 {{c/core|std::remove_extent_t&lt;T&gt;[N]}} 类型}}的对象的 {{lc|std::shared_ptr}}。
+
+对于返回的 {{lc|std::shared_ptr}} {{c|r}}，{{c|r.get()}} 会返回非空指针，且 {{c|r.use_count()}} 会返回 {{c|1}}。
+
+===异常===
+能抛出从 {{c|Alloc::allocate()}} 抛出的异常，或从 {{tt|T}} 构造函数抛出的异常。若抛出异常，则 {{v|1}} 无效果。{{rev inl|since=c++20|若异常在数组的构造中抛出，则已初始化元素以逆序销毁。}}
+
+===注解===
+这些函数通常会分配多于 {{c|sizeof(T)}} 的内存以储存内部记录结构，例如引用计数。
+
+类似 {{lc|std::make_shared}}，此函数通常只进行一次分配，并将 {{tt|T}} 对象与控制块都置于分配的内存块中（标准推荐但不要求如此，所有已知实现均如此）。{{c|alloc}} 的一个副本作为控制块的一部分存储，从而当所有共享及若引用计数抵达零时能用于它的解分配。
+
+不同于 {{tt|std::shared_ptr}} {{rlpt|shared_ptr|构造函数}}，{{tt|std::allocate_shared}} 不接受另外的自定义删除器：它用提供的分配器来进行控制块和 {{tt|T}} 对象的析构，及其共享内存块的解分配。
+
+{{rrev|until=c++20|
+{{lc|std::shared_ptr}} 支持数组类型（从 C++17 起），但 {{tt|std::allocate_shared}} 不支持。[http://www.boost.org/doc/libs/1_66_0/libs/smart_ptr/doc/html/smart_ptr.html#make_shared {{tt|boost::allocate_shared}}] 支持此功能。
+}}
+
+{{cpp/memory/shared ptr/enabling shared from this|plural=yes}}
+
+{{feature test macro|__cpp_lib_smart_ptr_for_overwrite|进行默认初始化的智能指针创建（{{tt|std::allocate_shared_for_overwrite}}, {{lc|std::make_shared_for_overwrite}}, {{lc|std::make_unique_for_overwrite}}）；重载 {{vl|6,7}}|value=202002L|std=C++20}}
+
+===示例===
+{{example
+|code=
+#include &lt;cstddef&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;memory_resource&gt;
+#include &lt;vector&gt;
+
+class Value
+{
+    int i;
+public:
+    Value(int i) : i(i) { std::cout &lt;&lt; "Value(), i = " &lt;&lt; i &lt;&lt; '\n'; }
+    ~Value() { std::cout &lt;&lt; "~Value(), i = " &lt;&lt; i &lt;&lt; '\n'; }
+    void print() const { std::cout &lt;&lt; "i = " &lt;&lt; i &lt;&lt; '\n'; }
+};
+
+int main()
+{
+    // 创建使用单调缓冲区资源的多态分配器
+    std::byte buffer[sizeof(Value) * 8];
+    std::pmr::monotonic_buffer_resource resource(buffer, sizeof(buffer));
+    std::pmr::polymorphic_allocator&lt;Value&gt; allocator(&amp;resource);
+    
+    std::vector&lt;std::shared_ptr&lt;Value&gt;&gt; v;
+    
+    for (int i{}; i != 4; ++i)
+        // 以自定义分配器使用 std::allocate_shared
+        v.emplace_back(std::allocate_shared&lt;Value&gt;(allocator, i));
+    
+    for (const auto&amp; sp : v)
+        sp-&gt;print();
+} //&lt; 全部共享指针都会在离开作用域使自动清理。
+|output=
+Value(), i = 0
+Value(), i = 1
+Value(), i = 2
+Value(), i = 3
+i = 0
+i = 1
+i = 2
+i = 3
+~Value(), i = 0
+~Value(), i = 1
+~Value(), i = 2
+~Value(), i = 3
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3216|std=C++20|before={{tt|std::allocate_shared}} 在构造和销毁对象前始终会重绑分配器|after=可以不重绑}}
+{{dr list item|wg=lwg|dr=4024|std=C++20|before=不明确如何销毁 {{tt|std::allocate_shared_for_overwrite}} 中构造的对象|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc constructor}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,113 @@
+{{cpp/title|stop_source}}
+{{cpp/thread/stop_source/navbar}}
+{{ddcl|header=stop_token|since=c++20|
+class stop_source;
+}}
+
+{{tt|stop_source}} 类提供一种发出停止请求的方法，例如用于 {{tt|std::jthread}} 的取消等。对一个 {{tt|stop_source}} 对象作出的停止请求，对所有拥有同一关联停止状态的 {{tt|stop_source}} 与 {{tt|std::stop_token}} 都可见；为关联 {{tt|std::stop_token}} 注册的任何 {{tt|std::stop_callback}} 都会被调用，并且在关联 {{tt|std::stop_token}} 上等待的任何 {{lc|std::condition_variable_any}} 对象都会被唤醒。
+
+一旦请求了停止，就不能撤销。额外的停止请求无效果。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/stop_source/dsc constructor}}
+{{dsc inc|cpp/thread/stop_source/dsc destructor}}
+{{dsc inc|1=cpp/thread/stop_source/dsc operator=}}
+
+{{dsc h2|修改器}}
+{{dsc inc|cpp/thread/stop_source/dsc request_stop}}
+{{dsc inc|cpp/thread/stop_source/dsc swap}}
+
+{{dsc h2|观察器}}
+{{dsc inc|cpp/thread/stop_source/dsc get_token}}
+{{dsc inc|cpp/thread/stop_source/dsc stop_requested}}
+{{dsc inc|cpp/thread/stop_source/dsc stop_possible}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/stop_source/dsc operator_cmp}}
+{{dsc inc|cpp/thread/stop_source/dsc swap2}}
+{{dsc end}}
+
+===辅助标签===
+{{dsc begin}}
+{{dsc inc|cpp/thread/stop_source/dsc nostopstate}}
+{{dsc end}}
+
+===注解===
+对于 {{tt|std::jthread}} 取消的目的而言，应该用 {{ltf|cpp/thread/jthread/get_stop_source}} 从 {{lc|std::jthread}} 对象取得 {{tt|stop_source}} 对象；或者应该直接从 {{lc|std::jthread}} 对象用 {{ltf|cpp/thread/jthread/request_stop}} 请求停止。然后它将使用传入 {{lc|std::jthread}} 所调用函数（即其线程上被执行的函数）的实参相同的关联停止状态。
+
+但对于其他用途，可以使用默认构造函数单独构造 {{tt|stop_source}}，这会创建新的停止状态。
+
+{{feature test macro|__cpp_lib_jthread|std=C++20|value=201911L|{{rlp|stop_token|停止令牌}}与{{rlp|jthread|结合线程}}}}
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;stop_token&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+void worker_fun(int id, std::stop_token stoken)
+{ 
+    for (int i = 10; i; --i)
+    {
+        std::this_thread::sleep_for(300ms);
+        if (stoken.stop_requested())
+        {
+            std::printf("  worker%d 被要求停止\n", id);
+            return;
+        }
+        std::printf("  worker%d 返回睡眠\n", id);
+    }
+}
+
+int main()
+{
+    std::jthread threads[4];
+    std::cout &lt;&lt; std::boolalpha;
+    auto print = [](const std::stop_source&amp; source)
+    {
+        std::printf("stop_source stop_possible = %s, stop_requested = %s\n",
+                    source.stop_possible() ? "true" : "false",
+                    source.stop_requested() ? "true" : "false");
+    };
+
+    // 公共源
+    std::stop_source stop_source;
+
+    print(stop_source);
+
+    // 创建工作线程
+    for (int i = 0; i &lt; 4; ++i)
+        threads[i] = std::jthread(worker_fun, i + 1, stop_source.get_token());
+
+    std::this_thread::sleep_for(500ms);
+
+    std::puts("请求停止");
+    stop_source.request_stop();
+
+    print(stop_source);
+
+    // 注：jthreads 的析构函数会调用 join，因此无需显式调用
+}
+|p=true
+|output=
+stop_source stop_possible = true, stop_requested = false
+  worker2 返回睡眠
+  worker3 返回睡眠
+  worker1 返回睡眠
+  worker4 返回睡眠
+请求停止
+stop_source stop_possible = true, stop_requested = true
+  worker3 被要求停止
+  worker1 被要求停止
+  worker2 被要求停止
+  worker4 被要求停止
+}}
+
+{{langlinks|en|es|ja|ru}}

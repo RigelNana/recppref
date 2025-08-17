@@ -1,0 +1,367 @@
+{{title|结构化绑定声明 {{mark since c++17}}}}
+{{cpp/language/declarations/navbar}}
+将指定名称绑定到初始化器的子对象或元素。
+
+与引用类似，结构化绑定是既存对象的别名。不同于引用的是，结构化绑定的类型不需要是引用类型。
+
+{{sdsc begin}}
+{{sdsc|
+{{spar optional|属性}} {{spar|声明说明符序列}} {{spar optional|引用限定符}} {{ttb|[}} {{spar|绑定标识符列表}} {{ttb|]}} {{spar sep|初始化器}}{{ttb|;}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|属性}}|任意数量的{{rlp|attributes|属性}}的序列}}
+{{par|{{spar|decl-specifier-seq}}|包含以下说明符的序列（遵循{{rlps|declarations#简单声明}}的规则）：
+{{rrev|since=c++26|
+* {{rlpt|constexpr}}
+* {{rlpt|constinit}}
+}}
+* {{ltt|cpp/keyword/static}}
+* {{ltt|cpp/keyword/thread_local}}
+* {{ltt|cpp/keyword/const}}
+* {{ltt|cpp/keyword/volatile}} {{mark deprecated c++20}}
+* {{rlpt|auto}}}}
+{{par|{{spar|引用限定符}}|{{ttb|&amp;}} 或 {{ttb|&amp;&amp;}} 之一}}
+{{par|{{spar|绑定标识符列表}}|此声明所引入的各标识符的逗号分隔的列表{{rev inl|since=c++26|，每个标识符可以后随一个{{rlp|attributes|属性说明符序列}}}}}}
+{{par|{{spar|初始化器}}|初始化器（见下文）}}
+{{par end}}
+
+
+{{spar sep|初始化器}}必须是下列之一：
+{{sdsc begin}}
+{{sdsc|num=1|
+{{ttb|1==}} {{spar|表达式}}
+}}
+{{sdsc|num=2|
+{{ttb|{}} {{spar|表达式}} {{ttb|}}}
+}}
+{{sdsc|num=3|
+{{ttb|(}} {{spar|表达式}} {{ttb|)}}
+}}
+{{sdsc end}}
+
+{{par begin}}
+{{par|{{spar|表达式}}|（无括号的{{rlp|operator other#内建的逗号运算符|逗号表达式}}以外的）任意表达式}}
+{{par end}}
+
+
+结构化绑定声明将{{spar sep|绑定标识符列表}}中的所有标识符引入作为其外围作用域中的名字，并将它们绑定到{{spar sep|表达式}}所指代的对象的各个子对象或元素。以此方式引入的绑定被称作''结构化绑定''。
+
+{{rrev|since=c++26|
+{{spar sep|绑定标识符列表}}中可以有一个前附省略号的标识符。这种标识符会引入''结构化绑定包''。
+
+该标识符必须声明{{rlps|templates#模板化实体}}。
+}}
+
+结构化绑定是{{spar sep|绑定标识符列表}}中的一个{{rev inl|since=c++26|没有前导省略号的}}标识符{{rev inl|since=c++26|，或者同一个标识符列表中引入的结构化绑定包的一个元素}}。
+
+===绑定过程===
+结构化绑定声明首先引入一个唯一命名的变量（此处以 {{c|e}} 指代）来保有其初始化器的值，方式如下：
+* 如果{{spar sep|表达式}}具有数组类型 ''cv1'' {{tt|A}} 且不存在{{spar|引用限定符}}，那么通过 {{box|{{spar optional|属性}} {{spar|标识符}} {{tt|A e;}}}} 来定义 {{c|e}}，其中{{spar sep|标识符}}是包含{{spar sep|声明说明符序列}}的除 {{c/core|auto}} 以外的所有说明符的序列。
+: 然后以{{spar sep|初始化器}}对应的方式以{{spar sep|表达式}}中的元素初始化 {{c|e}} 中的对应元素：
+:* 对于初始化器形式 {{v|1}}，元素会被{{rlp|copy initialization|复制初始化}}。
+:* 对于初始化器形式 {{v|2,3}}，元素会被{{rlp|direct initialization|直接初始化}}。
+* 否则通过 {{box|{{spar optional|属性}} {{spar|声明说明符序列}} {{spar optional|引用限定符}} {{tt|e}} {{spar sep|初始化器}}{{tt|;}}}} 来定义 {{c|e}}。
+
+我们用 {{tt|E}} 代表标识表达式 {{c|e}} 的类型。（换言之，{{tt|E}} 等价于 {{c/core|std::remove_reference_t&lt;decltype((e))&gt;}}）。
+
+{{tt|E}} 的''结构化绑定大小''{{sep}}是结构化绑定声明所要引入的结构化绑定的个数。
+
+{{rev begin}}
+{{rev|until=c++26|
+{{spar sep|绑定标识符列表}}中标识符的个数必须等于 {{tt|E}} 的结构化绑定大小。
+}}
+{{rev|since=c++26|
+给定{{spar sep|绑定标识符列表}}中标识符的个数 {{c|N}} 和 {{tt|E}} 的结构化绑定大小 {{c|S}}：
+* 如果不存在结构化绑定包，那么 {{c|N}} 必须等于 {{c|S}}。
+* 否则非包元素的个数（即 {{c|N - 1}}）必须小于或等于 {{c|S}}，并且结构化绑定包的元素个数是 {{c|S - N + 1}}（该值可以为零）。
+}}
+{{rev end}}
+
+{{source|1=
+struct C { int x, y, z; };
+
+template &lt;class T&gt;
+void now_i_know_my() 
+{
+    auto [a, b, c] = C(); // OK: a, b, c 分别指代 x, y, z
+    auto [d, ...e] = C(); // OK: d 指代 x; ...e 指代 y 和 z
+    auto [...f, g] = C(); // OK: ...f 指代 x 和 y; g 指代 z
+    auto [h, i, j, ...k] = C(); // OK: 包 k 为空
+    auto [l, m, n, o, ...p] = C(); // 错误: 结构化绑定大小太小
+}
+}}
+
+结构化绑定可以以下三种可能的方式之一进行绑定，取决于 {{tt|E}}：
+* 情况 1：如果 {{tt|E}} 是数组类型，那么绑定各个名字到各个数组元素。
+* 情况 2：如果 {{tt|E}} 是非联合类类型且 {{c/core|std::tuple_size&lt;E&gt;}} 是完整类型并拥有名为 {{tt|value}} 的成员（无关乎这种成员的类型或可访问性），那么使用“元组式”绑定协议。
+* 情况 3：如果 {{tt|E}} 是非联合类类型但 {{c/core|std::tuple_size&lt;E&gt;}} 不是完整类型，那么绑定各个名字到 {{tt|E}} 的各个可访问数据成员。
+
+下文对每种情况都有更详细的描述。
+
+每个结构化绑定都有一个''被引用类型''，会在后文的描述中予以定义。此类型是对无括号的结构化绑定应用 {{rlpt|decltype}} 所返回的类型。
+
+====情况 1：绑定数组====
+{{spar sep|绑定标识符列表}}中的每个结构化绑定均成为指代数组的对应元素的左值的名字。{{tt|E}} 的结构化绑定大小等于数组的元素数量。
+
+每个结构化绑定的''被引用类型''{{sep}}都是数组的元素类型。注意如果数组类型 {{tt|E}} 有 cv 限定，那么它的元素类型也有同样的限定。
+
+{{source|1=
+int a[2] = {1, 2};
+
+auto [x, y] = a;    // 创建 e[2]，复制 a 到 e，然后 x 指代 e[0]，y 指代 e[1]
+auto&amp; [xr, yr] = a; // xr 指代 a[0]，yr 指代 a[1]
+}}
+
+====情况 2：绑定实现元组操作的类型====
+表达式 {{c|std::tuple_size&lt;E&gt;::value}} 必须是良构的{{rlps|constant expression#整数常量表达式}}，且 {{tt|E}} 的结构化绑定大小等于 {{c|std::tuple_size&lt;E&gt;::value}}。
+
+对于每个结构化绑定，引入一个类型为“{{c/core|std::tuple_element&lt;I, E&gt;::type}} 的引用”的变量：如果它对应的初始化器是左值，那么它是左值引用，否则它是右值引用。第 {{c|I}} 个变量的初始化器
+* 如果在 {{tt|E}} 的作用域中对标识符 {{tt|get}} 按类成员访问进行的查找中，至少找到一个声明是首个模板形参为非类型形参的函数模板，那么它是 {{c|e.get&lt;I&gt;()}}
+* 否则它是 {{c|get&lt;I&gt;(e)}}，其中 {{c|get}} 只会进行{{rlp|adl|实参依赖查找}}，忽略其他查找。
+
+这些初始化器表达式中，如果实体 {{c|e}} 的类型是左值引用（只会在{{spar sep|引用限定符}}是 {{ttb|&amp;}}，或它是 {{ttb|&amp;&amp;}} 且初始化器是左值时发生），那么 {{c|e}} 是左值，否则它是亡值（这实际上进行了一种完美转发），{{c|I}} 是 {{lc|std::size_t}} 的纯右值，而且始终将 {{c|&lt;I&gt;}} 解释为模板形参列表。
+
+该变量拥有与 {{c|e}} 相同的{{rlp|storage duration|存储期}}。
+
+然后该结构化绑定变成左值的名字，它指代与上述变量绑定的对象。
+
+第 {{c|I}} 个结构化绑定的''被引用类型''{{sep}}是 {{c/core|std::tuple_element&lt;I, E&gt;::type}}。
+
+{{source|1=
+float x{};
+char  y{};
+int   z{};
+
+std::tuple&lt;float&amp;, char&amp;&amp;, int&gt; tpl(x, std::move(y), z);
+const auto&amp; [a, b, c] = tpl;
+// using Tpl = const std::tuple&lt;float&amp;, char&amp;&amp;, int&gt;;
+// a 指名指代 x 的结构化绑定（以 get&lt;0&gt;(tpl) 初始化）
+// decltype(a) 是 std::tuple_element&lt;0, Tpl&gt;::type，即 float&amp;
+// b 指名指代 y 的结构化绑定（以 get&lt;1&gt;(tpl) 初始化）
+// decltype(b) 是 std::tuple_element&lt;1, Tpl&gt;::type，即 char&amp;&amp;
+// c 指名指代 tpl 的第 3 元素（get&lt;2&gt;(tpl)）的结构化绑定
+// decltype(c) 是 std::tuple_element&lt;2, Tpl&gt;::type，即 const int
+}}
+
+====情况 3：绑定到数据成员====
+{{tt|E}} 的所有非静态数据成员必须都是 {{tt|E}} 或 {{tt|E}} 的同一基类的直接成员，必须在指名为 {{c|e.name}} 时在结构化绑定的语境中是良构的。{{tt|E}} 不能有匿名联合体成员。{{tt|E}} 的结构化绑定大小等于非静态数据成员的数量。
+
+{{spar sep|绑定标识符列表}}中的各个结构化绑定，按声明顺序依次成为指代 {{c|e}} 的各个成员的左值的名字（支持位域）；该左值的类型是 {{c|e.mI}} 的类型，其中 {{tt|mI}} 代表第 {{c|I}} 个成员。
+
+第 {{c|I}} 个结构化绑定的''被引用类型''{{sep}}是 {{c|e.mI}}（如果它不是引用类型）；否则是 {{tt|mI}} 的声明类型。
+{{source|1=
+#include &lt;iostream&gt;
+
+struct S
+{
+    mutable int x1 : 2;
+    volatile double y1;
+};
+
+S f() { return S{1, 2.3}; }
+
+int main()
+{
+    const auto [x, y] = f(); // x 是标识 2 位位域的 int 左值
+                             // y 是 const volatile double 左值
+    std::cout &lt;&lt; x &lt;&lt; ' ' &lt;&lt; y &lt;&lt; '\n';  // 1 2.3
+    x = -2;   // OK
+//  y = -2.;  // 错误：y 具有 const 限定
+    std::cout &lt;&lt; x &lt;&lt; ' ' &lt;&lt; y &lt;&lt; '\n';  // -2 2.3
+}
+|output=
+1 2.3
+-2 2.3
+}}
+
+====初始化顺序====
+设 {{c|valI}} 为{{spar sep|绑定标识符列表}}中第 {{c|I}} 个结构化绑定指名的对象或引用：
+* {{c|e}} 的初始化{{rlp|eval order|按顺序早于}}任何 {{c|valI}} 的初始化。
+* 如果 {{c|I}} 小于 {{c|J}}，那么任何 {{c|valI}} 的初始化都按顺序早于任何 {{c|valJ}} 的初始化。
+
+===注解===
+{{rrev|since=c++20|
+结构化绑定不能{{rlp|constraints|受约束}}：
+{{source|1=
+template&lt;class T&gt;
+concept C = true;
+
+C auto [x, y] = std::pair{1, 2}; // 错误：受约束
+}}
+}}
+
+对成员 {{tt|get}} 的查找照常忽略可访问性，同时也忽略非类型模板形参的确切类型。出现私有的 {{c|template&lt;char*&gt; void get(); }} 成员将导致使用成员解释方案，即使这会导致程序非良构也是如此。
+
+声明中 {{ttb|[}} 之前的部分应用于隐藏变量 {{c|e}}，而非引入的各个结构化绑定：
+{{source|1=
+int a = 1, b = 2;
+const auto&amp; [x, y] = std::tie(a, b); // x 与 y 的类型是 int&amp;
+auto [z, w] = std::tie(a, b);        // z 与 w 的类型仍然是 int&amp;
+assert(&amp;z == &amp;a);                    // 通过
+}}
+
+如果 {{c/core|std::tuple_size&lt;E&gt;}} 是完整类型，那么始终使用元组式解释方案，即使这会导致程序非良构也是如此：
+
+{{source|1=
+struct A { int x; };
+
+namespace std
+{
+    template&lt;&gt;
+    struct tuple_size&lt;::A&gt; { void value(); };
+}
+
+auto [x] = A{}; // 错误；不考虑“数据成员”解释方案。
+}}
+
+如果存在{{spar sep|引用限定符}}且{{spar sep|表达式}}是纯右值，那么应用将引用绑定到临时量的通常规则（包括生存期延续）。这些情况下，隐藏变量 {{c|e}} 是绑定到从纯右值表达式{{rlp|implicit_conversion#临时量实质化|实质化}}的临时变量，并延长它的生存期的一个引用。与之前一样，如果 {{c|e}} 是非 const 左值引用，那么绑定失败：
+{{source|1=
+int a = 1;
+
+const auto&amp; [x] = std::make_tuple(a); // OK，非悬垂引用
+auto&amp;       [y] = std::make_tuple(a); // 错误，不能绑定 auto&amp; 到右值 std::tuple
+auto&amp;&amp;      [z] = std::make_tuple(a); // 同样 OK
+}}
+
+{{c/core|decltype(x)}} 指名结构化绑定的''被引用类型''，其中 {{c|x}} 代表一个结构化绑定。在元组式的情况下，它是 {{lc|std::tuple_element}} 返回的类型，它可以不是引用，即使在此情况下始终会引入隐藏的引用。这相当于模拟了绑定到其各个非静态数据成员具有 {{lc|std::tuple_element}} 所返回的类型的结构体的行为，而绑定自身的引用性质则只是实现细节。
+{{source|1=
+std::tuple&lt;int, int&amp;&gt; f();
+
+auto [x, y] = f();       // decltype(x) 是 int
+                         // decltype(y) 是 int&amp;
+
+const auto [z, w] = f(); // decltype(z) 是 const int
+                         // decltype(w) 是 int&amp;
+}}
+
+{{rrev|until=c++20|
+{{rlp|lambda|lambda 表达式}}不能捕获结构化绑定：
+{{source|1=
+#include &lt;cassert&gt;
+ 
+int main()
+{
+    struct S { int p{6}, q{7}; };
+    const auto&amp; [b, d] = S{};
+    auto l = [b, d] { return b * d; }; // C++20 起合法
+    assert(l() == 42);
+}
+}}
+}}
+
+
+{{rrev|since=c++26|
+如果{{spar sep|绑定标识符列表}}刚好包含一个只引入空结构化绑定包的标识符，那么结构化绑定大小可以是 {{c|0}}。
+
+{{source|1=
+auto return_empty() -&gt; std::tuple&lt;&gt;;
+
+template &lt;class&gt;
+void test_empty()
+{
+    auto [] = return_empty(); // 错误
+    auto [...args] = return_empty(); // OK, args 是空包
+    auto [one, ...rest] = return_empty(); // 错误，结构化绑定大小太小
+}
+}}
+}}
+
+{{ftm begin|core=yes|sort=yes}}
+{{ftm|__cpp_structured_bindings|value=201606L|std=C++17|结构化绑定|rowspan=4}}
+{{ftm|-|value=202403L|std=C++26|带属性的结构化绑定}}
+{{ftm|-|value=202406L|std=C++26|结构化绑定声明作为条件}}
+{{ftm|-|value=202411L|std=C++26|结构化绑定可以引入包}}
+{{ftm end}}
+
+===关键词===
+{{ltt|cpp/keyword/auto}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;set&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::set&lt;std::string&gt; myset{"hello"};
+    
+    for (int i{2}; i; --i)
+    {
+        if (auto [iter, success] = myset.insert("Hello"); success) 
+            std::cout &lt;&lt; "插入成功。值为 " &lt;&lt; std::quoted(*iter) &lt;&lt; "。\n";
+        else
+            std::cout &lt;&lt; "集合中已存在值 " &lt;&lt; std::quoted(*iter) &lt;&lt; "。\n";
+    }
+    
+    struct BitFields
+    {
+        // C++20：位域的默认成员初始化器
+        int b : 4 {1}, d : 4 {2}, p : 4 {3}, q : 4 {4};
+    };
+    
+    {
+        const auto [b, d, p, q] = BitFields{};
+        std::cout &lt;&lt; b &lt;&lt; ' ' &lt;&lt; d &lt;&lt; ' ' &lt;&lt; p &lt;&lt; ' ' &lt;&lt; q &lt;&lt; '\n';
+    }
+    
+    {
+        const auto [b, d, p, q] = []{ return BitFields{4, 3, 2, 1}; }();
+        std::cout &lt;&lt; b &lt;&lt; ' ' &lt;&lt; d &lt;&lt; ' ' &lt;&lt; p &lt;&lt; ' ' &lt;&lt; q &lt;&lt; '\n';
+    }
+    
+    {
+        BitFields s;
+        
+        auto&amp; [b, d, p, q] = s;
+        std::cout &lt;&lt; b &lt;&lt; ' ' &lt;&lt; d &lt;&lt; ' ' &lt;&lt; p &lt;&lt; ' ' &lt;&lt; q &lt;&lt; '\n';
+        
+        b = 4, d = 3, p = 2, q = 1;
+        std::cout &lt;&lt; s.b &lt;&lt; ' ' &lt;&lt; s.d &lt;&lt; ' ' &lt;&lt; s.p &lt;&lt; ' ' &lt;&lt; s.q &lt;&lt; '\n';
+    }
+}
+|output=
+插入成功。值为 "Hello"。
+集合中已存在值 "Hello"。
+1 2 3 4
+4 3 2 1
+1 2 3 4
+4 3 2 1
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=2285|std=C++17|before={{spar sep|表达式}}可以涉及来自{{spar sep|绑定标识符列表}}的名字|after=此时声明非良构}}
+{{dr list item|wg=cwg|dr=2312|std=C++17|before={{c/core|mutable}} 的含义在情况 3 中丢失|after=保持它的含义}}
+{{dr list item|wg=cwg|dr=2313|std=C++17|before=在情况 2 中可以重声明结构化绑定变量|after=不能重声明}}
+{{dr list item|wg=cwg|dr=2339|std=C++17|before=在情况 2 中缺失了 {{c|I}} 的定义|after=补充定义}}
+{{dr list item|wg=cwg|dr=2341|paper=P1091R3|std=C++17|before=不能声明具有静态存储期的结构化绑定|after=可以声明}}
+{{dr list item|wg=cwg|dr=2386|std=C++17|before=只要 {{c/core|std::tuple_size&lt;E&gt;}} 是&lt;br&gt;完整类型时就会使用“元组式”绑定协议|after=只会在 {{c/core|std::tuple_size&lt;E&gt;}}&lt;br&gt;拥有成员 {{tt|value}} 时才会使用}}
+{{dr list item|wg=cwg|dr=2506|std=C++17|before={{spar|表达式}}是具有 cv 限定的数组类型时，{{tt|E}} 也会保留该 cv 限定|after=丢弃该 cv 限定}}
+{{dr list item|wg=cwg|dr=2635|std=C++20|before=结构化绑定可以受约束|after=已禁止}}
+{{dr list item|wg=cwg|dr=2867|std=C++17|before=初始化顺序不明确|after=使之明确}}
+{{dr list item|paper=P0961R1|std=C++17|before=元组式情况中，查找找到任何类型的 {{tt|get}} 时使用成员 {{tt|get}}|after=只有在查找找到拥有非类型模板形参的函数模板才使用}}
+{{dr list item|paper=P0969R0|std=C++17|before=绑定到成员情况中，要求这些成员公开|after=只需要在声明的语境中可访问}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.6|title=Structured binding declarations|id=dcl.struct.bind|p=228-229}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.6|title=Structured binding declarations|id=dcl.struct.bind|p=219-220}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=11.5|title=Structured binding declarations|id = dcl.struct.bind|p=219-220}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/tuple/dsc tie}}
+{{dsc end}}
+
+{{langlinks|es|en|ja|ru}}

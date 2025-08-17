@@ -1,0 +1,117 @@
+{{cpp/title|istreambuf_iterator}}
+{{cpp/iterator/istreambuf_iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl rev begin}}
+{{dcl|until=c++17|1=
+template&lt; class CharT, class Traits = std::char_traits&lt;CharT&gt; &gt;
+class istreambuf_iterator
+    : public std::iterator&lt;std::input_iterator_tag,
+                           CharT, typename Traits::off_type,
+                           /* 未指定 */, CharT &gt;
+}}
+{{dcl|since=c++17|1=
+template&lt; class CharT, class Traits = std::char_traits&lt;CharT&gt; &gt;
+class istreambuf_iterator;
+}}
+{{dcl rev end}}
+{{dcl end}}
+
+{{tt|std::istreambuf_iterator}} 是一种单趟迭代器，从用来构造它的 {{lc|std::basic_streambuf}} 对象读取相继字符。
+
+默认构造的 {{tt|std::istreambuf_iterator}} 迭代器被称为''流尾''迭代器。{{tt|std::istreambuf_iterator}} 抵达底层流结尾时，它变得等于流尾迭代器。解引用或进一步自增它导致未定义行为。
+
+{{rrev|since=c++11|
+{{tt|std::istreambuf_iterator}} 拥有平凡复制构造函数、constexpr 默认构造函数和平凡析构函数。
+}}
+
+{{cpp/iterator/iterator/inherit|std::input_iterator_tag|CharT|typename Traits::off_type|/* 未指定 */|CharT|ext=
+{{dsc|{{tt|char_type}}|{{tt|CharT}}}}
+{{dsc|{{tt|traits_type}}|{{tt|Traits}}}}
+{{dsc|{{tt|int_type}}|{{c/core|typename Traits::int_type}}}}
+{{dsc|{{tt|streambuf_type}}|{{c/core|std::basic_streambuf&lt;CharT, Traits&gt;}}}}
+{{dsc|{{tt|istream_type}}|{{c/core|std::basic_istream&lt;CharT, Traits&gt;}}}}
+{{dsc expos mem type|{{c/core|/* proxy */}}|由实现定义的类类型。&lt;br&gt;{{tt|''proxy''}} 对象保有一个 {{tt|char_type}} 字符和一个 {{tt|streambuf_type*}} 指针。&lt;br&gt;以 {{tt|operator*}} 解引用 {{tt|''代理''}} 对象得到存储的字符。}}
+}}
+
+成员类型 {{tt|pointer}} 通常是 {{tt|CharT*}}（见[[#注解|下文]]）。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc constructor}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc destructor}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc operator*}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc operator_arith}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc equal}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/istreambuf_iterator/dsc operator cmp}}
+{{dsc end}}
+
+===注解===
+{{lwg|659}} 的解决方案引入了 {{c/core|operator-&gt;}}。在给定 {{tt|std::istreambuf_iterator}} {{c|i}} 的情况下，期待表达式 {{c|(*i).m}} 和 {{c|i-&gt;m}} 具有相同的效果。
+
+然而该解决方案并没有正式描述它的行为。因此它有多种实现：包括返回 {{c|nullptr}}，返回临时量的地址，甚至直接不提供该成员。这导致它的期待行为难以达成，并且后来通过 {{lwg|2790}} 的解决方案将它移除。
+
+{{lwg|659}} 的解决方案同时不再指定成员类型 {{tt|pointer}}，这是为了能让 {{c/core|operator-&gt;}} 返回代理。这样在 {{tt|CharT}} 不是类类型时 {{c/core|operator-&gt;}} 也能成功编译。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    // 典型使用情况：以一对迭代器表示的输入流
+    std::istringstream in{"Hello, world"};
+    std::istreambuf_iterator&lt;char&gt; it{in}, end;
+    std::string ss{it, end};
+    std::cout &lt;&lt; "ss 拥有 " &lt;&lt; ss.size() &lt;&lt; " 个字节；"
+                 "它持有 \"" &lt;&lt; ss &lt;&lt; "\"\n";
+    
+    // 演示单趟本质
+    std::istringstream s{"abc"};
+    std::istreambuf_iterator&lt;char&gt; i1{s}, i2{s};
+    std::cout &lt;&lt; "i1 返回 '" &lt;&lt; *i1 &lt;&lt; "'\n"
+                 "i2 返回 '" &lt;&lt; *i2 &lt;&lt; "'\n";
+    
+    ++i1;
+    std::cout &lt;&lt; "在只自增 i1 但不自增 i2 后：\n"
+                 "i1 返回 '" &lt;&lt; *i1 &lt;&lt; "'\n"
+                 "i2 返回 '" &lt;&lt; *i2 &lt;&lt; "'\n";
+    
+    ++i2;
+    std::cout &lt;&lt; "在只自增 i2 但不自增 i1 后：\n"
+                 "i1 返回 '" &lt;&lt; *i1 &lt;&lt; "'\n"
+                 "i2 返回 '" &lt;&lt; *i2 &lt;&lt; "'\n";
+}
+|output=
+ss 拥有 12 个字节；它持有 "Hello, world"
+i1 返回 'a'
+i2 返回 'a'
+在只自增 i1 但不自增 i2 后：
+i1 返回 'b'
+i2 返回 'b'
+在只自增 i2 但不自增 i1 后：
+i1 返回 'c'
+i2 返回 'c'
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=659|std=C++98|before=1. {{tt|std::istreambuf_iterator}} 没有 {{c/core|operator-&gt;}}&lt;br&gt;2. 成员类型 {{tt|pointer}} 被指定为 {{tt|CharT*}}|after=1. 已添加&lt;br&gt;2. 不再指定}}
+{{dr list item|wg=lwg|dr=2790|std=C++98|before=由 {{lwg|659}} 添加的 {{c/core|operator-&gt;}} 没有用处|after=已移除}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/dsc ostreambuf_iterator}}
+{{dsc inc|cpp/iterator/dsc istream_iterator}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

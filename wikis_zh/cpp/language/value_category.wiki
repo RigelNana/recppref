@@ -1,0 +1,498 @@
+{{title|值类别}}
+{{cpp/language/expressions/navbar}}
+
+每个 C++ {{rlp|expressions|表达式}}（带有操作数的操作符、字面量、变量名等）可按照两种独立的特性加以辨别：''类型''{{sep}}和''值类别 (value category)''。每个表达式都具有某种非引用类型，且每个表达式只属于三种基本值类别中的一种：[[#纯右值|''纯右值 (prvalue)'']]、[[#亡值|''亡值 (xvalue)'']]、[[#左值|''左值 (lvalue)'']]。
+
+* '''{{ls|#泛左值}} (glvalue)'''（“泛化 (generalized)”的左值）是一个求值可确定某个对象或函数的标识的表达式；
+* '''{{ls|#纯右值}} (prvalue)'''（“纯 (pure)”的右值）是求值符合下列之一的表达式：
+** 计算某个运算符的操作数的值（这种纯右值没有''结果对象''）
+** 初始化某个对象（称这种纯右值有一个''结果对象''）。
+:: 结果对象可以是变量，由 {{rlp|new|new 表达式}}创建的对象，由{{rlps|implicit conversion#临时量实质化}}创建的临时对象，或者前述三类对象的成员。注意，非 {{c/core|void}} 的{{rlp|expressions#弃值表达式|弃值表达式}}有结果对象（即被实质化的临时量）。并且在作为 {{rlpt|decltype}} 的操作数以外的情况下，每个类类型或数组类型的纯右值都有结果对象；
+* '''{{ls|#亡值}} (xvalue)'''（“将亡 (expiring)”的值）是代表它的资源能够被重新使用的对象或位域的泛左值；
+* '''{{ls|#左值}} (lvalue)''' 是并非亡值的泛左值；
+{{cot}}
+如此称呼的历史原因是，左值可以在赋值表达式的左边出现。一般来说，并不总是这样：
+{{source|1=
+void foo();
+
+void baz()
+{
+    int a; // 表达式 `a` 是左值
+    a = 4; // OK，可以出现在赋值表达式的左侧
+
+    int&amp; b{a}; // 表达式 `b` 是左值
+    b = 5; // OK，可以出现在赋值表达式的左侧
+
+    const int&amp; c{a}; // 表达式 `c` 是左值
+    c = 6;           // 非良构，对只读引用赋值
+
+    // 表达式 `foo` 是左值
+    // 可以用内建取地址运算符获取其地址
+    void (*p)() = &amp;foo;
+
+    foo = baz; // 非良构，对函数赋值
+}
+}}
+{{cob}}
+
+* '''{{ls|#右值}} (rvalue)''' 是纯右值或者亡值；
+{{cot}}
+如此称呼的历史原因是，右值可以在赋值表达式的右边出现。一般来说，并不总是这样：
+{{example
+|code=
+#include &lt;iostream&gt;
+
+struct S
+{
+    S() : m{42} {}
+    S(int a) : m{a} {}
+    int m;
+};
+
+int main()
+{
+    S s;
+
+    // 表达式 `S{}` 是纯右值
+    // 可以出现在赋值表达式的右侧
+    s = S{};
+
+    std::cout &lt;&lt; s.m &lt;&lt; '\n';
+
+    // 表达式 `S{}` 是纯右值
+    // 也可以在左侧使用
+    std::cout &lt;&lt; (S{} = S{7}).m &lt;&lt; '\n';
+}
+|output=
+42
+7
+}}
+{{cob}}
+
+注意：这个分类法与 C++ 标准过去的各版本相比经历了显著变更，详见下文的{{ls|#历史}}部分。
+
+{{cot}}
+
+尽管它们被如此命名，这些术语所分类的是表达式，而非值。
+
+{{example
+|code=
+#include &lt;type_traits&gt;
+#include &lt;utility&gt;
+
+template &lt;class T&gt; struct is_prvalue : std::true_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_lvalue : std::false_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&gt; : std::true_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_xvalue : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&amp;&gt; : std::true_type {};
+
+int main()
+{
+    int a{42};
+    int&amp; b{a};
+    int&amp;&amp; r{std::move(a)};
+
+    // 表达式 `42` 是纯右值
+    static_assert(is_prvalue&lt;decltype((42))&gt;::value);
+
+    // 表达式 `a` 是左值
+    static_assert(is_lvalue&lt;decltype((a))&gt;::value);
+
+    // 表达式 `b` 是左值
+    static_assert(is_lvalue&lt;decltype((b))&gt;::value);
+
+    // 表达式 `std::move(a)` 是亡值
+    static_assert(is_xvalue&lt;decltype((std::move(a)))&gt;::value);
+
+    // 变量 `r` 的类型是右值引用
+    static_assert(std::is_rvalue_reference&lt;decltype(r)&gt;::value);
+
+    // 变量 `b` 的类型是左值引用
+    static_assert(std::is_lvalue_reference&lt;decltype(b)&gt;::value);
+
+    // 表达式 `r` 是左值
+    static_assert(is_lvalue&lt;decltype((r))&gt;::value);
+}
+}}
+{{cob}}
+
+===基本类别===
+====左值====
+下列表达式是''左值表达式''：
+* 变量、函数{{rev inl|since=c++20|、{{rlp|template parameters#非类型模板形参|模板形参对象}}}}或数据成员的名字，不论类型，例如 {{c|std::cin}} 或 {{c|std::endl}}。即使变量的类型是右值引用，由它的名字构成的表达式仍是左值表达式（但请见{{ls|#有移动资格的表达式}}）；
+
+{{cot}}
+{{source|1=
+void foo() {}
+
+void baz()
+{
+    // 'foo' 是左值
+    // 可以用内建取地址运算符获取其地址
+    void (*p)() = &amp;foo;
+}
+}}
+
+{{source|1=
+struct foo {};
+
+template &lt;foo a&gt;
+void baz()
+{
+    const foo* obj = &amp;a;  // `a` 是左值，模板形参对象
+}
+}}
+{{cob}}
+
+* 返回类型是左值引用的函数调用或重载运算符表达式，例如 {{c|std::getline(std::cin, str)}}、{{c|std::cout &lt;&lt; 1}}、{{c|1=str1 = str2}} 或 {{c|++it}}；
+
+{{cot}}
+{{source|1=
+int&amp; a_ref()
+{
+    static int a{3};
+    return a;
+}
+
+void foo()
+{
+    a_ref() = 5; // `a_ref()` 是左值，此函数调用的返回类型是左值引用
+}
+}}
+{{cob}}
+
+* {{c|1=a = b}}，{{c|1=a += b}}，{{c|1=a %= b}}，以及所有其他内建的{{rlp|operator assignment|赋值及复合赋值}}表达式；
+* {{c|++a}} 和 {{c|--a}}，内建的{{rlp|operator incdec#内建的前置运算符|前置自增与前置自减}}表达式；
+* {{c|*p}}，内建的{{rlp|operator member access#内建的间接寻址运算符|间接寻址}}表达式；
+* {{c|a[n]}} 和 {{c|n[a]}}，内建的{{rlp|operator member access#内建的下标运算符|下标}}表达式{{rev inl|since=c++11|，当 {{tt|a[n]}} 中的操作数是数组左值时}}；
+* {{c|a.m}}，{{rlp|operator member access#内建的成员访问运算符|对象成员}}表达式，除了以下两种情况： {{tt|m}} 是成员枚举项或非静态成员函数，或者 {{c|a}} 是右值而 {{tt|m}} 是对象类型的非静态数据成员的情况；
+
+{{cot}}
+{{source|1=
+struct foo
+{
+    enum bar
+    {
+        m // 成员枚举项
+    };
+};
+
+void baz()
+{
+    foo a;
+    a.m = 42; // 非良构，需要左值作为赋值的左操作数
+}
+}}
+
+{{source|1=
+struct foo
+{
+    void m() {} // 非静态成员函数
+};
+
+void baz()
+{
+    foo a;
+
+    // `a.m` 是纯右值，因而不能以内建取地址运算符获取其地址
+    void (foo::*p1)() = &amp;a.m; // 非良构
+
+    void (foo::*p2)() = &amp;foo::m; // OK：成员函数指针
+}
+}}
+
+{{source|1=
+struct foo
+{
+    static void m() {} // 静态成员函数
+};
+
+void baz()
+{
+    foo a;
+    void (*p1)() = &amp;a.m;     // `a.m` 是左值
+    void (*p2)() = &amp;foo::m;  // 相同
+}
+}}
+{{cob}}
+
+* {{c|p-&gt;m}}，内建的{{rlp|operator member access#内建的成员访问运算符|指针成员}}表达式，除了 {{tt|m}} 是成员枚举项或非静态成员函数的情况；
+* {{c|a.*mp}}，{{rlp|operator member access#内建的成员指针访问运算符|对象的成员指针}}表达式，其中 {{c|a}} 是左值且 {{tt|mp}} 是数据成员指针；
+* {{c|p-&gt;*mp}}，内建的{{rlp|operator member access#内建的成员指针访问运算符|指针的成员指针}}表达式，其中 {{tt|mp}} 是数据成员指针；
+* {{c|a, b}}，内建的{{rlp|operator other#内建的逗号运算符|逗号}}表达式，其中 {{c|b}} 是左值；
+* {{c|a ? b : c}}，对某些 {{c|b}} 和 {{c|c}} 的{{rlp|operator other#条件运算符|三元条件}}表达式（例如，当它们都是同类型左值时，但细节见{{rlp|operator other#条件运算符|定义}}）；
+* {{rlp|string literal|字符串字面量}}，例如 {{c|"Hello, world!"}}；
+* 转换到左值引用类型的转型表达式，例如 {{c|static_cast&lt;int&amp;&gt;(x)}} 或 {{c|static_cast&lt;void(&amp;)(int)&gt;(x)}}；
+* 具有左值引用类型的非类型{{rlp|template parameters|模板形参}}；
+
+{{source|1=
+template &lt;int&amp; v&gt;
+void set()
+{
+    v = 5; // 模板形参为左值
+}
+
+int a{3}; // 静态变量，编译时已知其固有地址
+
+void foo()
+{
+    set&lt;a&gt;();
+}
+}}
+
+{{rrev|since=c++11|
+* 返回类型是到函数的右值引用的函数调用表达式或重载的运算符表达式；
+* 转换到函数的右值引用类型的转型表达式，如 {{c|static_cast&lt;void (&amp;&amp;)(int)&gt;(x)}}。
+}}
+
+性质：
+* 与{{ls|#泛左值}}相同（见下文）。
+* 可以通过内建的取址运算符取左值的地址：{{c|&amp;++i}}&lt;ref&gt;假设 {{c|i}} 具有内建类型，或者它的前置自增运算符被{{rlp|operators|重载}}为返回左值引用。&lt;/ref&gt; 及 {{c|&amp;std::endl}} 是合法表达式。
+* 可修改的左值可用作内建赋值和内建复合赋值运算符的左操作数。
+* 左值可以用来{{rlp|reference initialization|初始化左值引用}}；这会将新名字关联给该表达式所标识的对象。
+
+====纯右值====
+下列表达式是''纯右值表达式''：
+* （除了{{rlp|string literal|字符串字面量}}之外的）{{rlp|expressions#字面量|字面量}}，例如 {{c|42}}、{{c|true}} 或 {{c|nullptr}}；
+* 返回类型是非引用的函数调用或重载运算符表达式，例如 {{c|str.substr(1, 2)}}、{{c|str1 + str2}} 或 {{c|it++}}；
+* {{c|a++}} 和 {{c|a--}}，内建的{{rlp|operator incdec#内建的后置运算符|后置自增与后置自减}}表达式；
+* {{c|a + b}}、{{c|a % b}}、{{c|a &amp; b}}、{{c|a &lt;&lt; b}}，以及其他所有内建的{{rlp|operator arithmetic|算术}}表达式；
+* {{c|a &amp;&amp; b}}、{{c|a {{!!}} b}}、{{c|!a}}，内建的{{rlp|operator logical|逻辑}}表达式；
+* {{c|a &lt; b}}、{{c|1=a == b}}、{{c|1=a &gt;= b}} 以及其他所有内建的{{rlp|operator comparison|比较}}表达式；
+* {{c|&amp;a}}，内建的{{rlp|operator member access#内建的取地址运算符|取地址}}表达式；
+* {{c|a.m}}，{{rlp|operator member access#内建的成员访问运算符|对象成员}}表达式，其中 {{tt|m}} 是成员枚举项或非静态成员函数&lt;ref name=pmfc&gt;一种特殊的右值类别，参见{{ls|#未决成员函数调用}}。&lt;/ref&gt;；
+* {{c|p-&gt;m}}，内建的{{rlp|operator member access#内建的成员访问运算符|指针成员}}表达式，其中 {{tt|m}} 是成员枚举项或非静态成员函数&lt;ref name=pmfc/&gt;；
+* {{c|a.*mp}}，{{rlp|operator member access#内建的成员指针访问运算符|对象的成员指针}}表达式，其中 {{tt|mp}} 是成员函数指针&lt;ref name=pmfc/&gt;；
+* {{c|p-&gt;*mp}}，内建的{{rlp|operator member access#内建的成员指针访问运算符|指针的成员指针}}表达式，其中 {{tt|mp}} 是成员函数指针&lt;ref name=pmfc/&gt;；
+* {{c|a, b}}，内建的{{rlp|operator other#内建的逗号表达式|逗号}}表达式，其中 {{c|b}} 是纯右值；
+* {{c|a ? b : c}}，对某些 {{c|b}} 和 {{c|c}} 的{{rlp|operator other#条件运算符|三元条件}}表达式（细节见{{rlp|operator other#条件运算符|定义}}）；
+* 转换到非引用类型的转型表达式，例如 {{c|static_cast&lt;double&gt;(x)}}、{{c|std::string{}&lt;!-- --&gt;}} 或 {{c|(int)42}}；
+* {{rlpt|this}} 指针；
+* {{rlp|enum|枚举项}};
+* 具有标量类型的非类型{{rlp|template parameters|模板形参}}；
+
+{{source|1=
+template &lt;int v&gt;
+void foo()
+{
+    // 不是左值，`v` 是标量类型 int 的模板形参
+    const int* a = &amp;v; // 非良构
+
+    v = 3; // 非良构：需要左值作为赋值的左操作数
+}
+}}
+
+{{rev begin}}
+{{rev|since=c++11|
+* {{rlp|lambda|lambda 表达式}}，例如 {{c|[](int x){ return x * x; }&lt;!-- --&gt;}}；
+}}
+{{rev|since=c++20|
+* {{rlp|constraints|requires 表达式}}，例如 {{c|requires (T i) { typename T::type; }&lt;!-- --&gt;}}；
+* {{rlp|constraints|概念}}的特化，例如 {{c|std::equality_comparable&lt;int&gt;}}。
+}}
+{{rev end}}
+
+性质：
+* 与{{ls|#右值}}相同（见下文）。
+* 纯右值不具有{{rlp|object#多态对象|多态}}：它所标识的对象的{{rlps|type#动态类型}}始终是该表达式的类型。
+* 非类非数组的纯右值不能有 {{rlp|cv|cv 限定}}{{rev inl|since=c++17|，除非它被{{rlp|implicit conversion#临时量实质化|实质化}}以{{rlp|reference initialization|绑定}}到 cv 限定类型的引用&lt;!-- CWG 2481 --&gt;}}。（注意：函数调用或转型表达式可能生成非类的 cv 限定类型的纯右值，但它的 cv 限定符通常被立即剥除。）
+* 纯右值不能具有{{rlps|type#不完整类型}}（除了类型 {{c/core|void}}（见下文），或在 {{rlpt|decltype}} 说明符中使用之外）
+* 纯右值不能具有{{rlp|abstract class|抽象类类型}}或它的数组类型。
+
+====亡值====
+下列表达式是''亡值表达式''：
+* {{c|a.m}}，{{rlp|operator member access#内建的成员访问运算符|对象成员}}表达式，其中 {{tt|a}} 是右值&lt;!-- 从 C++17（p0135r1）开始，当左操作数是纯右值时，会对实质化临时对象并将它转换成亡值，见 [expr]/9+。 --&gt;且 {{tt|m}} 是对象类型的非静态数据成员；
+* {{c|a.*mp}}，{{rlp|operator member access#内建的成员指针访问运算符|对象的成员指针}}表达式，其中 {{c|a}} 是右值且 {{tt|mp}} 是数据成员指针&lt;!-- 从 C++17（p0135r1）开始，当左操作数是纯右值时，会对实质化临时对象并将它转换成亡值，见 [expr]/9+。 --&gt;；
+* {{c|a, b}}，内建的{{rlp|operator other#内建的逗号表达式|逗号}}表达式，其中 {{c|b}} 是亡值；
+* {{c|a ? b : c}}，对某些 {{c|b}} 和 {{c|c}} 的{{rlp|operator other#条件运算符|三元条件}}表达式（细节见{{rlp|operator other#条件运算符|定义}}）；
+{{rev begin}}
+{{rev|since=c++11|
+* 返回类型是对象的右值引用的函数调用或重载运算符表达式，例如 {{c|std::move(x)}}；
+* {{c|a[n]}}，内建的{{rlp|operator member access#内建的下标运算符|下标}}表达式，它的操作数之一是数组右值&lt;!-- 从 C++17（p0135r1）开始，会为数组纯右值实质化临时对象并将它转换成亡值--&gt;；
+* 转换到对象的右值引用类型的类型转换表达式，例如 {{c|static_cast&lt;char&amp;&amp;&gt;(x)}}；
+}}
+{{rev|since=c++17|
+* 在{{rlps|implicit conversion#临时量实质化}}后，任何指代该临时对象的表达式。
+}}
+{{rev|since=c++23|
+* [[#有移动资格的表达式|有移动资格的表达式]]。
+}}
+{{rev end}}
+
+性质：
+* 与右值相同（见下文）。
+* 与泛左值相同（见下文）。
+
+特别是，与所有的右值类似，亡值可以绑定到右值引用上，而且与所有的泛左值类似，亡值可以是{{rlp|object#多态对象|多态的}}，而且非类的亡值可以有 {{rlp|cv|cv 限定}}。
+
+{{cot}}
+{{example
+|code=
+#include &lt;type_traits&gt;
+
+template &lt;class T&gt; struct is_prvalue : std::true_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_prvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_lvalue : std::false_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&gt; : std::true_type {};
+template &lt;class T&gt; struct is_lvalue&lt;T&amp;&amp;&gt; : std::false_type {};
+
+template &lt;class T&gt; struct is_xvalue : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&gt; : std::false_type {};
+template &lt;class T&gt; struct is_xvalue&lt;T&amp;&amp;&gt; : std::true_type {};
+
+// 来自 C++23 标准的示例：7.2.1 Value category [basic.lval]
+struct A
+{
+    int m;
+};
+
+A&amp;&amp; operator+(A, A);
+A&amp;&amp; f();
+
+int main()
+{
+    A a;
+    A&amp;&amp; ar = static_cast&lt;A&amp;&amp;&gt;(a);
+
+    // 返回类型为右值引用的函数调用是亡值
+    static_assert(is_xvalue&lt;decltype( (f()) )&gt;::value);
+
+    // 对象成员表达式，对象为亡值，`m` 是非静态数据成员
+    static_assert(is_xvalue&lt;decltype( (f().m) )&gt;::value);
+
+    // 向右值引用的转型表达式
+    static_assert(is_xvalue&lt;decltype( (static_cast&lt;A&amp;&amp;&gt;(a)) )&gt;::value);
+
+    // 返回类型是到对象的右值引用的运算符表达式
+    static_assert(is_xvalue&lt;decltype( (a + a) )&gt;::value);
+
+    // 表达式 `ar` 是左值，`&amp;ar` 有效
+    static_assert(is_lvalue&lt;decltype( (ar) )&gt;::value);
+    [[maybe_unused]] A* ap = &amp;ar;
+}
+}}
+{{cob}}
+
+===混合类别===
+====泛左值====
+''泛左值''表达式包括左值、亡值。
+
+性质：
+* 泛左值可以通过左值到右值、数组到指针或函数到指针{{rlp|implicit conversion|隐式转换}}转换成纯右值。
+* 泛左值可以是{{rlp|object#多态对象|多态的}}：它标识的对象的{{rlps|types#动态类型}}不必是该表达式的静态类型。
+* 泛左值可以具有{{rlps|types#不完整类型}}，只要表达式中容许。
+
+====右值====
+''右值表达式''包括纯右值、亡值。
+
+性质：
+* 右值不能由内建的取址运算符取地址：{{c|&amp;int()}}、{{c|&amp;i++}}&lt;ref&gt;假定 {{c|i}} 具有内建类型，或它的后置自增运算符并未{{rlp|operators|重载}}为返回左值引用。&lt;/ref&gt;、{{c|&amp;42}} 及 {{c|&amp;std::move(x)}} 是非法的。
+* 右值不能用作内建赋值运算符及内建复合赋值运算符的左操作数。
+* 右值可以用来{{rlp|reference initialization|初始化 const 左值引用}}，这种情况下该右值所标识的对象的生存期被{{rlp|reference initialization#临时对象的生存期|延长}}到该引用的作用域结尾。
+{{rrev|since=c++11|
+* 右值可以用来{{rlp|reference initialization|初始化右值引用}}，这种情况下该右值所标识的对象的生存期被{{rlp|reference initialization#临时对象的生存期|延长}}到该引用的作用域结尾。
+* 当被用作函数实参且该函数有两种{{rlp|overload resolution|重载}}可用，其中之一接受右值引用的形参而另一个接受 const 的左值引用的形参时，右值将被绑定到右值引用的重载之上（从而，当复制与移动构造函数均可用时，以右值实参将调用它的{{rlp|move constructor|移动构造函数}}，复制和移动赋值运算符与此类似）。
+}}
+
+===特殊类别===
+====未决成员函数调用====
+表达式 {{c|a.mf}} 与 {{c|p-&gt;mf}}，其中 {{tt|mf}} 是{{rlp|member functions|非静态成员函数}}，以及表达式 {{c|a.*pmf}} 与 {{c|p-&gt;*pmf}}，其中 {{tt|pmf}} 是{{rlp|pointer#成员函数指针|成员函数指针}}，被归类为纯右值表达式，但它们不能用来初始化引用，作为函数实参，或者用于除了作为函数调用运算符的左操作数（例如 {{c|(p-&gt;*pmf)(args)}}）以外的任何目的。
+
+====void 表达式====
+返回 {{c/core|void}} 的函数调用表达式，转换到 {{c/core|void}} 的转型表达式，以及 {{rlp|throw|throw 表达式}}，被归类为纯右值表达式，但它们不能用来初始化引用或者作为函数实参。它们可以用在舍弃值的语境（例如自成一行，作为逗号运算符的左操作数等）和返回 {{c/core|void}} 的函数中的 {{c/core|return}} 语句中。另外，throw 表达式可用作{{rlp|operator other|条件运算符 {{tt|?:}}}} 的第二个和第三个操作数。
+{{rrev|since=c++17|
+void 表达式没有''结果对象''。
+}}
+
+====位域====
+代表某个{{rlp|bit field|位域}}的表达式（例如 {{c|a.m}}，其中 {{c|a}} 是类型 {{c/core|struct A { int m: 3; }&lt;!-- --&gt;}} 的左值）是泛左值表达式：它可用作赋值运算符的左操作数，但它不能被取地址，并且非 const 的左值引用不能绑定于它。const 左值引用或右值引用可以从位域泛左值初始化，但这会制造位域的临时副本：它不会直接绑定到位域。
+
+{{rrev|since=c++11|
+====有移动资格的表达式====
+虽然由任何变量的名字构成的表达式是左值表达式，但若它作为
+* {{rlpt|return}} 语句
+* {{rlpt|coroutines|co_return}} 语句 {{mark since c++20}}
+* {{rlpt|throw}} 表达式 {{mark since c++17}}
+的操作数出现，则表达式具有移动资格。
+
+如果表达式有移动资格，那么它在{{rlp|overload resolution|重载决议}}时被视为{{rev inl|until=c++23|左值或者右值}}{{rev inl|since=c++23|右值}}（因此可能会选择{{rlp|move constructor|移动构造函数}}）。详情见{{rlps|return#自动从局部变量和形参移动}}。
+}}
+
+===历史===
+====CPL====
+编程语言 [[enwiki:CPL (programming language)|CPL]] 率先为表达式引入了值类别：所有 CPL 表达式都能以“右侧模式 (right-hand mode)”求值，但只有某些类型的表达式在“左侧模式 (left-hand mode)”有意义。在右侧模式中求值时，表达式被当做一条进行值的计算（右侧值，或''右值''）的规则。在左侧模式中求值时，表达式的效果是给出地址（左侧值，或''左值''）。“左”和“右”代表“赋值之左”和“赋值之右”。
+
+====C====
+C 编程语言遵循相似的分类法，但赋值的作用不再重要：C 的表达式被分为“左值 (lvalue) 表达式”和其他（函数和非对象值），其中“左值 (lvalue)”的含义为标识对象的表达式，即“定位器值 (locator value)”&lt;ref&gt;“C 社区中对此的观点主要围绕着 lvalue 的含义而有所差异，一组人认为 lvalue 是任何种类的对象定位器，另一组人认为 lvalue 在赋值运算符的左侧时才有意义。C89 委员会采纳了作为对象定位器的定义。”—— ANSI C 基本原理，6.3.2.1/10 。&lt;/ref&gt;。
+
+====C++98====
+2011 年前的 C++ 遵循 C 模型，但恢复了对非左值表达式的“右值 (rvalue)”称呼，令函数为左值，并添加了引用能绑定到左值但唯有 const 的引用能绑定到右值的规则。几种非左值的 C 表达式在 C++ 中成为了左值表达式。
+
+====C++11====
+随着移动语义引入到 C++11 之中，值类别被重新进行了定义，以区别表达式的两种独立的性质&lt;ref&gt;[http://www.stroustrup.com/terminology.pdf 新·值术语]，Bjarne Stroustrup，2010。&lt;/ref&gt;：
+* ''拥有身份 (identity)''：可以确定表达式是否与另一表达式指代同一实体，例如通过比较它们所标识的对象或函数的（直接或间接获得的）地址；
+* ''可被移动''：{{rlp|move constructor|移动构造函数}}、{{rlp|move assignment|移动赋值运算符}}或实现了移动语义的其他函数重载能够绑定于这个表达式。
+
+C++11 中：
+* 拥有身份且不可被移动的表达式被称作''左值 (lvalue)''{{sep}}表达式；
+* 拥有身份且可被移动的表达式被称作''亡值 (xvalue)''{{sep}}表达式；
+* 不拥有身份且可被移动的表达式被称作''纯右值 (prvalue)''{{sep}}表达式；
+* 不拥有身份且不可被移动的表达式无法使用&lt;ref&gt;const 纯右值（仅允许类类型）及 const 亡值不能绑定于 {{tt|T&amp;&amp;}} 的重载，但它们可以绑定于 {{c/core|const T&amp;&amp;}} 的重载——由于它满足这种分类中的“可被移动”的定义，标准中将这种重载也归类为“移动构造函数”和“移动赋值运算符”。然而，这种重载无法修改它们的参数，并且在实践中并不使用；当没有这种重载时，const 纯右值和 const 亡值绑定于 {{c/core|const T&amp;}} 的重载。&lt;/ref&gt;。
+
+拥有身份的表达式被称作“泛左值 (glvalue) 表达式”。左值和亡值都是泛左值表达式。
+
+可被移动的表达式被称作“右值 (rvalue) 表达式”。纯右值和亡值都是右值表达式。
+
+====C++17====
+C++17 中，某些场合强制要求进行{{rlp|copy elision|复制消除}}，而这要求将纯右值表达式从被它们所初始化的临时对象中分离出来，这就是我们现有的系统。要注意，与 C++11 的方案相比，纯右值已不再是可被移动。
+
+===脚注===
+&lt;references/&gt;
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=7.2.1|title=Value category|id=basic.lval}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=7.2.1|title=Value category|id=basic.lval}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=6.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=3.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=3.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=3.10|title=Lvalues and rvalues|id=basic.lval}}
+{{ref std end}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=616|std=C++11|before=右值的成员访问及通过成员指针的成员访问的结果是纯右值|after=重分类为亡值}}
+{{dr list item|wg=cwg|dr=1059|std=C++11|before=数组纯右值不能有 cv 限定|after=可以有 cv 限定}}
+{{dr list item|wg=cwg|dr=1213|std=C++11|before=数组右值的下标操作导致左值|after=重分类为亡值}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/value category|值类别|nomono=true}}
+{{dsc end}}
+
+===外部链接===
+{{elink begin}}
+{{elink|David Mazières, 2021 - [https://www.scs.stanford.edu/~dm/blog/decltype.html C++ 值类别和 decltype 解读]}}
+{{elink|StackOverflow, 2013 - [https://stackoverflow.com/a/16638081 凭经验确定表达式的值类别]}}
+{{elink begin}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

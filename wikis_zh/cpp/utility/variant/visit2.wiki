@@ -1,0 +1,158 @@
+{{cpp/title|visit}}
+{{cpp/utility/variant/navbar}}
+{{dcl begin}}
+{{dcl header|variant}}
+{{dcl|since=c++17|num=1|
+template &lt;class Visitor, class... Variants&gt;
+constexpr /* 见下文 */ visit( Visitor&amp;&amp; v, Variants&amp;&amp;... values );
+}}
+{{dcl|since=c++20|num=2|
+template&lt; class R, class Visitor, class... Variants &gt;
+constexpr R visit( Visitor&amp;&amp; v, Variants&amp;&amp;... values );
+}}
+{{dcl h|辅助模板}}
+{{dcl|notes={{mark expos}}|num=3|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( std::variant&lt;Ts...&gt;&amp; value );
+}}
+{{dcl|notes={{mark expos}}|num=4|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( const std::variant&lt;Ts...&gt;&amp; value );
+}}
+{{dcl|notes={{mark expos}}|num=5|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( std::variant&lt;Ts...&gt;&amp;&amp; value );
+}}
+{{dcl|notes={{mark expos}}|num=6|
+template&lt; class... Ts &gt;
+auto&amp;&amp; as-variant( const std::variant&lt;Ts...&gt;&amp;&amp; value );
+}}
+{{dcl end}}
+
+向一组变体 {{c|values}} 应用探访器 {{c|v}}（可以以变体中类型的任意组合调用的{{named req|Callable}}对象）。
+
+给定 {{tt|VariantBases}} 为 {{c/core|decltype(}}{{tti|as-variant}}{{c/core|(std::forward&lt;Variants&gt;(values))...}}（包含 {{c|sizeof...(Variants)}} 个类型的包）：
+@1@ 如同以 {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(std::forward&lt;Visitor&gt;(v),}}&lt;br&gt;{{c/core|       std::get&lt;indices&gt;(std::forward&lt;VariantBases&gt;(values))...)}}}} 调用 {{c|v}}，其中 {{c|indices}} 是 {{box|{{tti|as-variant}}{{c/core|(vars).index()...}}}}。
+
+@2@ 如同以 {{box|{{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}{{c/core|(std::forward&lt;Visitor&gt;(v),}}&lt;br&gt;{{c/core|          std::get&lt;indices&gt;(std::forward&lt;VariantBases&gt;(values))...)}}}} 调用 {{c|v}}，其中 {{c|indices}} 是 {{box|{{tti|as-variant}}{{c/core|(values).index()...}}}}。
+
+{{cpp/enable if|plural=yes| {{tt|VariantBases}} 中的每个类型都合法}}。如果由 {{lti|cpp/utility/functional|INVOKE}}{{rev inl|since=c++20| 或 {{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}}} 表示的表达式非法，或者 {{lti|cpp/utility/functional|INVOKE}}{{rev inl|since=c++20| 或 {{lti|cpp/utility/functional|INVOKE&lt;R&gt;}}}} 的结果在对于不同的 {{c|indices}} 会有不同的类型或值类别，那么程序非良构。
+
+@3-6@ 仅用于阐述的 {{tti|as-variant}} 函数模板接受一个具有可以为 {{c/core|std::variant&lt;Ts...&gt;}} [[cpp/language/template argument deduction|推导]]的类型（即 {{c/core|std::variant&lt;Ts...&gt;}} 或从 {{c/core|std::variant&lt;Ts...&gt;}} 派生的类型）的值，并返回具有相同 const 限定和值类别的 {{lc|std::variant}} 值。
+@3,4@ 返回 {{c|value}}。
+@5,6@ 返回 {{c|std::move(value)}}。
+
+===参数===
+{{par begin}}
+{{par|v|接受 {{c|Variants}} 中每个变体的每个可能可选项的{{named req|Callable}}对象}}
+{{par|values|传递给探访器的变体列表}}
+{{par end}}
+
+===返回值===
+@1@ {{lti|cpp/utility/functional|INVOKE}} 操作的结果。返回类型是将 {{ltt|cpp/language/decltype}} 应用到结果上取得的类型。
+@2@ 在 {{tt|R}} 是（可有 cv 限定的）{{c/core|void}} 时没有返回值；否则返回 {{lti|cpp/utility/functional|INVOKE&lt;R&gt;}} 操作的结果。
+@3-6@ 从 {{c|value}} 转换而成的 {{lc|std::variant}} 值。
+
+===异常===
+在 {{box|{{tti|as-variant}}{{c/core|(value_i).valueless_by_exception()}}}} 对于 {{c|values}} 中的任何变体 {{c|value_i}} 是 {{c|true}} 时抛出 {{lc|std::bad_variant_access}}。
+
+===复杂度===
+当变体的数量为零或一时，可调用对象的调用在常数时间内实现；即它不取决于变体中能存储的类型数量。
+
+如果变体的数量大于一，那么可调用对象的调用没有复杂度要求。
+
+===注解===
+令 {{c|n}} 为 {{c|(1 * ... * std::variant_size_v&lt;std::remove_reference_t&lt;VariantBases&gt;&gt;)}}，实现通常会为每个 {{tt|std::visit}} 的特化生成等价于有 {{c|n}} 个函数指针的（可能多维的）数组的一张表，这与[[cpp/language/virtual|虚函数]]的实现类似。
+
+实现亦可能为 {{tt|std::visit}} 生成有 {{c|n}} 个分支的 [[cpp/language/switch|switch 语句]]（例如 MSVC STL 实现在 {{c|n}} 不大于 256 时使用 switch 语句）。
+
+在典型实现上，可以认为调用 {{c|v}} 的时间复杂度等于访问（可能多维的）数组中的元素，或执行 switch 语句的时间复杂度。
+
+{{ftm begin|std=yes}}
+{{ftm|std=C++23|dr=17|value=202102L|__cpp_lib_variant|用于 {{lc|std::variant}} 派生类的 {{tt|std::visit}}}}
+{{ftm end}}
+
+===示例===
+{{example
+|code=
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;type_traits&gt;
+#include &lt;variant&gt;
+#include &lt;vector&gt;
+
+// 要探访的变体
+using value_t = std::variant&lt;int, long, double, std::string&gt;;
+
+// 探访器 #4 的辅助类型
+template&lt;class... Ts&gt;
+struct overloaded : Ts... { using Ts::operator()...; };
+// 显式推导指引（C++20 起不需要）
+template&lt;class... Ts&gt;
+overloaded(Ts...) -&gt; overloaded&lt;Ts...&gt;;
+
+int main()
+{
+    std::vector&lt;value_t&gt; vec = {10, 15l, 1.5, "hello"};
+    
+    for (auto&amp;&amp; v: vec)
+    {
+        // 1. void 探访器，仅为它的副作用而调用
+        std::visit([](auto&amp;&amp; arg){ std::cout &lt;&lt; arg; }, v);
+        
+        // 2. 返回值的探访器，演示返回另一变体的常见惯用法
+        value_t w = std::visit([](auto&amp;&amp; arg) -&gt; value_t { return arg + arg; }, v);
+        
+        // 3. 类型匹配探访器：以不同方式处理每个类型的 lambda
+        std::cout &lt;&lt; "。翻倍后，变体持有";
+        std::visit([](auto&amp;&amp; arg)
+        {
+            using T = std::decay_t&lt;decltype(arg)&gt;;
+            if constexpr (std::is_same_v&lt;T, int&gt;)
+                std::cout &lt;&lt; "值为 " &lt;&lt; arg &lt;&lt; " 的 int\n";
+            else if constexpr (std::is_same_v&lt;T, long&gt;)
+                std::cout &lt;&lt; "值为 " &lt;&lt; arg &lt;&lt; " 的 long\n";
+            else if constexpr (std::is_same_v&lt;T, double&gt;)
+                std::cout &lt;&lt; "值为 " &lt;&lt; arg &lt;&lt; " 的 double\n";
+            else if constexpr (std::is_same_v&lt;T, std::string&gt;)
+                std::cout &lt;&lt; "值为 " &lt;&lt; std::quoted(arg) &lt;&lt; " 的 std::string\n";
+            else 
+                static_assert(false, "探访器无法穷尽类型！");
+        }, w);
+    }
+
+    for (auto&amp;&amp; v: vec)
+    {
+        // 4. 另一种类型匹配探访器：有三个重载的 operator() 的类
+        // 注：此情况下 '(auto arg)' 模板 operator() 将绑定到 'int' 与 'long'，
+        //    但它不存在时 '(double arg)' operator() *也会* 绑定到 'int' 与 'long'，
+        //    因为两者均可隐式转换到 double。使用此形式时应留心以正确处理隐式转换。
+        std::visit(overloaded{
+            [](auto arg) { std::cout &lt;&lt; arg &lt;&lt; ' '; },
+            [](double arg) { std::cout &lt;&lt; std::fixed &lt;&lt; arg &lt;&lt; ' '; },
+            [](const std::string&amp; arg) { std::cout &lt;&lt; std::quoted(arg) &lt;&lt; ' '; },
+        }, v);
+    }
+}
+|output=
+10。翻倍后，变体持有值为 20 的 int
+15。翻倍后，变体持有值为 30 的 long
+1.5。翻倍后，变体持有值为 3 的 double
+hello。翻倍后，变体持有值为 "hellohello" 的 std::string
+10 15 1.500000 "hello" 
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2970|std=C++17|before=重载 {{v|1}} 的返回类型没有保留 {{tti|INVOKE}} 操作的结果的值类别|after=保留值类别}}
+{{dr list item|wg=lwg|dr=3052|paper=P2162R2|std=C++17|before=未指定在 {{tt|Variants}} 中的有类型不是 {{lc|std::variant}} 时的效果|after=已指定}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/utility/variant/dsc visit}}
+{{dsc inc|cpp/utility/variant/dsc swap}}
+{{dsc end}}
+
+{{langlinks|de|en|es|ja|ru}}

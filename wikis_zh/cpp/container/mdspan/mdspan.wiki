@@ -1,0 +1,173 @@
+{{cpp/container/mdspan/title|mdspan}}
+{{cpp/container/mdspan/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++23|
+constexpr mdspan();
+}}
+{{dcl|num=2|since=c++23|
+template&lt; class... OtherIndexTypes &gt;
+    constexpr explicit mdspan( data_handle_type p, OtherIndexTypes... exts );
+}}
+{{dcl|num=3|since=c++23|1=
+template&lt; class OtherIndexType, std::size_t N &gt;
+    constexpr explicit(N != rank_dynamic())
+        mdspan( data_handle_type p, std::span&lt;OtherIndexType, N&gt; exts );
+}}
+{{dcl|num=4|since=c++23|1=
+template&lt; class OtherIndexType, std::size_t N &gt;
+    constexpr explicit(N != rank_dynamic())
+        mdspan( data_handle_type p,
+                const std::array&lt;OtherIndexType, N&gt;&amp; exts );
+}}
+{{dcl|num=5|since=c++23|
+constexpr mdspan( data_handle_type p, const extents_type&amp; ext );
+}}
+{{dcl|num=6|since=c++23|
+constexpr mdspan( data_handle_type p, const mapping_type&amp; m );
+}}
+{{dcl|num=7|since=c++23|
+constexpr mdspan( data_handle_type p, const mapping_type&amp; m,
+                  const accessor_type&amp; a );
+}}
+{{dcl|num=8|since=c++23|
+template&lt; class OtherElementType, class OtherExtents,
+          class OtherLayoutPolicy, class OtherAccessor &gt;
+    constexpr explicit(/* 见下文 */)
+        mdspan( const mdspan&lt;OtherElementType, OtherExtents,
+                             OtherLayoutPolicy, OtherAccessor&gt;&amp; other );
+}}
+{{dcl|num=9|since=c++23|1=
+constexpr mdspan( const mdspan&amp; rhs ) = default;
+}}
+{{dcl|num=10|since=c++23|1=
+constexpr mdspan( mdspan&amp;&amp; rhs ) = default;
+}}
+{{dcl end}}
+
+构造一个 {{tt|mdspan}}，可选地使用用户提供的数据把柄 {{c|p}}、布局映射 {{c|m}} 和访问器 {{c|a}}。如果提供了尺度 {{c|exts}} 或 {{c|ext}}，那么将它们转换到 {{tt|extents_type}} 并以之初始化布局映射。
+
+===参数===
+{{par begin}}
+{{par|p|底层数据的把柄}}
+{{par|m|布局映射}}
+{{par|a|访问器}}
+{{par|ext|{{rlpt|extents|std::extents}} 对象}}
+{{par|exts|表示一种多维尺度}}
+{{par|other|要从之转换的另一 mdspan}}
+{{par|rhs|要从之复制或移动的另一 mdspan}}
+{{par end}}
+
+===效果===
+对于下表中列出的数据成员：
+* 如果对应的初始化器为空，那么该数据成员会被[[cpp/language/value initialization|值初始化]]。
+* 如果对应的初始化器不为空，那么该数据成员会以该初始化器被[[cpp/language/direct initialization|直接非列表初始化]]。
+
+{|class="wikitable" style="text-align: center;"
+!rowspan=2|{{nbsp}}重载{{nbsp}}
+!colspan=3|...对应的初始化器
+|-
+!{{normal|{{rlpsi|/#ptr_}}}}
+!{{normal|{{rlpsi|/#map_}}}}
+!{{normal|{{rlpsi|/#acc_}}}}
+|-
+|{{vl|1}}
+|colspan=3|（空）
+|-
+|{{vl|2}}
+|rowspan=6|{{c|std::move(p)}}
+|style="text-align: start;"|{{c multi
+|extents_type
+|    (static_cast&lt;index_type&gt;
+|         (std::move(exts))...)}}
+|rowspan=5|（空）
+|-
+|{{vl|3}}
+|rowspan=2|{{c|extents_type(exts)}}
+|-
+|{{vl|4}}
+|-
+|{{vl|5}}
+|{{c|ext}}
+|-
+|{{vl|6}}
+|rowspan=2|{{c|m}}
+|-
+|{{vl|7}}
+|{{c|a}}
+|-
+|{{vl|8}}
+|{{box|{{c/core|other.}}{{rlpsi|/#ptr_}}}}
+|{{box|{{c/core|other.}}{{rlpsi|/#map_}}}}
+|{{box|{{c/core|other.}}{{rlpsi|/#acc_}}}}
+|}
+
+===约束和补充信息===
+@1@ {{cpp/enable if|以下所有值都是 {{c|true}} }}：
+* {{c|rank_dynamic() &gt; 0}}
+* {{c|std::is_default_constructible_v&lt;data_handle_type&gt;}}
+* {{c|std::is_default_constructible_v&lt;mapping_type&gt;}}
+* {{c|std::is_default_constructible_v&lt;accessor_type&gt;}}
+
+@@ {{cpp/ub if|在调用此构造函数后 {{range/core|{{c|0}}|{{box|{{rlpsi|/#map_}}{{sep}}{{c/core|.required_span_size()}}}}}} 对于 {{rlpsi|/#map_}} 和 {{rlpsi|/#acc_}} 的值不是 {{box|{{rlpsi|/#ptr_}}}} 和 {{box|{{rlpsi|/#acc_}}}} 的{{ls|cpp/named req/AccessorPolicy#可访问范围}}}}。
+
+@2@ {{cpp/enable if|以下所有值都是 {{c|true}} }}：
+* {{c|(std::is_convertible_v&lt;OtherIndexTypes, index_type&gt; &amp;&amp; ...)}}
+* {{c|(std::is_nothrow_constructible&lt;index_type, OtherIndexTypes&gt; &amp;&amp; ...)}}
+* {{c|1=sizeof...(OtherIndexTypes) == rank() {{!!}} sizeof...(OtherIndexTypes) == rank_dynamic()}}
+* {{c|std::is_constructible_v&lt;mapping_type, extents_type&gt;}}
+* {{c|std::is_default_constructible_v&lt;accessor_type&gt;}}
+
+@@ {{cpp/ub if|在调用此构造函数后 {{range/core|{{c|0}}|{{box|{{rlpsi|/#map_}}{{sep}}{{c/core|.required_span_size()}}}}}} 对于 {{rlpsi|/#map_}} 和 {{rlpsi|/#acc_}} 的值不是 {{c|p}} 和 {{box|{{rlpsi|/#acc_}}}} 的可访问范围}}。
+
+@3,4@ {{cpp/enable if|plural=yes|以下所有值都是 {{c|true}} }}：
+* {{c|std::is_convertible_v&lt;const OtherIndexType&amp;, index_type&gt;}}
+* {{c|std::is_nothrow_constructible_v&lt;index_type, const OtherIndexType&amp;&gt;}}
+* {{c|1=N == rank() {{!!}} N == rank_dynamic()}}
+* {{c|std::is_constructible_v&lt;mapping_type, extents_type&gt;}}
+* {{c|std::is_default_constructible_v&lt;accessor_type&gt;}}
+
+@@ {{cpp/ub if|在调用这些构造函数后 {{range/core|{{c|0}}|{{box|{{rlpsi|/#map_}}{{sep}}{{c/core|.required_span_size()}}}}}} 对于 {{rlpsi|/#map_}} 和 {{rlpsi|/#acc_}} 的值不是 {{c|p}} 和 {{box|{{rlpsi|/#acc_}}}} 的可访问范围}}。
+
+@5@ {{cpp/enable if|以下所有值都是 {{c|true}} }}：
+* {{c|std::is_constructible_v&lt;mapping_type, const extents_type&amp;&gt;}}
+* {{c|std::is_default_constructible_v&lt;accessor_type&gt;}}
+
+@@ {{cpp/ub if|在调用此构造函数后 {{range/core|{{c|0}}|{{box|{{rlpsi|/#map_}}{{sep}}{{c/core|.required_span_size()}}}}}} 对于 {{rlpsi|/#map_}} 和 {{rlpsi|/#acc_}} 的值不是 {{c|p}} 和 {{box|{{rlpsi|/#acc_}}}} 的可访问范围}}。
+
+@6@ {{cpp/enable if| {{c|std::is_default_constructible_v&lt;accessor_type&gt;}} 是 {{c|true}} }}。
+@@ {{cpp/ub if|在调用此构造函数后 {{range|0|m.required_span_size()}} 对于 {{rlpsi|/#acc_}} 的值不是 {{c|p}} 和 {{box|{{rlpsi|/#acc_}}}} 的可访问范围}}。
+
+@7@ {{cpp/ub if|{{range|0|m.required_span_size()}} 不是 {{c|p}} 和 {{c|a}} 的可访问范围}}。
+
+@8@ {{c/core|explicit}} 中的表达式等价于 {{c multi
+|!std::is_convertible_v&lt;const OtherLayoutPolicy::template mapping&lt;OtherExtents&gt;&amp;,
+|                       mapping_type&gt;
+|    {{!!}} !std::is_convertible_v&lt;const OtherAccessor&amp;, accessor_type&gt;}}。
+@@ {{cpp/enable if|以下所有值都是 {{c|true}} }}：
+* {{c multi
+|std::is_constructible_v
+|    &lt;mapping_type, const OtherLayoutPolicy::template mapping&lt;OtherExtents&gt;&amp;&gt;}}
+* {{c|std::is_default_constructible_v&lt;accessor_type&gt;}}
+
+@@ {{cpp/error if|以下任意值是 {{c|false}} }}：
+* {{c|std::is_constructible_v&lt;data_handle_type, const OtherAccessor::data_handle_type&amp;&gt;}}
+* {{c|std::is_constructible_v&lt;extents_type, OtherExtents&gt;}}
+
+@@ {{cpp/ub if|在调用此构造函数后 {{range/core|{{c|0}}|{{box|{{rlpsi|/#map_}}{{sep}}{{c/core|.required_span_size()}}}}}} 对于 {{rlpsi|/#ptr_}}、{{rlpsi|/#map_}} 和 {{rlpsi|/#acc_}} 的值不是 {{box|{{rlpsi|/#ptr_}}}} 和 {{box|{{rlpsi|/#acc_}}}} 的可访问范围}}。
+
+@@ {{cpp/hardened ub if|since=c++26|{{c multi
+|static_extent(r) {{==}} std::dynamic_extent
+|    {{!!}} static_extent(r) {{==}} other.extent(r)}} 对于 {{tt|extents_type}} 的某个秩索引 {{c|r}} 是 {{c|false}}}}
+
+===示例===
+{{example}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|title=Constructors|id=mdspan.mdspan.cons|section=24.7.3.6.2}}
+{{ref std end}}
+
+===参阅===
+{{todo}}
+
+{{langlinks|en|es|ja|ru}}

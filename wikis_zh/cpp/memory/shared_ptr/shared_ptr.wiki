@@ -1,0 +1,222 @@
+{{cpp/memory/shared_ptr/title|shared_ptr}}
+{{cpp/memory/shared_ptr/navbar}}
+{{dcl begin}}
+{{dcl|num=1|1= 
+constexpr shared_ptr() noexcept;
+}}
+{{dcl|num=2|1= 
+constexpr shared_ptr( std::nullptr_t ) noexcept;
+}}
+{{dcl|num=3|1= 
+template&lt; class Y &gt; 
+explicit shared_ptr( Y* ptr );
+}}
+{{dcl|num=4|1= 
+template&lt; class Y, class Deleter &gt; 
+shared_ptr( Y* ptr, Deleter d );
+}}
+{{dcl|num=5|1= 
+template&lt; class Deleter &gt; 
+shared_ptr( std::nullptr_t ptr, Deleter d );
+}}
+{{dcl|num=6|1= 
+template&lt; class Y, class Deleter, class Alloc &gt; 
+shared_ptr( Y* ptr, Deleter d, Alloc alloc );
+}}
+{{dcl|num=7|1= 
+template&lt; class Deleter, class Alloc &gt; 
+shared_ptr( std::nullptr_t ptr, Deleter d, Alloc alloc );
+}}
+{{dcl|num=8|&lt;!--
+这是正确签名。请勿更改！ element_type 是 std::shared_ptr 的成员 typedef 。
+--&gt;
+template&lt; class Y &gt; 
+shared_ptr( const shared_ptr&lt;Y&gt;&amp; r, element_type* ptr ) noexcept;
+}}
+{{dcl|num=8|since=c++20|1= 
+template&lt; class Y &gt; 
+shared_ptr( shared_ptr&lt;Y&gt;&amp;&amp; r, element_type* ptr ) noexcept;
+}}
+{{dcl|num=9|1= 
+shared_ptr( const shared_ptr&amp; r ) noexcept;
+}}
+{{dcl|num=9|1= 
+template&lt; class Y &gt; 
+shared_ptr( const shared_ptr&lt;Y&gt;&amp; r ) noexcept;
+}}
+{{dcl|num=10|1= 
+shared_ptr( shared_ptr&amp;&amp; r ) noexcept;
+}}
+{{dcl|num=10|1= 
+template&lt; class Y &gt; 
+shared_ptr( shared_ptr&lt;Y&gt;&amp;&amp; r ) noexcept;
+}}
+{{dcl|num=11|1= 
+template&lt; class Y &gt; 
+explicit shared_ptr( const std::weak_ptr&lt;Y&gt;&amp; r );
+}}
+{{dcl|num=12|removed=c++17|1= 
+template&lt; class Y &gt; 
+shared_ptr( std::auto_ptr&lt;Y&gt;&amp;&amp; r );
+}}
+{{dcl|num=13|1= 
+template&lt; class Y, class Deleter &gt; 
+shared_ptr( std::unique_ptr&lt;Y, Deleter&gt;&amp;&amp; r );
+}}
+{{dcl end}}
+
+从指代要管理的对象的各种指针类型构造新的 {{tt|shared_ptr}}。
+
+{{rrev|since=c++17|
+为以下描述的目的，若指针类型 {{tt|Y*}} 可转换为指针类型 {{tt|T*}}，或 {{tt|Y}} 是 {{tt|U[N]}} 类型数组而 {{tt|T}} 是 {{tt|U cv []}}（其中 cv 是某个 cv 限定符集合），则称 {{tt|Y*}} ''兼容'' {{tt|T*}}。
+}}
+
+@1,2@ 构造无被管理对象的 {{tt|shared_ptr}}，即空 {{tt|shared_ptr}}。
+
+@3-7@ 构造 {{tt|shared_ptr}}，管理 {{c|ptr}} 所指向的对象。
+{{cpp/rev
+|until c++17=对于 {{v|3-4,6}}，{{tt|Y*}} 必须可转换为 {{tt|T*}}。
+|since c++17=若 {{tt|T}} 是数组类型 {{tt|U[N]}}，则当 {{tt|Y(*)[N]}} 为无效类型或不可转换为 {{tt|T*}} 时 {{v|3,4,6}} 不参与重载决议。若 {{tt|T}} 是数组类型 {{tt|U[]}}，则当 {{tt|Y(*)[]}} 为无效类型或不可转换为 {{tt|T*}} 时 {{v|3,4,6}} 不参与重载决议。否则，当 {{tt|Y*}} 不可转换为 {{tt|T*}} 时 {{v|3,4,6}} 不参与重载决议。
+}}
+另外：
+
+:@3@ {{rev inl|since=c++17|，若 {{tt|T}} 不是数组类型，则}}以 [[cpp/language/delete|delete 表达式]] {{c|delete ptr}} 为删除器{{rev inl|since=c++17|；若 {{tt|T}} 是数组类型，则以 {{c|delete[] ptr}} 为删除器}}。{{tt|Y}} 必须是完整类型。delete 表达式必须良构，拥有良好定义行为且不抛异常。{{rev inl|since=c++17|若 delete 表达式非良构，则此构造函数不参与重载决议。}}
+
+:@4,5@ 以指定的删除器 {{c|d}} 为删除器。表达式 {{c|d(ptr)}} 必须良构，拥有良好定义行为且不抛异常。{{c|d}} 的构造和从它复制并存储的删除器的构造必须不抛异常。
+{{cpp/rev
+|until c++17={{tt|Deleter}} 必须{{named req|CopyConstructible}}。
+|since c++17=若表达式 {{c|d(ptr)}} 非良构，或若 {{c|std::is_move_constructible_v&lt;D&gt;}} 为 {{c|false}}，则这些构造函数也不参与重载决议。
+}}
+
+:@6,7@ 同 {{v|4-5}}，但额外地用 {{c|alloc}} 的副本分配内部使用的数据。{{tt|Alloc}} 必须是{{named req|Allocator}}。
+
+@8@ ''别名使用构造函数''：构造 {{tt|shared_ptr}}，与 {{c|r}} 的初始值共享所有权信息，但保有无关且不管理的指针 {{c|ptr}}。若此 {{tt|shared_ptr}} 是离开作用域的组中的最后者，则它将调用最初 {{c|r}} 所管理对象的析构函数。然而，在此 {{tt|shared_ptr}} 上调用 {{tt|get()}} 将始终返回 {{c|ptr}} 的副本。程序员负责确保只要此 {{tt|shared_ptr}} 存在，此 {{c|ptr}} 就保持合法，例如在典型使用情况中，其中 {{c|ptr}} 是 {{c|r}} 所管理对象的成员，或是 {{tt|r.get()}} 的别名（例如向下转型）。{{rev inl|since=c++20|对于接收右值的第二重载，调用后 {{c|r}} 为空且 {{c|1=r.get() == nullptr}}。}}
+
+@9@ 构造 {{tt|shared_ptr}}，共享 {{c|r}} 所管理对象的所有权。若 {{c|r}} 不管理对象，则 {{c|*this}} 亦不管理对象。若 {{tt|Y*}} 不{{rev inl|until=c++17|可隐式转换为}}{{rev inl|since=c++17|''兼容''}} {{tt|T*}}，则此模板重载不参与重载决议。
+
+@10@ 从 {{c|r}} 移动构造 {{tt|shared_ptr}}。构造后，{{c|*this}} 含 {{c|r}} 先前状态的副本，而 {{c|r}} 为空且其存储的指针为空。若 {{tt|Y*}} 不{{rev inl|until=c++17|可隐式转换为}}{{rev inl|since=c++17|''兼容''}} {{tt|T*}}，则此模板重载不参与重载决议。
+
+@11@ 构造 {{tt|shared_ptr}}，共享 {{c|r}} 所管理对象的所有权。{{rev inl|until=c++17|{{tt|Y*}} 必须可隐式转换为 {{tt|T*}}。}}{{rev inl|since=c++17|{{cpp/enable_if| {{tt|Y*}} 兼容 {{tt|T*}} }}。}}注意可为相同目的用 {{c|r.lock()}}：区别是若实参为空则此构造函数抛异常，而 {{c|std::weak_ptr&lt;T&gt;::lock()}} 在该情况下构造空的 {{tt|std::shared_ptr}}。
+
+@12@ 构造 {{tt|shared_ptr}}，存储并拥有 {{c|r}} 先前拥有的对象。{{tt|Y*}} 必须可转换为 {{tt|T*}}。构造后，{{c|r}} 为空。
+
+@13@ 构造 {{tt|shared_ptr}}，管理当前 {{c|r}} 所管理的对象。存储与 {{c|r}} 关联的删除器以在未来删除被管理对象。调用后 {{c|r}} 不管理对象。{{rev begin}}{{rev|since=c++17|若 {{tt|std::unique_ptr&lt;Y, Deleter&gt;::pointer}} 不''兼容'' {{tt|T*}} 则此重载不参与重载决议。
+若 {{c|r.get()}} 是空指针，则此重载等价于默认构造函数 {{v|1}}。}}{{rev end}}若 {{tt|Deleter}} 是引用类型，则等价于 {{c|shared_ptr(r.release(), std::ref(r.get_deleter())}}。否则，等价于 {{c|shared_ptr(r.release(), std::move(r.get_deleter()))}}。
+
+{{tt|T}} 不是数组类型时，重载 {{v|3,4,6}} 以 {{c|ptr}} 启用 {{tt|shared_from_this}}，而重载 {{v|13}} 以 {{c|r.release()}} 所返回的指针启用 {{tt|shared_from_this}}。
+
+===参数===
+{{par begin}}
+{{par|ptr|指向要管理的对象的指针}}
+{{par|d|用于销毁对象的删除器}}
+{{par|alloc|用于分配内部使用的数据的分配器}}
+{{par|r|要共享所有权或从它获得所有权的另一智能指针}}
+{{par end}} 
+
+===异常===
+@3@ 若无法获得要求的额外内存则为 {{lc|std::bad_alloc}}。可能因其他错误抛出实现定义的异常。当发生异常时，{{rev inl|since=c++17|若 {{tt|T}} 非数组类型则}}调用 {{c|delete ptr}}{{rev inl|since=c++17|，否则调用 {{c|delete[] ptr}}}}。
+
+@4-7@ 若无法获得要求的额外内存则为 {{lc|std::bad_alloc}}。可能因其他错误抛出实现定义的异常。当发生异常时调用 {{c|d(ptr)}}。
+
+@11@ 若 {{c|r.expired() {{==}} true}} 则为 {{lc|std::bad_weak_ptr}}。若发生异常，则此构造函数无效果。
+
+@12@ 若无法获得要求的额外内存则为 {{lc|std::bad_alloc}}。可能因其他错误抛出实现定义的异常。若发生异常，则此构造函数无效果。
+
+@13@ 若抛异常，则此构造函数无效果。
+
+===注解===
+{{cpp/memory/shared ptr/enabling shared from this}}
+
+裸指针重载认定被指向对象的所有权。从而，为已经由某个 {{tt|shared_ptr}} 管理的对象用裸指针重载构造 {{tt|shared_ptr}}，例如以 {{c|shared_ptr(ptr.get())}}，很可能导致未定义行为，即使对象有派生自 {{lc|std::enable_shared_from_this}} 的类型也是如此。
+
+因为默认构造函数是 {{tt|constexpr}}，所以静态 shared_ptr，在任何动态初始化开始前，作为[[cpp/language/initialization#非局部变量|静态非局部初始化]]的一部分进行初始化。这使得在任何静态对象的构造函数中使用 shared_ptr 都是安全的。
+
+C++11 和 C++14 中，从 {{c|std::unique_ptr&lt;T[]&gt;}} 构造 {{c|std::shared_ptr&lt;T&gt;}} 是合法的：
+
+{{source|1=
+std::unique_ptr&lt;int[]&gt; arr(new int[1]);
+std::shared_ptr&lt;int&gt; ptr(std::move(arr)); 
+}}
+
+因为 {{tt|shared_ptr}} 从 {{tt|unique_ptr}} 获得其删除器（{{c|std::default_delete&lt;T[]&gt;}} 对象），故能正确解分配数组。
+
+C++17 中不再允许这样做。应当代之以使用数组形式 {{c|std::shared_ptr&lt;T[]&gt;}}。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct Foo
+{
+    int id{0};
+    Foo(int i = 0) : id{i} { std::cout &lt;&lt; "Foo::Foo(" &lt;&lt; i &lt;&lt;  ")\n"; }
+    ~Foo() { std::cout &lt;&lt; "Foo::~Foo(), id=" &lt;&lt; id &lt;&lt; '\n'; }
+};
+
+struct D
+{
+    void operator()(Foo* p) const
+    {
+        std::cout &lt;&lt; "从函数对象中调用 delete。Foo::id=" &lt;&lt; p-&gt;id &lt;&lt; '\n';
+        delete p;
+    }
+};
+
+int main()
+{
+    {
+        std::cout &lt;&lt; "1) 无管理对象的构造函数\n";
+        std::shared_ptr&lt;Foo&gt; sh1;
+    }
+
+    {
+        std::cout &lt;&lt; "2) 有对象的构造函数\n";
+        std::shared_ptr&lt;Foo&gt; sh2(new Foo{10});
+        std::cout &lt;&lt; "sh2.use_count(): " &lt;&lt; sh2.use_count() &lt;&lt; '\n';
+        std::shared_ptr&lt;Foo&gt; sh3(sh2);
+        std::cout &lt;&lt; "sh2.use_count(): " &lt;&lt; sh2.use_count() &lt;&lt; '\n';
+        std::cout &lt;&lt; "sh3.use_count(): " &lt;&lt; sh3.use_count() &lt;&lt; '\n';
+    }
+
+    {
+        std::cout &lt;&lt; "3) 有对象和删除器的构造函数\n";
+        std::shared_ptr&lt;Foo&gt; sh4(new Foo{11}, D());
+        std::shared_ptr&lt;Foo&gt; sh5(new Foo{12}, [](auto p)
+        {
+            std::cout &lt;&lt; "从 lambda 中调用 delete... p-&gt;id=" &lt;&lt; p-&gt;id &lt;&lt; '\n';
+            delete p;
+        });
+    }
+}
+|output=
+1) 无管理对象的构造函数
+2) 有对象的构造函数
+Foo::Foo(10)
+sh2.use_count(): 1
+sh2.use_count(): 2
+sh3.use_count(): 2
+Foo::~Foo(), id=10
+3) 有对象和删除器的构造函数
+Foo::Foo(11)
+Foo::Foo(12)
+从 lambda 中调用 delete... p-&gt;id=12
+Foo::~Foo(), id=12
+从函数对象中调用 delete。Foo::id=11
+Foo::~Foo(), id=11
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3548|std=C++11|before=源自 {{tt|unique_ptr}} 的构造函数复制构造删除器|after=改为移动构造}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/shared_ptr/dsc make_shared}}
+{{dsc inc|cpp/memory/shared_ptr/dsc allocate_shared}}
+{{dsc inc|cpp/memory/dsc enable_shared_from_this}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

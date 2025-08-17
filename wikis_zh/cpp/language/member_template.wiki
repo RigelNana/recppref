@@ -1,0 +1,189 @@
+{{title|成员模板}}
+{{cpp/language/templates/navbar}}
+
+模板声明（{{rlp|class_template|类}}、{{rlp|function_template|函数}}{{rev inl|since=c++14|及{{rlp|variable template|变量}}}}）可以在任何不是{{rlpsd|class#局部类}}的 class、struct 或 union 的{{rlp|class|成员说明}}中出现。
+
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+
+struct Printer
+{
+    // 泛型函子
+    std::ostream&amp; os;
+    Printer(std::ostream&amp; os) : os(os) {}
+    template&lt;typename T&gt;
+    void operator()(const T&amp; obj) { os &lt;&lt; obj &lt;&lt; ' '; } // 成员模板
+};
+
+int main()
+{
+    std::vector&lt;int&gt; v{1,2,3};
+    std::for_each(v.begin(), v.end(), Printer(std::cout));
+    std::string s{"abc"};
+    std::ranges::for_each(s, Printer(std::cout));
+}
+|output=
+1 2 3 a b c 
+}}
+
+在类作用域和外围命名空间作用域中都可以出现成员模板的部分特化。显式特化可以出现在主模板可出现的任何作用域中{{mark unreviewed dr|CWG|727}}。
+{{source|1=
+struct A
+{
+    template&lt;class T&gt; struct B;         // 主成员模板
+    template&lt;class T&gt; struct B&lt;T*&gt; { }; // OK：部分特化
+//  template&lt;&gt; struct B&lt;int*&gt; { };      // 经由 CWG 727 OK：全特化
+};
+template&lt;&gt; struct A::B&lt;int*&gt; { };       // OK
+template&lt;class T&gt; struct A::B&lt;T&amp;&gt; { };  // OK
+}}
+
+如果外围类定义也是类模板，那么在类体外定义成员模板时，它带有两组模板形参：一组是外围类的，另一组是其自身的：
+{{source|1=
+template&lt;typename T1&gt;
+struct string
+{
+    // 成员模板函数
+    template&lt;typename T2&gt;
+    int compare(const T2&amp;);
+    // 构造函数也可以是模板
+    template&lt;typename T2&gt;
+    string(const std::basic_string&lt;T2&gt;&amp; s) { /*...*/ }
+};
+// string&lt;T1&gt;::compare&lt;T2&gt; 的类外定义 
+template&lt;typename T1&gt; // 对于外围类模板
+template&lt;typename T2&gt; // 对于成员模板
+int string&lt;T1&gt;::compare(const T2&amp; s) { /* ... */ }
+}}
+
+===成员函数模板===
+{{rlp|destructor|析构函数}}和{{rlp|copy constructor|复制构造函数}}不能是模板。若声明了可以实例化为具有复制构造函数的类型签名的模板构造函数，则代之以使用{{rlpsd|copy constructor#隐式声明的复制构造函数}}。
+
+成员函数模板不能为虚函数，且派生类中的成员函数模板不能覆盖来自基类的虚成员函数。
+{{source|1=
+class Base
+{
+    virtual void f(int);
+};
+
+struct Derived : Base
+{
+    // 此成员模板不覆盖 Base::f
+    template &lt;class T&gt; void f(T);
+
+    // 非模板成员覆盖函数可以调用该模板：
+    void f(int i) override
+    {
+         f&lt;&gt;(i);
+    }
+};
+}}
+
+可以声明具有相同名字的非模板成员函数和模板成员函数。在冲突的情况下（某个模板特化与非模板函数的签名严格匹配），对该名字和类型的使用指代的是非模板成员，除非提供显式模板实参列表。
+
+{{source|1=
+template&lt;typename T&gt;
+struct A
+{
+    void f(int); // 非模板成员
+    
+    template&lt;typename T2&gt;
+    void f(T2); // 成员模板
+};
+
+// 模板成员定义
+template&lt;typename T&gt;
+template&lt;typename T2&gt;
+void A&lt;T&gt;::f(T2)
+{
+    // 一些代码
+}
+
+int main()
+{
+    A&lt;char&gt; ac;
+    ac.f('c'); // 调用模板函数 A&lt;char&gt;::f&lt;char&gt;(int)
+    ac.f(1);   // 调用非模板函数 A&lt;char&gt;::f(int)
+    ac.f&lt;&gt;(1); // 调用模板函数 A&lt;char&gt;::f&lt;int&gt;(int)
+}
+}}
+
+
+成员函数模板的类外定义必须''等价''于类内声明（等价性的定义见{{rlpsd|function_template#函数模板重载}}），否则它被认为是一个重载。
+
+{{source|1=
+struct X
+{
+    template&lt;class T&gt; T good(T n);
+    template&lt;class T&gt; T bad(T n);
+};
+
+template&lt;class T&gt; struct identity { using type = T; };
+
+// OK：等价声明
+template&lt;class V&gt;
+V X::good(V n) { return n; }
+
+// 错误：不与 X 内的任何声明等价
+template&lt;class T&gt;
+T X::bad(typename identity&lt;T&gt;::type n) { return n; }
+}}
+
+===转换函数模板===
+用户定义的{{rlp|cast operator|转换函数}}可以是模板。
+
+{{source|1=
+struct A
+{
+    template&lt;typename T&gt;
+    operator T*(); // 转换到指向任何类型的指针
+};
+
+// 类外定义
+template&lt;typename T&gt;
+A::operator T*() { return nullptr; }
+
+// 对 char* 的显式特化
+template&lt;&gt;
+A::operator char*() { return nullptr; }
+
+// 显式实例化
+template A::operator void*();
+
+int main()
+{
+    A a;
+    int* ip = a.operator int*(); // 显式调用 A::operator int*()
+}
+}}
+
+在{{rlp|overload_resolution|重载决议}}中，{{rlp|lookup|名字查找}}不会找到转换函数模板的特化。取而代之的是，所有可见的转换函数模板都会受到考虑，且每个{{rlp|template argument deduction|模板实参推导}}所产生的特化（对于转换函数模板有特殊规则）都会得到使用，如同被名字查找所找到一样。
+
+派生类中的 using 声明不能涉及来自基类的模板转换函数。
+
+{{rrev|since=c++14|{{mark unreviewed dr|CWG|1878}}
+用户定义转换函数模板不能有推导的返回类型：
+{{source|1=
+struct S
+{
+    operator auto() const { return 10; } // OK
+    template&lt;class T&gt; operator auto() const { return 42; } // 错误
+}; 
+}}
+}}
+
+{{rrev|since=c++14|
+===成员变量模板===
+变量模板可以在类作用域内声明，此时它声明静态数据成员模板。细节见{{rlp|variable template|变量模板}}。
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1878|std=C++14|before=技术性允许 operator auto|after=禁止 operator auto}}
+{{dr list end}}
+
+{{langlinks|en|es|ja|ru}}

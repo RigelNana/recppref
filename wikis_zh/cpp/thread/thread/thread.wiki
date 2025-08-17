@@ -1,0 +1,213 @@
+{{cpp/thread/thread/title|thread}}
+{{cpp/thread/thread/navbar}}
+{{dcl begin}}
+{{dcl|num=1|since=c++11|
+thread() noexcept;
+}}
+{{dcl|num=2|since=c++11|
+thread( thread&amp;&amp; other ) noexcept;
+}}
+{{dcl|num=3|since=c++11|
+template&lt; class F, class... Args &gt; 
+explicit thread( F&amp;&amp; f, Args&amp;&amp;... args );
+}}
+{{dcl|num=4|since=c++11|1=
+thread( const thread&amp; ) = delete;
+}}
+{{dcl end}}
+
+构造新的 {{tt|std::thread}} 对象。
+
+@1@ 构造不表示线程的新 {{tt|std::thread}} 对象。
+
+@2@ 移动构造函数。构造表示 {{c|other}} 曾表示的执行线程的 {{tt|std::thread}} 对象。此调用后 {{c|other}} 不再表示执行线程。
+
+@3@ 创建新的 {{tt|std::thread}} 对象并将它与执行线程关联。新的执行线程开始执行：
+{{rev begin}}
+{{rev|until=c++23|
+{{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{tt|{{nbsp|7}}}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}}
+}}
+{{rev|since=c++23|
+{{c|
+std::invoke(auto(std::forward&lt;F&gt;(f)),
+            auto(std::forward&lt;Args&gt;(args))...)}}
+}}
+{{rev end}}
+
+@@ {{rev inl|until=c++23|对 {{lti|cpp/standard library/decay-copy}} 的调用会在当前线程求值}}{{rev inl|since=c++23|{{c/core|auto}} 产生的值会在当前线程[[cpp/language/implicit conversion#临时量实质化|实质化]]}}，所以任何求值和复制/移动参数中抛出的异常都会抛出到当前线程，而不会开始新线程。
+
+@@ {{cpp/enable if| {{rev inl|until=c++20|{{c/core|std::decay&lt;F&gt;::type}}}}{{rev inl|since=c++20|{{ltt|cpp/types/remove_cvref|std::remove_cvref_t}}{{c/core|&lt;F&gt;}}}} 和 {{tt|std::thread}} 不是同一类型}}。
+{{rev begin}}
+{{rev|until=c++20|
+如果满足以下任意条件，那么程序非良构：
+* {{tt|F}} 不{{named req|MoveConstructible}}。
+* {{tt|Args}} 中的任何类型不{{named req|MoveConstructible}}。
+* {{box|{{lti|cpp/utility/functional|INVOKE}}{{c/core|(}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;F&gt;(f)),}}&lt;br&gt;{{tt|{{nbsp|7}}}}{{lti|cpp/standard library/decay-copy}}{{c/core|(std::forward&lt;Args&gt;(args))...)}}}} 不是合法的表达式。
+}}
+{{rev|since=c++20|
+如果以下任意值是 {{c|false}}，那么程序非良构：
+* {{c|std::is_constructible_v&lt;std::decay_t&lt;F&gt;, F&gt;}}
+* {{c|(std::is_constructible_v&lt;std::decay_t&lt;Args&gt;, Args&gt; &amp;&amp; ...)}}
+* {{c|std::is_invocable_v&lt;std::decay_t&lt;F&gt;, std::decay_t&lt;Args&gt;...&gt;}}
+}}
+{{rev end}}
+
+@@ 构造函数的调用完成[[cpp/atomic/memory_order|同步于]]新的执行线程上 {{c|f}} 副本的调用开始。
+
+@4@ 复制构造函数被弃置；{{tt|std::thread}} 不可复制。两个 {{tt|std::thread}} 对象不能表示同一执行线程。
+
+===参数===
+{{par begin}}
+{{par|other|用来构造此线程对象的另一线程对象}}
+{{par|f|在新线程执行的{{named req|Callable}}对象}}
+{{par|args|传递给新函数的实参}}
+{{par end}}
+
+===后条件===
+@1@ {{lc|get_id()}} 等于 {{c|std::thread::id()}}（即 {{lc|joinable}} 是 {{c|false}}）。
+@2@ {{c|other.get_id()}} 等于 {{lc|std::thread::id()}} 而 {{lc|get_id()}} 返回构造开始前 {{c|other.get_id()}} 的值。
+@3@ {{lc|get_id()}} 不等于 {{lc|std::thread::id()}}（即 {{lc|joinable}} 是 {{c|true}}）。
+
+===异常===
+@3@ 如果不能开始线程，那么就会抛出 {{lc|std::system_error}}。异常可能表示错误码 {{tt|std::errc::resource_unavailable_try_again}} 或另一实现决定的错误码。
+
+===注解===
+移动或按值复制线程函数的实参。如果需要传递引用实参给线程函数，那么必须包装它（例如用 {{lc|std::ref}} 或 {{lc|std::cref}}）。
+
+忽略来自函数的任何返回值。如果函数抛出异常，那么就会调用 {{lc|std::terminate}}。需要将返回值或异常传递回调用方线程时可以使用 {{lc|std::promise}} 或 {{lc|std::async}}。
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;iostream&gt;
+#include &lt;thread&gt;
+#include &lt;utility&gt;
+ 
+void f1(int n)
+{
+    for (int i = 0; i &lt; 5; ++i)
+    {
+        std::cout &lt;&lt; "正在执行线程1\n";
+        ++n;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+ 
+void f2(int&amp; n)
+{
+    for (int i = 0; i &lt; 5; ++i)
+    {
+        std::cout &lt;&lt; "正在执行线程2\n";
+        ++n;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+ 
+class foo
+{
+public:
+    void bar()
+    {
+        for (int i = 0; i &lt; 5; ++i)
+        {
+            std::cout &lt;&lt; "正在执行线程3\n";
+            ++n;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    int n = 0;
+};
+
+class baz
+{
+public:
+    void operator()()
+    {
+        for (int i = 0; i &lt; 5; ++i)
+        {
+            std::cout &lt;&lt; "正在执行线程4\n";
+            ++n;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    int n = 0;
+};
+ 
+int main()
+{
+    int n = 0;
+    foo f;
+    baz b;
+    std::thread t1; // t1 不是线程
+    std::thread t2(f1, n + 1); // 按值传递
+    std::thread t3(f2, std::ref(n)); // 按引用传递
+    std::thread t4(std::move(t3)); // t4 现在运行 f2()。t3 不再是线程
+    std::thread t5(&amp;foo::bar, &amp;f); // t5 在对象 f 上运行 foo::bar()
+    std::thread t6(b); // t6 在对象 b 的副本上运行 baz::operator()
+    t2.join();
+    t4.join();
+    t5.join();
+    t6.join();
+    std::cout &lt;&lt; "n 的最终值是 " &lt;&lt; n &lt;&lt; '\n';
+    std::cout &lt;&lt; "f.n (foo::n) 的最终值是 " &lt;&lt; f.n &lt;&lt; '\n';
+    std::cout &lt;&lt; "b.n (baz::n) 的最终值是 " &lt;&lt; b.n &lt;&lt; '\n';
+}
+|p=true
+|output=
+正在执行线程1
+正在执行线程2
+正在执行线程3
+正在执行线程4
+正在执行线程3
+正在执行线程1
+正在执行线程2
+正在执行线程4
+正在执行线程2
+正在执行线程3
+正在执行线程1
+正在执行线程4
+正在执行线程3
+正在执行线程2
+正在执行线程1
+正在执行线程4
+正在执行线程3
+正在执行线程1
+正在执行线程2
+正在执行线程4
+n 的最终值是 5
+f.n (foo::n) 的最终值是 5
+b.n (baz::n) 的最终值是 0
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2097|std=C++11|before=对于重载 {{v|3}}，{{tt|F}} 可以是 {{lc|std::thread}}|after=对 {{tt|F}} 进行约束}}
+{{dr list item|wg=lwg|dr=3476|std=C++20|before=重载 {{v|3}} 直接要求 {{tt|F}} 和实参类型（在退化后）必须可移动构造|after=移除这些要求&lt;ref&gt;{{lc|std::is_constructible_v}} 已间接要求了可移动构造性。&lt;/ref&gt;}}
+{{dr list end}}
+&lt;references/&gt;
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=33.4.3.3|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=32.4.2.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=33.3.2.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=30.3.1.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=30.3.1.2|title=thread constructors|id=thread.thread.constr}}
+{{ref std end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/thread/jthread/dsc constructor}}
+{{dsc see c|c/thread/thrd_create}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

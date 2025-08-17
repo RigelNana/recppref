@@ -1,0 +1,101 @@
+{{cpp/io/basic_ostream/title|sentry}}
+{{cpp/io/basic_ostream/navbar}}
+{{dcl begin}}
+{{dcl|1=
+class sentry;
+}}
+{{dcl end}}
+
+在 {{lc|std::basic_ostream}} 的每个进行输出（有格式与无格式）的成员函数起始，于局部作用域中构造一个类 {{tt|basic_ostream::sentry}} 的对象。它的构造函数准备输出流：检查流是否已在失败状态，冲洗所 tie() 的输出流，并且在需要时进行其他由实现定义的任务。实现定义的清理，还有在必要时的输出流冲洗，在其析构函数中进行，从而保证输出中抛出异常时会得到执行。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_ostream/sentry/dsc constructor}}
+{{dsc mem dtor|cpp/io/basic_ostream/sentry|inlinemem=true|在有格式输入后或异常后在必要情况下终止化流对象}}
+{{dsc mem fun| operator{{=}}|nolink=true|赋值运算符被弃置}}
+{{dsc inc|cpp/io/basic_ostream/sentry/dsc operator bool}}
+{{dsc end}}
+
+{{member|{{small|std::basic_ostream::sentry::}}sentry|2=
+{{ddcl|1=
+explicit sentry( std::basic_ostream&lt;CharT,Traits&gt;&amp; os );
+}}
+
+为有格式输出准备流。
+
+在 {{c|os.good()}} 是 {{c|false}} 时返回。否则如果 {{c|os.tie()}} 不是空指针，那么就会调用 {{c|os.tie()-&gt;flush()}} 以使得输出序列与外部流同步。在准备中，构造函数可能会调用 {{c|setstate(failbit)}}（它可能会抛出 {{lc|std::ios_base::failure}}）。
+
+如果在准备完成后 {{c|1=os.good() == true}}，那么任何对 {{c/core|operator bool}} 的后继调用都会返回 {{c|true}}。
+
+===参数===
+{{par begin}}
+{{par|os|要准备的输出流}}
+{{par end}}
+
+===异常===
+在文件尾条件出现时抛出 {{lc|std::ios_base::failure}}。
+}}
+
+
+{{member|{{small|std::basic_ostream::sentry::}}~sentry|2=
+{{ddcl|1=
+~sentry();
+}}
+如果 {{c|(os.flags() &amp; std::ios_base::unitbuf) &amp;&amp; !std::uncaught_exception() &amp;&amp; os.good())}} 是 {{c|true}}，那么就会调用 {{c|os.rdbuf()-&gt;pubsync()}}。如果该函数返回 {{c|-1}}，那么在 {{c|os.rdstate()}} 中设置 {{c|badbit}}，而不传播异常。
+}}
+
+
+{{member|{{small|std::basic_ostream::sentry::}}operator bool|2=
+{{ddcl|1=
+explicit operator bool() const;
+}}
+检查输出流的准备是否成功。
+
+===参数===
+（无）
+
+===返回值===
+在输出流的准备成功时返回 {{c|true}}，否则返回 {{c|false}}。
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+
+struct Foo
+{
+    char n[6];
+};
+
+std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, Foo&amp; f)
+{
+    std::ostream::sentry s(os);
+    if (s)
+        os.write(f.n, 5);
+    return os;
+}
+
+int main()
+{
+    Foo f = {"abcde"};
+    std::cout &lt;&lt; f &lt;&lt; '\n';
+}
+|output=
+abcde
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=397|std=C++98|before=析构函数可能会调用 {{c|os.flush()}}，它可能会抛出异常|after=不会传播该异常}}
+{{dr list item|wg=lwg|dr=442|std=C++98|before={{c/core|operator bool}} 没有声明为 {{c/core|const}}（它在[[cpp/header/ostream|概要]]中是 {{c/core|const}} 的）|after=加上 {{c/core|const}}}}
+{{dr list item|wg=lwg|dr=835|std=C++98|before=析构函数在 {{c|os}} 设置了 {{tt|unitbuf}} 时会调用 {{c|os.flush()}}，它是&lt;br&gt;{{named req|UnformattedOutputFunction}}，因此会构造另一个&lt;br&gt;sentry 对象（它的析构函数又会构造其他 sentry 对象，以此类推）|after=此时改成调用&lt;br&gt;{{c|os.rdbuf()-&gt;pubsync()}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_ostream/dsc operator ltlt}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,123 @@
+{{title|{{tt|decltype}} 说明符 {{mark since c++11}}}}
+{{cpp/language/declarations/navbar}}
+
+检查实体的声明类型，或表达式的类型和值类别。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|{{ttb|decltype (}} {{spar|实体}} {{ttb|)}}|num=1}}
+{{sdsc|{{ttb|decltype (}} {{spar|表达式}} {{ttb|)}}|num=2}}
+{{sdsc end}}
+
+===解释===
+@1@ 如果实参是没有括号的{{rlp|identifiers|标识表达式}}或没有括号的{{rlp|operator member access|类成员访问}}表达式，那么 {{tt|decltype}} 产生该表达式指名的实体的类型。如果没有这种实体或该实参指名了一组重载函数，那么程序非良构。
+{{rev begin}}
+{{rev| since=c++17 |
+如果实参是指名某个{{rlp|structured binding|结构化绑定}}的没有括号的{{rlp|identifiers|标识表达式}}，那么 {{tt|decltype}} 产生其''被引用类型''（在关于结构化绑定声明的说明中有所描述）。
+}}
+{{rev| since=c++20 |
+如果实参是指名某个{{rlp|template_parameters#非类型模板形参|非类型模板形参}}的没有括号的{{rlp|identifiers|标识表达式}}，那么 {{tt|decltype}} 生成该模板形参的类型（当该模板形参以占位符类型声明时，类型会先进行任何所需的类型推导）。即使实体是模板形参对象（为常量对象），其类型仍是非 const 的。
+}}
+{{rev end}}
+@2@ 如果实参是类型为 {{tt|T}} 的任何其他表达式，且
+:@a@ 如果 {{spar|表达式}} 的{{rlp|value_category|值类别}}是''亡值''，则 {{tt|decltype}} 产生 {{tt|T&amp;&amp;}}；
+:@b@ 如果 {{spar|表达式}} 的值类别是''左值''，则 {{tt|decltype}} 产生 {{tt|T&amp;}}；
+:@c@ 如果 {{spar|表达式}} 的值类别是''纯右值''，则 {{tt|decltype}} 产生 {{tt|T}}。
+{{rrev multi|until1=c++17|rev1=
+如果 {{spar|表达式}} 是返回类类型纯右值的函数调用，或是右操作数为这种函数调用的{{rlp|operator other|逗号表达式}}，那么不会对该纯右值引入临时量。
+|rev2=
+如果 {{spar|表达式}} 是{{rev inl|since=c++20|除了（可带括号的）{{rlp|consteval|立即调用}}以外的}}纯右值，那么不会从该纯右值{{rlp|implicit_conversion#临时量实质化|实质化}}临时对象：即这种纯右值没有结果对象。}}
+由于并未创建临时对象，该类型不需要是{{rlp|type#不完整类型|完整类型}}或拥有可用的{{rlp|destructor|析构函数}}，而且类型可以是{{rlp|abstract class|抽象的}}。此规则不适用于其子表达式：{{c|decltype(f(g()))}} 中，{{c|g()}} 必须有完整类型，但 {{c|f()}} 不必。
+
+注意如果对象的名字带有括号，那么它会被当做普通的左值表达式，因此 {{c|decltype(x)}} 和 {{c|decltype((x))}} 通常是不同的类型。
+
+在所声明的类型难以或不可能以标准写法声明时，{{tt|decltype}} 很有用，例如 lambda 相关类型或依赖于模板形参的类型。
+
+===注解===
+{{feature test macro|std=C++11|value=200707L|__cpp_decltype|{{c/core|decltype}}}}
+
+===关键词===
+{{ltt|cpp/keyword/decltype}}
+
+===示例===
+{{example
+|code=
+#include &lt;cassert&gt;
+#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+struct A { double x; };
+const A* a;
+
+decltype(a-&gt;x) y;       // y 的类型是 double（其声明类型）
+decltype((a-&gt;x)) z = y; // z 的类型是 const double&amp;（左值表达式）
+
+template&lt;typename T, typename U&gt;
+auto add(T t, U u) -&gt; decltype(t + u) // 返回类型依赖于模板形参
+{                                     // C++14 开始可以推导返回类型
+    return t + u;
+}
+
+const int&amp; getRef(const int* p) { return *p; }
+static_assert(std::is_same_v&lt;decltype(getRef), const int&amp;(const int*)&gt;);
+auto getRefFwdBad(const int* p) { return getRef(p); }
+static_assert(std::is_same_v&lt;decltype(getRefFwdBad), int(const int*)&gt;,
+    "仅返回 auto 并不能完美转发。");
+decltype(auto) getRefFwdGood(const int* p) { return getRef(p); }
+static_assert(std::is_same_v&lt;decltype(getRefFwdGood), const int&amp;(const int*)&gt;,
+    "返回 decltype(auto) 完美转发返回类型。");
+
+// 另一种写法：
+auto getRefFwdGood1(const int* p) -&gt; decltype(getRef(p)) { return getRef(p); }
+static_assert(std::is_same_v&lt;decltype(getRefFwdGood1), const int&amp;(const int*)&gt;,
+    "返回 decltype(返回表达式) 也完美转发返回类型。");
+
+int main() 
+{
+    int i = 33;
+    decltype(i) j = i * 2;
+    static_assert(std::is_same_v&lt;decltype(i), decltype(j)&gt;);
+    assert(i == 33 &amp;&amp; 66 == j);
+
+    auto f = [i](int av, int bv) -&gt; int { return av * bv + i; };
+    auto h = [i](int av, int bv) -&gt; int { return av * bv + i; };
+    static_assert(!std::is_same_v&lt;decltype(f), decltype(h)&gt;,
+        "lambda 函数的类型是独有且无名的");
+
+    decltype(f) g = f;
+    std::cout &lt;&lt; f(3, 3) &lt;&lt; ' ' &lt;&lt; g(3, 3) &lt;&lt; '\n';
+}
+|output=
+42 42
+}}
+
+===引用===
+{{cot}}
+{{ref std c++23}}
+{{ref std|section=9.2.9.5|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.2.8.4|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=TBD|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=TBD|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=TBD|title=Decltype specifiers|id=dcl.type.decltype}}
+{{ref std end}}
+{{cob}}
+
+{{todo|Requires correction. See: [[Talk:cpp/language/decltype#Wrong_References|Talk: Wrong References]].}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/language/dsc auto}}
+{{dsc inc|cpp/utility/dsc declval}}
+{{dsc inc|cpp/types/dsc is_same}}
+{{dsc see c|c/language/typeof}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

@@ -1,0 +1,137 @@
+{{cpp/title|default_delete}}
+{{cpp/memory/navbar}}
+{{dcl begin}}
+{{dcl header|memory}}
+{{dcl|num=1|since=c++11|1=
+template&lt; class T &gt; struct default_delete;
+}}
+{{dcl|num=2|since=c++11|1=
+template&lt; class T &gt; struct default_delete&lt;T[]&gt;;
+}}
+{{dcl end}}
+
+{{tt|std::default_delete}} 是不指定删除器时 {{lc|std::unique_ptr}} 所用的默认删除策略。 {{tt|default_delete}} 的特化在典型实现上为空类，并且用于[[cpp/language/ebo|空基类优化]]。
+
+@1@ 非特化的 {{tt|default_delete}} 用 {{c/core|delete}} 解分配单个对象的内存。
+
+@2@ 也为数组类型提供了使用 {{c/core|delete[]}} 的部分特化。
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/memory/default_delete/dsc constructor}}
+{{dsc inc|cpp/memory/default_delete/dsc operator()}}
+{{dsc end}}
+
+{{member|{{small|std::default_delete::}}default_delete|2=
+{{dcl begin}}
+{{dcl|num=1|1= 
+constexpr default_delete() noexcept = default;
+}}
+{{dcl h|主模板特化}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class U &gt;
+default_delete( const default_delete&lt;U&gt;&amp; d ) noexcept;
+}}
+{{dcl h|数组特化}}
+{{dcl|num=3|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class U &gt;
+default_delete( const default_delete&lt;U[]&gt;&amp; d ) noexcept;
+}}
+{{dcl end}}
+
+@1@ 构造 {{tt|std::default_delete}} 对象。
+
+@2@ 从另一 {{tt|std::default_delete}} 对象构造 {{c/core|std::default_delete}} 对象。
+@@ {{cpp/enable if| {{tt|U*}} 可隐式转换到 {{tt|T*}} }}。
+
+@3@ 从另一 {{tt|std::default_delete&lt;&lt;nowiki/&gt;U[]&gt;}} 对象构造 {{tt|std::default_delete&lt;T[]&gt;}} 对象。
+@@ {{cpp/enable if| {{tt|U(*)[]}} 可隐式转换到 {{tt|T(*)[]}} }}。
+
+===参数===
+{{par begin}}
+{{par|d|复制来源的删除器}}
+{{par end}}
+
+===注解===
+{{tt|std::default_delete}} 的[[cpp/language/converting_constructor|转换构造函数]]模板令从 {{c/core|std::unique_ptr&lt;Derived&gt;}} 到 {{c/core|std::unique_ptr&lt;Base&gt;}} 的隐式转换可行。
+}}
+
+{{member|{{small|std::default_delete::}}operator()|2=
+{{dcl begin}}
+{{dcl h|主模板特化}}
+{{dcl|num=1|since=c++11|notes={{mark constexpr since c++23}}|
+void operator()( T* ptr ) const;
+}}
+{{dcl h|数组特化}}
+{{dcl|num=2|since=c++11|notes={{mark constexpr since c++23}}|
+template&lt; class U &gt;
+void operator()( U* ptr ) const;
+}}
+{{dcl end}}
+
+@1@在 {{c|ptr}} 上调用 {{c/core|delete}}。
+
+@2@在 {{c|ptr}} 上调用 {{c/core|delete[]}}。
+@@ {{cpp/enable if| {{tt|U(*)[]}} 可隐式转换到 {{tt|T(*)[]}} }}。
+@@ 如果 {{tt|U}} 是不完整类型，那么程序非良构。
+
+===参数===
+{{par begin}}
+{{par|ptr|要删除的对象或数组}}
+{{par end}}
+
+===异常===
+无异常保证。
+}}
+
+===在不完整类型上调用===
+在代码中调用 {{c|operator()}} 的时候类型必须完整。一些实现中用 {{c/core|static_assert}} 确保如此。此要求的原因，是 C++ 中如果完整类类型拥有非平凡析构函数或解分配函数，那么在不完整类型上调用 {{ltt|cpp/language/delete}} 是未定义行为，因为编译器无法得知这种函数是否存在且必须被调用。
+
+===注解===
+{{feature test macro|__cpp_lib_constexpr_memory|{{c/core|constexpr}} 构造函数和 {{c|operator()}}|value=202202L|std=C++23}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;memory&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+//  {
+//      std::shared_ptr&lt;int&gt; shared_bad(new int[10]);
+//  } // 析构函数调用 delete，未定义行为
+    
+    {
+        std::shared_ptr&lt;int&gt; shared_good(new int[10], std::default_delete&lt;int[]&gt;());
+    } // OK：析构函数调用 delete[]
+    
+    {
+        std::unique_ptr&lt;int&gt; ptr(new int(5));
+    } // unique_ptr&lt;int&gt; 使用 default_delete&lt;int&gt;
+    
+    {
+        std::unique_ptr&lt;int[]&gt; ptr(new int[10]);
+    } // unique_ptr&lt;int[]&gt; 使用 default_delete&lt;int[]&gt;
+    
+    // default_delete 能用于需要进行删除的函数对象的任何场所
+    std::vector&lt;int*&gt; v;
+    for (int n = 0; n &lt; 100; ++n)
+        v.push_back(new int(n));
+    std::for_each(v.begin(), v.end(), std::default_delete&lt;int&gt;());
+}
+|output=
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=2118|std=C++11|before={{tt|default_delete&lt;T[]&gt;}} 的成员函数拒绝限定性转换|after=接受}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/memory/dsc unique_ptr}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

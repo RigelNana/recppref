@@ -1,0 +1,302 @@
+{{title|类声明}}
+{{cpp/language/classes/navbar}}
+类（class）是用户定义类型，以 {{spar|类说明符}} 定义，它在{{rlp|declarations|声明}}语法的 {{spar|声明说明符序列}} 中出现。
+
+===语法===
+类说明符拥有下列语法：
+{{sdsc begin}}
+{{sdsc|num=1|1=
+{{spar|类关键词}} {{spar optional|属性}} {{spar|类头名}} {{spar optional|类特性说明}} {{spar optional|基类子句}}&lt;br&gt;{{ttb|{}} {{spar|成员说明}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc|num=2|1=
+{{spar|类关键词}} {{spar optional|属性}} {{spar optional|基类子句}}&lt;br&gt;{{ttb|{}} {{spar|成员说明}} {{ttb|}&lt;!-- --&gt;}}
+}}
+{{sdsc end}}
+
+@1@ 具名类定义
+@2@ 无名类定义
+
+{{par begin}}
+{{par|{{spar|类关键词}}|{{ltt|cpp/keyword/class}}，{{ltt|cpp/keyword/struct}} 和 {{ltt|cpp/keyword/union}} 之一。除了默认{{rlp|access|成员访问}}和默认{{rlp|derived class|基类访问}}之外，关键词 {{c/core|struct}} 和 {{c/core|class}} 是等同的。如果关键词是 {{c/core|union}}，那么声明引入一个{{rlp|union|联合体类型}}。}} 
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}，可以包含 {{rlpt|alignas}} 说明符}}
+{{par|{{spar|类头名}}|所定义的类的名字，可以{{rlp|identifiers#有限定的标识符|有限定}}}}
+{{par|{{spar|类特性说明}}|以下说明符的列表，各说明符在每个序列中最多允许出现一次。
+{{cpp/language/class/specifiers}}}}
+{{par|{{spar|基类子句}}|一个或多个基类以及各自所用的继承模型的列表（见{{rlp|derived class|派生类}}）}}
+{{par|{{spar|成员说明}}|访问说明符、成员对象及成员函数的声明和定义的列表（[[#成员说明|见下文]]）}}
+{{par end}}
+
+===前置声明===
+以下形式的声明
+{{sdsc begin}}
+{{sdsc|1=
+{{spar|类关键词}} {{spar|属性}} {{spar|标识符}} {{ttb|;}}
+}}
+{{sdsc end}}
+
+声明一个将稍后在此作用域定义的类类型。直到定义出现前，此类名具有{{rlp|incomplete type|不完整类型}}。这允许类之间互相引用：
+{{source|
+class Vector; // 前置声明
+
+class Matrix
+{
+    // ...
+    friend Vector operator*(const Matrix&amp;, const Vector&amp;);
+};
+
+class Vector
+{
+    // ...
+    friend Vector operator*(const Matrix&amp;, const Vector&amp;);
+};
+}}
+而且如果特定的源文件只用到该类的指针和引用，使用前置声明也可以减少 {{c/core|#include}} 依赖：
+{{source|
+// 在 MyStruct.h 中
+#include &lt;iosfwd&gt; // 含有 std::ostream 的前置声明
+
+struct MyStruct
+{
+    int value;
+    friend std::ostream&amp; operator&lt;&lt;(std::ostream&amp; os, const S&amp; s);
+    // 它的定义在 MyStruct.cpp 文件中提供，该文件使用 #include &lt;ostream&gt;
+};
+}}
+
+如果前置声明在局部作用域出现，那么它会''隐藏''它的外围作用域中可能出现的先前声明的相同名字的类、变量、函数，以及所有其他声明：
+{{source|
+struct s { int a; };
+struct s; // 不做任何事（s 已经在此作用域定义）
+
+void g()
+{
+    struct s; // 新的局部结构体“s”的前置声明
+              // 它隐藏全局的结构体 s 直至此块结尾
+    
+    s* p;     // 指向局部结构体 s 的指针
+    
+    struct s { char* p; }; // 局部结构体 s 的定义
+}
+}}
+
+注意，通过作为其他声明一部分的{{rlp|elaborated type specifier|详述类型说明符}}也可以引入新的类名，但只有在{{rlp|lookup|名字查找}}无法找到先前声明的有此名的类时才可以。
+
+{{source|1=
+class U;
+
+namespace ns
+{
+    class Y f(class T p); // 声明函数 ns::f 并声明 ns::T 与 ns::Y
+    
+    class U f();          // U 指代 ::U
+    
+    // 可以使用到 T 和 Y 的指针及引用
+    Y* p;
+    T* q;
+}
+}}
+
+===成员说明===
+成员说明，或类定义的''体''，是花括号环绕的任何数量下列各项的序列：
+@1@ 具有下列形式的成员声明
+{{sdsc begin}}
+{{sdsc|{{spar optional|属性}} {{spar optional|声明说明符序列}} {{spar optional|成员声明符列表}} {{ttb|;}}
+}}
+{{sdsc end}}
+{{par begin}}
+{{par|{{spar|属性}}|{{mark since c++11}} 任意数量的{{rlp|attributes|属性}}}}
+{{par|{{spar|声明说明符序列}}|{{rlp|declarations#说明符|说明符}}的序列。它只能在构造函数，析构函数，以及用户定义{{rlp|cast operator|转换函数}}中省略。}}
+{{par|{{spar|成员声明符列表}}|与 {{rlp|declarations|初始化声明符列表}}相同，但额外允许{{rlp|bit field|位域定义}}、{{rlp|abstract class|纯说明符}}{{rev inl|since=c++11|和虚说明符（{{tt|{{rlp|override}}}} 或 {{tt|{{rlp|final}}}}）}}，并且不允许{{rlp|direct initialization|直接非列表初始化语法}}。}}
+{{par end}}
+这种声明可以声明{{rlp|static|静态}}及非静态的{{rlp|data members|数据成员}}与{{rlp|member functions|成员函数}}、成员 {{rlp|typedef}}、成员{{rlp|enum|枚举}}以及{{rlp|nested types|嵌套类}}。它也可以是{{rlp|friend|友元声明}}。
+{{source|1=
+class S
+{
+    int d1;             // 非静态数据成员
+    int a[10] = {1, 2}; // 带初始化器的非静态数据成员（C++11）
+    
+    static const int d2 = 1; // 带初始化器的静态数据成员
+    
+    virtual void f1(int) = 0; // 纯虚成员函数
+    
+    std::string d3, *d4, f2(int); // 两个数据成员和一个成员函数
+    
+    enum { NORTH, SOUTH, EAST, WEST };
+    
+    struct NestedS
+    {
+        std::string s;
+    } d5, *d6;
+    
+    typedef NestedS value_type, *pointer_type;
+};
+}}
+@2@ 函数定义，同时声明并定义{{rlp|member functions|成员函数}}或者{{rlp|friend|友元函数}}。成员函数定义之后的分号是可选的。所有定义于类体之内的函数自动为{{rlp|inline|内联}}的{{rev inl|since=c++20|，除非它们附着到{{rlp|modules|具名模块}}}}。
+{{source|
+class M
+{
+    std::size_t C;
+    std::vector&lt;int&gt; data;
+public:
+    M(std::size_t R, std::size_t C) : C(C), data(R*C) {} // 构造函数定义
+    
+    int operator()(std::size_t r, std::size_t c) const // 成员函数定义
+    {
+        return data[r * C + c];
+    }
+    
+    int&amp; operator()(size_t r, size_t c) // 另一个成员函数定义
+    {
+        return data[r * C + c];
+    }
+};
+}}
+@3@ {{rlp|access|访问说明符}} {{tt|public:}}、{{tt|protected:}} 和 {{tt|private:}}：
+{{source|
+class S
+{
+public:
+    S();          // 公开的构造函数
+    S(const S&amp;);  // 公开的复制构造函数
+    virtual ~S(); // 公开的虚析构函数
+private:
+    int* ptr; // 私有的数据成员
+};
+}}
+@4@ {{rlp|using declaration|using 声明}}：
+{{source|
+class Base
+{
+protected:
+    int d;
+};
+
+class Derived : public Base
+{
+public:
+    using Base::d;    // 令 Base 的受保护成员 d 成为 Derived 的公开成员
+    using Base::Base; // 继承基类的所有构造函数（C++11）
+};
+}}
+@5@ {{rlpt|static_assert}} 声明：
+{{source|
+template&lt;typename T&gt;
+struct Foo
+{
+    static_assert(std::is_floating_point&lt;T&gt;::value, "Foo&lt;T&gt;: T 必须是浮点数");
+};
+}}
+@6@ {{rlp|member template|成员模板声明}}：
+{{source|
+struct S
+{
+    template&lt;typename T&gt;
+    void f(T&amp;&amp; n);
+    
+    template&lt;class CharT&gt;
+    struct NestedS
+    {
+        std::basic_string&lt;CharT&gt; s;
+    };
+};
+}}
+
+{{rrev|since=c++11|
+@7@ {{rlp|type alias|别名声明}}：
+{{source|1=
+template&lt;typename T&gt;
+struct identity
+{
+    using type = T;
+};
+}}
+}}
+
+{{rrev|since=c++17|
+@8@ 成员类模板的{{rlp|deduction guide|推导指引}}：
+{{source|
+struct S
+{
+    template&lt;class CharT&gt;
+    struct NestedS
+    {
+        std::basic_string&lt;CharT&gt; s;
+    };
+    
+    template&lt;class CharT&gt;
+    NestedS(std::basic_string&lt;CharT&gt;) -&gt; NestedS&lt;CharT&gt;;
+};
+}}
+}}
+
+{{rrev|since=c++20|
+@9@ {{rlp|enum#using enum 声明|using enum 声明}}：
+{{source|1=
+enum class color { red, orange, yellow };
+
+struct highlight
+{
+    using enum color;
+};
+}}
+}}
+
+===局部类===
+类声明可以在函数体内出现，此时它定义''局部类''。这种类的名字只存在于函数作用域中，且无法在函数外访问。
+* 局部类的成员只能在该类的定义中声明，除了{{rlp|nested types|嵌套类}}成员也可以在该类的最近外围{{rlps|scope#块作用域}}中声明。
+* 局部类中的嵌套类也是局部类。
+* 局部类不能拥有静态数据成员。
+* 局部类的成员函数无链接。
+* 局部类的成员函数必须完全在类体内定义。
+* {{rev inl|since=c++14|除{{rlp|lambda|闭包类型}}以外的}}局部类不能拥有成员模板。
+* 局部类不能拥有{{rlp|friend#模板友元|友元模板}}。
+* 局部类不能在类定义内定义{{rlp|friend|友元函数}}。
+* 函数（包括成员函数）内的局部类的外围函数能访问的名字也可以被该局部类访问。
+{{rrev|until=c++11|
+* 局部类不能用作模板实参。
+}}
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v{1, 2, 3};
+    
+    struct Local
+    {
+        bool operator()(int n, int m)
+        {
+            return n &gt; m;
+        }
+    };
+    
+    std::sort(v.begin(), v.end(), Local()); // C++11 起
+    
+    for (int n : v)
+        std::cout &lt;&lt; n &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+|output=3 2 1
+}}
+
+===关键词===
+{{ltt|cpp/keyword/class}},
+{{ltt|cpp/keyword/struct}},
+{{ltt|cpp/keyword/union}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=1693|std=C++98|before=成员声明不能为空|after=允许空声明}}
+{{dr list item|wg=cwg|dr=1930|std=C++98|before={{spar sep|声明说明符序列}}包含存储类声明符或 cv 限定符时{{spar sep|成员声明符列表}}可以为空|after=类别不能为空}}
+{{dr list item|wg=cwg|dr=2890|std=C++98|before=不明确可以在哪里声明嵌套类的成员|after=使之明确}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc see c|c/language/struct|结构体声明|nomono=true}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

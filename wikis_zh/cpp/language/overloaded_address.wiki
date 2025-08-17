@@ -1,0 +1,146 @@
+{{title|重载函数的地址}}
+{{cpp/language/functions/navbar}}
+
+除了{{rlp|operator_other|函数调用表达式}}之外，重载函数的名字还可以出现在下列 7 种发生{{rlp|overload resolution|重载决议}}的语境中：
+
+{|class="wikitable"
+!语境
+!目标
+|-
+|对象或{{rlp|reference initialization|引用}}{{rlp|declarations|声明}}中的{{rlp|initialization|初始化器}}
+|被初始化的对象或引用
+|-
+|赋值运算符的右侧
+|赋值运算符的左侧
+|-
+|作为函数调用的实参
+|函数形参
+|-
+|作为用户定义运算符的实参
+|运算符形参
+|-
+|{{rlpt|return}} 语句
+|函数的返回值
+|-
+|{{rlp|explicit cast|显式转换}}或 {{rlpt|static_cast}} 的实参
+|对应的转换
+|-
+|非类型{{rlp|template parameters|模板实参}}
+|对应的模板形参
+|}
+
+在每个语境中，重载函数的名字可以前附取地址运算符 {{ttb|&amp;}} 并且可以被一组冗余的圆括号包围。
+
+{{rrev|since=c++26|
+如果目标类型包含{{rlp|auto|占位类型}}，那么就会进行占位类型推导，并且在后续说明中会以推导出的类型作为目标类型。
+}}
+
+===选择函数===
+在取重载函数的地址时，会从该重载函数的名字指代的重载集中选择函数作为集合 {{tt|S}}：
+* 如果没有目标，那么就会选择所有指名的非模板函数。
+* 否则就会为目标类型的函数类型 {{tt|FT}} 选择具有类型 {{tt|F}} 的非模板函数，其中 {{tt|F}}{{rev inl|since=c++17|（在应用{{rlps|implicit conversion#函数指针转换}}后）}}等同于 {{tt|FT}}。&lt;ref&gt;也就是说，在目标类型是成员函数指针类型时会忽略函数成员的所属类。&lt;/ref&gt;
+* 对每个指名的函数模板进行的{{rlp|template argument deduction|模板实参推导}}生成的特化（如果存在）也会被添加到 {{tt|S}} 中。
+
+如果目标具有函数指针类型或到函数类型的引用类型，那么 {{tt|S}} 只能包含非成员函数{{rev inl|since=c++23|、显式对象成员函数}}和静态成员函数。如果目标具有成员函数指针类型，那么 {{tt|S}} 只能包含隐式对象成员函数。
+
+&lt;references/&gt;
+
+===排除函数===
+在组成集合 {{tt|S}} 后会按以下顺序从其中排除函数：
+{{rrev|since=c++20|
+* 所有关联{{rlps|constraints#约束}}未得到满足的函数会从 {{tt|S}} 中排除。
+}}
+* 如果 {{tt|S}} 中还有多个函数，那么在 {{tt|S}} 包含非模板函数时会排除 {{tt|S}} 中的所有函数模板特化。
+{{rrev|since=c++20|
+* 非模板函数 {{c|func}} 会在 {{tt|S}} 包含另一个比 {{c|func}} {{rlp|constraints#约束的偏序|更受偏序约束}}的非模板函数时被排除。
+}}
+* 模板函数特化 {{c|spec}} 会在 {{tt|S}} 包含另一个比 {{c|spec}} {{rlp|function template#函数模板重载|更特殊}}的模板函数特化时被排除。
+
+排除这些函数后，{{tt|S}} 中只能剩下正好一个函数。否则程序非良构。
+
+===示例===
+{{example
+|code=
+int f(int) { return 1; }
+int f(double) { return 2; }
+ 
+void g(int(&amp;f1)(int), int(*f2)(double)) { f1(0); f2(0.0); }
+ 
+template&lt;int(*F)(int)&gt;
+struct Templ {};
+ 
+struct Foo
+{
+    int mf(int) { return 3; }
+    int mf(double) { return 4; }
+};
+ 
+struct Emp
+{
+    void operator&lt;&lt;(int (*)(double)) {}
+};
+ 
+int main()
+{
+    // 1. 初始化
+    int (*pf)(double) = f; // 选择 int f(double)
+    int (&amp;rf)(int) = f; // 选择 int f(int)
+    int (Foo::*mpf)(int) = &amp;Foo::mf; // 选择 int mf(int)
+    
+    // 2. 赋值
+    pf = nullptr;
+    pf = &amp;f; // 选择 int f(double)
+    
+    // 3. 函数实参
+    g(f, f); // 为第一实参选择 int f(int)
+             // 为第二实参选择 int f(double)
+    
+    // 4. 用户定义运算符
+    Emp{} &lt;&lt; f; // 选择 int f(double)
+    
+    // 5. 返回值
+    auto foo = []() -&gt; int (*)(int)
+    {
+        return f; // 选择 int f(int)
+    };
+    
+    // 6. 转换
+    auto p = static_cast&lt;int(*)(int)&gt;(f); // 选择 int f(int)
+    
+    // 7. 模板实参
+    Templ&lt;f&gt; t;  // 选择 int f(int)
+    
+    // 如 [[maybe_unused]] 一样避免“未使用变量”警告
+    [](...){}(pf, rf, mpf, foo, p, t);
+}
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=cwg|dr=202|std=C++98|before=非类型模板实参不是重载函数语境|after=是重载函数语境}}
+{{dr list item|wg=cwg|dr=250|std=C++98|before=不会从重载集中选择以未经推导生成的模板实参生成的函数模板特化|after=也会选择}}
+{{dr list item|wg=cwg|dr=1153|std=C++98|before=不明确指定的函数类型是否匹配目标类型|after=使之明确}}
+{{dr list item|wg=cwg|dr=1563|std=C++11|before=不明确列表初始化是否属于重载函数语境|after=使之明确}}
+{{dr list end}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=12.3|title=Address of overloaded function|id=over.over}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=12.5|title=Address of overloaded function|id=over.over}}
+{{ref std end}}
+{{ref std c++17}}
+{{ref std|section=16.4|title=Address of overloaded function|id=over.over}}
+{{ref std end}}
+{{ref std c++14}}
+{{ref std|section=13.4|title=Address of overloaded function|id=over.over}}
+{{ref std end}}
+{{ref std c++11}}
+{{ref std|section=13.4|title=Address of overloaded function|id=over.over}}
+{{ref std end}}
+{{ref std c++98}}
+{{ref std|section=13.4|title=Address of overloaded function|id=over.over}}
+{{ref std end}}
+
+{{langlinks|en|es|ja|ru}}

@@ -1,0 +1,105 @@
+{{cpp/language/attributes/title|no_unique_address|notes={{mark since c++20}}}}
+{{cpp/language/attributes/navbar}}
+
+允许此数据成员与其类的其他非静态数据成员或基类子对象重叠。
+
+===语法===
+{{sdsc begin}}
+{{sdsc|
+{{ttb|{{c/core|[[no_unique_address]]}}}}
+}}
+{{sdsc end}}
+
+===解释===
+应用到非位域非静态数据成员的声明中所声明的名字。
+
+使此成员子对象[[cpp/language/object#子对象|潜在重叠]]，即允许此成员与其类的其他非静态数据成员或基类子对象重叠。这表示若该成员拥有空类型（例如无状态分配器），则编译器可将它优化为不占空间，正如同假如它是[[cpp/language/ebo|空基类]]一样。若该成员非空，则其中的任何尾随填充空间亦可复用于存储其他数据成员。
+
+===注解===
+即便在 C++20 模式下，{{c|[[no_unique_address]]}} 也被 MSVC 忽略；但它提供了 {{c|[[msvc::no_unique_address]]}}。
+
+===示例===
+{{example
+|code=
+#include &lt;boost/type_index.hpp&gt;
+#include &lt;iostream&gt;
+
+struct Empty {}; // 任何空类类型对象的大小都至少为 1
+static_assert(sizeof(Empty) &gt;= 1);
+
+struct X
+{
+    int i;
+    Empty e; // 至少需要多一个字节以给 ‘e’ 唯一地址
+};
+static_assert(sizeof(X) &gt;= sizeof(int) + 1);
+
+struct Y
+{
+    int i;
+    [[no_unique_address]] Empty e; // 优化掉空成员
+};
+static_assert(sizeof(Y) &gt;= sizeof(int));
+
+struct Z
+{
+    char c;
+    // e1 与 e2 不能共享同一地址，因为它们拥有相同类型，尽管它们标记有 [[no_unique_address]]。
+    // 然而，其中一者可以与 c 共享地址。
+    [[no_unique_address]] Empty e1, e2;
+};
+static_assert(sizeof(Z) &gt;= 2);
+
+struct W
+{
+    char c[2];
+    // e1 与 e2 不能拥有同一地址，但它们之一能与 c[0] 共享，而另一者与 c[1] 共享
+    [[no_unique_address]] Empty e1, e2;
+};
+static_assert(sizeof(W) &gt;= 2);
+
+template &lt;typename T&gt;
+void print_size_of()
+{
+    using boost::typeindex::type_id;
+    std::cout &lt;&lt; "sizeof(" &lt;&lt; type_id&lt;T&gt;() &lt;&lt; ") == " &lt;&lt; sizeof(T) &lt;&lt; '\n';
+}
+
+int main()
+{
+    // 任何空类类型对象的大小至少为 1
+    static_assert(sizeof(Empty) &gt;= 1);
+
+    // 至少需要多一个字节以给 e 唯一地址
+    static_assert(sizeof(X) &gt;= sizeof(int) + 1);
+
+    // 优化掉空成员
+    std::cout &lt;&lt; "sizeof(Y) == sizeof(int) is " &lt;&lt; std::boolalpha 
+              &lt;&lt; (sizeof(Y) == sizeof(int)) &lt;&lt; '\n';
+
+    // e1 与 e2 不能共享同一地址，因为它们拥有相同类型，尽管它们标记有 [[no_unique_address]]。
+    // 然而，其中一者可以与 c 共享地址。
+    static_assert(sizeof(Z) &gt;= 2);
+
+    // e1 与 e2 不能拥有同一地址，但它们之一能与 c[0] 共享，而另一者与 c[1] 共享
+    std::cout &lt;&lt; "sizeof(W) == 2 is " &lt;&lt; (sizeof(W) == 2) &lt;&lt; '\n';
+}
+|p=true
+|output=
+sizeof(Empty) == 1
+sizeof(int) == 4
+sizeof(X) == 8
+sizeof(Y) == 4
+sizeof(Z) == 2
+sizeof(W) == 3
+}}
+
+===引用===
+{{ref std c++23}}
+{{ref std|section=9.12.11|title=No unique address attribute|id=dcl.attr.nouniqueaddr}}
+{{ref std end}}
+{{ref std c++20}}
+{{ref std|section=9.12.10|title=No unique address attribute|id=dcl.attr.nouniqueaddr}}
+{{ref std end}}
+
+{{langlinks|de|en|es|ja|ru}}

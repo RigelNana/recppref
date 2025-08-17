@@ -1,0 +1,99 @@
+{{cpp/locale/codecvt/title|out, do_out}}
+{{cpp/locale/codecvt/navbar}}
+{{dcl begin}}
+{{dcl header|locale}}
+{{dcl|num=1|1=
+public:
+result out( StateT&amp; state,
+            const InternT* from,
+            const InternT* from_end,
+            const InternT*&amp; from_next,
+            ExternT* to,
+            ExternT* to_end,
+            ExternT*&amp; to_next ) const;
+}}
+{{dcl|num=2|1=
+protected:
+virtual result do_out( StateT&amp; state,
+                       const InternT* from,
+                       const InternT* from_end,
+                       const InternT*&amp; from_next,
+                       ExternT* to,
+                       ExternT* to_end,
+                       ExternT*&amp; to_next ) const;
+}}
+{{dcl end}}
+
+@1@ 公开成员函数，调用最终派生类的成员函数 {{tt|do_out}}。
+
+@2@ 如果此 {{tt|codecvt}} 刻面定义了一个转换，那么将来自源范围 {{range|from|from_end}} 的内部字符翻译到外部字符，并将结果置于从 {{c|to}} 开始的相继位置。最多转换 {{c|from_end - from}} 个内部字符，最多写入 {{c|to_end - to}} 个外部字符。令 {{c|from_next}} 和 {{c|to_next}} 指向最后成功转换元素的后一位置。
+
+如果此 {{tt|codecvt}} 刻面不定义转换，那么不会转换字符。设置 {{c|to_next}} 等于 {{c|to}}，不更改 {{c|state}}，并返回 {{lc|std::codecvt_base::noconv}}。
+
+如果满足以下条件，{{c|do_out(state, from, from + 1, from_next, to, to_end, to_next)}} 必须返回 {{tt|ok}}：
+* 此 {{tt|codecvt}} 刻面用于 {{ltt|cpp/io/basic_filebuf}}，并且
+* {{c|do_out(state, from, from_end, from_next, to, to_end, to_next)}} 在 {{c|1=from != from_end}} 时会返回 {{tt|ok}}。
+
+===返回值===
+{{lc|std::codecvt_base::result}} 类型的值，按以下方式指示成功状况：
+{{dsc begin}}
+{{dsc|{{tt|ok}}|转换完成}}
+{{dsc|{{tt|partial}}|输出缓冲区的中空间不足，或源缓冲的未期待结尾}}
+{{dsc|{{tt|error}}|遇到无法转换的字符}}
+{{dsc|{{tt|noconv}}|此刻面不会转换，不写入输出}}
+{{dsc end}}
+
+无转换特化 {{c|std::codecvt&lt;char, char, std::mbstate_t&gt;}} 始终返回 {{lc|std::codecvt_base::noconv}}。
+
+===注解===
+要求 {{c|1=from &lt;= from_end &amp;&amp; to &lt;= to_end}} 且 {{c|state}} 要么表示初始迁移状态，要么以转换序列中前趋的字符获得。
+
+尽管 {{tt|codecvt}} 支持 N:M 转换（例如 UTF-16 到 UTF-8，其中可能需要两个初始字符决定输出的外部字符）， {{lc|std::basic_filebuf}} 只能使用定义 1:N {{tt|codecvt}} 转换的刻面，即它在写入文件时必须能够一次处理一个内部字符。
+
+进行 N:M 转换时，此函数可能在消耗所有源字符后（{{c|1=from_next == from_end}}）返回 {{lc|std::codecvt_base::partial}}。这表示需要其他内部字符完成转换（例如在转换 UTF-16 到 UTF-8 时，如果源缓冲区中的末字符是高位代理）。
+
+{{c|state}} 上的效果是有意未指定的。标准刻面中，它用于维护像是调用 {{lc|std::wcsrtombs}} 时的状态，从而被更新为反映最后被处理外部字符后的转换状态，但是用户定义刻面可以自由地用它维护任何其他状态，例如计量遇到的特殊字符数。
+
+===示例===
+{{example
+|code=
+#include &lt;iostream&gt;
+#include &lt;locale&gt;
+#include &lt;string&gt;
+
+int main()
+{
+    std::locale::global(std::locale("en_US.utf8"));
+    auto&amp; f = std::use_facet&lt;std::codecvt&lt;wchar_t, char, std::mbstate_t&gt;&gt;(std::locale());
+    std::wstring internal = L"z\u00df\u6c34\U0001f34c"; // L"zß水🍌"
+    
+    // 注意 wstring_convert 能做下列内容
+    std::mbstate_t mb{}; // 初始迁移状态
+    std::string external(internal.size() * f.max_length(), '\0'); 
+    const wchar_t* from_next;
+    char* to_next;
+    f.out(mb, &amp;internal[0], &amp;internal[internal.size()], from_next,
+              &amp;external[0], &amp;external[external.size()], to_next);
+    // 为简洁起见跳过错误检查
+    external.resize(to_next - &amp;external[0]);
+    
+    std::cout &lt;&lt; "在窄多字节编码下的字符串：" &lt;&lt; external &lt;&lt; '\n';
+}
+|output=
+在窄多字节编码下的字符串：zß水🍌
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=76|std=C++98|before=不明确转换是否需要支持每次转换单个内部字符|after=只有用于 {{ltt|cpp/io/basic_filebuf}} 时才需要}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/basic_filebuf/dsc overflow}}
+{{dsc inc|cpp/locale/wstring_convert/dsc to_bytes}}
+{{dsc inc|cpp/string/multibyte/dsc wcsrtombs}}
+{{dsc inc|cpp/locale/codecvt/dsc do_in}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

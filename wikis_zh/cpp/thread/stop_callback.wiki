@@ -1,0 +1,129 @@
+{{cpp/title|stop_callback}}
+{{cpp/thread/stop_callback/navbar}}
+{{ddcl|header=stop_token|since=c++20|
+template&lt; class Callback &gt;
+class stop_callback;
+}}
+
+{{tt|stop_callback}} 类模板提供一种为关联的 {{ltt|cpp/thread/stop_token|std::stop_token}} 对象注册回调函数的 RAII 对象类型，使得当该 {{ltt|cpp/thread/stop_token|std::stop_token}} 的关联 {{ltt|cpp/thread/stop_source|std::stop_source}} 被请求停止时将调用这个回调函数。
+
+经由 {{tt|stop_callback}} 构造函数注册的回调函数，在成功对该 {{tt|stop_callback}} 的关联 {{ltt|cpp/thread/stop_token|std::stop_token}} 的{{ltt|cpp/thread/stop_source|std::stop_source}} 调用了 {{c|request_stop()}} 的同一线程中调用；或者若构造函数的注册前已请求了停止，则在构造此 {{tt|stop_callback}} 的线程中调用。
+
+可以对同一 {{ltt|cpp/thread/stop_token|std::stop_token}} 创建多个 {{tt|stop_callback}}，这可以在相同或不同线程同时进行。对它们的执行顺序不提供保证，但它们将被同步调用；但已对 {{ltt|cpp/thread/stop_token|std::stop_token}} 请求停止后构造的 {{tt|stop_callback}}，则如前所述。
+
+若调用的回调经由异常退出，则调用 {{lc|std::terminate}}。
+
+{{tt|std::stop_callback}} 非{{named req|CopyConstructible}}、{{named req|CopyAssignable}}、{{named req|MoveConstructible}}亦非{{named req|MoveAssignable}}。
+
+模板形参 {{tt|Callback}} 类型必须为 {{lconcept|invocable}} 且为 {{lconcept|destructible}}。忽略任何返回值。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem|类型|定义}}
+{{dsc|{{tt|callback_type}}|{{tt|Callback}}}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc|cpp/thread/stop_callback/dsc constructor}}
+{{dsc inc|cpp/thread/stop_callback/dsc destructor}}
+{{dsc inc|cpp/thread/stop_callback/dsc operator{{=}}}}
+{{dsc end}}
+
+==={{rl|deduction_guides|推导指引}}===
+
+===示例===
+{{example
+|code=
+#include &lt;chrono&gt;
+#include &lt;condition_variable&gt;
+#include &lt;iostream&gt;
+#include &lt;mutex&gt;
+#include &lt;sstream&gt;
+#include &lt;thread&gt;
+
+using namespace std::chrono_literals;
+
+// 使用一个辅助类进行原子 std::cout 流输出。
+class Writer
+{
+    std::ostringstream buffer;
+public:
+    ~Writer()
+    {
+        std::cout &lt;&lt; buffer.str();
+    }
+    Writer&amp; operator&lt;&lt;(auto input)
+    {
+        buffer &lt;&lt; input;
+        return *this;
+    }
+};
+
+int main()
+{
+    // 工作线程。
+    // 它将等待直至被请求停止。
+    std::jthread worker([] (std::stop_token stoken)
+    {
+        Writer() &lt;&lt; "工作线程 id: " &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+        std::mutex mutex;
+        std::unique_lock lock(mutex);
+        std::condition_variable_any().wait(lock, stoken,
+            [&amp;stoken] { return stoken.stop_requested(); });
+    });
+
+    // 在工作线程上注册停止回调。
+    std::stop_callback callback(worker.get_stop_token(), []
+    {
+        Writer() &lt;&lt; "执行了停止回调，线程: "
+            &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+    });
+
+    // 可以提前销毁 stop_callback 对象以阻止其执行。
+    {
+        std::stop_callback scoped_callback(worker.get_stop_token(), []
+        {
+            // 这里不会执行。
+            Writer() &lt;&lt; "作用域内的停止回调被执行，线程: "
+                &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+        });
+    }
+
+    // 演示由哪个线程何时执行 stop_callback。
+    // 定义停止函数。
+    auto stopper_func = [&amp;worker]
+    {
+        if (worker.request_stop())
+            Writer() &lt;&lt; "执行了停止请求，线程: "
+                &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+        else
+            Writer() &lt;&lt; "未执行停止请求，线程: "
+                &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+    };
+
+    // 使多个线程竞争以停止工作线程。
+    std::jthread stopper1(stopper_func);
+    std::jthread stopper2(stopper_func);
+    stopper1.join();
+    stopper2.join();
+
+    // 已经请求停止后，立即执行新的 stop_callback。
+    Writer() &lt;&lt; "主线程: " &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+    std::stop_callback callback_after_stop(worker.get_stop_token(), []
+    {
+        Writer() &lt;&lt; "执行了停止回调，线程: "
+            &lt;&lt; std::this_thread::get_id() &lt;&lt; '\n';
+    });
+}
+|p=true
+|output=
+工作线程 id: 140460265039616
+执行了停止回调，线程: 140460256646912
+执行了停止请求，线程: 140460256646912
+未执行停止请求，线程: 140460248254208
+主线程: 140460265043776
+执行了停止回调，线程: 140460265043776
+}}
+
+{{langlinks|en|es|ja|ru}}

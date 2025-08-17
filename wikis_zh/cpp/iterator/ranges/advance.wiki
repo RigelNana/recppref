@@ -1,0 +1,175 @@
+{{cpp/ranges/title|advance}}
+{{cpp/iterator/navbar}}
+{{dcl begin}}
+{{dcl header|iterator}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_or_output_iterator I &gt;
+constexpr void advance( I&amp; i, std::iter_difference_t&lt;I&gt; n );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; std::input_or_output_iterator I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr void advance( I&amp; i, S bound );
+}}
+{{dcl|num=3|since=c++20|1=
+template&lt; std::input_or_output_iterator I, std::sentinel_for&lt;I&gt; S &gt;
+constexpr std::iter_difference_t&lt;I&gt; advance( I&amp; i, std::iter_difference_t&lt;I&gt; n, S bound );
+}}
+{{dcl end}}
+
+@1@ 自增给定的迭代器 {{tt|i}} {{c|n}} 次。
+@2@ 自增给定的迭代器 {{tt|i}} 直至 {{c|1=i == bound}}。
+@3@ 自增给定的迭代器 {{tt|i}} {{c|n}} 次，或直至 {{c|1=i == bound}}，取决于何者先达成。
+
+若 {{c|n}} 为负数，则自减迭代器。此情况下，{{tt|I}} 必须实现 {{lc|std::bidirectional_iterator}}，而若提供了 {{c|bound}} 则 {{tt|S}} 必须与 {{tt|I}} 为同一类型，否则行为未定义。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par|i|要推进的迭代器}}
+{{par|bound|哨位，代表 {{c|i}} 作为迭代器所指向的范围的结尾}}
+{{par|n|{{c|i}} 应自增的次数}}
+{{par end}}
+
+===返回值===
+@3@ {{c|n}} 与 {{c|i}} 所遍历的实际距离之间的差。
+
+===复杂度===
+线性。
+
+然而，若 {{tt|I}} 额外实现 {{lc|std::random_access_iterator}}，或若 {{tt|S}} 实现 {{c|std::sized_sentinel_for&lt;I&gt;}}，或若 {{tt|I}} 与 {{tt|S}} 实现 {{c|std::assignable_from&lt;I&amp;, S&gt;}}，则复杂度为常数。
+
+===注解===
+若指定的自增或自减序列会要求自增不可自增的迭代器（例如尾后迭代器），或自减不可自减的迭代器（例如首迭代器或孤立迭代器），则行为未定义。
+
+===可能的实现===
+
+{{eq fun|1=
+struct advance_fn
+{
+    template&lt;std::input_or_output_iterator I&gt;
+    constexpr void operator()(I&amp; i, std::iter_difference_t&lt;I&gt; n) const
+    {
+        if constexpr (std::random_access_iterator&lt;I&gt;)
+            i += n;
+        else
+        {
+            while (n &gt; 0)
+            {
+                --n;
+                ++i;
+            }
+
+            if constexpr (std::bidirectional_iterator&lt;I&gt;)
+            {
+                while (n &lt; 0)
+                {
+                    ++n;
+                    --i;
+                }
+            }
+        }
+    }
+
+    template&lt;std::input_or_output_iterator I, std::sentinel_for&lt;I&gt; S&gt;
+    constexpr void operator()(I&amp; i, S bound) const
+    {
+        if constexpr (std::assignable_from&lt;I&amp;, S&gt;)
+            i = std::move(bound);
+        else if constexpr (std::sized_sentinel_for&lt;S, I&gt;)
+            (*this)(i, bound - i);
+        else
+            while (i != bound)
+                ++i;
+    }
+
+    template&lt;std::input_or_output_iterator I, std::sentinel_for&lt;I&gt; S&gt;
+    constexpr std::iter_difference_t&lt;I&gt;
+    operator()(I&amp; i, std::iter_difference_t&lt;I&gt; n, S bound) const
+    {
+        if constexpr (std::sized_sentinel_for&lt;S, I&gt;)
+        {
+            // std::abs 在 C++23 前非 constexpr
+            auto abs = [](const std::iter_difference_t&lt;I&gt; x) { return x &lt; 0 ? -x : x; };
+
+            if (const auto dist = abs(n) - abs(bound - i); dist &lt; 0)
+            {
+                (*this)(i, bound);
+                return -dist;
+            }
+
+            (*this)(i, n);
+            return 0;
+        }
+        else
+        {
+            while (n &gt; 0 &amp;&amp; i != bound)
+            {
+                --n;
+                ++i;
+            }
+
+            if constexpr (std::bidirectional_iterator&lt;I&gt;)
+            {
+                while (n &lt; 0 &amp;&amp; i != bound)
+                {
+                    ++n;
+                    --i;
+                }
+            }
+
+            return n;
+        }
+    }
+};
+
+inline constexpr auto advance = advance_fn();
+}}
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+
+int main()
+{
+    std::vector&lt;int&gt; v {3, 1, 4};
+
+    auto vi = v.begin();
+
+    std::ranges::advance(vi, 2);
+    std::cout &lt;&lt; "1) value: " &lt;&lt; *vi &lt;&lt; '\n' &lt;&lt; std::boolalpha;
+
+    std::ranges::advance(vi, v.end());
+    std::cout &lt;&lt; "2) vi == v.end(): " &lt;&lt; (vi == v.end()) &lt;&lt; '\n';
+
+    std::ranges::advance(vi, -3);
+    std::cout &lt;&lt; "3) value: " &lt;&lt; *vi &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "4) diff: " &lt;&lt; std::ranges::advance(vi, 2, v.end())
+              &lt;&lt; ", value: " &lt;&lt; *vi &lt;&lt; '\n';
+
+    std::cout &lt;&lt; "5) diff: " &lt;&lt; std::ranges::advance(vi, 4, v.end())
+              &lt;&lt; ", vi == v.end(): " &lt;&lt; (vi == v.end()) &lt;&lt; '\n';
+}
+|output=
+1) value: 4
+2) vi == v.end(): true
+3) value: 3
+4) diff: 0, value: 4
+5) diff: 3, vi == v.end(): true
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/iterator/ranges/dsc next}}
+{{dsc inc|cpp/iterator/ranges/dsc prev}}
+{{dsc inc|cpp/iterator/ranges/dsc distance}}
+{{dsc inc|cpp/iterator/dsc advance}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

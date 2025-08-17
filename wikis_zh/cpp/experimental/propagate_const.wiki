@@ -1,0 +1,169 @@
+{{cpp/experimental/title|propagate_const}}
+{{cpp/experimental/lib extensions 2/propagate_const/navbar}}
+{{dcl begin}}
+{{dcl header|experimental/propagate_const}}
+{{dcl|since=libfund_ts_2|1=
+template&lt; class T &gt;
+class propagate_const;
+}}
+{{dcl end}}
+
+{{tt|std::experimental::propagate_const}} 是为指针和指针式对象传播 const 的包装器。如名所示，在通过 {{tt|const}} 访问路径访问时，它把被包装指针当做指向 {{tt|const}} 的指针。
+
+若底层的指针式类型类满足{{named req|MoveConstructible}}和{{named req|MoveAssignable}}的要求，则该类满足对应概念，但 {{tt|propagate_const}} 既非{{named req|CopyConstructible}}亦非{{named req|CopyAssignable}}。
+
+{{par begin}}
+{{par hreq}}
+{{par req | {{tt|T}} 必须是无 cv 限定的对象指针类型或按以下方式指定的无 cv 限定的指针式类类型。}}
+{{par end}}
+
+=== 指针式类型上的要求 ===
+若 {{tt|T}} 为类类型，则它必须满足此节中的要求。
+
+给定
+* {{tt|t}}，{{tt|T}} 类型的可修改[[cpp/language/value_category|左值表达式]]
+* {{tt|ct}}，与 {{tt|t}} 指代同一对象的 {{c|const T}} 类型左值（等价于 C++17 起的 {{c|std::as_const(t)}}）
+* {{tt|element_type}}，对象类型
+
+下列表达式必须合法并拥有其指定的效果：
+
+{|table class=wikitable
+|-
+!表达式||返回类型||前条件||操作语义
+|-
+| {{c|1=t.get()}}
+| {{c|element_type*}}
+| 
+| 
+|-
+| {{c|1=ct.get()}}
+| {{c|element_type*}} 或 {{c|const element_type*}}
+| 
+| {{c|1=t.get() == ct.get()}}
+|-
+| {{c|1=*t}}
+| {{c|element_type&amp;}}
+| {{c|1=t.get() != nullptr}}
+| {{c|*t}} 与 {{c|*(t.get())}} 指代同一对象
+|-
+| {{c|1=*ct}}
+| {{c|element_type&amp;}} 或 {{c|const element_type&amp;}}
+| {{c|1=ct.get() != nullptr}}
+| {{c|*ct}} 与 {{c|*(ct.get())}} 指代同一对象
+|-
+| {{c|1=t.operator-&gt;()}}
+| {{c|element_type*}}
+| {{c|1=t.get() != nullptr}}
+| {{c|1=t.operator-&gt;() == t.get()}}
+|-
+| {{c|1=ct.operator-&gt;()}}
+| {{c|element_type*}} 或 {{c|const element_type*}}
+| {{c|1=ct.get() != nullptr}}
+| {{c|1=ct.operator-&gt;() == ct.get()}}
+|-
+| {{c|1=(bool)t}}
+| {{c|bool}}
+| 
+| {{c|(bool)t}} 等价于 {{c|1=t.get() != nullptr}}
+|-
+| {{c|1=(bool)ct}}
+| {{c|bool}}
+| 
+| {{c|(bool)ct}} 等价于 {{c|1=ct.get() != nullptr}}
+|}
+
+还有，{{tt|T}} 和 {{c|const T}} 应当可按语境转换为 {{c|bool}}。
+
+另外，若 {{tt|T}} 可隐式转换为 {{c|element_type*}}，则 {{c|(element_type*)t}} 应当等于 {{c|t.get()}}。类似地，若 {{c|const T}} 可隐式转换为 {{c|const element_type*}}，则 {{c|(const element_type*)ct}} 应当等于 {{c|ct.get()}}。
+
+===成员类型===
+{{dsc begin}}
+{{dsc hitem |成员类型|定义}}
+{{dsc | {{c|element_type}} | {{c|std::remove_reference_t&lt;decltype(*std::declval&lt;T&amp;&gt;())&gt;}}， {{tt|T}} 所指向对象的类型}}
+{{dsc end}}
+
+===成员函数===
+{{dsc begin}}
+{{dsc inc | cpp/experimental/propagate_const/dsc constructor}}
+{{dsc inc | cpp/experimental/propagate_const/dsc destructor}}
+{{dsc inc | cpp/experimental/propagate_const/dsc operator{{=}}}}
+{{dsc inc | cpp/experimental/propagate_const/dsc swap}}
+
+{{dsc h2 |观察器}}
+{{dsc inc | cpp/experimental/propagate_const/dsc get}}
+{{dsc inc | cpp/experimental/propagate_const/dsc operator bool}}
+{{dsc inc | cpp/experimental/propagate_const/dsc operator*}}
+{{dsc inc | cpp/experimental/propagate_const/dsc operator element_type*}}
+{{dsc end}}
+
+===非成员函数===
+{{dsc begin}}
+{{dsc inc | cpp/experimental/propagate_const/dsc operator_cmp}}
+{{dsc inc | cpp/experimental/propagate_const/dsc swap2}}
+{{dsc inc | cpp/experimental/propagate_const/dsc get_underlying}}
+{{dsc end}}
+
+===辅助类===
+{{dsc begin}}
+{{dsc inc | cpp/experimental/propagate_const/dsc hash}}
+{{dsc inc | cpp/experimental/propagate_const/dsc cmp_func}}
+{{dsc end}}
+
+===示例===
+{{example
+|code=
+#include &lt;experimental/propagate_const&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+
+struct X
+{
+    void g() const { std::cout &lt;&lt; "X::g (const)\n"; }
+    void g() { std::cout &lt;&lt; "X::g (non-const)\n"; }
+};
+
+struct Y
+{
+    Y() : m_propConstX(std::make_unique&lt;X&gt;()), m_autoPtrX(std::make_unique&lt;X&gt;()) {}
+
+    void f() const
+    {
+        std::cout &lt;&lt; "Y::f (const)\n";
+        m_propConstX-&gt;g();
+        m_autoPtrX-&gt;g();
+    }
+
+    void f()
+    {
+        std::cout &lt;&lt; "Y::f (non-const)\n";
+        m_propConstX-&gt;g();
+        m_autoPtrX-&gt;g();
+    }
+    
+    std::experimental::propagate_const&lt;std::unique_ptr&lt;X&gt;&gt; m_propConstX;
+    std::unique_ptr&lt;X&gt; m_autoPtrX;
+};
+    
+int main()
+{
+    Y y;
+    y.f();
+    
+    const Y cy;
+    cy.f();
+}
+|output=
+Y::f (non-const)
+X::g (non-const)
+X::g (non-const)
+Y::f (const)
+X::g (const)
+X::g (non-const)
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=3136|std=LFTSv2|before=曾允许 {{c|int* const}}、 {{c|void*}} 或 {{c|const PtrLike}} 之类的无意义的 {{tt|T}}|after=禁止它们}}
+{{dr list end}}
+
+{{langlinks|de|en|es|it|fr|ja|pt|ru}}

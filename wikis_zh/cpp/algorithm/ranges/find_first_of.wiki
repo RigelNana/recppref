@@ -1,0 +1,149 @@
+{{cpp/ranges/title|find_first_of}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|num=1|since=c++20|1=
+template&lt; std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+constexpr I1
+    find_first_of( I1 first1, S1 last1, I2 first2, S2 last2,
+                   Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl|num=2|since=c++20|1=
+template&lt; ranges::input_range R1, ranges::forward_range R2,
+          class Pred = ranges::equal_to,
+          class Proj1 = std::identity,
+          class Proj2 = std::identity &gt;
+requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                    ranges::iterator_t&lt;R2&gt;,
+                                    Pred, Proj1, Proj2&gt;
+constexpr ranges::borrowed_iterator_t&lt;R1&gt;
+    find_first_of( R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {} );
+}}
+{{dcl end}}
+
+@1@ 在范围 {{range|first1|last1}} 中搜索范围 {{range|first2|last2}} 中的''任何''元素，分别以 {{c|proj1}} 与 {{c|proj2}} 投影范围。用二元谓词 {{c|pred}} 比较投影后的元素。
+
+@2@ 同 {{v|1}}，但以 {{c|r1}} 为第一源范围并以 {{c|r2}} 为第二源范围，如同以 {{c|ranges::begin(r1)}} 为 {{c|first1}}，以 {{c|ranges::end(r1)}} 为 {{c|last1}}，以 {{c|ranges::begin(r2)}} 为 {{c|first2}}，并以 {{c|ranges::end(r2)}} 为 {{c|last2}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|first1|last1|3=要检验的（又称''草堆''）|sentinel=yes}}
+{{par range|first2|last2|3=要搜索的（又称''针''）|sentinel=yes}}
+{{par|r1|要检验的元素范围（又称''草堆''）}}
+{{par|r2|要搜索的元素范围（又称''针''）}}
+{{par|pred|比较元素的二元谓词}}
+{{par|proj1|应用到第一范围中元素的投影}}
+{{par|proj2|应用到第二范围中元素的投影}}
+{{par end}}
+
+===返回值===
+指向范围 {{range|first1|last1}} 中首个在投影后等于范围 {{range|first2|last2}} 中某个元素的迭代器。若找不到这种元素，则返回等于 {{c|last1}} 的迭代器。
+
+===复杂度===
+至多应用 {{c|(S * N)}} 次比较和各自的投影，其中&lt;br&gt;
+{{v|1}} {{c|1=S = ranges::distance(first2, last2)}} 而 {{c|1=N = ranges::distance(first1, last1)}}；&lt;br&gt;
+{{v|2}} {{c|1=S = ranges::size(r2)}} 而 {{c|1=N = ranges::size(r1)}}。
+
+===可能的实现===
+{{eq fun|1=
+struct find_first_of_fn
+{
+    template&lt;std::input_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::forward_iterator I2, std::sentinel_for&lt;I2&gt; S2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;I1, I2, Pred, Proj1, Proj2&gt;
+    constexpr I1 operator()(I1 first1, S1 last1, I2 first2, S2 last2, Pred pred = {},
+                            Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        for (; first1 != last1; ++first1)
+            for (auto i = first2; i != last2; ++i)
+                if (std::invoke(pred, std::invoke(proj1, *first1), std::invoke(proj2, *i)))
+                    return first1;
+        return first1;
+    }
+
+    template&lt;ranges::input_range R1, ranges::forward_range R2,
+             class Pred = ranges::equal_to,
+             class Proj1 = std::identity,
+             class Proj2 = std::identity&gt;
+    requires std::indirectly_comparable&lt;ranges::iterator_t&lt;R1&gt;,
+                                        ranges::iterator_t&lt;R2&gt;,
+                                        Pred, Proj1, Proj2&gt;
+    constexpr ranges::borrowed_iterator_t&lt;R1&gt;
+        operator()(R1&amp;&amp; r1, R2&amp;&amp; r2, Pred pred = {},
+                   Proj1 proj1 = {}, Proj2 proj2 = {}) const
+    {
+        return (*this)(ranges::begin(r1), ranges::end(r1),
+                       ranges::begin(r2), ranges::end(r2),
+                       std::move(pred), std::move(proj1), std::move(proj2));
+    }
+};
+
+inline constexpr find_first_of_fn find_first_of {};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;iterator&gt;
+
+int main()
+{
+    namespace rng = std::ranges;
+
+    constexpr static auto haystack = {1, 2, 3, 4};
+    constexpr static auto needles  = {0, 3, 4, 3};
+
+    constexpr auto found1 = rng::find_first_of(haystack.begin(), haystack.end(),
+                                               needles.begin(), needles.end());
+    static_assert(std::distance(haystack.begin(), found1) == 2);
+
+    constexpr auto found2 = rng::find_first_of(haystack, needles);
+    static_assert(std::distance(haystack.begin(), found2) == 2);
+
+    constexpr static auto negatives = {-6, -3, -4, -3};
+    constexpr auto not_found = rng::find_first_of(haystack, negatives);
+    static_assert(not_found == haystack.end());
+
+    constexpr auto found3 = rng::find_first_of(haystack, negatives,
+        [](int x, int y) { return x == -y; }); // 使用二元比较器
+    static_assert(std::distance(haystack.begin(), found3) == 2);
+
+    struct P { int x, y; };
+    constexpr static auto p1 = {P{1, -1}, P{2, -2}, P{3, -3}, P{4, -4}&lt;!----&gt;};
+    constexpr static auto p2 = {P{5, -5}, P{6, -3}, P{7, -5}, P{8, -3}&lt;!----&gt;};
+
+    // 仅比较 P::y 数据成员，通过投影它们：
+    const auto found4 = rng::find_first_of(p1, p2, {}, &amp;P::y, &amp;P::y);
+    std::cout &lt;&lt; "在位置 " &lt;&lt; std::distance(p1.begin(), found4)
+              &lt;&lt; " 找到首个等价元素 {" &lt;&lt; found4-&gt;x &lt;&lt; ", " &lt;&lt; found4-&gt;y
+              &lt;&lt; "}。\n";
+}
+|output=
+在位置 2 找到首个等价元素 {3, -3}。
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/dsc find_first_of}}
+{{dsc inc|cpp/algorithm/ranges/dsc adjacent_find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find}}
+{{dsc inc|cpp/algorithm/ranges/dsc find_end}}
+{{dsc inc|cpp/algorithm/ranges/dsc search}}
+{{dsc inc|cpp/algorithm/ranges/dsc search_n}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

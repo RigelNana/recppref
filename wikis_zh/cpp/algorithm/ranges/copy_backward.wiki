@@ -1,0 +1,132 @@
+{{cpp/ranges/title|copy_backward|copy_backward_result}}
+{{cpp/algorithm/ranges/navbar}}
+{{dcl begin}}
+{{dcl header|algorithm}}
+{{dcl h|调用签名}}
+{{dcl|since=c++20|num=1|1=
+template&lt; std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+          std::bidirectional_iterator I2 &gt;
+requires std::indirectly_copyable&lt;I1, I2&gt;
+constexpr copy_backward_result&lt;I1, I2&gt;
+    copy_backward( I1 first, S1 last, I2 d_last );
+}}
+{{dcl|since=c++20|num=2|1=
+template&lt; ranges::bidirectional_range R, std::bidirectional_iterator I &gt;
+requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+constexpr copy_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+    copy_backward( R&amp;&amp; r, I d_last );
+}}
+{{dcl h|辅助类型}}
+{{dcl|since=c++20|num=3|1=
+template&lt; class I1, class I2 &gt;
+using copy_backward_result = ranges::in_out_result&lt;I1, I2&gt;;
+}}
+{{dcl end}}
+
+@1@ 从 {{range|first|last}} 所定义的范围移动元素到另一范围 {{range|d_last - N|d_last}}，其中 {{c|1=N = ranges::distance(first, last)}}。按逆序复制元素（首先移动末元素），但保持其相对顺序。若 {{c|d_last}} 在 {{tt|'''('''{{c|first}}, {{c|last}}''']'''}} 内则行为未定义。此情况下可用 {{lc|std::ranges::copy}} 代替。
+
+@2@ 同 {{v|1}}，但以 {{c|r}} 为源范围，如同以 {{c|ranges::begin(r)}} 为 {{c|first}} 并以 {{c|ranges::end(r)}} 为 {{c|last}}。
+
+{{cpp/ranges/niebloid}}
+
+===参数===
+{{par begin}}
+{{par range|3=要复制的|sentinel=yes}}
+{{par|r|要复制的元素范围}}
+{{par|d_last|目标范围的末尾}}
+{{par end}}
+
+===返回值===
+{{c|1= {last, d_last - N}&lt;!----&gt;}} 。
+
+===复杂度===
+准确 {{c|N}} 次赋值。
+
+===注解===
+复制重叠的范围时，{{rlpt|copy|ranges::copy}} 适合向左复制（目标范围的起始在源范围外），而 {{tt|ranges::copy_backward}} 适合向右复制（目标范围的末尾在源范围外）。
+
+===可能的实现===
+{{eq fun|1=
+struct copy_backward_fn
+{
+    template&lt;std::bidirectional_iterator I1, std::sentinel_for&lt;I1&gt; S1,
+             std::bidirectional_iterator I2&gt;
+    requires std::indirectly_copyable&lt;I1, I2&gt;
+    constexpr ranges::copy_backward_result&lt;I1, I2&gt;
+        operator()(I1 first, S1 last, I2 d_last) const
+    {
+        I1 last1 {ranges::next(first, std::move(last))};
+        for (I1 i {last1}; i != first;)
+            *--d_last = *--i;
+        return {std::move(last1), std::move(d_last)};
+    }
+
+    template&lt;ranges::bidirectional_range R, std::bidirectional_iterator I&gt;
+    requires std::indirectly_copyable&lt;ranges::iterator_t&lt;R&gt;, I&gt;
+    constexpr ranges::copy_backward_result&lt;ranges::borrowed_iterator_t&lt;R&gt;, I&gt;
+        operator()(R&amp;&amp; r, I d_last) const
+    {
+        return (*this)(ranges::begin(r), ranges::end(r), std::move(d_last));
+    }
+};
+
+inline constexpr copy_backward_fn copy_backward{};
+}}
+
+===示例===
+{{example
+|code=
+#include &lt;algorithm&gt;
+#include &lt;iostream&gt;
+#include &lt;ranges&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+void print(std::string_view rem, std::ranges::forward_range auto const&amp; r)
+{
+    for (std::cout &lt;&lt; rem &lt;&lt; ": "; auto const&amp; elem : r)
+        std::cout &lt;&lt; elem &lt;&lt; ' ';
+    std::cout &lt;&lt; '\n';
+}
+
+int main()
+{
+    const auto src = {1, 2, 3, 4};
+    print("src", src);
+
+    std::vector&lt;int&gt; dst(src.size() + 2);
+    std::ranges::copy_backward(src, dst.end());
+    print("dst", dst);
+
+    std::ranges::fill(dst, 0);
+    const auto [in, out] =
+        std::ranges::copy_backward(src.begin(), src.end() - 2, dst.end());
+    print("dst", dst);
+
+    std::cout
+        &lt;&lt; "(in - src.begin) == " &lt;&lt; std::distance(src.begin(), in) &lt;&lt; '\n'
+        &lt;&lt; "(out - dst.begin) == " &lt;&lt; std::distance(dst.begin(), out) &lt;&lt; '\n';
+}
+|output=
+src: 1 2 3 4
+dst: 0 0 1 2 3 4
+dst: 0 0 0 0 1 2
+(in - src.begin) == 2
+(out - dst.begin) == 4
+}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc copy_n}}
+{{dsc inc|cpp/algorithm/ranges/dsc remove_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc replace_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc reverse_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc rotate_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc unique_copy}}
+{{dsc inc|cpp/algorithm/ranges/dsc move}}
+{{dsc inc|cpp/algorithm/ranges/dsc move_backward}}
+{{dsc inc|cpp/algorithm/dsc copy_backward}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}

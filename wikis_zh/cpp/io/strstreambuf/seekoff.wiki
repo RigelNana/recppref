@@ -1,0 +1,100 @@
+{{cpp/io/strstreambuf/title|seekoff}}
+{{cpp/io/strstreambuf/navbar}}
+{{ddcl|deprecated=c++98|removed=c++26|1=
+protected:
+virtual pos_type seekoff( off_type off,
+                          ios_base::seekdir way,
+                          ios_base::openmode which = ios_base::in {{!}} ios_base::out );
+}}
+
+在可能时重寻位 {{lc|std::basic_streambuf::gptr}} 和/或 {{lc|std::basic_streambuf::pptr}} 到对应距缓冲的获取和/或放置区起始、结尾或当前位置准确 {{c|off}} 个字符的位置。
+
+* 如果 {{c|which}} 包含 {{c|ios_base::in}} 并且此缓冲为读取打开，那么以后述方式重寻位获取区内的读指针 {{lc|std::basic_streambuf::gptr}}。
+* 如果 {{c|which}} 包含 {{c|ios_base::out}} 并且此缓冲为写入打开，那么以后述方式重定位放置区内的写指针 {{lc|std::basic_streambuf::pptr}}。
+* 如果 {{c|which}} 包含 {{c|ios_base::in}} 和 {{c|ios_base::out}} 两者并且此缓冲为读和写打开，而且 {{c|way}} 是 {{c|ios_base::beg}} 或 {{c|ios_base::end}}，那么以后述方式重寻位读和写指针。
+* 否则，此函数失败。
+
+如果重寻位了指针（{{tt|gptr}} 或 {{tt|pptr}} 或两者），那么它会按下列方式进行：
+@1@ 如果要重寻位的指针是空指针且新偏移 {{tt|newoff}} 非零，那么函数失败。
+@2@ 确定 {{tt|off_type}} 类型的新指针偏移 {{c|newoff}}：
+:@a@ 如果 {{c|1=way == ios_base::beg}}，那么 {{c|newoff}} 为零
+:@b@ 如果 {{c|1=way == ios_base::cur}}，那么 {{c|newoff}} 是指针的当前位置（{{c|gptr() - eback()}} 或 {{c|pptr() - pbase()}}）
+:@c@ 如果 {{c|1=way == ios_base::end}}，那么 {{c|newoff}} 是缓冲区的整个已初始化部分的长度（使用过分配时就是高水位指针减起始指针）
+@3@ 如果 {{c|newoff + off}} 为负或在缓冲区的已初始化部分外，那么函数失败
+@4@ 否则，如同用 {{c|1=gptr() = eback() + newoff + off}} 或 {{c|1=pptr() = pbase() + newoff + off}} 赋值指针。
+
+===参数===
+{{par begin}}
+{{par|off|设置下一位置指针到的相对位置}}
+{{par|way|定义应用偏移到的基位置。它可以是下列常量之一：
+{{cpp/io/ios_base/seekdir consts}}}}
+{{par|which|定义会影响到的输入和/或输出序列。它可以是下列常量之一或它们的组合：
+{{cpp/io/ios_base/openmode streambuf consts}}}}
+{{par end}}
+
+===返回值===
+成功时返回 {{c|pos_type(newoff)}}，失败时或 pos_type 无法表示结果流位置时返回 {{c|pos_type(off_type(-1))}}。
+
+===示例===
+{{example
+|
+|code=
+#include &lt;iostream&gt;
+#include &lt;strstream&gt;
+
+int main()
+{
+    std::stringstream ss("123"); // 入/出
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // 两个指针绝对寻位
+    ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::beg); // 都前移 1
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // 试图从当前位置前移两个指针 1
+    if (-1 == ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::cur))
+        std::cout &lt;&lt; "从当前位置前移两个指针失败\n";
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    // 前移写指针 1 ，但不前移读指针
+    // 也可以调用 ss.seekp(1, std::ios_base::cur);
+    ss.rdbuf()-&gt;pubseekoff(1, std::ios_base::cur, std::ios_base::out);
+    std::cout &lt;&lt; "写入位置 = " &lt;&lt; ss.tellp()
+              &lt;&lt; " 读取位置 = " &lt;&lt; ss.tellg() &lt;&lt; '\n';
+    
+    ss &lt;&lt; 'a'; // 在写入位置写入
+    std::cout &lt;&lt; "在写入位置写入 'a'，现在缓冲区是 ";
+    std::cout.write(a, sizeof a);
+    std::cout &lt;&lt; "'\n";
+    
+    char ch;
+    ss &gt;&gt; ch;
+    std::cout &lt;&lt; "在读取位置读取到了 '" &lt;&lt; ch &lt;&lt; "'\n";
+}
+|output=
+写入位置 = 0 读取位置 = 0
+写入位置 = 1 读取位置 = 1
+从当前位置前移两个指针失败
+写入位置 = 1 读取位置 = 1
+写入位置 = 2 读取位置 = 1
+在写入位置写入 'a'，现在缓冲区是 12a
+在读取位置读取到了 '2'
+}}
+
+===缺陷报告===
+{{dr list begin}}
+{{dr list item|wg=lwg|dr=55|std=C++98|before={{tt|seekoff}} 在失败时返回了未定义的无效流位置|after=失败时返回 {{c|pos_type(off_type(-1))}}}}
+{{dr list end}}
+
+===参阅===
+{{dsc begin}}
+{{dsc inc|cpp/io/strstreambuf/dsc seekpos}}
+{{dsc inc|cpp/io/basic_streambuf/dsc seekoff}}
+{{dsc inc|cpp/io/basic_stringbuf/dsc seekoff}}
+{{dsc inc|cpp/io/basic_filebuf/dsc seekoff}}
+{{dsc end}}
+
+{{langlinks|de|en|es|fr|it|ja|pt|ru}}
